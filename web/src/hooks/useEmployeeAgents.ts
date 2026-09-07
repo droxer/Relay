@@ -11,6 +11,8 @@ export const EMPLOYEE_AGENTS_QUERY_KEY = "employee-agents";
 export function useEmployeeAgents(employeeId?: string): {
   agents: EmployeeAgent[];
   isFetching: boolean;
+  error: string | null;
+  refetch: () => Promise<unknown>;
 } {
   const query = useQuery({
     queryKey: [EMPLOYEE_AGENTS_QUERY_KEY, employeeId],
@@ -22,5 +24,7 @@ export function useEmployeeAgents(employeeId?: string): {
   return {
     agents,
     isFetching: query.isFetching,
+    error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
+    refetch: query.refetch,
   };
 }

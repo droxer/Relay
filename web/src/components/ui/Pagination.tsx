@@ -3,6 +3,7 @@
 import { useTranslation } from "react-i18next";
 
 import { pageNumbers, type Page } from "../../lib/pagination";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { Button } from "@/components/ui/button";
 import { ICON, PageNext, PagePrevious } from "../icons";
 
@@ -39,9 +40,11 @@ export function Pagination<T>({
   compact?: boolean;
 }) {
   const { t } = useTranslation();
+  const narrow = useMediaQuery("(max-width: 820px)");
+  const isCompact = compact || narrow;
   if (!page.needed) return null;
 
-  const numbers = compact ? [] : pageNumbers(page.page, page.pageCount);
+  const numbers = isCompact ? [] : pageNumbers(page.page, page.pageCount);
 
   return (
     <nav
@@ -49,7 +52,7 @@ export function Pagination<T>({
       aria-label={t("list.pagination_label", { collection: label })}
     >
       <p className="list-pager-range" aria-live="polite">
-        {compact
+        {isCompact
           // No numbers to read the position off, so the range has to carry it.
           ? t("list.pagination_range_compact", { page: page.page, pageCount: page.pageCount, total: page.total })
           : t("list.pagination_range", { from: page.from, to: page.to, total: page.total })}

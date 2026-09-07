@@ -11,10 +11,12 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { activityChartMetrics, type ActivityChartPoint } from "@/lib/activityChart";
+import { formatChartDate } from "@/lib/chartDate";
 
 interface ActivityChartProps {
   daily: ActivityChartPoint[];
   ready: boolean;
+  error?: string | null;
   className?: string;
 }
 
@@ -22,7 +24,7 @@ const WIDTH = 720;
 const HEIGHT = 160;
 const PADDING = { top: 12, right: 12, bottom: 24, left: 32 };
 
-export function ActivityChart({ daily, ready, className }: ActivityChartProps) {
+export function ActivityChart({ daily, ready, error, className }: ActivityChartProps) {
   const { t, i18n } = useTranslation();
   const lineRef = useRef<SVGPathElement>(null);
   const [lineLength, setLineLength] = useState(0);
@@ -62,7 +64,7 @@ export function ActivityChart({ daily, ready, className }: ActivityChartProps) {
     const tickIndices = points.length > 7 ? [0, Math.floor(points.length / 2), points.length - 1] : points.map((_, i) => i);
     const xTicks = tickIndices.map((i) => {
       const c = coords[i];
-      const label = formatDate(points[i].date, i18n.language);
+      const label = formatChartDate(points[i].date, i18n.language);
       return { x: c.x, label };
     });
 
@@ -123,14 +125,16 @@ export function ActivityChart({ daily, ready, className }: ActivityChartProps) {
         <ul className="sr-only">
           {daily.map((point) => (
             <li key={point.date}>
-              {`${formatDate(point.date, i18n.language)}: ${point.count}`}
+              {`${formatChartDate(point.date, i18n.language)}: ${point.count}`}
             </li>
           ))}
         </ul>
       ) : null}
       <CardFooter className="border-t">
         <CardDescription render={<span />}>
-          {ready
+          {error
+            ? error
+            : ready
             ? dataPeak > 0
               ? t("admin.v2.dash_sessions_hint", { count: dataPeak })
               : t("admin.v2.dash_sessions_empty")
@@ -139,10 +143,4 @@ export function ActivityChart({ daily, ready, className }: ActivityChartProps) {
       </CardFooter>
     </Card>
   );
-}
-
-function formatDate(iso: string, locale: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return new Intl.DateTimeFormat(locale || undefined, { month: "short", day: "numeric" }).format(parsed);
 }

@@ -16,6 +16,7 @@ const EMPTY: DashboardSessionsResponse = {
 export function useDashboardSessions(enabled: boolean): {
   data: DashboardSessionsResponse;
   isLoading: boolean;
+  isError: boolean;
   error: string | null;
 } {
   const query = useQuery<DashboardSessionsResponse>({
@@ -27,6 +28,7 @@ export function useDashboardSessions(enabled: boolean): {
   return {
     data: query.data ?? EMPTY,
     isLoading: query.isLoading,
+    isError: query.isError,
     error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
   };
 }

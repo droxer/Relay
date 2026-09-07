@@ -84,6 +84,14 @@
   opacity: 1;
 }
 
+/* Hover-only controls are invisible on touch screens until a user discovers
+   their location. Keep record actions present when hover is unavailable. */
+@media (hover: none) {
+  .project-member-tile-edit {
+    opacity: 1;
+  }
+}
+
 .project-member-tile-edit:hover {
   color: var(--ink-1);
   background: var(--surface-2);

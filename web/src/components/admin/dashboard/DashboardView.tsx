@@ -30,12 +30,12 @@ export function DashboardView({
   const sessionsQuery = useDashboardSessions(true);
   const tokens = useTokenUsage();
 
-  const sessionsReady = !sessionsQuery.isLoading;
+  const sessionsReady = !sessionsQuery.isLoading && !sessionsQuery.error;
   const sessions = sessionsQuery.data;
   const nodesReady = nodes.length > 0 || employees.length > 0;
 
   const dash = "—";
-  const showTokens = tokens.available;
+  const showTokens = tokens.available || tokens.isError;
 
   const last24h = sessions.last24h;
   const prior24h = clampNonNeg(sessions.last7d - last24h) / 6;
@@ -127,8 +127,8 @@ export function DashboardView({
             <KpiTile
               slot="tokens"
               eyebrow={t("admin.v2.dash_kpi_tokens")}
-              value={formatCompact(tokens.total, i18n.language)}
-              hint={t("admin.v2.dash_kpi_tokens_hint")}
+              value={tokens.isError ? dash : formatCompact(tokens.total, i18n.language)}
+              hint={tokens.isError ? t("workspace.load_failed") : t("admin.v2.dash_kpi_tokens_hint")}
             />
           ) : null}
         </section>
@@ -142,6 +142,7 @@ export function DashboardView({
           <ActivityChart
             daily={sessions.dailyCounts}
             ready={sessionsReady}
+            error={sessionsQuery.error}
           />
           {showTokens ? (
             <TokenUsageChart snapshot={tokens} compact />
@@ -153,6 +154,7 @@ export function DashboardView({
             employees={employees}
             nodes={nodes}
             ranked={sessions.topEmployees}
+            error={sessionsQuery.error}
           />
         </div>
       </div>

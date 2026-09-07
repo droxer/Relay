@@ -34,7 +34,7 @@ export function TeamsPage({
   onSelectTeam: (teamId: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const { teams, isFetching } = useTeams(currentUser.employeeId);
+  const { teams, isFetching, error, refetch } = useTeams(currentUser.employeeId);
   const [addTeam, setAddTeam] = useUrlSearchState(
     "dialog",
     false,
@@ -115,6 +115,12 @@ export function TeamsPage({
         <div className="teams-page-body">
           {loading ? (
             <div className="route-loading" role="status" aria-live="polite">{t("admin.loading")}</div>
+          ) : error && teams.length === 0 ? (
+            <RelayEmptyState
+              title={t("workspace.load_failed")}
+              body={error}
+              actions={<Button type="button" variant="outline" onClick={() => void refetch()}>{t("workspace.retry")}</Button>}
+            />
           ) : visibleTeams.length === 0 ? (
             <RelayEmptyState
               title={teams.length === 0 ? t("teams.empty_title") : t("teams.empty_filtered_title")}
