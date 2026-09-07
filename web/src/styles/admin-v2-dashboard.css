@@ -18,9 +18,6 @@
   gap: var(--sp-5);
   padding: var(--sp-6) var(--page-gutter) var(--sp-8);
   min-width: 0;
-  max-width: 1440px;
-  margin: 0 auto;
-  width: 100%;
 }
 
 /* ── KPI rail ─────────────────────────────────────────────────────────
@@ -533,41 +530,6 @@
   }
 }
 
-/* Control panel overview: the fleet readout sits above historical analytics. */
-.adm-control-intro {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-6);
-  padding: var(--sp-3) 0 var(--sp-4);
-}
-
-.adm-control-intro-copy { min-width: 0; }
-
-.adm-control-intro h2 {
-  margin: var(--sp-3) 0;
-  color: var(--ink-1);
-  font-family: var(--font-display);
-  font-size: clamp(24px, 2.5vw, 36px);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: var(--track-display);
-  text-wrap: balance;
-}
-
-.adm-control-intro p {
-  margin: 0;
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-}
-
-.adm-control-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  flex-shrink: 0;
-}
-
 .adm-control-fleet {
   display: flex;
   align-items: center;
@@ -619,15 +581,11 @@
 }
 
 @media (max-width: 1200px) {
-  .adm-control-intro { align-items: flex-start; flex-direction: column; }
   .adm-control-fleet { flex-wrap: wrap; }
   .adm-control-readings { flex-basis: 65%; }
 }
 
 @media (max-width: 640px) {
-  .adm-control-intro { gap: var(--sp-4); }
-  .adm-control-actions { width: 100%; }
-  .adm-control-actions > button { flex: 1; }
   .adm-control-fleet { padding: var(--sp-4); gap: var(--sp-4); }
   .adm-control-readings { flex-basis: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

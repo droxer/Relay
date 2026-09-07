@@ -10,7 +10,7 @@ import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
 import { TokenUsageChart } from "./TokenUsageChart";
 import { Button } from "@/components/ui/button";
-import { ActionAdd, AdminNode, ICON } from "../../icons";
+import { AdminNode, ICON } from "../../icons";
 import { StateMark } from "../../StateMark";
 import { TopEmployees } from "./TopEmployees";
 
@@ -19,12 +19,10 @@ interface DashboardViewProps {
   employees: EmployeeRecord[];
   metrics: NodeMetrics;
   onManageNodes: () => void;
-  onAddNode: () => void;
-  onAddEmployee: () => void;
 }
 
 export function DashboardView({
-  nodes, employees, metrics, onManageNodes, onAddNode, onAddEmployee,
+  nodes, employees, metrics, onManageNodes,
 }: DashboardViewProps) {
   const { t, i18n } = useTranslation();
   const sessionsQuery = useDashboardSessions(true);
@@ -43,22 +41,6 @@ export function DashboardView({
 
   return (
     <div className="adm-dash">
-      <section className="adm-control-intro" aria-labelledby="adm-overview-title">
-        <div className="adm-control-intro-copy">
-          <span className="adm-control-eyebrow">{t("admin.control_panel.overview")}</span>
-          <h2 id="adm-overview-title">{t("admin.control_panel.heading")}</h2>
-          <p>{t("admin.control_panel.description")}</p>
-        </div>
-        <div className="adm-control-actions">
-          <Button onClick={onAddNode}>
-            <ActionAdd size={ICON.sm} aria-hidden="true" />
-            {t("admin.v2.add_node_cta")}
-          </Button>
-          <Button variant="outline" onClick={onAddEmployee}>
-            {t("admin.v2.add_employee_cta")}
-          </Button>
-        </div>
-      </section>
       <section className="adm-control-fleet" aria-label={t("admin.control_panel.fleet")}>
         <div className="adm-control-fleet-label">
           <AdminNode size={ICON.md} aria-hidden="true" />

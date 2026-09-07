@@ -143,7 +143,6 @@
   clip-path: none;
   color: var(--ink-3);
   font: var(--type-micro);
-  font-size: var(--fs-1);
   letter-spacing: var(--track-0);
 }
 

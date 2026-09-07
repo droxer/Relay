@@ -484,6 +484,30 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
             ) : null}
             {/* No manual refresh: the view polls on its own (useAdminNodes),
                 so the button was chrome for a job already done. */}
+            {view === "dashboard" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="adm-create-action"
+                  onClick={() => setAddNodeOpen(true)}
+                  tooltip={t("admin.v2.add_node_cta")}
+                >
+                  <ActionAdd size={ICON.md} aria-hidden="true" />
+                  {t("admin.v2.add_node_cta")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="adm-create-action"
+                  onClick={() => setAddEmployeeOpen(true)}
+                  tooltip={t("admin.v2.add_employee_cta")}
+                >
+                  <ActionAdd size={ICON.md} aria-hidden="true" />
+                  {t("admin.v2.add_employee_cta")}
+                </Button>
+              </>
+            ) : null}
             {view === "employees" ? (
               <Button
                 type="button"
@@ -538,8 +562,6 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
                 <DashboardView
                   nodes={nodes} employees={employees} metrics={metrics}
                   onManageNodes={() => setView("nodes")}
-                  onAddNode={() => setAddNodeOpen(true)}
-                  onAddEmployee={() => setAddEmployeeOpen(true)}
                 />
               ) : view === "employees" ? (
                 <EmployeesView

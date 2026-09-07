@@ -53,21 +53,13 @@
 /* A dedicated navigation band keeps sections separate from page actions. */
 .adm-shell > .page-header {
   padding: var(--sp-6) var(--page-gutter);
-  background: var(--surface-1);
-}
-
-.adm-shell .page-header-kicker,
-.adm-control-eyebrow {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-  color: var(--ink-3);
+  background: var(--surface-header-bg);
 }
 
 .adm-shell .page-header-title {
-  font-family: var(--font-display);
-  font-size: var(--fs-5);
-  letter-spacing: var(--track-display);
+  /* Fixed-noun page title — same 20px/500 rung as Backlog, Teams, Computers. */
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
 }
 
 .adm-section-nav {
@@ -76,8 +68,8 @@
   justify-content: space-between;
   gap: var(--sp-4);
   padding: 0 var(--page-gutter);
-  border-bottom: 1px solid var(--line-1);
-  background: var(--surface-1);
+  border-bottom: 0.5px solid var(--line-1);
+  background: var(--surface-header-bg);
   min-width: 0;
 }
 
