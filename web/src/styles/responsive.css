@@ -184,7 +184,7 @@
 
   /* Work routes — mobile topbar already names the page; drop the in-page
      title band and keep a compact actions toolbar. */
-  .messenger-shell[data-route]:not([data-route="main"]) .page-header-lead {
+  .messenger-shell:where([data-route]:not([data-route="main"])) .page-header-lead {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -196,17 +196,19 @@
     border: 0;
   }
 
-  .messenger-shell[data-route]:not([data-route="main"]) .page-header {
+  .messenger-shell:where([data-route]:not([data-route="main"])) .page-header {
     min-height: 0;
     justify-content: flex-end;
     border-bottom-color: var(--line-2);
   }
 
-  /* Admin + agents keep their in-page lead (title, tabs). Other work routes
-     hide it because the mobile topbar already names the page. Agents must
-     keep the workspace segmented tabs — clipping the lead dropped them. */
+  /* Record routes keep their in-page lead because it contains the segmented
+     tabs. The mobile topbar names the route, while this header switches the
+     record's content. */
   .messenger-shell[data-route="admin"] .page-header,
-  .messenger-shell[data-route="agents"] .page-header {
+  .messenger-shell[data-route="agents"] .page-header,
+  .messenger-shell[data-route="teams"] .page-header,
+  .messenger-shell[data-route="projects"] .page-header {
     min-height: 0;
     justify-content: space-between;
     align-items: flex-start;
@@ -214,7 +216,9 @@
   }
 
   .messenger-shell[data-route="admin"] .page-header-lead,
-  .messenger-shell[data-route="agents"] .page-header-lead {
+  .messenger-shell[data-route="agents"] .page-header-lead,
+  .messenger-shell[data-route="teams"] .page-header-lead,
+  .messenger-shell[data-route="projects"] .page-header-lead {
     position: static;
     width: auto;
     height: auto;

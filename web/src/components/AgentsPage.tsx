@@ -189,7 +189,7 @@ export function AgentsPage({
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
-  const { agents, isFetching } = useEmployeeAgents(currentUser.employeeId);
+  const { agents, isFetching, error, refetch } = useEmployeeAgents(currentUser.employeeId);
   const descriptors = useMemo(() => agentDescriptors(t), [t]);
   const [query, setQuery] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value || null);
   const [availability, setAvailability] = useUrlSearchState(
@@ -232,8 +232,7 @@ export function AgentsPage({
   const handleProfileDirtyChange = useCallback((dirty: boolean) => {
     profileDirtyRef.current = dirty;
   }, []);
-  const handleSelectAgent = useCallback(async (agent: EmployeeAgent) => {
-    if (agent.id === detailAgent?.id) return;
+  const confirmProfileNavigation = useCallback(async () => {
     if (profileDirtyRef.current) {
       const ok = await confirm({
         title: t("unsaved.title"),
@@ -242,11 +241,20 @@ export function AgentsPage({
         cancelLabel: t("dialog.cancel"),
         tone: "danger",
       });
-      if (!ok) return;
+      if (!ok) return false;
       profileDirtyRef.current = false;
     }
+    return true;
+  }, [confirm, t]);
+  const handleSelectAgent = useCallback(async (agent: EmployeeAgent) => {
+    if (agent.id === detailAgent?.id) return;
+    if (!await confirmProfileNavigation()) return;
     onOpenAgent(agent);
-  }, [confirm, detailAgent?.id, onOpenAgent, t]);
+  }, [confirmProfileNavigation, detailAgent?.id, onOpenAgent]);
+  const handleBackToAgents = useCallback(async () => {
+    if (!await confirmProfileNavigation()) return;
+    onBackToAgents();
+  }, [confirmProfileNavigation, onBackToAgents]);
 
   return (
     <section
@@ -294,6 +302,12 @@ export function AgentsPage({
           <div className="route-loading" role="status" aria-live="polite">
             {t("admin.loading")}
           </div>
+        ) : error && agents.length === 0 ? (
+          <RelayEmptyState
+            title={t("workspace.load_failed")}
+            body={error}
+            actions={<Button type="button" variant="outline" onClick={() => void refetch()}>{t("workspace.retry")}</Button>}
+          />
         ) : visibleAgents.length === 0 ? (
           <RelayEmptyState
             title={activeAgents.length === 0 ? t("agents_page.empty_title") : t("agents_page.empty_filtered_title")}
@@ -341,7 +355,7 @@ export function AgentsPage({
               type="button"
               variant="ghost"
               className="agents-mobile-back"
-              onClick={onBackToAgents}
+              onClick={() => void handleBackToAgents()}
             >
               <NavBack size={ICON.sm} aria-hidden="true" />
               {t("agents_page.title")}

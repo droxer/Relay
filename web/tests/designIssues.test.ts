@@ -3,11 +3,81 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { resolve } from "node:path";
 
-import { activityChartMetrics } from "../src/lib/activityChart.js";
+import { activityChartMetrics } from "../src/lib/activityChart.ts";
 
 const readWeb = (path: string) => readFileSync(resolve("web", path), "utf8");
 
 describe("reviewed design regressions", () => {
+  it("keeps record detail tabs visible on mobile routes", () => {
+    const responsive = readWeb("src/styles/responsive.css");
+
+    // The shared hiding rule must have lower specificity than route overrides.
+    // Merely finding a later `position: static` does not prove it wins.
+    assert.match(responsive, /\.messenger-shell:where\(\[data-route\]:not\(\[data-route="main"\]\)\) \.page-header-lead\s*\{/);
+    assert.doesNotMatch(responsive, /\.messenger-shell\[data-route\]:not\(\[data-route="main"\]\) \.page-header-lead\s*\{/);
+
+    for (const route of ["agents", "teams", "projects"]) {
+      assert.match(
+        responsive,
+        new RegExp(`\\.messenger-shell\\[data-route="${route}"\\] \\.page-header-lead[\\s\\S]*?position:\\s*static`),
+        `${route} must restore the header lead that contains its tabs`,
+      );
+    }
+  });
+
+  it("guards mobile Back with the same discard confirmation as agent selection", () => {
+    const agents = readWeb("src/components/AgentsPage.tsx");
+    assert.match(agents, /const handleBackToAgents = useCallback\(async \(\) => \{\s*if \(!await confirmProfileNavigation\(\)\) return;\s*onBackToAgents\(\);/);
+    assert.match(agents, /className="agents-mobile-back"\s+onClick=\{\(\) => void handleBackToAgents\(\)\}/);
+    assert.match(agents, /if \(!await confirmProfileNavigation\(\)\) return;\s*onOpenAgent\(agent\);/);
+  });
+
+  it("uses compact pagination on narrow screens, including its page readout", () => {
+    const pager = readWeb("src/components/ui/Pagination.tsx");
+    assert.match(pager, /useMediaQuery\("\(max-width: 820px\)"\)/);
+    assert.match(pager, /const isCompact = compact \|\| narrow;/);
+    assert.match(pager, /const numbers = isCompact \? \[\] : pageNumbers/);
+    assert.match(pager, /\{isCompact[\s\S]*?pagination_range_compact/);
+  });
+
+  it("does not display a failed token total as a measured value", () => {
+    const dashboard = readWeb("src/components/admin/dashboard/DashboardView.tsx");
+    assert.match(dashboard, /value=\{tokens\.isError \? dash : formatCompact\(tokens\.total, i18n\.language\)\}/);
+    assert.match(dashboard, /hint=\{tokens\.isError \? t\("workspace.load_failed"\)/);
+  });
+
+  it("keeps project member actions discoverable without hover", () => {
+    const styles = readWeb("src/styles/project-page.css");
+    assert.match(
+      styles,
+      /@media \(hover: none\)[\s\S]*?\.project-member-tile-edit\s*\{[^}]*opacity:\s*1/s,
+    );
+  });
+
+  it("does not treat failed artifact downloads as copied content", () => {
+    const header = readWeb("src/components/artifact/ArtifactPreviewHeader.tsx");
+    assert.match(header, /const response = await fetch\(rawHref\);\s*if \(!response\.ok\) throw new Error/s);
+  });
+
+  it("preserves a visible unavailable state for failed dashboard data", () => {
+    const dashboard = readWeb("src/components/admin/dashboard/DashboardView.tsx");
+    const sessionHook = readWeb("src/hooks/useDashboardSessions.ts");
+    const tokenHook = readWeb("src/hooks/useTokenUsage.ts");
+
+    assert.match(dashboard, /const sessionsReady = !sessionsQuery\.isLoading && !sessionsQuery\.error;/);
+    assert.match(dashboard, /<TopEmployees[\s\S]*?error=\{sessionsQuery\.error\}/);
+    assert.match(sessionHook, /isError: boolean/);
+    assert.match(tokenHook, /isError:/);
+  });
+
+  it("lets agent and team routes distinguish failed loads from empty results", () => {
+    const agents = readWeb("src/hooks/useEmployeeAgents.ts");
+    const teams = readWeb("src/hooks/useTeams.ts");
+
+    assert.match(agents, /error: string \| null/);
+    assert.match(teams, /error: string \| null/);
+  });
+
   it("keeps chart scale padding separate from the reported data peak", () => {
     assert.deepEqual(activityChartMetrics([]), { dataPeak: 0, scaleMax: 4 });
     assert.deepEqual(

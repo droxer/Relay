@@ -40,6 +40,7 @@ export function ArtifactPreviewHeader({
   const handleCopy = useCallback(async () => {
     try {
       const response = await fetch(rawHref);
+      if (!response.ok) throw new Error(response.statusText);
       const text = await response.text();
       await navigator.clipboard.writeText(text);
       setCopied(true);

@@ -7,7 +7,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { TokenUsageSnapshot } from "../../../hooks/useTokenUsage";
+import type { TokenUsageState } from "../../../hooks/useTokenUsage";
+import { formatChartDate } from "../../../lib/chartDate";
 
 const WIDTH = 720;
 const HEIGHT = 200;
@@ -60,7 +61,7 @@ function PlaceholderBars({ compact }: { compact?: boolean }) {
 }
 
 interface TokenUsageChartProps {
-  snapshot: TokenUsageSnapshot;
+  snapshot: TokenUsageState;
   compact?: boolean;
   className?: string;
 }
@@ -74,6 +75,15 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
   const coverageNote = unsupportedAgents
     ? t("admin.v2.dash_tokens_unsupported", { agents: unsupportedAgents })
     : null;
+
+  if (snapshot.isError) {
+    return (
+      <Card render={<section />} className={className}>
+        <CardHeader><CardTitle render={<h2 />}>{t("admin.v2.dash_tokens_title")}</CardTitle></CardHeader>
+        <CardDescription>{snapshot.error}</CardDescription>
+      </Card>
+    );
+  }
 
   if (!snapshot.available || snapshot.daily.length === 0) {
     return (
@@ -165,6 +175,9 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
           });
         })}
       </svg>
+      <div className="adm-dash-chart-axis" aria-hidden="true">
+        {points.map((point) => <span key={point.date}>{formatChartDate(point.date, i18n.language)}</span>)}
+      </div>
       <ul className="sr-only">
         {points.map((point) => (
           <li key={point.date}>

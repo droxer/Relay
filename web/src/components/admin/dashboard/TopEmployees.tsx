@@ -16,10 +16,11 @@ interface TopEmployeesProps {
   employees: EmployeeRecord[];
   nodes: ControlPanelDaemonNodeRecord[];
   ranked: Array<{ employeeId: string; sessionCount: number }>;
+  error?: string | null;
   className?: string;
 }
 
-export function TopEmployees({ employees, nodes, ranked, className }: TopEmployeesProps) {
+export function TopEmployees({ employees, nodes, ranked, error, className }: TopEmployeesProps) {
   const { t } = useTranslation();
 
   const rows = useMemo(() => {
@@ -47,7 +48,9 @@ export function TopEmployees({ employees, nodes, ranked, className }: TopEmploye
       <CardHeader>
         <CardTitle render={<h2 />}>{t("admin.v2.dash_top_title")}</CardTitle>
       </CardHeader>
-      {rows.length === 0 ? (
+      {error ? (
+        <CardDescription>{error}</CardDescription>
+      ) : rows.length === 0 ? (
         <CardDescription>{t("admin.v2.dash_top_empty")}</CardDescription>
       ) : (
         <ol className="adm-dash-top-list">
