@@ -259,6 +259,90 @@ test("managed reconciler creates an attempt and starts the declared provider", a
     { status: "registering", providerInstanceId: "mnode_alice:1" },
   ]);
 });
+test("managed reconciler treats a daemon enrollment racing the registering patch as success", async () => {
+  const backend = new FakeManagedBackend([managedNode()]);
+  const provider = new FakeProvider();
+  // The spawned daemon enrolls (attempt → succeeded, terminal) while
+  // provider.ensure() is in flight, so the reconciler's registering PATCH
+  // lands after the attempt closed and the backend answers 409.
+  const baseEnsure = provider.ensure.bind(provider);
+  provider.ensure = async (input) => {
+    backend.attempts.push({
+      id: "attempt_1",
+      managedNodeId: input.node.id,
+      generation: 1,
+      attemptNumber: 1,
+      status: "succeeded",
+      startedAt: "2026-07-10T00:00:00Z",
+      updatedAt: "2026-07-10T00:00:00Z",
+    });
+    return baseEnsure(input);
+  };
+  const baseUpdate = backend.updateProvisioningAttempt.bind(backend);
+  backend.updateProvisioningAttempt = async (nodeId, attemptId, patch) => {
+    if (patch.status === "registering" && backend.attempts.some((attempt) => attempt.status === "succeeded")) {
+      const conflict = new Error("Provisioning attempt is already terminal.") as Error & { status: number };
+      conflict.status = 409;
+      throw conflict;
+    }
+    return baseUpdate(nodeId, attemptId, patch);
+  };
+  const reconciler = new ManagedNodeReconciler({
+    backend,
+    providers: [provider],
+    backendUrl: "http://backend.test",
+    workspacePathForNode: () => "/workspaces/alice",
+  });
+
+  assert.deepEqual(await reconciler.reconcileOnce(), {
+    nodes: 1,
+    started: 1,
+    skipped: 0,
+    healthy: 0,
+    failed: 0,
+  });
+});
+
+test("managed reconciler still fails when a conflicting attempt did not succeed", async () => {
+  const backend = new FakeManagedBackend([managedNode()]);
+  const provider = new FakeProvider();
+  const baseEnsure = provider.ensure.bind(provider);
+  provider.ensure = async (input) => {
+    backend.attempts.push({
+      id: "attempt_1",
+      managedNodeId: input.node.id,
+      generation: 1,
+      attemptNumber: 1,
+      status: "cancelled",
+      startedAt: "2026-07-10T00:00:00Z",
+      updatedAt: "2026-07-10T00:00:00Z",
+    });
+    return baseEnsure(input);
+  };
+  const baseUpdate = backend.updateProvisioningAttempt.bind(backend);
+  backend.updateProvisioningAttempt = async (nodeId, attemptId, patch) => {
+    if (patch.status === "registering" && backend.attempts.some((attempt) => attempt.status === "cancelled")) {
+      const conflict = new Error("Provisioning attempt is already terminal.") as Error & { status: number };
+      conflict.status = 409;
+      throw conflict;
+    }
+    return baseUpdate(nodeId, attemptId, patch);
+  };
+  const reconciler = new ManagedNodeReconciler({
+    backend,
+    providers: [provider],
+    backendUrl: "http://backend.test",
+    workspacePathForNode: () => "/workspaces/alice",
+  });
+
+  assert.deepEqual(await reconciler.reconcileOnce(), {
+    nodes: 1,
+    started: 0,
+    skipped: 0,
+    healthy: 0,
+    failed: 1,
+  });
+});
 
 test("managed workspace identity is explicit when configured and node-affine otherwise", () => {
   assert.equal(

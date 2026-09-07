@@ -291,7 +291,8 @@ export class ManagedNodeReconciler {
       let created: Awaited<ReturnType<ManagedNodeBackend["createProvisioningAttempt"]>> | undefined;
       try {
         created = await this.backend.createProvisioningAttempt(node.id);
-        await this.backend.updateProvisioningAttempt(node.id, created.attempt.id, { status: "allocating" });
+        const createdAttemptId = created.attempt.id;
+        await this.backend.updateProvisioningAttempt(node.id, createdAttemptId, { status: "allocating" });
         const instance = await provider.ensure({
           node,
           attempt: created.attempt,
@@ -301,10 +302,20 @@ export class ManagedNodeReconciler {
           workspaceId: workspaceIdForManagedNode(node),
         });
         this.instances.set(node.id, { provider, instance, generation: node.generation });
-        await this.backend.updateProvisioningAttempt(node.id, created.attempt.id, {
-          status: "registering",
-          providerInstanceId: instance.id,
-        });
+        try {
+          await this.backend.updateProvisioningAttempt(node.id, createdAttemptId, {
+            status: "registering",
+            providerInstanceId: instance.id,
+          });
+        } catch (error) {
+          // The spawned daemon can enroll (attempt → succeeded, terminal)
+          // before this PATCH lands; that is a completed provision, not a
+          // failure, and the backend rightfully refuses to reopen the attempt.
+          if (!isConflictResponse(error)) throw error;
+          const current = (await this.backend.listProvisioningAttempts(node.id))
+            .find((attempt) => attempt.id === createdAttemptId);
+          if (current?.status !== "succeeded") throw error;
+        }
         started += 1;
       } catch (error) {
         failed += 1;
