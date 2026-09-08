@@ -1,5 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { getSession, RelayApiError } from "../api";
+import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
 import type { RelaySession } from "../types";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { mergeSessionEventsIntoSessions, SessionEventIdIndex } from "../lib/sessionEventMerge";
@@ -18,10 +20,14 @@ type RelayEvent = RelaySession["events"][number];
 // truth for everything else.
 export function useSessionEvents(sessionId: string | undefined, enabled: boolean): void {
   const queryClient = useQueryClient();
+  const [connection, setConnection] = useState(0);
+  const retryDelay = useRef({ sessionId, milliseconds: 1_000 });
 
   useEffect(() => {
     if (!sessionId || !enabled || typeof window === "undefined") return;
 
+    if (retryDelay.current.sessionId !== sessionId) retryDelay.current = { sessionId, milliseconds: 1_000 };
+    const controller = new AbortController();
     const source = new EventSource(sessionEventsUrl(
       sessionId,
       lastSessionEventId(queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY), sessionId),
@@ -101,28 +107,34 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       if (isTerminalSessionStatus(status)) source.close();
     });
 
-    // EventSource auto-reconnects on transient errors, but it cannot read the
-    // HTTP status, so a permanent failure (auth lost, session gone) would loop
-    // forever hammering the backend. Cap consecutive failures and fall back to
-    // the list poll, which remains the source of truth.
-    let failures = 0;
-    const MAX_FAILURES = 5;
+    // Recreate even CLOSED sources: browsers do not automatically retry some
+    // failed handshakes. Resume from the last committed event, not a dropped frame.
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     source.onerror = () => {
-      // A reconnect attempt (CONNECTING) is normal; only count hard failures.
-      if (source.readyState !== EventSource.CLOSED) {
-        failures += 1;
-        if (failures >= MAX_FAILURES) source.close();
-        return;
-      }
       source.close();
+      if (reconnectTimer !== undefined) return;
+      const delay = retryDelay.current.milliseconds;
+      retryDelay.current.milliseconds = Math.min(30_000, delay * 2);
+      reconnectTimer = setTimeout(() => setConnection(value => value + 1), delay);
+      // HTTP remains a fallback when SSE itself is unavailable. Also lets us
+      // distinguish a temporary outage from revoked access or a deleted thread.
+      void getSession(sessionId, controller.signal).then(snapshot => {
+        if (controller.signal.aborted) return;
+        queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
+          mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked));
+      }).catch(error => {
+        if (error instanceof RelayApiError && [401, 403, 404].includes(error.status)) {
+          clearTimeout(reconnectTimer);
+        }
+      });
     };
-    source.onopen = () => {
-      failures = 0;
-    };
+    source.onopen = () => { retryDelay.current.milliseconds = 1_000; };
 
     return () => {
+      controller.abort();
       source.close();
       scheduler.cancel();
+      if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
     };
-  }, [sessionId, enabled, queryClient]);
+  }, [sessionId, enabled, queryClient, connection]);
 }

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import { DialogProvider, useDialogs } from "../src/components/ui/DialogProvider";
 import { useTranscriptPin } from "../src/hooks/useTranscriptPin";
 
@@ -34,5 +34,27 @@ it("rebinds transcript observation when the same session's DOM remounts", () => 
   expect(disconnect).toHaveBeenCalled();
   fireEvent.click(screen.getByText("Toggle"));
   expect(observe).toHaveBeenLastCalledWith(screen.getByTestId("content"));
+  vi.unstubAllGlobals();
+});
+
+it("follows growing output only while the reader is pinned", () => {
+  let resize!: () => void;
+  vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { resize = callback; } observe() {} disconnect() {} });
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(0); return 1; });
+  function Harness() {
+    const pin = useTranscriptPin(1, "session");
+    return <><button onClick={pin.pinToBottom}>Pin</button><div data-testid="transcript" ref={pin.ref} onScroll={pin.onScroll}><div /></div></>;
+  }
+  render(<Harness />);
+  const node = screen.getByTestId("transcript");
+  Object.defineProperties(node, { scrollHeight: { value: 500 }, clientHeight: { value: 100 } });
+  node.scrollTop = 0;
+  fireEvent.scroll(node);
+  act(() => resize());
+  expect(node.scrollTop).toBe(0);
+  fireEvent.click(screen.getByText("Pin"));
+  expect(node.scrollTop).toBe(500);
+  act(() => resize());
+  expect(node.scrollTop).toBe(500);
   vi.unstubAllGlobals();
 });

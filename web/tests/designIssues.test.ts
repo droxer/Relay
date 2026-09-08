@@ -25,12 +25,7 @@ describe("reviewed design regressions", () => {
     }
   });
 
-  it("guards mobile Back with the same discard confirmation as agent selection", () => {
-    const agents = readWeb("src/components/AgentsPage.tsx");
-    assert.match(agents, /const handleBackToAgents = useCallback\(async \(\) => \{\s*if \(!await confirmProfileNavigation\(\)\) return;\s*onBackToAgents\(\);/);
-    assert.match(agents, /className="agents-mobile-back"\s+onClick=\{\(\) => void handleBackToAgents\(\)\}/);
-    assert.match(agents, /if \(!await confirmProfileNavigation\(\)\) return;\s*onOpenAgent\(agent\);/);
-  });
+  // Agent Back/discard behavior is exercised in e2e/frontendRecovery.spec.ts.
 
   it("uses compact pagination on narrow screens, including its page readout", () => {
     const pager = readWeb("src/components/ui/Pagination.tsx");

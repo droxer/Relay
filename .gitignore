@@ -24,6 +24,9 @@ out/
 .ruff_cache/
 .coverage
 htmlcov/
+coverage/
+playwright-report/
+test-results/
 
 # BoxLite OCI export (generated from local Docker image)
 .oci/

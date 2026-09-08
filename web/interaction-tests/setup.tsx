@@ -17,4 +17,4 @@ vi.mock("@/components/ui/dialog", () => {
 vi.mock("@/components/ui/toast", () => ({ Toaster: () => null, toast: { add: vi.fn() } }));
 vi.mock("@/components/ui/button", () => ({ Button: ({ children, tooltip: _tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, ...props }: any) => createElement("button", props, children) }));
 vi.mock("@/components/ui/input", () => ({ Input: (props: any) => createElement("input", props) }));
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });

@@ -4,6 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from "react-i18next";
 import { logout } from "./api";
 import type { AgentName, AgentTeam, EmployeeAgent, RelayArtifact, RelaySession } from "./types";
+import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { LoginScreen } from "./components/LoginScreen";
 import { useRelayData } from "./hooks/useRelayData";
 import { useRelayMutations } from "./hooks/useRelayMutations";
@@ -677,6 +678,7 @@ export function App() {
       language={preferences.language}
       onLanguageChange={preferences.setLanguage}
     >
+      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${teamWorkspaceId}`}>
       <Suspense fallback={<RouteFallback />}>
         {notFound ? (
           <section className="route-loading" role="status">
@@ -804,6 +806,7 @@ export function App() {
           />
         )}
       </Suspense>
+      </ScreenErrorBoundary>
     </AppShell>
   );
 }

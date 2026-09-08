@@ -6,7 +6,7 @@ import { useRelayMutations } from "../src/hooks/useRelayMutations";
 import { useSessionEvents } from "../src/hooks/useSessionEvents";
 import { useSessionDetail } from "../src/hooks/useSessionDetail";
 import { deleteSession, getSession } from "../src/api";
-vi.mock("../src/api", () => ({ deleteSession: vi.fn(), getSession: vi.fn() }));
+vi.mock("../src/api", () => ({ deleteSession: vi.fn(), getSession: vi.fn(), RelayApiError: class extends Error { constructor(public message: string, public status: number) { super(message); } } }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn() }) }));
 vi.mock("../src/hooks/useMutationError", () => ({ useMutationError: () => ({ reportMutationError: vi.fn() }) }));
 const key = ["relay", "sessions"];

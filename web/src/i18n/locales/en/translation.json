@@ -13,6 +13,9 @@
     "confirm": "Discard changes"
   },
   "errors": {
+    "screen_failed": "This screen could not load",
+    "screen_failed_body": "Reload to try again, or open another page.",
+    "reload_app": "Reload app",
     "rename_thread": "Couldn't rename the thread. Refresh the thread list and try again.",
     "rename_computer": "Couldn't rename the computer. Check the connection and try again.",
     "disconnect_computer": "Couldn't disconnect that computer. Check your connection and try again.",

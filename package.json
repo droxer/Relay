@@ -14,12 +14,11 @@
   "scripts": {
     "build": "npm run build -w relay-core && npm run build -w relay-chat && npm run build -w relay-daemon && npm run build -w relay-supervisor && npm run build -w web && tsc -p packages/tsconfig.json",
     "test": "npm run test:ts && npm run test:py",
-    "test:ts": "npm run build && node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-chat/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js dist/web/tests/*.test.js",
+    "test:ts": "npm run build && node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-chat/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js dist/web/tests/*.test.js && npm run test:react -w web",
     "test:py": "UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest",
     "test:integration": "npm run build && UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest -m integration",
     "web": "npm run dev -w web"
   },
-  "dependencies": {},
   "overrides": {
     "nanoid": "3.3.18",
     "postcss": "8.5.23",
@@ -29,6 +28,7 @@
     "@boxlite-ai/boxlite": "^0.9.7",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.16",
+    "jsdom": "^26.1.0",
     "typescript": "^5.9.0"
   },
   "engines": {

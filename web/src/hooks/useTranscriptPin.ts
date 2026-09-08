@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Keeps the transcript pinned to its newest output while the reader is at the
@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef } from "react";
  */
 export interface TranscriptPin {
   /** Attach to the scrolling transcript element. */
-  ref: React.RefObject<HTMLDivElement | null>;
+  ref: (node: HTMLDivElement | null) => void;
   /** Attach to that element's onScroll. */
   onScroll: () => void;
   /** Re-pin to the bottom — call after sending, or when opening a thread. */
@@ -31,25 +31,34 @@ export function useTranscriptPin(
   messageCount: number,
   sessionId: string | undefined,
 ): TranscriptPin {
-  const ref = useRef<HTMLDivElement>(null);
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    elementRef.current = node;
+    setElement(node);
+  }, []);
   const atBottom = useRef(true);
 
   const onScroll = useCallback(() => {
-    const el = ref.current;
+    const el = elementRef.current;
     if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_EPSILON;
   }, []);
 
   const pinToBottom = useCallback(() => {
     atBottom.current = true;
+    const el = elementRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
-  }, [messageCount, sessionId]);
+  useEffect(() => { atBottom.current = true; }, [sessionId]);
 
   useEffect(() => {
-    const el = ref.current;
+    const el = element;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
+  }, [element, messageCount, sessionId]);
+
+  useEffect(() => {
+    const el = element;
     const content = el?.firstElementChild;
     if (!el || !content || typeof ResizeObserver === "undefined") return;
     let frame: number | undefined;
@@ -65,7 +74,7 @@ export function useTranscriptPin(
       observer.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [sessionId]);
+  }, [element]);
 
   return { ref, onScroll, pinToBottom };
 }

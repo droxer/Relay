@@ -47,7 +47,7 @@ export type ThreadsViewProps = {
   pendingUserMessage: { id: string; text: string } | null;
   displayMessages: DerivedMessage[];
   awaitingDecision: boolean;
-  transcriptRef: RefObject<HTMLDivElement | null>;
+  transcriptRef: (node: HTMLDivElement | null) => void;
   composerRef: RefObject<ComposerHandle | null>;
   onTranscriptScroll: () => void;
   onSelectThread: (sessionId: string) => void;

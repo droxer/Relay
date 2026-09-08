@@ -6,6 +6,7 @@ import { DialogProvider } from "@/components/ui/DialogProvider";
 import { ArtifactViewerProvider } from "@/components/ArtifactViewerProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "../i18n";
+import { ScreenErrorBoundary } from "../components/ScreenErrorBoundary";
 
 // Single QueryClient for the SPA. Created in state so it survives re-renders
 // but is never shared across requests (irrelevant under static export, but the
@@ -27,6 +28,7 @@ function makeQueryClient(): QueryClient {
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
   return (
+    <ScreenErrorBoundary>
     <QueryClientProvider client={queryClient}>
       {/* One tooltip provider for the app, so the delay before the FIRST
           tooltip opens is paid once and moving between neighbouring icon
@@ -37,5 +39,6 @@ export function Providers({ children }: { children: ReactNode }) {
         </DialogProvider>
       </TooltipProvider>
     </QueryClientProvider>
+    </ScreenErrorBoundary>
   );
 }

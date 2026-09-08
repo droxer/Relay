@@ -11,7 +11,10 @@
     "prepreview": "npm run build -w relay-core",
     "preview": "next dev -H 127.0.0.1 -p 5000",
     "lint:css": "stylelint \"src/**/*.css\"",
-    "test:react": "vitest run"
+    "test:react": "vitest run",
+    "test:e2e": "playwright test",
+    "pretest:e2e": "npm run build",
+    "test:react:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -43,10 +46,11 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/react-dom": "^19.2.3",
-    "jsdom": "^30.0.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "shadcn": "^4.13.0",
     "stylelint": "^16.9.0",
     "vitest": "^5.0.0"

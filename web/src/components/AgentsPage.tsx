@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { groupAgentsByComputer } from "../lib/agentGroups";
 import { agentMatchesQuery } from "../lib/agentSearch";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
-import { useDialogs } from "@/components/ui/DialogProvider";
 import type { AgentName, CurrentUser, EmployeeAgent, LogicalAgentAvailability } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
@@ -188,7 +187,6 @@ export function AgentsPage({
   onOpenThread,
 }: AgentsPageProps) {
   const { t } = useTranslation();
-  const { confirm } = useDialogs();
   const { agents, isFetching, error, refetch } = useEmployeeAgents(currentUser.employeeId);
   const descriptors = useMemo(() => agentDescriptors(t), [t]);
   const [query, setQuery] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value || null);
@@ -225,36 +223,12 @@ export function AgentsPage({
   const loading = isFetching && agents.length === 0;
   const [createOpen, setCreateOpen] = useState(false);
 
-  // The detail pane remounts per agent (key={detailAgent.id}), so an
-  // in-flight profile draft cannot survive a roster switch — hold the
-  // selection here until the owner confirms the discard.
-  const profileDirtyRef = useRef(false);
-  const handleProfileDirtyChange = useCallback((dirty: boolean) => {
-    profileDirtyRef.current = dirty;
-  }, []);
-  const confirmProfileNavigation = useCallback(async () => {
-    if (profileDirtyRef.current) {
-      const ok = await confirm({
-        title: t("unsaved.title"),
-        message: t("unsaved.message"),
-        confirmLabel: t("unsaved.confirm"),
-        cancelLabel: t("dialog.cancel"),
-        tone: "danger",
-      });
-      if (!ok) return false;
-      profileDirtyRef.current = false;
-    }
-    return true;
-  }, [confirm, t]);
-  const handleSelectAgent = useCallback(async (agent: EmployeeAgent) => {
-    if (agent.id === detailAgent?.id) return;
-    if (!await confirmProfileNavigation()) return;
-    onOpenAgent(agent);
-  }, [confirmProfileNavigation, detailAgent?.id, onOpenAgent]);
-  const handleBackToAgents = useCallback(async () => {
-    if (!await confirmProfileNavigation()) return;
-    onBackToAgents();
-  }, [confirmProfileNavigation, onBackToAgents]);
+  // All route changes share the editor's navigation guard, including the
+  // mobile Back button, sidebar, and browser history.
+  const handleSelectAgent = useCallback((agent: EmployeeAgent) => {
+    if (agent.id !== detailAgent?.id) onOpenAgent(agent);
+  }, [detailAgent?.id, onOpenAgent]);
+  const handleBackToAgents = onBackToAgents;
 
   return (
     <section
@@ -365,7 +339,6 @@ export function AgentsPage({
               agent={detailAgent}
               onOpenThread={onOpenThread}
               canEditMeta
-              onProfileDirtyChange={handleProfileDirtyChange}
             />
           </>
         ) : (
