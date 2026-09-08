@@ -7,12 +7,12 @@ import { NavRefresh } from "@/components/icons"
 import { Tooltip } from "@/components/ui/tooltip"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-bold whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-bold whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-(--opacity-disabled) aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         /* Disabled drops OUT of the fill rather than fading through it. The
-           shared `disabled:opacity-50` is right for ghost/outline/link, where
+           shared `disabled:opacity-(--opacity-disabled)` is right for ghost/outline/link, where
            the label sits on the page's own surface, but half-opacity white on
            cobalt measures ~2.2:1 — and a filled CTA is exactly the button that
            spends most of its life disabled (admin Settings' Save is disabled
@@ -44,7 +44,7 @@ const buttonVariants = cva(
           "border-destructive/45 text-destructive hover:border-destructive hover:bg-destructive hover:text-destructive-foreground focus-visible:border-destructive focus-visible:[outline:var(--focus-outline-danger)] focus-visible:[outline-offset:var(--focus-offset)] disabled:opacity-100 disabled:border-(--line-1) disabled:text-(--ink-4)",
         /* Circular icon-only action — the source system's 40px button-icon-circular:
            ink-3 idle; a control wash + line-2 + ink-1 on hover. Always paired
-           with the `icon` (--control-h) / `icon-sm` (--control-h-xs) sizes.
+           with the `icon` (--control-h) / `icon-dense` (--control-h-xs) sizes.
            `tinted` swaps the hover to an --action wash; the `danger` modifier
            re-tints it to --err and adds the hairline that keeps the
            destructive signal alive under forced-colors. */
@@ -56,14 +56,15 @@ const buttonVariants = cva(
            inline half rounds to the 24px step on the grid. */
         default:
           "h-(--control-h) gap-1.5 px-6 has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
-        /* The text tier climbs with the size tier: xs 12px (caption) → sm and
-           default 14px (the source system's button-md, the base `text-xs`).
+        /* The text tier climbs with the size tier: xs 12px (caption) → dense, sm and
+           default 13px (the source system's button-md, the base `text-xs`).
            Every tier takes the CONTROL radius (--r-2, 6px) from the base, not
            a pill: see the radii block in palette.css for why this app squares
            off the brand's lozenge. These tiers restate it only to win the
            tailwind-merge conflict inside a button group. */
         xs: "h-(--control-h-2xs) gap-1 rounded-md px-3 text-micro in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-(--control-h-xs) gap-1 rounded-md px-4 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        dense: "h-(--control-h-xs) gap-1 rounded-md px-4 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        sm: "h-(--control-h-sm) gap-1.5 px-4 text-xs",
         /* One step ABOVE `default`, on the --control-h-lg rung, for hero and
            dual-CTA pairs where the pill carries a marketing weight. */
         lg: "h-(--control-h-lg) gap-2 px-7 has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5",
@@ -71,7 +72,7 @@ const buttonVariants = cva(
            label typography. Replaces the old `.adm-form-actions` descendant
            override so footer buttons are styled explicitly.
 
-           Shares `default`'s 14px/700 label and differs from it by padding
+           Shares `default`'s 13px/700 label and differs from it by padding
            alone — in this system the button label is ALREADY the bold tier
            (the source system's button-md is 14px/700), so a commit action cannot
            emphasise itself by getting heavier. It leads through the cobalt
@@ -80,12 +81,13 @@ const buttonVariants = cva(
         /* Square counterpart of `default`: the toolbar refresh buttons sit
            directly beside default-size buttons, so the icon tier tracks
            --control-h instead of a fixed height that rendered 8px short.
-           `icon-sm`/`icon-xs` remain the dense tiers for in-row chrome. */
+           `icon-dense`/`icon-xs` remain the dense tiers for in-row chrome. */
         icon: "size-(--control-h)",
         "icon-xs":
           "size-(--control-h-2xs) rounded-md in-data-[slot=button-group]:rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
+        "icon-dense":
           "size-(--control-h-xs) rounded-md in-data-[slot=button-group]:rounded-md",
+        "icon-sm": "size-(--control-h-sm)",
         "icon-lg": "size-(--control-h-lg)",
       },
       /* Tinted hover for the `icon` variant — the icon communicates a colored

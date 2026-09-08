@@ -162,7 +162,7 @@ export function EmployeeRow({
       <TableCell render={<div />} className="adm-emp-actions">
         {onEdit ? (
           <Button variant="icon"
-            size="icon-sm"
+            size="icon-dense"
             tinted
             type="button"
             className="adm-node-card-icon-btn"
@@ -175,7 +175,7 @@ export function EmployeeRow({
         ) : null}
         {onDelete ? (
           <Button variant="icon"
-            size="icon-sm"
+            size="icon-dense"
             tinted
             type="button"
             danger

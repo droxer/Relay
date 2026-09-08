@@ -100,7 +100,7 @@ export function WorkspaceFileList({
       ) : message ? (
         <div className="workspace-file-error">
           <WorkspaceEmpty title={message} mark={<WorkspaceFile size={ICON.lg} />} announce />
-          {sharedUnavailable ? <Button type="button" variant="outline" size="sm" onClick={onRetry}>{t("workspace.retry")}</Button> : null}
+          {sharedUnavailable ? <Button type="button" variant="outline" size="dense" onClick={onRetry}>{t("workspace.retry")}</Button> : null}
         </div>
       ) : data && !data.exists ? (
         <WorkspaceEmpty title={t("workspace.files_unavailable")} mark={<WorkspaceFile size={ICON.lg} />} announce />

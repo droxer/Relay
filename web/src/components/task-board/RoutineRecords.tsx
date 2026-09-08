@@ -42,7 +42,7 @@ export function RoutineStartButton({
   return (
     <Button
       variant="icon"
-      size="icon-sm"
+      size="icon-dense"
       tinted
       type="button"
       className="backlog-action-icon"

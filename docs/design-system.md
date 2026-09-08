@@ -1,4 +1,4 @@
-# Relay Design — Meta Commerce
+# Relay Design System
 
 <p align="center">
   <img src="../web/public/brand/relay-logo.svg" alt="Relay logo" width="360">
@@ -6,15 +6,13 @@
 
 ## Overview
 
-Relay's visual language follows the Meta hardware-commerce system recorded in
-[Appendix — the source system](#appendix--the-source-system) at the end of this
-document. That appendix is the complete extracted spec (it replaces the
-`DESIGN.md` the analysis originally shipped as); everything above it is what
-Relay actually implements, and the two are meant to be read together. It rests
-on one rule:
+The executable source of truth is `web/src/styles/tokens/`. This document
+specifies Relay's current dense workspace UI. The [source-system appendix](#appendix--the-source-system)
+is historical design reference, not a component specification: Relay adapts its
+colors and typography but uses compact corners and flat elevation.
 
-> **A stark canvas carries the content; cobalt carries the action; every
-> button, tab, and badge is a pill.**
+> **A neutral canvas carries the content; cobalt carries the action;
+> shared tokens and components carry the interface.**
 
 A near-white cloud canvas with stark white cards, a cool ink ramp, the source
 system's semantic status hues, and one saturated action colour — cobalt `#0064e0` —
@@ -69,10 +67,11 @@ Phosphor.
   inverted against the usual expectation: the display tiers are 500 and the
   heaviest weight belongs to the *small* roles — button labels, badges, body
   emphasis. JetBrains Mono survives for technical text only — IDs, logs,
-  code — set 400 untracked.
-- **Pill geometry, generous cards.** Every button, tab chip, and badge takes
-  `--r-full`; containers step 4 → 8 → 16 → 24 → 32. "Buttons are NEVER
-  squared in Meta's system" is a rule, not a preference.
+  code — the code role is 400 and the `.code` utility is 500, both untracked.
+- **Compact geometry, flat surfaces.** Micro details use `--r-1` (4px),
+  controls/tabs/badges use `--r-2` (6px), and containers use `--r-3` (8px).
+  `--r-full` is reserved for true circles and capsules, including status dots
+  and switch tracks. Floating surfaces use a hairline ring, without blur.
 - **One ease, two speeds.** `--ease` `cubic-bezier(0, 0, 0.2, 1)` (ease-out),
   `--t-fast` 150ms, `--t-slow` 250ms — the source system's recommended band.
   Nothing
@@ -85,7 +84,7 @@ demo.
 ## Token architecture
 
 Tokens live under `web/src/styles/tokens/`, imported by
-`web/src/styles/styles.css`. The three Relay files are pulled in with
+`web/src/styles.css`. The three Relay files are pulled in with
 `layer(relay)`; `shadcn-bridge.css` stays **unlayered** because it carries the
 Tailwind `@theme` machinery:
 
@@ -125,7 +124,7 @@ Tailwind `@theme` machinery:
    tabular figures in the reading face — counts, timestamps, ratios, sizes.
    `.code` gives the mono face to literal strings the operator could type,
    paste, or diff — node ids, `@handles`, emails, workspace paths,
-   credentials. Because `.code` sets `font-family` alone, a companion rule
+   credentials. Because `.code` supplies a family and weight rather than a full font role, a companion rule
    using the `font` shorthand resets it; those sites carry an explicit
    `.<class>.code` override.
 
@@ -267,11 +266,8 @@ deliberate — a reader who takes the rule literally will file them as bugs:
   cobalt like every other primary action. The cover sets its field labels,
   footer meta, and status line in the mono face — a deliberate skin;
   everywhere else mono is technical text only.
-- **The atelier landing keeps one ambient glow.** The empty transcript state
-  drifts an ink-only wash on `--t-ambient`. That is decoration, not
-  liveness — no pulse cadence, no accent — so an idle landing's accent
-  density stays zero. It is the ambient loop's only occupant; a second one is
-  a bug.
+- **Empty states remain still.** They share type, spacing, and an optional
+  identity mark. There is no decorative ambient animation token.
 
 Any **further** source of colour is a bug.
 
@@ -294,17 +290,17 @@ introduces visual rest.
 
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
-| `--type-display` | 500 48/1.17 | `--track-display` (0) | hero headline, admin metric values |
-| `--type-title` | 500 24/1.25 | `--track-display` (0) | page titles and other fixed UI nouns |
+| `--type-display` | 500 32/1.17 | `--track-display` (0) | hero headline, admin metric values |
+| `--type-title` | 500 20/1.25 | `--track-display` (0) | page titles and other fixed UI nouns |
 | `--type-heading` | 700 18/1.44 | `--track-0` | section heads, list labels, in-message h1 |
-| `--type-title-content` | 400 24/1.25 | `--track-display` (0) | titles whose text comes from a user or agent |
+| `--type-title-content` | 400 20/1.25 | `--track-display` (0) | titles whose text comes from a user or agent |
 | `--type-body` | 400 16/1.5 | `--track-body` | prose, message bodies, inputs |
 | `--type-name` | 700 16/1.5 | `--track-body` | the identity of the thing a row or card is about |
-| `--type-body-sm` | 400 14/1.43 | `--track-body-sm` | dense prose, captions |
-| `--type-label` | 500 14/1.43 | `--track-body-sm` | chrome labels, nav, metadata |
-| `--type-label-strong` | 700 14/1.43 | `--track-body-sm` | bold chrome, button and pill-tab labels |
+| `--type-body-sm` | 400 13/1.43 | `--track-body-sm` | dense prose, captions |
+| `--type-label` | 500 13/1.43 | `--track-body-sm` | chrome labels, nav, metadata |
+| `--type-label-strong` | 700 13/1.43 | `--track-body-sm` | bold chrome, button and pill-tab labels |
 | `--type-micro` | 700 12/1.33 | `--track-caps` (0) | structural group labels (+ uppercase), badges |
-| `--type-number` | 500 36/1.28 | `--track-display` (0) | metrics |
+| `--type-number` | 500 24/1.28 | `--track-display` (0) | metrics |
 | `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
 
 **Every role ships a paired `--type-<role>-track`.** The `font:` shorthand
@@ -331,15 +327,11 @@ disables font synthesis, so an 800 declaration would silently render as 700.
 Nothing in the roles asks for it — in this system the heaviest weight (700)
 already belongs to the small emphasis tiers, and the display tiers sit at 500.
 
-The size ladder is **12 / 14 / 16 / 18 / 24 / 36 / 48** (`--fs-1`, `--fs-2`,
-`--fs-3`, `--fs-heading`, `--fs-title`, `--fs-5`, `--fs-6`, all rem; root
-pinned to 87.5% so 1rem = 14px at the default), with `--fs-hero` clamping
-between 36 and 64px for the one hero tier. `--fs-4` **aliases `--fs-3`**: the
-source system has exactly one reading size between its 14px body-sm and its
-18px subtitle, so the two names survive for call-site meaning (dense prose vs
-body copy) rather than inventing a 15px step the brand does not have. The root
-font-size is pinned to 87.5% so the browser's font-size preference scales the
-whole UI (WCAG 1.4.4).
+The size ladder is **12 / 13 / 15 / 16 / 18 / 20 / 24 / 32px** at the
+browser's default font size (`--fs-1/2/3/4/heading/title/5/6`). All sizes use
+rem; the root is 87.5% (14px by default), so user font preferences scale type.
+The hero size clamps between 24 and 40px. Dense prose (`--fs-3`, 15px) and
+body copy (`--fs-4`, 16px) are distinct roles. Code uses 14px monospace.
 
 **`--track-display` must be applied to every display-tier rule** — via the
 role's paired track token or directly. Display-tier means *two* shapes, and
@@ -368,13 +360,10 @@ through to the system sans by design rather than shipping a second file.
 
 ## Geometry, elevation, motion
 
-- **Radii:** `--r-1` 4px (tags, micro-controls) · `--r-2` 8px (inputs, radio
-  options, selection tiles) · `--r-3` 16px (cards, drawers, modals) · `--r-4`
-  24px (accessory tiles, ghost action cards) · `--r-5` 32px (photographic
-  feature cards, promo strips) · `--r-full` (pills, tab chips, badges, dots,
-  avatars). `--r-full` is 9999px rather than the source system's literal 100px so the
-  pill holds its shape at any control height; at Relay's 28–44px controls the
-  two are visually identical.
+- **Radii:** `--r-1` 4px for micro details; `--r-2` 6px for controls,
+  tabs, and badges; `--r-3` 8px for cards, drawers, dialogs, and panels.
+  `--r-full` is 9999px for actual circles/capsules. Tailwind's larger radius
+  names clamp to `--r-3`; they do not introduce additional geometry.
 - **Spacing:** 4px base — `--sp-1` 4 · `--sp-2` 8 · `--sp-3` 12 · `--sp-4`
   16 · `--sp-5` 20 · `--sp-6` 24 · `--sp-7` 32 · `--sp-8` 48. The scale stops
   there: the source system's 64/80px section rungs shipped with no call site
@@ -386,19 +375,15 @@ through to the system sans by design rather than shipping a second file.
   the source system renders inputs and primary pills at the same height so they share
   a silhouette and clear the WCAG AAA touch floor.
 - **Density:** `[data-density="compact"]` drops the reading tier one rung
-  (`--fs-4` 16 → 14px) for genuinely dense surfaces (tables and list
+  (`--fs-4` 16 → 15px; body-sm 13 → 12px) for genuinely dense surfaces (tables and list
   layouts). Put the attribute on the dense container, not the page. It
   overrides `--fs-4` **and restates every role built on it** (`--type-body`,
   `--type-name`, `--type-body-sm`), because a custom property resolves
   `var()` where it is *declared*, not where it inherits. Add a restatement
   whenever a new role uses `--fs-4`.
-- **Elevation:** the source system runs three levels and only two of them are real
-  shadows. Level 0 — cards and tiles — is flat: rounding plus a hairline, and
-  the source system explicitly calls heavy shadows on a marketing card a
-  mistake ("elevation is a commerce-flow signal, not a marketing flourish").
-  `--shadow-1` is therefore `none`. `--shadow-2` is the one published blur
-  (`rgba(20,22,26,.3) 0 1px 4px`) plus a 1px hairline ring, carried by chrome
-  that genuinely floats: drawers, dialogs, menus, sticky summaries.
+- **Elevation:** flat. `--shadow-1` is `none`; `--shadow-2` is a 0.5px
+  `--line-1` ring without blur. Cards separate by surface and border;
+  floating dialogs, drawers, menus, tooltips, and toasts share the ring.
 - **Focus:** `--focus-outline` — a 2px solid **link-blue** ring at a 2px
   offset (WCAG 1.4.11), drawn with `outline`, **not** `box-shadow`, so no
   ancestor's `overflow: hidden` can clip it and forced-colors mode preserves
@@ -464,8 +449,8 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Pair the action fill with `--on-action` — white on the cobalt, in both
   registers.
 - Use `--action-soft` for selected rows and active navigation.
-- Give every button, tab chip, and badge `--r-full`. A squared button reads
-  as a third-party widget dropped into the page.
+- Give buttons, tab chips, and badges `--r-2`; reserve `--r-full` for
+  actual circles and capsules.
 - Carry status as dots/borders/text on the semantic tones; use `--info` for
   status without alarm.
 - Use `--live` only for work happening right now, and only where `--t-pulse`
@@ -476,7 +461,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Apply the paired `--type-*-track` at every display-role site, even where
   the paired track is 0 — the declaration is the contract.
 - Disable with opacity, not a dedicated hex.
-- Carry depth with hairlines first; the one blur is for floating chrome.
+- Separate surfaces with fills and hairlines; floating chrome adds a ring, not blur.
 - Add new raw values to `palette.css` and new roles to `roles.css` — never
   inline a colour in a component file (`npm run lint:css -w web` enforces).
 
@@ -484,7 +469,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Don't use a status colour as an action, or the action colour as a status.
 - Don't introduce a third accent. Cobalt is the action, purple is liveness,
   blue is wayfinding; everywhere else the ink ramp is the only signal.
-- Don't square off a pill, and don't run a card without rounding.
+- Don't give controls pill corners or introduce radii beyond the 4/6/8px ladder.
 - Don't set text or dots in a status tone taken straight from the source
   system's badge palette — those are *fill* values (success `#31a24c` measures 3.1:1
   on white, warning `#f7b928` 1.8:1). The tokens here are already the
@@ -518,9 +503,8 @@ Relay's breakpoint registry lives in a comment at the top of `palette.css` —
 custom properties cannot drive `@media`, so that list is the only registry
 there is, and it must be updated when a query is added. The app-wide tiers are
 **820px** (mobile) and **1040px** (tablet); everything else is a component tier
-(480 backlog card grid · 560 artifact chips · 600 dialog stack · 640 compact
-panes · 720 transcript time column · 768 admin drawer · 900 dashboard medium ·
-1100 multi-pane → single pane · 1200 dashboard widest). Two rules of thumb: a
+(480 narrow phone · 640 compact panes · 768 container queries · 900 dashboard
+medium · 1100 multi-pane → single pane · 1200 dashboard widest). Two rules of thumb: a
 new query reuses a tier above rather than inventing a neighbour, and one
 component gets one breakpoint.
 
@@ -557,6 +541,50 @@ utilisation readout: live-carrying elements when work is in flight, none when
 idle.
 
 ---
+
+## Shared component contracts
+
+- Slotted primitives own their border, fill, disabled, focus, and invalid
+  states. Native element resets must exclude all `data-slot` controls; the
+  `relay` layer follows Tailwind utilities and otherwise overrides them.
+- Overlay inputs keep the shared control boundary (`--control-border`). Only
+  their fill changes to `--field-on-overlay`; structural hairlines are not
+  field boundaries. Error borders remain `--err`.
+- `--tone-line` resolves on each element and pseudo-element from its local
+  `--tone`. Defining this composite only on the root would freeze the neutral
+  fallback before a badge or alert supplies its tone.
+- Ordinary disabled controls use `--opacity-disabled` (0.6). Filled primary
+  and destructive buttons retain their explicit full-opacity disabled fills.
+- Switches retain a 36×20px track on both pointer types, with a pseudo-element
+  providing a 44px target. Touch sizing must not enlarge the visible track.
+- Toast stack geometry belongs to Toast; its appearance uses `--shadow-2`,
+  `--ease`, `--t-slow` for movement/opacity and `--t-fast` for height.
+
+| Control size | Height | Button | SelectTrigger |
+| --- | --- | --- | --- |
+| Inline | 24px | `xs`, `icon-xs` | — |
+| Dense row | 32px | `dense`, `icon-dense` | — |
+| Small standalone | 40px | `sm`, `icon-sm` | `sm` |
+| Default | 44px | `default`, `icon`, `cta` | `default` |
+| Large | 48px | `lg`, `icon-lg` | — |
+
+Existing 32px button consumers use `dense` explicitly. Touch controls may
+increase to the shared target floor; compact visual controls use separate hit
+areas. Do not change row density as a side effect of aligning API names.
+
+## Reviewing changes
+
+Run `npm run dev -w web` and open `/dev/design-system` for a specimen composed
+from the actual primitives. It uses no API records and returns not-found in
+production. Use the light/dark controls, drawer, and toast actions to inspect
+states. It is a focused control specimen, not a substitute for real-route review.
+
+Run `npx playwright install chromium` once, then `npm run test:design -w web`
+for computed-style checks in desktop and touch Chromium, in both themes.
+The suite covers chrome, tone scope, invalid overlay fields, disabled opacity,
+size parity, switch geometry, toast elevation/motion, and reduced motion.
+Keep source-level token tests too: they check vocabulary and ownership, while
+browser checks prove the styles that actually win the cascade.
 
 # Appendix — the source system
 

@@ -40,7 +40,7 @@ export function BoardEmpty({
           {createLabel}
         </Button>
       ) : onClear && clearLabel ? (
-        <Button size="sm" variant="ghost" onClick={onClear}>
+        <Button size="dense" variant="ghost" onClick={onClear}>
           {clearLabel}
         </Button>
       ) : undefined}

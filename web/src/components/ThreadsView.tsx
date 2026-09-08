@@ -293,7 +293,7 @@ export function ThreadsView({
             title={t("project.load_failed")}
             body={projectsError || t("project.load_failed_body")}
             actions={(
-              <Button type="button" variant="outline" size="sm" onClick={onRetryProjects}>
+              <Button type="button" variant="outline" size="dense" onClick={onRetryProjects}>
                 {t("workspace.retry")}
               </Button>
             )}
@@ -311,7 +311,7 @@ export function ThreadsView({
             title={t("project.not_found")}
             body={t("project.not_found_body")}
             actions={(
-              <Button type="button" variant="outline" size="sm" onClick={() => onSelectProject(null)}>
+              <Button type="button" variant="outline" size="dense" onClick={() => onSelectProject(null)}>
                 {t("project.back")}
               </Button>
             )}

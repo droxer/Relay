@@ -43,13 +43,6 @@
      read the same. The only state allowed above the hover tier. */
   --line-drag: color-mix(in srgb, var(--ink-1) 30%, var(--line-1));
 
-  /* Status-tinted edge — the one strength for a border that carries a status
-     tone (set --tone first via the .tone-* classes, or it falls back to the
-     neutral ink). Was hand-mixed at nine different percentages (18–45%)
-     across the surface sheets; 35% reads against both registers on a 0.5px
-     hairline. */
-  --tone-line: color-mix(in srgb, var(--tone, var(--ink-1)) 35%, transparent);
-
   /* Selected-row accent bar — the 2px inset marker down the leading edge of
      the active item in a list or drawer section, in the cobalt action.
      Full-height, drawn as an inset shadow; the rail variant that stops short
@@ -225,4 +218,13 @@ html:lang(zh-CN),
 html:lang(zh-TW) {
   --type-body:    400 var(--fs-4)/1.7 var(--font-sans);
   --type-body-sm: 400 var(--fs-2)/1.7 var(--font-sans);
+}
+
+/* Resolve locally, including on pseudo-elements: a root composite would
+   inherit an already-resolved neutral fallback instead of the consumer's tone.
+   This defines a value only; components opt in by consuming --tone-line. */
+*,
+*::before,
+*::after {
+  --tone-line: color-mix(in srgb, var(--tone, var(--ink-1)) 35%, transparent);
 }

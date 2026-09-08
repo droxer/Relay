@@ -90,7 +90,7 @@
   [role="menuitemcheckbox"],
   [role="menuitemradio"],
   [role="option"],
-  [role="switch"],
+  [role="switch"]:not([data-slot="switch"]),
   [data-slot="button"],
   [data-slot="link-button"],
   [data-slot="input"],
@@ -222,5 +222,13 @@
     --line-2: color-mix(in srgb, var(--dark-ink) 26%, var(--dark-surface));
     --focus-w: 3px;
     --focus-outline: var(--focus-w) solid var(--dark-ink);
+  }
+}
+
+/* The switch's pseudo-element supplies a 44px hit target around its compact
+   36×20px drawing. Growing the track itself distorts the thumb geometry. */
+@media (pointer: coarse) {
+  [data-slot="switch"] {
+    min-height: 0;
   }
 }

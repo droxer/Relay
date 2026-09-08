@@ -18,7 +18,7 @@ export function PageHeader({
   subtitle?: ReactNode;
   toolbar?: ReactNode;
   actions?: ReactNode;
-  /** "display" is mono, for fixed UI nouns; "record" is sans, for a name the
+  /** "display" is medium-weight sans for fixed UI nouns; "record" is regular sans for a name the
    *  user or an agent authored. See .page-header-title--display in shell.css. */
   titleVariant?: "default" | "display" | "record";
   /** Heading level. Nested detail panes (team/agent detail under a roster)
