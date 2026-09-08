@@ -700,7 +700,9 @@ def test_scheduler_backs_off_after_failed_dispatch() -> None:
             assert failed["dispatchClaim"]["id"]
             assert failed["dispatchOutcome"]["code"] == "dispatch_failed"
             assert second.dispatched == 0
-            assert second.skipped == 1
+            # Queue storage filters deferred tasks before the scheduler loads
+            # routing state, so an immediate retick has no candidate to skip.
+            assert second.skipped == 0
             assert backend.calls == 1
 
     asyncio.run(run_flow())

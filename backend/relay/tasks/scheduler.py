@@ -4,7 +4,7 @@ import asyncio
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
@@ -300,7 +300,9 @@ class TaskScheduler:
         for task in candidates:
             if attempts >= self.max_dispatches_per_tick:
                 break
-            if self._backoff_active(task["id"], now):
+            if self._backoff_active(task["id"], now) or self._retry_deadline_active(
+                task
+            ):
                 skipped += 1
                 continue
             if self._continuation_refused(task):
@@ -614,6 +616,7 @@ class TaskScheduler:
             )
             return False
         self.task_store.update_task(task["id"], {"status": "running"})
+        self.task_store.clear_dispatch_retry(task["id"])
         if claim_id:
             self.task_store.release_dispatch_claim(task["id"], claim_id)
         self.task_store.record_dispatch_outcome(task["id"], "started")
@@ -639,6 +642,30 @@ class TaskScheduler:
         failures = self._dispatch_backoff.get(task_id, (0, 0.0))[0] + 1
         delay = min(self.interval_seconds * (2**failures), MAX_DISPATCH_BACKOFF_SECONDS)
         self._dispatch_backoff[task_id] = (failures, time.monotonic() + delay)
+        next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+        self.task_store.record_dispatch_retry(
+            task_id,
+            failure_count=failures,
+            next_attempt_at=next_attempt_at.isoformat().replace("+00:00", "Z"),
+            code="dispatch_failed",
+            message="Retry scheduled after dispatch failure.",
+        )
+
+    @staticmethod
+    def _retry_deadline_active(task: dict[str, Any]) -> bool:
+        retry = task.get("dispatchRetry")
+        if not isinstance(retry, dict):
+            return False
+        value = retry.get("nextAttemptAt")
+        if not isinstance(value, str):
+            return False
+        try:
+            deadline = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if deadline.tzinfo is None:
+            return False
+        return deadline > datetime.now(timezone.utc)
 
     def _routine_due(self, task: dict[str, Any], today: date) -> bool:
         if (

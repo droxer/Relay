@@ -502,6 +502,7 @@ class TaskDispatcher:
             return self._dispatch_error_result(error)
 
         self.ctx.task_store.update_task(self.task["id"], {"status": "running"})
+        self.ctx.task_store.clear_dispatch_retry(self.task["id"])
         if self.claim_id:
             self.ctx.task_store.release_dispatch_claim(self.task["id"], self.claim_id)
         message = f"{self.agent} started the task."
