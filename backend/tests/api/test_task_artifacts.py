@@ -185,3 +185,20 @@ def test_task_artifacts_denied_for_other_employee(monkeypatch) -> None:
 
         response = worker.get(f"/api/v1/tasks/{task['id']}/artifacts")
         assert response.status_code == 403
+
+
+def test_historical_artifact_download_prefers_retained_content_over_live_file(monkeypatch):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root, TemporaryDirectory() as ws:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        task = _create_task_with_session(client, ws)
+        session_id = task["linkedSessionIds"][0]
+        artifact = _workspace_artifact(ws, "report.pdf", artifact_id="20000000-0000-4000-8000-000000000099",
+                                      created_at="2026-07-01T00:00:00.000Z", content_type="application/pdf")
+        Path(artifact["path"]).write_bytes(b"later project edits")
+        app.state.session_store.index_workspace_artifact(session_id, artifact, b"original task output")
+        response = client.get(f"/api/v1/threads/{session_id}/artifacts/{artifact['id']}")
+        assert response.status_code == 200
+        assert response.content == b"original task output"
