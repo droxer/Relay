@@ -10,7 +10,8 @@
     "build": "next build",
     "prepreview": "npm run build -w relay-core",
     "preview": "next dev -H 127.0.0.1 -p 5000",
-    "lint:css": "stylelint \"src/**/*.css\""
+    "lint:css": "stylelint \"src/**/*.css\"",
+    "test:react": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -42,9 +43,13 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/react-dom": "^19.2.3",
+    "jsdom": "^30.0.1",
     "shadcn": "^4.13.0",
-    "stylelint": "^16.9.0"
+    "stylelint": "^16.9.0",
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=22.19.0"
