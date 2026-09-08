@@ -3,6 +3,10 @@
 **Date:** 2026-09-02
 **Status:** Approved, ready for implementation planning
 
+**Update:** Implemented; binding persistence and capability fallback are refined by
+[ADR-018](adr/018-durable-task-workspace-bindings.md). The original decisions below
+are retained as design history.
+
 ## Problem
 
 A task dispatches one session per round, each linked through

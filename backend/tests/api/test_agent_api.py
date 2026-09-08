@@ -2467,7 +2467,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2682,7 +2682,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )

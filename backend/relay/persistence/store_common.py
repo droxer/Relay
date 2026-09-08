@@ -568,6 +568,23 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     return task
 
 
+def _apply_task_workspace_wait(task: dict[str, Any], event: dict[str, Any]) -> None:
+    if event.get("waiting"):
+        task["workspaceWaiting"] = dict(event["waiting"])
+    elif (task.get("workspaceWaiting") or {}).get("runId") == event.get("runId"):
+        task.pop("workspaceWaiting", None)
+
+
+def _apply_task_workspace_bound(task: dict[str, Any], event: dict[str, Any]) -> None:
+    binding = event["binding"]
+    current = task.get("workspaceBinding")
+    if current and current != binding:
+        raise ValueError(
+            "workspace_unavailable: a task's workspace binding is immutable."
+        )
+    task["workspaceBinding"] = dict(binding)
+
+
 def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
     for key in ("title", "description", "priority", "assigneeEmployeeId", "dueDate"):
         if key not in event or event[key] is None:
@@ -647,6 +664,8 @@ def _apply_task_round(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 def _apply_task_status(task: dict[str, Any], event: dict[str, Any]) -> None:
     task["status"] = event["status"]
+    if event["status"] != "running":
+        task.pop("workspaceWaiting", None)
 
 
 def _apply_task_deleted(task: dict[str, Any], event: dict[str, Any]) -> None:
@@ -674,6 +693,8 @@ def _apply_task_activity(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 TaskEventHandler = Callable[[dict[str, Any], dict[str, Any]], None]
 TASK_EVENT_HANDLERS: dict[str, TaskEventHandler] = {
+    "task.workspace_bound": _apply_task_workspace_bound,
+    "task.workspace_wait": _apply_task_workspace_wait,
     "task.updated": _apply_task_updated,
     "task.assigned": _apply_task_assigned,
     "task.unassigned": _apply_task_unassigned,

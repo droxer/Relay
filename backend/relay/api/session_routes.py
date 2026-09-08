@@ -937,21 +937,28 @@ async def read_artifact(
     session = get_session_for_actor(ctx.session_store, session_id, actor)
     artifact = session_artifact(session, artifact_id)
     if artifact and is_workspace_artifact(artifact):
+        # An artifact identifies the producing run's bytes, even while the
+        # shared workspace has a newer file at the same path.
+        read_content = getattr(ctx.session_store, "read_artifact_content", None)
+        content = read_content(session_id, artifact_id) if read_content else None
+        if content is not None:
+            from urllib.parse import quote
+
+            filename = quote(artifact.get("title") or "artifact", safe="")
+            return Response(
+                content,
+                media_type=artifact.get("contentType") or "application/octet-stream",
+                headers={
+                    "Content-Disposition": f"attachment; filename*=UTF-8''{filename}"
+                },
+            )
+        # Legacy artifacts without snapshots retain their live-file behavior.
         path = workspace_artifact_path(session, artifact)
         if path:
             return FileResponse(
                 path,
                 media_type=artifact.get("contentType") or "application/octet-stream",
                 filename=artifact.get("title") or path.name,
-            )
-        # The live workspace copy is gone (or lives on another machine); fall
-        # back to the content snapshot stored when the artifact was indexed.
-        read_content = getattr(ctx.session_store, "read_artifact_content", None)
-        content = read_content(session_id, artifact_id) if read_content else None
-        if content is not None:
-            return Response(
-                content,
-                media_type=artifact.get("contentType") or "application/octet-stream",
             )
         raise HTTPException(404, "Artifact not found.")
     try:

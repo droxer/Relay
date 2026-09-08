@@ -159,7 +159,7 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
         assert command["workspaceSubpath"] == f"tasks/{task['id']}"
 
 
-def test_dispatch_falls_back_to_thread_on_an_older_node(monkeypatch) -> None:
+def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -181,9 +181,9 @@ def test_dispatch_falls_back_to_thread_on_an_older_node(monkeypatch) -> None:
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
 
-        command = _take_command(app, node)
-        assert command["workspaceLayout"] == "thread"
-        assert "workspaceSubpath" not in command
+        assert started.json()["dispatch"]["state"] == "queued"
+        assert started.json()["dispatch"]["code"] == "workspace_unavailable"
+        assert started.json()["session"] is None
 
 
 def test_dispatch_resolves_the_layout_on_the_legacy_no_agent_record_branch(
