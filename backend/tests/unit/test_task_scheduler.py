@@ -743,6 +743,40 @@ def test_scheduler_uses_targeted_task_queue_queries() -> None:
     asyncio.run(run_flow())
 
 
+def test_scheduler_honors_a_persisted_retry_deadline_after_restart() -> None:
+    class RetryOnlyTaskStore:
+        def list_due_routines(self, today: str) -> list[dict]:
+            return []
+
+        def list_dispatchable_tasks(self) -> list[dict]:
+            return [
+                {
+                    "id": "task_waiting",
+                    "status": "assigned",
+                    "assignedAgent": "codex",
+                    "assignedAgentId": "agent_builder",
+                    "dispatchRetry": {
+                        "failureCount": 1,
+                        "nextAttemptAt": "2099-01-01T00:00:00Z",
+                    },
+                }
+            ]
+
+    async def run_flow() -> None:
+        scheduler = TaskScheduler(
+            task_store=RetryOnlyTaskStore(),
+            registry=object(),
+            backend=SimpleNamespace(agent_store=object(), agent_placement_store=object()),
+        )
+
+        result = await scheduler.tick()
+
+        assert result.dispatched == 0
+        assert result.skipped == 1
+
+    asyncio.run(run_flow())
+
+
 def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
     """A legacy `assignedAgent` runtime task resolves to an already-declared
     agent for that runtime/computer pair; agents are no longer auto-created."""
