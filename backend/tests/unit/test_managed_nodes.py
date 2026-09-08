@@ -371,3 +371,39 @@ def test_blank_provider_is_rejected(tmp_path: Path) -> None:
     node = store.create_node({"employeeId": "alice"})
     with pytest.raises(ValueError, match="provider must be a non-empty string"):
         store.update_node(node["id"], {"provider": 7})
+
+
+def test_late_provider_registration_preserves_completed_enrollment(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+    node = store.create_node({"employeeId": "alice"})
+    attempt, _ = store.create_attempt(node["id"])
+    store.complete_enrollment(node["id"], attempt["id"], "daemon")
+    store.mark_ready("daemon")
+    completed = store.list_attempts(node["id"])[0]
+    updated = store.update_attempt(attempt["id"], {
+        "status": "registering", "providerInstanceId": "instance",
+    })
+    assert updated["status"] == "succeeded"
+    assert updated["providerInstanceId"] == "instance"
+    assert updated["finishedAt"] == completed["finishedAt"]
+    assert store.get_node(node["id"])["phase"] == "ready"
+
+
+def test_old_runtime_cannot_mark_new_generation_ready(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+    node = store.create_node({"employeeId": "alice"})
+    attempt, _ = store.create_attempt(node["id"])
+    store.complete_enrollment(node["id"], attempt["id"], "daemon")
+    store.update_node(node["id"], {"profile": "large"})
+    assert store.mark_ready("daemon") is None
+    assert store.get_node(node["id"])["phase"] == "requested"
+
+
+def test_stopping_runtime_cannot_mark_ready(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+    node = store.create_node({"employeeId": "alice"})
+    attempt, _ = store.create_attempt(node["id"])
+    store.complete_enrollment(node["id"], attempt["id"], "daemon")
+    store.update_node(node["id"], {"desiredState": "stopped"})
+    assert store.mark_ready("daemon") is None
+    assert store.get_node(node["id"])["phase"] == "draining"

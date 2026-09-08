@@ -321,6 +321,16 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
             "timeoutMs": 15_000,
         }
 
+        # Enrollment and readiness can beat the provider's allocation response.
+        attempt_id = attempt_response.json()["attempt"]["id"]
+        late_provider = client.patch(
+            f"/api/v1/admin/managed-nodes/{managed_node['id']}/attempts/{attempt_id}",
+            json={"status": "registering", "providerInstanceId": "local-process:fixture"},
+        )
+        assert late_provider.status_code == 200
+        assert late_provider.json()["attempt"]["status"] == "succeeded"
+        assert late_provider.json()["attempt"]["providerInstanceId"] == "local-process:fixture"
+
         managed = client.get(f"/api/v1/admin/managed-nodes/{managed_node['id']}")
         assert managed.status_code == 200
         assert managed.json()["node"]["phase"] == "ready"

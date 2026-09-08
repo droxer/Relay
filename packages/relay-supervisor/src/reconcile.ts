@@ -12,6 +12,8 @@ export interface SupervisorOptions {
   launcher: DaemonLauncher;
   workspacePathForEmployee: (employee: EmployeeRecord) => string;
   logger?: SupervisorLogger;
+  registrationTimeoutMs?: number;
+  now?: () => number;
 }
 
 export interface ReconcileResult {
@@ -26,6 +28,9 @@ export class RelaySupervisor {
   private readonly launcher: DaemonLauncher;
   private readonly workspacePathForEmployee: (employee: EmployeeRecord) => string;
   private readonly logger?: SupervisorLogger;
+  private readonly now: () => number;
+  private readonly registrationTimeoutMs: number;
+  private readonly launchedAt = new Map<string, number>();
   private readonly managed = new Map<string, ManagedDaemon>();
 
   constructor(options: SupervisorOptions) {
@@ -33,6 +38,8 @@ export class RelaySupervisor {
     this.launcher = options.launcher;
     this.workspacePathForEmployee = options.workspacePathForEmployee;
     this.logger = options.logger;
+    this.now = options.now ?? Date.now;
+    this.registrationTimeoutMs = options.registrationTimeoutMs ?? 15 * 60_000;
   }
 
   async reconcileOnce(): Promise<ReconcileResult> {
@@ -62,6 +69,19 @@ export class RelaySupervisor {
         this.logger?.info("provisioned daemon node", { employeeId: employee.id, nodeId: node.id });
       }
 
+      if (this.launcher.connectionMode === "http" && this.managed.has(node.id)) {
+        if (node.online && !node.stale) {
+          // Bootstrap ownership ends once the remote daemon reports over HTTP.
+          this.managed.delete(node.id);
+          this.launchedAt.delete(node.id);
+        } else if (this.now() - (this.launchedAt.get(node.id) ?? 0) >= this.registrationTimeoutMs) {
+          // Stop only the bootstrap command before retrying it. Remote daemon
+          // lifecycle must be implemented idempotently by that command.
+          await this.managed.get(node.id)!.stop();
+          this.managed.delete(node.id);
+          this.launchedAt.delete(node.id);
+        }
+      }
       if (!shouldStart(node) || this.managed.has(node.id)) {
         skipped += 1;
         continue;
@@ -79,6 +99,7 @@ export class RelaySupervisor {
         workspacePath,
       });
       this.managed.set(node.id, managed);
+      this.launchedAt.set(node.id, this.now());
       started += 1;
       this.logger?.info("started daemon node", { employeeId: employee.id, nodeId: node.id, provider: managed.provider });
     }
@@ -89,10 +110,13 @@ export class RelaySupervisor {
   async stop(): Promise<void> {
     const daemons = [...this.managed.values()];
     this.managed.clear();
+    this.launchedAt.clear();
+    if (this.launcher.connectionMode === "http") return;
     await Promise.allSettled(daemons.map((daemon) => daemon.stop()));
   }
 
   private pruneExitedDaemons(): void {
+    if (this.launcher.connectionMode === "http") return;
     for (const [nodeId, daemon] of this.managed) {
       if (!daemon.child) continue;
       if (daemon.child.exitCode === null && !daemon.child.signalCode) continue;
@@ -110,7 +134,7 @@ export class RelaySupervisor {
 
 function shouldStart(node: ControlPanelDaemonNodeRecord): boolean {
   if (node.online && !node.stale) return false;
-  return Boolean(node.nodeToken);
+  return true;
 }
 
 function nodeRank(node: ControlPanelDaemonNodeRecord): number {
