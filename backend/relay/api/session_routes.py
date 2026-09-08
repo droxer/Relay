@@ -924,10 +924,14 @@ async def read_artifact(
                 content,
                 media_type=artifact.get("contentType") or "application/octet-stream",
                 headers={
-                    "Content-Disposition": "attachment; filename*=UTF-8''" + quote(
-                        str(artifact.get("title") or artifact_id), safe=""
+                    "Content-Disposition": (
+                        "attachment; filename*=UTF-8''"
+                        + quote(str(artifact.get("title") or artifact_id), safe="")
                     ),
-                    "Content-Security-Policy": "sandbox; default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+                    "Content-Security-Policy": (
+                        "sandbox; default-src 'none'; base-uri 'none'; "
+                        "frame-ancestors 'none'"
+                    ),
                 },
             )
         raise HTTPException(404, "Artifact not found.")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from tempfile import TemporaryDirectory
 
+import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
@@ -450,8 +451,9 @@ def test_project_bounds_and_member_deletion_guard(monkeypatch) -> None:
         assert listed[0]["archivedAt"]
 
 
-def test_employee_delete_allows_archived_project_and_preserves_history(
-    monkeypatch,
+@pytest.mark.parametrize("archive_first", [True, False])
+def test_employee_delete_requires_archival_and_preserves_history(
+    monkeypatch, archive_first,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -477,10 +479,11 @@ def test_employee_delete_allows_archived_project_and_preserves_history(
                 ],
             },
         ).json()["project"]
-        archived = client.delete(
-            f"/api/v1/projects/{project['id']}?expectedVersion=1"
-        )
-        assert archived.status_code == 200, archived.text
+        if archive_first:
+            archived = client.delete(
+                f"/api/v1/projects/{project['id']}?expectedVersion=1"
+            )
+            assert archived.status_code == 200, archived.text
         client.post("/api/v1/auth/logout")
         assert (
             client.post(
@@ -492,16 +495,13 @@ def test_employee_delete_allows_archived_project_and_preserves_history(
 
         deleted = client.delete("/api/v1/admin/employees/alice")
 
-        assert deleted.status_code == 200, deleted.text
-        assert (
-            app.state.project_store.get_project(project["id"]).get("archivedAt")
-            is not None
-        )
-        assert app.state.agent_store.get_agent(lead["id"]).get("deletedAt") is not None
-        assert not any(
-            employee["id"] == "alice"
-            for employee in client.get("/api/v1/admin/employees").json()["employees"]
-        )
+        assert deleted.status_code == (200 if archive_first else 409), deleted.text
+        saved_project = app.state.project_store.get_project(project["id"])
+        assert bool(saved_project.get("archivedAt")) is archive_first
+        assert saved_project["members"] == project["members"]
+        assert bool(app.state.agent_store.get_agent(lead["id"]).get("deletedAt")) is archive_first
+        employees = client.get("/api/v1/admin/employees").json()["employees"]
+        assert any(employee["id"] == "alice" for employee in employees) is not archive_first
 
 
 def test_project_routes_are_owner_scoped(monkeypatch) -> None:

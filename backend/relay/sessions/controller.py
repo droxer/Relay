@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
 from loguru import logger
@@ -202,7 +202,9 @@ class SessionController:
             ),
         )
 
-    def complete_session(self, session_id: str, outcome: str, task_status: str = "done") -> dict[str, Any]:
+    def complete_session(
+        self, session_id: str, outcome: str, task_status: str = "done"
+    ) -> dict[str, Any]:
         with self._transaction():
             return self._complete_session(session_id, outcome, task_status)
 
@@ -266,7 +268,9 @@ class SessionController:
             ),
         )
 
-    def cancel_session(self, session_id: str, note: str = "Cancelled by human.") -> dict[str, Any]:
+    def cancel_session(
+        self, session_id: str, note: str = "Cancelled by human."
+    ) -> dict[str, Any]:
         with self._transaction():
             return self._cancel_session(session_id, note)
 
@@ -758,7 +762,7 @@ class SessionController:
         if session_id not in task["linkedSessionIds"]:
             self.task_store.link_session(self.task_id, session_id)
 
-    def _transaction(self):
+    def _transaction(self) -> AbstractContextManager[Any]:
         engine = getattr(self.store, "engine", None)
         if engine is not None and (
             self.task_store is None or getattr(self.task_store, "engine", None) is engine

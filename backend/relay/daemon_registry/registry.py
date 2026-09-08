@@ -3310,9 +3310,6 @@ class DaemonNodeRegistry:
         """Only the last writable member may publish the aggregate verdict."""
         return assignment_reports_round_result(assignments, index)
 
-    def _node_reports_generated_files(self, sandbox: dict[str, Any]) -> bool:
-        return DAEMON_CAPABILITY_GENERATED_FILES in (sandbox.get("capabilities") or [])
-
     def _record_generated_workspace_artifacts(
         self,
         sandbox: dict[str, Any],

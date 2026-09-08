@@ -131,3 +131,39 @@ def test_dangling_legacy_session_id_is_treated_as_missing(
         store,
         {"linkedSessionIds": ["ses_legacy"]},
     )
+
+
+def test_empty_project_migration_preserves_data_and_guards_downgrade(
+    migrated_schema: tuple[str, str],
+) -> None:
+    from relay.persistence.agent_store import DatabaseAgentStore
+    from relay.persistence.project_store import DatabaseProjectStore
+    from relay.security.auth import DatabaseUserAuthStore
+
+    url, _schema = migrated_schema
+    owner = DatabaseUserAuthStore(url).create_user(
+        "project-owner", "kestrel-vault-7719", employee_id="project-owner"
+    )["employeeId"]
+    store = DatabaseProjectStore(url)
+    project = store.create_project(owner, {
+        "name": "New project", "computerId": "device:review", "members": [],
+    })
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    with pytest.raises(RuntimeError, match="assign their lead agents first"):
+        command.downgrade(config, "20260908_0066")
+    assert store.get_project(project["id"]) == project
+
+    agent = DatabaseAgentStore(url).create_agent(owner, {
+        "displayName": "Lead", "executorKind": "codex", "defaultRole": "planner",
+    })
+    populated = store.update_project(project["id"], {
+        "leadAgentId": agent["id"],
+        "members": [{
+            "agentId": agent["id"], "role": "planner", "functionTitle": "Lead",
+            "responsibilities": "Plan",
+        }],
+    }, expected_version=1)
+    command.downgrade(config, "20260908_0066")
+    command.upgrade(config, "head")
+    assert store.get_project(project["id"]) == populated

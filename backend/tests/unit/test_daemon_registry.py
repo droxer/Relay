@@ -1545,13 +1545,6 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
         with TemporaryDirectory() as root:
             workspace = Path(root) / "workspace"
             workspace.mkdir()
-            stale = workspace / "old-deck.pptx"
-            stale.write_bytes(b"old")
-            stale_time = time.time() - 3600
-            os.utime(stale, (stale_time, stale_time))
-            existing = workspace / "existing-deck.pptx"
-            existing.write_bytes(b"already here")
-
             session_store = LocalSessionStore(root)
             daemon_store = LocalDaemonStore(root)
             registry = DaemonNodeRegistry(session_store, daemon_store)
@@ -1580,14 +1573,6 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
             [command] = registry.take_commands("sbx_alice", "node_token")
             generated = workspace / "quarterly-review.pptx"
             generated.write_bytes(b"pptx bytes")
-            outside = Path(root) / "outside.pptx"
-            outside.write_bytes(b"outside")
-            linked = workspace / "linked-outside.pptx"
-            try:
-                linked.symlink_to(outside)
-            except OSError as exc:
-                pytest.skip(f"symlinks unavailable: {exc}")
-
             registry.handle_event(
                 "sbx_alice",
                 {
@@ -1598,6 +1583,9 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
                     "agent": "codex",
                     "exitCode": 0,
                     "agentLog": "created quarterly-review.pptx",
+                    "generatedFiles": [
+                        {"relativePath": 'quarterly-review.pptx', "contentBase64": base64.b64encode(b'pptx bytes').decode("ascii")}
+                    ],
                 },
                 "node_token",
             )
@@ -1609,7 +1597,7 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
                 if item["kind"] == "workspace_file"
             ]
             assert artifact["title"] == "quarterly-review.pptx"
-            assert artifact["path"] == str(generated.resolve())
+            assert artifact["path"] == str(workspace / session["id"] / generated.name)
             assert artifact["workspaceRelativePath"] == "quarterly-review.pptx"
             assert artifact["agentRunId"] == command["runId"]
             assert artifact["id"] in updated["agentRuns"][0]["artifactIds"]
@@ -1676,6 +1664,11 @@ def test_daemon_completion_indexes_text_files_under_output_folder() -> None:
                     "agent": "codex",
                     "exitCode": 0,
                     "agentLog": "created output/summary.md",
+                    "generatedFiles": [
+                        {"relativePath": 'notes.md', "contentBase64": base64.b64encode(b'a root deliverable\n').decode("ascii")},
+                        {"relativePath": 'output/summary.md', "contentBase64": base64.b64encode(b'# Summary\n').decode("ascii")},
+                        {"relativePath": 'checkout/README.md', "contentBase64": base64.b64encode(b'not a deliverable').decode("ascii")}
+                    ],
                 },
                 "node_token",
             )
@@ -1974,6 +1967,10 @@ def test_regenerated_workspace_file_gets_artifact_per_producing_run() -> None:
                     "agent": "codex",
                     "exitCode": 0,
                     "agentLog": "created report.pdf",
+                    "generatedFiles": [{
+                        "relativePath": "report.pdf",
+                        "contentBase64": base64.b64encode(report.read_bytes()).decode("ascii"),
+                    }],
                 },
                 "node_token",
             )
@@ -1998,6 +1995,10 @@ def test_regenerated_workspace_file_gets_artifact_per_producing_run() -> None:
                     "agent": "codex",
                     "exitCode": 0,
                     "agentLog": "refreshed report.pdf",
+                    "generatedFiles": [{
+                        "relativePath": "report.pdf",
+                        "contentBase64": base64.b64encode(report.read_bytes()).decode("ascii"),
+                    }],
                 },
                 "node_token",
             )
