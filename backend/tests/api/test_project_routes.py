@@ -450,7 +450,7 @@ def test_project_bounds_and_member_deletion_guard(monkeypatch) -> None:
         assert listed[0]["archivedAt"]
 
 
-def test_employee_delete_rejects_archived_project_without_partial_cascade(
+def test_employee_delete_allows_archived_project_and_preserves_history(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -492,14 +492,13 @@ def test_employee_delete_rejects_archived_project_without_partial_cascade(
 
         deleted = client.delete("/api/v1/admin/employees/alice")
 
-        assert deleted.status_code == 409
-        assert deleted.json()["detail"] == "employee_has_projects"
+        assert deleted.status_code == 200, deleted.text
         assert (
             app.state.project_store.get_project(project["id"]).get("archivedAt")
             is not None
         )
-        assert app.state.agent_store.get_agent(lead["id"]).get("deletedAt") is None
-        assert any(
+        assert app.state.agent_store.get_agent(lead["id"]).get("deletedAt") is not None
+        assert not any(
             employee["id"] == "alice"
             for employee in client.get("/api/v1/admin/employees").json()["employees"]
         )
@@ -1313,3 +1312,35 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
         unavailable = client.get(f"/api/v1/projects/{project['id']}/workspace/files")
         assert unavailable.status_code == 503
         assert unavailable.json()["detail"] == {"reason": "placement-unavailable"}
+
+
+def test_empty_project_can_add_and_remove_its_last_member(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_empty", "machine-empty")
+        lead = _agent(client, app, computer, "Lead", "codex")
+        _login_alice(client)
+        created = client.post("/api/v1/projects", json={
+            "name": "Empty project", "daemonNodeId": computer["id"],
+            "leadAgentId": None, "members": [],
+        })
+        assert created.status_code == 201, created.text
+        project = created.json()["project"]
+        assert project["leadAgentId"] is None
+        member = {
+            "agentId": lead["id"], "role": "planner", "functionTitle": "Lead",
+            "responsibilities": "Plan",
+        }
+        added = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": 1, "members": [member], "leadAgentId": lead["id"],
+        })
+        assert added.status_code == 200, added.text
+        cleared = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": 2, "members": [],
+        })
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["project"]["members"] == []
+        assert cleared.json()["project"]["leadAgentId"] is None
