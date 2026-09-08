@@ -113,6 +113,10 @@ def test_task_artifacts_dedupes_regenerated_file_across_sessions(monkeypatch) ->
         assert artifacts[0]["id"] == "20000000-0000-4000-8000-000000000004"
         assert artifacts[0]["sessionId"] == second_session
 
+        history = client.get(f"/api/v1/tasks/{task['id']}/artifacts?versions=all")
+        assert history.status_code == 200
+        assert [item["id"] for item in history.json()["artifacts"]] == [fresh["id"], stale["id"]]
+
 
 def test_task_artifacts_ignores_non_workspace_artifacts(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
