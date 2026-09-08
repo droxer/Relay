@@ -317,6 +317,34 @@ def test_task_store_claims_exact_task_for_dispatch() -> None:
         assert second_claim is None
 
 
+@pytest.mark.parametrize("database", [False, True])
+def test_task_store_persists_dispatch_retry_state(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        task = store.create_task({"title": "Retry a queued dispatch"})
+
+        updated = store.record_dispatch_retry(
+            task["id"],
+            failure_count=2,
+            next_attempt_at="2026-06-25T00:01:00Z",
+            code="agent_offline",
+            message="No agent node is ready.",
+        )
+
+        assert updated["dispatchRetry"] == {
+            "failureCount": 2,
+            "nextAttemptAt": "2026-06-25T00:01:00Z",
+            "code": "agent_offline",
+            "message": "No agent node is ready.",
+        }
+        replayed = store.get_task(task["id"])
+        assert replayed["dispatchRetry"] == updated["dispatchRetry"]
+
+
 def test_task_store_promotes_due_routine_once() -> None:
     with TemporaryDirectory() as root:
         store = LocalTaskStore(root)
