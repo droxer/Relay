@@ -176,3 +176,33 @@ test("the daemon tightens a pre-existing workspace lock directory", async () => 
     rmSync(lockDirectory, { recursive: true, force: true });
   }
 });
+
+test("waiting runs report the blocking thread and clear their wait before execution", async () => {
+  const gate = new WorkspaceRunGate();
+  let release!: () => void;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  const states: Array<string | null | undefined> = [];
+  const first = gate.run("shared", undefined, () => blocked, { sessionId: "first-thread" });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const second = gate.run("shared", undefined, async () => {
+    assert.equal(states.at(-1), null);
+  }, { sessionId: "second-thread", onWaiting: async owner => { states.push(owner); } });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(states[0], "first-thread");
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(states, ["first-thread", null]);
+});
+
+test("a queued observer failure cannot fail the run holding the workspace", async () => {
+  const gate = new WorkspaceRunGate();
+  let executed = false;
+  const first = gate.run("shared", undefined, async () => { executed = true; }, { sessionId: "first" });
+  const second = gate.run("shared", undefined, async () => {}, {
+    sessionId: "second",
+    onWaiting: async owner => { if (owner === "first") throw new Error("queued notification cancelled"); },
+  });
+  await first;
+  await second;
+  assert.equal(executed, true);
+});

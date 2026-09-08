@@ -557,7 +557,21 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               environment,
               controller.signal,
               cancellationTerminalEventSignal,
-            )),
+            ), command.reportWorkspaceStatus ? {
+              sessionId: command.sessionId,
+              onWaiting: async (blockingSessionId) => {
+                await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+                  type: "run.workspace",
+                  commandId: command.id,
+                  ...commandLeaseEventFields(command),
+                  sessionId: command.sessionId,
+                  runId: command.runId,
+                  agent: command.agent,
+                  waiting: blockingSessionId !== null,
+                  ...(blockingSessionId ? { blockingSessionId } : {}),
+                } satisfies DaemonNodeEvent, token, controller.signal);
+              },
+            } : undefined),
           ).catch(async (error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             logger.error("command failed before completion", { ...commandLogFields(sandboxId, command), error: message });

@@ -76,7 +76,7 @@ def _agent(
             "workspacePath": f"/workspace/{employee_id}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["task-workspaces", "thread-workspaces"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -542,7 +542,7 @@ def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -696,7 +696,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -783,7 +783,7 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -919,7 +919,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
                 "sandboxMode": "boxlite",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -958,7 +958,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1060,7 +1060,7 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex", "claude"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["task-workspaces", "thread-workspaces"],
                     "status": "ready",
                 }
             )
@@ -1123,7 +1123,7 @@ def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> No
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1331,7 +1331,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1490,7 +1490,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1660,7 +1660,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1734,7 +1734,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1979,7 +1979,7 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2056,7 +2056,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2164,7 +2164,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2268,7 +2268,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces"],
                 "status": "ready",
             }
         )

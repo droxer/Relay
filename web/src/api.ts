@@ -662,8 +662,14 @@ export function startTask(
   });
 }
 
-export function listTaskArtifacts(taskId: string, signal?: AbortSignal): Promise<TaskArtifactsResponse> {
-  return apiJson<TaskArtifactsResponse>(`/tasks/${encodeURIComponent(taskId)}/artifacts`, { signal });
+export function taskWorkspaceStatus(taskId: string, signal?: AbortSignal): Promise<{
+  waiting: boolean; blockingSessionId?: string; blockingTitle?: string;
+}> {
+  return apiJson(`/tasks/${encodeURIComponent(taskId)}/workspace/status`, { signal });
+}
+
+export function listTaskArtifacts(taskId: string, signal?: AbortSignal, allVersions = false): Promise<TaskArtifactsResponse> {
+  return apiJson<TaskArtifactsResponse>(`/tasks/${encodeURIComponent(taskId)}/artifacts${allVersions ? "?versions=all" : ""}`, { signal });
 }
 
 /**

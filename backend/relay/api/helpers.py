@@ -637,6 +637,22 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
         )
     lease_id = string_field(value, "leaseId")
     lease_field = {"leaseId": lease_id} if lease_id else {}
+    if event_type == "run.workspace":
+        if not isinstance(value.get("waiting"), bool):
+            raise ValueError("invalid daemon workspace wait state.")
+        blocker = value.get("blockingSessionId")
+        if blocker is not None and (not isinstance(blocker, str) or len(blocker) > 200):
+            raise ValueError("invalid blocking session id.")
+        return {
+            "type": event_type,
+            "commandId": command_id,
+            **lease_field,
+            "sessionId": session_id,
+            "runId": run_id,
+            "agent": agent,
+            "waiting": value["waiting"],
+            **({"blockingSessionId": blocker} if blocker else {}),
+        }
     if event_type == "run.output":
         if (
             value.get("stream") not in ("stdout", "stderr")
@@ -804,11 +820,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(generated_files, list)
                 else {}
             ),
-            **(
-                {"roundResult": round_result}
-                if isinstance(round_result, dict)
-                else {}
-            ),
+            **({"roundResult": round_result} if isinstance(round_result, dict) else {}),
         }
     if event_type == "run.failed":
         # An agent process may finish successfully and write deliverables even

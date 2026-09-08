@@ -253,6 +253,8 @@ export interface ProjectWorkspaceFileResponse {
 }
 
 export interface TaskWorkspaceFilesResponse {
+  workspaceLayout?: "thread" | "task" | "project" | "node-root";
+  sharedWithProject?: boolean;
   taskId: string;
   scope: "shared";
   source: "live";

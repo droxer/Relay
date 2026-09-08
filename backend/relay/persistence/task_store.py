@@ -320,6 +320,8 @@ class LocalTaskStore:
                 "linkedSessionIds", []
             ):
                 return current
+            # Validate immutable facts before writing the authoritative log.
+            task = materialize_task_events([*current.get("events", []), *new_events])
             self._task_dir(task_id).mkdir(parents=True, exist_ok=True)
             for event in new_events:
                 _append_jsonl(self._events_path(task_id), event)
@@ -328,8 +330,6 @@ class LocalTaskStore:
                 task_id=task_id,
                 event_types=[event.get("type") for event in new_events],
             )
-            events = [*current.get("events", []), *new_events]
-            task = materialize_task_events(events)
             _write_json(self._snapshot_path(task_id), compact_task_snapshot(task))
             return task
 

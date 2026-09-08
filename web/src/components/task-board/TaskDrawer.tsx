@@ -674,7 +674,7 @@ export function TaskDrawer({
             <TaskDrawerArtifacts taskId={form.id} />
             {/* Files produced sit next to files indexed: the artifact list is
                 the durable record, the workspace is what is there right now. */}
-            <TaskDrawerWorkspace taskId={form.id} />
+            <TaskDrawerWorkspace taskId={form.id} onOpenThread={onOpenThread} />
             {/* A routine's runs happen in its occurrences, so it reads as a
                 ledger of runs; a plain task ran once and reads as a timeline. */}
             {form.variant === "routine" ? (

@@ -1098,3 +1098,18 @@ def test_database_task_store_verify_schema_rejects_missing_constraint(
 
     with pytest.raises(RuntimeError, match="task_id, session_id"):
         store.verify_schema()
+
+
+@pytest.mark.parametrize("store_type", [LocalTaskStore, DatabaseTaskStore])
+def test_workspace_binding_is_durable_and_immutable(tmp_path, store_type):
+    store = store_type(f"sqlite:///{tmp_path}/tasks.sqlite", create_schema=True) if store_type is DatabaseTaskStore else store_type(str(tmp_path))
+    task = store.create_task({"title": "Keep files"})
+    binding = {"computerId": "device:alice:machine", "layout": "task", "subpath": f"tasks/{task['id']}"}
+    event = relay_task_event("task.workspace_bound", task["id"], {"binding": binding})
+    store.append_event(task["id"], event)
+    assert store.get_task(task["id"])["workspaceBinding"] == binding
+    with pytest.raises(ValueError, match="workspace_unavailable"):
+        store.append_event(task["id"], relay_task_event("task.workspace_bound", task["id"], {
+            "binding": {**binding, "computerId": "device:alice:other"},
+        }))
+    assert store.get_task(task["id"])["workspaceBinding"] == binding

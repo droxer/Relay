@@ -14,6 +14,14 @@ export interface RelayTaskActivity {
   sessionId?: string;
 }
 
+export interface TaskWorkspaceBinding {
+  computerId: string;
+  workspaceRoot?: string;
+  layout: "node-root" | "thread" | "task" | "project";
+  subpath?: string | null;
+  sessionId?: string;
+}
+
 export interface RelayTask {
   id: string;
   title: string;
@@ -50,6 +58,8 @@ export interface RelayTask {
     code?: string;
     message?: string;
   };
+  workspaceBinding?: TaskWorkspaceBinding;
+  workspaceWaiting?: { runId: string; sessionId: string; blockingSessionId?: string };
   linkedSessionIds: string[];
   activity: RelayTaskActivity[];
   createdAt: string;
@@ -71,6 +81,21 @@ export type RelayTaskSummary = RelayTaskListItem & {
 };
 
 export type RelayTaskEvent =
+  | {
+      id: string;
+      type: "task.workspace_wait";
+      taskId: string;
+      timestamp: string;
+      runId: string;
+      waiting: RelayTask["workspaceWaiting"] | null;
+    }
+  | {
+      id: string;
+      type: "task.workspace_bound";
+      taskId: string;
+      timestamp: string;
+      binding: TaskWorkspaceBinding;
+    }
   | {
       id: string;
       type: "task.created";
@@ -279,12 +304,18 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
       task.dispatchClaim = event.claim;
     } else if (event.type === "task.dispatch_released") {
       if (task.dispatchClaim?.id === event.claimId) delete task.dispatchClaim;
+    } else if (event.type === "task.workspace_wait") {
+      if (event.waiting) task.workspaceWaiting = { ...event.waiting };
+      else if (task.workspaceWaiting?.runId === event.runId) delete task.workspaceWaiting;
+    } else if (event.type === "task.workspace_bound") {
+      task.workspaceBinding = { ...event.binding };
     } else if (event.type === "task.dispatch_outcome") {
       task.dispatchOutcome = event.outcome;
     } else if (event.type === "task.occurrence_created") {
       if (!task.occurrenceIds?.includes(event.occurrenceId)) task.occurrenceIds?.push(event.occurrenceId);
     } else if (event.type === "task.status") {
       task.status = event.status;
+      if (event.status !== "running") delete task.workspaceWaiting;
     } else if (event.type === "task.deleted") {
       task.deletedAt = event.timestamp;
     } else if (event.type === "task.session_linked") {

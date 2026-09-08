@@ -24,19 +24,20 @@ export function TaskDrawerArtifacts({ taskId }: { taskId: string }) {
   const { t, i18n } = useTranslation();
   const { open } = useArtifactViewer();
   const [artifacts, setArtifacts] = useState<ArtifactIndexItem[] | null>(null);
+  const [allVersions, setAllVersions] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     setArtifacts(null);
     setFailed(false);
-    listTaskArtifacts(taskId, controller.signal)
+    listTaskArtifacts(taskId, controller.signal, allVersions)
       .then((response) => setArtifacts(response.artifacts))
       .catch(() => {
         if (!controller.signal.aborted) setFailed(true);
       });
     return () => controller.abort();
-  }, [taskId]);
+  }, [taskId, allVersions]);
 
   return (
     <section className="task-drawer-artifacts" aria-label={t("backlog.artifacts")}>
@@ -46,6 +47,9 @@ export function TaskDrawerArtifacts({ taskId }: { taskId: string }) {
           <span className="task-drawer-artifacts-count tnum">{artifacts.length}</span>
         ) : null}
       </h3>
+      <Button variant="ghost" type="button" aria-pressed={allVersions} onClick={() => setAllVersions(!allVersions)}>
+        {t(allVersions ? "backlog.artifacts_latest" : "backlog.artifacts_versions")}
+      </Button>
       {failed ? (
         <p className="task-drawer-artifacts-empty" role="alert">{t("backlog.artifacts_error")}</p>
       ) : artifacts === null ? (

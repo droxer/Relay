@@ -233,13 +233,13 @@ def test_node_without_shared_read_reports_placement_unavailable(client, task_wit
     task, _ = task_with_run(capabilities=["task-workspaces"])
     response = client.get(f"/api/v1/tasks/{task['id']}/workspace/files")
     assert response.status_code == 503
-    assert response.json()["detail"]["reason"] == "placement-unavailable"
+    assert response.json()["detail"]["reason"] == "workspace-unsupported"
 
 
-def test_task_that_never_dispatched_reports_placement_unavailable(client, backlog_task):
+def test_task_that_never_dispatched_reports_not_created(client, backlog_task):
     response = client.get(f"/api/v1/tasks/{backlog_task['id']}/workspace/files")
-    assert response.status_code == 503
-    assert response.json()["detail"]["reason"] == "placement-unavailable"
+    assert response.status_code == 409
+    assert response.json()["detail"]["reason"] == "workspace-not-created"
 
 
 def test_routine_lists_its_occurrence_directories(client, routine_with_occurrence):
@@ -340,7 +340,7 @@ def test_task_workspace_rejects_a_daemon_that_lost_task_workspace_support(
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"]["reason"] == "placement-unavailable"
+    assert response.json()["detail"]["reason"] == "workspace-unsupported"
 
 
 def test_newest_workspace_session_does_not_fall_back_to_an_older_node(
@@ -373,7 +373,7 @@ def test_newest_workspace_session_does_not_fall_back_to_an_older_node(
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"]["reason"] == "placement-unavailable"
+    assert response.json()["detail"]["reason"] == "computer-offline"
 
 
 def test_falls_back_to_an_older_session_when_the_newest_was_deleted(client, task_with_run):
@@ -406,18 +406,18 @@ def test_falls_back_to_an_older_session_when_the_newest_was_deleted(client, task
     assert response.json()["nodeId"] == node["id"]
 
 
-def test_reports_placement_unavailable_when_only_deleted_sessions_remain(client, task_with_run):
+def test_durable_binding_survives_deletion_of_all_sessions(client, task_with_run):
     task, node = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
     app = client.app
     only_session_id = task["linkedSessionIds"][0]
     app.state.session_store.delete_session(only_session_id)
 
     response = client.get(f"/api/v1/tasks/{task['id']}/workspace/files")
-    assert response.status_code == 503
-    assert response.json()["detail"]["reason"] == "placement-unavailable"
+    assert response.status_code == 200
+    assert response.json()["workspaceLayout"] == "task"
 
 
-def test_reports_placement_unavailable_when_session_layout_is_not_task(client, task_with_run):
+def test_linking_an_unrelated_thread_does_not_replace_the_task_binding(client, task_with_run):
     # A session recorded under a non-"task" layout (a legacy task, or a
     # dispatch that degraded because the node lacked task-workspaces) would
     # source a node whose files live elsewhere. Browsing must not claim the
@@ -441,5 +441,62 @@ def test_reports_placement_unavailable_when_session_layout_is_not_task(client, t
     controller.create_session(task["title"], ["human", "codex"])
 
     response = client.get(f"/api/v1/tasks/{task['id']}/workspace/files")
-    assert response.status_code == 503
-    assert response.json()["detail"]["reason"] == "placement-unavailable"
+    assert response.status_code == 200
+    assert response.json()["workspaceLayout"] == "task"
+
+
+def test_browse_uses_recorded_subpath_after_daemon_replacement(client, backlog_task, monkeypatch):
+    app = client.app
+    old = _register_node(app, "old-runtime", "stable-machine", ["task-workspaces", "workspace-read-shared"])
+    controller = SessionController(app.state.session_store, task_store=app.state.task_store,
+        task_id=backlog_task["id"], owner_employee_id="alice", workspace_path=old["workspacePath"],
+        workspace_layout="task", workspace_subpath="tasks/original-location", daemon_node_id=old["id"],
+        computer_id=computer_id(old))
+    controller.create_session("Keep files", ["human", "codex"])
+    app.state.registry.delete(old["id"])
+    new = _register_node(app, "new-runtime", "stable-machine", ["task-workspaces", "workspace-read-shared"])
+    captured = {}
+    async def dispatch(ctx, node, command):
+        captured.update(command)
+        return {"type": "workspace.listing", "path": "", "exists": True, "entries": []}
+    monkeypatch.setattr("relay.api.task_routes.dispatch_workspace_command", dispatch)
+    response = client.get(f"/api/v1/tasks/{backlog_task['id']}/workspace/files")
+    assert response.status_code == 200, response.text
+    assert response.json()["nodeId"] == new["id"]
+    assert captured["workspaceSubpath"] == "tasks/original-location"
+
+
+def test_wait_status_tracks_daemon_queue_events_and_clears_on_acquire(client, task_with_run):
+    task, node = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
+    app = client.app
+    token = f"token_{node['id']}"
+    [command] = app.state.registry.take_commands(node["id"], token)
+    event = {"type": "run.workspace", "commandId": command["id"],
+             "leaseId": command.get("leaseId"), "sessionId": command["sessionId"],
+             "runId": command["runId"], "agent": command["agent"], "waiting": True}
+    url = f"/api/v1/daemon-nodes/{node['id']}/events"
+    response = client.post(url, json=event, headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200, response.text
+    status = client.get(f"/api/v1/tasks/{task['id']}/workspace/status")
+    assert status.json() == {"waiting": True}
+    response = client.post(url, json={**event, "waiting": False}, headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 200
+    assert client.get(f"/api/v1/tasks/{task['id']}/workspace/status").json() == {"waiting": False}
+
+
+def test_task_admission_rejects_another_computer_even_without_dispatch_helper(client, task_with_run):
+    task, node = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
+    other = _register_node(client.app, "other", "other-machine", ["task-workspaces"])
+    with pytest.raises(ValueError, match="workspace_unavailable"):
+        asyncio.run(client.app.state.backend.run(other["id"], {
+            "taskId": task["id"], "taskGoal": "Continue", "assignments": [{"agent": "codex"}],
+            "actorEmployeeId": "alice",
+        }))
+    binding = client.app.state.task_store.get_task(task["id"])["workspaceBinding"]
+    assert binding["computerId"] == computer_id(node)
+
+
+def test_task_workspace_status_denies_other_employee(client, task_with_run, other_employee):
+    task, _ = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
+    response = client.get(f"/api/v1/tasks/{task['id']}/workspace/status", headers=other_employee.headers)
+    assert response.status_code == 403

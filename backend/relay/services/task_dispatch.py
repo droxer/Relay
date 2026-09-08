@@ -41,7 +41,11 @@ from .dispatch_retry import (
     safe_dispatch_error_message,
 )
 from .project_runtime import ProjectDispatchError, resolve_project_task_assignments
-from .task_workspace import resolve_task_workspace
+from .task_workspace import (
+    recorded_task_workspace,
+    resolve_task_workspace,
+    task_workspace_nodes,
+)
 from .team_dispatch import (
     TEAM_UNAVAILABLE_MESSAGE,
     TeamDispatchError,
@@ -279,7 +283,11 @@ class TaskDispatcher:
                     project_store=self.ctx.project_store,
                     agent_store=self.ctx.agent_store,
                     placement_store=self.ctx.agent_placement_store,
-                    daemon_nodes=self.ctx.registry.monitor_nodes(),
+                    daemon_nodes=task_workspace_nodes(
+                        self.task,
+                        self.ctx.registry.monitor_nodes(),
+                        self.ctx.session_store,
+                    ),
                     session_store=self.ctx.session_store,
                 )
             )
@@ -313,7 +321,9 @@ class TaskDispatcher:
                 team_store=self.ctx.team_store,
                 agent_store=self.ctx.agent_store,
                 placement_store=self.ctx.agent_placement_store,
-                daemon_nodes=self.ctx.registry.monitor_nodes(),
+                daemon_nodes=task_workspace_nodes(
+                    self.task, self.ctx.registry.monitor_nodes(), self.ctx.session_store
+                ),
                 session_store=self.ctx.session_store,
             )
             self.team_assignment_resolved = True
@@ -402,7 +412,11 @@ class TaskDispatcher:
                     is_admin=False,
                     agent_store=self.ctx.agent_store,
                     placement_store=self.ctx.agent_placement_store,
-                    daemon_nodes=self.ctx.registry.monitor_nodes(),
+                    daemon_nodes=task_workspace_nodes(
+                        self.task,
+                        self.ctx.registry.monitor_nodes(),
+                        self.ctx.session_store,
+                    ),
                     session_store=self.ctx.session_store,
                 )
             except AgentRoutingError as error:
@@ -570,7 +584,13 @@ class TaskDispatcher:
             self.task,
             node=node,
             project_snapshot=self.project_snapshot,
+            session_store=self.ctx.session_store,
         )
+        binding = recorded_task_workspace(
+            self.task, self.ctx.session_store, self.ctx.registry.monitor_nodes()
+        )
+        if binding and layout in ("thread", "node-root"):
+            request["sessionId"] = binding["sessionId"]
         request["workspaceLayout"] = layout
         if subpath:
             request["workspaceSubpath"] = subpath
