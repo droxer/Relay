@@ -18,9 +18,10 @@
      token overrides (login's --action, a11y's --focus-outline) resolve exactly
      as before; responsive.css / a11y.css stay last to win intra-layer order.
 
-   To let a Tailwind utility win over an app rule (a deliberate per-component
-   override), move that rule out of `relay` or raise its specificity — it is
-   now an explicit act rather than an accident of source order.
+   Shared primitives own their paint in utilities; keep native resets and
+   surface rules from matching those properties. Increasing a utility's
+   specificity cannot beat a later layer. Reserve `relay` overrides for
+   intentional surface layout or fill differences.
    ===================================================================== */
 
 /* ── Tailwind theme machinery — unlayered ─────────────────────────────── */

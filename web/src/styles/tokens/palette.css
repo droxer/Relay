@@ -1,8 +1,7 @@
 /* Meta commerce palette — raw values, both registers side by side.
-   Relay is a stark, photography-first product surface: a near-white cloud
-   canvas, stark white cards, cobalt for the primary action, and pill
-   geometry on every button, tab, and badge. The only file allowed to
-   originate a color.
+   Relay uses a neutral canvas, cobalt primary actions, compact 4/6/8px
+   corners, and flat surfaces. This is the only file allowed to originate a
+   color. The source commerce reference below is adapted, not copied.
    Source system: docs/design-system.md, "Appendix — the source system"
    (Meta hardware commerce — white canvas, cobalt
    #0064e0 CTA, Optimistic VF, 100px pills, 16–32px card rounding), adapted

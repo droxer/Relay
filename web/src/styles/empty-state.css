@@ -192,16 +192,8 @@
   letter-spacing: var(--type-body-track);
 }
 
-/* Starter prompts — the hero's one real affordance, so they have to read as
-   controls. Two things kept them from doing that: `--surface-1` is the same
-   value as the stage they sit on (an invisible fill), and base.css's
-   `button:not([data-slot="button"])` reset out-specifies a bare class, so
-   the border was being zeroed out and the chips rendered as loose bold text.
-   Hence the `button.` prefix — same specificity as the reset, later in the
-   layer — and `--control-fill`, the plane-independent resting fill every
-   other low-chrome control uses. The trailing arrow is the second half of
-   the affordance: it steps up and out on hover, the direction the prompt
-   travels into the composer. */
+/* Starter prompts use the plane-independent control fill and a visible
+   boundary. The trailing arrow follows the prompt into the composer. */
 /* One column, equal widths: three prompts of unequal length centered as
    free pills wrapped into a ragged stack. A stack of matched chips reads as
    what it is — a short menu of first moves. */

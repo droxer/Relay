@@ -119,22 +119,22 @@ export function ComputerCard({
         {/* Labelled, not three bare icons: on the machine you own, "which one
             of these renames it" should not need a hover. */}
         <div className="computer-card-actions">
-          <Button type="button" variant="outline" size="sm" onClick={() => onRename(node)}>
+          <Button type="button" variant="outline" size="dense" onClick={() => onRename(node)}>
             <ActionEdit size={ICON.sm} aria-hidden="true" />
             {t("thread.rename")}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onManageExecutors(node)}>
+          <Button type="button" variant="outline" size="dense" onClick={() => onManageExecutors(node)}>
             <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
             {t("admin.v2.manage_executors")}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onShowToken(node)}>
+          <Button type="button" variant="outline" size="dense" onClick={() => onShowToken(node)}>
             <ActionKey size={ICON.sm} aria-hidden="true" />
             {t("computer.token_button")}
           </Button>
           {/* Removal is the counterpart to self-service enrollment, but
               managed-computer lifecycle belongs to the admin control plane. */}
           {node.managedNodeId ? null : (
-            <Button type="button" variant="ghost" size="sm" onClick={() => onDisconnect(node)}>
+            <Button type="button" variant="ghost" size="dense" onClick={() => onDisconnect(node)}>
               <ActionRemove size={ICON.sm} aria-hidden="true" />
               {t("computer.disconnect")}
             </Button>
@@ -227,7 +227,7 @@ export function ComputerCard({
                 <Button
                   type="button"
                   variant="icon"
-                  size="icon-sm"
+                  size="icon-dense"
                   tinted
                   onClick={() => void handleCopyId()}
                   aria-label={copied ? t("admin.copied") : t("admin.copy_node_id")}

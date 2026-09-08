@@ -11,11 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Drawer } from "@/components/ui/Drawer";
+import { useDialogs } from "@/components/ui/DialogProvider";
 import { toast } from "@/components/ui/toast";
 import { RoutineStateBadge } from "@/components/RoutineStateBadge";
 
 function ExampleSelect({ label, size = "default" }: { label: string; size?: "default" | "sm" }) {
-  return <Select defaultValue="one"><SelectTrigger aria-label={label} size={size}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="one">First option</SelectItem><SelectItem value="two">Second option</SelectItem></SelectContent></Select>;
+  return <Select defaultValue="one" items={[{ value: "one", label: "First option" }, { value: "two", label: "Second option" }]}><SelectTrigger aria-label={label} size={size}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="one">First option</SelectItem><SelectItem value="two">Second option</SelectItem></SelectContent></Select>;
 }
 
 function OverlayFields() {
@@ -30,12 +31,14 @@ function OverlayFields() {
 /** Real UI primitives, no API calls or persisted example records. */
 export function DesignSystemSpecimen() {
   const [drawer, setDrawer] = useState(false);
+  const dialogs = useDialogs();
   return <main className="flex flex-col gap-6 p-6">
     <h1>Design system</h1>
     <div className="flex flex-wrap gap-3">
       <Button onClick={() => document.documentElement.dataset.theme = "light"}>Light theme</Button>
       <Button onClick={() => document.documentElement.dataset.theme = "dark"}>Dark theme</Button>
       <Button onClick={() => setDrawer(true)}>Open drawer</Button>
+      <Button onClick={() => void dialogs.prompt({ title: "Example prompt", defaultValue: "Draft" })}>Open prompt</Button>
       <Button onClick={() => toast.add({ title: "Saved", description: "Changes saved", timeout: 0 })}>Show toast</Button>
     </div>
     <Card><div className="flex flex-wrap items-center gap-4">
@@ -47,7 +50,7 @@ export function DesignSystemSpecimen() {
       <Switch aria-label="Example switch" />
       <Checkbox aria-label="Example checkbox" />
     </div></Card>
-    <Card><div className="flex flex-wrap gap-3">
+    <Card><div className="flex flex-wrap items-center gap-3">
       <Badge variant="state" className="tone-warn" data-testid="warning-badge">Warning</Badge>
       <Badge variant="state" className="tone-bad" data-testid="error-badge">Error</Badge>
       <Badge variant="state" className="tone-live" data-testid="live-badge">Live</Badge>

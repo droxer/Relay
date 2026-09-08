@@ -243,12 +243,12 @@ export function ThreadSpacePanel({
                 {projectId ? t("space.empty_body_project") : t("space.empty_body")}
               </p>
               {projectId ? (
-                <Button type="button" size="sm" onClick={() => setTab("project")}>
+                <Button type="button" size="dense" onClick={() => setTab("project")}>
                   <WorkspaceFolder size={ICON.sm} />
                   {t("space.empty_cta_files")}
                 </Button>
               ) : (
-                <Button type="button" variant="outline" size="sm" onClick={onClose}>
+                <Button type="button" variant="outline" size="dense" onClick={onClose}>
                   {t("space.empty_cta_back")}
                 </Button>
               )}
