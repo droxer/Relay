@@ -212,3 +212,21 @@ test("supervisor backend requests time out instead of freezing reconciliation", 
 
   await assert.rejects(client.listManagedNodes(), /timeout|aborted/i);
 });
+
+test("supervisor recovers offline nodes without tokens in HTTP list responses", async () => {
+  const backend = new FakeBackend([{ id: "alice" }], [node({ id: "sbx_alice", employeeId: "alice" })]);
+  const launcher = new FakeLauncher();
+  const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForEmployee: () => "/workspace" });
+  assert.equal((await supervisor.reconcileOnce()).started, 1);
+  assert.equal(backend.provisionCalls.length, 1);
+});
+
+test("remote bootstrap exit does not replace HTTP registration during its grace period", async () => {
+  const backend = new FakeBackend([{ id: "alice" }], []);
+  const launcher = new ExitedChildLauncher();
+  Object.defineProperty(launcher, "name", { value: "command" });
+  const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForEmployee: () => "/workspace" });
+  assert.equal((await supervisor.reconcileOnce()).started, 1);
+  assert.equal((await supervisor.reconcileOnce()).started, 0);
+  assert.equal(launcher.starts.length, 1);
+});
