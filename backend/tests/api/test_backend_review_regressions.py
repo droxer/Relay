@@ -110,6 +110,20 @@ def test_notification_bridge_preserves_password():
         engine.dispose()
 
 
+def test_legacy_daemon_completion_does_not_collect_backend_files(review_app, tmp_path):
+    workspace = tmp_path / "host-files"
+    workspace.mkdir()
+    (workspace / "private.pdf").write_bytes(b"backend secret")
+    session = SessionController(
+        review_app.state.session_store, workspace_path=str(workspace), owner_employee_id="admin",
+    ).create_session("Legacy daemon")
+    review_app.state.registry._record_generated_workspace_artifacts(
+        {"workspacePath": str(workspace)}, {"sessionId": session["id"]},
+        {"runId": new_database_id()}, None,
+    )
+    assert review_app.state.session_store.get_session(session["id"])["artifacts"] == []
+
+
 @pytest.mark.parametrize("action,session_status,task_status", [
     ("mark_done", "completed", "done"), ("cancel", "cancelled", "blocked"),
     ("cancellations", "cancelled", "blocked"),
