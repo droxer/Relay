@@ -103,7 +103,7 @@ async def provision_sandbox(request: Request, ctx: AppContextDep) -> dict[str, A
         logger.warning(
             "Sandbox provisioning denied", employee_id=employee_id, error=str(error)
         )
-        raise HTTPException(401, str(error))
+        raise HTTPException(403, str(error))
 
 
 @router.get("/sandboxes/{sandbox_id}")

@@ -185,6 +185,11 @@ class ServerDaemonNodeBackend:
         )
         if existing:
             if payload.get("actorEmployeeId"):
+                if (
+                    not payload.get("actorIsAdmin")
+                    and existing.get("employeeId") != payload["actorEmployeeId"]
+                ):
+                    raise PermissionError("Sandbox access denied.")
                 return existing
             ui_error = sandbox_ui_auth_error(existing, payload.get("token"))
             if not ui_error:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from typing import Any
 
 from loguru import logger
@@ -8,6 +9,7 @@ from loguru import logger
 from ..collaboration.models import COLLABORATION_ADMISSION_EXPIRED_OUTCOME
 from ..core.ids import new_relay_id, now_iso
 from ..persistence.protocols import SessionStore, TaskStore
+from ..persistence.store_common import store_transaction
 from ..persistence.stores import relay_event, relay_task_event
 
 
@@ -200,7 +202,11 @@ class SessionController:
             ),
         )
 
-    def complete_session(
+    def complete_session(self, session_id: str, outcome: str, task_status: str = "done") -> dict[str, Any]:
+        with self._transaction():
+            return self._complete_session(session_id, outcome, task_status)
+
+    def _complete_session(
         self, session_id: str, outcome: str, task_status: str = "done"
     ) -> dict[str, Any]:
         session = self._append(
@@ -260,7 +266,11 @@ class SessionController:
             ),
         )
 
-    def cancel_session(
+    def cancel_session(self, session_id: str, note: str = "Cancelled by human.") -> dict[str, Any]:
+        with self._transaction():
+            return self._cancel_session(session_id, note)
+
+    def _cancel_session(
         self, session_id: str, note: str = "Cancelled by human."
     ) -> dict[str, Any]:
         current = self.store.get_session(session_id)
@@ -286,6 +296,20 @@ class SessionController:
         return session
 
     def record_decision(
+        self,
+        session_id: str,
+        kind: str,
+        note: str | None = None,
+        target_agent: str | None = None,
+        *,
+        decision_id: str | None = None,
+    ) -> dict[str, Any]:
+        with self._transaction():
+            return self._record_decision(
+                session_id, kind, note, target_agent, decision_id=decision_id
+            )
+
+    def _record_decision(
         self,
         session_id: str,
         kind: str,
@@ -734,14 +758,35 @@ class SessionController:
         if session_id not in task["linkedSessionIds"]:
             self.task_store.link_session(self.task_id, session_id)
 
+    def _transaction(self):
+        engine = getattr(self.store, "engine", None)
+        if engine is not None and (
+            self.task_store is None or getattr(self.task_store, "engine", None) is engine
+        ):
+            return store_transaction(engine)
+        return nullcontext()
+
     def _update_task_status(
         self, status: str, message: str, extras: dict[str, Any] | None = None
     ) -> None:
-        if not self.task_store or not self.task_id:
+        if not self.task_store:
             return
         extras = extras or {}
-        self.task_store.append_event(
-            self.task_id,
-            relay_task_event("task.status", self.task_id, {"status": status}),
-        )
-        self.task_store.record_activity(self.task_id, message, extras)
+        if self.task_id:
+            task_ids = [self.task_id]
+        elif extras.get("sessionId"):
+            # Routine templates link every occurrence for history, but a
+            # terminal occurrence must not complete or block its schedule.
+            task_ids = [
+                task["id"]
+                for task in self.task_store.list_tasks_for_session(extras["sessionId"])
+                if not task.get("isRoutine")
+            ]
+        else:
+            task_ids = []
+        for task_id in task_ids:
+            self.task_store.append_event(
+                task_id,
+                relay_task_event("task.status", task_id, {"status": status}),
+            )
+            self.task_store.record_activity(task_id, message, extras)
