@@ -113,7 +113,9 @@ Node.js 22.19 or newer is required.
 - Run database migrations: `make backend-migrate` (Alembic; optionally pass `DATABASE_URL=<url>`).
 - Backend task scheduler env: `RELAY_TASK_SCHEDULER_ENABLED` (default on),
   `RELAY_TASK_SCHEDULER_INTERVAL_SECONDS` (default `10`),
-  `RELAY_TASK_SCHEDULER_MAX_DISPATCHES` (default `5`).
+  `RELAY_TASK_SCHEDULER_MAX_DISPATCHES` (default `5`), and
+  `RELAY_TASK_DISPATCH_MAX_FAILURES` (default `10`, consecutive classified
+  dispatch failures before a task is blocked).
 - Completed-run agent log tail cap: `RELAY_AGENT_RESULT_LOG_LIMIT` (default
   `262144` chars) — the fallback transcript keeps the head of long output.
 - Stop Relay and BoxLite processes: `make stop`.

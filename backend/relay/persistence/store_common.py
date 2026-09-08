@@ -612,6 +612,16 @@ def _apply_task_dispatch_outcome(task: dict[str, Any], event: dict[str, Any]) ->
     task["dispatchOutcome"] = event["outcome"]
 
 
+def _apply_task_dispatch_retry(task: dict[str, Any], event: dict[str, Any]) -> None:
+    task["dispatchRetry"] = event["retry"]
+
+
+def _apply_task_dispatch_retry_cleared(
+    task: dict[str, Any], _event: dict[str, Any]
+) -> None:
+    task.pop("dispatchRetry", None)
+
+
 def _apply_task_occurrence_created(task: dict[str, Any], event: dict[str, Any]) -> None:
     occurrence_id = event["occurrenceId"]
     if occurrence_id not in task["occurrenceIds"]:
@@ -670,6 +680,8 @@ TASK_EVENT_HANDLERS: dict[str, TaskEventHandler] = {
     "task.dispatch_claimed": _apply_task_dispatch_claimed,
     "task.dispatch_released": _apply_task_dispatch_released,
     "task.dispatch_outcome": _apply_task_dispatch_outcome,
+    "task.dispatch_retry": _apply_task_dispatch_retry,
+    "task.dispatch_retry_cleared": _apply_task_dispatch_retry_cleared,
     "task.occurrence_created": _apply_task_occurrence_created,
     "task.round": _apply_task_round,
     "task.status": _apply_task_status,

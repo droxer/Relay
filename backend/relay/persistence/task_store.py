@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Table,
     Text,
     UniqueConstraint,
@@ -409,6 +410,7 @@ class LocalTaskStore:
                 or task.get("assignedTeamId")
                 or task.get("projectId")
             )
+            and dispatch_retry_due(task)
         ]
         ordered = sorted(tasks, key=task_claim_sort_key)
         return ordered[:limit] if limit is not None else ordered
@@ -544,6 +546,32 @@ class LocalTaskStore:
             task_id,
             dispatch_outcome_event(task_id, state, code=code, message=message),
         )
+
+    def record_dispatch_retry(
+        self,
+        task_id: str,
+        *,
+        failure_count: int,
+        next_attempt_at: str,
+        code: str | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any]:
+        return self.append_event(
+            task_id,
+            dispatch_retry_event(
+                task_id,
+                failure_count=failure_count,
+                next_attempt_at=next_attempt_at,
+                code=code,
+                message=message,
+            ),
+        )
+
+    def clear_dispatch_retry(self, task_id: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task.get("dispatchRetry"):
+            return task
+        return self.append_event(task_id, dispatch_retry_cleared_event(task_id))
 
     def promote_due_routine(
         self,
@@ -764,6 +792,8 @@ class DatabaseTaskStore:
         Column("routine_cadence", Text, nullable=True),
         Column("routine_next_run_date", Date, nullable=True),
         Column("routine_enabled", Boolean, nullable=False, default=False),
+        Column("dispatch_failure_count", Integer, nullable=False, default=0),
+        Column("dispatch_next_attempt_at", DateTime(timezone=True), nullable=True),
         Column("snapshot", json_type(), nullable=False),
         Column("version", BigInteger, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
@@ -784,6 +814,15 @@ class DatabaseTaskStore:
         Index("ix_tasks_is_routine", "is_routine"),
         Index("ix_tasks_routine_next_run_date", "routine_next_run_date"),
         Index("ix_tasks_routine_enabled", "routine_enabled"),
+        Index(
+            "ix_tasks_dispatch_eligibility",
+            "status",
+            "is_routine",
+            "dispatch_next_attempt_at",
+            "priority",
+            "due_date",
+            "created_at",
+        ),
     )
     events = Table(
         "task_events",
@@ -1139,6 +1178,12 @@ class DatabaseTaskStore:
                 )
             )
             .where(self.tasks.c.is_routine.is_(False))
+            .where(
+                or_(
+                    self.tasks.c.dispatch_next_attempt_at.is_(None),
+                    self.tasks.c.dispatch_next_attempt_at <= datetime.now(timezone.utc),
+                )
+            )
             .order_by(
                 _priority_order_expression(),
                 _due_date_missing_expression(),
@@ -1327,6 +1372,32 @@ class DatabaseTaskStore:
             task_id,
             dispatch_outcome_event(task_id, state, code=code, message=message),
         )
+
+    def record_dispatch_retry(
+        self,
+        task_id: str,
+        *,
+        failure_count: int,
+        next_attempt_at: str,
+        code: str | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any]:
+        return self.append_event(
+            task_id,
+            dispatch_retry_event(
+                task_id,
+                failure_count=failure_count,
+                next_attempt_at=next_attempt_at,
+                code=code,
+                message=message,
+            ),
+        )
+
+    def clear_dispatch_retry(self, task_id: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task.get("dispatchRetry"):
+            return task
+        return self.append_event(task_id, dispatch_retry_cleared_event(task_id))
 
     def promote_due_routine(
         self,
@@ -1707,6 +1778,12 @@ def task_to_row(
         "routine_cadence": task.get("routineCadence"),
         "routine_next_run_date": _parse_date(task.get("routineNextRunDate")),
         "routine_enabled": bool(task.get("routineEnabled")),
+        "dispatch_failure_count": int(
+            (task.get("dispatchRetry") or {}).get("failureCount") or 0
+        ),
+        "dispatch_next_attempt_at": _parse_iso(
+            (task.get("dispatchRetry") or {}).get("nextAttemptAt")
+        ),
         "snapshot": compact_task_snapshot(task, event_count=version),
         "version": version,
         "created_at": _parse_iso(task["createdAt"]),
@@ -1960,9 +2037,53 @@ def dispatch_outcome_event(
     )
 
 
+def dispatch_retry_event(
+    task_id: str,
+    *,
+    failure_count: int,
+    next_attempt_at: str,
+    code: str | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    return relay_task_event(
+        "task.dispatch_retry",
+        task_id,
+        {
+            "retry": {
+                "failureCount": failure_count,
+                "nextAttemptAt": next_attempt_at,
+                **({"code": code} if code else {}),
+                **({"message": message} if message else {}),
+            }
+        },
+    )
+
+
+def dispatch_retry_cleared_event(task_id: str) -> dict[str, Any]:
+    return relay_task_event("task.dispatch_retry_cleared", task_id, {})
+
+
 def dispatch_claim_active(task: dict[str, Any]) -> bool:
     claim = task.get("dispatchClaim")
     if not isinstance(claim, dict):
         return False
     expires_at = _parse_iso(claim.get("expiresAt"))
     return bool(expires_at and expires_at > datetime.now(timezone.utc))
+
+
+def dispatch_retry_due(task: dict[str, Any]) -> bool:
+    retry = task.get("dispatchRetry")
+    if not isinstance(retry, dict):
+        return True
+    try:
+        deadline = _parse_iso(retry.get("nextAttemptAt"))
+    except (AttributeError, ValueError):
+        # A malformed deadline must not wedge the task out of the queue.
+        return True
+    if deadline is None:
+        return True
+    if deadline.tzinfo is None:
+        # Relay writes all timestamps as UTC; a naive value is a UTC instant
+        # that lost its offset (e.g. via SQLite), never local time.
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    return deadline <= datetime.now(timezone.utc)

@@ -330,3 +330,100 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
             command["workspaceSubpath"]
             == f"tasks/{routine['id']}/{occurrence['id']}"
         )
+
+
+def test_manual_dispatch_failure_records_retry_state(monkeypatch) -> None:
+    """A failed manual dispatch persists retry state under the same rules as
+    the scheduled path: count, deadline, real error code, and a safe message."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        node = _register_node(
+            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+        )
+        agent = _agent(app, node)
+
+        async def failing_run(node_id, request):
+            raise ValueError("capacity_exhausted: node is full")
+
+        monkeypatch.setattr(app.state.backend, "run", failing_run)
+        task = app.state.task_store.create_task(
+            {
+                "title": "Manual dispatch that fails",
+                "assignedAgent": "codex",
+                "assignedAgentId": agent["id"],
+                "ownerEmployeeId": "alice",
+                "assigneeEmployeeId": "alice",
+                "status": "assigned",
+            }
+        )
+        ctx = app_context_for(app)
+        actor = {"employeeId": "alice", "isAdmin": True}
+
+        result = asyncio.run(
+            start_task_on_ready_node(ctx, task, actor, assignments=None)
+        )
+
+        assert result is not None
+        assert result["dispatch"]["state"] == "queued"
+        assert result["dispatch"]["code"] == "capacity_exhausted"
+        failed = app.state.task_store.get_task(task["id"])
+        retry = failed["dispatchRetry"]
+        assert retry["failureCount"] == 1
+        assert retry["code"] == "capacity_exhausted"
+        assert "capacity_exhausted: node is full" in retry["message"]
+        assert retry["nextAttemptAt"]
+        # A classified failure means the run was not accepted, so the claim
+        # is released and the task is eligible again after the deadline.
+        assert "dispatchClaim" not in failed
+
+
+def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
+    monkeypatch,
+) -> None:
+    """An unclassified failure may have been accepted by the daemon: the
+    claim is retained and no retry event is recorded."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        node = _register_node(
+            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+        )
+        agent = _agent(app, node)
+
+        async def failing_run(node_id, request):
+            raise ValueError("connection reset")
+
+        monkeypatch.setattr(app.state.backend, "run", failing_run)
+        task = app.state.task_store.create_task(
+            {
+                "title": "Manual dispatch with unknown outcome",
+                "assignedAgent": "codex",
+                "assignedAgentId": agent["id"],
+                "ownerEmployeeId": "alice",
+                "assigneeEmployeeId": "alice",
+                "status": "assigned",
+            }
+        )
+        ctx = app_context_for(app)
+        actor = {"employeeId": "alice", "isAdmin": True}
+
+        result = asyncio.run(
+            start_task_on_ready_node(ctx, task, actor, assignments=None)
+        )
+
+        assert result is not None
+        assert result["dispatch"]["state"] == "queued"
+        assert result["dispatch"]["code"] == "dispatch_failed"
+        failed = app.state.task_store.get_task(task["id"])
+        assert failed["dispatchClaim"]["id"]
+        assert "dispatchRetry" not in failed
+        assert not [
+            event
+            for event in failed["events"]
+            if event["type"] == "task.dispatch_retry"
+        ]

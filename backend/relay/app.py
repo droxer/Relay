@@ -75,6 +75,7 @@ from .persistence.stores import (
 from .persistence.team_store import DatabaseTeamStore, LocalTeamStore
 from .security.auth import USER_COOKIE_NAME, auth_store_from_env, configure_admin_token
 from .security.rate_limit import AuthRateLimiter
+from .services.dispatch_retry import DEFAULT_MAX_CONSECUTIVE_DISPATCH_FAILURES
 from .services.event_notifier import (
     CONTROL_PLANE_NOTIFICATION_CHANNEL,
     KeyedEventNotifier,
@@ -537,6 +538,15 @@ def task_scheduler_from_env(
         ),
         max_dispatches_per_tick=max(
             1, int(os.environ.get("RELAY_TASK_SCHEDULER_MAX_DISPATCHES", "5"))
+        ),
+        max_dispatch_failures=max(
+            1,
+            int(
+                os.environ.get(
+                    "RELAY_TASK_DISPATCH_MAX_FAILURES",
+                    str(DEFAULT_MAX_CONSECUTIVE_DISPATCH_FAILURES),
+                )
+            ),
         ),
         today=today or scheduler_today_from_env(),
     )

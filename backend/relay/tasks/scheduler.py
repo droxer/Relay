@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import time
+import random
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -19,15 +19,24 @@ from ..core.ids import new_database_id
 from ..core.models import AgentName
 from ..daemon_registry import node_accepts_run
 from ..persistence.agent_placement_store import create_node_placement
-from ..persistence.stores import valid_agent
 from ..persistence.protocols import TaskDispatchAssignment
-from ..persistence.task_store import routine_due_sort_key, task_claim_sort_key
+from ..persistence.stores import valid_agent
+from ..persistence.task_store import (
+    dispatch_retry_due,
+    routine_due_sort_key,
+    task_claim_sort_key,
+)
 from ..services.agent_routing import (
     AgentRoutingError,
     dispatch_failure_code,
     dispatch_reason_code,
     persist_legacy_session_computer_id,
     resolve_agent_assignments,
+)
+from ..services.dispatch_retry import (
+    DEFAULT_MAX_CONSECUTIVE_DISPATCH_FAILURES,
+    record_dispatch_retry,
+    safe_dispatch_error_message,
 )
 from ..services.project_runtime import (
     ProjectDispatchError,
@@ -47,7 +56,6 @@ from ..services.team_dispatch import (
     task_execution_employee_id,
 )
 
-MAX_DISPATCH_BACKOFF_SECONDS = 3600.0
 PERMANENT_DISPATCH_CODES = {
     "agent_disabled",
     "agent_forbidden",
@@ -164,6 +172,8 @@ class TaskScheduler:
         org_settings_store: Any | None = None,
         interval_seconds: float = 10.0,
         max_dispatches_per_tick: int = 5,
+        max_dispatch_failures: int = DEFAULT_MAX_CONSECUTIVE_DISPATCH_FAILURES,
+        jitter: Callable[[], float] = random.random,
         today: Callable[[], date] = date.today,
     ) -> None:
         self.task_store = task_store
@@ -175,11 +185,11 @@ class TaskScheduler:
         self.org_settings_store = org_settings_store
         self.interval_seconds = interval_seconds
         self.max_dispatches_per_tick = max_dispatches_per_tick
+        self.max_dispatch_failures = max_dispatch_failures
+        self._jitter = jitter
         self._today = today
         self._loop_task: asyncio.Task[None] | None = None
         self._tick_lock = asyncio.Lock()
-        # task id → (consecutive failures, monotonic time before dispatch resumes)
-        self._dispatch_backoff: dict[str, tuple[int, float]] = {}
 
     def start(self) -> None:
         if self._loop_task and not self._loop_task.done():
@@ -283,7 +293,6 @@ class TaskScheduler:
             )
         skipped = len(legacy)
         attempts = 0
-        now = time.monotonic()
         candidates = [
             task
             for task in dispatchable
@@ -291,16 +300,10 @@ class TaskScheduler:
             or bool(task.get("assignedTeamId"))
             or bool(task.get("projectId"))
         ]
-        candidate_ids = {task["id"] for task in candidates}
-        self._dispatch_backoff = {
-            task_id: entry
-            for task_id, entry in self._dispatch_backoff.items()
-            if task_id in candidate_ids
-        }
         for task in candidates:
             if attempts >= self.max_dispatches_per_tick:
                 break
-            if self._backoff_active(task["id"], now):
+            if not dispatch_retry_due(task):
                 skipped += 1
                 continue
             if self._continuation_refused(task):
@@ -447,9 +450,6 @@ class TaskScheduler:
                 session_id=resume_session_id,
             ):
                 dispatched += 1
-                self._dispatch_backoff.pop(task["id"], None)
-            else:
-                self._register_dispatch_failure(task["id"])
         return dispatched, skipped
 
     def _session_for_continuation(self, session_id: str) -> dict[str, Any] | None:
@@ -606,6 +606,21 @@ class TaskScheduler:
                 code=code,
                 message=str(error),
             )
+            if code != "dispatch_failed":
+                # A classified failure means the run was not accepted, so the
+                # retry budget applies. An unclassified ("dispatch_failed")
+                # failure keeps its claim because the run may have been
+                # accepted; that ambiguity must be reconciled by the claim
+                # lease, not by consuming retry budget.
+                record_dispatch_retry(
+                    self.task_store,
+                    task,
+                    code=code,
+                    message=safe_dispatch_error_message(error),
+                    base_seconds=self.interval_seconds,
+                    max_failures=self.max_dispatch_failures,
+                    sample=self._jitter,
+                )
             logger.warning(
                 "Scheduled task dispatch failed",
                 task_id=task["id"],
@@ -614,6 +629,7 @@ class TaskScheduler:
             )
             return False
         self.task_store.update_task(task["id"], {"status": "running"})
+        self.task_store.clear_dispatch_retry(task["id"])
         if claim_id:
             self.task_store.release_dispatch_claim(task["id"], claim_id)
         self.task_store.record_dispatch_outcome(task["id"], "started")
@@ -630,15 +646,6 @@ class TaskScheduler:
             node_id=node_id,
         )
         return True
-
-    def _backoff_active(self, task_id: str, now: float) -> bool:
-        entry = self._dispatch_backoff.get(task_id)
-        return entry is not None and now < entry[1]
-
-    def _register_dispatch_failure(self, task_id: str) -> None:
-        failures = self._dispatch_backoff.get(task_id, (0, 0.0))[0] + 1
-        delay = min(self.interval_seconds * (2**failures), MAX_DISPATCH_BACKOFF_SECONDS)
-        self._dispatch_backoff[task_id] = (failures, time.monotonic() + delay)
 
     def _routine_due(self, task: dict[str, Any], today: date) -> bool:
         if (

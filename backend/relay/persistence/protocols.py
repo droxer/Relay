@@ -117,6 +117,16 @@ class TaskStore(Protocol):
         code: str | None = None,
         message: str | None = None,
     ) -> dict[str, Any]: ...
+    def record_dispatch_retry(
+        self,
+        task_id: str,
+        *,
+        failure_count: int,
+        next_attempt_at: str,
+        code: str | None = None,
+        message: str | None = None,
+    ) -> dict[str, Any]: ...
+    def clear_dispatch_retry(self, task_id: str) -> dict[str, Any]: ...
     def claim_task_for_dispatch(
         self,
         task_id: str,
