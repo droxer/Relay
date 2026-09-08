@@ -193,3 +193,16 @@ test("waiting runs report the blocking thread and clear their wait before execut
   await Promise.all([first, second]);
   assert.deepEqual(states, ["first-thread", null]);
 });
+
+test("a queued observer failure cannot fail the run holding the workspace", async () => {
+  const gate = new WorkspaceRunGate();
+  let executed = false;
+  const first = gate.run("shared", undefined, async () => { executed = true; }, { sessionId: "first" });
+  const second = gate.run("shared", undefined, async () => {}, {
+    sessionId: "second",
+    onWaiting: async owner => { if (owner === "first") throw new Error("queued notification cancelled"); },
+  });
+  await first;
+  await second;
+  assert.equal(executed, true);
+});
