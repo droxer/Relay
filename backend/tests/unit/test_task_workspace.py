@@ -34,9 +34,32 @@ def test_project_wins_over_the_task_workspace():
     ) == ("project", "projects/prj_one")
 
 
-def test_node_without_the_capability_falls_back_to_thread():
-    assert resolve_task_workspace({"id": "tsk_one"}, node=OLD_NODE) == ("thread", None)
+def test_new_task_requires_durable_workspace_support():
+    import pytest
+    with pytest.raises(ValueError, match="workspace_unavailable"):
+        resolve_task_workspace({"id": "new"}, node=OLD_NODE)
 
 
-def test_missing_node_falls_back_to_thread():
-    assert resolve_task_workspace({"id": "tsk_one"}, node=None) == ("thread", None)
+def test_recorded_binding_wins_over_changed_project_membership():
+    task = {"id": "one", "workspaceBinding": {
+        "computerId": "node:one", "layout": "task", "subpath": "tasks/original",
+    }}
+    assert resolve_task_workspace(task, node={"id": "one", **TASK_CAPABLE_NODE},
+        project_snapshot={"workspaceSubpath": "projects/new"}) == ("task", "tasks/original")
+
+
+def test_binding_refuses_a_different_computer():
+    import pytest
+    task = {"id": "one", "workspaceBinding": {
+        "computerId": "node:original", "layout": "task", "subpath": "tasks/one",
+    }}
+    with pytest.raises(ValueError, match="workspace_unavailable"):
+        resolve_task_workspace(task, node={"id": "other", **TASK_CAPABLE_NODE})
+
+
+def test_binding_survives_daemon_replacement_on_the_same_computer():
+    task = {"id": "one", "workspaceBinding": {
+        "computerId": "device:alice:machine", "layout": "task", "subpath": "tasks/one",
+    }}
+    node = {"id": "replacement", "employeeId": "alice", "workspaceId": "machine", **TASK_CAPABLE_NODE}
+    assert resolve_task_workspace(task, node=node) == ("task", "tasks/one")

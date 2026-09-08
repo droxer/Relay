@@ -443,3 +443,24 @@ def test_reports_placement_unavailable_when_session_layout_is_not_task(client, t
     response = client.get(f"/api/v1/tasks/{task['id']}/workspace/files")
     assert response.status_code == 503
     assert response.json()["detail"]["reason"] == "placement-unavailable"
+
+
+def test_browse_uses_recorded_subpath_after_daemon_replacement(client, backlog_task, monkeypatch):
+    app = client.app
+    old = _register_node(app, "old-runtime", "stable-machine", ["task-workspaces", "workspace-read-shared"])
+    controller = SessionController(app.state.session_store, task_store=app.state.task_store,
+        task_id=backlog_task["id"], owner_employee_id="alice", workspace_path=old["workspacePath"],
+        workspace_layout="task", workspace_subpath="tasks/original-location", daemon_node_id=old["id"],
+        computer_id=computer_id(old))
+    controller.create_session("Keep files", ["human", "codex"])
+    app.state.registry.delete(old["id"])
+    new = _register_node(app, "new-runtime", "stable-machine", ["task-workspaces", "workspace-read-shared"])
+    captured = {}
+    async def dispatch(ctx, node, command):
+        captured.update(command)
+        return {"type": "workspace.listing", "path": "", "exists": True, "entries": []}
+    monkeypatch.setattr("relay.api.task_routes.dispatch_workspace_command", dispatch)
+    response = client.get(f"/api/v1/tasks/{backlog_task['id']}/workspace/files")
+    assert response.status_code == 200, response.text
+    assert response.json()["nodeId"] == new["id"]
+    assert captured["workspaceSubpath"] == "tasks/original-location"
