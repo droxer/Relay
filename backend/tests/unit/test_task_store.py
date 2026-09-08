@@ -345,6 +345,31 @@ def test_task_store_persists_dispatch_retry_state(database: bool) -> None:
         assert replayed["dispatchRetry"] == updated["dispatchRetry"]
 
 
+@pytest.mark.parametrize("database", [False, True])
+def test_dispatchable_tasks_exclude_future_retry_deadlines(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        waiting = store.create_task(
+            {"title": "Wait", "assignedAgent": "codex", "status": "assigned"}
+        )
+        ready = store.create_task(
+            {"title": "Ready", "assignedAgent": "codex", "status": "assigned"}
+        )
+        store.record_dispatch_retry(
+            waiting["id"],
+            failure_count=1,
+            next_attempt_at="2099-01-01T00:00:00Z",
+        )
+
+        dispatchable = store.list_dispatchable_tasks()
+
+        assert [task["id"] for task in dispatchable] == [ready["id"]]
+
+
 def test_task_store_promotes_due_routine_once() -> None:
     with TemporaryDirectory() as root:
         store = LocalTaskStore(root)
