@@ -24,11 +24,17 @@ uniqueness, and queue UI remain planned follow-up work.
 | Restart-safe scheduler deadline | `pytest backend/tests/unit/test_task_scheduler.py -q` — failure reached routing because persisted deadline was ignored | `pytest backend/tests/unit/test_task_scheduler.py backend/tests/unit/test_task_store.py -q` — 61 passed | A fresh scheduler skips a task whose persisted deadline is in the future. |
 | Queryable eligibility | `pytest backend/tests/unit/test_task_store.py -q` — 2 failures: future retry tasks returned by queue list | `pytest backend/tests/unit/test_task_store.py backend/tests/unit/test_task_scheduler.py -q` — 63 passed | Both stores omit future-retry tasks; PostgreSQL uses the projected deadline column. |
 | Retry clearing | `pytest backend/tests/unit/test_task_store.py -q` — 2 failures: missing `clear_dispatch_retry` | `pytest backend/tests/unit/test_task_store.py backend/tests/unit/test_task_scheduler.py backend/tests/unit/test_task_dispatch.py -q` — 70 passed | Successful scheduled and manual dispatch clear retry state. |
+| Restart-safe failure count | `pytest backend/tests/unit/test_task_scheduler.py -q` — fresh scheduler persisted `failureCount=1` over the stored count | `pytest backend/tests/unit/test_task_store.py backend/tests/unit/test_task_scheduler.py backend/tests/unit/test_task_dispatch.py -q` — 80 passed | The count derives from persisted `dispatchRetry.failureCount`; the in-memory backoff map is gone. |
+| Classified vs ambiguous failures | Manual dispatch recorded no retry state; scheduled retries stored `code="dispatch_failed"` and a generic message | Same command — 80 passed | Classified failures persist the real code and a bounded message; ambiguous acceptances keep the claim and consume no budget. |
+| Retry policy shared by both paths | `task_dispatch.py` cleared retry state only on success | Same command — 80 passed | `services/dispatch_retry.py` owns the count/backoff/jitter/blocking rules for scheduled and manual dispatch. |
+| Clear-event noise | `clear_dispatch_retry` appended an event on every success | Same command — 80 passed | The event is appended only when retry state exists (both stores). |
 
 ## Additional verification
 
 - `alembic -c backend/alembic.ini heads` reported `20260908_0066 (head)`.
 - `pytest backend/tests/unit/test_task_dispatch.py backend/tests/unit/test_schema_drift.py -q` passed 7 tests. The PostgreSQL-only schema-drift test was not exercised because no live test database was available.
+- Focused suites after the review fixes: `test_task_store.py` 41 passed, `test_task_scheduler.py` 32 passed, `test_task_dispatch.py` 7 passed.
+- Full backend suite: 1121 passed, 2 pre-existing failures in `tests/unit/test_backend_structure.py` (Dockerfile assertions, failing on the base commit too).
 - `git diff --check` passed after the focused backend suite.
 
 ## Coverage and known gaps

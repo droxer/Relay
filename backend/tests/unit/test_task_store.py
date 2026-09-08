@@ -391,6 +391,69 @@ def test_task_store_clears_retry_state_after_dispatch_starts(database: bool) -> 
         assert "dispatchRetry" not in store.get_task(task["id"])
 
 
+@pytest.mark.parametrize("database", [False, True])
+def test_clear_dispatch_retry_without_state_appends_no_event(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        task = store.create_task({"title": "Nothing to clear"})
+
+        cleared = store.clear_dispatch_retry(task["id"])
+
+        assert "dispatchRetry" not in cleared
+        assert not [
+            event
+            for event in cleared["events"]
+            if event["type"] == "task.dispatch_retry_cleared"
+        ]
+
+        store.record_dispatch_retry(
+            task["id"],
+            failure_count=1,
+            next_attempt_at="2099-01-01T00:00:00Z",
+        )
+        cleared = store.clear_dispatch_retry(task["id"])
+
+        assert [
+            event["type"]
+            for event in cleared["events"]
+            if event["type"] == "task.dispatch_retry_cleared"
+        ] == ["task.dispatch_retry_cleared"]
+
+
+@pytest.mark.parametrize("database", [False, True])
+def test_dispatchable_tasks_treat_naive_retry_deadline_as_utc(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        waiting = store.create_task(
+            {"title": "Wait", "assignedAgent": "codex", "status": "assigned"}
+        )
+        ready = store.create_task(
+            {"title": "Ready", "assignedAgent": "codex", "status": "assigned"}
+        )
+        store.record_dispatch_retry(
+            waiting["id"],
+            failure_count=1,
+            next_attempt_at="2099-01-01T00:00:00",
+        )
+        store.record_dispatch_retry(
+            ready["id"],
+            failure_count=1,
+            next_attempt_at="2000-01-01T00:00:00",
+        )
+
+        dispatchable = store.list_dispatchable_tasks()
+
+        assert [task["id"] for task in dispatchable] == [ready["id"]]
+
+
 def test_task_store_promotes_due_routine_once() -> None:
     with TemporaryDirectory() as root:
         store = LocalTaskStore(root)

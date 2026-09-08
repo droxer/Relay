@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import UTC, date, datetime
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
@@ -13,9 +13,14 @@ from relay.persistence.employee_agent_store import LocalEmployeeAgentStore
 from relay.persistence.session_store import LocalSessionStore
 from relay.persistence.task_store import LocalTaskStore
 from relay.persistence.team_store import LocalTeamStore
+from relay.services.dispatch_retry import (
+    MAX_DISPATCH_RETRY_DELAY_SECONDS,
+    dispatch_retry_delay,
+)
 from relay.services.managed_nodes import LocalManagedNodeStore
 from relay.tasks import (
     ROUTINE_SKIP_NO_AGENT_MESSAGE,
+    SchedulerTickResult,
     TaskScheduler,
     materialize_legacy_agent_assignment,
     next_routine_date,
@@ -648,7 +653,7 @@ def test_scheduler_backs_off_after_failed_dispatch() -> None:
 
         async def run(self, node_id: str, request: dict) -> dict:
             self.calls += 1
-            raise ValueError("dispatch rejected")
+            raise ValueError("capacity_exhausted: node is full")
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
@@ -684,6 +689,86 @@ def test_scheduler_backs_off_after_failed_dispatch() -> None:
                 }
             )
             scheduler = TaskScheduler(
+                task_store=task_store,
+                registry=registry,
+                backend=backend,
+                jitter=lambda: 0.5,
+            )
+
+            first = await scheduler.tick()
+            second = await scheduler.tick()
+
+            assert first.dispatched == 0
+            assert backend.calls == 1
+            # The failed task is back in the queue with a persisted retry
+            # deadline, so the immediate retick does not re-run it.
+            failed = task_store.get_task(task["id"])
+            assert failed["status"] == "assigned"
+            assert failed["assignedAgentId"] == agent["id"]
+            assert "dispatchClaim" not in failed
+            assert failed["dispatchOutcome"]["code"] == "capacity_exhausted"
+            retry = failed["dispatchRetry"]
+            assert retry["failureCount"] == 1
+            assert retry["code"] == "capacity_exhausted"
+            assert "capacity_exhausted: node is full" in retry["message"]
+            deadline = datetime.fromisoformat(retry["nextAttemptAt"])
+            assert deadline > datetime.now(UTC)
+            assert second.dispatched == 0
+            # Queue storage filters deferred tasks before the scheduler loads
+            # routing state, so an immediate retick has no candidate to skip.
+            assert second.skipped == 0
+            assert backend.calls == 1
+
+    asyncio.run(run_flow())
+
+
+def test_scheduler_keeps_the_claim_on_ambiguous_dispatch_failure() -> None:
+    """An unclassified failure may have been accepted by the daemon, so the
+    claim is retained and no retry budget is consumed: no retry event, no
+    deadline, no failure count."""
+
+    class FailingBackend:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def run(self, node_id: str, request: dict) -> dict:
+            self.calls += 1
+            raise ValueError("dispatch rejected")
+
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            session_store = LocalSessionStore(root)
+            task_store = LocalTaskStore(root)
+            registry = DaemonNodeRegistry(
+                session_store, LocalDaemonStore(root), task_store=task_store
+            )
+            registry.register(
+                {
+                    "sandboxId": "sbx_alice",
+                    "employeeId": "alice",
+                    "token": "node_token",
+                    "workspacePath": "/workspace/alice",
+                    "protocolVersion": 1,
+                    "supportedAgents": ["codex"],
+                    "capabilities": ["thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            routing_backend, agent = _logical_backend(root, registry, "sbx_alice")
+            backend = FailingBackend()
+            backend.agent_store = routing_backend.agent_store
+            backend.agent_placement_store = routing_backend.agent_placement_store
+            task = task_store.create_task(
+                {
+                    "title": "Ambiguous failure",
+                    "assignedAgent": "codex",
+                    "assignedAgentId": agent["id"],
+                    "assigneeEmployeeId": "alice",
+                    "status": "assigned",
+                }
+            )
+            scheduler = TaskScheduler(
                 task_store=task_store, registry=registry, backend=backend
             )
 
@@ -692,20 +777,170 @@ def test_scheduler_backs_off_after_failed_dispatch() -> None:
 
             assert first.dispatched == 0
             assert backend.calls == 1
-            # The failed task is back in the queue but skipped until its
-            # backoff window elapses, so the immediate retick does not re-run.
             failed = task_store.get_task(task["id"])
             assert failed["status"] == "assigned"
-            assert failed["assignedAgentId"] == agent["id"]
             assert failed["dispatchClaim"]["id"]
             assert failed["dispatchOutcome"]["code"] == "dispatch_failed"
+            assert "dispatchRetry" not in failed
+            assert not [
+                event
+                for event in failed["events"]
+                if event["type"] == "task.dispatch_retry"
+            ]
+            # The retained claim is still leased, so the retick refuses to
+            # claim again rather than dispatching twice.
             assert second.dispatched == 0
-            # Queue storage filters deferred tasks before the scheduler loads
-            # routing state, so an immediate retick has no candidate to skip.
-            assert second.skipped == 0
+            assert second.skipped == 1
             assert backend.calls == 1
 
     asyncio.run(run_flow())
+
+
+def test_scheduler_retry_count_accumulates_across_restart() -> None:
+    """A fresh scheduler against the same store must continue the persisted
+    failure count instead of restarting it at one."""
+
+    class FailingBackend:
+        async def run(self, node_id: str, request: dict) -> dict:
+            raise ValueError("capacity_exhausted: node is full")
+
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            session_store = LocalSessionStore(root)
+            task_store = LocalTaskStore(root)
+            registry = DaemonNodeRegistry(
+                session_store, LocalDaemonStore(root), task_store=task_store
+            )
+            registry.register(
+                {
+                    "sandboxId": "sbx_alice",
+                    "employeeId": "alice",
+                    "token": "node_token",
+                    "workspacePath": "/workspace/alice",
+                    "protocolVersion": 1,
+                    "supportedAgents": ["codex"],
+                    "capabilities": ["thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            routing_backend, agent = _logical_backend(root, registry, "sbx_alice")
+            backend = FailingBackend()
+            backend.agent_store = routing_backend.agent_store
+            backend.agent_placement_store = routing_backend.agent_placement_store
+            task = task_store.create_task(
+                {
+                    "title": "Survives a restart",
+                    "assignedAgent": "codex",
+                    "assignedAgentId": agent["id"],
+                    "assigneeEmployeeId": "alice",
+                    "status": "assigned",
+                }
+            )
+
+            first_scheduler = TaskScheduler(
+                task_store=task_store,
+                registry=registry,
+                backend=backend,
+                jitter=lambda: 0.5,
+            )
+            await first_scheduler.tick()
+            assert (
+                task_store.get_task(task["id"])["dispatchRetry"]["failureCount"] == 1
+            )
+
+            # The process restarts; the persisted deadline eventually elapses.
+            task_store.record_dispatch_retry(
+                task["id"],
+                failure_count=1,
+                next_attempt_at="2000-01-01T00:00:00Z",
+                code="capacity_exhausted",
+                message="node is full",
+            )
+            restarted_scheduler = TaskScheduler(
+                task_store=task_store,
+                registry=registry,
+                backend=backend,
+                jitter=lambda: 0.5,
+            )
+            result = await restarted_scheduler.tick()
+
+            assert result.dispatched == 0
+            retry = task_store.get_task(task["id"])["dispatchRetry"]
+            assert retry["failureCount"] == 2
+            assert retry["code"] == "capacity_exhausted"
+
+    asyncio.run(run_flow())
+
+
+def test_scheduler_blocks_task_after_retry_budget_is_spent() -> None:
+    class FailingBackend:
+        async def run(self, node_id: str, request: dict) -> dict:
+            raise ValueError("capacity_exhausted: node is full")
+
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            session_store = LocalSessionStore(root)
+            task_store = LocalTaskStore(root)
+            registry = DaemonNodeRegistry(
+                session_store, LocalDaemonStore(root), task_store=task_store
+            )
+            registry.register(
+                {
+                    "sandboxId": "sbx_alice",
+                    "employeeId": "alice",
+                    "token": "node_token",
+                    "workspacePath": "/workspace/alice",
+                    "protocolVersion": 1,
+                    "supportedAgents": ["codex"],
+                    "capabilities": ["thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            routing_backend, agent = _logical_backend(root, registry, "sbx_alice")
+            backend = FailingBackend()
+            backend.agent_store = routing_backend.agent_store
+            backend.agent_placement_store = routing_backend.agent_placement_store
+            task = task_store.create_task(
+                {
+                    "title": "Runs out of retries",
+                    "assignedAgent": "codex",
+                    "assignedAgentId": agent["id"],
+                    "assigneeEmployeeId": "alice",
+                    "status": "assigned",
+                }
+            )
+            scheduler = TaskScheduler(
+                task_store=task_store,
+                registry=registry,
+                backend=backend,
+                max_dispatch_failures=1,
+                jitter=lambda: 0.5,
+            )
+
+            result = await scheduler.tick()
+
+            assert result.dispatched == 0
+            blocked = task_store.get_task(task["id"])
+            assert blocked["status"] == "blocked"
+            assert blocked["dispatchOutcome"]["state"] == "rejected"
+            assert blocked["dispatchOutcome"]["code"] == "dispatch_retry_exhausted"
+            assert blocked["dispatchRetry"]["failureCount"] == 1
+            # A blocked task leaves the dispatch queue.
+            assert await scheduler.tick() == SchedulerTickResult()
+
+    asyncio.run(run_flow())
+
+
+def test_dispatch_retry_delay_is_bounded_and_capped() -> None:
+    base = dispatch_retry_delay(1, base_seconds=10.0, sample=lambda: 0.5)
+    assert base == 20.0
+    assert dispatch_retry_delay(1, base_seconds=10.0, sample=lambda: 0.0) == 16.0
+    high = dispatch_retry_delay(1, base_seconds=10.0, sample=lambda: 0.999999)
+    assert high < 24.0
+    capped = dispatch_retry_delay(30, base_seconds=10.0, sample=lambda: 0.999999)
+    assert capped <= MAX_DISPATCH_RETRY_DELAY_SECONDS * 1.2
 
 
 def test_scheduler_uses_targeted_task_queue_queries() -> None:

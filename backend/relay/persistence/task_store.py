@@ -568,6 +568,9 @@ class LocalTaskStore:
         )
 
     def clear_dispatch_retry(self, task_id: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task.get("dispatchRetry"):
+            return task
         return self.append_event(task_id, dispatch_retry_cleared_event(task_id))
 
     def promote_due_routine(
@@ -1391,6 +1394,9 @@ class DatabaseTaskStore:
         )
 
     def clear_dispatch_retry(self, task_id: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task.get("dispatchRetry"):
+            return task
         return self.append_event(task_id, dispatch_retry_cleared_event(task_id))
 
     def promote_due_routine(
@@ -2069,5 +2075,15 @@ def dispatch_retry_due(task: dict[str, Any]) -> bool:
     retry = task.get("dispatchRetry")
     if not isinstance(retry, dict):
         return True
-    deadline = _parse_iso(retry.get("nextAttemptAt"))
-    return deadline is None or deadline <= datetime.now(timezone.utc)
+    try:
+        deadline = _parse_iso(retry.get("nextAttemptAt"))
+    except (AttributeError, ValueError):
+        # A malformed deadline must not wedge the task out of the queue.
+        return True
+    if deadline is None:
+        return True
+    if deadline.tzinfo is None:
+        # Relay writes all timestamps as UTC; a naive value is a UTC instant
+        # that lost its offset (e.g. via SQLite), never local time.
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    return deadline <= datetime.now(timezone.utc)
