@@ -527,6 +527,15 @@ class LocalManagedNodeStore:
             status = patch.get("status", attempt["status"])
             if status not in PROVISIONING_ATTEMPT_STATUSES:
                 raise ValueError("Invalid provisioning attempt status.")
+            # The daemon may enroll over HTTP before provider.ensure returns.
+            # Accept the provider's late identity without regressing enrollment.
+            if (
+                attempt["status"] == "succeeded"
+                and status == "registering"
+                and set(patch) <= {"status", "providerInstanceId", "providerOperationId"}
+            ):
+                patch = {**patch, "status": "succeeded"}
+                status = "succeeded"
             if (
                 attempt["status"] in TERMINAL_ATTEMPT_STATUSES
                 and status != attempt["status"]
@@ -539,8 +548,10 @@ class LocalManagedNodeStore:
             now = now_iso()
             updated = {**attempt, **patch, "updatedAt": now}
             if status in TERMINAL_ATTEMPT_STATUSES:
-                updated["finishedAt"] = now
+                updated["finishedAt"] = attempt.get("finishedAt") or now
             _write_json(self.attempts_dir / f"{safe_name(attempt_id)}.json", updated)
+            if attempt["status"] in TERMINAL_ATTEMPT_STATUSES:
+                return updated
             node = self.get_node(attempt["managedNodeId"])
             if node:
                 phase_by_status = {
@@ -650,7 +661,14 @@ class LocalManagedNodeStore:
     def mark_ready(self, daemon_node_id: str) -> dict[str, Any] | None:
         with self._lock:
             node = next((item for item in self.list_nodes() if item.get("activeDaemonNodeId") == daemon_node_id), None)
-            if not node:
+            if not node or node.get("desiredState") != "running":
+                return None
+            current_attempt = next((
+                attempt for attempt in reversed(self.list_attempts(node["id"]))
+                if attempt.get("generation") == node.get("generation")
+                and attempt.get("status") == "succeeded"
+            ), None)
+            if not current_attempt:
                 return None
             updated = {**node, "phase": "ready", "conditions": [], "updatedAt": now_iso()}
             self._write_node(updated)

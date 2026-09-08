@@ -13,6 +13,7 @@ export interface ManagedNodeReconcilerOptions {
   backendUrl: string;
   workspacePathForNode: (node: ManagedNodeRecord) => string;
   recoveryGraceMs?: number;
+  registrationTimeoutMs?: number;
   retryBaseMs?: number;
   retryMaxMs?: number;
   /** Max time a managed node can sit in "deleting" phase before the
@@ -77,6 +78,7 @@ export class ManagedNodeReconciler {
   private readonly backendUrl: string;
   private readonly workspacePathForNode: (node: ManagedNodeRecord) => string;
   private readonly recoveryGraceMs: number;
+  private readonly registrationTimeoutMs: number;
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
   private readonly deletionDeadlineMs: number;
@@ -94,6 +96,7 @@ export class ManagedNodeReconciler {
     this.backendUrl = options.backendUrl;
     this.workspacePathForNode = options.workspacePathForNode;
     this.recoveryGraceMs = options.recoveryGraceMs ?? 60_000;
+    this.registrationTimeoutMs = options.registrationTimeoutMs ?? 15 * 60_000;
     this.retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
     this.retryMaxMs = options.retryMaxMs ?? DEFAULT_RETRY_MAX_MS;
     this.deletionDeadlineMs = options.deletionDeadlineMs ?? DEFAULT_DELETION_DEADLINE_MS;
@@ -180,19 +183,48 @@ export class ManagedNodeReconciler {
         skipped += 1;
         continue;
       }
+      const attempts = await this.backend.listProvisioningAttempts(node.id);
+      const daemon = node.activeDaemonNodeId ? daemonById.get(node.activeDaemonNodeId) : undefined;
+      const runtimeAttempt = attempts.find((attempt) => attempt.id === daemon?.provisioningAttemptId)
+        ?? attempts.find((attempt) => attempt.id === node.activeAttemptId)
+        ?? [...attempts].reverse().find((attempt) => attempt.providerInstanceId);
+      const currentGeneration = runtimeAttempt?.generation === node.generation;
+      if (["allocating", "bootstrapping", "registering"].includes(node.phase)
+        && currentGeneration && runtimeAttempt
+        && !["failed", "cancelled"].includes(runtimeAttempt.status)
+        && (node.activeAttemptId || node.activeDaemonNodeId || this.instances.has(node.id))
+        && this.now() - Date.parse(runtimeAttempt.startedAt) > this.registrationTimeoutMs) {
+        if (node.activeDaemonNodeId && !await this.retireRuntimeWhenDrained(node)) {
+          skipped += 1;
+          continue;
+        }
+        const instanceId = runtimeAttempt.providerInstanceId ?? this.instances.get(node.id)?.instance.id;
+        if (instanceId) await provider.stop(instanceId);
+        this.instances.delete(node.id);
+        if (!["succeeded", "failed", "cancelled"].includes(runtimeAttempt.status)) {
+          await this.backend.updateProvisioningAttempt(node.id, runtimeAttempt.id, {
+            status: "failed", errorCode: "registration_timeout",
+            errorMessage: "Daemon did not become ready over HTTP before the registration deadline.",
+            retryAt: new Date(this.now() + provisioningRetryDelayMs(runtimeAttempt.attemptNumber,
+              this.retryBaseMs, this.retryMaxMs)).toISOString(),
+          });
+        } else {
+          await this.backend.updateManagedNode(node.id, { phase: "requested" });
+        }
+        failed += 1;
+        continue;
+      }
       if (node.phase === "ready") {
-        const daemon = node.activeDaemonNodeId ? daemonById.get(node.activeDaemonNodeId) : undefined;
-        if (daemon?.online && !daemon.stale && (daemon.status === "ready" || daemon.status === "busy" || daemon.status === "running")) {
+        if (currentGeneration && daemon?.online && !daemon.stale && (daemon.status === "ready" || daemon.status === "busy" || daemon.status === "running")) {
           skipped += 1;
           healthy += 1;
           continue;
         }
-        const attempts = await this.backend.listProvisioningAttempts(node.id);
-        const instanceId = [...attempts].reverse().find((attempt) => attempt.providerInstanceId)?.providerInstanceId;
+        const instanceId = runtimeAttempt?.providerInstanceId;
         const instanceRunning = Boolean(
           instanceId && await provider.inspect(instanceId) === "running"
         );
-        if (instanceRunning) {
+        if (instanceRunning && currentGeneration) {
           const lastSeenAgeMs = daemon?.lastSeenAgeMs;
           if (typeof lastSeenAgeMs === "number" && lastSeenAgeMs <= this.recoveryGraceMs) {
             this.logger?.warn("managed node heartbeat is recovering", {
@@ -215,7 +247,6 @@ export class ManagedNodeReconciler {
         this.instances.delete(node.id);
         await this.backend.updateManagedNode(node.id, { phase: "requested" });
       }
-      const attempts = await this.backend.listProvisioningAttempts(node.id);
       if (node.phase !== "ready" && node.activeDaemonNodeId && !runtimeRetired) {
         const daemon = daemonById.get(node.activeDaemonNodeId);
         const linkedAttempt = attempts.find((attempt) => attempt.id === daemon?.provisioningAttemptId)

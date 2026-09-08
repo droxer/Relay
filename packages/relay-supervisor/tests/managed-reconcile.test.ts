@@ -286,6 +286,9 @@ test("managed reconciler does not provision ready or stopped nodes", async () =>
     online: true,
     stale: false,
   }]);
+  backend.attempts.push({ id: "attempt_1", managedNodeId: ready.id, generation: ready.generation,
+    attemptNumber: 1, status: "succeeded", providerInstanceId: "instance",
+    startedAt: ready.createdAt, updatedAt: ready.updatedAt });
   const provider = new FakeProvider();
   const reconciler = new ManagedNodeReconciler({
     backend,
@@ -345,6 +348,9 @@ test("managed reconciler keeps an online busy daemon running", async () => {
     online: true,
     stale: false,
   }]);
+  backend.attempts.push({ id: "attempt_1", managedNodeId: ready.id, generation: ready.generation,
+    attemptNumber: 1, status: "succeeded", providerInstanceId: "instance",
+    startedAt: ready.createdAt, updatedAt: ready.updatedAt });
   const provider = new FakeProvider();
   const reconciler = new ManagedNodeReconciler({
     backend,
@@ -618,6 +624,7 @@ test("supervisor restart adopts a current registering runtime without duplicatin
   const provider = new FakeProvider();
   const reconciler = new ManagedNodeReconciler({
     backend,
+    now: () => Date.parse(node.createdAt) + 60_000,
     providers: [provider],
     backendUrl: "http://backend.test",
     workspacePathForNode: () => "/workspaces/alice",
@@ -936,6 +943,8 @@ test("managed reconciler expires a live instance that never registers over HTTP"
   assert.equal(attempt.status, "failed");
   assert.equal(attempt.errorCode, "registration_timeout");
   assert.ok(attempt.retryAt);
+  assert.equal((await reconciler.reconcileOnce()).skipped, 1);
+  assert.equal(provider.stopCalls, 1);
 });
 
 test("healthy HTTP runtime from an old generation is replaced", async () => {
@@ -952,4 +961,20 @@ test("healthy HTTP runtime from an old generation is replaced", async () => {
   assert.equal((await reconciler.reconcileOnce()).started, 1);
   assert.equal(backend.retiredRuntimes, 1);
   assert.equal(provider.stopCalls, 1);
+});
+
+test("enrolled runtime readiness timeout can advance to a replacement attempt", async () => {
+  const node = { ...managedNode(), phase: "registering" as const, activeDaemonNodeId: "daemon" };
+  const attempt: ProvisioningAttemptRecord = {
+    id: "old", managedNodeId: node.id, generation: 1, attemptNumber: 1,
+    status: "succeeded", providerInstanceId: "instance", startedAt: node.createdAt, updatedAt: node.updatedAt,
+  };
+  const backend = new FakeManagedBackend([node], [], [attempt]);
+  const provider = new FakeProvider();
+  const reconciler = new ManagedNodeReconciler({ backend, providers: [provider], backendUrl: "http://backend.test",
+    workspacePathForNode: () => "/workspace", now: () => Date.parse(node.createdAt) + 20 * 60_000 });
+  assert.equal((await reconciler.reconcileOnce()).failed, 1);
+  assert.equal(attempt.status, "succeeded");
+  assert.equal(node.phase, "requested");
+  assert.equal((await reconciler.reconcileOnce()).started, 1);
 });

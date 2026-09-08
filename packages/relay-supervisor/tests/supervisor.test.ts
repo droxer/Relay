@@ -215,18 +215,55 @@ test("supervisor backend requests time out instead of freezing reconciliation", 
 
 test("supervisor recovers offline nodes without tokens in HTTP list responses", async () => {
   const backend = new FakeBackend([{ id: "alice" }], [node({ id: "sbx_alice", employeeId: "alice" })]);
+  const provision = backend.provisionDaemonNode.bind(backend);
+  backend.provisionDaemonNode = async (input) => {
+    const response = await provision(input);
+    return { ...response, daemonEnv: { ...response.daemonEnv, RELAY_DAEMON_NODE_TOKEN: "recovered-token" } };
+  };
   const launcher = new FakeLauncher();
   const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForEmployee: () => "/workspace" });
   assert.equal((await supervisor.reconcileOnce()).started, 1);
   assert.equal(backend.provisionCalls.length, 1);
+  assert.equal(launcher.starts[0].env.RELAY_DAEMON_NODE_TOKEN, "recovered-token");
 });
 
 test("remote bootstrap exit does not replace HTTP registration during its grace period", async () => {
   const backend = new FakeBackend([{ id: "alice" }], []);
   const launcher = new ExitedChildLauncher();
-  Object.defineProperty(launcher, "name", { value: "command" });
+  Object.defineProperty(launcher, "connectionMode", { value: "http" });
   const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForEmployee: () => "/workspace" });
   assert.equal((await supervisor.reconcileOnce()).started, 1);
   assert.equal((await supervisor.reconcileOnce()).started, 0);
   assert.equal(launcher.starts.length, 1);
+});
+
+test("remote recovery follows HTTP liveness after bootstrap and detaches on shutdown", async () => {
+  const runtime = node({ id: "sbx_alice", employeeId: "alice", nodeToken: "token" });
+  const backend = new FakeBackend([{ id: "alice" }], [runtime]);
+  let starts = 0;
+  let stops = 0;
+  let clock = 0;
+  const launcher: DaemonLauncher = {
+    name: "cloud", connectionMode: "http",
+    async start() { starts++; return { key: "remote", provider: "cloud", async stop() { stops++; } }; },
+  };
+  const supervisor = new RelaySupervisor({ backend, launcher, now: () => clock,
+    registrationTimeoutMs: 1000, workspacePathForEmployee: () => "/workspace" });
+  await supervisor.reconcileOnce();
+  clock = 999;
+  await supervisor.reconcileOnce();
+  assert.equal(starts, 1);
+  clock = 1000;
+  await supervisor.reconcileOnce();
+  assert.equal(starts, 2);
+  assert.equal(stops, 1);
+  runtime.online = true;
+  runtime.stale = false;
+  await supervisor.reconcileOnce();
+  runtime.online = false;
+  runtime.stale = true;
+  await supervisor.reconcileOnce();
+  assert.equal(starts, 3);
+  await supervisor.stop();
+  assert.equal(stops, 1);
 });

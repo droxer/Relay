@@ -107,6 +107,8 @@ export interface ManagedDaemon {
 }
 
 export interface DaemonLauncher {
+  /** Remote readiness is observed through backend HTTP heartbeats. */
+  readonly connectionMode?: "http";
   readonly name: string;
   start(request: DaemonLaunchRequest): Promise<ManagedDaemon>;
 }

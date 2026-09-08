@@ -232,6 +232,22 @@ provisioning):
 make supervisor
 ```
 
+Remote daemons use the same outbound HTTP(S) protocol as local daemons:
+enrollment or token-authenticated registration, heartbeats, command polling,
+and run events. The backend URL must be reachable from the remote machine.
+No inbound connection to the daemon is needed for this protocol.
+
+The legacy `--provider command` supervisor option is an optional remote
+bootstrap adapter. Its template must idempotently ensure the daemon is
+running (for example, through the remote machine's service manager), and
+must pass the remote workspace and backend URL explicitly. A bootstrap
+process exiting does not mean the remote daemon disconnected: the supervisor
+uses HTTP heartbeat state and allows 15 minutes for registration before
+retrying bootstrap. Supervisor shutdown leaves remote daemons running.
+The default managed provider remains `local-process`, which can also run on
+a cloud host; it owns local process cleanup while daemon communication uses
+HTTP. Managed instances that never become ready time out after 15 minutes.
+
 BoxLite downloads a small guest bootstrap image independently of Docker. If
 the host needs an outbound proxy for OCI registries, put the proxy URL in the
 supervisor's local environment file so only managed daemon children inherit
