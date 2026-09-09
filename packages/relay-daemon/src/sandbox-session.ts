@@ -43,6 +43,7 @@ export interface OrchestratorSessionOptions {
   workspacePath?: string;
   boxliteHome?: string;
   executionManager?: ExecutionManager;
+  runtimeOwner?: BoxliteRuntimeOwner;
 }
 
 export interface ActiveOrchestratorSession {
@@ -55,13 +56,76 @@ interface BoxliteRuntimeLifecycle {
   close?(): void;
 }
 
+// BoxLite 0.9.7 retains its native home lock after shutdown()/close(). Keep
+// the runtime alive across guest replacements; only shut it down on daemon exit.
+export class BoxliteRuntimeOwner {
+  private pending?: Promise<BoxliteRuntimeLifecycle>;
+  private homeLock?: BoxliteHomeLock;
+  private closing?: Promise<void>;
+  private closed = false;
+
+  constructor(
+    readonly home: string,
+    private readonly create = async (): Promise<BoxliteRuntimeLifecycle> => {
+      const { JsBoxlite } = await importBoxLite();
+      return new JsBoxlite({ homeDir: home });
+    },
+  ) {}
+
+  async get(): Promise<BoxliteRuntimeLifecycle> {
+    if (this.closed) throw new Error("BoxLite runtime owner is closed; restart the daemon.");
+    if (!this.pending) {
+      this.homeLock = acquireBoxliteHomeLock(this.home);
+      this.pending = this.create().catch((error: unknown) => {
+        this.homeLock?.release();
+        this.homeLock = undefined;
+        this.pending = undefined;
+        throw error;
+      });
+    }
+    return this.pending;
+  }
+
+  close(): Promise<void> {
+    this.closed = true;
+    return this.closing ??= this.finish();
+  }
+
+  private async finish(): Promise<void> {
+    if (this.pending) await shutdownBoxliteRuntime(await this.pending);
+    // BoxLite 0.9.7 keeps its native home lock for the lifetime of the Node
+    // process even after shutdown()/close(). Retain Relay's ownership marker
+    // as well; the next process safely reclaims it after this PID exits.
+  }
+}
+
 const readyAgents = new Set<AgentName>();
 
-export function resolveBoxliteHome(hostWorkspace: string, override = process.env.RELAY_BOXLITE_HOME): string {
+/**
+ * A BoxLite home admits exactly one runtime at a time, so the home is the
+ * daemon's private property: it is keyed by `sandboxId` and not by the
+ * workspace alone. Several daemons on one host routinely share a workspace
+ * (each employee's node registers against the same repo root), and keying on
+ * the workspace pointed all of them at one home — whichever started second
+ * failed every run with "Another BoxliteRuntime is already using directory".
+ *
+ * The sandbox id joins the digest rather than the path because BoxLite opens
+ * Unix sockets beneath this home and macOS caps a socket path at 104 bytes; a
+ * 36-character uuid spent on a path segment overruns that budget, while the
+ * digest stays 12 characters wide however long the id is. `sandboxId` is
+ * stable for a daemon's life, so its home — and the image cache in it —
+ * survives restarts.
+ */
+export function resolveBoxliteHome(
+  hostWorkspace: string,
+  override = process.env.RELAY_BOXLITE_HOME,
+  sandboxId?: string,
+): string {
   const explicit = override?.trim();
   if (explicit) return resolve(explicit);
   const workspacePath = resolve(hostWorkspace);
-  const digest = createHash("sha256").update(workspacePath).digest("hex").slice(0, 12);
+  const key = sandboxId ? `${sandboxId}\0${workspacePath}` : workspacePath;
+  const digest = createHash("sha256").update(key).digest("hex").slice(0, 12);
   return join(homedir(), ".relay", "boxlite", digest);
 }
 
@@ -110,6 +174,9 @@ export async function startOrchestratorSession(
   const executionManager = options.executionManager ?? defaultExecutionManager;
   const hostWorkspace = options.workspacePath ?? hostWorkspacePath();
   const boxliteHome = resolveBoxliteHome(hostWorkspace, options.boxliteHome);
+  if (options.runtimeOwner && resolve(options.runtimeOwner.home) !== boxliteHome) {
+    throw new Error("BoxLite runtime owner does not match the session home.");
+  }
   resetAgentReadiness();
   if (!sink) {
     console.log(section("Relay", ansi.cyan));
@@ -133,16 +200,20 @@ export async function startOrchestratorSession(
       }
     } finally {
       try {
-        if (runtime) await shutdownBoxliteRuntime(runtime);
+        if (runtime && !options.runtimeOwner) await shutdownBoxliteRuntime(runtime);
       } finally {
         homeLock?.release();
       }
     }
   };
   try {
-    homeLock = acquireBoxliteHomeLock(boxliteHome);
-    const { JsBoxlite } = await importBoxLite();
-    runtime = new JsBoxlite({ homeDir: boxliteHome });
+    if (options.runtimeOwner) {
+      runtime = await options.runtimeOwner.get();
+    } else {
+      homeLock = acquireBoxliteHomeLock(boxliteHome);
+      const { JsBoxlite } = await importBoxLite();
+      runtime = new JsBoxlite({ homeDir: boxliteHome });
+    }
     const [hostUid, hostGid] = hostWorkspaceOwner(hostWorkspace);
     const guestEnv = guestAgentEnv(hostWorkspace);
     setSessionGuestEnv(guestEnv);

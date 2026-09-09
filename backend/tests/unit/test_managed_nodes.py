@@ -335,6 +335,42 @@ def test_repeated_failed_attempts_do_not_grow_history_without_bound(
     assert len(list(store.grants_dir.glob("*.json"))) <= len(retained)
 
 
+def test_failed_attempt_with_retry_is_projected_as_recovering(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+    node = store.create_node({"employeeId": "alice"})
+    attempt, _credential = store.create_attempt(node["id"])
+
+    store.update_attempt(attempt["id"], {
+        "status": "failed",
+        "errorCode": "controller_recovered_unknown_instance",
+        "errorMessage": "The provider instance disappeared.",
+        "retryAt": "2026-07-10T00:00:10Z",
+    })
+
+    updated = store.get_node(node["id"])
+    assert updated["phase"] == "recovering"
+    assert updated["conditions"][-1] == {
+        "type": "Provisioned",
+        "status": "Unknown",
+        "reason": "controller_recovered_unknown_instance",
+        "message": "The provider instance disappeared.",
+        "updatedAt": updated["conditions"][-1]["updatedAt"],
+    }
+    assert managed_nodes_module._managed_node_status(updated) == "provisioning"
+
+
+def test_failed_attempt_without_retry_remains_failed(tmp_path: Path) -> None:
+    store = LocalManagedNodeStore(tmp_path)
+    node = store.create_node({"employeeId": "alice"})
+    attempt, _credential = store.create_attempt(node["id"])
+
+    store.update_attempt(attempt["id"], {"status": "failed"})
+
+    updated = store.get_node(node["id"])
+    assert updated["phase"] == "failed"
+    assert updated["conditions"][-1]["status"] == "False"
+
+
 def test_expired_grants_are_swept_when_new_attempts_are_created(tmp_path: Path) -> None:
     store = LocalManagedNodeStore(tmp_path)
     node = store.create_node({"employeeId": "alice"})

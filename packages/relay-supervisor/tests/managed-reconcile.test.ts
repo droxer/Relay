@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
 import { join } from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import {
   ManagedNodeReconciler,
+  nextProvisioningFailureNumber,
   provisioningRetryDelayMs,
   workspaceIdForManagedNode,
 } from "../src/managed-reconcile.js";
@@ -82,6 +84,9 @@ class FakeManagedBackend implements ManagedNodeBackend {
     if (current) Object.assign(current, patch);
     if (patch.status === "failed" || patch.status === "succeeded" || patch.status === "cancelled") {
       const node = this.nodes.find((candidate) => candidate.id === _nodeId);
+      if (node && patch.status === "failed") {
+        node.phase = patch.retryAt ? "recovering" : "failed";
+      }
       if (node?.activeAttemptId === _attemptId) node.activeAttemptId = undefined;
     }
     return {
@@ -106,6 +111,22 @@ class FakeProvider implements ManagedNodeProvider {
   async inspect(_instanceId: string): Promise<"running" | "stopped" | "unknown"> { return this.status; }
   async stop(): Promise<void> { this.stopCalls += 1; this.status = "stopped"; }
   async delete(): Promise<void> { this.status = "stopped"; }
+}
+
+function pidIsRunning(pid: number): boolean {
+  try {
+    const state = execFileSync("ps", ["-p", String(pid), "-o", "stat="], { encoding: "utf8" }).trim();
+    return Boolean(state) && !state.startsWith("Z");
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPidToStop(pid: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (pidIsRunning(pid) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }
 
 test("supervisor shutdown detaches without stopping managed computers", async () => {
@@ -236,6 +257,87 @@ test("local process provider is idempotent for a managed node generation", async
     assert.equal((await restarted.ensure(input)).id, first.id);
   } finally {
     await Promise.allSettled([provider.stop(first.id), provider.stop(second.id)]);
+  }
+});
+
+test("local process provider replaces a persisted daemon owned by an older attempt", async () => {
+  const stateDirectory = mkdtempSync(join(tmpdir(), "relay-provider-attempt-state-"));
+  const command = join(stateDirectory, "relay-daemon");
+  writeFileSync(command, "#!/bin/sh\ntrap 'exit 0' TERM INT\nwhile :; do sleep 1; done\n", { mode: 0o755 });
+  const firstProvider = new LocalProcessProvider({ command, stateDirectory });
+  const node = managedNode();
+  const firstAttempt = (await new FakeManagedBackend([]).createProvisioningAttempt(node.id)).attempt;
+  const input = {
+    node,
+    attempt: firstAttempt,
+    backendUrl: "http://backend.test",
+    enrollmentCredential: "grant.first",
+    workspacePath: "/tmp",
+    workspaceId: "employee:alice:home",
+  };
+  const first = await firstProvider.ensure(input);
+  const restartedProvider = new LocalProcessProvider({ command, stateDirectory });
+  let replacement: ProviderInstance | undefined;
+
+  try {
+    replacement = await restartedProvider.ensure({
+      ...input,
+      attempt: { ...firstAttempt, id: "attempt_2", attemptNumber: 2 },
+      enrollmentCredential: "grant.second",
+    });
+    assert.notEqual(replacement.id, first.id);
+    await waitForPidToStop(first.child!.pid!, 2_000);
+    assert.equal(pidIsRunning(first.child!.pid!), false);
+    assert.equal(await restartedProvider.inspect(replacement.id), "running");
+  } finally {
+    await Promise.allSettled([
+      firstProvider.stop(first.id),
+      ...(replacement ? [restartedProvider.stop(replacement.id)] : []),
+    ]);
+    rmSync(stateDirectory, { recursive: true, force: true });
+  }
+});
+
+test("local process provider daemon survives a supervisor process-group SIGINT", {
+  skip: process.platform === "win32",
+}, async () => {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), "relay-provider-signal-"));
+  const stateDirectory = join(temporaryDirectory, "state");
+  const workspacePath = join(temporaryDirectory, "workspace");
+  const harness = spawn(process.execPath, [
+    join(process.cwd(), "packages/relay-supervisor/tests/fixtures/local-provider-signal-harness.mjs"),
+    new URL("../src/providers.js", import.meta.url).href,
+    join(process.cwd(), "packages/relay-supervisor/tests/fixtures/long-running-daemon.sh"),
+    stateDirectory,
+    workspacePath,
+  ], {
+    detached: true,
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const childInfo = await new Promise<{ instanceId: string; pid: number }>((resolve, reject) => {
+    let output = "";
+    const timer = setTimeout(() => reject(new Error("signal harness did not start")), 5_000);
+    harness.once("error", reject);
+    harness.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+      const newline = output.indexOf("\n");
+      if (newline < 0) return;
+      clearTimeout(timer);
+      resolve(JSON.parse(output.slice(0, newline)) as { instanceId: string; pid: number });
+    });
+  });
+
+  try {
+    assert.ok(childInfo.pid > 0);
+    process.kill(-harness.pid!, "SIGINT");
+    await waitForPidToStop(harness.pid!, 2_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    assert.equal(pidIsRunning(childInfo.pid), true, "managed daemon exited with the supervisor process group");
+  } finally {
+    try { process.kill(-childInfo.pid, "SIGTERM"); } catch { try { process.kill(childInfo.pid, "SIGTERM"); } catch {} }
+    try { process.kill(-harness.pid!, "SIGKILL"); } catch {}
+    await waitForPidToStop(childInfo.pid, 2_000);
+    rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 });
 
@@ -828,13 +930,20 @@ test("managed reconciler backs off when an active provider instance disappears",
     id: "attempt_1",
     managedNodeId: node.id,
     generation: node.generation,
-    attemptNumber: 3,
+    attemptNumber: 6,
     status: "registering",
     providerInstanceId: "missing-instance",
     startedAt: node.createdAt,
     updatedAt: node.updatedAt,
   } satisfies ProvisioningAttemptRecord;
-  const backend = new FakeManagedBackend([node], [], [attempt]);
+  const previousSuccess = {
+    ...attempt,
+    id: "attempt_previous_success",
+    attemptNumber: 5,
+    status: "succeeded" as const,
+    providerInstanceId: "previous-instance",
+  } satisfies ProvisioningAttemptRecord;
+  const backend = new FakeManagedBackend([node], [], [previousSuccess, attempt]);
   const provider = new FakeProvider();
   provider.status = "stopped";
   let clock = Date.parse("2026-07-10T00:00:00Z");
@@ -860,10 +969,11 @@ test("managed reconciler backs off when an active provider instance disappears",
     status: "failed",
     errorCode: "controller_recovered_unknown_instance",
     errorMessage: "The controller could not recover the provider instance; a new attempt will be created.",
-    retryAt: new Date(clock + 40_000).toISOString(),
+    retryAt: new Date(clock + 10_000).toISOString(),
   });
+  assert.equal(node.phase, "recovering");
 
-  clock += 10_000;
+  clock += 5_000;
   assert.deepEqual(await reconciler.reconcileOnce(), {
     nodes: 1,
     started: 0,
@@ -964,6 +1074,24 @@ test("provisioning retry delay grows exponentially and is capped", () => {
   assert.equal(provisioningRetryDelayMs(2, 1_000, 60_000), 2_000);
   assert.equal(provisioningRetryDelayMs(4, 1_000, 60_000), 8_000);
   assert.equal(provisioningRetryDelayMs(50, 1_000, 60_000), 60_000);
+});
+
+test("provisioning failure streak resets after a successful attempt", () => {
+  const base = {
+    managedNodeId: "mnode_alice",
+    generation: 1,
+    startedAt: "2026-07-10T00:00:00Z",
+    updatedAt: "2026-07-10T00:00:00Z",
+  };
+  const attempts = [
+    { ...base, id: "attempt_4", attemptNumber: 4, status: "failed" as const },
+    { ...base, id: "attempt_5", attemptNumber: 5, status: "succeeded" as const },
+    { ...base, id: "attempt_6", attemptNumber: 6, status: "failed" as const },
+    { ...base, id: "attempt_7", attemptNumber: 7, status: "failed" as const },
+  ] satisfies ProvisioningAttemptRecord[];
+
+  assert.equal(nextProvisioningFailureNumber(attempts, 1), 3);
+  assert.equal(nextProvisioningFailureNumber(attempts, 2), 1);
 });
 
 test("a failed provider ensure backs off instead of retrying every pass", async () => {

@@ -22,13 +22,14 @@ import {
   startOrchestratorSession,
   ensureAgentReady as ensureSandboxAgentReady,
   resolveBoxliteHome,
+  BoxliteRuntimeOwner,
   type ActiveOrchestratorSession,
 } from "./sandbox-session.js";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
 import { consumeRoundResult } from "./round-result.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
-import { defaultExecutionManager } from "./execution.js";
+import { defaultExecutionManager, type ExecutionManager } from "./execution.js";
 import { ensureLocalDevboxOci, hasHostKimiCodeAuth, prepareHostAgentSkills, prepareHostKimiCodeHome } from "./box.js";
 
 async function verifyBoxlitePrerequisites(sandboxId: string): Promise<void> {
@@ -1212,14 +1213,23 @@ function prepareLocalAgentSkills(): void {
 }
 
 
-function createBoxliteEnvironment(
+export interface BoxliteEnvironmentOptions {
+  boxliteHome?: string;
+  executionManager?: ExecutionManager;
+  runtimeOwner?: BoxliteRuntimeOwner;
+}
+
+export function createBoxliteEnvironment(
   sandboxId: string,
   workspacePath: string,
   logger: DaemonLogger,
+  options: BoxliteEnvironmentOptions = {},
 ): DaemonExecutionEnvironment {
   let starting: Promise<ActiveOrchestratorSession> | undefined;
   let mountedWorkspace: string | undefined;
-  const boxliteHome = resolveBoxliteHome(workspacePath);
+  const boxliteHome = resolveBoxliteHome(workspacePath, options.boxliteHome, sandboxId);
+  const executionManager = options.executionManager ?? defaultExecutionManager;
+  const runtimeOwner = options.runtimeOwner ?? new BoxliteRuntimeOwner(boxliteHome);
   const stop = async (): Promise<void> => {
     if (!starting) return;
     const pending = starting;
@@ -1245,6 +1255,8 @@ function createBoxliteEnvironment(
       boxName: boxNameForSandbox(sandboxId),
       workspacePath: nextWorkspace,
       boxliteHome,
+      runtimeOwner,
+      executionManager,
     }).catch((error: unknown) => {
       starting = undefined;
       mountedWorkspace = undefined;
@@ -1256,14 +1268,18 @@ function createBoxliteEnvironment(
     sandboxMode: "boxlite",
     async ensureAgentReady(agent, signal, hostWorkspace) {
       await start(hostWorkspace);
-      await ensureSandboxAgentReady(agent, undefined, signal);
+      await ensureSandboxAgentReady(agent, undefined, signal, executionManager);
     },
     execStream: async (cmd, args = [], options = {}) => {
       await start(mountedWorkspace ?? workspacePath);
-      return defaultExecutionManager.execStream(cmd, args, options);
+      return executionManager.execStream(cmd, args, options);
     },
     async close() {
-      await stop();
+      try {
+        await stop();
+      } finally {
+        await runtimeOwner.close();
+      }
     },
   };
 }
