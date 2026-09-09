@@ -119,12 +119,16 @@ GET    /api/v1/projects/{id}/workspace/file?path={relativePath}
 
 The selected Computer must advertise `project-workspaces`; every enabled member
 must be an enabled agent with an active placement on that Computer. A project
-has at most 32 members. Names and function titles are limited to 120
+may start with an empty roster and `leadAgentId: null`; adding members requires
+an enabled lead from that roster. Removing the last member clears the lead.
+A project has at most 32 members. Names and function titles are limited to 120
 characters, responsibilities to 4,000 characters, and optional project
 instructions to 8,000 characters. Updates use optimistic versions; stale writes
 return `project_version_conflict`. Duplicate live names return
 `project_name_taken`. Archiving is a soft delete: it disables future dispatch
 while preserving tasks, threads, events, and workspace files.
+Employees with active projects cannot be soft-deleted. After all their projects
+are archived, employee soft deletion is allowed and retains the project history.
 
 Project workspace reads address the persistent shared project root directly;
 they do not require a Thread. They are live-only and return
@@ -139,6 +143,14 @@ team, or non-member overrides; the backend resolves the fixed roster and the
 current daemon instance for the project's stable Computer identity.
 
 ## Daemon node workspace reads
+
+Generated artifact downloads under
+`GET /api/v1/threads/{threadId}/artifacts/{artifactId}` serve the stored daemon
+snapshot as an attachment with a restrictive content security policy. The backend
+never reads a daemon workspace path from its own filesystem. An artifact without
+a content snapshot returns 404; live workspace browsing remains available through
+the owning daemon. Older daemons must report generated files and their content to
+make new downloadable snapshots available.
 
 Daemon nodes expose the same workspace-read shape used by projects:
 

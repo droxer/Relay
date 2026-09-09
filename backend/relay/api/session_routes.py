@@ -5,11 +5,11 @@ import os
 import time
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
@@ -65,28 +65,6 @@ def session_artifact(
         ),
         None,
     )
-
-
-def workspace_artifact_path(
-    session: dict[str, Any], artifact: dict[str, Any]
-) -> Path | None:
-    workspace_path = session.get("workspacePath")
-    artifact_path = artifact.get("path")
-    if not workspace_path or not artifact_path:
-        return None
-    try:
-        root = Path(str(workspace_path)).resolve()
-        path = Path(str(artifact_path))
-        if path.is_symlink():
-            return None
-        target = path.resolve()
-    except OSError:
-        return None
-    if target != root and root not in target.parents:
-        return None
-    if not target.is_file():
-        return None
-    return target
 
 
 def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
@@ -937,28 +915,24 @@ async def read_artifact(
     session = get_session_for_actor(ctx.session_store, session_id, actor)
     artifact = session_artifact(session, artifact_id)
     if artifact and is_workspace_artifact(artifact):
-        # An artifact identifies the producing run's bytes, even while the
-        # shared workspace has a newer file at the same path.
+        # Workspace paths belong to the execution plane. A same-named host
+        # file is never evidence that this backend shares the daemon's storage.
         read_content = getattr(ctx.session_store, "read_artifact_content", None)
         content = read_content(session_id, artifact_id) if read_content else None
         if content is not None:
-            from urllib.parse import quote
-
-            filename = quote(artifact.get("title") or "artifact", safe="")
             return Response(
                 content,
                 media_type=artifact.get("contentType") or "application/octet-stream",
                 headers={
-                    "Content-Disposition": f"attachment; filename*=UTF-8''{filename}"
+                    "Content-Disposition": (
+                        "attachment; filename*=UTF-8''"
+                        + quote(str(artifact.get("title") or artifact_id), safe="")
+                    ),
+                    "Content-Security-Policy": (
+                        "sandbox; default-src 'none'; base-uri 'none'; "
+                        "frame-ancestors 'none'"
+                    ),
                 },
-            )
-        # Legacy artifacts without snapshots retain their live-file behavior.
-        path = workspace_artifact_path(session, artifact)
-        if path:
-            return FileResponse(
-                path,
-                media_type=artifact.get("contentType") or "application/octet-stream",
-                filename=artifact.get("title") or path.name,
             )
         raise HTTPException(404, "Artifact not found.")
     try:

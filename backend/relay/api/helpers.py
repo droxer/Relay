@@ -880,7 +880,7 @@ def web_ui_asset_response(asset_path: str) -> Response:
         )
     requested = asset_path or "index.html"
     asset = (dist / requested).resolve()
-    confined = str(asset).startswith(str(dist.resolve()))
+    confined = asset.is_relative_to(dist.resolve())
     if not confined or not asset.exists() or not asset.is_file():
         root = asset_path.split("/", 1)[0]
         # A pathname with a file suffix is an asset request, never a client

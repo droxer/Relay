@@ -6,6 +6,23 @@ from relay.persistence.session_store import LocalSessionStore
 from relay.sessions import SessionController, initial_agent_state
 
 
+def test_local_controller_completes_linked_task_without_explicit_task_id() -> None:
+    from relay.persistence.task_store import LocalTaskStore
+
+    with TemporaryDirectory() as root:
+        sessions = LocalSessionStore(root)
+        tasks = LocalTaskStore(root)
+        session = SessionController(sessions).create_session("Legacy thread")
+        task = tasks.create_task({"title": "Legacy task"})
+        tasks.link_session(task["id"], session["id"])
+        controller = SessionController(sessions, task_store=tasks)
+
+        controller.record_decision(session["id"], "mark_done")
+
+        assert tasks.get_task(task["id"])["status"] == "done"
+        assert sessions.get_session(session["id"])["status"] == "completed"
+
+
 def test_session_controller_records_review_run() -> None:
     with TemporaryDirectory() as root:
         store = LocalSessionStore(root)

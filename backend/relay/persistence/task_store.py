@@ -353,6 +353,13 @@ class LocalTaskStore:
         live = [task for task in tasks if not task.get("deletedAt")]
         return sorted(live, key=lambda item: item["updatedAt"], reverse=True)
 
+    def list_tasks_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        return [
+            task
+            for task in self.list_tasks()
+            if session_id in task.get("linkedSessionIds", [])
+        ]
+
     def list_task_summaries(
         self, *, employee_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
@@ -1073,6 +1080,27 @@ class DatabaseTaskStore:
                 if not task.get("deletedAt"):
                     tasks.append(task)
             return tasks
+
+    def list_tasks_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        with store_transaction(self.engine) as conn:
+            rows = (
+                conn.execute(
+                    select(self.tasks.c.snapshot)
+                    .join(
+                        self.task_sessions,
+                        self.task_sessions.c.task_id == self.tasks.c.id,
+                    )
+                    .where(self.task_sessions.c.session_id == session_id)
+                    .order_by(self.tasks.c.id)
+                )
+                .mappings()
+                .all()
+            )
+            return [
+                dict(row["snapshot"])
+                for row in rows
+                if not row["snapshot"].get("deletedAt")
+            ]
 
     def list_task_summaries(
         self, *, employee_id: str | None = None, limit: int | None = None

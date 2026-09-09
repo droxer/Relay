@@ -112,8 +112,9 @@ def update_project_payload(
         )
         if "members" in patch:
             patch["members"] = members
-        if "leadAgentId" in patch:
-            patch["leadAgentId"] = lead_agent_id
+        # Clearing the last member also clears its lead, even when the caller
+        # only supplies members. Keep the roster and lead as one valid update.
+        patch["leadAgentId"] = lead_agent_id
     return patch, expected_version
 
 

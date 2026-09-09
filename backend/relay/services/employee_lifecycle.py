@@ -170,7 +170,7 @@ def _cascade(
 ) -> dict[str, Any]:
     project_store = getattr(ctx, "project_store", None)
     if project_store and project_store.list_projects(
-        employee_id, include_archived=True
+        employee_id, include_archived=False
     ):
         # Project ownership is durable product state. Deleting the employee
         # first would orphan the project and delete the roster agents it still
