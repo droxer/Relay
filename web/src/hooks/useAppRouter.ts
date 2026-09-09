@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { installNavigationHistory } from "../lib/navigationGuard";
 import type { RelaySession } from "../types";
 import type { AppRoute, MobileView } from "../lib/viewTypes";
 import {
@@ -58,19 +59,20 @@ export function useAppRouter({
       }
     }
 
+    const releaseHistory = installNavigationHistory();
     const applyCurrentLocation = () => applyLocationState(parseAppPath(window.location.pathname, window.location.search));
     applyCurrentLocation();
     window.addEventListener("popstate", applyCurrentLocation);
     window.addEventListener(APP_NAVIGATION_EVENT, applyCurrentLocation);
     return () => {
+      releaseHistory();
       window.removeEventListener("popstate", applyCurrentLocation);
       window.removeEventListener(APP_NAVIGATION_EVENT, applyCurrentLocation);
     };
   }, [applyLocationState]);
 
   const navigateToAppState = useCallback((state: AppLocationState, replace = false) => {
-    applyLocationState(state);
-    syncAppStateToUrl(state, replace);
+    void syncAppStateToUrl(state, replace, () => applyLocationState(state));
   }, [applyLocationState]);
 
   const currentSessionId = !composingNew
@@ -106,8 +108,7 @@ export function useAppRouter({
       projectId: projectId ?? null,
       composingNew: sessionId === null,
     };
-    setLocationState(state);
-    syncAppStateToUrl(state, replace);
+    void syncAppStateToUrl(state, replace, () => setLocationState(state));
   }, []);
 
   const navigateToAgent = useCallback((agentId: string | null) => {

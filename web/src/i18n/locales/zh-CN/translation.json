@@ -13,6 +13,9 @@
     "confirm": "放弃更改"
   },
   "errors": {
+    "screen_failed": "此页面无法加载",
+    "screen_failed_body": "请重新加载，或打开其他页面。",
+    "reload_app": "重新加载应用",
     "rename_thread": "无法重命名对话。请刷新对话列表后重试。",
     "rename_computer": "无法重命名电脑。请检查连接后重试。",
     "disconnect_computer": "无法断开该电脑的连接。请检查连接后重试。",

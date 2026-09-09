@@ -1,3 +1,4 @@
+import { requestNavigation } from "./navigationGuard.ts";
 import type { AppRoute, MobileView } from "./viewTypes.js";
 
 const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
@@ -344,17 +345,25 @@ export function browserUrlForAppState(
   return nextPath === currentPathname ? canonicalBrowserUrl(nextPath, currentSearch) : nextPath;
 }
 
-export function syncAppStateToUrl(state: AppLocationState, replace = false): void {
-  if (typeof window === "undefined") return;
+export function syncAppStateToUrl(state: AppLocationState, replace = false, onCommit?: () => void): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
   const nextUrl = browserUrlForAppState(state, window.location.pathname, window.location.search);
-  if (`${window.location.pathname}${window.location.search}${window.location.hash}` === nextUrl) return;
-  window.history[replace ? "replaceState" : "pushState"]({ relayRoute: state }, "", nextUrl);
-  window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+  if (`${window.location.pathname}${window.location.search}${window.location.hash}` === nextUrl) {
+    onCommit?.();
+    return Promise.resolve();
+  }
+  return requestNavigation(() => {
+    onCommit?.();
+    window.history[replace ? "replaceState" : "pushState"]({ ...window.history.state, relayRoute: state }, "", nextUrl);
+    window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+  });
 }
 
 /** Push an in-app path (search params allowed) and notify route/search listeners. */
-export function navigateToAppPath(path: string): void {
-  if (typeof window === "undefined") return;
-  window.history.pushState(window.history.state, "", path);
-  window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+export function navigateToAppPath(path: string): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  return requestNavigation(() => {
+    window.history.pushState(window.history.state, "", path);
+    window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+  });
 }

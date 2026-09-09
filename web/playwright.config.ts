@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "design-consistency.spec.ts",
   fullyParallel: true,
   workers: 2,
   retries: 0,

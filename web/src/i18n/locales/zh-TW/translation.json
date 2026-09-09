@@ -13,6 +13,9 @@
     "confirm": "放棄變更"
   },
   "errors": {
+    "screen_failed": "此頁面無法載入",
+    "screen_failed_body": "請重新載入，或開啟其他頁面。",
+    "reload_app": "重新載入應用程式",
     "rename_thread": "無法重新命名對話。請重新整理對話列表後重試。",
     "rename_computer": "無法重新命名電腦。請檢查連線後再試一次。",
     "disconnect_computer": "無法中斷該電腦的連線。請檢查連線後再試一次。",

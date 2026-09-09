@@ -86,16 +86,21 @@ export function useRelayMutations() {
       queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
         (current ?? []).filter((session) => session.id !== sessionId),
       );
-      return { previous };
+      return { deleted: previous?.find((session) => session.id === sessionId) };
     },
     onSuccess: () => {
       void invalidateSessions();
       void invalidateTasks();
     },
     onError: (error, _input, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(SESSIONS_QUERY_KEY, context.previous);
+      if (context?.deleted) {
+        const deleted = context.deleted;
+        queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
+          current?.some((session) => session.id === deleted.id)
+            ? current
+            : [deleted, ...(current ?? [])]);
       }
+      void invalidateSessions();
       onRelayError("Failed to delete thread", "errors.delete_thread")(error);
     },
   });

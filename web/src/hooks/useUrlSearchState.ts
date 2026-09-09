@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { requestNavigation } from "../lib/navigationGuard";
 import { APP_NAVIGATION_EVENT, canonicalBrowserUrl } from "../lib/appRoute";
 import {
   resolveUrlSearchValue,
@@ -37,16 +38,20 @@ export function useUrlSearchState<T>(
 
   const update = useCallback((nextValue: UrlSearchStateUpdate<T>) => {
     const next = resolveUrlSearchValue(valueRef.current, nextValue);
-    valueRef.current = next;
-    setValue(next);
-
     const url = new URL(window.location.href);
     const encoded = serialize(next);
     if (encoded === null) url.searchParams.delete(key);
     else url.searchParams.set(key, encoded);
     const nextUrl = canonicalBrowserUrl(url.pathname, url.search);
-    window.history[historyMode === "push" ? "pushState" : "replaceState"](window.history.state, "", nextUrl);
-    window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+    const commit = () => {
+      valueRef.current = next;
+      setValue(next);
+      window.history[historyMode === "push" ? "pushState" : "replaceState"](window.history.state, "", nextUrl);
+      window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+    };
+    // Tabs can unmount an editor; filter and artifact writes retain their view.
+    if (key === "tab") void requestNavigation(commit);
+    else commit();
   }, [historyMode, key, serialize]);
 
   return [value, update];

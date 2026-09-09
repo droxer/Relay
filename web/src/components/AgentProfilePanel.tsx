@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import {
   ActionToggle,
   AdminDelete,
@@ -69,7 +68,6 @@ export function AgentProfilePanel({
   );
   const dirtyDraftRef = useRef(false);
   dirtyDraftRef.current = dirtyDraft;
-  useUnsavedChangesGuard(dirtyDraft && !saving);
 
   useEffect(() => {
     onDirtyChange?.(dirtyDraft);

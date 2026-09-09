@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -102,6 +101,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     }
     requestRef.current = next;
     setRequest(next);
+    setInputValue(next?.kind === "prompt" ? next.opts.defaultValue ?? "" : "");
   }, []);
 
   const confirm = useCallback(
@@ -143,6 +143,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     const next = requestQueue.current.shift() ?? null;
     requestRef.current = next;
     setRequest(next);
+    setInputValue(next?.kind === "prompt" ? next.opts.defaultValue ?? "" : "");
     dialogClosingRef.current = false;
     setDialogClosing(false);
   }, []);
@@ -160,12 +161,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     if (current) settle(cancelValue(current));
   }, [settle]);
 
-  // Seed the prompt field from `defaultValue` when a request arrives, so the
-  // controlled input starts where the caller asked.
-  useEffect(() => {
-    if (!request || dialogClosing || request.kind !== "prompt") return;
-    setInputValue(request.opts.defaultValue ?? "");
-  }, [dialogClosing, request]);
+  const attachPromptInput = useCallback((node: HTMLInputElement | null) => {
+    initialFocusRef.current = node;
+  }, []);
 
   const isDangerConfirm = request?.kind === "confirm" && request.opts.tone === "danger";
   return (
@@ -218,7 +216,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                     <Input
                       /* window.prompt parity: the default arrives selected, so
                          typing replaces it rather than appending to it. */
-                      ref={(node) => { initialFocusRef.current = node; }}
+                      ref={attachPromptInput}
                       // Wait for Dialog to capture the opener before selection
                       // focuses the field, so closing can restore focus.
                       onFocus={(event) => event.currentTarget.select()}

@@ -91,6 +91,7 @@ export function ProjectMemberEditor({
   const functionTitleRef = useRef<HTMLInputElement>(null);
   const responsibilitiesRef = useRef<HTMLTextAreaElement>(null);
   const initializedKeyRef = useRef<string | null>(null);
+  const initialVersionRef = useRef(project.version);
   const initialDraftKeyRef = useRef(draftKey(EMPTY_DRAFT));
   const agentLabelId = useId();
   const roleLabelId = useId();
@@ -119,9 +120,10 @@ export function ProjectMemberEditor({
       initializedKeyRef.current = null;
       return;
     }
-    const initializationKey = member ? `${project.id}:${project.version}:${member.agentId}` : `${project.id}:${project.version}:new`;
+    const initializationKey = member ? `${project.id}:${member.agentId}` : `${project.id}:new`;
     if (initializedKeyRef.current === initializationKey) return;
     initializedKeyRef.current = initializationKey;
+    initialVersionRef.current = project.version;
     const initial = member
       ? {
           agentId: member.agentId,
@@ -200,7 +202,7 @@ export function ProjectMemberEditor({
     try {
       await updateProjectMutation.mutateAsync({
         projectId: project.id,
-        input: { expectedVersion: project.version, leadAgentId, members },
+        input: { expectedVersion: initialVersionRef.current, leadAgentId, members },
       });
       onClose();
     } catch {
@@ -225,7 +227,7 @@ export function ProjectMemberEditor({
     try {
       await updateProjectMutation.mutateAsync({
         projectId: project.id,
-        input: { expectedVersion: project.version, leadAgentId, members },
+        input: { expectedVersion: initialVersionRef.current, leadAgentId, members },
       });
       onClose();
     } catch {
