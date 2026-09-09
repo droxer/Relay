@@ -430,7 +430,17 @@
     "routine_origin_unknown": "例程",
     "routine_origin_of": "由例程「{{title}}」產生",
     "save_task": "儲存任務",
-    "create_task": "建立任務"
+    "create_task": "建立任務",
+    "workspace_not_created": "工作區尚未建立。任務開始後，檔案會顯示在這裡。",
+    "workspace_offline": "儲存這些檔案的電腦已離線。仍可查看已儲存的產物。",
+    "workspace_unsupported": "請升級此電腦的守護程序以瀏覽工作區。",
+    "workspace_denied": "你沒有此工作區的存取權限。",
+    "workspace_shared_project": "與專案共用。其他專案任務也會使用這些檔案。",
+    "workspace_refresh": "重新整理檔案",
+    "artifacts_versions": "顯示所有版本",
+    "artifacts_latest": "顯示最新版本",
+    "workspace_waiting": "正在等候使用此工作區的其他任務。",
+    "workspace_open_active": "開啟執行中的對話"
   },
   "workspace": {
     "title": "工作區",

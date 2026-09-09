@@ -28,7 +28,7 @@ export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDel
     <>
       <Button
         variant="icon"
-        size="icon-sm"
+        size="icon-dense"
         tinted
         type="button"
         className="adm-node-card-icon-btn adm-node-action--rename"
@@ -41,7 +41,7 @@ export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDel
       {node.managedNodeId || !onReveal ? null : (
         <Button
           variant="icon"
-          size="icon-sm"
+          size="icon-dense"
           tinted
           type="button"
           className="adm-node-card-icon-btn adm-node-action--credentials"
@@ -55,7 +55,7 @@ export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDel
       {!node.provisioningPlaceholder ? (
         <Button
           variant="icon"
-          size="icon-sm"
+          size="icon-dense"
           tinted
           type="button"
           className="adm-node-card-icon-btn adm-node-action--agents"
@@ -69,7 +69,7 @@ export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDel
       {onDelete ? (
         <Button
           variant="icon"
-          size="icon-sm"
+          size="icon-dense"
           tinted
           type="button"
           danger

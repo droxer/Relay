@@ -245,4 +245,6 @@ def database_notification_bridge(
     engine = getattr(store, "engine", None)
     if engine is None or engine.dialect.name != "postgresql":
         return None
-    return PostgresNotificationBridge(str(engine.url), notifier)
+    return PostgresNotificationBridge(
+        engine.url.render_as_string(hide_password=False), notifier
+    )

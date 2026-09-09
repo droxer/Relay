@@ -70,7 +70,7 @@ class DatabaseProjectStore:
         Column("name_key", Text, nullable=False),
         Column("computer_id", Text, nullable=False),
         Column("workspace_subpath", Text, nullable=False),
-        Column("lead_agent_id", entity_uuid_type(), nullable=False),
+        Column("lead_agent_id", entity_uuid_type(), nullable=True),
         Column("enabled", Boolean, nullable=False),
         Column("snapshot", json_type(), nullable=False),
         Column("event_version", BigInteger, nullable=False),

@@ -22,7 +22,7 @@ describe("routine start button", () => {
 
     assert.equal(usages.length, 2);
     assert.match(source, /variant="icon"/);
-    assert.match(source, /size="icon-sm"/);
+    assert.match(source, /size="icon-dense"/);
     assert.match(source, /tinted/);
     assert.match(source, /className="backlog-action-icon"/);
     assert.doesNotMatch(source, /className="backlog-action-primary backlog-action-icon"/);

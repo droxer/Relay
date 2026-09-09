@@ -138,22 +138,20 @@ button {
   cursor: pointer;
 }
 
-/* Surface-specific native buttons still start unpainted. The shadcn Button
-   primitive owns its chrome through buttonVariants(), so exclude it from this
-   reset and let Tailwind's utility layer remain the single source of truth. */
-button:not([data-slot="button"]) {
+/* Unslotted native controls start unpainted. Slotted primitives own their
+   chrome in Tailwind's layer, so this later layer must leave them alone.
+   Zero specificity also lets surface classes style native controls. */
+:where(button:not([data-slot])) {
   border: 0;
   background: none;
 }
 
-/* Disabled is opacity — one token, no disabled hex in the palette. */
-button:not([data-slot="button"]):disabled {
+:where(button:not([data-slot])):disabled {
   cursor: not-allowed;
   opacity: var(--opacity-disabled);
 }
 
-button:not([data-slot="button"]):not(:disabled):active {
-  /* `translate` (not `transform`) so component-level transforms survive. */
+:where(button:not([data-slot])):not(:disabled):active {
   translate: 0 1px;
 }
 

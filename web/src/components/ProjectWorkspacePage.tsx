@@ -178,7 +178,7 @@ function ProjectProfile({
           />
           {onAddMember ? (
             <div className="project-profile-empty-action">
-              <Button type="button" variant="outline" size="sm" onClick={onAddMember}>
+              <Button type="button" variant="outline" size="dense" onClick={onAddMember}>
                 <ActionAdd size={ICON.sm} aria-hidden="true" />
                 {t("project.member_add")}
               </Button>
@@ -295,12 +295,12 @@ export function ProjectWorkspacePage({
         layout="stacked"
         actions={(
           <>
-            <Button type="button" variant="ghost" size="sm" className="project-mobile-back" onClick={onBack}>
+            <Button type="button" variant="ghost" size="dense" className="project-mobile-back" onClick={onBack}>
               <NavBack size={ICON.sm} aria-hidden="true" />
               {t("project.back")}
             </Button>
             {actions.settings ? (
-              <Button type="button" variant="outline" size="sm" onClick={onOpenSettings}>
+              <Button type="button" variant="outline" size="dense" onClick={onOpenSettings}>
                 <ActionEdit size={ICON.sm} aria-hidden="true" />
                 {t("project.edit")}
               </Button>

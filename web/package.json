@@ -12,9 +12,10 @@
     "preview": "next dev -H 127.0.0.1 -p 5000",
     "lint:css": "stylelint \"src/**/*.css\"",
     "test:react": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test -c playwright.recovery.config.ts",
     "pretest:e2e": "npm run build",
-    "test:react:coverage": "vitest run --coverage"
+    "test:react:coverage": "vitest run --coverage",
+    "test:design": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

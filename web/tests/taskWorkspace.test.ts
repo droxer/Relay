@@ -33,3 +33,18 @@ describe("task workspace section state", () => {
     assert.equal(taskWorkspaceState({ isLoading: false, error: { status: 500 }, data: undefined }), "failed");
   });
 });
+
+it("distinguishes not-created, offline, unsupported and denied workspaces", () => {
+  for (const [error, state] of [
+    [{ status: 409, code: "workspace-not-created" }, "not-created"],
+    [{ status: 503, code: "computer-offline" }, "offline"],
+    [{ status: 503, code: "workspace-unsupported" }, "unsupported"],
+    [{ status: 403 }, "denied"],
+  ] as const) {
+    assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined }), state);
+  }
+});
+
+it("does not call a missing workspace an empty directory", () => {
+  assert.equal(taskWorkspaceState({ isLoading: false, error: null, data: { exists: false, entries: [] } }), "not-created");
+});

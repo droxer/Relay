@@ -551,7 +551,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="dense"
                     onClick={() => setAssignmentWarning(null)}
                   >
                     {t("admin.v2.dismiss")}

@@ -24,7 +24,7 @@ function Label({
         className: cn(
           "inline-flex items-center gap-1 text-xs leading-none font-medium text-body select-none",
           "group-data-[disabled=true]/field:pointer-events-none group-data-[disabled=true]/field:opacity-50",
-          "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+          "peer-disabled:cursor-not-allowed peer-disabled:opacity-(--opacity-disabled)",
           className
         ),
       },

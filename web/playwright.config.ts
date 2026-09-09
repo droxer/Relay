@@ -2,16 +2,19 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "design-consistency.spec.ts",
   fullyParallel: true,
-  use: {
-    baseURL: "http://127.0.0.1:5124",
-    headless: true,
-    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH },
-    trace: "retain-on-failure",
-  },
+  workers: 2,
+  retries: 0,
+  reporter: "list",
+  use: { baseURL: "http://127.0.0.1:5017", trace: "retain-on-failure" },
+  projects: [
+    { name: "desktop", use: { browserName: "chromium", viewport: { width: 1280, height: 900 } } },
+    { name: "touch", use: { browserName: "chromium", viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true } },
+  ],
   webServer: {
-    command: "node e2e/serve.mjs",
-    url: "http://127.0.0.1:5124",
-    reuseExistingServer: !process.env.CI,
+    command: "npm run build -w relay-core && next dev -H 127.0.0.1 -p 5017",
+    url: "http://127.0.0.1:5017/dev/design-system",
+    timeout: 120_000,
   },
 });

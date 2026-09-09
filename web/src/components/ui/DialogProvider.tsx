@@ -163,7 +163,6 @@ export function DialogProvider({ children }: { children: ReactNode }) {
 
   const attachPromptInput = useCallback((node: HTMLInputElement | null) => {
     initialFocusRef.current = node;
-    node?.select();
   }, []);
 
   const isDangerConfirm = request?.kind === "confirm" && request.opts.tone === "danger";
@@ -218,6 +217,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                       /* window.prompt parity: the default arrives selected, so
                          typing replaces it rather than appending to it. */
                       ref={attachPromptInput}
+                      // Wait for Dialog to capture the opener before selection
+                      // focuses the field, so closing can restore focus.
+                      onFocus={(event) => event.currentTarget.select()}
                       className="dialog-input"
                       name="dialog-prompt"
                       autoComplete="off"

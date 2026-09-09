@@ -30,10 +30,8 @@ from ..services.task_dispatch import (
     start_routine_occurrence_on_ready_node as dispatch_routine_occurrence,
 )
 from ..services.task_workspace import (
-    DAEMON_CAPABILITY_TASK_WORKSPACES,
-    WORKSPACE_LAYOUT_PROJECT,
-    WORKSPACE_LAYOUT_TASK,
     task_workspace_subpath,
+    recorded_task_workspace,
 )
 from ..services.team_dispatch import (
     TeamDispatchError,
@@ -1068,7 +1066,7 @@ async def task_events(
 
 
 def newest_artifacts_by_file(
-    ctx: Any, sources: list[tuple[str, str]]
+    ctx: Any, sources: list[tuple[str, str]], *, all_versions: bool = False
 ) -> dict[str, dict[str, Any]]:
     """Workspace artifacts across `(taskId, sessionId)` pairs, newest per file.
 
@@ -1091,7 +1089,11 @@ def newest_artifacts_by_file(
             )
             continue
         for artifact in workspace_artifacts(session):
-            key = workspace_artifact_key(session, artifact)
+            key = (
+                f"{session_id}:{artifact['id']}"
+                if all_versions
+                else workspace_artifact_key(session, artifact)
+            )
             current = newest.get(key)
             if current is None or (artifact.get("createdAt") or "") >= (
                 current.get("createdAt") or ""
@@ -1126,7 +1128,9 @@ async def task_artifacts(
             for session_id in occurrence.get("linkedSessionIds", [])
         )
     ordered = sorted(
-        newest_artifacts_by_file(ctx, sources).values(),
+        newest_artifacts_by_file(
+            ctx, sources, all_versions=request.query_params.get("versions") == "all"
+        ).values(),
         key=lambda item: item.get("createdAt") or "",
         reverse=True,
     )
@@ -1136,54 +1140,81 @@ async def task_artifacts(
 def _task_workspace_target(
     ctx: Any, task: dict[str, Any], actor: dict[str, Any]
 ) -> tuple[dict[str, Any], str, str]:
-    """The live computer and recorded layout holding this task's workspace.
+    """Resolve live reads from the same recorded identity used for execution."""
+    from ..core.computer_identity import computer_id
 
-    Unlike a project, a task pins no computer of its own — it ran wherever its
-    sessions ran. The newest linked session names the node; a routine never runs
-    itself, so it borrows the node from its newest occurrence's session. A task
-    that has not dispatched yet has no workspace to read, which reads to the
-    caller the same way an offline computer does.
-    """
-    session_ids = list(task.get("linkedSessionIds") or [])
-    for occurrence in occurrence_tasks(ctx, task, actor):
-        session_ids.extend(occurrence.get("linkedSessionIds") or [])
-    nodes = {item["id"]: item for item in ctx.registry.monitor_nodes()}
-    for session_id in reversed(session_ids):
-        try:
-            session = ctx.session_store.get_session(session_id)
-        except (KeyError, FileNotFoundError):
-            continue  # A linked session may have been deleted; skip it.
-        if not session:
-            continue
-        # The newest surviving session is authoritative. Falling through to an
-        # older online node would present a stale, divergent copy of the task
-        # workspace after placement changed.
-        layout = session.get("workspaceLayout")
-        if layout not in (WORKSPACE_LAYOUT_TASK, WORKSPACE_LAYOUT_PROJECT):
-            raise HTTPException(503, {"reason": "placement-unavailable"})
-        node = nodes.get(session.get("daemonNodeId"))
-        required_capability = (
-            DAEMON_CAPABILITY_TASK_WORKSPACES
-            if layout == WORKSPACE_LAYOUT_TASK
-            else "project-workspaces"
+    nodes = ctx.registry.monitor_nodes()
+    binding = recorded_task_workspace(task, ctx.session_store, nodes)
+    if task.get("isRoutine"):
+        # A routine is a browse-only parent; each occurrence owns its binding.
+        for occurrence in reversed(occurrence_tasks(ctx, task, actor)):
+            binding = recorded_task_workspace(occurrence, ctx.session_store, nodes)
+            if binding:
+                if binding["layout"] == "task":
+                    binding = {**binding, "subpath": task_workspace_subpath(task)}
+                break
+    if not binding:
+        reason = (
+            "workspace-not-created"
+            if not task.get("linkedSessionIds")
+            else "placement-unavailable"
         )
-        capabilities = (node or {}).get("capabilities") or []
-        if not (
+        raise HTTPException(
+            409 if reason == "workspace-not-created" else 503,
+            {"reason": reason, "code": reason},
+        )
+    candidates = [
+        node
+        for node in nodes
+        if computer_id(node) == binding["computerId"]
+        and node.get("online")
+        and not node.get("stale")
+        and not node.get("retiredAt")
+    ]
+    if not candidates:
+        raise HTTPException(
+            503, {"reason": "computer-offline", "code": "computer-offline"}
+        )
+    if binding.get("workspaceRoot"):
+        candidates = [
             node
-            and node.get("online")
-            and "workspace-read-shared" in capabilities
-            and required_capability in capabilities
-        ):
-            raise HTTPException(503, {"reason": "placement-unavailable"})
-        subpath = (
-            task_workspace_subpath(task)
-            if layout == WORKSPACE_LAYOUT_TASK
-            else session.get("workspaceSubpath")
+            for node in candidates
+            if node.get("workspacePath") == binding["workspaceRoot"]
+        ]
+        if not candidates:
+            raise HTTPException(
+                503,
+                {"reason": "placement-unavailable", "code": "placement-unavailable"},
+            )
+    layout = binding["layout"]
+    required = {
+        "task": "task-workspaces",
+        "project": "project-workspaces",
+        "thread": "thread-workspaces",
+    }.get(layout)
+    node = next(
+        (
+            node
+            for node in candidates
+            if "workspace-read-shared" in (node.get("capabilities") or [])
+            and (not required or required in (node.get("capabilities") or []))
+        ),
+        None,
+    )
+    if not node:
+        raise HTTPException(
+            503, {"reason": "workspace-unsupported", "code": "workspace-unsupported"}
         )
-        if not isinstance(subpath, str) or not subpath:
-            raise HTTPException(503, {"reason": "placement-unavailable"})
-        return node, layout, subpath
-    raise HTTPException(503, {"reason": "placement-unavailable"})
+    subpath = (
+        binding.get("subpath")
+        if layout in ("task", "project")
+        else binding.get("sessionId")
+    )
+    if not isinstance(subpath, str) or not subpath:
+        raise HTTPException(
+            503, {"reason": "placement-unavailable", "code": "placement-unavailable"}
+        )
+    return node, layout, subpath
 
 
 def _task_workspace_command(
@@ -1201,11 +1232,37 @@ def _task_workspace_command(
         # Task ids use the same validated database-id alphabet as sessions. The
         # daemon treats this only as a routing identifier; workspaceSubpath is
         # what selects the durable task root.
-        "sessionId": task["id"],
+        "sessionId": task["id"]
+        if workspace_layout in ("task", "project")
+        else workspace_subpath,
         "workspaceLayout": workspace_layout,
         "workspaceSubpath": workspace_subpath,
         "path": path,
     }
+
+
+@router.get("/tasks/{task_id}/workspace/status")
+async def task_workspace_status(
+    task_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    """Small polling response; never dispatches a filesystem read just to show a wait."""
+    actor = request_actor(request, ctx.auth_store)
+    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    waiting = task.get("workspaceWaiting")
+    active = ctx.daemon_store.list_active_runs() if waiting else []
+    if not waiting or not any(run["runId"] == waiting["runId"] for run in active):
+        return {"waiting": False}
+    result: dict[str, Any] = {"waiting": True}
+    blocker = waiting.get("blockingSessionId")
+    if blocker and any(run["sessionId"] == blocker for run in active):
+        try:
+            session = ctx.session_store.get_session(blocker)
+        except (KeyError, FileNotFoundError):
+            session = None
+        if session and actor_can_access_record(actor, session):
+            result["blockingSessionId"] = blocker
+            result["blockingTitle"] = session.get("taskGoal") or ""
+    return result
 
 
 @router.get("/tasks/{task_id}/workspace/files")
@@ -1220,9 +1277,7 @@ async def task_workspace_files(
     actor = request_actor(request, ctx.auth_store)
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     path = workspace_path(request.query_params.get("path"))
-    node, workspace_layout, workspace_subpath = _task_workspace_target(
-        ctx, task, actor
-    )
+    node, workspace_layout, workspace_subpath = _task_workspace_target(ctx, task, actor)
     event = await dispatch_workspace_command(
         ctx,
         node,
@@ -1239,7 +1294,13 @@ async def task_workspace_files(
     return live_workspace_listing(
         event,
         path=path,
-        metadata={"taskId": task["id"], "scope": "shared", "nodeId": node["id"]},
+        metadata={
+            "taskId": task["id"],
+            "scope": "shared",
+            "nodeId": node["id"],
+            "workspaceLayout": workspace_layout,
+            "sharedWithProject": workspace_layout == "project",
+        },
     )
 
 
@@ -1250,9 +1311,7 @@ async def task_workspace_file(
     actor = request_actor(request, ctx.auth_store)
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     path = workspace_path(request.query_params.get("path"), required=True)
-    node, workspace_layout, workspace_subpath = _task_workspace_target(
-        ctx, task, actor
-    )
+    node, workspace_layout, workspace_subpath = _task_workspace_target(ctx, task, actor)
     event = await dispatch_workspace_command(
         ctx,
         node,
@@ -1269,7 +1328,13 @@ async def task_workspace_file(
     return live_workspace_file(
         event,
         path=path,
-        metadata={"taskId": task["id"], "scope": "shared", "nodeId": node["id"]},
+        metadata={
+            "taskId": task["id"],
+            "scope": "shared",
+            "nodeId": node["id"],
+            "workspaceLayout": workspace_layout,
+            "sharedWithProject": workspace_layout == "project",
+        },
     )
 
 

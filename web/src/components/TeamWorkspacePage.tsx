@@ -410,7 +410,7 @@ function TeamProfile({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="dense"
                     onClick={() => setRenaming(false)}
                     disabled={busy}
                   >
@@ -418,7 +418,7 @@ function TeamProfile({
                   </Button>
                   <Button
                     type="button"
-                    size="sm"
+                    size="dense"
                     onClick={() => void saveRename()}
                     disabled={busy}
                   >

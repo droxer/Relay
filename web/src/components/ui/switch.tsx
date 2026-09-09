@@ -14,7 +14,7 @@ function Switch({ className, ...props }: SwitchPrimitive.Root.Props) {
            and its only job was focus/invalid state, which the shared outline
            contract (--focus-outline / --focus-outline-danger) already carries.
            Keep the three numbers in sync if any one of them moves. */
-        "group/switch relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-input p-0.5 transition-[background-color,box-shadow] outline-none after:absolute after:-inset-x-1 after:-inset-y-3 focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] data-checked:bg-[var(--action)] data-disabled:cursor-not-allowed data-disabled:opacity-50 aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)]",
+        "group/switch relative inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-input p-0.5 transition-[background-color,box-shadow] outline-none after:absolute after:-inset-x-1 after:-inset-y-3 focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] data-checked:bg-[var(--action)] data-disabled:cursor-not-allowed data-disabled:opacity-(--opacity-disabled) aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)]",
         className
       )}
       {...props}

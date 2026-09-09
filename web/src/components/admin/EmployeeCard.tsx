@@ -123,7 +123,7 @@ export function EmployeeCard({
             {onEdit ? (
               <Button
                 variant="icon"
-                size="icon-sm"
+                size="icon-dense"
                 tinted
                 type="button"
                 className="adm-node-card-icon-btn"
@@ -136,7 +136,7 @@ export function EmployeeCard({
             {onDelete ? (
             <Button
               variant="icon"
-              size="icon-sm"
+              size="icon-dense"
               tinted
               type="button"
               danger
