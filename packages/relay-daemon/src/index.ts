@@ -525,7 +525,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           try {
             sharedWorkspaceKey = durableWorkspaceLayout(command.workspaceLayout)
               ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
-              : undefined;
+              : command.workspaceLayout === "thread"
+                ? undefined
+                : workspacePath;
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);
             logger.warn("command rejected for invalid workspace subpath", { ...commandLogFields(sandboxId, command), error: detail });
@@ -874,7 +876,7 @@ async function executeCommand(
   cancellationTerminalEventSignal?: () => AbortSignal | undefined,
 ): Promise<void> {
   const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
-  const state = command.state ?? initialAgentState(command.taskGoal);
+  const state = { ...(command.state ?? initialAgentState(command.taskGoal)), round_result_run_id: command.runId };
   logger.info("run starting", commandLogFields(sandboxId, command));
   if (command.workspacePath && !workspacePathsMatch(command.workspacePath, nodeWorkspacePath)) {
     throw new Error(
@@ -886,6 +888,8 @@ async function executeCommand(
     : durableWorkspaceLayout(command.workspaceLayout)
       ? threadWorkspaces.ensureSubpath(command.sessionId, requiredWorkspaceSubpath(command))
       : threadWorkspaces.nodeRoot(command.sessionId);
+  // Discard control state from an interrupted previous run before execution.
+  consumeRoundResult(threadWorkspace.hostPath);
   await environment.ensureAgentReady(command.agent, signal, threadWorkspace.hostPath);
   if (signal?.aborted) {
     await postRunCancelled(fetchFn, eventUrl, command, token, signal.reason, cancellationTerminalEventSignal?.()).catch((error: unknown) => {
@@ -1031,18 +1035,23 @@ async function executeCommand(
   let patch;
   try {
     patch = await runAgentNode(command.agent, runState, options);
+  } catch (error) {
+    consumeRoundResult(threadWorkspace.hostPath);
+    throw error;
   } finally {
     outputBuffer.close();
     await waitForOutputPosts();
   }
   const next = mergeAgentState(state, patch);
   const agentLog = next.agent_logs.slice(-1)[0] ?? "";
+  // Consume on every terminal path, including cancellation and delivery failure.
+  const roundResult = consumeRoundResult(threadWorkspace.hostPath, command.runId);
   if (signal?.aborted) {
     logger.info("run cancelled", {
       ...commandLogFields(sandboxId, command),
       exitCode: next.last_exit_code,
     });
-    await postRunCancelled(fetchFn, eventUrl, command, token, signal.reason, cancellationTerminalEventSignal?.()).catch((error: unknown) => {
+    await postRunCancelled(fetchFn, eventUrl, command, token, signal.reason, cancellationTerminalEventSignal?.(), agentLog).catch((error: unknown) => {
       logger.error("terminal event post failed", {
         ...commandLogFields(sandboxId, command),
         error: error instanceof Error ? error.message : String(error),
@@ -1071,10 +1080,6 @@ async function executeCommand(
     } satisfies DaemonNodeEvent, token, signal);
     return;
   }
-  // Read the verdict even on a failed run: a round that stopped because it is
-  // blocked has something to say, and leaving the file behind would let the
-  // next round inherit it.
-  const roundResult = consumeRoundResult(threadWorkspace.hostPath);
   logger.info("run completed", {
     ...commandLogFields(sandboxId, command),
     exitCode: next.last_exit_code,
@@ -1103,6 +1108,7 @@ async function postRunCancelled(
   token: string,
   reason: unknown,
   signal?: AbortSignal,
+  agentLog?: string,
 ): Promise<void> {
   await postJsonWithRetry(fetchFn, eventUrl, {
     type: "run.cancelled",
@@ -1112,6 +1118,7 @@ async function postRunCancelled(
     runId: command.runId,
     agent: command.agent,
     reason: typeof reason === "string" && reason ? reason : "Cancelled by human.",
+    ...(agentLog ? { agentLog } : {}),
   } satisfies DaemonNodeEvent, token, signal);
 }
 

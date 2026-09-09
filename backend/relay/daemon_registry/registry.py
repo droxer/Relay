@@ -2705,16 +2705,10 @@ class DaemonNodeRegistry:
         )
         if bridge:
             state["prior_agent_bridge"] = bridge
-        # Task work outlives a single prompt: it spans pipeline members, later
-        # rounds, and elided history. Chat threads without a task do not need a
-        # file on disk to remember one exchange.
-        progress_file = (
-            task_progress_file(run_request["sessionId"], workspace_layout)
-            if run_request.get("taskId")
-            else None
-        )
-        if progress_file:
-            state["progress_file"] = progress_file
+        # Chat can grow into substantial work too. Provide a stable path on
+        # every run; the prompt only asks to create a checkpoint for real work.
+        progress_file = task_progress_file(run_request["sessionId"], workspace_layout)
+        state["progress_file"] = progress_file
         conversation = compute_conversation_history(
             session_snapshot, self.store, progress_file=progress_file
         )
@@ -2751,7 +2745,7 @@ class DaemonNodeRegistry:
         # without the capability the file would sit in the workspace unread,
         # and the task would wait for a human either way.
         if (
-            progress_file
+            run_request.get("taskId")
             and self._assignment_reports_round_result(assignments, index)
             and DAEMON_CAPABILITY_ROUND_RESULT in (sandbox.get("capabilities") or [])
         ):
@@ -3093,6 +3087,7 @@ class DaemonNodeRegistry:
             )
             return
         if event["type"] == "run.cancelled":
+            agent_log = event.get("agentLog") or self.output_for_run(event["runId"])
             self.clear_run_output(event["runId"])
             if not existing_completion:
                 controller.record_agent_completed(
@@ -3103,7 +3098,7 @@ class DaemonNodeRegistry:
                         "agent": event["agent"],
                         "status": "cancelled",
                         "exitCode": 130,
-                        "agentLog": "",
+                        "agentLog": agent_log,
                         "assignmentId": assignment.get("assignmentId"),
                     },
                 )

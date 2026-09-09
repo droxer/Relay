@@ -410,13 +410,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: var(--sp-6);
+  gap: var(--sp-7);
 }
 
 @container record (min-width: 768px) {
   .workspace-profile .workspace-profile-dossier {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
-    gap: var(--sp-7);
+    /* Two columns: the gap is now also the channel between the document and
+       its identity rail, so it takes the rung above the stacked case. */
+    gap: var(--sp-8);
   }
 
   .workspace-dossier-admin {
@@ -532,7 +534,9 @@
 .workspace-profile .agent-dossier {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  /* Section rung — these are independent blocks of a record, not a field
+     stack. Matches .adm-view and .workspace-profile-dossier. */
+  gap: var(--sp-7);
 }
 
 .agent-dossier-identity {

@@ -363,7 +363,9 @@
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
-  padding: var(--sp-4);
+  /* --sp-5, not --sp-4: the card view is the one that trades density for
+     legibility (that is why both views exist), so it takes the wider inset. */
+  padding: var(--sp-5);
   transition: border-color var(--t-fast) var(--ease);
 }
 

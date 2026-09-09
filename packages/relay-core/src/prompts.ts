@@ -93,6 +93,9 @@ function promptPreludes(state: AgentState): string[] {
       [
         "[Finishing]",
         `When you stop, write \`${state.round_result_file}\` as JSON: {"status": "done" | "continue" | "blocked", "note": "<one line>"}.`,
+        ...(state.round_result_run_id
+          ? [`Include "runId": ${JSON.stringify(state.round_result_run_id)} in that JSON; verdicts for other runs are rejected.`]
+          : []),
         '"done" means the task is complete, "continue" means real work remains, "blocked" means you cannot proceed without a human.',
         "This file is how the task is closed out; without it the task waits for a person.",
       ].join("\n"),
@@ -107,6 +110,10 @@ function promptPreludes(state: AgentState): string[] {
         "[Progress log]",
         `\`${state.progress_file}\` in the workspace is this task's durable record across turns and agents.`,
         "Read it before you start; the conversation below may be truncated, but this file is not.",
+        "For substantial work, create it before implementation with the goal, acceptance criteria, and a checklist of pending, in progress, done, or blocked steps.",
+        "For a simple exchange with no ongoing work, do not create a progress file solely to answer it.",
+        "Update it after each meaningful milestone and before a handoff, so interruption does not lose all progress.",
+        "Record verification results, key decisions, failed approaches, blockers, and the exact next action. Verify the current workspace before relying on an older checkpoint.",
         "Before you finish, update it: what you decided, what is done, what is left, and anything the next agent would otherwise have to rediscover.",
       ].join("\n"),
     );

@@ -1,6 +1,16 @@
 /* ============================ responsive ============================ */
 
 @media (max-width: 820px) {
+  /* The desktop gutter is --sp-7 (32px). A phone cannot afford it: at 375px
+     that is 17% of the screen spent on margin, and the surfaces this token
+     insets — route headers, the backlog, the transcript — are the ones whose
+     content is already width-starved here. Pin the token rather than
+     unsetting it per surface, so all fourteen consumers step down together
+     and stay aligned with each other exactly as they do on desktop. */
+  :root {
+    --page-gutter: var(--sp-6);
+  }
+
   .messenger-shell,
   .messenger-shell[data-sidenav="open"],
   .messenger-shell[data-route],

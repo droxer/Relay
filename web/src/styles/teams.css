@@ -59,12 +59,8 @@
    full-bleed stripes it brought read as a different kind of object than the
    thread and agent rows beside it. */
 .teams-list {
-  /* The rails carry data-density="compact" for TYPE (13px names, 12px meta),
-     but a two-line selectable object is not a dense table row, so the dense
-     --sp-row (8px) left name and meta touching their own row edges. Restate
-     the standard row rhythm for the rail's descendants; density keeps the
-     type scale. */
-  --sp-row: var(--sp-3);
+  /* Row rhythm comes from the compact scope itself — see the note on
+     .conversation-list in thread.css. */
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);

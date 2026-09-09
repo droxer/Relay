@@ -5,6 +5,37 @@ from typing import Any
 from relay.sessions import compute_prior_agent_bridge, extract_last_assistant_text
 
 
+def test_bridge_bounds_long_current_turn_and_preserves_latest_result() -> None:
+    session = {"id": "s", "events": [], "agentRuns": [
+        {"agent": "codex", "agentLog": "● " + str(i) + "x" * 10000}
+        for i in range(30)
+    ]}
+    session["agentRuns"][-1]["agentLog"] += "NEXT: verify migration"
+    bridge = compute_prior_agent_bridge(session, "claude", _FakeStore({}))
+    assert len(bridge) <= 16000
+    assert "omitted" in bridge
+    assert "NEXT: verify migration" in bridge
+
+
+def test_bridge_bounds_one_oversized_result_without_losing_attribution() -> None:
+    session = {"id": "s", "events": [], "agentRuns": [
+        {"agent": "codex", "status": "cancelled", "agentLog": "● " + "x" * 50000 + "NEXT STEP"},
+    ]}
+    bridge = compute_prior_agent_bridge(session, "claude", _FakeStore({}))
+    assert len(bridge) <= 16000
+    assert "@codex - cancelled" in bridge
+    assert bridge.endswith("NEXT STEP")
+
+
+def test_bridge_bounds_many_small_results() -> None:
+    session = {"id": "s", "events": [], "agentRuns": [
+        {"agent": "codex", "agentLog": f"● result-{i}"} for i in range(40)
+    ]}
+    bridge = compute_prior_agent_bridge(session, "claude", _FakeStore({}))
+    assert bridge.count("[Previous from") == 24
+    assert bridge.endswith("result-39")
+
+
 def test_extract_last_assistant_text_empty_returns_none() -> None:
     assert extract_last_assistant_text("") is None
     assert extract_last_assistant_text("   \n\n") is None

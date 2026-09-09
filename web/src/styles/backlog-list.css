@@ -48,8 +48,13 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
-  padding: var(--sp-4) var(--page-gutter) var(--sp-7);
+  /* Band separation — --sp-7, the scale's section rung. This gap is the only
+     thing dividing one status band from the next (the band header is sticky
+     and tinted, but it travels), so it has to out-measure the gap between
+     rows inside a band by enough that the boundary is legible while
+     scrolling. --sp-5 against a 12px row rhythm was not that margin. */
+  gap: var(--sp-7);
+  padding: var(--sp-6) var(--page-gutter) var(--sp-8);
 }
 
 .list-group[data-status="backlog"],
@@ -121,12 +126,20 @@
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  /* 44px, not the 68 this row carried while it was also printing a status
-     word and a second line of meta. A grouped list is read by scanning down
-     one band, so the row's height is what decides how much of a band fits on
-     screen — and every fact left in the row is one line tall. */
-  min-height: 44px;
-  padding: var(--sp-1) var(--sp-3);
+  /* 52px. The 44 this row settled on came from stripping it back to one line
+     of facts — that reasoning still holds, and the row still prints one line.
+     What changed is the ask: 4px of block padding made the row a rule with
+     text in it rather than an object with edges, and a band of them read as a
+     ledger. 52 is the same one-line row with room around the line; a band
+     still fits ~11 rows in a 640px pane, so scanning down a band did not
+     become a scrolling exercise.
+
+     The block padding is --sp-row so the row rhythm is decided by the density
+     scope this list opts into (compact → 12px), not restated here. It sits
+     under the 52px floor, which is what actually sets a single-line row's
+     height; it takes over once a row wraps. */
+  min-height: 52px;
+  padding: var(--sp-row) var(--sp-3);
   border-bottom: 0.5px solid var(--line-2);
   transition: background var(--t-fast) var(--ease);
 }
@@ -525,8 +538,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   align-content: start;
-  gap: var(--sp-3);
-  padding: var(--sp-4) var(--page-gutter) var(--sp-7);
+  /* A card grid, not banded rows: the gap separates peers rather than
+     sections, so it steps to --sp-4 while the band gap goes to --sp-7. */
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--page-gutter) var(--sp-8);
 }
 
 .routine-card {

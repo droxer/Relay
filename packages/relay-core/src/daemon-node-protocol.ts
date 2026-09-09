@@ -307,6 +307,7 @@ export type DaemonNodeEvent =
       runId: string;
       agent: AgentName;
       reason: string;
+      agentLog?: string;
     }
   | {
       type: "workspace.listing";

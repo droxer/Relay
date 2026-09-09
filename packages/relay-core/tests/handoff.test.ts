@@ -303,6 +303,9 @@ describe("prompts", () => {
     assert.match(prompt, /\[Progress log\]\n`PROGRESS\.md` in the workspace/);
     assert.match(prompt, /Read it before you start/);
     assert.match(prompt, /Before you finish, update it/);
+    assert.match(prompt, /after each meaningful milestone/);
+    assert.match(prompt, /exact next action/);
+    assert.match(prompt, /simple exchange/);
   });
   it("asks every task run to update the progress log", () => {
     const taskState = state({
@@ -319,11 +322,13 @@ describe("prompts", () => {
     const roundState = state({
       task_goal: "Migrate the billing tables",
       round_result_file: ".relay/round-result.json",
+      round_result_run_id: "run_current",
     });
 
     const prompt = claudeTaskPrompt(roundState);
     assert.match(prompt, /\[Finishing\]\nWhen you stop, write `\.relay\/round-result\.json`/);
     assert.match(prompt, /"status": "done" \| "continue" \| "blocked"/);
+    assert.match(prompt, /"runId": "run_current"/);
 
     assert.match(buildClaudeCommand(roundState), /\[Finishing\]/);
   });

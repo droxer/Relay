@@ -30,7 +30,7 @@ const NOTE_MAX_CHARS = 2000;
  * so. Returns undefined when absent or malformed; a broken control file must
  * not fail an otherwise successful run.
  */
-export function consumeRoundResult(workspacePath: string): RoundResult | undefined {
+export function consumeRoundResult(workspacePath: string, expectedRunId?: string): RoundResult | undefined {
   const path = join(workspacePath, ROUND_RESULT_RELATIVE_PATH);
   let raw: string;
   try {
@@ -43,10 +43,10 @@ export function consumeRoundResult(workspacePath: string): RoundResult | undefin
     return undefined;
   }
   removeQuietly(path);
-  return parseRoundResult(raw);
+  return parseRoundResult(raw, expectedRunId);
 }
 
-export function parseRoundResult(raw: string): RoundResult | undefined {
+export function parseRoundResult(raw: string, expectedRunId?: string): RoundResult | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -56,7 +56,8 @@ export function parseRoundResult(raw: string): RoundResult | undefined {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
-  const { status, note } = parsed as { status?: unknown; note?: unknown };
+  const { status, note, runId } = parsed as { status?: unknown; note?: unknown; runId?: unknown };
+  if (expectedRunId !== undefined && runId !== expectedRunId) return undefined;
   if (typeof status !== "string" || !ROUND_RESULT_STATUSES.has(status)) {
     return undefined;
   }

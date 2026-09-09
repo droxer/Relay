@@ -22,6 +22,8 @@ _ASSISTANT_SPLIT = re.compile(r"\n?● ")  # "● "
 _CONTINUITY_STATUSES = {None, "completed", "failed", "cancelled"}
 _OUTPUT_TAIL_LINES = 20
 _OUTPUT_TAIL_CHARS = 1200
+_MAX_BRIDGE_CHARS = 16000
+_MAX_BRIDGE_BLOCKS = 24
 
 
 def extract_last_assistant_text(transcript: str) -> str | None:
@@ -234,4 +236,20 @@ def compute_prior_agent_bridge(
         text = run_continuity_text(run, body)
         blocks.append(f"[Previous from @{run.get('agent')}{run_continuity_suffix(run)}]\n{text or '<no output>'}")
 
-    return "\n\n".join(blocks)
+    if len(blocks) <= _MAX_BRIDGE_BLOCKS and len("\n\n".join(blocks)) <= _MAX_BRIDGE_CHARS:
+        return "\n\n".join(blocks)
+    marker = "[Earlier agent context omitted; consult the shared progress log if present and prior run logs.]"
+    budget = _MAX_BRIDGE_CHARS - len(marker) - 2
+    kept: list[str] = []
+    for block in reversed(blocks):
+        remaining = budget - sum(len(item) + 2 for item in kept)
+        if len(kept) >= _MAX_BRIDGE_BLOCKS or remaining <= 0:
+            break
+        if len(block) > remaining:
+            if not kept:
+                header, _, body = block.partition("\n")
+                prefix = header + "\n[Earlier content omitted]\n"
+                kept.append(prefix + body[-(remaining - len(prefix)):])
+            break
+        kept.append(block)
+    return "\n\n".join([marker, *reversed(kept)])

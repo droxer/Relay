@@ -40,8 +40,8 @@ def _elision(progress_file: str | None) -> str:
     if not progress_file:
         return _HISTORY_ELISION
     return (
-        f"[Earlier conversation omitted — `{progress_file}` in the workspace "
-        "carries the decisions and state from before this point]"
+        f"[Earlier conversation omitted — consult `{progress_file}` in the workspace "
+        "if present for earlier decisions and state; verify it against the current workspace]"
     )
 _DEFAULT_MAX_HISTORY_BLOCKS = 24
 _DEFAULT_MAX_HISTORY_CHARS = 16000
@@ -156,6 +156,20 @@ def compute_conversation_history(
             continue
         agent = run.get("agent", "agent")
         items.append((marker, "agent", f"[Assistant @{agent}{run_continuity_suffix(run)}]\n{text or '<no output>'}"))
+    for index, event in enumerate(session.get("events", [])):
+        if event.get("type") != "human.decision":
+            continue
+        marker = (event.get("timestamp") or "", index)
+        if latest_user and marker >= latest_user:
+            continue
+        decision = event.get("decision") or {}
+        note = decision.get("note")
+        if decision.get("kind") != "handoff" or not isinstance(note, str) or not note.strip():
+            continue
+        target = decision.get("targetAgent") or "agent"
+        if decision.get("targetAgentId"):
+            target += f" ({decision['targetAgentId']})"
+        items.append((marker, "handoff", f"[Historical handoff to @{target}]\n{note.strip()}"))
 
     items.sort(key=lambda item: item[0])
 

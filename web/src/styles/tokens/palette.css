@@ -316,6 +316,15 @@
      --sp-8 at a scroll region's tail. Re-add them only together with a call
      site in the same change.
 
+     That rule survived the breathing-room pass: the app got airier by moving
+     its separations UP the existing scale, not by inventing a rung above it.
+     A section stack that read at --sp-5 now reads at --sp-7, the shared page
+     gutter at --sp-7, and the scroll tail stays --sp-8. 64px was considered
+     and rejected — the only candidates were gaps inside a SCROLLING list,
+     where a rung that large spends a third of the viewport on emptiness the
+     reader scrolls past. Breathing room is the frame and the boundaries
+     between sections; it is not a bigger number everywhere.
+
      --sp-hairline (0.5px) is NOT a gap — it is the width of the hairline
      visual construct expressed as spacing: padding that lets a hairline
      border show past a fill, or the hairline channel between segments that
@@ -331,7 +340,14 @@
   --sp-6: 24px;
   --sp-7: 32px;
   --sp-8: 48px;
-  --sp-row: var(--sp-3); /* dense row rhythm */
+  /* Row rhythm. The root value is the COMFORTABLE tier and the compact scope
+     steps it down one rung — 16 → 12, mirroring how that scope steps type.
+     Before the breathing-room pass this was 12 at root and 8 in compact, and
+     the three roster rails (agents / teams / threads) each restated it back to
+     12 because 8 left a two-line row's name and meta touching their own edges.
+     Now that compact IS 12, those restatements are gone: one rung, decided in
+     one place, instead of the same override written three times. */
+  --sp-row: var(--sp-4);
 
   /* Control heights — the source system renders form inputs and primary pills at
      44px so they share a silhouette and clear the WCAG AAA touch floor. The
@@ -479,8 +495,14 @@
   /* Shared inline gutter for page chrome — route PageHeaders, the thread
      rail, and the chat header/transcript all inset by this one token so the
      content edges of adjacent panes line up instead of each picking its own
-     step on the spacing scale. */
-  --page-gutter: var(--sp-6);
+     step on the spacing scale.
+
+     32px, not 24. This is the single highest-leverage breathing-room lever in
+     the app: fourteen surfaces inset by it, so one rung here widens every
+     route's margin at once and nothing drifts out of alignment because they
+     all read the same token. responsive.css pins it back to 24 below 820px —
+     a 32px gutter on a 375px phone spends 17% of the screen on margin. */
+  --page-gutter: var(--sp-7);
 
   /* Elevation — flat. There are no shadow raw values: planes separate by a
      surface step plus a hairline, and floating chrome adds only the hairline
@@ -808,7 +830,10 @@ html:lang(zh-TW) {
 /* Density escape hatch — data-dense surfaces (admin tables, backlog). */
 [data-density="compact"] {
   --leading-loose: 1.5;
-  --sp-row: var(--sp-2);
+  /* One rung below root's --sp-4, the same way --fs-4 drops one rung below.
+     8px was the old value and it was too tight for the two-line rows this
+     scope actually wraps — every rail that used it overrode it back. */
+  --sp-row: var(--sp-3);
   /* The dense reading tier runs one rung down: the compact scope's --fs-4
      becomes the ladder's 15px dense-prose rung. Heading tiers are untouched —
      density compresses rows, not hierarchy.

@@ -26,7 +26,9 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-1-5) var(--sp-3);
+  /* --sp-2, not --sp-1-5: the sub-4px rungs are for binding glyph-tight pairs
+     (palette.css), and this is a padded surface, not a pairing. */
+  padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
   background: color-mix(in srgb, var(--row-accent) 10%, var(--surface-1));
 }
@@ -103,7 +105,9 @@
 .adm-grouped-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  /* Matches .backlog-rows — both are banded lists, and the boundary between
+     two bands is the same kind of separation on either surface. */
+  gap: var(--sp-7);
   min-height: 0;
 }
 

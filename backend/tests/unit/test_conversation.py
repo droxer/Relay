@@ -13,6 +13,18 @@ class _FakeStore:
         return self._bodies[artifact_id]
 
 
+def test_handoff_constraints_survive_a_followup_with_target_scope() -> None:
+    session = _session(events=[
+        {"type": "human.decision", "timestamp": "2026-06-20T00:01:00.000Z",
+         "decision": {"kind": "handoff", "targetAgent": "codex",
+                      "targetAgentId": "reviewer", "note": "Preserve the public API."}},
+        {"type": "user.message", "timestamp": "2026-06-20T00:02:00.000Z", "text": "Continue"},
+    ])
+    history = compute_conversation_history(session, _FakeStore({}))
+    assert "Preserve the public API." in history
+    assert "codex" in history and "reviewer" in history
+
+
 def _session(
     *,
     task_goal: str = "first question",
@@ -203,7 +215,7 @@ def test_elided_history_names_the_progress_log_when_the_run_keeps_one() -> None:
 
     assert out == (
         "[Conversation so far]\n\n"
-        "[Earlier conversation omitted — `PROGRESS.md` in the workspace "
-        "carries the decisions and state from before this point]\n\n"
+        "[Earlier conversation omitted — consult `PROGRESS.md` in the workspace "
+        "if present for earlier decisions and state; verify it against the current workspace]\n\n"
         "[User]\nnear current follow up"
     )

@@ -350,7 +350,10 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1);
-  padding: var(--sp-3) var(--sp-4);
+  /* Inline padding tracks .backlog-task's own inset (backlog.css) — the bar
+     overlays the card edge-to-edge, so its inset is the only thing keeping
+     the first action aligned with the title above it. */
+  padding: var(--sp-3) var(--sp-5);
   border-top: 0.5px solid var(--line-2);
   background: var(--surface-1);
   border-radius: 0 0 calc(var(--r-3) - 1px) calc(var(--r-3) - 1px);

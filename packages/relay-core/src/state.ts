@@ -47,6 +47,8 @@ export interface AgentState {
    * read it back; absent means nothing will consume what the agent writes.
    */
   round_result_file?: string;
+  /** Set by the daemon to reject a verdict belonging to another run. */
+  round_result_run_id?: string;
   /**
    * Why the lead was handed the turn back: a teammate's run failed and this
    * run is the bounded chance to fix the cause before the pipeline resumes.

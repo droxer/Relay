@@ -15,8 +15,10 @@
 .adm-dash {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
-  padding: var(--sp-6) var(--page-gutter) var(--sp-8);
+  /* The dashboard is a stack of independent instruments — KPI rail, charts,
+     activity. --sp-7 is the section rung; at --sp-5 they read as one grid. */
+  gap: var(--sp-7);
+  padding: var(--sp-7) var(--page-gutter) var(--sp-8);
   min-width: 0;
 }
 

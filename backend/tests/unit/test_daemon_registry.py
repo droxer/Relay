@@ -3832,7 +3832,8 @@ def test_daemon_output_retry_after_registry_restart_is_deduplicated() -> None:
     asyncio.run(run_flow())
 
 
-def test_daemon_cancel_event_clears_active_run_request() -> None:
+@pytest.mark.parametrize("terminal_log", [True, False])
+def test_daemon_cancel_event_clears_active_run_request(terminal_log: bool) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
@@ -3861,6 +3862,7 @@ def test_daemon_cancel_event_clears_active_run_request() -> None:
                 },
             )
             [command] = registry.take_commands("sbx_alice", "node_token")
+            registry._append_run_output(command["runId"], "● Updated schema; migration verification remains.")
             registry.cancel_active_run("sbx_alice", session["id"], "no longer needed")
             [cancel] = registry.take_commands("sbx_alice", "node_token")
             assert cancel["type"] == "run.cancel"
@@ -3873,11 +3875,13 @@ def test_daemon_cancel_event_clears_active_run_request() -> None:
                     "runId": command["runId"],
                     "agent": "claude",
                     "reason": "no longer needed",
+                    **({"agentLog": "● Updated schema; migration verification remains."} if terminal_log else {}),
                 },
                 "node_token",
             )
 
             assert session_store.get_session(session["id"])["status"] == "cancelled"
+            assert "migration verification remains" in session_store.get_session(session["id"])["agentRuns"][-1]["agentLog"]
             assert daemon_store.list_active_run_requests("sbx_alice") == []
 
     asyncio.run(run_flow())
@@ -4874,7 +4878,7 @@ def test_progress_log_is_named_per_thread_on_a_shared_node_workspace() -> None:
     assert task_progress_file("ses_beta", "node-root") == "PROGRESS-ses_beta.md"
 
 
-def test_task_runs_carry_a_progress_log_and_chat_runs_do_not() -> None:
+def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
@@ -4903,7 +4907,8 @@ def test_task_runs_carry_a_progress_log_and_chat_runs_do_not() -> None:
                 },
             )
             [chat_command] = registry.take_commands("sbx_alice", "node_token")
-            assert "progress_file" not in chat_command["state"]
+            assert chat_command["state"]["progress_file"] == "PROGRESS.md"
+            assert "round_result_file" not in chat_command["state"]
             registry.handle_event(
                 "sbx_alice",
                 {

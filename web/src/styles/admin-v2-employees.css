@@ -17,7 +17,9 @@
 
 .adm-content-main {
   overflow-y: auto;
-  padding: var(--sp-6) var(--page-gutter);
+  /* Block inset steps with the gutter so an admin view is inset by the same
+     amount on all four sides. */
+  padding: var(--sp-7) var(--page-gutter);
   min-width: 0;
 }
 
