@@ -218,10 +218,10 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                     <Input
                       /* window.prompt parity: the default arrives selected, so
                          typing replaces it rather than appending to it. */
-                      ref={(node) => {
-                        initialFocusRef.current = node;
-                        node?.select();
-                      }}
+                      ref={(node) => { initialFocusRef.current = node; }}
+                      // Wait for Dialog to capture the opener before selection
+                      // focuses the field, so closing can restore focus.
+                      onFocus={(event) => event.currentTarget.select()}
                       className="dialog-input"
                       name="dialog-prompt"
                       autoComplete="off"

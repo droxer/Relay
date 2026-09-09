@@ -33,7 +33,7 @@ export function ArtifactNavButton({ artifactCount, inProject, onOpenArtifacts, e
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size="dense"
       className={`chat-artifacts-button${className ? ` ${className}` : ""}`}
       type="button"
       aria-label={toggleLabel}

@@ -214,7 +214,7 @@ export function EditEmployeeDrawer({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              size="dense"
               className="self-start"
               onClick={() => {
                 setMaxLocalComputers("");

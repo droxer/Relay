@@ -105,7 +105,7 @@ export function AgentProfileEditor({
             // Always the quiet outline tier — the cobalt default made a
             // secondary record action the loudest thing on the profile page.
             variant="outline"
-            size="sm"
+            size="dense"
             className="agent-personality-edit-action"
             onClick={onStartEdit}
           >
@@ -185,10 +185,10 @@ export function AgentProfileEditor({
             </span>
             <span className="agent-personality-save-hint">{t("agents_page.personality_save_hint")}</span>
             <div className="agent-personality-actions">
-              <Button type="button" variant="ghost" size="sm" onClick={() => { void requestCancel(); }} disabled={saving}>
+              <Button type="button" variant="ghost" size="dense" onClick={() => { void requestCancel(); }} disabled={saving}>
                 {t("admin.v2.cancel")}
               </Button>
-              <Button type="button" size="sm" onClick={onSave} disabled={!canSave} loading={saving} loadingLabel={t("admin.v2.saving")}>
+              <Button type="button" size="dense" onClick={onSave} disabled={!canSave} loading={saving} loadingLabel={t("admin.v2.saving")}>
                 {t("agents_page.save_profile")}
               </Button>
             </div>

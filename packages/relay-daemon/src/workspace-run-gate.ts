@@ -21,10 +21,19 @@ interface LockOwner {
   pid: number;
   token: string;
   createdAt: number;
+  sessionId?: string;
+}
+
+export interface WorkspaceGateObserver {
+  sessionId: string;
+  /** null means the wait ended; undefined means another process owns the lock. */
+  onWaiting?: (blockingSessionId: string | null | undefined) => Promise<void>;
 }
 
 /** Serializes writes that target the same physical project workspace. */
 export class WorkspaceRunGate {
+  private readonly owners = new Map<string, string>();
+  private readonly waiters = new Map<string, Set<WorkspaceGateObserver>>();
   private readonly tails = new Map<string, Promise<void>>();
 
   constructor(private readonly workspaceRoot?: string) {}
@@ -33,9 +42,11 @@ export class WorkspaceRunGate {
     key: string | undefined,
     signal: AbortSignal | undefined,
     work: () => Promise<T>,
+    observer?: WorkspaceGateObserver,
   ): Promise<T> {
     if (!key) return work();
 
+    const queued = this.tails.has(key);
     const predecessor = this.tails.get(key) ?? Promise.resolve();
     let release!: () => void;
     const ownTurn = new Promise<void>((resolve) => {
@@ -46,12 +57,32 @@ export class WorkspaceRunGate {
     let releaseFileLock: (() => void) | undefined;
 
     try {
+      if (queued && observer) {
+        const waiters = this.waiters.get(key) ?? new Set<WorkspaceGateObserver>();
+        waiters.add(observer);
+        this.waiters.set(key, waiters);
+        await observer.onWaiting?.(this.owners.get(key));
+      }
       await waitForTurn(predecessor, signal);
       signal?.throwIfAborted();
-      releaseFileLock = await acquireFileLock(this.workspaceRoot, key, signal);
+      releaseFileLock = await acquireFileLock(this.workspaceRoot, key, signal, observer);
+      if (observer) {
+        this.waiters.get(key)?.delete(observer);
+        this.owners.set(key, observer.sessionId);
+        await observer.onWaiting?.(null);
+        for (const waiter of this.waiters.get(key) ?? []) {
+          // A cancelled queued run must not fail the current workspace owner.
+          await waiter.onWaiting?.(observer.sessionId).catch(() => undefined);
+        }
+      }
       signal?.throwIfAborted();
       return await work();
     } finally {
+      if (observer) {
+        this.waiters.get(key)?.delete(observer);
+        if (this.owners.get(key) === observer.sessionId) this.owners.delete(key);
+        if (!this.waiters.get(key)?.size) this.waiters.delete(key);
+      }
       releaseFileLock?.();
       release();
       if (this.tails.get(key) === tail) {
@@ -67,6 +98,7 @@ async function acquireFileLock(
   workspaceRoot: string | undefined,
   key: string,
   signal: AbortSignal | undefined,
+  observer?: WorkspaceGateObserver,
 ): Promise<(() => void) | undefined> {
   if (!workspaceRoot) return undefined;
   const lockDirectory = workspaceLockDirectory(workspaceRoot);
@@ -79,8 +111,11 @@ async function acquireFileLock(
     pid: process.pid,
     token: randomUUID(),
     createdAt: Date.now(),
+    sessionId: observer?.sessionId,
   };
 
+  let lastOwner: string | undefined;
+  let reportedWait = false;
   while (true) {
     signal?.throwIfAborted();
     let descriptor: number | undefined;
@@ -109,6 +144,16 @@ async function acquireFileLock(
           }
         }
         continue;
+      }
+      let blockingSessionId: string | undefined;
+      try {
+        const lock = JSON.parse(readFileSync(lockPath, "utf8")) as Partial<LockOwner>;
+        if (typeof lock.sessionId === "string") blockingSessionId = lock.sessionId;
+      } catch { /* A lock can be replaced while it is inspected. */ }
+      if (!reportedWait || blockingSessionId !== lastOwner) {
+        await observer?.onWaiting?.(blockingSessionId);
+        lastOwner = blockingSessionId;
+        reportedWait = true;
       }
       await waitForRetry(signal);
     }

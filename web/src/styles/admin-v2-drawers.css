@@ -232,8 +232,7 @@
 .adm-drawer [data-slot="select-trigger"],
 .adm-drawer [data-slot="textarea"] {
   background: var(--field-on-overlay);
-  border-color: var(--line-1);
-  color: var(--ink-1);
+  /* Border, text, focus and invalid states remain owned by the primitive. */
 }
 
 .adm-drawer [data-slot="input"]::placeholder,

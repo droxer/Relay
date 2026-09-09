@@ -2087,6 +2087,44 @@ class DaemonNodeRegistry:
             raise PermissionError(
                 "Unauthorized daemon node event: command metadata does not match the active command."
             )
+        if event["type"] == "run.workspace":
+            from ..persistence.store_common import relay_task_event
+
+            run_request = self.daemon_store.get_run_request(
+                command.get("_runRequestId")
+            )
+            task_id = (run_request or {}).get("taskId")
+            if task_id and self.task_store:
+                waiting = {"runId": event["runId"], "sessionId": event["sessionId"]}
+                blocker = event.get("blockingSessionId")
+                if blocker:
+                    try:
+                        blocking_session = self.store.get_session(blocker)
+                        current_session = self.store.get_session(event["sessionId"])
+                    except (KeyError, FileNotFoundError):
+                        blocking_session = None
+                    if blocking_session and all(
+                        blocking_session.get(key) == current_session.get(key)
+                        for key in (
+                            "ownerEmployeeId",
+                            "computerId",
+                            "workspaceLayout",
+                            "workspaceSubpath",
+                        )
+                    ):
+                        waiting["blockingSessionId"] = blocker
+                self.task_store.append_event(
+                    task_id,
+                    relay_task_event(
+                        "task.workspace_wait",
+                        task_id,
+                        {
+                            "runId": event["runId"],
+                            "waiting": waiting if event["waiting"] else None,
+                        },
+                    ),
+                )
+            return
         if event["type"] == "run.output":
             seen = self._output_sequences_for_run(event["sessionId"], event["runId"])
             if event["sequence"] <= seen.get(event["stream"], -1):
@@ -2762,6 +2800,7 @@ class DaemonNodeRegistry:
             ),
             "state": state,
             "_runRequestId": run_request["id"],
+            "reportWorkspaceStatus": True,
             "_nodeId": node_id,
         }
         collaboration_manifest = request_state.get(COLLABORATION_MANIFEST_STATE_KEY)

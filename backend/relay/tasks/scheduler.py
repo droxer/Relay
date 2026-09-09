@@ -48,7 +48,11 @@ from ..services.task_rounds import (
     continuation_budget_exhausted,
     continuation_session_id,
 )
-from ..services.task_workspace import resolve_task_workspace
+from ..services.task_workspace import (
+    recorded_task_workspace,
+    resolve_task_workspace,
+    task_workspace_nodes,
+)
 from ..services.team_dispatch import (
     TEAM_UNAVAILABLE_MESSAGE,
     TeamDispatchError,
@@ -325,7 +329,9 @@ class TaskScheduler:
             )
             try:
                 employee_id = task_execution_employee_id(task)
-                daemon_nodes = self.registry.monitor_nodes()
+                daemon_nodes = task_workspace_nodes(
+                    task, self.registry.monitor_nodes(), self.registry.store
+                )
                 if resume_session:
                     resume_session = persist_legacy_session_computer_id(
                         resume_session,
@@ -575,7 +581,13 @@ class TaskScheduler:
                 task,
                 node=self.registry.get(node_id),
                 project_snapshot=project_snapshot,
+                session_store=self.registry.store,
             )
+            binding = recorded_task_workspace(
+                task, self.registry.store, self.registry.monitor_nodes()
+            )
+            if binding and layout in ("thread", "node-root"):
+                session_id = binding["sessionId"]
             workspace_fields: dict[str, Any] = {"workspaceLayout": layout}
             if subpath:
                 workspace_fields["workspaceSubpath"] = subpath

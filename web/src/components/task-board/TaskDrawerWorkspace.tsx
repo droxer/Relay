@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { listTaskWorkspaceFiles, readTaskWorkspaceFile } from "../../api";
+import { listTaskWorkspaceFiles, readTaskWorkspaceFile, taskWorkspaceStatus } from "../../api";
 import type {
   TaskWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
@@ -21,33 +21,35 @@ import { taskWorkspaceState } from "./taskWorkspaceState";
 /** The directory this task's rounds share, browsed inside the task drawer.
  *
  *  Live reads only: the workspace exists on the computer that ran the task, so
- *  an offline computer renders as an explained empty state rather than an
- *  error. The artifact list above stays the durable record either way.
+ *  an offline Computer is distinct from an empty or not-yet-created directory.
+ *  The artifact list above stays the durable record either way.
  *
  *  A routine lists its occurrence directories; the routine itself never runs. */
-export function TaskDrawerWorkspace({ taskId }: { taskId: string }) {
+export function TaskDrawerWorkspace({ taskId, onOpenThread }: { taskId: string; onOpenThread?: (sessionId: string) => void }) {
   const { t } = useTranslation();
   const [path, setPath] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
   const selectedName = selectedPath ? selectedPath.split("/").at(-1) || selectedPath : "";
 
-  // The fourth key element is a refresh-version counter on the sibling
-  // ProjectWorkspaceFiles, bumped by a manual refresh button there. The
-  // drawer has no such affordance yet, so it stays a fixed 0 rather than a
-  // wired-up counter — reserving the slot without inventing a control.
   const fileQuery = useQuery({
     queryKey: ["workspace-files", `task:${taskId}`, path, 0],
     retry: false,
     queryFn: ({ signal }): Promise<TaskWorkspaceFilesResponse> =>
       listTaskWorkspaceFiles({ taskId, path }, signal),
   });
-  // Same reservation as fileQuery above: no manual refresh in the drawer yet.
   const contentQuery = useQuery({
     queryKey: ["workspace-file", `task:${taskId}`, selectedPath, 0],
     enabled: Boolean(selectedPath),
     retry: false,
     queryFn: ({ signal }): Promise<TaskWorkspaceFileResponse> =>
       readTaskWorkspaceFile({ taskId, path: selectedPath }, signal),
+  });
+
+  const statusQuery = useQuery({
+    queryKey: ["task-workspace-status", taskId],
+    queryFn: ({ signal }) => taskWorkspaceStatus(taskId, signal),
+    refetchInterval: 3000,
+    retry: false,
   });
 
   function openDirectory(next: string): void {
@@ -65,7 +67,31 @@ export function TaskDrawerWorkspace({ taskId }: { taskId: string }) {
   return (
     <section className="task-drawer-artifacts" aria-label={t("backlog.workspace")}>
       <h3 className="task-drawer-artifacts-title">{t("backlog.workspace")}</h3>
-      {state === "loading" ? (
+      <Button variant="ghost" type="button" onClick={() => {
+        void fileQuery.refetch();
+        if (selectedPath) void contentQuery.refetch();
+      }}>{t("backlog.workspace_refresh")}</Button>
+      {statusQuery.data?.waiting ? (
+        <p className="task-drawer-artifacts-empty" role="status">
+          {t("backlog.workspace_waiting")}{" "}
+          {statusQuery.data.blockingSessionId ? (
+            <a href={`/threads/${encodeURIComponent(statusQuery.data.blockingSessionId)}`} onClick={event => {
+              if (onOpenThread && statusQuery.data?.blockingSessionId) {
+                event.preventDefault();
+                onOpenThread(statusQuery.data.blockingSessionId);
+              }
+            }}>{statusQuery.data.blockingTitle || t("backlog.workspace_open_active")}</a>
+          ) : null}
+        </p>
+      ) : null}
+      {fileQuery.data?.sharedWithProject ? (
+        <p className="task-drawer-artifacts-empty">{t("backlog.workspace_shared_project")}</p>
+      ) : null}
+      {["not-created", "offline", "unsupported", "denied"].includes(state) ? (
+        <p className="task-drawer-artifacts-empty" role="status">
+          {t(`backlog.workspace_${state.replace("-", "_")}`)}
+        </p>
+      ) : state === "loading" ? (
         <p className="task-drawer-artifacts-empty" role="status" aria-live="polite">
           {t("backlog.workspace_loading")}
         </p>

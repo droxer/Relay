@@ -142,7 +142,7 @@ export function NodeCard({
         ) : null}
         <div className="adm-node-card-actions">
           <Button variant="icon"
-            size="icon-sm"
+            size="icon-dense"
             tinted
             type="button"
             className="adm-node-card-icon-btn adm-node-action--copy"

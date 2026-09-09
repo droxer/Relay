@@ -427,7 +427,17 @@
     "routine_origin_unknown": "例程",
     "routine_origin_of": "由例程“{{title}}”生成",
     "save_task": "保存任务",
-    "create_task": "创建任务"
+    "create_task": "创建任务",
+    "workspace_not_created": "工作区尚未创建。任务开始后，文件会显示在这里。",
+    "workspace_offline": "存储这些文件的计算机已离线。仍可查看已保存的产物。",
+    "workspace_unsupported": "请升级此计算机的守护进程以浏览工作区。",
+    "workspace_denied": "你没有此工作区的访问权限。",
+    "workspace_shared_project": "与项目共享。其他项目任务也会使用这些文件。",
+    "workspace_refresh": "刷新文件",
+    "artifacts_versions": "显示所有版本",
+    "artifacts_latest": "显示最新版本",
+    "workspace_waiting": "正在等待使用此工作区的其他任务。",
+    "workspace_open_active": "打开正在运行的会话"
   },
   "workspace": {
     "title": "工作区",

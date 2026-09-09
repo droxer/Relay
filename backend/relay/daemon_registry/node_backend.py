@@ -303,6 +303,7 @@ class ServerDaemonNodeBackend:
             if prepared_request:
                 request = self._resume_prepared_request(request, prepared_request)
             sandbox = self._validate_run_target(sandbox_id, request)
+            request = self._task_workspace_request(request, sandbox)
             existing_session = self._existing_session(request)
             self._validate_existing_session_computer(
                 existing_session, sandbox_id, request
@@ -320,6 +321,26 @@ class ServerDaemonNodeBackend:
                 owner_employee_id,
                 run_request_id=(prepared_request or {}).get("id") or run_request_id,
             )
+            if request.get("_workspaceBinding") and self.registry.task_store:
+                from ..persistence.store_common import relay_task_event
+
+                task = self.registry.task_store.get_task(request["taskId"])
+                if (
+                    task.get("workspaceBinding")
+                    and task["workspaceBinding"] != request["_workspaceBinding"]
+                ):
+                    raise ValueError(
+                        "workspace_unavailable: this task was bound by another dispatch."
+                    )
+                if not task.get("workspaceBinding"):
+                    self.registry.task_store.append_event(
+                        task["id"],
+                        relay_task_event(
+                            "task.workspace_bound",
+                            task["id"],
+                            {"binding": request["_workspaceBinding"]},
+                        ),
+                    )
             controller = self._run_controller(
                 sandbox_id,
                 sandbox,
@@ -368,6 +389,71 @@ class ServerDaemonNodeBackend:
                 active_runs=active_runs_by_node[run_request["nodeId"]],
             )
             return self.registry.store.get_session(session_id)
+
+    def _task_workspace_request(
+        self, request: dict[str, Any], node: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Enforce affinity at admission, including callers outside task dispatch."""
+        from ..services.task_workspace import (
+            recorded_task_workspace,
+            resolve_task_workspace,
+        )
+
+        if not request.get("taskId") or not self.registry.task_store:
+            return request
+        task = self.registry.task_store.get_task(request["taskId"])
+        actor = request.get("actorEmployeeId")
+        if (
+            actor
+            and not request.get("actorIsAdmin")
+            and actor
+            not in (task.get("ownerEmployeeId"), task.get("assigneeEmployeeId"))
+        ):
+            raise PermissionError("Task belongs to another employee.")
+        binding = recorded_task_workspace(
+            task, self.registry.store, self.registry.monitor_nodes()
+        )
+        # Project identity is supplied only by the authorized project dispatch path.
+        project = None
+        if request.get("projectId") and request.get("workspaceLayout") == "project":
+            project = {"workspaceSubpath": request.get("workspaceSubpath")}
+        layout, subpath = resolve_task_workspace(
+            {**task, **({"workspaceBinding": binding} if binding else {})},
+            node=node,
+            project_snapshot=project,
+        )
+        if binding and layout in ("thread", "node-root"):
+            requested_session = request.get("sessionId")
+            if requested_session and requested_session != binding.get("sessionId"):
+                raise ValueError(
+                    "workspace_unavailable: this legacy task must continue in its original thread."
+                )
+            request = {**request, "sessionId": binding["sessionId"]}
+        if request.get("sessionId"):
+            existing = self.registry.store.get_session(request["sessionId"])
+            if layout in ("task", "project") and (
+                existing.get("workspaceLayout") != layout
+                or existing.get("workspaceSubpath") != subpath
+            ):
+                raise ValueError(
+                    "workspace_unavailable: linking a thread cannot relocate its files."
+                )
+        binding = binding or {
+            "computerId": computer_id(node),
+            "layout": layout,
+            "subpath": subpath,
+            **(
+                {"workspaceRoot": node["workspacePath"]}
+                if node.get("workspacePath")
+                else {}
+            ),
+        }
+        return {
+            **request,
+            "workspaceLayout": layout,
+            "workspaceSubpath": subpath,
+            "_workspaceBinding": binding,
+        }
 
     def _normalize_run_request(
         self, sandbox_id: str, request: dict[str, Any]

@@ -73,14 +73,14 @@ describe("UI primitive contracts", () => {
     const source = await readFile(resolve("web/src/components/ui/switch.tsx"), "utf8");
     assert.match(source, /h-5 w-9/);
     assert.match(source, /after:-inset-x-1 after:-inset-y-3/);
-    assert.match(source, /data-disabled:opacity-50/);
+    assert.match(source, /data-disabled:opacity-\(--opacity-disabled\)/);
     assert.match(source, /data-checked:bg-\[var\(--action\)\]/);
     assert.doesNotMatch(source, /data-slot="switch-track"/);
   });
 
   it("keeps shadcn button chrome in buttonVariants instead of the later Relay layer", async () => {
     const base = await readFile(resolve("web/src/styles/tokens/base.css"), "utf8");
-    assert.match(base, /button:not\(\[data-slot="button"\]\)\s*\{/);
+    assert.match(base, /:where\(button:not\(\[data-slot\]\)\)\s*\{/);
     assert.doesNotMatch(base, /button\[data-slot="button"\]\[data-variant=/);
   });
 
@@ -181,7 +181,7 @@ describe("UI primitive contracts", () => {
     // floating chrome gets the 0.5px hairline ring and nothing else.
     assert.match(roles, /--shadow-2:\s*0 0 0 0\.5px var\(--line-1\);/);
 
-    for (const file of ["select.tsx", "card.tsx"]) {
+    for (const file of ["select.tsx", "card.tsx", "toast.tsx"]) {
       const source = await readFile(resolve(`web/src/components/ui/${file}`), "utf8");
       assert.doesNotMatch(
         stripComments(source),

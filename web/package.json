@@ -10,7 +10,8 @@
     "build": "next build",
     "prepreview": "npm run build -w relay-core",
     "preview": "next dev -H 127.0.0.1 -p 5000",
-    "lint:css": "stylelint \"src/**/*.css\""
+    "lint:css": "stylelint \"src/**/*.css\"",
+    "test:design": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -42,6 +43,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/react-dom": "^19.2.3",
     "shadcn": "^4.13.0",
     "stylelint": "^16.9.0"

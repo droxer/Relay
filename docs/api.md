@@ -197,3 +197,36 @@ representation and `204` otherwise.
 Only the canonical paths documented here are mounted. Relay is under active
 development, so unversioned JSON routes, `/sessions`, `/cp`, old action routes,
 and hash-based browser URLs do not have compatibility aliases or redirects.
+
+## Task workspace and artifact continuity
+
+```text
+GET /api/v1/tasks/{id}/workspace/files?path={relativePath}
+GET /api/v1/tasks/{id}/workspace/file?path={relativePath}
+GET /api/v1/tasks/{id}/workspace/status
+GET /api/v1/tasks/{id}/artifacts?versions=all
+```
+
+Task workspace reads use the recorded `workspaceBinding` and current daemon for
+its stable Computer. Listings include `workspaceLayout` and `sharedWithProject`.
+The status route returns `{ "waiting": false }`, or `{ "waiting": true }` with
+an optional authorized `blockingSessionId` and `blockingTitle`. It never requests
+a filesystem scan. All routes use the existing task access policy.
+
+A workspace not yet created returns `409` with `detail.code` and `detail.reason`
+set to `workspace-not-created`. An offline Computer returns `503` with
+`computer-offline`; missing daemon read/layout capabilities return `503` with
+`workspace-unsupported`. Unrecoverable recorded placement returns `503` with
+`placement-unavailable`. Access denial remains `403`. An empty directory is a
+successful listing with an empty `entries` array, not an unavailable workspace.
+
+The artifact endpoint keeps its latest-per-file default. `versions=all` returns
+all recorded versions across the authorized linked sessions/occurrences, newest
+first. Artifact downloads prefer retained bytes over live workspace files;
+existing size limits and legacy live-file fallback still apply.
+
+New task runs require a daemon advertising `task-workspaces`. The run admission
+records `task.workspace_bound`; conflicting bindings are rejected. Commands with
+`reportWorkspaceStatus: true` accept a lease-validated `run.workspace` event with
+`waiting: boolean` and optional `blockingSessionId`. These transitions materialize
+as `task.workspace_wait` events; an acquire clears the matching run's wait state.

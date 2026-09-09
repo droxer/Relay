@@ -81,16 +81,12 @@
   width: 100%;
   height: var(--control-h);
   padding: 0 var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  /* Input owns the control border and its focus/invalid states. */
   border-radius: var(--r-2);
   background: var(--field-on-overlay);
   color: var(--ink-1);
   font-size: var(--fs-4);
   transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
-}
-
-.dialog-input:focus-visible {
-  border-color: var(--link);
 }
 
 .dialog-actions {
