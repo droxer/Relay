@@ -34,6 +34,7 @@ MANAGED_NODE_PHASES = frozenset({
     "allocating",
     "bootstrapping",
     "registering",
+    "recovering",
     "ready",
     "draining",
     "stopped",
@@ -565,11 +566,12 @@ class LocalManagedNodeStore:
                 if status in phase_by_status:
                     node_patch["phase"] = phase_by_status[status]
                 if status == "failed":
-                    node_patch["phase"] = "failed"
+                    retry_scheduled = bool(updated.get("retryAt")) and node.get("desiredState") == "running"
+                    node_patch["phase"] = "recovering" if retry_scheduled else "failed"
                     node_patch["conditions"] = [
                         {
                             "type": "Provisioned",
-                            "status": "False",
+                            "status": "Unknown" if retry_scheduled else "False",
                             "reason": patch.get("errorCode") or "provisioning_failed",
                             "message": patch.get("errorMessage") or "Managed node provisioning failed.",
                             "updatedAt": now,

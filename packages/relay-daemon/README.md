@@ -40,8 +40,22 @@ Optional:
   `~/.relay/daemon-nodes/<sandbox-id>` and is deliberately outside the agent
   workspace mount.
 - `RELAY_BOXLITE_HOME`: BoxLite runtime state directory for `boxlite` mode.
-  Defaults to a per-workspace directory under `~/.relay/boxlite`, isolated from
-  BoxLite's global `~/.boxlite` state.
+  Defaults to a per-daemon directory under `~/.relay/boxlite`, isolated from
+  BoxLite's global `~/.boxlite` state. The directory name is a digest of the
+  sandbox id **and** the workspace path: a BoxLite home admits one runtime at a
+  time, and several daemons on one host routinely share a workspace, so keying
+  it on the workspace alone made every run on the daemon that started second
+  fail with "Another BoxliteRuntime is already using directory". The id joins
+  the digest rather than the path because BoxLite opens Unix sockets beneath
+  this home and macOS caps a socket path at 104 bytes. Setting this variable
+  overrides the whole scheme — point two daemons at one explicit home and they
+  will collide again.
+  The daemon owns one runtime for its lifetime and replaces only the guest box
+  when switching thread workspaces. BoxLite 0.9.7 retains its native home lock
+  after runtime shutdown, so recovering an already-retained lock requires
+  restarting the owning daemon process. Do not delete the lock file while that
+  process is running. Relay keeps its own ownership marker until process exit
+  so an in-process restart fails early with the owning daemon's details.
 - `RELAY_AGENT_HOME`: override the home inspected by local mode. By default,
   local mode detects this user's existing Claude/Codex/Pi/Kimi installations,
   logins, skills, and MCP configuration under `HOME`.

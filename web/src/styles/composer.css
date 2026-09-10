@@ -28,9 +28,13 @@
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
-  /* Fixed token height, not min-height: the 32px trigger inside plus the
-     rail's own border otherwise sums to 34px next to the 32px agent picker. */
-  height: var(--control-h-xs);
+  /* Fixed token height, not min-height, so the border does not add onto the
+     trigger inside and overshoot by a pixel. --control-h-sm because that is
+     what every other control in the targets rail stands at: the agent picker
+     (SelectTrigger size="sm") and .composer-project-room. This rail was left
+     at --control-h-xs from when the agent picker was 32px too, so the row's
+     one interactive pair sat at two different heights. */
+  height: var(--control-h-sm);
   padding: 0 var(--sp-2);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
@@ -169,7 +173,13 @@
   gap: var(--sp-1);
   min-width: 0;
   color: var(--ink-3);
-  font-size: var(--fs-1);
+  /* The supporting-text role, not a raw rung. A bare `font-size: var(--fs-1)`
+     pinned this to 12px at every density — so compact, which restates
+     --type-body-sm one rung down, could not move it — and left weight, leading,
+     and family to inherit rather than be declared. The name above it stays
+     --type-label-strong, so the pair still separates by weight and ink. */
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .thread-runtime-option-id {
@@ -220,8 +230,15 @@
   transition: box-shadow var(--t-fast) var(--ease);
 }
 
+/* Ring only — the shadow is deliberately NOT restated here. `:has()` takes the
+   specificity of its argument, so this selector scores (0,3,0) against
+   `[data-running]`'s (0,2,0); restating the resting `--shadow-2` therefore beat
+   the running rule below and swallowed its accent hairline for exactly as long
+   as the composer had focus. Since a user typing the next message while a run
+   streams is the normal case, the running state was invisible most of the time
+   it mattered. Leaving box-shadow alone lets whichever of the two states is
+   actually true keep painting it. */
 .composer-input-wrap:has(.composer-input:focus-within) {
-  box-shadow: var(--shadow-2);
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
 }
@@ -320,7 +337,12 @@
   justify-content: flex-end;
   gap: var(--sp-3);
   min-height: var(--control-h-sm);
-  padding: var(--sp-1) var(--sp-3) var(--sp-3) var(--composer-inline);
+  /* Symmetric with .composer-textarea's inline padding on BOTH edges. The
+     right edge was --sp-3 while the draft above it was inset --composer-inline
+     (24px), so the send disc hung 12px closer to the card edge than the text
+     it commits — the one vertical line the eye can check on this card, off by
+     half its own inset. */
+  padding: var(--sp-1) var(--composer-inline) var(--sp-3);
 }
 
 .composer-project-room {
@@ -353,6 +375,14 @@
 .send-button {
   display: grid;
   place-items: center;
+  /* The circle the comment above has always claimed. Nothing was actually
+     rounding it: Button's base carries `rounded-md`, and no rule here overrode
+     that, so the send control shipped as a 6px rounded square — the one shape
+     this system reserves for text buttons, on its only icon-only commit. This
+     is a true-circle case (equal width and height, an icon at the centre), not
+     --r-full standing in as a control radius; a11y.css squares it up to
+     --touch-target on coarse pointers, where it stays a circle. */
+  border-radius: var(--r-full);
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),
@@ -387,11 +417,20 @@
 .mention-popup {
   position: absolute;
   bottom: calc(100% + var(--sp-2));
-  left: 0;
+  /* Aligned to the draft, not to the card. The comment above says both layers
+     "sit inside .composer-input so they inherit the card's inline padding" —
+     but .composer-input is not positioned, so this anchors to
+     .composer-input-wrap and `left: 0` put the list flush against the card's
+     outer edge, --composer-inline (24px) to the left of the `@` it is
+     completing. Stating the inset here restores the alignment the comment
+     describes; the max-width keeps the list off the opposite edge, since its
+     min-width still resolves against the full card. */
+  left: var(--composer-inline);
   z-index: var(--z-float);
   display: flex;
   max-height: 240px;
   min-width: min(280px, 100%);
+  max-width: calc(100% - 2 * var(--composer-inline));
   flex-direction: column;
   overflow-y: auto;
   padding: var(--sp-1);

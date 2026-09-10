@@ -24,6 +24,7 @@ export class LocalProcessProvider implements ManagedNodeProvider {
   private readonly logger?: SupervisorLogger;
   private readonly children = new Map<string, ChildProcess>();
   private readonly instancesByGeneration = new Map<string, string>();
+  private readonly attemptsByGeneration = new Map<string, string>();
   private readonly generationByInstance = new Map<string, string>();
   private readonly pendingEnsures = new Map<string, Promise<ProviderInstance>>();
   private readonly signalProcess: (pid: number, signal: NodeJS.Signals) => void;
@@ -51,7 +52,10 @@ export class LocalProcessProvider implements ManagedNodeProvider {
     const instanceId = this.instancesByGeneration.get(generationKey);
     const current = instanceId ? this.children.get(instanceId) : undefined;
     if (instanceId && current && current.exitCode === null && !current.signalCode) {
-      return { id: instanceId, child: current };
+      if (this.attemptsByGeneration.get(generationKey) === input.attempt.id) {
+        return { id: instanceId, child: current };
+      }
+      await this.stop(instanceId);
     }
     const pending = this.pendingEnsures.get(generationKey);
     if (pending) return pending;
@@ -59,9 +63,15 @@ export class LocalProcessProvider implements ManagedNodeProvider {
     const durable = readProviderState(statePath);
     if (durable?.instanceId) {
       if (await this.inspect(durable.instanceId) === "running") {
-        this.instancesByGeneration.set(generationKey, durable.instanceId);
-        this.generationByInstance.set(durable.instanceId, generationKey);
-        return { id: durable.instanceId };
+        const belongsToAttempt = durable.attemptId === input.attempt.id
+          || (!durable.attemptId && input.attempt.providerInstanceId === durable.instanceId);
+        if (belongsToAttempt) {
+          this.instancesByGeneration.set(generationKey, durable.instanceId);
+          this.attemptsByGeneration.set(generationKey, input.attempt.id);
+          this.generationByInstance.set(durable.instanceId, generationKey);
+          return { id: durable.instanceId };
+        }
+        await this.stop(durable.instanceId);
       }
       rmSync(statePath, { force: true });
     } else if (durable?.status === "allocating") {
@@ -74,9 +84,13 @@ export class LocalProcessProvider implements ManagedNodeProvider {
       this.logger?.warn("discarding stale managed local process allocation", { generationKey });
     }
     mkdirSync(this.stateDirectory, { recursive: true });
-    writeProviderState(statePath, { status: "allocating", createdAt: new Date().toISOString() });
+    writeProviderState(statePath, {
+      status: "allocating",
+      attemptId: input.attempt.id,
+      createdAt: new Date().toISOString(),
+    });
     const started = this.start(input, generationKey).then((instance) => {
-      writeProviderState(statePath, { status: "running", instanceId: instance.id });
+      writeProviderState(statePath, { status: "running", attemptId: input.attempt.id, instanceId: instance.id });
       return instance;
     }).catch((error) => {
       rmSync(statePath, { force: true });
@@ -100,6 +114,7 @@ export class LocalProcessProvider implements ManagedNodeProvider {
     ], {
       cwd: input.workspacePath,
       env: managedDaemonEnv(input),
+      detached: true,
       stdio: "inherit",
     });
     await waitForSpawn(child);
@@ -135,16 +150,19 @@ export class LocalProcessProvider implements ManagedNodeProvider {
     const instanceId = `local-process:${child.pid}:${workspaceIdentity}:${processIdentity}`;
     this.children.set(instanceId, child);
     this.instancesByGeneration.set(generationKey, instanceId);
+    this.attemptsByGeneration.set(generationKey, input.attempt.id);
     this.generationByInstance.set(instanceId, generationKey);
     child.once("exit", (code, signal) => {
       this.children.delete(instanceId);
       if (this.instancesByGeneration.get(generationKey) === instanceId) {
         this.instancesByGeneration.delete(generationKey);
+        this.attemptsByGeneration.delete(generationKey);
       }
       this.generationByInstance.delete(instanceId);
       this.clearState(generationKey, instanceId);
       this.logger?.warn("managed local process exited", { instanceId, code, signal });
     });
+    child.unref();
     return { id: instanceId, child };
   }
 
@@ -191,6 +209,7 @@ export class LocalProcessProvider implements ManagedNodeProvider {
     const generationKey = this.generationByInstance.get(instanceId);
     if (generationKey && this.instancesByGeneration.get(generationKey) === instanceId) {
       this.instancesByGeneration.delete(generationKey);
+      this.attemptsByGeneration.delete(generationKey);
     }
     this.generationByInstance.delete(instanceId);
     if (generationKey) this.clearState(generationKey, instanceId);
@@ -268,6 +287,7 @@ function mergeNoProxy(current: string | undefined, required: string[]): string {
 
 interface ProviderState {
   status: "allocating" | "running";
+  attemptId?: string;
   instanceId?: string;
   createdAt?: string;
 }

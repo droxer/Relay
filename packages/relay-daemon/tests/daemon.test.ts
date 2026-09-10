@@ -164,6 +164,32 @@ test("BoxLite home leaves room for runtime sockets in managed workspaces", () =>
   );
 });
 
+// A BoxLite home admits one runtime at a time, and several daemons on one host
+// routinely share a workspace. Keying the home on the workspace alone pointed
+// them all at one directory, and every run on the daemon that started second
+// failed with "Another BoxliteRuntime is already using directory".
+test("BoxLite home is private to a daemon, so two nodes sharing a workspace do not collide", () => {
+  const workspace = join(process.cwd(), ".relay", "employee-workspaces", "shared");
+
+  const first = resolveBoxliteHome(workspace, undefined, "fe1d7172-a306-4910-8c3d-6999f98fbe38");
+  const second = resolveBoxliteHome(workspace, undefined, "010b02ae-1b5f-4368-91d8-55954c74ff00");
+
+  assert.notEqual(first, second);
+  // Stable across restarts, so the daemon keeps its image cache.
+  assert.equal(
+    resolveBoxliteHome(workspace, undefined, "fe1d7172-a306-4910-8c3d-6999f98fbe38"),
+    first,
+  );
+  // The id joins the digest instead of the path: a uuid spent on a path
+  // segment would overrun the 104-byte macOS Unix socket limit.
+  assert.match(first, /\/\.relay\/boxlite\/[a-f0-9]{12}$/);
+  const readySocket = join(first, "boxes", "Te1OnCQiUQlF", "sockets", "ready.sock");
+  assert.ok(
+    Buffer.byteLength(readySocket) < 104,
+    `BoxLite ready socket exceeds the macOS Unix socket path limit: ${readySocket}`,
+  );
+});
+
 test("BoxLite home locks allow different homes at the same time", async (t: TestContext) => {
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");

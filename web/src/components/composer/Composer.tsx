@@ -132,12 +132,22 @@ const ComposerView = forwardRef<ComposerHandle, {
   // Interim state between submit and the run actually starting, so the send
   // button can't double-fire while the dispatch is still being validated.
   const [sendPending, setSendPending] = useState(false);
+  // One answer to "can this draft be sent?", read by both the button's
+  // `disabled` and the keyboard path. They were written separately and had
+  // already drifted: the button also refused a staged thread with no computer
+  // picked, but `triggerSend` did not, so ⌘-Enter dispatched a round with no
+  // runtime — the very bypass the mention comment below was added to close.
+  const cannotSend = readOnly
+    || !composerText.trim()
+    || parsed.blocked
+    || (initializingThread && !projectName && !runtimeNodeId);
   const triggerSend = () => {
-    if (running || sendPending || readOnly) return;
-    // The send button is disabled on a mention that resolves to nobody, but the
-    // keyboard shortcut bypasses the button — and a blocked draft sent anyway
-    // would address the whole room instead of the agent the author named.
-    if (parsed.blocked || !composerText.trim()) return;
+    if (running || sendPending) return;
+    // The send button is disabled on a mention that resolves to nobody, and on
+    // a staged thread with no computer, but the keyboard shortcut bypasses the
+    // button — a blocked draft sent anyway would address the whole room instead
+    // of the agent the author named, and one with no computer has nowhere to run.
+    if (cannotSend) return;
     setSendPending(true);
     onSend();
   };
@@ -289,13 +299,7 @@ const ComposerView = forwardRef<ComposerHandle, {
               className={running
                 ? "send-button send-button-cancel h-(--control-h-sm) w-(--control-h-sm) px-0"
                 : "send-button h-(--control-h-sm) w-(--control-h-sm) px-0"}
-              disabled={!running && (
-                sendPending
-                || readOnly
-                || !composerText.trim()
-                || parsed.blocked
-                || (initializingThread && !projectName && !runtimeNodeId)
-              )}
+              disabled={!running && (sendPending || cannotSend)}
               onClick={running ? onCancelRun : undefined}
               aria-busy={sendPending || undefined}
               aria-label={running ? t("composer.cancel_run") : sendPending ? t("composer.sending", { defaultValue: "Sending…" }) : t("composer.send")}

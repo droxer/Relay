@@ -18,7 +18,7 @@ export interface SupervisorBackend {
 }
 
 export type ManagedNodeDesiredState = "running" | "stopped" | "deleted";
-export type ManagedNodePhase = "requested" | "allocating" | "bootstrapping" | "registering" | "ready" | "draining" | "stopped" | "deleting" | "deleted" | "failed";
+export type ManagedNodePhase = "requested" | "allocating" | "bootstrapping" | "registering" | "recovering" | "ready" | "draining" | "stopped" | "deleting" | "deleted" | "failed";
 
 export interface ManagedNodeRecord {
   id: string;

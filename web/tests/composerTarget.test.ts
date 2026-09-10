@@ -34,6 +34,20 @@ describe("composer team targeting", () => {
     assert.match(select, /teamSelectValue/);
     assert.match(select, /composer\.teams_group/);
     assert.match(select, /onTeamPicked/);
+    // The trigger names the thread's target by identity, never through a
+    // routability filter. Resolving the active agent with
+    // `isEmployeeAgentRoutable` dropped the Select's value to null the moment
+    // that agent went offline or was disabled, so the trigger announced "no
+    // available agent" about an agent the thread was still pinned to — while
+    // its option stayed listed below. Teams already resolved by id; agents
+    // match. Routability still drives the affordance (disabled options and the
+    // availability chip), which is why the import must remain in use.
+    assert.match(
+      select,
+      /const activeLogicalAgent = logicalAgents\.find\(\(agent\) => agent\.id === activeLogicalAgentId\);/,
+    );
+    assert.doesNotMatch(select, /activeLogicalAgentId && isEmployeeAgentRoutable/);
+    assert.match(select, /disabled=\{!isRoutable\}/);
     // A team thread keeps its roster for life, so the picker locks onto it.
     assert.match(app, /teamLocked=\{Boolean\(activeSession\?\.teamId\)\}/);
     // Team dispatch goes through teamId — the backend expands the roster.
@@ -57,6 +71,21 @@ describe("composer agent selection", () => {
     // a target its own round would refuse with `agent_forbidden`.
     assert.match(app, /activeProject[\s\S]{0,400}addressableThreadAgents/);
     assert.match(app, /activeTeam[\s\S]{0,400}addressableThreadAgents/);
+  });
+
+  it("gates the send shortcut on the same rule as the send button", async () => {
+    const composer = await readFile(resolve("web/src/components/composer/Composer.tsx"), "utf8");
+    // ⌘-Enter bypasses the button, so any condition that only disables the
+    // button is not enforced at all. The two were written separately and had
+    // drifted: the button refused a staged thread with no computer picked while
+    // the shortcut dispatched it anyway, with nowhere to run. One derived value
+    // now feeds both, which is the property under test — not its exact spelling.
+    assert.match(composer, /const cannotSend =/);
+    assert.match(composer, /initializingThread && !projectName && !runtimeNodeId/);
+    assert.match(composer, /if \(cannotSend\) return;/);
+    assert.match(composer, /disabled=\{!running && \(sendPending \|\| cannotSend\)\}/);
+    // The guard must not be restated on the button alone.
+    assert.equal(composer.match(/initializingThread && !projectName && !runtimeNodeId/g)?.length, 1);
   });
 
   it("dispatches a new thread to the agents the draft addresses", async () => {

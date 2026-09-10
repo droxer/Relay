@@ -512,6 +512,7 @@ export type ManagedNodePhase =
   | "allocating"
   | "bootstrapping"
   | "registering"
+  | "recovering"
   | "ready"
   | "draining"
   | "stopped"

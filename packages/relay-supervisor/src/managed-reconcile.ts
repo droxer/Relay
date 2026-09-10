@@ -43,12 +43,28 @@ const DEFAULT_RETRY_MAX_MS = 3_600_000;
 
 /** Capped exponential backoff, so a permanently failing node stops hot-looping. */
 export function provisioningRetryDelayMs(
-  attemptNumber: number,
+  consecutiveFailureNumber: number,
   baseMs = DEFAULT_RETRY_BASE_MS,
   maxMs = DEFAULT_RETRY_MAX_MS,
 ): number {
-  const exponent = Math.min(Math.max(attemptNumber, 1) - 1, 20);
+  const exponent = Math.min(Math.max(consecutiveFailureNumber, 1) - 1, 20);
   return Math.min(baseMs * 2 ** exponent, maxMs);
+}
+
+/** The failure number for the next failed attempt, reset by the latest success. */
+export function nextProvisioningFailureNumber(
+  attempts: ProvisioningAttemptRecord[],
+  generation: number,
+): number {
+  let failures = 0;
+  const currentGeneration = attempts
+    .filter((attempt) => attempt.generation === generation)
+    .sort((left, right) => right.attemptNumber - left.attemptNumber);
+  for (const attempt of currentGeneration) {
+    if (attempt.status === "succeeded") break;
+    if (attempt.status === "failed") failures += 1;
+  }
+  return failures + 1;
 }
 
 /**
@@ -60,9 +76,14 @@ function provisioningRetryAt(
   attempts: ProvisioningAttemptRecord[],
   generation: number,
 ): number | undefined {
+  const lastSuccessfulAttempt = attempts
+    .filter((attempt) => attempt.generation === generation && attempt.status === "succeeded")
+    .reduce((latest, attempt) => Math.max(latest, attempt.attemptNumber), 0);
   let latest: number | undefined;
   for (const attempt of attempts) {
-    if (attempt.generation !== generation || !attempt.retryAt) continue;
+    if (attempt.generation !== generation
+      || attempt.attemptNumber <= lastSuccessfulAttempt
+      || !attempt.retryAt) continue;
     const deadline = Date.parse(attempt.retryAt);
     if (Number.isNaN(deadline)) continue;
     if (latest === undefined || deadline > latest) latest = deadline;
@@ -205,7 +226,8 @@ export class ManagedNodeReconciler {
           await this.backend.updateProvisioningAttempt(node.id, runtimeAttempt.id, {
             status: "failed", errorCode: "registration_timeout",
             errorMessage: "Daemon did not become ready over HTTP before the registration deadline.",
-            retryAt: new Date(this.now() + provisioningRetryDelayMs(runtimeAttempt.attemptNumber,
+            retryAt: new Date(this.now() + provisioningRetryDelayMs(nextProvisioningFailureNumber(
+              attempts, node.generation),
               this.retryBaseMs, this.retryMaxMs)).toISOString(),
           });
         } else {
@@ -290,7 +312,7 @@ export class ManagedNodeReconciler {
         }
         if (active) {
           const retryDelayMs = provisioningRetryDelayMs(
-            active.attemptNumber,
+            nextProvisioningFailureNumber(attempts, node.generation),
             this.retryBaseMs,
             this.retryMaxMs,
           );
@@ -351,7 +373,7 @@ export class ManagedNodeReconciler {
       } catch (error) {
         failed += 1;
         const retryDelayMs = provisioningRetryDelayMs(
-          created?.attempt.attemptNumber ?? 1,
+          nextProvisioningFailureNumber(attempts, node.generation),
           this.retryBaseMs,
           this.retryMaxMs,
         );

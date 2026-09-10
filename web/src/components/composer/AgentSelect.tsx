@@ -4,7 +4,7 @@ import type { AgentTeam, EmployeeAgent } from "../../types";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
-import { isEmployeeAgentRoutable } from "../../lib/agentDisplayNames";
+import { isEmployeeAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
 import { isTeamRoutable, teamAvailability } from "../../lib/taskAssignment";
 
 const TEAM_VALUE_PREFIX = "team:";
@@ -61,9 +61,18 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   running?: boolean;
 }) {
   const { t } = useTranslation();
-  const activeLogicalAgent = logicalAgents.find(
-    (agent) => agent.id === activeLogicalAgentId && isEmployeeAgentRoutable(agent),
-  );
+  // Identity, not routability. A thread's agent is whoever it is even after
+  // they go busy, offline, or disabled mid-thread — and those are exactly the
+  // moments the trigger has to keep naming them, the same way the computer
+  // readout keeps naming a machine that went offline. Filtering this lookup by
+  // `isEmployeeAgentRoutable` dropped the selection instead: the Select's
+  // `value` fell to null while the option stayed listed below, so the trigger
+  // announced "no available agent" about an agent the thread was still pinned
+  // to, and picking that agent again was a no-op because it was already the
+  // value. Routability drives the affordance — the disabled option and the
+  // availability chip — never who is named. `activeTeam` already resolves this
+  // way; agents now match.
+  const activeLogicalAgent = logicalAgents.find((agent) => agent.id === activeLogicalAgentId);
   const activeTeam = teams.find((team) => team.id === activeTeamId && !team.deletedAt) ?? null;
   // The roster is the target only while no single member is picked, so the
   // trigger never claims the whole room while a mention narrows the round.
@@ -96,7 +105,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
           : activeTeam
           ? teamAvailability(activeTeam)
           : activeLogicalAgent
-          ? activeLogicalAgent.availability
+          ? visualAvailabilityOf(activeLogicalAgent)
           : "unavailable"}
         aria-label={room
           ? t("thread.talk_to_project")
@@ -230,10 +239,9 @@ function agentOptions({ logicalAgents, t }: {
   t: ReturnType<typeof useTranslation>["t"];
 }) {
   return logicalAgents.map((logicalAgent) => {
-    const isInactive = !logicalAgent.enabled || Boolean(logicalAgent.deletedAt);
     const isRoutable = isEmployeeAgentRoutable(logicalAgent);
     const isBusy = logicalAgent.availability === "busy";
-    const visualAvailability = isInactive ? "inactive" : logicalAgent.availability;
+    const visualAvailability = visualAvailabilityOf(logicalAgent);
     const availabilityLabel = !isRoutable
       ? t(`status.${visualAvailability}`, {
           defaultValue: visualAvailability,
