@@ -2360,6 +2360,7 @@ test("relay daemon reports generated workspace documents in run.completed", asyn
 
   assert.equal(registrations[0]?.capabilities?.includes("generated-files"), true);
   assert.equal(registrations[0]?.capabilities?.includes("thread-workspaces"), true);
+  assert.equal(registrations[0]?.capabilities?.includes("produced-files"), true);
   const completed = events.find((event) => event.type === "run.completed");
   assert.ok(completed && completed.type === "run.completed");
   const byPath = new Map(
