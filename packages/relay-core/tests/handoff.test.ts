@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import type { DaemonGeneratedFile } from "../src/daemon-node-protocol.js";
 import {
   AGENT_NAMES,
   type AgentState,
@@ -1944,5 +1945,31 @@ describe("agent registry", () => {
     assert.equal(afterPass.kimi, 0);
     assert.equal(failureCount({ ...base, agent_failures: { codex: 3 } }, "codex"), 3);
     assert.equal(failureCount(base, "pi"), 0);
+  });
+});
+
+describe("produced-files protocol", () => {
+  it("produced-files capability and snapshot reasons are on the wire protocol", async () => {
+    const { DAEMON_CAPABILITY_PRODUCED_FILES } = await import("../src/daemon-node-protocol.js");
+    assert.equal(DAEMON_CAPABILITY_PRODUCED_FILES, "produced-files");
+
+    // A metadata-only report states why no bytes came with it; a snapshotted
+    // one carries content and no reason. The type must permit exactly both.
+    const skipped: DaemonGeneratedFile = {
+      relativePath: "src/main.py",
+      title: "main.py",
+      bytes: 4096,
+      contentType: "text/x-python",
+      snapshotSkipped: "not-snapshotable-type",
+    };
+    const stored: DaemonGeneratedFile = {
+      relativePath: "report.md",
+      title: "report.md",
+      bytes: 12,
+      contentType: "text/markdown",
+      contentBase64: "IyBSZXBvcnQK",
+    };
+    assert.equal(skipped.snapshotSkipped, "not-snapshotable-type");
+    assert.equal(stored.snapshotSkipped, undefined);
   });
 });

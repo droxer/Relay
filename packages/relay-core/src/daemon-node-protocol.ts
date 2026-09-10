@@ -59,7 +59,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result";
+export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "produced-files";
 export const DAEMON_CAPABILITY_GENERATED_FILES: DaemonNodeCapability = "generated-files";
 /** The daemon can serve live file listings and reads from the workspace root it exposes. */
 export const DAEMON_CAPABILITY_WORKSPACE_READ_SHARED: DaemonNodeCapability = "workspace-read-shared";
@@ -77,6 +77,13 @@ export const DAEMON_CAPABILITY_TASK_WORKSPACES: DaemonNodeCapability = "task-wor
  * is finished without parsing the agent's prose.
  */
 export const DAEMON_CAPABILITY_ROUND_RESULT: DaemonNodeCapability = "round-result";
+/**
+ * "produced-files" means the daemon reports every file a run changed, not only
+ * document types, and states why any file arrived without a snapshot. A daemon
+ * without it reports the older document-only set, which the backend still
+ * indexes unchanged.
+ */
+export const DAEMON_CAPABILITY_PRODUCED_FILES: DaemonNodeCapability = "produced-files";
 
 /**
  * A round's own verdict on the task, reported by the daemon from the control
@@ -87,6 +94,19 @@ export interface DaemonRoundResult {
   status: "done" | "continue" | "blocked";
   note?: string;
 }
+
+/**
+ * Why a reported file arrived without bytes attached.
+ *
+ * "too-large" covers both the per-file cap and an exhausted per-event budget;
+ * a reader only needs to know the size limits stopped it. "unreadable" means
+ * the file vanished or could not be read between the walk and the read.
+ */
+export type SnapshotSkippedReason =
+  | "too-large"
+  | "not-snapshotable-type"
+  | "sensitive"
+  | "unreadable";
 
 /** A workspace file a run created or changed, reported by the daemon. */
 export interface DaemonGeneratedFile {
@@ -101,6 +121,12 @@ export interface DaemonGeneratedFile {
    * and after the workspace copy is deleted or rewritten.
    */
   contentBase64?: string;
+  /**
+   * Set when no snapshot was attached, so the record can say the file is
+   * attributed but live-only rather than simply appearing to be missing.
+   * Absent whenever `contentBase64` is present.
+   */
+  snapshotSkipped?: SnapshotSkippedReason;
 }
 
 export interface DaemonNodeRegistration {
