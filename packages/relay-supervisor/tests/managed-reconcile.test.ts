@@ -1190,3 +1190,62 @@ test("enrolled runtime readiness timeout can advance to a replacement attempt", 
   assert.equal(node.phase, "requested");
   assert.equal((await reconciler.reconcileOnce()).started, 1);
 });
+
+for (const commitBeforeFailure of [false, true]) {
+  test(`managed reconciler retries instance linkage after PATCH failure (committed=${commitBeforeFailure})`, async () => {
+    const node = managedNode();
+    const backend = new FakeManagedBackend([node]);
+    const provider = new FakeProvider();
+    const create = backend.createProvisioningAttempt.bind(backend);
+    backend.createProvisioningAttempt = async (nodeId) => {
+      const result = await create(nodeId);
+      backend.attempts.push(result.attempt);
+      node.activeAttemptId = result.attempt.id;
+      node.phase = "allocating";
+      return result;
+    };
+    const update = backend.updateProvisioningAttempt.bind(backend);
+    let failures = 2;
+    backend.updateProvisioningAttempt = async (nodeId, attemptId, patch) => {
+      if (patch.status === "registering" && failures-- > 0) {
+        if (commitBeforeFailure) await update(nodeId, attemptId, patch);
+        throw new Error("transient PATCH failure");
+      }
+      return update(nodeId, attemptId, patch);
+    };
+    const reconciler = new ManagedNodeReconciler({
+      backend, providers: [provider], backendUrl: "http://backend.test",
+      workspacePathForNode: () => "/workspaces/alice",
+      now: () => Date.parse(node.createdAt),
+    });
+    await reconciler.reconcileOnce();
+    assert.notEqual(backend.attempts[0].status, "failed");
+    await reconciler.reconcileOnce();
+    await reconciler.reconcileOnce();
+    assert.equal(backend.attempts[0].providerInstanceId, `${node.id}:1`);
+    assert.equal(backend.attempts[0].status, "registering");
+    assert.equal(provider.calls.length, 1);
+    assert.equal(provider.stopCalls, 0);
+  });
+}
+
+test("managed reconciler stops an allocated instance whose linkage PATCH failed", async () => {
+  const node = managedNode();
+  const backend = new FakeManagedBackend([node]);
+  const provider = new FakeProvider();
+  const update = backend.updateProvisioningAttempt.bind(backend);
+  backend.updateProvisioningAttempt = async (nodeId, attemptId, patch) => {
+    if (patch.status === "registering") throw new Error("transient PATCH failure");
+    return update(nodeId, attemptId, patch);
+  };
+  const reconciler = new ManagedNodeReconciler({
+    backend, providers: [provider], backendUrl: "http://backend.test",
+    workspacePathForNode: () => "/workspaces/alice",
+  });
+  await reconciler.reconcileOnce();
+  node.desiredState = "stopped";
+  node.phase = "draining";
+  await reconciler.reconcileOnce();
+  assert.equal(provider.stopCalls, 1);
+  assert.equal(node.phase, "stopped");
+});
