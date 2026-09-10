@@ -15,6 +15,7 @@ import {
   listEmployeeAgents,
   listSessionSummaries,
   listTaskArtifacts,
+  listTaskFiles,
   readProjectWorkspaceFile,
   reissueComputerToken,
   RelayApiError,
@@ -383,6 +384,33 @@ describe("apiJson", () => {
     assert.equal(result.artifacts.length, 1);
     assert.equal(result.artifacts[0].title, "deck.pptx");
     assert.equal(result.artifacts[0].sessionId, "ses_1");
+  });
+
+  it("lists merged task files with path and version options", async () => {
+    let requestedUrl = "";
+    globalThis.fetch = (async (input) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({
+        taskId: "task 1",
+        produced: [],
+        live: { status: "ok", path: "src", entries: [] },
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const result = await listTaskFiles({
+      taskId: "task 1",
+      path: "src",
+      allVersions: true,
+    });
+
+    assert.equal(
+      requestedUrl,
+      "/api/v1/tasks/task%201/files?path=src&versions=all",
+    );
+    assert.equal(result.live.status, "ok");
   });
 
   it("deletes a task through the task resource", async () => {
