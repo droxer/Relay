@@ -190,7 +190,8 @@ export class ManagedNodeReconciler {
           });
         }
         const attempts = await this.backend.listProvisioningAttempts(node.id);
-        const instanceId = [...attempts].reverse().find((attempt) => attempt.providerInstanceId)?.providerInstanceId;
+        const instanceId = [...attempts].reverse().find((attempt) => attempt.providerInstanceId)?.providerInstanceId
+          ?? this.instances.get(node.id)?.instance.id;
         if (instanceId) {
           if (node.desiredState === "deleted") await provider.delete(instanceId);
           else await provider.stop(instanceId);
@@ -298,6 +299,21 @@ export class ManagedNodeReconciler {
           if (trackedRunning) await tracked.provider.stop(tracked.instance.id);
           this.instances.delete(node.id);
         } else if (trackedRunning) {
+          const active = attempts.find((attempt) => attempt.id === node.activeAttemptId);
+          if (active && !active.providerInstanceId) {
+            try {
+              await this.linkProviderInstance(node.id, active.id, tracked.instance.id);
+              started += 1;
+            } catch (error) {
+              failed += 1;
+              this.logger?.error("managed node instance linkage failed", {
+                nodeId: node.id,
+                provider: node.provider,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+            continue;
+          }
           skipped += 1;
           continue;
         } else {
@@ -356,18 +372,18 @@ export class ManagedNodeReconciler {
         });
         this.instances.set(node.id, { provider, instance, generation: node.generation });
         try {
-          await this.backend.updateProvisioningAttempt(node.id, createdAttemptId, {
-            status: "registering",
-            providerInstanceId: instance.id,
-          });
+          await this.linkProviderInstance(node.id, createdAttemptId, instance.id);
         } catch (error) {
-          // The spawned daemon can enroll (attempt → succeeded, terminal)
-          // before this PATCH lands; that is a completed provision, not a
-          // failure, and the backend rightfully refuses to reopen the attempt.
-          if (!isConflictResponse(error)) throw error;
-          const current = (await this.backend.listProvisioningAttempts(node.id))
-            .find((attempt) => attempt.id === createdAttemptId);
-          if (current?.status !== "succeeded") throw error;
+          // Provider allocation succeeded. Keep the handle so the next pass
+          // can retry an ambiguous control-plane write or tear it down if the
+          // desired state changes; it is not a provider failure.
+          failed += 1;
+          this.logger?.error("managed node instance linkage failed", {
+            nodeId: node.id,
+            provider: node.provider,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          continue;
         }
         started += 1;
       } catch (error) {
@@ -402,6 +418,24 @@ export class ManagedNodeReconciler {
       }
     }
     return { nodes: nodes.length, started, skipped, healthy, failed };
+  }
+
+  private async linkProviderInstance(nodeId: string, attemptId: string, instanceId: string): Promise<void> {
+    try {
+      await this.backend.updateProvisioningAttempt(nodeId, attemptId, {
+        status: "registering",
+        providerInstanceId: instanceId,
+      });
+    } catch (error) {
+      // The write may have committed before the response failed, or daemon
+      // enrollment may already have completed the attempt. Resolve either
+      // ambiguity from durable state before asking a later pass to retry.
+      const current = (await this.backend.listProvisioningAttempts(nodeId))
+        .find((attempt) => attempt.id === attemptId);
+      if (current?.providerInstanceId === instanceId
+        || (isConflictResponse(error) && current?.status === "succeeded")) return;
+      throw error;
+    }
   }
 
   private async retireRuntimeWhenDrained(node: ManagedNodeRecord): Promise<boolean> {

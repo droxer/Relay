@@ -462,6 +462,7 @@ class DaemonNodeRegistry:
         *,
         authorized_node_location: str | None = None,
     ) -> dict[str, Any]:
+        self._refresh_persisted_liveness(payload["sandboxId"])
         with self.dispatch_scope([payload["sandboxId"]]):
             return self._register_unlocked(
                 payload,
@@ -1826,7 +1827,20 @@ class DaemonNodeRegistry:
         request = self.daemon_store.get_run_request(request_id)
         if not request:
             raise KeyError(request_id)
-        with self.dispatch_scope([request["nodeId"]]):
+        assignments = request.get("assignments") or []
+        index = request.get("currentIndex", 0)
+        assignment = assignments[index] if index < len(assignments) else None
+        if (
+            assignment
+            and not request.get("currentCommandId")
+            and self.logical_assignment_validator
+            and assignment.get("agentId")
+        ):
+            # Validation may consult monitor_nodes(), whose reaper must not see
+            # a request after it has transitioned to running but before its
+            # first command is linked.
+            self.logical_assignment_validator(assignment)
+        with self.dispatch_lock, self.dispatch_scope([request["nodeId"]]):
             request = self.daemon_store.get_run_request(request_id)
             if not request:
                 raise KeyError(request_id)
@@ -1878,7 +1892,11 @@ class DaemonNodeRegistry:
                 raise ValueError(
                     f"cannot activate collaboration request for {session['status']} session"
                 )
-            return self._enqueue_current_assignment(request, active_runs=active_runs)
+            return self._enqueue_current_assignment(
+                request,
+                active_runs=active_runs,
+                validate_logical_assignment=False,
+            )
 
     def cancel_active_run(
         self, sandbox_id: str, session_id: str, reason: str
@@ -2616,6 +2634,7 @@ class DaemonNodeRegistry:
         run_request: dict[str, Any],
         *,
         active_runs: list[dict[str, Any]] | None = None,
+        validate_logical_assignment: bool = True,
     ) -> dict[str, Any]:
         assignments = run_request["assignments"]
         index = run_request.get("currentIndex", 0)
@@ -2637,7 +2656,11 @@ class DaemonNodeRegistry:
             )
             return run_request
         try:
-            if self.logical_assignment_validator and assignment.get("agentId"):
+            if (
+                validate_logical_assignment
+                and self.logical_assignment_validator
+                and assignment.get("agentId")
+            ):
                 self.logical_assignment_validator(assignment)
             if not self._liveness(sandbox)["online"]:
                 raise ValueError("Runtime node heartbeat is not live.")
@@ -3866,18 +3889,23 @@ class DaemonNodeRegistry:
                     continue
                 persisted_seen = persisted.get("lastSeenAt") or ""
                 current_seen = current.get("lastSeenAt") or ""
-                if persisted_seen <= current_seen:
-                    continue
                 refreshed = {
                     **current,
-                    "lastSeenAt": persisted_seen,
-                    "updatedAt": persisted.get("updatedAt") or current.get("updatedAt"),
-                    "status": persisted.get("status", current.get("status")),
+                    **persisted,
+                    "lastSeenAt": max(persisted_seen, current_seen),
+                    "updatedAt": max(
+                        persisted.get("updatedAt") or "",
+                        current.get("updatedAt") or "",
+                    ),
                 }
-                if persisted.get("lastError"):
-                    refreshed["lastError"] = persisted["lastError"]
-                else:
-                    refreshed.pop("lastError", None)
+                if persisted.get("retiredAt"):
+                    refreshed["agents"] = current.get("agents", refreshed.get("agents"))
+                if current_seen >= persisted_seen and not persisted.get("retiredAt"):
+                    refreshed["status"] = current.get("status", persisted.get("status"))
+                    if current.get("lastError"):
+                        refreshed["lastError"] = current["lastError"]
+                    else:
+                        refreshed.pop("lastError", None)
                 self.sandboxes[persisted["id"]] = refreshed
 
     def _liveness(self, sandbox: dict[str, Any]) -> dict[str, Any]:

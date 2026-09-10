@@ -167,6 +167,19 @@ def node_registration_changed(
     } != {key: value for key, value in node.items() if key not in _NODE_LIVENESS_FIELDS}
 
 
+def preserve_node_retirement(
+    previous: dict[str, Any] | None, node: dict[str, Any]
+) -> dict[str, Any]:
+    """Keep a durable retirement fence monotonic across stale replica writes."""
+    if not previous or not previous.get("retiredAt"):
+        return node
+    return {
+        **node,
+        "retiredAt": previous["retiredAt"],
+        "status": "deleted" if previous.get("status") == "deleted" else "stopped",
+    }
+
+
 def infer_node_location(node: dict[str, Any]) -> str | None:
     """Infer location only from explicit or managed control-plane state."""
     explicit = node.get("nodeLocation")
@@ -349,7 +362,9 @@ class LocalDaemonStore:
     def register_node(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             node = _node_for_storage(sandbox)
-            changed = node_registration_changed(self.get_node(node["id"]), node)
+            previous = self.get_node(node["id"])
+            node = preserve_node_retirement(previous, node)
+            changed = node_registration_changed(previous, node)
             self._write_node(node)
             # The row always advances lastSeenAt; only a material change is worth
             # an event. See node_registration_changed.
@@ -414,6 +429,7 @@ class LocalDaemonStore:
                 "updatedAt": now,
                 "lastSeenAt": now,
             }
+            updated = preserve_node_retirement(node, updated)
             if patch.get("lastError") is None and "lastError" in patch:
                 updated.pop("lastError", None)
             self._write_node(updated)
@@ -1715,6 +1731,17 @@ class DatabaseDaemonStore:
     def register_node(self, sandbox: dict[str, Any]) -> dict[str, Any]:
         node = _node_for_storage(sandbox)
         with store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    select(self.nodes)
+                    .where(self.nodes.c.id == node["id"])
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            previous = row_to_node(row) if row else None
+            node = preserve_node_retirement(previous, node)
             changed = self._node_state_changed(conn, node)
             self._save_node(conn, node)
             # The row always advances lastSeenAt; only a material change is worth
@@ -1770,21 +1797,32 @@ class DatabaseDaemonStore:
     def mark_node_seen(
         self, node_id: str, patch: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
-        node = self.get_node(node_id)
-        if not node:
-            return None
-        now = now_iso()
-        patch = patch or {}
-        updated = {
-            **node,
-            **{k: v for k, v in patch.items() if v is not None},
-            "updatedAt": now,
-            "lastSeenAt": now,
-        }
-        if patch.get("lastError") is None and "lastError" in patch:
-            updated.pop("lastError", None)
         with store_transaction(self.engine) as conn:
-            node_pk = self._node_pk(conn, node_id)
+            row = (
+                conn.execute(
+                    select(self.nodes)
+                    .where(self.nodes.c.id == node_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                return None
+            node_pk = str(row["id"])
+            agents = self._node_agents_by_node(conn, [node_pk])
+            node = apply_node_agents(row_to_node(row), agents.get(node_pk, []))
+            now = now_iso()
+            patch = patch or {}
+            updated = {
+                **node,
+                **{k: v for k, v in patch.items() if v is not None},
+                "updatedAt": now,
+                "lastSeenAt": now,
+            }
+            updated = preserve_node_retirement(node, updated)
+            if patch.get("lastError") is None and "lastError" in patch:
+                updated.pop("lastError", None)
             self._save_node(conn, updated, database_id=node_pk)
             # Deliberately not logged as a daemon event: heartbeats arrive
             # several times per second per node, and `lastSeenAt` on the node
