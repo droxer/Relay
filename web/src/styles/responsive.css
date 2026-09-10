@@ -544,6 +544,16 @@
     gap: var(--sp-2);
   }
 
+  /* The agent picker gives up its name at this width (above), so the room chip
+     has to give ground too: at its desktop 280px cap it plus the agent mark
+     overran a 320px viewport and wrapped the targets rail onto a second line,
+     pushing the card down. Capped by viewport rather than another fixed pixel
+     so the chip shrinks continuously with the panel instead of at one more
+     breakpoint; its own ellipsis handles the truncation. */
+  .composer-project-room {
+    max-width: min(280px, 52vw);
+  }
+
   .adm-content-main {
     padding: var(--sp-4);
   }

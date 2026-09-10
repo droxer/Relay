@@ -16,6 +16,20 @@ export function isEmployeeAgentRoutable(agent: EmployeeAgent): boolean {
   return agent.enabled && !agent.deletedAt && isLogicalAgentRoutable(agent.availability);
 }
 
+/**
+ * What the reader is told about an agent's state, as opposed to what its
+ * placement last reported. A disabled or deleted agent keeps whatever
+ * availability it had when it stopped, so rendering that raw labels an
+ * unpickable agent "ready". Being inactive outranks it.
+ *
+ * This is a display concern only — never route on it. Routing asks
+ * `isEmployeeAgentRoutable`, which is a stricter question: `busy` reads as
+ * "busy" here but still takes work.
+ */
+export function visualAvailabilityOf(agent: EmployeeAgent): LogicalAgentAvailability | "inactive" {
+  return !agent.enabled || agent.deletedAt ? "inactive" : agent.availability;
+}
+
 /** Keep the current selection when possible, otherwise choose the first agent
  * that can actually accept work. Never fall back to an unavailable agent. */
 export function preferredRoutableAgent(

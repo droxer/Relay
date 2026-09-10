@@ -10,6 +10,7 @@ import {
   isLogicalAgentRoutable,
   labelForExecutor,
   preferredRoutableAgent,
+  visualAvailabilityOf,
 } from "../src/lib/agentDisplayNames.js";
 import type { EmployeeAgent } from "../src/types.js";
 
@@ -104,5 +105,30 @@ describe("agentDisplayNames", () => {
     // A legacy run carries no logical identity to resolve against.
     assert.equal(imageForAgentRun({}, images), undefined);
     assert.equal(imageForAgentRun({ agentId: "a1" }, undefined), undefined);
+  });
+
+  it("reports a disabled or deleted agent as inactive, not as its stale availability", () => {
+    // An agent keeps whatever availability it had when it stopped, so showing
+    // the raw value labels an unpickable agent "ready".
+    assert.equal(visualAvailabilityOf(agent({ id: "a", displayName: "A", executorKind: "claude" })), "ready");
+    assert.equal(
+      visualAvailabilityOf(agent({ id: "a", displayName: "A", executorKind: "claude", enabled: false })),
+      "inactive",
+    );
+    assert.equal(
+      visualAvailabilityOf(agent({
+        id: "a", displayName: "A", executorKind: "claude", deletedAt: "2026-01-01T00:00:00.000Z",
+      })),
+      "inactive",
+    );
+    // Busy is a live state, not an inactive one: it still routes.
+    const busy = agent({ id: "a", displayName: "A", executorKind: "claude", availability: "busy" });
+    assert.equal(visualAvailabilityOf(busy), "busy");
+    assert.equal(isEmployeeAgentRoutable(busy), true);
+    // Offline is reported as itself; inactivity is about the agent, not the placement.
+    assert.equal(
+      visualAvailabilityOf(agent({ id: "a", displayName: "A", executorKind: "claude", availability: "offline" })),
+      "offline",
+    );
   });
 });
