@@ -188,6 +188,7 @@ DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS = "structured-agent-events"
 DAEMON_CAPABILITY_THREAD_WORKSPACES = "thread-workspaces"
 DAEMON_CAPABILITY_PROJECT_WORKSPACES = "project-workspaces"
 DAEMON_CAPABILITY_ROUND_RESULT = "round-result"
+DAEMON_CAPABILITY_PRODUCED_FILES = "produced-files"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
         DAEMON_CAPABILITY_GENERATED_FILES,
@@ -197,6 +198,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_PROJECT_WORKSPACES,
         DAEMON_CAPABILITY_TASK_WORKSPACES,
         DAEMON_CAPABILITY_ROUND_RESULT,
+        DAEMON_CAPABILITY_PRODUCED_FILES,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -3380,7 +3382,10 @@ class DaemonNodeRegistry:
             ) or workspace_path
         if isinstance(event.get("generatedFiles"), list):
             items = daemon_reported_generated_files(
-                artifact_workspace_path, event["generatedFiles"]
+                artifact_workspace_path,
+                event["generatedFiles"],
+                produced_files=DAEMON_CAPABILITY_PRODUCED_FILES
+                in (sandbox.get("capabilities") or []),
             )
         else:
             # Older daemons must upgrade to report generated files; a host
@@ -3410,6 +3415,11 @@ class DaemonNodeRegistry:
                 "bytes": item["bytes"],
                 "contentType": item["contentType"],
                 "workspaceRelativePath": item["relativePath"],
+                **(
+                    {"snapshotSkipped": item["snapshotSkipped"]}
+                    if item.get("snapshotSkipped")
+                    else {}
+                ),
                 **(
                     {"agentId": assignment["agentId"]}
                     if assignment and assignment.get("agentId")
