@@ -289,10 +289,12 @@ class ServerDaemonNodeBackend:
                 if assignment.get("daemonNodeId")
             ),
         ]
-        # Global recovery runs before node scopes so run admission follows the
-        # same global -> node order as terminal-event finalization.
-        self.registry.reap_stale_runs(force=False)
-        with self.registry.dispatch_scope(node_ids):
+        # Terminal-event finalization holds the global lock while advancing a
+        # request. Admission must retain that same global -> node order for its
+        # whole node-scoped mutation, or a validation path that consults global
+        # registry state can deadlock with finalization.
+        with self.registry.dispatch_lock, self.registry.dispatch_scope(node_ids):
+            self.registry.reap_stale_runs(force=False)
             run_request_id = self._run_request_id(request)
             idempotent_session = self._idempotent_session(request, run_request_id)
             if idempotent_session:
