@@ -22,7 +22,7 @@ from relay.daemon_registry import (
     sandbox_ui_token_matches,
     workspace_paths_match,
 )
-from relay.daemon_registry.artifacts import _is_generated_artifact_path
+from relay.daemon_registry.artifacts import is_snapshotable_path
 from relay.daemon_registry.registry import (
     _confined_workspace_path,
     task_progress_file,
@@ -1719,10 +1719,10 @@ def test_daemon_completion_indexes_text_files_under_output_folder() -> None:
         ("notes.rst", False),
     ],
 )
-def test_is_generated_artifact_path_scopes_text_documents_to_workspace_roots(
+def test_is_snapshotable_path_scopes_text_documents_to_workspace_roots(
     relative_path: str, indexed: bool
 ) -> None:
-    assert _is_generated_artifact_path(relative_path) is indexed
+    assert is_snapshotable_path(relative_path) is indexed
 
 
 def test_daemon_reported_generated_files_index_without_shared_filesystem() -> None:

@@ -2368,15 +2368,13 @@ test("relay daemon reports generated workspace documents in run.completed", asyn
   );
   // Shared-root files and the agent's own home are reported; a sibling
   // agent's private home is never attributed to this run. server.key is
-  // attributed too now — candidacy widened — but its type is never
-  // snapshotable, so no bytes travel with it.
+  // excluded outright by name — a private-key filename earns no record at
+  // all, even metadata-only.
   assert.deepEqual([...byPath.keys()].sort(), [
     "agents/agent-YWdlbnRfcmVzZWFyY2g/quarterly-report.pdf",
-    "agents/agent-YWdlbnRfcmVzZWFyY2g/server.key",
     "shared-summary.csv",
   ]);
-  assert.equal(byPath.get("agents/agent-YWdlbnRfcmVzZWFyY2g/server.key")?.contentBase64, undefined);
-  assert.equal(byPath.get("agents/agent-YWdlbnRfcmVzZWFyY2g/server.key")?.snapshotSkipped, "not-snapshotable-type");
+  assert.equal(byPath.has("agents/agent-YWdlbnRfcmVzZWFyY2g/server.key"), false);
   const file = byPath.get("agents/agent-YWdlbnRfcmVzZWFyY2g/quarterly-report.pdf");
   assert.ok(file);
   assert.equal(file.contentType, "application/pdf");
@@ -2524,6 +2522,28 @@ test("generated-file scan excludes credential names and never stores secret cont
   assert.equal(byPath.get("report.txt")?.contentBase64, undefined);
   assert.equal(byPath.get("report.txt")?.snapshotSkipped, "sensitive");
   assert.equal(byPath.get("safe-report.txt")?.contentBase64, Buffer.from("No secrets here.\n").toString("base64"));
+});
+
+test("generated-file scan excludes private-key filenames outright", async (t: TestContext) => {
+  const { mkdtempSync, mkdirSync: makeDir, rmSync, writeFileSync: writeFile } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join: joinPath } = await import("node:path");
+  const { diffGeneratedFiles } = await import("../src/generated-files.js");
+  const workspace = mkdtempSync(joinPath(tmpdir(), "relay-generated-keys-"));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  makeDir(joinPath(workspace, "deploy"));
+  makeDir(joinPath(workspace, ".ssh"));
+  writeFile(joinPath(workspace, "deploy", "ca.key"), "not a real key");
+  writeFile(joinPath(workspace, ".ssh", "id_rsa"), "not a real key");
+  writeFile(joinPath(workspace, "report.md"), "# Report\n");
+
+  const changed = diffGeneratedFiles(workspace, {});
+  const byPath = new Map(changed.map((file) => [file.relativePath, file]));
+  // A private-key filename earns no record at all, not even metadata-only.
+  assert.equal(byPath.has("deploy/ca.key"), false);
+  assert.equal(byPath.has(".ssh/id_rsa"), false);
+  assert.equal(byPath.get("report.md")?.snapshotSkipped, undefined);
 });
 
 test("generated-file scan reports text documents at an agent home root and output dir", async (t: TestContext) => {

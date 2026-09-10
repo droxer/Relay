@@ -118,6 +118,12 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const SENSITIVE_FILE_NAME = /(?:^|[._-])(credential|credentials|secret|secrets|token|tokens|password|passwd|api[._-]?key|private[._-]?key)(?:[._-]|$)/i;
+/** Private-key filenames: no bytes ever attach, but the filename itself
+ * reaches the UI, so these are excluded outright. Mirrors
+ * SENSITIVE_FILE_EXACT_NAMES / SENSITIVE_FILE_EXTENSIONS
+ * (backend/relay/daemon_registry/artifacts.py). */
+const SENSITIVE_FILE_EXACT_NAMES = new Set(["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"]);
+const SENSITIVE_FILE_EXTENSIONS = new Set([".key", ".pem", ".p12", ".pfx", ".keystore", ".jks"]);
 const LIKELY_SECRET_CONTENT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:OPENAI|ANTHROPIC|AWS|GITHUB|GOOGLE|RELAY)?_?(?:API_?KEY|ACCESS_?TOKEN|SECRET|PASSWORD)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9_./+\-=]{8,}|\bsk-[A-Za-z0-9_-]{8,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAKIA[A-Z0-9]{16})/i;
 
 export interface GeneratedFileCandidate {
@@ -153,7 +159,7 @@ function fileExtension(name: string): string {
  * directory in either. Paths are thread-relative here, so an agent that writes
  * `guide.md` beside its work is reported, while `somecheckout/README.md` — a
  * repo file the run merely touched — is not. Mirrored in
- * `_is_generated_artifact_path` (backend/relay/daemon_registry/artifacts.py);
+ * `is_snapshotable_path` (backend/relay/daemon_registry/artifacts.py);
  * change both together.
  */
 function isTextDocumentFile(relativePath: string, extension: string): boolean {
@@ -174,7 +180,13 @@ function isSiblingAgentHome(relativeDir: string, ownAgentHomeSubdir: string | un
 
 /** A credential-named file earns no record: the name alone is a leak. */
 function isExcludedByName(name: string): boolean {
-  return SENSITIVE_FILE_NAME.test(name) || name === ".env" || name.startsWith(".env.");
+  return (
+    SENSITIVE_FILE_NAME.test(name)
+    || name === ".env"
+    || name.startsWith(".env.")
+    || SENSITIVE_FILE_EXACT_NAMES.has(name)
+    || SENSITIVE_FILE_EXTENSIONS.has(fileExtension(name))
+  );
 }
 
 /**
