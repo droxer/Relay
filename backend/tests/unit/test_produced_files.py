@@ -80,3 +80,14 @@ def test_a_private_key_filename_earns_no_record_at_all() -> None:
     raw = [_raw("deploy/id_rsa", content=b"-----BEGIN")]
     items = daemon_reported_generated_files("/ws", raw, produced_files=True)
     assert items == []
+
+
+def test_a_private_key_extension_earns_no_record_even_without_a_matching_name() -> None:
+    # None of these basenames trip SENSITIVE_FILE_NAME (no "credential",
+    # "secret", "token", "password", "api_key", or "private_key" substring),
+    # so this isolates the extension half of the exclusion rule: it must fail
+    # if SENSITIVE_FILE_EXTENSIONS is ever dropped from _is_sensitive_name.
+    names = ["ca.key", "server.pem", "bundle.p12", "vault.keystore"]
+    raw = [_raw(f"deploy/{name}", content=b"opaque") for name in names]
+    items = daemon_reported_generated_files("/ws", raw, produced_files=True)
+    assert items == []
