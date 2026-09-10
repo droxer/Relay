@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -13,11 +15,61 @@ from relay.services.produced_files import (
     live_status,
 )
 
-from .test_task_artifacts import (
-    _bootstrap,
-    _create_task_with_session,
-    _workspace_artifact,
-)
+
+def _bootstrap(client: TestClient) -> None:
+    assert (
+        client.post(
+            "/api/v1/auth/bootstrap",
+            json={
+                "token": "admin_token",
+                "username": "admin",
+                "password": "kestrel-vault-7719",
+            },
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "kestrel-vault-7719"},
+        ).status_code
+        == 200
+    )
+
+
+def _create_task_with_session(
+    client: TestClient, workspace_path: str
+) -> dict[str, Any]:
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "Ship the quarterly deck",
+            "createSession": True,
+            "workspacePath": workspace_path,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def _workspace_artifact(
+    workspace: str,
+    name: str,
+    *,
+    artifact_id: str,
+    created_at: str,
+    content_type: str,
+) -> dict[str, Any]:
+    return {
+        "id": artifact_id,
+        "kind": "workspace_file",
+        "title": name,
+        "path": str(Path(workspace) / name),
+        "createdAt": created_at,
+        "bytes": 8,
+        "contentType": content_type,
+        "workspaceRelativePath": name,
+    }
 
 
 def test_currency_compares_the_record_against_the_live_entry() -> None:

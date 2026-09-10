@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -29,6 +30,7 @@ from ..services.task_dispatch import (
 from ..services.task_dispatch import (
     start_routine_occurrence_on_ready_node as dispatch_routine_occurrence,
 )
+from ..services.produced_files import file_currency, listing_directories, live_status
 from ..services.task_workspace import (
     task_workspace_subpath,
     recorded_task_workspace,
@@ -45,7 +47,7 @@ from ..tasks import (
     next_routine_date,
     task_goal_text,
 )
-from .deps import AppContextDep
+from .deps import AppContext, AppContextDep
 from .helpers import (
     actor_can_access_record,
     artifact_index_item,
@@ -1135,6 +1137,113 @@ async def task_artifacts(
         reverse=True,
     )
     return {"taskId": task_id, "artifacts": ordered}
+
+
+async def _task_directory_listings(
+    ctx: AppContext,
+    task: dict[str, Any],
+    actor: dict[str, Any],
+    directories: list[str],
+) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, Any]]:
+    """Read live directories without letting an unavailable computer hide the index."""
+    try:
+        node, layout, subpath = _task_workspace_target(ctx, task, actor)
+    except HTTPException as error:
+        return {}, {
+            "status": live_status(error),
+            "entries": [],
+            "path": directories[0],
+        }
+
+    async def _one(
+        path: str,
+    ) -> tuple[str, list[dict[str, Any]] | None, str | None]:
+        try:
+            event = await dispatch_workspace_command(
+                ctx,
+                node,
+                _task_workspace_command(
+                    task,
+                    command_id=new_database_id(),
+                    command_type="workspace.list",
+                    path=path,
+                    workspace_layout=layout,
+                    workspace_subpath=subpath,
+                ),
+            )
+            raise_workspace_error(event)
+        except HTTPException as error:
+            return path, None, live_status(error)
+        if not event.get("exists"):
+            return path, None, "not-created"
+        return path, event.get("entries") or [], None
+
+    results = await asyncio.gather(*(_one(path) for path in directories))
+    listings: dict[str, dict[str, dict[str, Any]]] = {}
+    root_entries: list[dict[str, Any]] = []
+    root_failure: str | None = None
+    for path, entries, failure in results:
+        if path == directories[0]:
+            root_failure = failure
+        if entries is None:
+            continue
+        listings[path] = {entry["name"]: entry for entry in entries}
+        if path == directories[0]:
+            root_entries = entries
+    if root_failure:
+        return listings, {
+            "status": root_failure,
+            "entries": [],
+            "path": directories[0],
+        }
+    return listings, {
+        "status": "ok",
+        "entries": root_entries,
+        "path": directories[0],
+    }
+
+
+@router.get("/tasks/{task_id}/files")
+async def task_files(
+    task_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    """Return what the task produced, enriched by live workspace state."""
+    actor = request_actor(request, ctx.auth_store)
+    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    sources: list[tuple[str, str]] = [
+        (task_id, session_id) for session_id in task.get("linkedSessionIds", [])
+    ]
+    for occurrence in occurrence_tasks(ctx, task, actor):
+        sources.extend(
+            (occurrence["id"], session_id)
+            for session_id in occurrence.get("linkedSessionIds", [])
+        )
+    produced = sorted(
+        newest_artifacts_by_file(
+            ctx, sources, all_versions=request.query_params.get("versions") == "all"
+        ).values(),
+        key=lambda item: item.get("createdAt") or "",
+        reverse=True,
+    )
+    root = workspace_path(request.query_params.get("path"))
+    listings, live = await _task_directory_listings(
+        ctx, task, actor, listing_directories(produced, root=root)
+    )
+    claimed = {item.get("workspaceRelativePath") for item in produced}
+    return {
+        "taskId": task_id,
+        "produced": [
+            {**item, "currency": file_currency(item, listings)} for item in produced
+        ],
+        "live": {
+            **live,
+            "entries": [
+                entry
+                for entry in live["entries"]
+                if entry.get("path") not in claimed
+            ],
+        },
+    }
 
 
 def _task_workspace_target(
