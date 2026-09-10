@@ -51,6 +51,7 @@ import type {
   StartTaskResponse,
 
   TaskArtifactsResponse,
+  TaskFilesResponse,
   TaskDeletionResponse,
   TaskEventsResponse,
   TaskRunsResponse,
@@ -670,6 +671,21 @@ export function taskWorkspaceStatus(taskId: string, signal?: AbortSignal): Promi
 
 export function listTaskArtifacts(taskId: string, signal?: AbortSignal, allVersions = false): Promise<TaskArtifactsResponse> {
   return apiJson<TaskArtifactsResponse>(`/tasks/${encodeURIComponent(taskId)}/artifacts${allVersions ? "?versions=all" : ""}`, { signal });
+}
+
+/** A task's produced files, enriched with current live workspace state. */
+export function listTaskFiles(
+  input: { taskId: string; path?: string; allVersions?: boolean },
+  signal?: AbortSignal,
+): Promise<TaskFilesResponse> {
+  const params = new URLSearchParams();
+  if (input.path) params.set("path", input.path);
+  if (input.allVersions) params.set("versions", "all");
+  const query = params.toString();
+  return apiJson<TaskFilesResponse>(
+    `/tasks/${encodeURIComponent(input.taskId)}/files${query ? `?${query}` : ""}`,
+    { signal },
+  );
 }
 
 /**

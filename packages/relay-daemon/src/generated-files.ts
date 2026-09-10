@@ -4,14 +4,22 @@ import { join, relative, sep } from "node:path";
 import type { DaemonGeneratedFile } from "relay-core";
 
 /**
- * Workspace document detection for daemon runs.
+ * Workspace produced-file detection for daemon runs.
  *
- * The daemon snapshots document-type files before a run and diffs after a
- * successful one, reporting new/changed files in its run.completed event so
- * the backend can index them as workspace artifacts without needing access to
- * this machine's filesystem. Small files are shipped inline (base64) so the
- * backend can keep serving them after the workspace copy changes or is
- * deleted.
+ * The daemon snapshots the workspace before a run and diffs after a successful
+ * one, reporting every new or changed file in its run.completed event so the
+ * backend can index them without access to this machine's filesystem.
+ *
+ * Two separate decisions live here and must not be conflated:
+ *
+ *   Candidacy  — does this file earn a record at all? Every changed file does,
+ *                except one whose *name* marks it as a credential.
+ *   Storage    — do its bytes travel with the record? Only allowlisted types,
+ *                under the size caps, whose content does not trip the secret
+ *                scanner. This set has deliberately not widened.
+ *
+ * Mirrored in `is_produced_file_path` / `is_snapshotable_path`
+ * (backend/relay/daemon_registry/artifacts.py); change both together.
  */
 
 export const GENERATED_FILE_EXTENSIONS = new Set([
@@ -62,7 +70,23 @@ export const GENERATED_FILE_EXCLUDED_DIRS = new Set([
   "venv",
 ]);
 
-export const GENERATED_FILE_LIMIT = 20;
+/** Dependency lockfiles churn on every install and are never a deliverable. */
+export const GENERATED_FILE_EXCLUDED_NAMES = new Set([
+  "Cargo.lock",
+  "go.sum",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "poetry.lock",
+  "uv.lock",
+  "yarn.lock",
+]);
+
+/**
+ * Row cap per report. Sized for "every changed file", not just documents;
+ * with newest-first ordering this truncates the tail of a pathological run
+ * rather than dropping recent work.
+ */
+export const GENERATED_FILE_LIMIT = 200;
 /** Per-file inline snapshot cap; larger files are reported metadata-only. */
 export const GENERATED_FILE_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
 /** Total inline content budget per run.completed event. */
@@ -94,6 +118,12 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const SENSITIVE_FILE_NAME = /(?:^|[._-])(credential|credentials|secret|secrets|token|tokens|password|passwd|api[._-]?key|private[._-]?key)(?:[._-]|$)/i;
+/** Private-key filenames: no bytes ever attach, but the filename itself
+ * reaches the UI, so these are excluded outright. Mirrors
+ * SENSITIVE_FILE_EXACT_NAMES / SENSITIVE_FILE_EXTENSIONS
+ * (backend/relay/daemon_registry/artifacts.py). */
+const SENSITIVE_FILE_EXACT_NAMES = new Set(["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519"]);
+const SENSITIVE_FILE_EXTENSIONS = new Set([".key", ".pem", ".p12", ".pfx", ".keystore", ".jks"]);
 const LIKELY_SECRET_CONTENT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:OPENAI|ANTHROPIC|AWS|GITHUB|GOOGLE|RELAY)?_?(?:API_?KEY|ACCESS_?TOKEN|SECRET|PASSWORD)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9_./+\-=]{8,}|\bsk-[A-Za-z0-9_-]{8,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAKIA[A-Z0-9]{16})/i;
 
 export interface GeneratedFileCandidate {
@@ -103,6 +133,8 @@ export interface GeneratedFileCandidate {
   bytes: number;
   mtimeMs: number;
   contentType: string;
+  /** Whether this path's bytes may be stored. Candidacy is separate. */
+  snapshotable: boolean;
 }
 
 export type GeneratedFileSnapshot = Record<string, { mtimeMs: number; bytes: number }>;
@@ -127,7 +159,7 @@ function fileExtension(name: string): string {
  * directory in either. Paths are thread-relative here, so an agent that writes
  * `guide.md` beside its work is reported, while `somecheckout/README.md` — a
  * repo file the run merely touched — is not. Mirrored in
- * `_is_generated_artifact_path` (backend/relay/daemon_registry/artifacts.py);
+ * `is_snapshotable_path` (backend/relay/daemon_registry/artifacts.py);
  * change both together.
  */
 function isTextDocumentFile(relativePath: string, extension: string): boolean {
@@ -146,8 +178,30 @@ function isSiblingAgentHome(relativeDir: string, ownAgentHomeSubdir: string | un
   return relativeDir !== ownAgentHomeSubdir;
 }
 
-function isSensitiveCandidate(path: string, name: string, extension: string, bytes: number): boolean {
-  if (SENSITIVE_FILE_NAME.test(name) || name === ".env" || name.startsWith(".env.")) return true;
+/** A credential-named file earns no record: the name alone is a leak. */
+function isExcludedByName(name: string): boolean {
+  return (
+    SENSITIVE_FILE_NAME.test(name)
+    || name === ".env"
+    || name.startsWith(".env.")
+    || SENSITIVE_FILE_EXACT_NAMES.has(name)
+    || SENSITIVE_FILE_EXTENSIONS.has(fileExtension(name))
+  );
+}
+
+/**
+ * Whether this path's bytes may travel with the record.
+ *
+ * Exactly the old candidacy rule: binary/document types anywhere, text
+ * documents only near a workspace root. Widening this widens what Relay
+ * stores and serves, so it stays as narrow as it was audited.
+ */
+export function isSnapshotableFile(relativePath: string, extension: string): boolean {
+  return GENERATED_FILE_EXTENSIONS.has(extension) || isTextDocumentFile(relativePath, extension);
+}
+
+/** Whether a storable file's body looks like it carries a credential. */
+function hasLikelySecretContent(path: string, extension: string, bytes: number): boolean {
   const textLike = OUTPUT_FILE_TEXT_EXTENSIONS.has(extension)
     || extension === ".csv"
     || extension === ".html"
@@ -195,6 +249,7 @@ function listCandidates(
         continue;
       }
       if (!entry.isFile() || entry.name.startsWith("~$")) continue;
+      if (isExcludedByName(entry.name) || GENERATED_FILE_EXCLUDED_NAMES.has(entry.name)) continue;
       const extension = fileExtension(entry.name);
       let stat;
       try {
@@ -204,8 +259,6 @@ function listCandidates(
       }
       if (!stat.isFile()) continue;
       const relativePath = relative(workspacePath, path).split(sep).join("/");
-      if (!GENERATED_FILE_EXTENSIONS.has(extension) && !isTextDocumentFile(relativePath, extension)) continue;
-      if (isSensitiveCandidate(path, entry.name, extension, stat.size)) continue;
       files.push({
         path,
         relativePath,
@@ -213,6 +266,7 @@ function listCandidates(
         bytes: stat.size,
         mtimeMs: stat.mtimeMs,
         contentType: CONTENT_TYPES[extension] ?? "application/octet-stream",
+        snapshotable: isSnapshotableFile(relativePath, extension),
       });
     }
   }
@@ -251,15 +305,26 @@ export function diffGeneratedFiles(
       bytes: item.bytes,
       contentType: item.contentType,
     };
-    if (item.bytes <= GENERATED_FILE_CONTENT_MAX_BYTES && item.bytes <= contentBudget) {
-      try {
-        const body = readFileSync(item.path);
-        file.contentBase64 = body.toString("base64");
-        file.bytes = body.length;
-        contentBudget -= body.length;
-      } catch {
-        // The file vanished between the walk and the read; report metadata only.
-      }
+    if (!item.snapshotable) {
+      file.snapshotSkipped = "not-snapshotable-type";
+      return file;
+    }
+    if (item.bytes > GENERATED_FILE_CONTENT_MAX_BYTES || item.bytes > contentBudget) {
+      file.snapshotSkipped = "too-large";
+      return file;
+    }
+    if (hasLikelySecretContent(item.path, fileExtension(item.title), item.bytes)) {
+      file.snapshotSkipped = "sensitive";
+      return file;
+    }
+    try {
+      const body = readFileSync(item.path);
+      file.contentBase64 = body.toString("base64");
+      file.bytes = body.length;
+      contentBudget -= body.length;
+    } catch {
+      // The file vanished between the walk and the read.
+      file.snapshotSkipped = "unreadable";
     }
     return file;
   });

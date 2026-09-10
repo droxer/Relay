@@ -22,7 +22,7 @@ from relay.daemon_registry import (
     sandbox_ui_token_matches,
     workspace_paths_match,
 )
-from relay.daemon_registry.artifacts import _is_generated_artifact_path
+from relay.daemon_registry.artifacts import is_snapshotable_path
 from relay.daemon_registry.registry import (
     _confined_workspace_path,
     task_progress_file,
@@ -1719,10 +1719,10 @@ def test_daemon_completion_indexes_text_files_under_output_folder() -> None:
         ("notes.rst", False),
     ],
 )
-def test_is_generated_artifact_path_scopes_text_documents_to_workspace_roots(
+def test_is_snapshotable_path_scopes_text_documents_to_workspace_roots(
     relative_path: str, indexed: bool
 ) -> None:
-    assert _is_generated_artifact_path(relative_path) is indexed
+    assert is_snapshotable_path(relative_path) is indexed
 
 
 def test_daemon_reported_generated_files_index_without_shared_filesystem() -> None:
@@ -1843,6 +1843,103 @@ def test_daemon_reported_generated_files_index_without_shared_filesystem() -> No
             )
 
     asyncio.run(run_flow())
+
+
+def _artifacts_from_completed_generated_file_report(
+    capabilities: list[str], generated_files: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    async def run_flow() -> list[dict[str, Any]]:
+        with TemporaryDirectory() as root:
+            session_store = LocalSessionStore(root)
+            registry = DaemonNodeRegistry(session_store, LocalDaemonStore(root))
+            registry.register(
+                {
+                    "sandboxId": "sbx_alice",
+                    "employeeId": "alice",
+                    "token": "node_token",
+                    "workspacePath": "/remote/daemon/workspace",
+                    "protocolVersion": 1,
+                    "supportedAgents": ["codex"],
+                    "capabilities": [*capabilities, "thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            session = await ServerDaemonNodeBackend(registry).run(
+                "sbx_alice",
+                {
+                    "taskGoal": "produce workspace files",
+                    "assignments": [{"agent": "codex"}],
+                },
+            )
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            registry.handle_event(
+                "sbx_alice",
+                {
+                    "type": "run.completed",
+                    "commandId": command["id"],
+                    "sessionId": command["sessionId"],
+                    "runId": command["runId"],
+                    "agent": "codex",
+                    "exitCode": 0,
+                    "agentLog": "produced files",
+                    "generatedFiles": generated_files,
+                },
+                "node_token",
+            )
+            return session_store.get_session(session["id"])["artifacts"]
+
+    return asyncio.run(run_flow())
+
+
+def test_run_completed_records_why_a_produced_file_was_not_snapshotted() -> None:
+    artifacts = _artifacts_from_completed_generated_file_report(
+        ["generated-files", "produced-files"],
+        [
+            {
+                "relativePath": "src/main.py",
+                "title": "main.py",
+                "bytes": 4096,
+                "contentType": "text/x-python",
+                "snapshotSkipped": "not-snapshotable-type",
+            },
+            {
+                "relativePath": "report.md",
+                "title": "report.md",
+                "bytes": 8,
+                "contentType": "text/markdown",
+                "contentBase64": base64.b64encode(b"# Report").decode("ascii"),
+            },
+        ],
+    )
+
+    by_path = {artifact["workspaceRelativePath"]: artifact for artifact in artifacts}
+    assert by_path["src/main.py"]["snapshotSkipped"] == "not-snapshotable-type"
+    assert "snapshotSkipped" not in by_path["report.md"]
+
+
+def test_daemon_without_produced_files_indexes_only_documents() -> None:
+    artifacts = _artifacts_from_completed_generated_file_report(
+        ["generated-files"],
+        [
+            {
+                "relativePath": "src/main.py",
+                "title": "main.py",
+                "bytes": 4096,
+                "contentType": "text/x-python",
+            },
+            {
+                "relativePath": "report.md",
+                "title": "report.md",
+                "bytes": 8,
+                "contentType": "text/markdown",
+            },
+        ],
+    )
+
+    assert {artifact["workspaceRelativePath"] for artifact in artifacts} == {
+        "report.md"
+    }
 
 
 def test_generated_file_replay_fills_in_partially_indexed_report() -> None:

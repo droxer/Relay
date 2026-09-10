@@ -2360,16 +2360,22 @@ test("relay daemon reports generated workspace documents in run.completed", asyn
 
   assert.equal(registrations[0]?.capabilities?.includes("generated-files"), true);
   assert.equal(registrations[0]?.capabilities?.includes("thread-workspaces"), true);
+  assert.equal(registrations[0]?.capabilities?.includes("produced-files"), true);
   const completed = events.find((event) => event.type === "run.completed");
   assert.ok(completed && completed.type === "run.completed");
-  const reported = (completed.generatedFiles ?? []).map((item) => item.relativePath).sort();
+  const byPath = new Map(
+    (completed.generatedFiles ?? []).map((item) => [item.relativePath, item]),
+  );
   // Shared-root files and the agent's own home are reported; a sibling
-  // agent's private home is never attributed to this run.
-  assert.deepEqual(reported, [
+  // agent's private home is never attributed to this run. server.key is
+  // excluded outright by name — a private-key filename earns no record at
+  // all, even metadata-only.
+  assert.deepEqual([...byPath.keys()].sort(), [
     "agents/agent-YWdlbnRfcmVzZWFyY2g/quarterly-report.pdf",
     "shared-summary.csv",
   ]);
-  const file = (completed.generatedFiles ?? []).find((item) => item.relativePath.endsWith(".pdf"));
+  assert.equal(byPath.has("agents/agent-YWdlbnRfcmVzZWFyY2g/server.key"), false);
+  const file = byPath.get("agents/agent-YWdlbnRfcmVzZWFyY2g/quarterly-report.pdf");
   assert.ok(file);
   assert.equal(file.contentType, "application/pdf");
   assert.equal(Buffer.from(file.contentBase64 ?? "", "base64").toString("utf-8"), "pdf bytes");
@@ -2433,7 +2439,7 @@ test("upgraded daemon keeps legacy sessions on the existing node root", async (t
   assert.equal(existsSync(join(workspace, command.sessionId)), false);
 });
 
-test("generated-file diff detects changed files and skips excluded directories", async (t: TestContext) => {
+test("generated-file diff reports every changed file and skips excluded directories", async (t: TestContext) => {
   const { mkdtempSync, mkdirSync: makeDir, rmSync, writeFileSync: writeFile } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join: joinPath } = await import("node:path");
@@ -2447,26 +2453,54 @@ test("generated-file diff detects changed files and skips excluded directories",
   const before = snapshotGeneratedFiles(workspace);
 
   makeDir(joinPath(workspace, "output"));
+  makeDir(joinPath(workspace, "src"));
   writeFile(joinPath(workspace, "report.html"), "<h1>hi</h1>");
   writeFile(joinPath(workspace, "data.csv"), "a,b\nc,d\n");
   writeFile(joinPath(workspace, "output", "summary.md"), "# Summary\n");
-  // A doc written beside the work is the agent's deliverable; one buried in a
-  // checkout the run merely touched is not.
-  writeFile(joinPath(workspace, "notes.md"), "a thread-root deliverable\n");
+  // Source the run wrote is now output too — a coding task has deliverables.
+  writeFile(joinPath(workspace, "src", "main.py"), "print('hi')\n");
+  // A checkout's own README is reported now; it was changed by the run.
   makeDir(joinPath(workspace, "checkout"));
   writeFile(joinPath(workspace, "checkout", "README.md"), "someone else's repo\n");
+  writeFile(joinPath(workspace, "package-lock.json"), "{}\n");
 
   const changed = diffGeneratedFiles(workspace, before);
   assert.deepEqual(changed.map((file) => file.relativePath).sort(), [
+    "checkout/README.md",
     "data.csv",
-    "notes.md",
     "output/summary.md",
     "report.html",
+    "src/main.py",
   ]);
   assert.deepEqual(diffGeneratedFiles(workspace, snapshotGeneratedFiles(workspace)), []);
 });
 
-test("generated-file scan never uploads likely credentials or opaque archives", async (t: TestContext) => {
+test("generated-file diff snapshots only allowlisted types and states why it skipped", async (t: TestContext) => {
+  const { mkdtempSync, mkdirSync: makeDir, rmSync, writeFileSync: writeFile } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join: joinPath } = await import("node:path");
+  const { diffGeneratedFiles } = await import("../src/generated-files.js");
+  const workspace = mkdtempSync(joinPath(tmpdir(), "relay-generated-snapshot-"));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  makeDir(joinPath(workspace, "src"));
+  writeFile(joinPath(workspace, "report.md"), "# Report\n");
+  writeFile(joinPath(workspace, "src", "main.py"), "print('hi')\n");
+  writeFile(joinPath(workspace, "bundle.zip"), "opaque archive");
+
+  const byPath = new Map(
+    diffGeneratedFiles(workspace, {}).map((file) => [file.relativePath, file]),
+  );
+  // A document beside the work is stored and readable offline.
+  assert.equal(byPath.get("report.md")?.contentBase64, Buffer.from("# Report\n").toString("base64"));
+  assert.equal(byPath.get("report.md")?.snapshotSkipped, undefined);
+  // Source and archives are attributed but never stored.
+  assert.equal(byPath.get("src/main.py")?.contentBase64, undefined);
+  assert.equal(byPath.get("src/main.py")?.snapshotSkipped, "not-snapshotable-type");
+  assert.equal(byPath.get("bundle.zip")?.snapshotSkipped, "not-snapshotable-type");
+});
+
+test("generated-file scan excludes credential names and never stores secret content", async (t: TestContext) => {
   const { mkdtempSync, rmSync, writeFileSync: writeFile } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join: joinPath } = await import("node:path");
@@ -2475,12 +2509,41 @@ test("generated-file scan never uploads likely credentials or opaque archives", 
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
   writeFile(joinPath(workspace, "credentials.json"), '{"token":"tok_super_secret"}');
+  writeFile(joinPath(workspace, ".env.local"), "OPENAI_API_KEY=sk-secret-value\n");
   writeFile(joinPath(workspace, "report.txt"), "OPENAI_API_KEY=sk-secret-value");
-  writeFile(joinPath(workspace, "bundle.zip"), "opaque archive");
   writeFile(joinPath(workspace, "safe-report.txt"), "No secrets here.\n");
 
   const changed = diffGeneratedFiles(workspace, {});
-  assert.deepEqual(changed.map((file) => file.relativePath), ["safe-report.txt"]);
+  const byPath = new Map(changed.map((file) => [file.relativePath, file]));
+  // A credential-named file is not even attributed: the name itself leaks.
+  assert.equal(byPath.has("credentials.json"), false);
+  assert.equal(byPath.has(".env.local"), false);
+  // A document whose body trips the scanner is attributed but never stored.
+  assert.equal(byPath.get("report.txt")?.contentBase64, undefined);
+  assert.equal(byPath.get("report.txt")?.snapshotSkipped, "sensitive");
+  assert.equal(byPath.get("safe-report.txt")?.contentBase64, Buffer.from("No secrets here.\n").toString("base64"));
+});
+
+test("generated-file scan excludes private-key filenames outright", async (t: TestContext) => {
+  const { mkdtempSync, mkdirSync: makeDir, rmSync, writeFileSync: writeFile } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join: joinPath } = await import("node:path");
+  const { diffGeneratedFiles } = await import("../src/generated-files.js");
+  const workspace = mkdtempSync(joinPath(tmpdir(), "relay-generated-keys-"));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  makeDir(joinPath(workspace, "deploy"));
+  makeDir(joinPath(workspace, ".ssh"));
+  writeFile(joinPath(workspace, "deploy", "ca.key"), "not a real key");
+  writeFile(joinPath(workspace, ".ssh", "id_rsa"), "not a real key");
+  writeFile(joinPath(workspace, "report.md"), "# Report\n");
+
+  const changed = diffGeneratedFiles(workspace, {});
+  const byPath = new Map(changed.map((file) => [file.relativePath, file]));
+  // A private-key filename earns no record at all, not even metadata-only.
+  assert.equal(byPath.has("deploy/ca.key"), false);
+  assert.equal(byPath.has(".ssh/id_rsa"), false);
+  assert.equal(byPath.get("report.md")?.snapshotSkipped, undefined);
 });
 
 test("generated-file scan reports text documents at an agent home root and output dir", async (t: TestContext) => {
@@ -2498,11 +2561,56 @@ test("generated-file scan reports text documents at an agent home root and outpu
   writeFile(joinPath(workspace, own, "output", "report.txt"), "done\n");
   writeFile(joinPath(workspace, own, "scratch", "buffer.md"), "working notes\n");
 
-  const changed = diffGeneratedFiles(workspace, {}, { ownAgentHomeSubdir: own });
-  assert.deepEqual(changed.map((file) => file.relativePath).sort(), [
+  const byPath = new Map(
+    diffGeneratedFiles(workspace, {}, { ownAgentHomeSubdir: own }).map((f) => [f.relativePath, f]),
+  );
+  // All three are reported now; placement decides only whether bytes are kept.
+  assert.deepEqual([...byPath.keys()].sort(), [
     `${own}/guide.md`,
     `${own}/output/report.txt`,
+    `${own}/scratch/buffer.md`,
   ]);
+  assert.equal(byPath.get(`${own}/guide.md`)?.snapshotSkipped, undefined);
+  assert.equal(byPath.get(`${own}/output/report.txt`)?.snapshotSkipped, undefined);
+  assert.equal(byPath.get(`${own}/scratch/buffer.md`)?.snapshotSkipped, "not-snapshotable-type");
+});
+
+test("generated-file diff caps rows and stops storing once the budget is spent", async (t: TestContext) => {
+  const { mkdtempSync, rmSync, writeFileSync: writeFile } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join: joinPath } = await import("node:path");
+  const { diffGeneratedFiles, GENERATED_FILE_LIMIT } = await import("../src/generated-files.js");
+  const workspace = mkdtempSync(joinPath(tmpdir(), "relay-generated-budget-"));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  assert.equal(GENERATED_FILE_LIMIT, 200);
+  // 12 markdown files of 1 MB each: 8 fit the 8 MB event budget, 4 do not.
+  const body = "x".repeat(1024 * 1024);
+  for (let index = 0; index < 12; index += 1) {
+    writeFile(joinPath(workspace, `doc-${index}.md`), body);
+  }
+  const changed = diffGeneratedFiles(workspace, {});
+  assert.equal(changed.length, 12);
+  const stored = changed.filter((file) => file.contentBase64 !== undefined);
+  assert.equal(stored.length, 8);
+  for (const file of changed.filter((f) => f.contentBase64 === undefined)) {
+    assert.equal(file.snapshotSkipped, "too-large");
+  }
+});
+
+test("generated-file diff reports far more than the old twenty-file ceiling", async (t: TestContext) => {
+  const { mkdtempSync, rmSync, writeFileSync: writeFile } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join: joinPath } = await import("node:path");
+  const { diffGeneratedFiles } = await import("../src/generated-files.js");
+  const workspace = mkdtempSync(joinPath(tmpdir(), "relay-generated-many-"));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+
+  for (let index = 0; index < 250; index += 1) {
+    writeFile(joinPath(workspace, `module-${index}.py`), `# module ${index}\n`);
+  }
+  const changed = diffGeneratedFiles(workspace, {});
+  assert.equal(changed.length, 200);
 });
 
 test("generated-file scan skips sibling agent homes but keeps the running agent's own", async (t: TestContext) => {
