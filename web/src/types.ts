@@ -111,6 +111,38 @@ export interface TaskArtifactsResponse {
   artifacts: ArtifactIndexItem[];
 }
 
+export type ProducedFileCurrency = "current" | "changed-since" | "deleted" | "unknown";
+
+export type SnapshotSkippedReason =
+  | "too-large"
+  | "not-snapshotable-type"
+  | "sensitive"
+  | "unreadable";
+
+/** One file a run of this task created or modified. */
+export interface ProducedFile extends ArtifactIndexItem {
+  currency: ProducedFileCurrency;
+  snapshotSkipped?: SnapshotSkippedReason;
+}
+
+export type TaskLiveStatus =
+  | "ok"
+  | "offline"
+  | "not-created"
+  | "unsupported"
+  | "denied"
+  | "unavailable";
+
+export interface TaskFilesResponse {
+  taskId: string;
+  produced: ProducedFile[];
+  live: {
+    status: TaskLiveStatus;
+    path: string;
+    entries: WorkspaceFileEntry[];
+  };
+}
+
 export interface TaskEventsResponse {
   events: RelayTaskEvent[];
 }
