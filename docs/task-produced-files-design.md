@@ -72,7 +72,11 @@ now defines which rows exist rather than decorating rows chosen by extension.
 New field on the artifact record:
 
 ```
-snapshotSkipped: null | "too-large" | "not-snapshotable-type" | "sensitive"
+snapshotSkipped: null
+  | "too-large"             # over the per-file cap or the per-event budget
+  | "not-snapshotable-type" # outside the storage allowlist
+  | "sensitive"             # content secret-scan tripped
+  | "unreadable"            # vanished or unreadable between walk and read
 ```
 
 This is the load-bearing addition. Today "not snapshotted" is expressed by the
@@ -96,7 +100,14 @@ from deriving it differently.
 | `current` | live entry matches the record |
 | `changed-since` | live entry exists with different size or mtime |
 | `deleted` | record exists, no live entry |
-| `unknown` | no live listing (computer offline, unsupported, or denied) |
+| `unknown` | no live listing for that file's directory |
+
+A live listing covers one directory, but produced files nest. The handler
+therefore gathers listings for the root plus up to seven further distinct
+parent directories of produced files (`PRODUCED_FILE_LISTING_MAX_DIRS = 8`),
+dispatched concurrently, and resolves currency from their union. Produced files
+in directories beyond that cap report `unknown`. Durability, the more important
+signal, is unaffected by the cap.
 
 Currency is the new information that makes one list possible. It is precisely
 what a reader was previously extracting by eyeballing two lists side by side.
