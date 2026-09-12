@@ -311,7 +311,14 @@ export function ThreadListPanel({
           });
           return (
           <section key={project.id} className={`project-folder${selection ? ` ${selection}` : ""}${project.archivedAt ? " archived" : ""}${expanded ? " expanded" : " collapsed"}`}>
-            <div className="project-folder-header">
+            {/* The folder header is a rail row like any other — `.rail-row` +
+                data-selected is the one place the wash and the leading accent
+                are defined (tokens/base.css), shared with thread, agent and
+                team rows. */}
+            <div
+              className="project-folder-header rail-row"
+              data-selected={selection === "selected" ? "true" : "false"}
+            >
               <Button
                 variant="ghost"
                 type="button"
