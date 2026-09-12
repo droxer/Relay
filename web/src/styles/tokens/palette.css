@@ -35,10 +35,12 @@
              desktop layout. Everything narrow-vs-wide belongs on this tier;
              prefer making the wide value the base and narrowing here over
              adding a `min-width` partner.
-     900px   dashboard + backlog medium
+     900px   dashboard + backlog medium; SHELL — below it the space panel
+             stops being a column and becomes an overlay
     1040px   TABLET — the app-wide tier
     1100px   multi-pane → single pane (agents, backlog, teams, workspace)
-    1200px   dashboard widest
+    1200px   dashboard widest; SHELL — the narrowest viewport that can seat
+             all four shell columns on their floors (1128px of them)
 
    Two rules of thumb: a new query should reuse a tier above rather than
    invent a neighbour (700/800/1024 were each ~20px from a real tier and have
@@ -477,20 +479,37 @@
   --measure: 48ch;
   --measure-wide: 72ch;
 
-  /* Shell */
+  /* Shell
+
+     Each resizable column is a PAIR: a floor (`-min`) and the width it would
+     prefer. The shell grid asks for the preferred width and settles for
+     anything down to the floor, so a 1024px laptop shrinks the rails instead
+     of squeezing the chat column to 94px. The floors mirror the drag clamps
+     in lib/{sidenav,threadList,threadSpace}.ts one-for-one — shellColumns.
+     test.ts fails if either side moves alone. */
   --sidenav-w: 72px;
   /* Expanded-rail default. The shell restates this inline from the dragged
      width (see lib/sidenav.ts for the min/max), so this value is what the
      prerendered export shows before hydration — keep it equal to
      SIDENAV_WIDTH_DEFAULT or the rail jumps on load. */
   --sidenav-w-open: 228px;
+  --sidenav-w-min: 180px;
   --thread-w: 318px;
+  --thread-w-min: 240px;
+  /* The transcript's floor, and the one floor that is itself adaptive: below
+     ~875px there is no longer 420px to give after the rails take theirs, and
+     a hard floor there would push the grid into overflow rather than into a
+     narrower conversation. 48vw is the share that keeps the last desktop
+     arrangement (rail + chat) fitting at 821px, where the phone layout takes
+     over. */
+  --chat-w-min: min(420px, 48vw);
   /* Transcript/composer column cap. A layout width, not a reading measure:
      wide enough that a wide chat pane doesn't leave dead margins on both
      sides, narrow enough that agent prose still scans. One token so the
      transcript and composer always cap at the same width. */
   --thread-measure: 1200px;
   --space-w: 384px;
+  --space-w-min: 288px;
   --header-h: 64px; /* the source system's top navigation height */
   /* Shared inline gutter for page chrome — route PageHeaders, the thread
      rail, and the chat header/transcript all inset by this one token so the

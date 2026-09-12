@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
-import { OVERLAY_TAKEOVER_QUERY } from "@/lib/breakpoints";
+import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
 
 
 const KEYBOARD_RESIZE_STEP = 16;
@@ -76,12 +76,13 @@ export function ThreadSpacePanel({
 }) {
   const { t } = useTranslation();
   const selected = resolveSelectedSpaceItem(items, selectedArtifactId);
-  const isOverlay = useMediaQuery(OVERLAY_TAKEOVER_QUERY);
-  /* Modal only at the takeover width. Below it the panel is a real sibling
-     in the chat grid — no scrim, no portal — so the primitive is asked for
-     `trap-focus` rather than a full modal, and the popup renders in place
-     instead of through a Portal. Above that width it is just a panel, and
-     wrapping it in a dialog would announce one that is not there. */
+  const isOverlay = useMediaQuery(SPACE_OVERLAY_QUERY);
+  /* Modal only where the panel actually covers the viewport — the same query
+     responsive.css uses to make it `fixed`, so the two cannot drift. Above
+     that width the panel is a real sibling in the chat grid — no scrim, no
+     portal — so the primitive is asked for `trap-focus` rather than a full
+     modal, and the popup renders in place instead of through a Portal.
+     Wrapping a column in a dialog would announce one that is not there. */
 
   // Each artifact opens on its rendered reading; the choice is per-artifact,
   // so selecting another one starts from preview again rather than carrying a

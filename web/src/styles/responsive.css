@@ -1,5 +1,51 @@
 /* ============================ responsive ============================ */
 
+/* ── Shell columns ───────────────────────────────────────────────────
+   The shell grid shrinks its rails toward their floors on its own (see
+   shell.css); these two tiers handle what shrinking cannot. Past a point the
+   floors themselves stop fitting, and the answer is one panel fewer rather
+   than an overflowing grid or a chat column below its own floor.
+
+     > 1200px   sidenav + thread rail + chat + space panel   (1128px of floor)
+     > 900px    sidenav + chat + space panel                 ( 888px of floor)
+     > 820px    sidenav + thread rail + chat                 ( 840px of floor)
+     <= 820px   one pane at a time (the phone tier, below)
+
+   Nothing is lost at either step: the panel the tier drops is the one the
+   user can still reach — the thread rail through its toggle, the space panel
+   as an overlay. */
+
+@media (max-width: 1200px) {
+  .messenger-shell[data-space="open"][data-threadlist="open"] {
+    --shell-rail-track: minmax(0px, 0px);
+  }
+}
+
+@media (max-width: 900px) {
+  /* The panel leaves the grid and overlays the conversation, which gives the
+     thread rail its track back — the shell is simply in its default
+     arrangement with a sheet on top. Same treatment the phone tier gives it;
+     it just starts earlier now, because 900px is where the split stopped
+     being a split. */
+  .messenger-shell[data-space="open"] {
+    --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w));
+    --shell-space-track: minmax(0px, 0px);
+  }
+
+  .thread-space-panel {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-drawer);
+    width: auto;
+    border-left: 0;
+    background: var(--surface-0);
+  }
+
+  .thread-space-resize {
+    display: none;
+  }
+}
+
 @media (max-width: 820px) {
   /* The desktop gutter is --sp-7 (32px). A phone cannot afford it: at 375px
      that is 17% of the screen spent on margin, and the surfaces this token
@@ -21,27 +67,13 @@
     padding: 0;
   }
 
-  /* No split view at this width: the space panel leaves the grid (which
-     stays single-column) and takes over the viewport like the drawers in
-     mobile-overlays.css. */
+  /* One pane at a time: the shell stays single-column whatever the panel
+     states say. The panel itself already overlays from the 900px tier up. */
   .messenger-shell[data-space="open"],
   .messenger-shell[data-space="open"][data-sidenav="open"],
   .messenger-shell[data-space="open"][data-threadlist="open"],
   .messenger-shell[data-space="open"][data-threadlist="open"][data-sidenav="open"] {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .thread-space-panel {
-    position: fixed;
-    inset: 0;
-    z-index: var(--z-drawer);
-    width: auto;
-    border-left: 0;
-    background: var(--surface-0);
-  }
-
-  .thread-space-resize {
-    display: none;
   }
 
   .thread-panel-resize {

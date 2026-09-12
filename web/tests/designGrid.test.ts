@@ -194,24 +194,26 @@ describe("design grid", () => {
   });
 
   it("collapses the thread track to zero when the space panel is open", () => {
-    // The split view trades the thread rail for the panel by default; the
-    // fourth track (--space-w) only appears in the data-space rules.
+    // The split view trades the thread rail for the panel by default. Each
+    // state re-points a track variable; the template itself is written once
+    // (the track shapes and the tier ladder are shellColumns.test.ts).
     const shell = readStyle("shell.css");
     assert.match(
       shell,
-      /\.messenger-shell\[data-space="open"\]\s*\{\s*grid-template-columns:\s*var\(--sidenav-w\)\s+0\s+minmax\(0,\s*1fr\)\s+var\(--space-w\)/,
-      "opening the space panel must collapse --thread-w to 0 and add the --space-w track",
+      /\.messenger-shell\[data-space="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(0px, 0px\);\s*--shell-space-track:\s*minmax\(var\(--space-w-min\), var\(--space-w\)\);/,
+      "opening the space panel must close the rail track and open the space track",
     );
     assert.match(
       shell,
-      /\.messenger-shell\[data-space="open"\]\[data-threadlist="open"\]\s*\{\s*grid-template-columns:\s*var\(--sidenav-w\)\s+var\(--thread-w\)\s+minmax\(0,\s*1fr\)\s+var\(--space-w\)/,
-      "re-opening the thread list on top of the panel must restore --thread-w",
+      /\.messenger-shell\[data-space="open"\]\[data-threadlist="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(var\(--thread-w-min\), var\(--thread-w\)\);/,
+      "re-opening the thread list on top of the panel must restore the rail track",
     );
   });
 
   it("keeps the space track out of the narrow-viewport grid", () => {
-    // At <=820px there is no split view: the shell stays single-column and
-    // the panel becomes a fixed overlay.
+    // At <=820px there is no split view: the shell stays single-column. (The
+    // panel is already a fixed overlay from the 900px tier — shellColumns.
+    // test.ts owns that half.)
     const responsive = readStyle("responsive.css");
     const mobileStart = responsive.indexOf("@media (max-width: 820px)");
     assert.ok(mobileStart >= 0, "responsive.css lost its 820px block");
@@ -222,11 +224,6 @@ describe("design grid", () => {
     for (const grid of shellGrids) {
       assert.equal(grid, "minmax(0, 1fr)", "no fourth track under the narrow-viewport media query");
     }
-    assert.match(
-      mobile,
-      /\.thread-space-panel\s*\{[^}]*position:\s*fixed/,
-      "the space panel must leave the grid and overlay at <=820px",
-    );
   });
 
   it("leaves no declaration dead behind a later copy of its own selector", () => {

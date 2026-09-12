@@ -1,4 +1,4 @@
-import { TRANSCRIPT_MIN_WIDTH } from "./threadSpace";
+import { TRANSCRIPT_MIN_WIDTH } from "./threadSpace.ts";
 
 export const THREAD_LIST_WIDTH_DEFAULT = 318;
 export const THREAD_LIST_WIDTH_MIN = 240;
