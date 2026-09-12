@@ -68,12 +68,15 @@
 }
 
 /* The <ul> that actually holds rows — one per attention group in threads
-   mode, one per folder in projects mode. Same rhythm as
-   .agents-roster-list: rounded rows separated by a 2px gutter. */
+   mode, one per folder in projects mode. Same rhythm as .agents-roster-list
+   and .teams-list: rounded rows separated by a --sp-1 gutter. It was --sp-0-5
+   here, so the one rail with the most rows was also the only one whose rows
+   nearly touched — the comment claimed parity with the agent roster while
+   sitting at half its gutter. */
 .conversation-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-0-5);
+  gap: var(--sp-1);
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -82,14 +85,17 @@
 
 /* Applied only in projects directory mode (ThreadListPanel gates the class
    on directoryMode): folder blocks are multi-part sections, so they take the
-   wider --sp-2 section gap instead of the list's tight --sp-0-5 row gap. */
+   wider --sp-2 section gap instead of the list's --sp-1 row gap. */
 .project-directory {
   gap: var(--sp-2);
 }
 
+/* No border: a rail row is borderless (.conversation-row, .agents-roster-row,
+   .teams-list-row all set `border: 0`). The transparent 0.5px hairline here
+   was the residue of a bordered folder treatment, and it inset the folder
+   block half a pixel from the thread rows sharing its list. */
 .project-folder {
   min-width: 0;
-  border: 0.5px solid transparent;
 }
 
 /* Hover and selection paint the HEADER ROW, never the section. The section
@@ -105,33 +111,14 @@
   background: var(--row-hover);
 }
 
-.project-folder.selected > .project-folder-header,
-.project-folder.selected > .project-folder-header:hover {
-  /* Linear-style selection: a neutral wash, not a tinted border — the row
-     drives the content pane, so it should read as "you are here", not as an
-     accent element. */
-  background: var(--action-soft);
-}
-
-/* ...and the leading accent every other selectable row in the app carries
-   (.conversation-row, .agents-roster-row, .teams-list-row). A project folder
-   drives the same detail pane those rows do; without the bar it was the one
-   selection in the product that spoke with only half the vocabulary.
-
-   The geometry comes from the same --accent-bar-* tokens .rail-row uses in
-   tokens/base.css. It was hand-written here as `top/bottom: 6px; width: 2px`,
-   which made the folder's bar 4px longer at each end than every other selected
-   row — a copy of the treatment that had already drifted off the token. */
-.project-folder.selected > .project-folder-header::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: var(--accent-bar-inset);
-  bottom: var(--accent-bar-inset);
-  width: var(--accent-bar-w);
-  border-radius: calc(var(--r-1) / 2);
-  background: var(--action);
-}
+/* Selection (wash + leading accent bar) comes from `.rail-row` in
+   tokens/base.css — the folder header carries the class and `data-selected`,
+   the same as .conversation-row, .agents-roster-row and .teams-list-row. A
+   project folder drives the same detail pane those rows do, and it used to be
+   the one rail selection with its own hand-written copy of the treatment,
+   keyed on a `.selected` class nothing else in the rail used. Hover still
+   paints over the wash on a selected row, exactly as it does on the other
+   three rails — the accent bar is what keeps saying "you are here". */
 
 /* There is deliberately no rule for .project-folder.ancestor — a folder
    holding the open thread is not itself selected. The thread row owns the
@@ -143,8 +130,9 @@
 }
 
 .project-folder-header {
-  /* Positioned so the selection accent above can hang off its leading edge,
-     the same way .conversation-row anchors its own. */
+  /* `.rail-row` hangs its selection accent off this element's leading edge,
+     so the row has to be the positioned ancestor — the same contract
+     .conversation-row, .agents-roster-row and .teams-list-row each satisfy. */
   position: relative;
   display: flex;
   align-items: center;
@@ -168,10 +156,13 @@
   gap: var(--sp-2);
   min-width: 0;
   flex: 1;
-  /* --sp-row/--sp-2: the row padding the thread rows below it use, minus the
-     leading inset the chevron already supplies. A uniform --sp-2 box made the
-     folder row taller on the sides than the rows it heads. */
-  padding: var(--sp-row) var(--sp-2);
+  /* --sp-row vertically, the same as every rail row. Horizontally the row's
+     --sp-3 is kept on the TRAILING edge — that is where the count sits, and it
+     has to line up with the stamp on the thread rows below it — while the
+     leading edge drops to --sp-2 because the chevron already supplies the
+     inset there. It was --sp-2 on both edges, which pulled the count 4px
+     further right than every other trailing mark in the rail. */
+  padding: var(--sp-row) var(--sp-3) var(--sp-row) var(--sp-2);
   border-radius: var(--r-2);
   text-align: left;
 }
@@ -364,9 +355,14 @@
      set to the taller case, which reserves rather than under-reserves.
      Nested rows reserve their own size below. */
   contain-intrinsic-size: auto 57px;
+  /* No `overflow: hidden`. It was here to clip the inner button's square
+     corners against this row's radius, but the button carries
+     `border-radius: inherit` and is the only thing that paints — while the
+     clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
+     its border box (--focus-offset). The row's own radius was quietly eating
+     the keyboard focus indicator on every rail. */
   border: 0;
   border-radius: var(--r-2);
-  overflow: hidden;
   background: transparent;
   color: var(--ink-1);
   transition: background var(--t-fast) var(--ease);

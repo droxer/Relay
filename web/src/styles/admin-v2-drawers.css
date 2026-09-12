@@ -76,7 +76,7 @@
 }
 
 /* A drawer is subordinate to the page behind it, so its title takes the same
-   --type-title rung as a pane title rather than the 24px --fs-5 step above it,
+   --type-title rung as a pane title rather than the 22px --fs-5 step above it,
    which made the drawer the loudest thing on screen. */
 .adm-drawer-title {
   margin: 0;

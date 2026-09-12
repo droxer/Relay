@@ -2,7 +2,7 @@ import type {
   ProducedFile,
   TaskFilesResponse,
   WorkspaceFileEntry,
-} from "../../types";
+} from "../../types.js";
 
 export type ProducedFilesState = "loading" | "failed" | "empty" | "ready";
 

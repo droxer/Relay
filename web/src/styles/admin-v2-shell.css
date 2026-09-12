@@ -10,11 +10,7 @@
    retired v1 admin.css; the attribute selector out-specifies the default
    .messenger-shell grid regardless of load order.) */
 .messenger-shell[data-route="admin"] {
-  grid-template-columns: var(--sidenav-w) minmax(0, 1fr);
-}
-
-.messenger-shell[data-route="admin"][data-sidenav="open"] {
-  grid-template-columns: var(--sidenav-w-open) minmax(0, 1fr);
+  grid-template-columns: var(--shell-nav-track) minmax(0, 1fr);
 }
 
 @media (max-width: 820px) {

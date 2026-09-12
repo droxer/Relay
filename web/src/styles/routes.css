@@ -3,6 +3,10 @@
 
    Top-level work pages collapse the thread pane so the route content fills
    the space beside the sidenav. Register every AppRoute work page here.
+
+   The rail keeps the shell's own track (shell.css owns --shell-nav-track and
+   switches it on data-sidenav), so these pages need no expanded-rail copy of
+   this list and the rail resizes identically on every route.
    ===================================================================== */
 
 .messenger-shell[data-route="channels"],
@@ -14,19 +18,7 @@
 .messenger-shell[data-route="teams"],
 .messenger-shell[data-route="computer"],
 .messenger-shell[data-route="skills"] {
-  grid-template-columns: var(--sidenav-w) minmax(0, 1fr);
-}
-
-.messenger-shell[data-route="channels"][data-sidenav="open"],
-.messenger-shell[data-route="workspace"][data-sidenav="open"],
-.messenger-shell[data-route="mcp"][data-sidenav="open"],
-.messenger-shell[data-route="backlog"][data-sidenav="open"],
-.messenger-shell[data-route="routine"][data-sidenav="open"],
-.messenger-shell[data-route="agents"][data-sidenav="open"],
-.messenger-shell[data-route="teams"][data-sidenav="open"],
-.messenger-shell[data-route="computer"][data-sidenav="open"],
-.messenger-shell[data-route="skills"][data-sidenav="open"] {
-  grid-template-columns: var(--sidenav-w-open) minmax(0, 1fr);
+  grid-template-columns: var(--shell-nav-track) minmax(0, 1fr);
 }
 
 @media (max-width: 820px) {

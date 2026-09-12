@@ -2,10 +2,27 @@
 
 .messenger-shell {
   display: grid;
-  /* The trailing 0 track is the thread space panel's slot: always present so
-     opening/closing the panel animates through the grid-track transition
-     below instead of jumping between track counts. */
-  grid-template-columns: var(--sidenav-w) var(--thread-w) minmax(0, 1fr) 0;
+  /* Four tracks, one variable each, and exactly one place where the template
+     is written. Every state below re-points a track variable instead of
+     restating the whole line — eight near-identical templates is how the
+     space panel's width came to be stated four times.
+
+     Each track is a minmax: what the column must have, and what it would
+     take. Grid pays the floors first, then grows the rails toward their
+     preferred widths, and only then hands the rest to the chat column — so a
+     narrow viewport shrinks the rails and a wide one feeds the conversation.
+     The closed tracks are minmax(0px, 0px) rather than a bare 0 so the
+     track-list transition below still interpolates (a track list only
+     animates when both endpoints use the same sizing function per track).
+
+     The space panel's track is always present, closed, for that same reason:
+     opening it animates instead of jumping between track counts. */
+  --shell-nav-track: minmax(var(--sidenav-w), var(--sidenav-w));
+  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w));
+  --shell-chat-track: minmax(var(--chat-w-min), 1fr);
+  --shell-space-track: minmax(0px, 0px);
+  grid-template-columns:
+    var(--shell-nav-track) var(--shell-rail-track) var(--shell-chat-track) var(--shell-space-track);
   height: 100vh;
   height: 100dvh;
   min-height: 100dvh;
@@ -24,27 +41,23 @@
   display: contents;
 }
 
+/* The collapsed rail is a fixed icon column; only the expanded one is
+   resizable, and only it can give width back. */
 .messenger-shell[data-sidenav="open"] {
-  grid-template-columns: var(--sidenav-w-open) var(--thread-w) minmax(0, 1fr) 0;
+  --shell-nav-track: minmax(var(--sidenav-w-min), var(--sidenav-w-open));
 }
 
 /* Space panel open: the thread rail collapses to zero by default; the user
    may re-open it on top of the panel (data-threadlist="open"), producing
-   three columns beside the sidenav. */
+   three columns beside the sidenav — which responsive.css refuses below the
+   1200px tier, where four floors no longer fit. */
 .messenger-shell[data-space="open"] {
-  grid-template-columns: var(--sidenav-w) 0 minmax(0, 1fr) var(--space-w);
-}
-
-.messenger-shell[data-space="open"][data-sidenav="open"] {
-  grid-template-columns: var(--sidenav-w-open) 0 minmax(0, 1fr) var(--space-w);
+  --shell-rail-track: minmax(0px, 0px);
+  --shell-space-track: minmax(var(--space-w-min), var(--space-w));
 }
 
 .messenger-shell[data-space="open"][data-threadlist="open"] {
-  grid-template-columns: var(--sidenav-w) var(--thread-w) minmax(0, 1fr) var(--space-w);
-}
-
-.messenger-shell[data-space="open"][data-threadlist="open"][data-sidenav="open"] {
-  grid-template-columns: var(--sidenav-w-open) var(--thread-w) minmax(0, 1fr) var(--space-w);
+  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w));
 }
 
 /* During a drag the pointer owns the width; the track transition would

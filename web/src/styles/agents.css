@@ -118,17 +118,28 @@
 .agents-roster-row {
   /* Render-skip for a long roster. The estimate is the ROW's own height,
      owned here rather than in a11y.css: that sheet loads last, so its
-     generic value silently overrode every component-specific one. */
+     generic value silently overrode every component-specific one.
+
+     58px is what a roster row actually measures — --sp-row twice over around
+     a nowrap 13px name, a 4px gutter, and a nowrap 12px meta line; neither
+     line can wrap, so there is no taller case to reserve for. It read 96px,
+     which over-reserved ~40px per unrendered row and left a long roster's
+     scrollbar claiming far more height than the list has. `auto` means the
+     browser replaces this with the real size after first render either way. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 96px;
+  contain-intrinsic-size: auto 58px;
   position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
+  /* No `overflow: hidden`. It was here to clip the inner button's square
+     corners against this row's radius, but the button carries
+     `border-radius: inherit` and is the only thing that paints — while the
+     clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
+     its border box (--focus-offset). The row's own radius was quietly eating
+     the keyboard focus indicator on every rail. */
   border: 0;
   border-radius: var(--r-2);
-  overflow: hidden;
-  padding: var(--sp-row) var(--sp-3);
   transition: background var(--t-fast) var(--ease);
 }
 
@@ -140,11 +151,18 @@
   flex: 1;
   min-width: 0;
   /* Geometry beats the Button base utilities (h-(--control-h)); the row sizes
-     itself to its content, focus ring comes from Button. */
+     itself to its content. */
   height: auto;
   border: 0;
   background: transparent;
-  padding: 0;
+  /* The row's inset lives HERE, not on the row, for the same reason
+     .conversation-row-inner carries the thread rail's: this button is the
+     focus target, so base.css draws its ring at this element's box. With the
+     padding on the row the ring came out floating 12px inside the row edge,
+     outlining the text instead of the row. Same total geometry either way —
+     the button fills the row. */
+  padding: var(--sp-row) var(--sp-3);
+  border-radius: inherit;
   color: inherit;
   cursor: pointer;
   text-align: left;
@@ -157,10 +175,12 @@
 /* Selection comes from `.rail-row` (tokens/base.css). Status never touches
    this rail. */
 
-.agents-roster-row:focus-within {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
-}
+/* No focus ring here. The ring is drawn in exactly one place — the
+   button/a/input/[tabindex] rule in tokens/base.css — and this row's focus
+   target is the real <button> inside it, which already gets it, keyboard-only
+   and with forced-colors coverage. The `:focus-within` copy that used to sit
+   here drew a second ring around the whole row on mouse-down as well, which
+   is why the thread rail (the one rail that never had it) looked right. */
 
 .agents-roster-row-badge {
   display: flex;

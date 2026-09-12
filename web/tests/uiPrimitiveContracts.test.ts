@@ -261,6 +261,41 @@ describe("UI primitive contracts", () => {
     assert.match(field, /wrapper === "div" && htmlFor/);
   });
 
+  it("keeps every dialog popup inside a portal", async () => {
+    /* `DialogContent` is a Base UI `Dialog.Popup`, and a Popup without a
+       `Dialog.Portal` ancestor THROWS — "Base UI: <Dialog.Portal> is missing."
+       React unwinds to the nearest boundary, so the symptom is the whole
+       screen replaced by "This screen could not load", not a broken dialog.
+
+       ThreadSpacePanel shipped exactly that: it rendered `<Dialog>` wrapping a
+       bare `<DialogContent>` to avoid portaling a panel that is already
+       full-viewport, and every phone-width open of the thread files panel
+       crashed the threads screen. The interaction tests could not catch it —
+       their setup mocks `@/components/ui/dialog` into plain divs, so the
+       missing portal is invisible there. Hence a static check.
+
+       Same file is enough: the popup and its portal are written together in
+       every consumer, and a portal passed down through props would be a worse
+       pattern than the bug. */
+    const offenders: string[] = [];
+    const root = resolve("web/src/components");
+    const walk = async (dir: string): Promise<void> => {
+      const { readdir } = await import("node:fs/promises");
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name);
+        if (entry.isDirectory()) { await walk(full); continue; }
+        if (!entry.name.endsWith(".tsx")) continue;
+        const source = stripComments(await readFile(full, "utf8"));
+        // The primitive module itself defines these names rather than using them.
+        if (full.endsWith("ui/dialog.tsx")) continue;
+        if (!/<DialogContent[\s/>]/.test(source)) continue;
+        if (!/<DialogPortal[\s/>]/.test(source)) offenders.push(entry.name);
+      }
+    };
+    await walk(root);
+    assert.deepEqual(offenders, [], "a DialogContent needs a DialogPortal around it or it throws at render");
+  });
+
   it("supports polite announcements for async workspace results", async () => {
     const source = await readFile(resolve("web/src/components/workspace/WorkspacePrimitives.tsx"), "utf8");
     assert.match(source, /announce\?: boolean/);

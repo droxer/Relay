@@ -144,14 +144,14 @@
      solid. The tokens stay explicit so a role's tracking is decided here,
      once, not re-derived at every call site. */
   --type-display:      500 var(--fs-6)/1.17 var(--font-display);
-  /* The display tier is 32px/500 — the display weight in this system is the
+  /* The display tier is 28px/500 — the display weight in this system is the
      MIDDLE of the ramp, not the top of it. Emphasis at reading sizes runs
      heavier (700) than the headline tier does, which is the source system's
      signature: size carries hierarchy, weight carries emphasis. (The brand
      publishes this tier at 48px; palette.css documents why the app ladder
      runs a console-density step below the marketing one.) */
-  /* Page titles sit at 20px/500 — the tier this app uses for card titles,
-     pane titles, and feature-tile headers. The 24px rung above it is reserved
+  /* Page titles sit at 19px/500 — the tier this app uses for card titles,
+     pane titles, and feature-tile headers. The 22px rung above it is reserved
      for KPI numerals and subsection headlines, where an oversized figure is
      the point. */
   --type-title:        500 var(--fs-title)/1.25 var(--font-display);
@@ -163,7 +163,7 @@
   --type-micro:        700 var(--fs-1)/1.33 var(--font-sans); /* + uppercase */
   --type-number:       500 var(--fs-5)/1.28 var(--font-display);
   /* Code sizes to the mono face's metrics, not the sans ladder. 1rem = 14px
-     sits deliberately BETWEEN the 13px body-sm rung and the 16px body rung:
+     sits deliberately BETWEEN the 13px body-sm rung and the 15px body rung:
      mono advances are wider than sans at the same size, so 14px mono already
      occupies the column width of ~15px sans. Snapping it onto --fs-2 would
      make code read smaller than the prose around it, which is the one place
@@ -185,7 +185,7 @@
                   that differs from its own description by weight alone does
                   not lead.
      --type-title-content
-                  a title whose text comes from a user or an agent. Same 20px
+                  a title whose text comes from a user or an agent. Same 19px
                   rung as --type-title, one weight calmer (400 vs 500) —
                   The source system's editorial-subhead move, where a lighter weight
                   at a display size introduces visual rest rather than

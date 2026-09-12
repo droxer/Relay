@@ -77,10 +77,14 @@
   display: flex;
   width: 100%;
   min-width: 0;
+  /* No `overflow: hidden`. It was here to clip the inner button's square
+     corners against this row's radius, but the button carries
+     `border-radius: inherit` and is the only thing that paints — while the
+     clip DID catch the button's focus ring, which base.css draws 2px OUTSIDE
+     its border box (--focus-offset). The row's own radius was quietly eating
+     the keyboard focus indicator on every rail. */
   border: 0;
   border-radius: var(--r-2);
-  overflow: hidden;
-  padding: var(--sp-row) var(--sp-3);
   transition: background var(--t-fast) var(--ease);
 }
 
@@ -103,7 +107,10 @@
   height: auto;
   border: 0;
   background: transparent;
-  padding: 0;
+  /* Row inset on the button, not the row — it is the focus target, so this is
+     where base.css draws the ring. See the note on .agents-roster-row-select. */
+  padding: var(--sp-row) var(--sp-3);
+  border-radius: inherit;
   color: inherit;
   cursor: pointer;
   text-align: left;
@@ -131,10 +138,9 @@
   box-shadow: inset 0 0 0 0.5px var(--tone-line);
 }
 
-.teams-list-row:focus-within {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
-}
+/* No focus ring here either — see the note on .agents-roster-row. The row's
+   focus target is the <button> inside it, and tokens/base.css is the one
+   place the ring is drawn. */
 
 .teams-list-identity {
   display: flex;

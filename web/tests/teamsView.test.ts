@@ -19,7 +19,7 @@ describe("Agent team management", () => {
     const teamMarkSource = await readFile(resolve("web/src/components/IdentityMark.tsx"), "utf8");
     const sideNavSource = await readFile(resolve("web/src/components/SideNav.tsx"), "utf8");
     const drawerSource = await readFile(resolve("web/src/components/admin/TeamDrawer.tsx"), "utf8");
-    const pickerSource = await readFile(resolve("web/src/components/task-board/TaskDrawer.tsx"), "utf8");
+    const pickerSource = await readFile(resolve("web/src/components/assignment/AssignmentField.tsx"), "utf8");
 
     assert.doesNotMatch(adminPageSource, /adminTeam|adminAddTeam|<TeamsView/);
     assert.doesNotMatch(agentsSource, /agentsView|managementView|<TeamDrawer|useTeams/);

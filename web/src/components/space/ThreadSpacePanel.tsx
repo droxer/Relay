@@ -22,7 +22,7 @@ import { ArtifactViewToggle, type ArtifactView } from "../artifact/ArtifactViewT
 import { ThreadSpaceFiles } from "./ThreadSpaceFiles";
 import { ThreadSpaceList } from "./ThreadSpaceList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog";
 import {
   ICON,
   NavBack,
@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
-import { OVERLAY_TAKEOVER_QUERY } from "@/lib/breakpoints";
+import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
 
 
 const KEYBOARD_RESIZE_STEP = 16;
@@ -76,12 +76,13 @@ export function ThreadSpacePanel({
 }) {
   const { t } = useTranslation();
   const selected = resolveSelectedSpaceItem(items, selectedArtifactId);
-  const isOverlay = useMediaQuery(OVERLAY_TAKEOVER_QUERY);
-  /* Modal only at the takeover width. Below it the panel is a real sibling
-     in the chat grid — no scrim, no portal — so the primitive is asked for
-     `trap-focus` rather than a full modal, and the popup renders in place
-     instead of through a Portal. Above that width it is just a panel, and
-     wrapping it in a dialog would announce one that is not there. */
+  const isOverlay = useMediaQuery(SPACE_OVERLAY_QUERY);
+  /* Modal only where the panel actually covers the viewport — the same query
+     responsive.css uses to make it `fixed`, so the two cannot drift. Above
+     that width the panel is a real sibling in the chat grid — no scrim, no
+     portal — so the primitive is asked for `trap-focus` rather than a full
+     modal, and the popup renders in place instead of through a Portal.
+     Wrapping a column in a dialog would announce one that is not there. */
 
   // Each artifact opens on its rendered reading; the choice is per-artifact,
   // so selecting another one starts from preview again rather than carrying a
@@ -274,6 +275,15 @@ export function ThreadSpacePanel({
     );
   }
 
+  /* The popup must sit inside a DialogPortal: a Base UI `Dialog.Popup` with
+     no portal ancestor throws, and React unwinds to ScreenErrorBoundary — so
+     the panel did not merely fail to open, it replaced the whole threads
+     screen with "This screen could not load". An earlier draft left the
+     portal out on purpose, reasoning that a panel already covering the
+     viewport has nothing to escape; the primitive does not offer that choice.
+     No backdrop for that same reason: the panel IS the full viewport at this
+     width, so a scrim behind it would never be seen, and there is no outside
+     left to click. Escape and the close button are the ways out. */
   return (
     <Dialog
       open
@@ -282,13 +292,15 @@ export function ThreadSpacePanel({
         if (!next) onClose();
       }}
     >
-      <DialogContent
-        render={<aside />}
-        className="thread-space-panel"
-        aria-label={t("space.panel_label")}
-      >
-        {panel}
-      </DialogContent>
+      <DialogPortal>
+        <DialogContent
+          render={<aside />}
+          className="thread-space-panel"
+          aria-label={t("space.panel_label")}
+        >
+          {panel}
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
