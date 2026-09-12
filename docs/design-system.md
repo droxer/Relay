@@ -327,11 +327,11 @@ disables font synthesis, so an 800 declaration would silently render as 700.
 Nothing in the roles asks for it — in this system the heaviest weight (700)
 already belongs to the small emphasis tiers, and the display tiers sit at 500.
 
-The size ladder is **12 / 13 / 15 / 16 / 18 / 20 / 24 / 32px** at the
+The size ladder is **12 / 13 / 14 / 15 / 17 / 19 / 22 / 28px** at the
 browser's default font size (`--fs-1/2/3/4/heading/title/5/6`). All sizes use
 rem; the root is 87.5% (14px by default), so user font preferences scale type.
-The hero size clamps between 24 and 40px. Dense prose (`--fs-3`, 15px) and
-body copy (`--fs-4`, 16px) are distinct roles. Code uses 14px monospace.
+The hero size clamps between 22 and 36px. Dense prose (`--fs-3`, 14px) and
+body copy (`--fs-4`, 15px) are distinct roles. Code uses 14px monospace.
 
 **`--track-display` must be applied to every display-tier rule** — via the
 role's paired track token or directly. Display-tier means *two* shapes, and
@@ -375,7 +375,7 @@ through to the system sans by design rather than shipping a second file.
   the source system renders inputs and primary pills at the same height so they share
   a silhouette and clear the WCAG AAA touch floor.
 - **Density:** `[data-density="compact"]` drops the reading tier one rung
-  (`--fs-4` 16 → 15px; body-sm 13 → 12px) for genuinely dense surfaces (tables and list
+  (`--fs-4` 15 → 14px; body-sm 13 → 12px) for genuinely dense surfaces (tables and list
   layouts). Put the attribute on the dense container, not the page. It
   overrides `--fs-4` **and restates every role built on it** (`--type-body`,
   `--type-name`, `--type-body-sm`), because a custom property resolves

@@ -637,19 +637,28 @@
   color: var(--ink-2);
 }
 
+/* Wears the thread composer's input-card chrome (composer.css
+   .composer-input-wrap): borderless --surface-3 plane at the --r-3 card
+   radius, outlined by the --shadow-2 hairline instead of a drawn border, so
+   the "type a title" field reads as the same surface in both places. The
+   global input:focus-visible contract already supplies the same
+   --focus-outline ring the composer card carries, so focus needs no rule
+   here. Height and --type-body-sm stay lane-scale — the field lives inside
+   dense lanes, not above a transcript. */
 .backlog-inline-create {
   width: 100%;
   min-height: 36px;
-  padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-strong);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
+  padding: var(--sp-2) var(--sp-4);
+  border: 0;
+  border-radius: var(--r-3);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-2);
   color: var(--ink-1);
   font: var(--type-body-sm);
 }
 
 .backlog-inline-create::placeholder {
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 

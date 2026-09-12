@@ -52,6 +52,63 @@
   white-space: nowrap;
 }
 
+/* Roster tabs pinned at the top of the assignment popup. Agents and teams are
+   two rosters, so the popup switches between them instead of stacking both
+   into one scroll. Same segmented-control language as .workspace-page-tabs —
+   line-1 border, gapless segments, surface-0 active fill — sized to the popup
+   and split two-up so neither roster reads as the primary one. */
+.task-assignment-tabs {
+  display: flex;
+  gap: 0;
+  margin: var(--sp-1) var(--sp-1) 0;
+  padding: var(--sp-0-5);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+}
+
+.task-assignment-tab {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: calc(var(--r-2) - 2px);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  font: var(--type-label-strong);
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.task-assignment-tab:hover {
+  color: var(--ink-1);
+}
+
+.task-assignment-tab[aria-selected="true"] {
+  background: var(--surface-0);
+  color: var(--ink-1);
+  box-shadow: inset 0 0 0 0.5px var(--line-1);
+}
+
+.task-assignment-tab-count {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.task-assignment-tab[aria-selected="true"] .task-assignment-tab-count {
+  color: var(--ink-2);
+}
+
 .task-assignment-option {
   display: flex;
   flex: 1;

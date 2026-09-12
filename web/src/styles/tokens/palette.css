@@ -558,8 +558,8 @@
 
   /* Type sizes — rem so browser font-size preference scales the UI
      (root pinned to 87.5% in base.css; 1rem = 14px at the default). */
-  /* APPLICATION LADDER, NOT THE BRAND'S MARKETING LADDER: 12 / 13 / 15 / 16 /
-     18 / 20 / 24 / 32, with the hero display on its own clamp above.
+  /* APPLICATION LADDER, NOT THE BRAND'S MARKETING LADDER: 12 / 13 / 14 / 15 /
+     17 / 19 / 22 / 28, with the hero display on its own clamp above.
 
      The source system publishes 12/14/16/18/24/36/48 — a ladder drawn for a
      single-column commerce page where a product title owns the viewport. This
@@ -568,8 +568,8 @@
      rungs wholesale set 24px pane titles over 14px rail rows and 36px KPI
      numerals inside admin tiles, and the whole UI read a full step too loud.
      The rungs below are the ones this app was built against — every density
-     decision in the surface CSS (13px rail titles over 12px meta, the 15px
-     dense-prose tier, the 20px pane title) is written to them.
+     decision in the surface CSS (13px rail titles over 12px meta, the 14px
+     dense-prose tier, the 19px pane title) is written to them.
 
      The brand relationship is kept where it matters and dropped where it does
      not: the FACE, the weights, the tracking, and the role architecture in
@@ -586,16 +586,16 @@
      a dead rung. Recount before deleting anything. */
   --fs-1: 0.8571rem; /* 12px — caption: badges, legal microcopy, compact metadata */
   --fs-2: 0.9286rem; /* 13px — body-sm: labels, chrome, button and pill-tab text */
-  --fs-3: 1.0714rem; /* 15px — dense prose, the compact scope's body rung */
-  --fs-4: 1.1429rem; /* 16px — body copy: the primary reading size */
-  --fs-heading: 1.2857rem; /* 18px — subtitle-lg: section headings, in-message h1 */
-  --fs-title: 1.4286rem;   /* 20px — card titles, pane and page titles */
-  --fs-5: 1.7143rem; /* 24px — KPI numerals, subsection headlines */
-  --fs-6: 2.2857rem; /* 32px — display: section-opener display */
+  --fs-3: 1rem;      /* 14px — dense prose, the compact scope's body rung */
+  --fs-4: 1.0714rem; /* 15px — body copy: the primary reading size */
+  --fs-heading: 1.2143rem; /* 17px — subtitle-lg: section headings, in-message h1 */
+  --fs-title: 1.3571rem;   /* 19px — card titles, pane and page titles */
+  --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */
+  --fs-6: 2rem;      /* 28px — display: section-opener display */
   /* Hero display — the one place a headline owns the viewport (login, empty
      section openers). A clamp, not a rung: it tracks the viewport between the
-     24px KPI tier and 40px and never joins the ladder. */
-  --fs-hero: clamp(1.7143rem, 4vw, 2.8571rem);
+     22px KPI tier and 36px and never joins the ladder. */
+  --fs-hero: clamp(1.5714rem, 4vw, 2.5714rem);
 
   /* Leading — the source system's published line heights: 1.16 hero, 1.17 display,
      1.28 heading-lg, 1.25 heading-sm, 1.44 subtitle, 1.50 body, 1.43 body-sm.
@@ -620,7 +620,7 @@
      roles a fractional negative track instead: -0.16px at 16px and -0.14px
      at 14px (≈ -0.01em), the snug-but-not-condensed setting Optimistic VF
      was drawn for. Caps get no letterspacing — the source system's uppercase
-     captions are set solid — and the display tier is 0 because at 36–64px
+     captions are set solid — and the display tier is 0 because at 28–36px
      the face already sets tight. The paired-track contract in roles.css is
      what keeps these attached to their roles. */
   --track-display: 0;
@@ -854,7 +854,7 @@ html:lang(zh-TW) {
      scope actually wraps — every rail that used it overrode it back. */
   --sp-row: var(--sp-3);
   /* The dense reading tier runs one rung down: the compact scope's --fs-4
-     becomes the ladder's 15px dense-prose rung. Heading tiers are untouched —
+     becomes the ladder's 14px dense-prose rung. Heading tiers are untouched —
      density compresses rows, not hierarchy.
 
      REDECLARING THE ROLES IS LOAD-BEARING, NOT REDUNDANT. A custom property is
@@ -876,7 +876,7 @@ html:lang(zh-TW) {
 }
 
 /* CJK reading roles are looser; the compact scope must restate them too or a
-   dense Han list silently reverts to the standard 16px tier. */
+   dense Han list silently reverts to the standard 15px tier. */
 html:lang(zh-CN) [data-density="compact"],
 html:lang(zh-TW) [data-density="compact"],
 html:lang(zh-CN)[data-density="compact"],

@@ -22,7 +22,7 @@ import { ArtifactViewToggle, type ArtifactView } from "../artifact/ArtifactViewT
 import { ThreadSpaceFiles } from "./ThreadSpaceFiles";
 import { ThreadSpaceList } from "./ThreadSpaceList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog";
 import {
   ICON,
   NavBack,
@@ -275,6 +275,15 @@ export function ThreadSpacePanel({
     );
   }
 
+  /* The popup must sit inside a DialogPortal: a Base UI `Dialog.Popup` with
+     no portal ancestor throws, and React unwinds to ScreenErrorBoundary — so
+     the panel did not merely fail to open, it replaced the whole threads
+     screen with "This screen could not load". An earlier draft left the
+     portal out on purpose, reasoning that a panel already covering the
+     viewport has nothing to escape; the primitive does not offer that choice.
+     No backdrop for that same reason: the panel IS the full viewport at this
+     width, so a scrim behind it would never be seen, and there is no outside
+     left to click. Escape and the close button are the ways out. */
   return (
     <Dialog
       open
@@ -283,13 +292,15 @@ export function ThreadSpacePanel({
         if (!next) onClose();
       }}
     >
-      <DialogContent
-        render={<aside />}
-        className="thread-space-panel"
-        aria-label={t("space.panel_label")}
-      >
-        {panel}
-      </DialogContent>
+      <DialogPortal>
+        <DialogContent
+          render={<aside />}
+          className="thread-space-panel"
+          aria-label={t("space.panel_label")}
+        >
+          {panel}
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }

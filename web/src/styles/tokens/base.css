@@ -96,7 +96,7 @@ body {
    WRAPPED IN :where() SO COMPONENT RULES WIN. `input:not([data-slot])` scores
    0,1,1 — higher than any single-class selector — so this reset silently beat
    every component rule that set a field's type. `.backlog-filter-search`,
-   `.command-input`, and `.dialog-input` each asked for --fs-4/15px and rendered
+   `.command-input`, and `.dialog-input` each asked for --fs-4 and rendered
    at the inherited 14px; the stylesheet said one thing and the browser did
    another. This is the same failure the button note below documents, one
    element further along. :where() zeroes the specificity, so a field with no

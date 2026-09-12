@@ -54,6 +54,38 @@ describe("local typography assets", () => {
 });
 
 describe("application typography roles", () => {
+  it("keeps the application type ladder compact without shrinking utility text below 12px", () => {
+    const palette = readWebSource("styles/tokens/palette.css");
+    const base = readWebSource("styles/tokens/base.css");
+
+    const rootPercent = Number(base.match(/html\s*\{[^}]*font-size:\s*([\d.]+)%/s)?.[1]);
+    assert.equal(rootPercent, 87.5, "the rem scale must continue to respect the browser font-size preference");
+
+    const expectedPixels = new Map([
+      ["--fs-1", 12],
+      ["--fs-2", 13],
+      ["--fs-3", 14],
+      ["--fs-4", 15],
+      ["--fs-heading", 17],
+      ["--fs-title", 19],
+      ["--fs-5", 22],
+      ["--fs-6", 28],
+    ]);
+    for (const [name, expected] of expectedPixels) {
+      const rem = Number(palette.match(new RegExp(`${name}:\\s*([\\d.]+)rem;`))?.[1]);
+      assert.ok(Number.isFinite(rem), `${name} must be declared in rem`);
+      assert.ok(
+        Math.abs(rem * 16 * (rootPercent / 100) - expected) < 0.01,
+        `${name} should resolve to ${expected}px at the default browser size`,
+      );
+    }
+
+    const hero = palette.match(/--fs-hero:\s*clamp\(([\d.]+)rem,\s*4vw,\s*([\d.]+)rem\);/);
+    assert.ok(hero, "--fs-hero must remain a responsive clamp");
+    assert.ok(Math.abs(Number(hero[1]) * 14 - 22) < 0.01, "the hero floor should resolve to 22px");
+    assert.ok(Math.abs(Number(hero[2]) * 14 - 36) < 0.01, "the hero ceiling should resolve to 36px");
+  });
+
   it("wires one sans for every reading and display role, mono for technical text only", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");

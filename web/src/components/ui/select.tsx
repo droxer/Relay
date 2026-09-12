@@ -59,14 +59,20 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
+  header,
   side = "bottom",
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
   ...props
-}: SelectPrimitive.Popup.Props &
-  Pick<
+}: SelectPrimitive.Popup.Props & {
+  /** Chrome pinned above the option list — a filter strip, a tab bar. It sits
+   *  inside the popup but OUTSIDE `Select.List`, because that list is the
+   *  `role="listbox"` and an ARIA listbox may only contain options and groups.
+   *  The popup is what scrolls, so the header sticks to its top. */
+  header?: React.ReactNode
+} & Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
@@ -90,6 +96,11 @@ function SelectContent({
           className={cn("relative isolate z-(--z-float) max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md bg-popover text-popover-foreground shadow-(--shadow-2) transition-[opacity,transform] duration-(--t-fast) ease-(--ease) data-[open]:opacity-100 data-[closed]:opacity-0 data-[closed]:scale-95", className )}
           {...props}
         >
+          {header ? (
+            <div data-slot="select-header" className="sticky top-0 z-10 bg-popover">
+              {header}
+            </div>
+          ) : null}
           <SelectScrollUpButton />
           <SelectPrimitive.List>{children}</SelectPrimitive.List>
           <SelectScrollDownButton />
