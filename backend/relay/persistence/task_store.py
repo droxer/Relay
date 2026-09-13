@@ -35,6 +35,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..core.ids import new_relay_id
 from .protocols import TaskDispatchAssignment
+from .task_execution import prepare_execution_events
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     AgentName,
@@ -311,9 +312,13 @@ class LocalTaskStore:
         new_events: list[dict[str, Any]],
         *,
         skip_linked_session_id: str | None = None,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             current = self.get_task(task_id)
+            new_events = prepare_execution_events(current, new_events, execution_owner)
+            if not new_events:
+                return current
             if skip_linked_session_id and current.get("deletedAt"):
                 return current
             if skip_linked_session_id and skip_linked_session_id in current.get(
@@ -937,6 +942,7 @@ class DatabaseTaskStore:
         skip_linked_session_id: str | None = None,
         reject_active_claim: bool = False,
         active_linked_session: Callable[[dict[str, Any]], bool] | None = None,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         for attempt in range(3):
             try:
@@ -946,6 +952,7 @@ class DatabaseTaskStore:
                     skip_linked_session_id=skip_linked_session_id,
                     reject_active_claim=reject_active_claim,
                     active_linked_session=active_linked_session,
+                    execution_owner=execution_owner,
                 )
             except (IntegrityError, _TaskWriteConflict):
                 if attempt == 2:
@@ -961,6 +968,7 @@ class DatabaseTaskStore:
         skip_linked_session_id: str | None = None,
         reject_active_claim: bool = False,
         active_linked_session: Callable[[dict[str, Any]], bool] | None = None,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:
             if skip_linked_session_id:
@@ -979,6 +987,9 @@ class DatabaseTaskStore:
             task_pk = row["id"]
             sequence = int(row["version"] or 0)
             current = row["snapshot"] or {}
+            events = prepare_execution_events(current, events, execution_owner)
+            if not events:
+                return self.get_task(task_id)
             deleting = any(event.get("type") == "task.deleted" for event in events)
             if deleting and current.get("deletedAt"):
                 return current

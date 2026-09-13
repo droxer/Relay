@@ -692,7 +692,16 @@ def _apply_task_activity(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 
 TaskEventHandler = Callable[[dict[str, Any], dict[str, Any]], None]
+
+
+def _apply_task_execution_claimed(task: dict[str, Any], event: dict[str, Any]) -> None:
+    task["executionOwner"] = {
+        "requestId": event["requestId"], "revision": event["revision"],
+    }
+
+
 TASK_EVENT_HANDLERS: dict[str, TaskEventHandler] = {
+    "task.execution.claimed": _apply_task_execution_claimed,
     "task.workspace_bound": _apply_task_workspace_bound,
     "task.workspace_wait": _apply_task_workspace_wait,
     "task.updated": _apply_task_updated,
