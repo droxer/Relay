@@ -1369,9 +1369,28 @@ export async function localProcessExecStream(
       const rendered = options.stderrRenderer ? options.stderrRenderer(text) : text;
       if (rendered) options.sink?.(rendered);
     });
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
       if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener("abort", abort);
+      if (detached && child.pid) {
+        // The parent can exit before a child that closed its inherited pipes.
+        // Finish the process group before reporting a terminal execution; do
+        // not cancel escalation just because the parent emitted close.
+        terminate("SIGKILL");
+        const groupId = child.pid;
+        await new Promise<void>((finished) => {
+          const check = (): void => {
+            try { process.kill(-groupId, 0); } catch (error) {
+              if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+                finished();
+                return;
+              }
+            }
+            setTimeout(check, 100);
+          };
+          check();
+        });
+      }
       resolve({
         exit_code: code ?? -1,
         stdout: stdoutCapture.toString(),

@@ -131,12 +131,21 @@ Pause admissions during deployment. If duplicate active owners already exist,
 the migration stops without modifying runs; resolve them through normal lifecycle
 operations and confirm writers have stopped before retrying. The constraint
 releases when the request becomes terminal, and prevents stale requests from
-reactivating over an active replacement. It is not proof that a cancelled process
-exited; stronger process fencing remains separate work.
+reactivating over an active replacement. Cancellation intent is not proof that a
+process exited.
 Pre-delivery cancellation and terminal-session cleanup retain the reservation
 when the current command has already been delivered, even if its lease expired.
 Cancellation intent alone therefore does not release that delivered reservation;
 daemon terminal-event handling remains a separate lifecycle step.
+Delivered timeout and retirement stops follow the same rule. Their durable stop
+intent is replayed after a publication crash and suppresses lease-expiry
+redelivery. A late success acknowledges exit but cannot override that stop.
+Terminal acknowledgements recovered after a crash preserve a terminal session's
+human decision. Updated POSIX daemons wait for their execution process group to
+exit; BoxLite failures wait for confirmed execution exit. An unconfirmable exit
+retains ownership and may require operator recovery. Upgrade daemons as well as
+backend replicas; escaped/unrelated writers and Windows process trees are not
+covered by this guarantee.
 
 New task execution requests also claim a monotonic task revision through
 `task.execution.claimed`. Task records expose `executionOwner: { requestId,
@@ -153,6 +162,9 @@ owner. These are control-plane write fences, not filesystem/process leases or
 restrictions on deliberate human edits. Upgrade all backend replicas together:
 older backends do not enforce this guard. No additional schema migration is
 needed for the ownership event and projection.
+Manual and scheduler dispatch callbacks also check their claim, owner, and task
+status under the task write lock, so delayed bookkeeping cannot reopen completed
+work or overwrite a replacement's result.
 
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and

@@ -554,6 +554,8 @@ class TaskScheduler:
         session_id: str | None = None,
     ) -> bool:
         claim = task.get("dispatchClaim") or {}
+        from ..services.dispatch_results import dispatch_result_scope
+
         claim_id = claim.get("id")
         try:
             collaboration = {
@@ -609,55 +611,63 @@ class TaskScheduler:
                 },
             )
         except Exception as error:
-            code = dispatch_failure_code(error)
-            if claim_id and code != "dispatch_failed":
-                self.task_store.release_dispatch_claim(task["id"], claim_id)
-            self.task_store.record_dispatch_outcome(
-                task["id"],
-                "queued",
-                code=code,
-                message=str(error),
-            )
-            if code not in ("dispatch_failed", "task_wip_limit"):
-                # A classified failure means the run was not accepted, so the
-                # retry budget applies. An unclassified ("dispatch_failed")
-                # failure keeps its claim because the run may have been
-                # accepted; that ambiguity must be reconciled by the claim
-                # lease, not by consuming retry budget.
-                record_dispatch_retry(
-                    self.task_store,
-                    task,
+            with dispatch_result_scope(self.task_store, task, claim_id, success=False) as current:
+                if current is None:
+                    return False
+                task = current
+                code = dispatch_failure_code(error)
+                if claim_id and code != "dispatch_failed":
+                    self.task_store.release_dispatch_claim(task["id"], claim_id)
+                self.task_store.record_dispatch_outcome(
+                    task["id"],
+                    "queued",
                     code=code,
-                    message=safe_dispatch_error_message(error),
-                    base_seconds=self.interval_seconds,
-                    max_failures=self.max_dispatch_failures,
-                    sample=self._jitter,
+                    message=str(error),
                 )
-            logger.warning(
-                "Scheduled task dispatch failed",
-                task_id=task["id"],
-                agent=agent,
-                error=str(error),
+                if code not in ("dispatch_failed", "task_wip_limit"):
+                    # A classified failure means the run was not accepted, so the
+                    # retry budget applies. An unclassified ("dispatch_failed")
+                    # failure keeps its claim because the run may have been
+                    # accepted; that ambiguity must be reconciled by the claim
+                    # lease, not by consuming retry budget.
+                    record_dispatch_retry(
+                        self.task_store,
+                        task,
+                        code=code,
+                        message=safe_dispatch_error_message(error),
+                        base_seconds=self.interval_seconds,
+                        max_failures=self.max_dispatch_failures,
+                        sample=self._jitter,
+                    )
+                logger.warning(
+                    "Scheduled task dispatch failed",
+                    task_id=task["id"],
+                    agent=agent,
+                    error=str(error),
+                )
+                return False
+        with dispatch_result_scope(self.task_store, task, claim_id, success=True) as current:
+            if current is None:
+                return True
+            task = current
+            self.task_store.update_task(task["id"], {"status": "running"})
+            self.task_store.clear_dispatch_retry(task["id"])
+            if claim_id:
+                self.task_store.release_dispatch_claim(task["id"], claim_id)
+            self.task_store.record_dispatch_outcome(task["id"], "started")
+            self.task_store.record_activity(
+                task["id"],
+                f"Scheduled dispatch started by {agent}.",
+                {"agent": agent, "sessionId": session["id"]},
             )
-            return False
-        self.task_store.update_task(task["id"], {"status": "running"})
-        self.task_store.clear_dispatch_retry(task["id"])
-        if claim_id:
-            self.task_store.release_dispatch_claim(task["id"], claim_id)
-        self.task_store.record_dispatch_outcome(task["id"], "started")
-        self.task_store.record_activity(
-            task["id"],
-            f"Scheduled dispatch started by {agent}.",
-            {"agent": agent, "sessionId": session["id"]},
-        )
-        logger.info(
-            "Scheduled task dispatched",
-            task_id=task["id"],
-            session_id=session["id"],
-            agent=agent,
-            node_id=node_id,
-        )
-        return True
+            logger.info(
+                "Scheduled task dispatched",
+                task_id=task["id"],
+                session_id=session["id"],
+                agent=agent,
+                node_id=node_id,
+            )
+            return True
 
     def _routine_due(self, task: dict[str, Any], today: date) -> bool:
         if (

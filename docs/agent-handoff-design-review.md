@@ -168,11 +168,23 @@ redispatch or rewrite task results after their replacement finishes. Legacy
 snapshot projections cannot reset ownership because the fence reads authoritative
 events. See `docs/testing/task-execution-revisions.tdd.md`.
 
-Stronger termination/crash-recovery guarantees remain pending. The local
-workspace gate is not an OS sandbox and cannot stop an unrelated process that
-ignores it. All backend replicas must be upgraded: older writers do not enforce
-the new task guard. Human edits and dispatch bookkeeping retain their separate
-control-plane semantics; these runtime fences do not revoke API credentials.
+Delayed manual/scheduler dispatch results now check the dispatch claim, execution
+owner, and task status under the task write lock. They cannot reopen completed
+work or overwrite a replacement's outcome. Delivered timeout/retirement stops
+retain ownership until a terminal acknowledgement; a durable stable-id stop
+intent survives publication crashes and prevents lease-expiry redelivery.
+Acknowledgement replay preserves terminal human decisions, and a late success
+cannot override a stop or dispatch its successor.
+
+POSIX local execution terminates and waits for the execution process group before
+returning. BoxLite stream failures request termination and wait for confirmed
+exit; an unavailable exit result retains the run rather than releasing ownership.
+This can require operator recovery after an unrecoverable runtime failure.
+The workspace gate is not an OS sandbox: unrelated writers, children that escape
+the process group, Windows process trees, and external side effects are not
+covered. Upgrade all backend replicas and daemons together; older versions do
+not enforce these guarantees. Human edits remain separate and runtime fences do
+not revoke API credentials. See `docs/testing/handoff-lifecycle.tdd.md`.
 
 - Existing web recovery callers already use logical-agent `/recoveries`. The
   repository caller inventory found no active chat/core client calling the

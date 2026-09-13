@@ -304,22 +304,40 @@
   gap: var(--sp-1);
 }
 
+/* The assigned agent, named. The mark alone is an unlabelled glyph — it
+   identifies an agent only to a reader who already knows the monogram, and a
+   card has the width the list column did not. */
+.backlog-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  min-width: 0;
+}
+
+.backlog-agent-name {
+  min-width: 0;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .backlog-due.warn { color: var(--warn); }
 .backlog-due.bad { color: var(--err); }
 
 /* ── Routine provenance ────────────────────────────────────────────── */
 
-/* A quiet chip: it explains where a record came from, it does not rank it, so
-   it must never out-weigh the priority badge sitting beside it. */
+/* Provenance, stated the way the date beside it is: a glyph and a word. It
+   explains where a record came from, it does not rank it, so it must never
+   out-weigh the priority badge — and the outlined capsule it used to wear put
+   it at exactly that weight, a third bordered object on a line that already
+   had two. */
 .backlog-routine-origin {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   min-width: 0;
   max-width: 160px;
-  padding: 0 var(--sp-2);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-2);
   color: var(--ink-3);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
@@ -333,42 +351,26 @@
   white-space: nowrap;
 }
 
-/* ── The card's run result ─────────────────────────────────────────── */
-
-.backlog-result {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-}
-
-/* The mark carries the outcome's tone; the label stays in the meta line's own
-   colour so a board of finished cards does not read as a wall of green. */
-.backlog-task[data-status="blocked"] .backlog-result { color: var(--err); }
-
+/* The one thing a run leaves behind that the lane does not already say: how
+   many files it produced. The status word that used to sit beside it was
+   `task.status` — the lane's own name, restated on every card in it. */
 .backlog-result-files {
   color: var(--ink-3);
 }
 
-/* Actions overlay the card's bottom on hover — absolutely positioned, so the
-   resting card carries no reserved (invisible) footer. The overlay reads
-   --surface-1 to match the card, plus a hairline and the card's inner bottom
-   radius. */
+/* The card's actions live in the reserved footer row (.backlog-card-foot in
+   backlog.css), stacked over the reference rather than over the record's
+   facts. They are absolutely positioned WITHIN that row, so the row's height
+   is the same whether they are showing or not and nothing moves on hover. */
 .backlog-task-actions {
   position: absolute;
   left: 0;
-  right: 0;
+  top: 0;
   bottom: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1);
-  /* Inline padding tracks .backlog-task's own inset (backlog.css) — the bar
-     overlays the card edge-to-edge, so its inset is the only thing keeping
-     the first action aligned with the title above it. */
-  padding: var(--sp-3) var(--sp-5);
-  border-top: 0.5px solid var(--line-2);
   background: var(--surface-1);
-  border-radius: 0 0 calc(var(--r-3) - 1px) calc(var(--r-3) - 1px);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t-fast) var(--ease);

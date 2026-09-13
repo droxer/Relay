@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -291,6 +292,11 @@ def task_update_events(
 
 
 class LocalTaskStore:
+    @contextmanager
+    def task_write_scope(self, task_id: str):
+        with self._lock:
+            yield self.get_task(task_id)
+
     def __init__(self, root_dir: str | Path = DEFAULT_RELAY_DATA_DIR):
         self.root_dir = Path(root_dir)
         self.tasks_dir = self.root_dir / "tasks"
@@ -793,6 +799,22 @@ class LocalTaskStore:
 
 
 class DatabaseTaskStore:
+    @contextmanager
+    def task_write_scope(self, task_id: str):
+        with store_transaction(self.engine) as conn:
+            # Bookkeeping may append a status event. Take admission's lock
+            # before the row lock, matching the event writer's lock order.
+            if self.engine.dialect.name == "postgresql":
+                conn.execute(text("SELECT pg_advisory_xact_lock(7265193401)"))
+            else:
+                conn.execute(
+                    update(self.tasks)
+                    .where(self.tasks.c.id == task_id)
+                    .values(version=self.tasks.c.version)
+                )
+            self._task_pk(conn, task_id, lock=True)
+            yield self.get_task(task_id)
+
     metadata = shared_metadata
 
     tasks = Table(

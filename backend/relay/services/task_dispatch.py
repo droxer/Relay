@@ -515,11 +515,24 @@ class TaskDispatcher:
         return None
 
     async def _dispatch(self, node: dict[str, Any]) -> DispatchResult:
+        from .dispatch_results import dispatch_result_scope
+
         try:
             session = await self.ctx.backend.run(node["id"], self._run_request(node))
         except Exception as error:
-            return self._dispatch_error_result(error)
+            with dispatch_result_scope(self.ctx.task_store, self.task, self.claim_id, success=False) as current:
+                if current is None:
+                    return _result(self.ctx.task_store.get_task(self.task["id"]), "queued", code="dispatch_superseded")
+                self.task = current
+                return self._dispatch_error_result(error)
 
+        with dispatch_result_scope(self.ctx.task_store, self.task, self.claim_id, success=True) as current:
+            if current is None:
+                return _result(self.ctx.task_store.get_task(self.task["id"]), "started", session=session)
+            self.task = current
+            return self._record_dispatch_started(session, node)
+
+    def _record_dispatch_started(self, session: dict[str, Any], node: dict[str, Any]) -> DispatchResult:
         self.ctx.task_store.update_task(self.task["id"], {"status": "running"})
         self.ctx.task_store.clear_dispatch_retry(self.task["id"])
         if self.claim_id:

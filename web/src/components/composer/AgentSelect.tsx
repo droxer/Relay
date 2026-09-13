@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { StateMark, type StateTone } from "../StateMark";
+import { StateMark } from "../StateMark";
+import { availabilityPipTone } from "./availabilityTone";
 import type { AgentTeam, EmployeeAgent } from "../../types";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
@@ -21,18 +22,22 @@ export function parseTeamSelectValue(value: string | null): string | null {
   return value?.startsWith(TEAM_VALUE_PREFIX) ? value.slice(TEAM_VALUE_PREFIX.length) : null;
 }
 
-/**
- * Availability → pip tone. `ready` and `busy` both stay neutral here: this
- * pip always sits beside the availability word, so hue only has to separate
- * the states the label cannot make urgent on its own. `offline`/`inactive`
- * resolve to `bad`, which StateMark draws as the hollow ring.
- */
-const PIP_TONE: Record<string, StateTone> = {
-  pending: "warn",
-  offline: "bad",
-  inactive: "bad",
-};
-const pipTone = (availability: string): StateTone => PIP_TONE[availability] ?? "neutral";
+
+/** The project roster as one identity. It draws the same `.agent-state` box a
+ *  team does — one mark size across every row and trigger in the picker —
+ *  with its tone carrying whether the room can take a round at all. */
+function RoomMark({ routable, label }: { routable: boolean; label: string }) {
+  return (
+    <span
+      className={`agent-state ${routable ? "tone-good" : "tone-bad"}`}
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <ProfileImage src={null} alt="" fallback={<IdentityMark kind="team" />} />
+    </span>
+  );
+}
 
 // Target picker above the composer: selects who the thread talks to —
 // one logical (employee) agent, a whole agent team, or — in a project room —
@@ -141,15 +146,17 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
           : t("thread.talk_to_agent")}
       >
         {activeRoom ? (
-          <>
-            <ProfileImage
-              src={null}
-              alt=""
-              fallback={<IdentityMark kind="team" />}
-              className="chat-active-agent-mark"
-            />
-            <span className="chat-agent-select-name">{t("composer.project_room")}</span>
-          </>
+          // The room is an identity like any other target, so it wears the
+          // roster trigger — same mark box, same name type — and only its
+          // words differ. Its name carries `--room` because the generic team
+          // glyph identifies nothing on its own: agents and teams may drop to
+          // a mark on a phone, the room may not.
+          <span className="roster-trigger">
+            <RoomMark routable={roomRoutable} label={t("composer.project_room")} />
+            <span className="roster-trigger-name roster-trigger-name--room">
+              {t("composer.project_room")}
+            </span>
+          </span>
         ) : activeTeam ? (
           <RosterTriggerValue team={activeTeam} />
         ) : activeLogicalAgent ? (
@@ -185,19 +192,21 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
               <SelectLabel>{t("composer.project_group")}</SelectLabel>
               <SelectItem
                 value={ROOM_VALUE}
+                label={t("composer.project_room")}
                 className="chat-agent-option"
                 disabled={!roomRoutable}
                 data-availability={roomRoutable ? "ready" : "offline"}
               >
-                <ProfileImage
-                  src={null}
-                  alt=""
-                  fallback={<IdentityMark kind="team" />}
-                  className="chat-agent-option-mark"
-                />
-                <span>{t("composer.project_room")}</span>
-                <span className="chat-agent-option-availability">
-                  {t("teams.member_count", { count: room.memberCount })}
+                {/* A team row's shape exactly: mark, name, roster size under
+                    it. The count used to be pushed to the right edge in the
+                    availability slot, which is where every other row states
+                    why it cannot take work. */}
+                <span className="roster-option">
+                  <RoomMark routable={roomRoutable} label={t("composer.project_room")} />
+                  <span className="roster-option-copy">
+                    <span>{t("composer.project_room")}</span>
+                    <span>{t("teams.member_count", { count: room.memberCount })}</span>
+                  </span>
                 </span>
               </SelectItem>
             </SelectGroup>
@@ -236,7 +245,7 @@ function teamOption({ team, t }: {
       <RosterOption team={team} />
       {!isRoutable ? (
         <span className="chat-agent-option-availability" data-availability={availability}>
-          <StateMark tone={pipTone(availability)} />
+          <StateMark tone={availabilityPipTone(availability)} />
           {t(`status.${availability}`, { defaultValue: availability })}
         </span>
       ) : null}
@@ -263,7 +272,7 @@ function agentOptions({ logicalAgents, t }: {
         <RosterOption agent={logicalAgent} />
         {!isRoutable ? (
           <span className="chat-agent-option-availability" data-availability={visualAvailability}>
-            <StateMark tone={pipTone(visualAvailability)} />
+            <StateMark tone={availabilityPipTone(visualAvailability)} />
             {t(`status.${visualAvailability}`, { defaultValue: visualAvailability })}
           </span>
         ) : null}

@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, date, datetime
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+import pytest
 
 from relay.core.computer_identity import computer_id
 from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
@@ -55,7 +56,8 @@ def _logical_backend(
     )
 
 
-def test_scheduler_dispatches_assigned_task_to_ready_node() -> None:
+@pytest.mark.parametrize("completed_before_return", [False, True])
+def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_return) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
@@ -96,12 +98,21 @@ def test_scheduler_dispatches_assigned_task_to_ready_node() -> None:
             scheduler = TaskScheduler(
                 task_store=task_store, registry=registry, backend=backend
             )
+            if completed_before_return:
+                original_run = backend.run
+
+                async def delayed_run(*args, **kwargs):
+                    session = await original_run(*args, **kwargs)
+                    task_store.update_task(task["id"], {"status": "done"})
+                    return session
+
+                backend.run = delayed_run
 
             result = await scheduler.tick()
 
             assert result.dispatched == 1
             updated = task_store.get_task(task["id"])
-            assert updated["status"] == "running"
+            assert updated["status"] == ("done" if completed_before_return else "running")
             assert updated["linkedSessionIds"]
             [command] = registry.take_commands("sbx_alice", "node_token")
             assert command["type"] == "run.start"

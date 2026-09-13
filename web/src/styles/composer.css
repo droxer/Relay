@@ -17,21 +17,18 @@
   background: transparent;
 }
 
-/* Runtime and target use the same SelectTrigger chrome. The runtime label
-   sits on the rail, leaving one focusable control with one visible border. */
+/* One rail, one vocabulary. Every surface answers the same two questions —
+   who runs this round, and where — but only some of those answers are still
+   open. The one the author can act on wears a control's chrome (a Select
+   trigger); the ones already settled wear `.composer-context`: a quiet lead-in
+   word and the value, no plate, no border, no chevron. Nothing invites a click
+   where there is nothing to click, and nothing that IS clickable hides it. */
 .thread-runtime-rail {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
   max-width: 100%;
-}
-
-.thread-runtime-context {
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  white-space: nowrap;
 }
 
 .thread-runtime-select {
@@ -61,13 +58,12 @@
   color: var(--ink-3);
 }
 
-/* Read-only twin of the trigger, for a thread already pinned to its computer.
-   It wears no chrome at all — no plate, no border, no fill, no divider
-   hairline, no label: just a presence dot and the machine's name in quiet
-   ink, sitting directly on the composer card. Nothing invites a click
-   because there is nothing here to click. The dot leads because a pinned
-   computer can go dark mid-thread. */
-.thread-runtime-readout {
+/* The settled answer — "Runs on <machine>", "Runs in <project>". Drawn once
+   here for both, because they are the same kind of statement: the project room
+   used to be a bordered, filled pill (control chrome on a fact you cannot
+   change) sitting beside a chrome-less computer line, so the same rail read as
+   two different materials depending on which surface you were on. */
+.composer-context {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1-5);
@@ -76,16 +72,22 @@
   font: var(--type-label);
 }
 
-/* Lead-in word for the pinned computer. Quieter than the machine name so the
-   pair reads as a statement of fact beside the agent plate, not a second
-   control that lost its chrome. */
-.thread-runtime-readout-label {
+.composer-context > svg {
+  flex: none;
+  color: var(--ink-4);
+}
+
+/* Lead-in word, on the readouts and on the picker rail alike. Quieter than the
+   value so the pair reads as a statement of fact beside the agent plate, not a
+   second control that lost its chrome. */
+.composer-context-label {
   color: var(--ink-4);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   white-space: nowrap;
 }
 
-.thread-runtime-readout-name {
+.composer-context-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -93,7 +95,8 @@
 
 /* An offline computer recedes another step, matching the fleet cards — the
    name stays readable, the row stops looking live. */
-.thread-runtime-readout[data-online="false"] {
+.composer-context[data-online="false"],
+.composer-context[data-online="false"] > svg {
   color: var(--ink-4);
 }
 
@@ -162,10 +165,19 @@
     gap: var(--sp-2);
   }
 
-  /* Phone width goes to the machine name; the lead-in words are the first
-     thing that can go, in the picker rail and the readout alike. */
-  .thread-runtime-context,
-  .thread-runtime-readout-label {
+  /* One breakpoint for the whole rail. Phone width goes to the values — the
+     machine name, the project name, the agent name — and the lead-in words are
+     the first thing that can go. The agent name used to disappear a full
+     180px earlier than these, so between 641 and 820 the choice was a nameless
+     mark while the fact beside it still read "Runs on my-macbook" in full. */
+  .composer-context-label {
+    display: none;
+  }
+
+  /* The mark identifies an agent or a team on its own (profile image, else
+     monogram). The project room's mark is the generic team glyph, which
+     identifies nothing — so its name stays. */
+  .chat-agent-select .roster-trigger-name:not(.roster-trigger-name--room) {
     display: none;
   }
 
@@ -311,24 +323,6 @@
      it commits — the one vertical line the eye can check on this card, off by
      half its own inset. */
   padding: var(--sp-1) var(--composer-inline) var(--sp-3);
-}
-
-.composer-project-room {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-  max-width: 280px;
-  height: var(--control-h-sm);
-  padding: 0 var(--sp-3);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-2);
-  color: var(--ink-2);
-  background: var(--surface-2);
-  font: var(--type-label-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Primary assign plate — a --control-h-sm cobalt disc, the one place

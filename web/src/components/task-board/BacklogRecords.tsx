@@ -96,6 +96,10 @@ export function BacklogTaskCard({
     task.status === "blocked" ||
     task.status === "done";
   const result = taskResultLine(task, session);
+  // Nothing is assigned yet: the empty dashed slot said so with a glyph that
+  // named nobody, on the one lane where unassigned is the normal condition.
+  // The assign action is two icons away.
+  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
 
   return (
     <article
@@ -108,89 +112,125 @@ export function BacklogTaskCard({
       onDragEnd={onDragEnd}
       onTouchStart={onTouchStart}
     >
-      {/* Title first. The card used to open with a badge strip — checkbox,
-          priority, executor, routine origin, reference — five bordered
-          objects above a title quieter than any of them, so the one thing
-          the reader came for was the last thing they reached. The badges did
-          not go away; they moved below the title into the meta line, where
-          they read as facts about the task rather than as a header for it.
-          The checkbox keeps the top-left corner because it is the card's
-          handle, not a fact, and a selection column that moves is unusable. */}
-      <div className="backlog-task-head">
+      {/* One text column. The checkbox holds the card's control gutter — a
+          selection control that moves with the content is unusable — and
+          everything that is not the checkbox (title, description, facts,
+          footer) lines up on a single left edge. The description used to
+          start at the card's padding edge while the title started 24px in,
+          so every card with a description read as two misaligned blocks. */}
+      <div className="backlog-card-head">
         <TaskSelectCheckbox
           className="backlog-select-box"
           checked={selected}
           label={t("backlog.select_task", { title: task.title })}
           onCheckedChange={onToggleSelect}
         />
-        <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-      </div>
-      <TaskFlowDetails task={task} />
-      {task.description ? <p className="backlog-description">{task.description}</p> : null}
-      <div className="backlog-meta">
-        <PriorityBadge priority={task.priority} />
-        <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
-        <RoutineOriginBadge task={task} routineTitle={routineTitle} />
-        {assigneeIsSelf ? null : (
-          <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
-        )}
-        <span className={cn("backlog-due", tone !== "neutral" && tone)}>
-          <ActionCalendar size={ICON.sm} />
-          {task.dueDate ? formatDueDate(task.dueDate) : t("backlog.no_due")}
-        </span>
-        {result ? (
-          /* The card carries no status text of its own, so the result names
-             the outcome. The list row's dot already does, and so does not. */
-          <span className="backlog-result">
-            <StateMark shape={TASK_STATUS_SHAPE[result.status]} />
-            {t(`backlog.statuses.${result.status}`)}
-            {result.hasFiles ? (
+        <div className="backlog-card-body">
+          <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
+          <TaskFlowDetails task={task} />
+          {task.description ? <p className="backlog-description">{task.description}</p> : null}
+          {/* One line of facts, and only facts the lane above does not already
+              state. What used to be here and is gone: the task's status word
+              (the lane IS the status — `taskResultLine.status` is literally
+              `task.status`), and "No due date" on every undated card, which
+              spent a fact slot announcing that nobody had decided anything.
+              The agent gained its name: a bare executor glyph identified
+              nothing on a card with room to spell it. */}
+          <div className="backlog-meta">
+            <PriorityBadge priority={task.priority} />
+            {assigned ? (
+              <span className="backlog-agent">
+                <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
+                {/* The badge already announces "<name> · <availability>" to
+                    assistive tech; this is the same string made visible. */}
+                {agentDisplayName ? <span className="backlog-agent-name" aria-hidden="true">{agentDisplayName}</span> : null}
+              </span>
+            ) : null}
+            <RoutineOriginBadge task={task} routineTitle={routineTitle} />
+            {assigneeIsSelf ? null : (
+              <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
+            )}
+            {task.dueDate ? (
+              <span className={cn("backlog-due", tone !== "neutral" && tone)}>
+                <ActionCalendar size={ICON.sm} />
+                {formatDueDate(task.dueDate)}
+              </span>
+            ) : null}
+            {result?.hasFiles ? (
               <span className="backlog-result-files tnum">
                 {t("backlog.result_files", { count: result.fileCount })}
               </span>
             ) : null}
-          </span>
-        ) : null}
-        {/* The reference is an address, not a fact about the work, so it
-            trails the line at the dimmest tier rather than heading the card.
-            On its own row it cost every card a line to state an id; pushed to
-            the meta line's far edge it costs none. */}
-        <TaskReference taskId={task.id} />
-      </div>
-      <div className="backlog-task-actions" role="group" aria-label={t("backlog.actions")}>
-        <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
-          <Button variant="outline"
-            type="button"
-            className="backlog-action-icon"
-            onClick={onAssign}
-            disabled={task.status === "running" || task.status === "done"}
-            aria-label={t("backlog.assign_task")}
-            title={t("backlog.assign_task")}
-          >
-            <NavAgents size={ICON.sm} />
-          </Button>
-          <Button variant={startDisabled ? "ghost" : "default"}
-            type="button"
-            className="backlog-action-primary backlog-action-icon"
-            onClick={onStart}
-            disabled={startDisabled}
-            loading={starting}
-            aria-label={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-            title={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-          >
-            <ActionStart size={ICON.sm} />
-          </Button>
-        </div>
-        <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_state")}>
-          <Button variant="outline"
-            type="button"
-            className={task.status === "blocked" ? undefined : "backlog-action-block"}
-            onClick={onToggleBlock}
-            disabled={task.status === "running" || task.status === "done"}
-          >
-            {task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
-          </Button>
-          <Button variant="outline" type="button" className="backlog-action-done" onClick={onDone} disabled={task.status !== "review"}>{t("backlog.done")}</Button>
+          </div>
+          {/* A reserved footer row, not an overlay. The action bar used to be
+              absolutely positioned across the card's bottom edge, so hovering
+              a card covered its own meta line — every fact the reader was
+              scanning disappeared under the buttons that appeared because
+              they moved the pointer there. The row is always laid out; the
+              only thing the actions cover is the reference, which is an
+              address the drawer and the list column both still carry. */}
+          <div className="backlog-card-foot">
+            <TaskReference taskId={task.id} />
+            <div className="backlog-task-actions" role="group" aria-label={t("backlog.actions")}>
+              {/* Four glyphs of one weight, labels in the tooltip. The card
+                  used to spell "Block" and "Done" as text buttons beside two
+                  icons — four controls in two shapes, which wrapped the bar
+                  onto a second line inside a lane-width card. They are all the
+                  quiet `icon` tier now and each lights up in its own meaning
+                  on hover: action for start, --err for block, --ok for done —
+                  the same two rules the list rows use. */}
+              <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
+                <Button variant="icon"
+                  size="icon-dense"
+                  type="button"
+                  className="backlog-action-icon"
+                  onClick={onAssign}
+                  disabled={task.status === "running" || task.status === "done"}
+                  aria-label={t("backlog.assign_task")}
+                  title={t("backlog.assign_task")}
+                >
+                  <NavAgents size={ICON.sm} />
+                </Button>
+                <Button variant="icon"
+                  size="icon-dense"
+                  tinted
+                  type="button"
+                  className="backlog-action-primary backlog-action-icon"
+                  onClick={onStart}
+                  disabled={startDisabled}
+                  loading={starting}
+                  aria-label={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+                  title={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+                >
+                  <ActionStart size={ICON.sm} />
+                </Button>
+              </div>
+              <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_state")}>
+                <Button variant="icon"
+                  size="icon-dense"
+                  type="button"
+                  className={cn("backlog-action-icon", task.status !== "blocked" && "backlog-action-block")}
+                  onClick={onToggleBlock}
+                  disabled={task.status === "running" || task.status === "done"}
+                  aria-label={task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
+                  title={task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
+                >
+                  {task.status === "blocked" ? <NavRefresh size={ICON.sm} /> : <ActionStop size={ICON.sm} />}
+                </Button>
+                <Button variant="icon"
+                  size="icon-dense"
+                  type="button"
+                  className="backlog-action-icon backlog-action-done"
+                  onClick={onDone}
+                  disabled={task.status !== "review"}
+                  aria-label={t("backlog.done")}
+                  title={t("backlog.done")}
+                >
+                  <ActionApprove size={ICON.sm} />
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </article>
@@ -297,6 +337,10 @@ export function BacklogTaskRow({
   const { t } = useTranslation();
   const tone = dueTone(task);
   const result = taskResultLine(task, session);
+  // Nothing is assigned yet: the empty dashed slot said so with a glyph that
+  // named nobody, on the one lane where unassigned is the normal condition.
+  // The assign action is two icons away.
+  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
   const startDisabled =
     (!task.assignedAgentId && !task.assignedTeamId && !canDiscuss) ||
     task.status === "running" ||
@@ -348,7 +392,7 @@ export function BacklogTaskRow({
       </TableCell>
       <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
-          <Button variant="ghost"
+          <Button variant="outline"
             type="button"
             className="backlog-action-icon"
             onClick={onAssign}

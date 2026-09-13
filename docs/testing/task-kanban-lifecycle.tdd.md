@@ -76,3 +76,21 @@ coverage, not a claim of whole-repository coverage.
   vulnerabilities (5 moderate, 7 high, 1 critical). This change does not alter
   dependencies or attempt unrelated package upgrades.
 - Existing Starlette/httpx, SQLite datetime, and schema reflection warnings remain.
+
+## PR integration verification
+
+Merged current `origin/main` (`2b580323`) before opening the PR. Preserved its
+card layout and dispatch-result ownership guards. Task write scopes acquire the
+WIP admission lock before task row locks so nested status bookkeeping follows
+the event writer's lock order. PostgreSQL concurrency coverage now exercises
+both direct event writes and writes inside task write scopes.
+
+- `npm test`: production build, 1,448 Node tests, 38 React tests, and 1,336
+  backend tests passed after integration.
+- `UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest backend/tests/unit/test_schema_drift.py -k wip_admission -q`:
+  2 passed against PostgreSQL, 3 deselected.
+- `npx playwright test -c web/playwright.recovery.config.ts taskKanban.spec.ts`:
+  2 passed.
+- `npm run lint:css --workspace web` and `git diff --check`: passed.
+- `npm audit --registry=https://registry.npmjs.org`: 0 vulnerabilities after
+  integrating main's dependency updates; this supersedes the earlier audit result.

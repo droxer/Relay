@@ -441,7 +441,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
         <>
           <div className="routine-list">
           {pagedTasks.items.map((task) => {
-            const session = linkedSession(task);
             const assignment = taskAssignmentDisplay(task);
             return (
               <RoutineCard
@@ -450,7 +449,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
                 selected={visibleSelection.has(task.id)}
                 onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                 state={routineState(task, runningIds)}
-                session={session}
                 assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
                 assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
                 agentDisplayName={assignment.name}

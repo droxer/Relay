@@ -9,6 +9,7 @@ import {
   WorkspaceFolder,
 } from "../icons";
 import { AgentSelect } from "./AgentSelect";
+import { ComposerContextLine } from "./ComposerContext";
 import { useComposer } from "../../hooks/useComposer";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete";
 import { parseMentions, replaceAddressRun, type MentionCandidate } from "../../lib/mentions";
@@ -177,10 +178,15 @@ const ComposerView = forwardRef<ComposerHandle, {
   // the computer it was pinned to; only a thread still being staged gets a
   // picker.
   const computerSlot = projectName ? (
-    <span className="composer-project-room" title={t("project.shared_workspace")}>
-      <WorkspaceFolder size={ICON.sm} aria-hidden="true" />
-      {projectName}
-    </span>
+    // Same readout shape as the pinned computer, different words: a project
+    // thread's settled fact is its shared workspace, not a machine.
+    <ComposerContextLine
+      label={t("thread.runs_in")}
+      mark={<WorkspaceFolder size={ICON.sm} aria-hidden="true" />}
+      name={projectName}
+      title={t("project.shared_workspace")}
+      srDetail={t("project.shared_workspace")}
+    />
   ) : initializingThread ? (
     <ThreadRuntimeSelect
       nodes={runtimeNodes}
@@ -188,9 +194,9 @@ const ComposerView = forwardRef<ComposerHandle, {
       selectedNode={selectedRuntimeNode}
       onValueChange={onRuntimeNodeChange}
     />
-  ) : activeRuntimeNode ? (
-    <ThreadRuntimeReadout node={activeRuntimeNode} />
-  ) : null;
+  ) : (
+    <ThreadRuntimeReadout node={activeRuntimeNode} nodeId={runtimeNodeId} />
+  );
 
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); triggerSend(); }}>

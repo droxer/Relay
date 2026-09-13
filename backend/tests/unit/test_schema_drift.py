@@ -169,7 +169,8 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
     assert store.get_project(project["id"]) == populated
 
 
-def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema, monkeypatch):
+@pytest.mark.parametrize("scoped", [False, True])
+def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema, monkeypatch, scoped):
     from concurrent.futures import ThreadPoolExecutor
     from relay.persistence.task_store import DatabaseTaskStore
     from relay.persistence.store_common import relay_task_event
@@ -185,9 +186,12 @@ def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema
 
     def attempt(task):
         try:
-            DatabaseTaskStore(url).append_event(task['id'], relay_task_event(
-                'task.execution.claimed', task['id'], {'requestId': task['id'], 'expectedRevision': 0},
-            ))
+            from contextlib import nullcontext
+            writer = DatabaseTaskStore(url)
+            with writer.task_write_scope(task['id']) if scoped else nullcontext():
+                writer.append_event(task['id'], relay_task_event(
+                    'task.execution.claimed', task['id'], {'requestId': task['id'], 'expectedRevision': 0},
+                ))
             return True
         except ValueError as error:
             assert 'task_wip_limit' in str(error)
