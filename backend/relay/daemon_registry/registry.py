@@ -43,6 +43,7 @@ from ..core.models import (
 )
 from ..persistence.daemon_store import ACTIVE_RUN_REQUEST_STATUSES
 from ..persistence.protocols import SessionStore, TaskStore
+from ..persistence.task_execution import request_execution_owner
 from ..persistence.stores import (
     infer_node_location,
     relay_event,
@@ -151,6 +152,8 @@ ARTIFACT_SNAPSHOT_STATE_KEY = "_relay_artifact_snapshot"
 # the moment the next command is staged.
 CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
     {
+        "_relay_task_source_revision",
+        "_relay_task_execution_revision",
         REPAIR_COUNT_STATE_KEY,
         REPAIR_RESUME_INDEX_STATE_KEY,
         REPAIR_NOTE_STATE_KEY,
@@ -1780,6 +1783,20 @@ class DaemonNodeRegistry:
         request_id: str | None,
     ) -> dict[str, Any]:
         existing = self.daemon_store.get_run_request(request_id) if request_id else None
+        if task_id and self.task_store:
+            task = self.task_store.get_task(task_id)
+            manifest = state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+            state = {
+                **state,
+                "_relay_task_source_revision": manifest.get(
+                    "sourceTaskRevision", (task.get("executionOwner") or {}).get("revision", 0),
+                ),
+            }
+            # An expired prepared operation must keep its original generation,
+            # even if a newer owner has since finished and released its slot.
+            for key in ("_relay_task_source_revision", "_relay_task_execution_revision"):
+                if key in ((existing or {}).get("state") or {}):
+                    state[key] = existing["state"][key]
         if existing and (existing.get("state") or {}).get(
             COLLABORATION_ADMISSION_EXPIRED_STATE_KEY
         ):
@@ -1848,6 +1865,34 @@ class DaemonNodeRegistry:
             }
         )
 
+    def ensure_task_execution_claim(self, request: dict[str, Any]) -> dict[str, Any]:
+        from ..persistence.store_common import relay_task_event
+
+        task_id = request.get("taskId")
+        state = request.get("state") or {}
+        if not task_id or not self.task_store or "_relay_task_source_revision" not in state:
+            return request  # Previously prepared operations retain legacy revision zero.
+        try:
+            task = self.task_store.append_event(task_id, relay_task_event(
+                "task.execution.claimed", task_id,
+                {"requestId": request["id"], "expectedRevision": state["_relay_task_source_revision"]},
+            ))
+        except ValueError as error:
+            self.daemon_store.update_run_request_if_status(
+                request["id"], "prepared", {"status": "failed", "error": str(error)},
+            )
+            raise
+        revision = task["executionOwner"]["revision"]
+        if state.get("_relay_task_execution_revision") == revision:
+            return request
+        updated = self.daemon_store.update_run_request_if_status(
+            request["id"], "prepared",
+            {"state": {**state, "_relay_task_execution_revision": revision}},
+        )
+        if not updated:
+            raise ValueError("task_ownership_changed: prepared request changed during claim")
+        return updated
+
     def activate_run_request(
         self,
         request_id: str,
@@ -1893,6 +1938,7 @@ class DaemonNodeRegistry:
                     f"cannot activate collaboration request for {session['status']} session"
                 )
             if request.get("status") == "prepared":
+                request = self.ensure_task_execution_claim(request)
                 activation_state = dict(request.get("state") or {})
                 activation_state.pop(COLLABORATION_ADMISSION_EXPIRED_STATE_KEY, None)
                 patch: dict[str, Any] = {
@@ -2177,6 +2223,7 @@ class DaemonNodeRegistry:
                             "waiting": waiting if event["waiting"] else None,
                         },
                     ),
+                    execution_owner=request_execution_owner(run_request),
                 )
             return
         if event["type"] == "run.executing":
@@ -2442,6 +2489,7 @@ class DaemonNodeRegistry:
                             self.store,
                             task_store=self.task_store,
                             task_id=request.get("taskId"),
+                            task_execution_owner=request_execution_owner(request),
                         ).fail_session(
                             request["sessionId"],
                             COLLABORATION_ADMISSION_EXPIRED_OUTCOME,
@@ -3001,7 +3049,7 @@ class DaemonNodeRegistry:
             return
         assignment = run_request["assignments"][run_request.get("currentIndex", 0)]
         sandbox = self.sandboxes[command["_nodeId"]]
-        controller = self._controller_for_sandbox(sandbox, run_request.get("taskId"))
+        controller = self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
         # The command already carries the role the agent was told to play; the
         # thread must record that one, not a second resolution of it.
         role = command.get("role") or effective_role_for_assignment(sandbox, assignment)
@@ -3120,7 +3168,7 @@ class DaemonNodeRegistry:
         if not sandbox:
             self.clear_run_output(event["runId"])
             return
-        controller = self._controller_for_sandbox(sandbox, run_request.get("taskId"))
+        controller = self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
         try:
             session_before = self.store.get_session(run_request["sessionId"])
         except KeyError:
@@ -3582,12 +3630,13 @@ class DaemonNodeRegistry:
     def _complete_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
         sandbox = self.sandboxes.get(run_request["nodeId"])
         controller = (
-            self._controller_for_sandbox(sandbox, run_request.get("taskId"))
+            self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
             if sandbox
             else SessionController(
                 self.store,
                 task_store=self.task_store,
                 task_id=run_request.get("taskId"),
+                task_execution_owner=request_execution_owner(run_request),
             )
         )
         task_status = "done"
@@ -3672,6 +3721,7 @@ class DaemonNodeRegistry:
             task_id,
             "Closed out without a round verdict: the agent did not write "
             f"{ROUND_RESULT_RELATIVE_PATH}.",
+            execution_owner=request_execution_owner(run_request),
         )
 
     def _round_result_was_required(self, run_request: dict[str, Any]) -> bool:
@@ -3699,7 +3749,8 @@ class DaemonNodeRegistry:
             return
         if task_status != "assigned":
             self.task_store.record_round(
-                task_id, round_result=round_result, clear_continuation=True
+                task_id, round_result=round_result, clear_continuation=True,
+                execution_owner=request_execution_owner(run_request),
             )
             return
         task = self.task_store.get_task(task_id)
@@ -3713,6 +3764,7 @@ class DaemonNodeRegistry:
                 else 1
             ),
             continuation_session_id=run_request["sessionId"],
+            execution_owner=request_execution_owner(run_request),
         )
 
     def _fail_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
@@ -3747,12 +3799,13 @@ class DaemonNodeRegistry:
             self.clear_run_output(run_id)
         sandbox = self.sandboxes.get(run_request["nodeId"])
         controller = (
-            self._controller_for_sandbox(sandbox, run_request.get("taskId"))
+            self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
             if sandbox
             else SessionController(
                 self.store,
                 task_store=self.task_store,
                 task_id=run_request.get("taskId"),
+                task_execution_owner=request_execution_owner(run_request),
             )
         )
         if run_id and run_request.get("currentAgent"):
@@ -3776,12 +3829,16 @@ class DaemonNodeRegistry:
         )
 
     def _controller_for_sandbox(
-        self, sandbox: dict[str, Any], task_id: str | None = None
+        self, sandbox: dict[str, Any], task_id: str | None = None,
+        run_request: dict[str, Any] | None = None,
     ) -> SessionController:
+        from ..persistence.task_execution import request_execution_owner
+
         return SessionController(
             self.store,
             task_store=self.task_store,
             task_id=task_id,
+            task_execution_owner=request_execution_owner(run_request) if run_request else None,
             workspace_path=sandbox.get("workspacePath") or "/workspace",
             owner_employee_id=sandbox.get("employeeId"),
             daemon_node_id=sandbox.get("id"),

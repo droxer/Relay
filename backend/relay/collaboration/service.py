@@ -464,6 +464,8 @@ class CollaborationConductor:
             scope = self._recovery_work_scope(session)
             if scope["kind"] == "task":
                 parsed["taskId"] = scope["taskId"]
+                task = self.ctx.task_store.get_task(scope["taskId"])
+                manifest["sourceTaskRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
             manifest["workScope"] = scope
         if session and intent.decision and intent.decision.get("kind") == "handoff":
             prepared = (

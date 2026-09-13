@@ -303,8 +303,8 @@ class LocalTaskStore:
             _write_json(self._snapshot_path(task_id), compact_task_snapshot(task))
             return task
 
-    def append_event(self, task_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        return self.append_events(task_id, [event])
+    def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.append_events(task_id, [event], execution_owner=execution_owner)
 
     def append_events(
         self,
@@ -534,6 +534,7 @@ class LocalTaskStore:
         round_count: int | None = None,
         continuation_session_id: str | None = None,
         clear_continuation: bool = False,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.append_event(
             task_id,
@@ -544,6 +545,7 @@ class LocalTaskStore:
                 continuation_session_id=continuation_session_id,
                 clear_continuation=clear_continuation,
             ),
+            execution_owner=execution_owner,
         )
 
     def record_dispatch_outcome(
@@ -741,7 +743,8 @@ class LocalTaskStore:
         )
 
     def record_activity(
-        self, task_id: str, message: str, payload: dict[str, Any] | None = None
+        self, task_id: str, message: str, payload: dict[str, Any] | None = None,
+        *, execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         extras = payload or {}
         logger.debug("Task activity recorded", task_id=task_id, message=message)
@@ -764,6 +767,7 @@ class LocalTaskStore:
                     }
                 },
             ),
+            execution_owner=execution_owner,
         )
 
     def _task_dir(self, task_id: str) -> Path:
@@ -931,8 +935,8 @@ class DatabaseTaskStore:
                 )
         return task
 
-    def append_event(self, task_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        return self.append_events(task_id, [event])
+    def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.append_events(task_id, [event], execution_owner=execution_owner)
 
     def append_events(
         self,
@@ -1387,6 +1391,7 @@ class DatabaseTaskStore:
         round_count: int | None = None,
         continuation_session_id: str | None = None,
         clear_continuation: bool = False,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.append_event(
             task_id,
@@ -1397,6 +1402,7 @@ class DatabaseTaskStore:
                 continuation_session_id=continuation_session_id,
                 clear_continuation=clear_continuation,
             ),
+            execution_owner=execution_owner,
         )
 
     def record_dispatch_outcome(
@@ -1729,7 +1735,8 @@ class DatabaseTaskStore:
         return task
 
     def record_activity(
-        self, task_id: str, message: str, payload: dict[str, Any] | None = None
+        self, task_id: str, message: str, payload: dict[str, Any] | None = None,
+        *, execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         extras = payload or {}
         logger.debug(
@@ -1754,6 +1761,7 @@ class DatabaseTaskStore:
                     }
                 },
             ),
+            execution_owner=execution_owner,
         )
 
     def _task_pk(self, conn: Any, task_id: str, *, lock: bool = False) -> str:

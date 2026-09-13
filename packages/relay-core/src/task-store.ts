@@ -23,6 +23,7 @@ export interface TaskWorkspaceBinding {
 }
 
 export interface RelayTask {
+  executionOwner?: { requestId: string; revision: number };
   id: string;
   title: string;
   description: string;
@@ -81,6 +82,15 @@ export type RelayTaskSummary = RelayTaskListItem & {
 };
 
 export type RelayTaskEvent =
+  | {
+      id: string;
+      type: "task.execution.claimed";
+      taskId: string;
+      timestamp: string;
+      requestId: string;
+      expectedRevision: number;
+      revision: number;
+    }
   | {
       id: string;
       type: "task.workspace_wait";
@@ -313,6 +323,8 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
       task.dispatchOutcome = event.outcome;
     } else if (event.type === "task.occurrence_created") {
       if (!task.occurrenceIds?.includes(event.occurrenceId)) task.occurrenceIds?.push(event.occurrenceId);
+    } else if (event.type === "task.execution.claimed") {
+      task.executionOwner = { requestId: event.requestId, revision: event.revision };
     } else if (event.type === "task.status") {
       task.status = event.status;
       if (event.status !== "running") delete task.workspaceWaiting;

@@ -113,6 +113,7 @@ export interface CollaborationRoundManifest {
     synthesizer?: boolean;
   }>;
   sourceOwnership?: { revision: number; roundId: string | null };
+  sourceTaskRevision?: number;
   handoffContext?: {
     receipt?: {
       contract: { name: "relay.handoff.receipt"; version: 1 };

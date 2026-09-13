@@ -396,6 +396,10 @@ class ServerDaemonNodeBackend:
             session_id = run_request["sessionId"]
             current_session = self.registry.store.get_session(session_id)
             self._validate_source_ownership(run_request, current_session)
+            run_request = self.registry.ensure_task_execution_claim(run_request)
+            from ..persistence.task_execution import request_execution_owner
+
+            controller.task_execution_owner = request_execution_owner(run_request)
             if (
                 (run_request.get("state") or {}).get(
                     COLLABORATION_NEW_SESSION_STATE_KEY
