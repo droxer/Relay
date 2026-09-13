@@ -991,6 +991,20 @@ class DatabaseTaskStore:
             task_pk = row["id"]
             sequence = int(row["version"] or 0)
             current = row["snapshot"] or {}
+            existing_events = self._events_for_task(conn, task_pk)
+            if not existing_events:
+                existing_events = list(current.get("events", []))
+            # Ownership is an event fact. An older projection writer may omit
+            # the new field, but must never reset the authoritative generation.
+            if existing_events:
+                current = {**current}
+                current.pop("executionOwner", None)
+                for event in reversed(existing_events):
+                    if event.get("type") == "task.execution.claimed":
+                        current["executionOwner"] = {
+                            "requestId": event["requestId"], "revision": event["revision"],
+                        }
+                        break
             events = prepare_execution_events(current, events, execution_owner)
             if not events:
                 return self.get_task(task_id)
@@ -1007,9 +1021,6 @@ class DatabaseTaskStore:
                 "linkedSessionIds", []
             ):
                 return current
-            existing_events = self._events_for_task(conn, task_pk)
-            if not existing_events:
-                existing_events = list(current.get("events", []))
             task = materialize_task_events([*existing_events, *events])
             claimed = conn.execute(
                 update(self.tasks)
