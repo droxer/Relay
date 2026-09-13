@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { EmployeeAgent } from "../../types";
-import { isEmployeeAgentRoutable } from "../../lib/agentDisplayNames";
+import { isEmployeeAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
+import { RosterAgentItem, RosterOption, RosterTriggerValue } from "../roster/RosterOption";
+import { StateMark } from "../StateMark";
+import { availabilityPipTone } from "./availabilityTone";
 import {
   ActionApprove,
   ActionHandoff,
@@ -14,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -68,16 +70,16 @@ export function DecisionBar({ logicalAgents, sendDecision, handoffOpen, setHando
 
   const busy = pendingAction !== null;
 
-  const agentOptions = logicalAgents.map((agent) => {
-    const disabled = !isEmployeeAgentRoutable(agent);
-    return {
-      value: agent.id,
-      label: disabled
-        ? t("thread.agent_disabled_option", { agent: agent.displayName })
-        : agent.displayName,
-      disabled,
-    };
-  });
+  // Handing off is the same question the composer's target picker asks — which
+  // agent — so it draws the same roster rows: identity mark, name, executor,
+  // and an availability chip on anything that cannot take the round. It used
+  // to be plain text with "(disabled)" appended to the name, which is the one
+  // spelling of "an agent" this app is meant not to have.
+  const handoffAgent = logicalAgents.find((agent) => agent.id === handoffAgentId) ?? null;
+  const agentOptions = logicalAgents.map((agent) => ({
+    value: agent.id,
+    label: `${agent.displayName} · ${agent.executorKind}`,
+  }));
 
   return (
     <>
@@ -102,14 +104,31 @@ export function DecisionBar({ logicalAgents, sendDecision, handoffOpen, setHando
                 without it the trigger would show the raw agent id. */}
             <Select value={handoffAgentId} items={agentOptions} onValueChange={(value) => { if (value != null) setHandoffAgentId(value); }}>
               <SelectTrigger id="handoff-agent" name="handoff-agent" className="w-full">
-                <SelectValue />
+                {handoffAgent ? <RosterTriggerValue agent={handoffAgent} /> : <SelectValue />}
               </SelectTrigger>
               <SelectContent>
-                {agentOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value} label={option.label} disabled={option.disabled}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                {logicalAgents.map((agent) => {
+                  const isRoutable = isEmployeeAgentRoutable(agent);
+                  const availability = visualAvailabilityOf(agent);
+                  return (
+                    <RosterAgentItem
+                      key={agent.id}
+                      value={agent.id}
+                      agent={agent}
+                      className="chat-agent-option"
+                      disabled={!isRoutable}
+                      data-availability={availability}
+                    >
+                      <RosterOption agent={agent} />
+                      {isRoutable ? null : (
+                        <span className="chat-agent-option-availability" data-availability={availability}>
+                          <StateMark tone={availabilityPipTone(availability)} />
+                          {t(`status.${availability}`, { defaultValue: availability })}
+                        </span>
+                      )}
+                    </RosterAgentItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>

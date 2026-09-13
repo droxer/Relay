@@ -98,30 +98,29 @@
   flex: none;
 }
 
+/* Capped like its neighbour on the rail (--thread-runtime-select, 34vw): the
+   targets rail wraps, so an uncapped trigger let one long agent or team name
+   push the computer readout onto a second line and shove the input card down.
+   The agent is the primary choice, so it gets the wider share. */
 .chat-agent-select {
   min-width: 0;
-  max-width: 100%;
+  max-width: min(280px, 44vw);
 }
 
 .chat-agent-select[data-availability="unavailable"] {
   --tone: var(--err);
   border-color: var(--tone-line);
-  /* Fill stays a neutral surface step: status is dot/border/text, never a
-     fill — the unavailable tone lives on the border and the label. */
-  background: var(--surface-2);
+  /* Status is dot/border/text, never a fill — so the fill stays exactly what
+     every other trigger on this rail uses. It used to swap to --surface-2
+     here, which made the empty state read as a different material than the
+     control it replaces. The trigger is also disabled in this state, so
+     base.css's opacity already carries "you cannot act on this"; the tone
+     carries why. */
   color: var(--err);
-  opacity: 1;
 }
 
 .chat-agent-select-content {
   min-width: min(280px, calc(100vw - var(--sp-6)));
-}
-
-.chat-agent-select-name {
-  overflow: hidden;
-  font: var(--type-label);
-  color: var(--ink-2);
-  text-overflow: ellipsis;
 }
 
 .chat-agent-select-unavailable {
@@ -129,17 +128,6 @@
   align-items: center;
   gap: var(--sp-2);
   font: var(--type-label-strong);
-}
-
-/* The picker names one logical agent, so it carries that agent's profile
-   image (uploaded, else its monogram) rather than a shared executor glyph —
-   two agents on the same executor were otherwise indistinguishable here. */
-.chat-active-agent-mark,
-.chat-agent-option-mark {
-  flex: 0 0 auto;
-  width: var(--icon-md);
-  height: var(--icon-md);
-  border-radius: var(--r-1);
 }
 
 /* Availability inside the picker list is a read-only fact on an

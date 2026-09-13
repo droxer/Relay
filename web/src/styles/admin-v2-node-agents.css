@@ -123,8 +123,7 @@
   --mark-accent: var(--ink-4);
 }
 
-/* Official vendor glyph — identity, alongside the name label. Same
-   flex/opacity treatment as .chat-active-agent-mark. */
+/* Official vendor glyph — identity, alongside the name label. */
 .adm-agent-chip-mark {
   flex: 0 0 auto;
   display: inline-grid;

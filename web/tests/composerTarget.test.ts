@@ -197,16 +197,52 @@ describe("composer agent selection", () => {
     const spelledOut = select.match(/chat-agent-option-availability" data-availability=\{/g) ?? [];
     assert.equal(spelledOut.length, 2, "agent and team options must both spell out availability");
     assert.match(select, /disabled=\{!isRoutable\}/);
-    assert.match(select, /<StateMark tone=\{pipTone\(/);
+    assert.match(select, /<StateMark tone=\{availabilityPipTone\(/);
   });
 
-  it("hides the trigger name on narrow screens", async () => {
+  it("drops the rail's lead-in words and agent name at one breakpoint", async () => {
+    const composer = await readFile(resolve("web/src/styles/composer.css"), "utf8");
     const responsive = await readFile(resolve("web/src/styles/responsive.css"), "utf8");
-    // The agent/team trigger name renders through the shared roster row, so
-    // the narrow-screen rule covers it alongside the project-room label.
+    // One breakpoint for the whole targets rail. The agent name used to hide
+    // at 820 while the readout lead-ins held until 640, so in that band the
+    // choice was a nameless mark beside a fact spelled out in full.
+    assert.doesNotMatch(responsive, /chat-agent-select/);
+    const phone = composer.slice(composer.indexOf("@media (max-width: 640px)"));
+    assert.match(phone, /\.composer-context-label \{\s*display: none;/);
     assert.match(
-      responsive,
-      /\.chat-agent-select \.chat-agent-select-name,\s*\.chat-agent-select \.roster-trigger-name \{\s*display: none;/,
+      phone,
+      /\.chat-agent-select \.roster-trigger-name:not\(\.roster-trigger-name--room\) \{\s*display: none;/,
     );
+  });
+
+  it("keeps every settled target fact on one readout shape", async () => {
+    const composer = await readFile(resolve("web/src/components/composer/Composer.tsx"), "utf8");
+    const runtime = await readFile(resolve("web/src/components/composer/ThreadRuntimeSelect.tsx"), "utf8");
+    const css = await readFile(resolve("web/src/styles/composer.css"), "utf8");
+    // The pinned computer and the project workspace are the same kind of
+    // statement, so they draw the same line — the project no longer wears a
+    // bordered, filled pill that reads as a control it is not.
+    assert.match(composer, /<ComposerContextLine/);
+    assert.match(runtime, /<ComposerContextLine/);
+    assert.doesNotMatch(composer, /composer-project-room/);
+    assert.doesNotMatch(css, /composer-project-room/);
+    // A thread pinned to a computer the fleet no longer lists still says where
+    // it runs, instead of dropping the line entirely.
+    assert.match(runtime, /if \(!nodeId\) return null;/);
+    assert.match(composer, /<ThreadRuntimeReadout node=\{activeRuntimeNode\} nodeId=\{runtimeNodeId\} \/>/);
+  });
+
+  it("asks \"which agent\" in one vocabulary", async () => {
+    const decision = await readFile(resolve("web/src/components/composer/DecisionBar.tsx"), "utf8");
+    const select = await readFile(resolve("web/src/components/composer/AgentSelect.tsx"), "utf8");
+    // Handoff draws the shared roster rows, not plain text with "(disabled)"
+    // appended to the agent's name.
+    assert.match(decision, /<RosterAgentItem/);
+    assert.match(decision, /chat-agent-option-availability/);
+    assert.doesNotMatch(decision, /agent_disabled_option/);
+    // Both pickers take their pip hue from the one shared map.
+    for (const source of [decision, select]) {
+      assert.match(source, /availabilityPipTone/);
+    }
   });
 });
