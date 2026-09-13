@@ -416,11 +416,19 @@
   cursor: pointer;
 }
 
-.mention-option[data-active] {
+/* `data-highlighted`, not `data-active`: base-ui's Combobox marks the roving
+   highlight with the former, so the old selector matched nothing and arrowing
+   through the list — or accepting with Enter or Tab — moved a highlight the
+   author could not see. */
+.mention-option[data-highlighted] {
   background: var(--action-soft);
 }
 
-.mention-option:disabled {
+/* `[data-disabled]`, not `:disabled`: the row is a div with an option role,
+   which the pseudo-class can never match. An agent that cannot take the turn
+   therefore looked exactly like one that could, right down to the pointer
+   cursor, and clicking it did nothing at all. */
+.mention-option[data-disabled] {
   color: var(--ink-4);
   cursor: not-allowed;
 }

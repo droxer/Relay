@@ -274,7 +274,8 @@ const ComposerView = forwardRef<ComposerHandle, {
                 mentions.onCaretChange(e.target.selectionStart ?? e.target.value.length);
               }}
               onSelect={(e) => mentions.onCaretChange(e.currentTarget.selectionStart ?? 0)}
-              onBlur={mentions.close}
+              onFocus={mentions.focus}
+              onBlur={mentions.blur}
               onKeyDown={(e) => {
                 // The popup gets first refusal on navigation keys; the send
                 // shortcut is untouched because the popup never claims it.

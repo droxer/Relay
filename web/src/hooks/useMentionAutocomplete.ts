@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   activeMentionQuery,
   applyMention,
@@ -10,7 +10,10 @@ export type MentionAutocomplete = {
   matches: MentionCandidate[];
   /** Track the caret so the open `@…` fragment can be found. */
   onCaretChange: (caret: number) => void;
-  close: () => void;
+  /** Hide the list while the draft is not focused, without retiring the
+   *  fragment — see `blur`/`focus` below. */
+  blur: () => void;
+  focus: () => void;
   /**
    * Handle a key while the popup is open; false means the composer keeps it.
    *
@@ -37,20 +40,45 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }): MentionAutocomplete {
   const [caret, setCaret] = useState(0);
-  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  // Escape retires ONE fragment, and is remembered as that fragment's text
+  // rather than its offset. An offset is not an identity: `@` at the head of a
+  // draft is offset 0 every time, so dismissing one there buried every later
+  // mention typed in the same place — including one typed after the draft was
+  // cleared — and the popup stayed dead for the rest of the session.
+  const [dismissed, setDismissed] = useState<{ start: number; query: string } | null>(null);
   const [acceptedText, setAcceptedText] = useState<string | null>(null);
+  // Blur hides the list; it must NOT dismiss the fragment. Clicking the
+  // transcript, the agent picker, or another window all blur the draft, and a
+  // dismissal there left the author typing the rest of a name into a list that
+  // would never come back.
+  const [blurred, setBlurred] = useState(false);
 
   const open = useMemo(() => activeMentionQuery(text, caret), [text, caret]);
+  // Typing further into a dismissed fragment keeps it dismissed — Escape means
+  // "I know this name". Deleting back out of it, or opening a different one,
+  // does not.
+  const suppressed = Boolean(
+    dismissed && open && dismissed.start === open.start && open.query.startsWith(dismissed.query),
+  );
   const matches = useMemo(() => {
-    if (!open || dismissedAt === open.start || acceptedText === text) return [];
+    if (!open || blurred || suppressed || acceptedText === text) return [];
     const needle = open.query.trim().toLowerCase();
     return candidates.filter(
       (candidate) => !needle || candidate.displayName.toLowerCase().includes(needle),
     );
-  }, [acceptedText, candidates, dismissedAt, open, text]);
+  }, [acceptedText, blurred, candidates, open, suppressed, text]);
+
+  // A dismissal outlives only its own fragment. Once the caret is no longer in
+  // one, the next `@` starts clean wherever it is typed.
+  useEffect(() => {
+    if (!open && dismissed) setDismissed(null);
+  }, [dismissed, open]);
+
+  const blur = useCallback(() => setBlurred(true), []);
+  const focus = useCallback(() => setBlurred(false), []);
 
   const close = useCallback(() => {
-    setDismissedAt(open ? open.start : null);
+    setDismissed(open ? { start: open.start, query: open.query } : null);
   }, [open]);
 
   const pick = useCallback(
@@ -58,7 +86,7 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
       if (!open || !candidate.eligible) return;
       const applied = applyMention(text, open.start, caret, candidate.displayName);
       setText(applied.text);
-      setDismissedAt(null);
+      setDismissed(null);
       // A completed name still reads as an open `@…` fragment, so the popup
       // would otherwise stay up listing the agent just accepted. Closing it
       // against the exact accepted text — rather than the fragment's offset —
@@ -107,7 +135,8 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
   return {
     matches,
     onCaretChange: setCaret,
-    close,
+    blur,
+    focus,
     handleKey,
     pick,
   };
