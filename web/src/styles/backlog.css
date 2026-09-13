@@ -387,31 +387,44 @@
 
 /* Priority lives on the PriorityBadge alone — the badge's ascending bars
    already carry rank, so the old 3px colored card edge was double signaling
-   (and painted a red stripe down every high-priority card). */
-.backlog-task-badges {
+   (and painted a red stripe down every high-priority card).
+
+   The badge STRIP this rule used to lay out is gone: the card opened with
+   checkbox + priority + executor + routine origin + reference above a title
+   quieter than any of them, so the record's name was the last thing the eye
+   reached. Badges moved into .backlog-meta below the title, where they read
+   as facts about the task rather than a header for it. */
+
+/* Line 1: the selection handle and the title, and nothing else. The checkbox
+   holds the corner because it is the card's handle — a selection control
+   that moves with the content is unusable — and `align-items: start` keeps
+   it on the title's first line when the title wraps to two. */
+.backlog-task-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-1);
-  margin-bottom: var(--sp-2);
+  align-items: flex-start;
+  gap: var(--sp-2);
 }
 
+/* The checkbox is 16px against a ~20px line; nudge it onto the title's
+   optical centre rather than its box top. */
+.backlog-task-head .backlog-select-box {
+  flex: none;
+  margin-top: 2px;
+}
+
+
+
 /* The card equivalent of the list's REF column. It is an address rather than
-   task metadata, so it stays quiet and moves to the far edge of the badge
-   line until a narrow card needs to wrap it. */
+   task metadata, so it stays quiet and trails the meta line, after the facts
+   rather than above them. */
 .backlog-task-ref {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--sp-1);
+  /* Pushed to the meta line's far edge. It never earns a line of its own —
+     that cost every card ~24px to state an id nobody scans for. */
   margin-inline-start: auto;
   color: var(--ink-4);
   font-size: var(--fs-1);
   line-height: var(--leading-snug);
   white-space: nowrap;
-}
-
-.backlog-task-ref-label {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }

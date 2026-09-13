@@ -540,9 +540,26 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
       ) : view === "list" ? (
         /* Grouped by status, same dimension the board lanes on — which is
            what buys the columns back: a row under a band that says "Blocked"
-           does not have to spend 96px repeating it. Each band is its own
-           table so the column header stays next to the rows it names. */
+           does not have to spend 96px repeating it.
+
+           The column header is hoisted out of the groups and rendered once,
+           sticky, above all of them — see BacklogRowsHead for why it stopped
+           repeating. Its select-all therefore covers every visible row on the
+           page rather than one band's worth. */
         <div className="backlog-rows" data-density="compact">
+          <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
+            <BacklogRowsHead
+              sort={sort}
+              onSort={toggleSort}
+              selectAll={
+                <TaskSelectAllCheckbox
+                  state={selectionCheckState(visibleSelection, visibleIds)}
+                  label={t("backlog.select_all_tasks")}
+                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                />
+              }
+            />
+          </Table>
           {TASK_STATUSES.map((status) => {
             const group = grouped[status];
             const opening = inlineCreateStatus === status;
@@ -550,7 +567,6 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
             if (group.length === 0 && !opening) return null;
             const label = t(`backlog.statuses.${status}`);
             const groupPage = pagedLanes[status];
-            const groupIds = groupPage.items.map((task) => task.id);
             return (
               <ListGroup
                 key={status}
@@ -562,17 +578,6 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
                 onAdd={() => setInlineCreateStatus(status)}
               >
                 <Table className="list-group-rows" aria-label={label}>
-                  <BacklogRowsHead
-                    sort={sort}
-                    onSort={toggleSort}
-                    selectAll={
-                      <TaskSelectAllCheckbox
-                        state={selectionCheckState(visibleSelection, groupIds)}
-                        label={t("backlog.select_all_tasks")}
-                        onToggle={() => setSelection((current) => toggleAllSelected(current, groupIds))}
-                      />
-                    }
-                  />
                   {opening ? (
                     <TableRow className="backlog-inline-create-row">
                       <InlineTaskCreate

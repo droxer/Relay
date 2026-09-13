@@ -272,18 +272,24 @@
   overflow: hidden;
 }
 
+/* Every fact the card states about the task, on one wrapping line below the
+   title: the badges that used to head the card, then cadence, assignee, date
+   and outcome.
+
+   The hand-written `·` separators are gone. They were there to divide runs of
+   plain text, but every atom on this line now carries its own boundary — a
+   badge has a hairline, the date and the outcome are icon-led — so the
+   interpuncts were dividing things that were already divided. --sp-3, not
+   --sp-2: with the dots removed the gap is the only separation, so it steps
+   up one rung. */
 .backlog-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   margin-top: var(--sp-3);
   color: var(--ink-3);
   font: var(--type-label);
-}
-
-.backlog-meta-sep {
-  color: var(--ink-4);
 }
 
 .backlog-due {

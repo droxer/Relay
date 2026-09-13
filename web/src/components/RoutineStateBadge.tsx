@@ -20,8 +20,17 @@ export const ROUTINE_STATE_SHAPE: Record<RoutineState, StateShape> = {
   paused: "muted",
 };
 
-export function RoutineStateBadge({ state }: { state: RoutineState }) {
+/**
+ * `scheduled` renders NOTHING on a scanning surface. It is the resting state
+ * of a healthy routine — the next-run date beside it already says when, and
+ * in its neutral tone — so a pill repeating it turned every quiet row into
+ * another object to read past. Overdue, due, running, unscheduled and paused
+ * each say something the date cannot, and keep their pill. Pass `always` in
+ * the drawer, where the record is being inspected rather than scanned.
+ */
+export function RoutineStateBadge({ state, always = false }: { state: RoutineState; always?: boolean }) {
   const { t } = useTranslation();
+  if (state === "scheduled" && !always) return null;
   /* The shared Badge chrome — `.routine-state` used to restate the same
      padding, hairline, radius, and label type the primitive already owns, and
      only ever needed the per-state accent it keeps below. `variant="state"`

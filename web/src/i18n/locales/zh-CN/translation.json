@@ -425,7 +425,7 @@
         "pending": "未开始"
       }
     },
-    "col_result": "结果",
+    "columns": "列",
     "result_title": "结果",
     "result_files_other": "{{count}} 个文件",
     "linked": "已关联",

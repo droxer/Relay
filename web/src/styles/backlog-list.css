@@ -43,19 +43,36 @@
 /* ── List view — Vercel-style rows ──────────────────────────────────── */
 
 .backlog-rows {
+  /* Two sticky layers, one number. The hoisted column header pins at 0 and
+     each group band pins directly beneath it, so the band's offset IS the
+     header's height — declared once here and enforced on both sides (the
+     header takes it as a fixed height, the band as its `top`) rather than
+     measured off whatever the header's contents happen to make it. A
+     checkbox or a caret growing a few pixels cannot slide the bands under
+     the header any more. */
+  --list-head-h: 40px;
+  --list-band-top: var(--list-head-h);
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   /* Band separation — --sp-7, the scale's section rung. This gap is the only
-     thing dividing one status band from the next (the band header is sticky
-     and tinted, but it travels), so it has to out-measure the gap between
-     rows inside a band by enough that the boundary is legible while
-     scrolling. --sp-5 against a 12px row rhythm was not that margin. */
-  gap: var(--sp-7);
-  padding: var(--sp-6) var(--page-gutter) var(--sp-8);
+     thing dividing one status band from the next (the band header is sticky,
+     so it travels), so it has to out-measure the gap between rows inside a
+     band by enough that the boundary is legible while scrolling. --sp-5
+     against a 12px row rhythm was not that margin. It matters more now that
+     the band is a rule rather than a filled slab.
+
+     Expressed as a sibling margin rather than the container's `gap` because
+     the hoisted column header is now a child of this box too, and a gap
+     would push the first band a section-rung away from the header that
+     names it. */
+  gap: 0;
+  padding: 0 var(--page-gutter) var(--sp-8);
 }
+
+.backlog-rows > .list-group + .list-group { margin-top: var(--sp-7); }
 
 .list-group[data-status="backlog"],
 .backlog-row[data-status="backlog"] { --row-accent: var(--ink-4); }
@@ -72,11 +89,24 @@
 .list-group[data-status="done"],
 .backlog-row[data-status="done"] { --row-accent: var(--ok); }
 
+/* The header is rendered once for the whole list now, so it has to travel
+   with the scroll to keep naming the row under the reader's eye — the one
+   thing the old per-group copy did better. It sits on --surface-0 rather
+   than transparent because rows scroll underneath it. */
+.backlog-rows-headwrap {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-0);
+}
+
 .backlog-rows-head {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: var(--sp-1) var(--sp-3);
+  /* Height, not block padding — see --list-head-h above. */
+  height: var(--list-head-h);
+  padding: 0 var(--sp-3);
   border-bottom: 0.5px solid var(--line-2);
 }
 
@@ -103,12 +133,10 @@
 .backlog-rows-head-assignee,
 .backlog-row-assignee { flex: none; width: 150px; }
 
+/* 116 → 150: the file count that used to sit in a RESULT column of its own
+   now trails the date inside this cell. */
 .backlog-rows-head-due,
-.backlog-row-due { flex: none; width: 116px; }
-
-/* Narrow: it carries a count, and often nothing at all. */
-.backlog-rows-head-result,
-.backlog-row-result { flex: none; width: 76px; }
+.backlog-row-due { flex: none; width: 150px; }
 
 .backlog-rows-head-actions,
 .backlog-row-actions { flex: none; width: 176px; }
@@ -319,6 +347,16 @@
 .backlog-due-value.warn { color: var(--warn); }
 .backlog-due-value.bad { color: var(--err); }
 
+/* A footnote to the date, not a peer of it: dimmest tier, and it never
+   competes for the cell when the date itself is the overdue one. */
+.backlog-row-files {
+  margin-inline-start: var(--sp-2);
+  color: var(--ink-4);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
 /* An unset date is an offer, not a value: it opens the record where the date
    is set. It stays a ghost until the row is under the pointer so a screenful
    of undated rows does not read as a screenful of buttons. */
@@ -344,7 +382,18 @@
 
 /* Quick-action column — always visible, right-aligned icon toolbar so every
    row exposes its actions without a hover reveal. Shorter action sets (no
-   linked thread / non-blockable) simply leave space on the leading edge. */
+   linked thread / non-blockable) simply leave space on the leading edge.
+
+   What changed is the PRIMARY's weight, not its presence. The start button
+   carried the filled --action variant here, which put a saturated rectangle
+   on every startable row — twelve of them stacked, the loudest thing on a
+   page whose content is text. The row now uses the same tinted icon the
+   routine list always used: --action on an --action-soft plate, which still
+   reads as the one action that does something and still clears 1.4.11,
+   without a column of solid blue. The board CARD keeps the fill — there is
+   one per card there, and a card is an object that can carry a call to
+   action. Dimming the group at rest was the other option and was rejected:
+   an --opacity-ghost control fails non-text contrast. */
 .backlog-row-actions {
   display: flex;
   align-items: center;
@@ -381,10 +430,29 @@
 
 /* Disabled comes from the button base — see .backlog-task-actions above. */
 
+/* In the LIST the primary is an --action GLYPH, not an --action plate. The
+   filled `default` variant put a saturated rectangle on every startable row,
+   twelve deep — see the note on .backlog-row-actions. The hue moves to the
+   icon, which is what `tinted` was already doing on hover and now holds at
+   rest too, so the start action is still the one coloured thing in the group
+   without the column of blue. Contrast is on the glyph against the row, the
+   same relationship a link has with its paragraph — not an --opacity-ghost
+   control, which would fail 1.4.11.
+
+   The board CARD keeps the fill (task-status.css): one per card, and a card
+   is an object large enough to carry a call to action. */
 .backlog-row-actions .backlog-action-primary {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
+  color: var(--action);
+}
+
+/* A start that cannot run has nothing to call attention to, so it drops back
+   to the group's neutral ink rather than sitting there as a bright control
+   that does nothing. */
+.backlog-row-actions .backlog-action-primary:disabled {
+  color: var(--ink-4);
 }
 
 /* Filled only while actionable; a disabled start recedes to a ghost icon. The
@@ -404,8 +472,7 @@
   .backlog-rows-head-assignee { display: none; }
   /* The row's dot still carries the outcome, so the file count is the losable
      half of the result — it goes with the assignee on the backlog's own tier. */
-  .backlog-row-result,
-  .backlog-rows-head-result { display: none; }
+  .backlog-row-files { display: none; }
 }
 
 /* ── Mobile: rebuild the flex table row (≈640px of fixed cells, can't fit a
@@ -459,7 +526,7 @@
      Restored (the ≤1100/≤900 hides above only make sense for the flex table). */
   .backlog-row-tags     { flex: 0 0 auto; width: auto; }
   .backlog-row-due      { flex: 0 0 auto; width: auto; }
-  .backlog-row-result   { flex: 0 0 auto; display: inline-flex; width: auto; }
+  .backlog-row-files    { display: inline; }
   /* The agent readiness pip is absolutely positioned 3px past the badge's
      right edge; without clearance it kisses the card boundary. Nudge the whole
      assignee cell in so the pip has room to breathe. */
