@@ -108,10 +108,36 @@ current run request or active round belongs to that task. Routine-template and
 reference links remain historical relationships.
 
 New handoff rounds include optional `handoffContext` with contract
-`relay.handoff.context` version 1. It contains the receiving assignment and
+`relay.handoff.context` version 2 (legacy version 1 remains readable). It contains the receiving assignment and
 logical agent, linked decision, source event boundary, bounded objective/note
 and prior-context excerpts, and run/artifact/progress-file references. Retrying
 an accepted operation preserves that context even if the thread later changes.
+Version 2 requires `handoffContext.receipt`, using
+`relay.handoff.receipt` version 1. The receipt preserves the work scope, verbatim
+task requirements or initial thread objective, current request, and handoff
+instruction. Requirements are never truncated: a combined protected-text budget
+of 16,000 characters is enforced before admission. The serialized receipt has a
+separate 32,000-character ceiling, in addition to the existing 24,000-character
+history budget. An oversized new handoff returns a conflict requiring narrower
+work; prepared retries reuse the accepted receipt without recapturing it.
+
+For substantial work, agents are instructed to write
+`<progressFile>.handoff.json` with their assignment ID, completed/pending work,
+blockers, failed approaches, verification reports, dirty paths, observed workspace
+revision, and next action. These are attributed claims, not completion approval
+or new permissions. The existing generated-file pipeline snapshots the file when
+reported; the backend never opens daemon workspace paths.
+
+The receipt includes up to 24 source-run artifact references with SHA-256 hashes
+when stored bytes are available. Coverage is explicitly partial. Checkpoints
+must belong to the source run and match its assignment. Missing, unavailable,
+invalid, and stale checkpoints remain explicit unknown-progress states. Hashes
+identify historical bytes, not the live workspace; receiving agents are
+instructed to verify relevant files and claims. Legacy contexts without receipts
+remain supported. No new database migration is required.
+Older backends reject version 2 explicitly instead of silently dropping its
+protected requirements; upgrade backend replicas before producing new receipts.
+
 `collaboration.delivery` SSE events carry `roundId`, `assignmentId`, `runId`, and
 `status` (`queued` or `running`). `agent.started` alone means the backend staged
 an attempt. Daemons acknowledge requested execution with the lease-bound

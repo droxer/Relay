@@ -2411,7 +2411,7 @@ def test_recovery_dispatches_current_user_turn(
     assert command["phase"] == "review"
     if followup:
         assert "Add a signup form" in command["state"]["prior_conversation"]
-        assert expected not in command["state"]["prior_conversation"]
+        assert expected not in command["state"]["prior_conversation"].split("[Handoff work receipt]")[0]
     replay = client.post(endpoint, json=body)
     assert replay.status_code == 202, replay.text
     assert len(replay.json()["agentRuns"]) == 1
@@ -2628,12 +2628,31 @@ def test_addressed_team_reviewer_keeps_specialization(
     assert [a["agentId"] for a in request["assignments"]] == [reviewer["id"]]
 
 
+@pytest.mark.parametrize("task_backed", [False, True])
 def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
-    recovery_team_thread, monkeypatch
+    recovery_team_thread, monkeypatch, task_backed
 ) -> None:
     from relay.api.helpers import daemon_node_event
 
     client, controller, session, _team, reviewer = recovery_team_thread
+    task = None
+    if task_backed:
+        task = client.app.state.task_store.create_task(
+            {
+                "title": "Build login",
+                "description": "Acceptance: keyboard navigation works.",
+                "ownerEmployeeId": "alice",
+            }
+        )
+        client.app.state.task_store.link_session(task["id"], session["id"])
+        controller.record_collaboration_round_started(
+            session["id"],
+            {
+                "roundId": "source",
+                "collaborationId": "work",
+                "workScope": {"kind": "task", "taskId": task["id"]},
+            },
+        )
     endpoint = f"/api/v1/threads/{session['id']}/recoveries"
     body = {
         "kind": "handoff",
@@ -2657,6 +2676,10 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
         )
     )
     frozen = request["state"]["_relay_collaboration_manifest"]["handoffContext"]
+    if task:
+        client.app.state.task_store.update_task(
+            task["id"], {"description": "CHANGED AFTER ACCEPTANCE" * 1000}
+        )
     controller.record_user_message(
         session["id"], "A later message must not rewrite accepted work"
     )
@@ -2664,11 +2687,21 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
     assert response.status_code == 202, response.text
     stored = response.json()["collaborationRounds"][-1]["handoffContext"]
     assert stored == frozen
+    assert stored["receipt"]["contract"] == {
+        "name": "relay.handoff.receipt",
+        "version": 1,
+    }
+    if task:
+        assert (
+            stored["receipt"]["workDefinition"]["requirements"] == task["description"]
+        )
     assert stored["targetAgentId"] == reviewer["id"]
     assert stored["decisionId"] == response.json()["decisions"][-1]["id"]
     registry = client.app.state.registry
     command = registry.take_commands("test_node_alice", "node_token")[0]
     assert command["state"]["task_goal"] == session["taskGoal"]
+    assert "[Handoff work receipt]" in command["state"]["prior_conversation"]
+    assert "CHANGED AFTER ACCEPTANCE" not in command["state"]["prior_conversation"]
     assert "later message" not in command["state"]["prior_conversation"]
     assert (
         command["state"]["prior_handoff_note"]
@@ -2707,3 +2740,35 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
         if e["type"] == "collaboration.delivery"
     ]
     assert [e["status"] for e in deliveries] == ["queued", "running"]
+
+
+@pytest.mark.parametrize("variant,accepted", [("legacy", True), ("missing", False), ("future", False)])
+def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatch, variant, accepted):
+    from relay.collaboration import service
+
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    capture = service.capture_handoff_context
+
+    def versioned(*args, **kwargs):
+        context = capture(*args, **kwargs)
+        if variant == "legacy":
+            context["contract"]["version"] = 1
+            context.pop("receipt")
+        elif variant == "missing":
+            context.pop("receipt")
+        else:
+            context["receipt"]["contract"]["version"] = 99
+        return context
+
+    monkeypatch.setattr(service, "capture_handoff_context", versioned)
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={
+            "kind": "handoff",
+            "targetAgentId": reviewer["id"],
+        },
+    )
+    assert response.status_code == 202, response.text
+    assert (response.json()["status"] != "failed") is accepted
+    commands = client.app.state.registry.take_commands("test_node_alice", "node_token")
+    assert bool(commands) is accepted

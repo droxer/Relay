@@ -2757,23 +2757,51 @@ class DaemonNodeRegistry:
         manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
         context = manifest.get("handoffContext")
         if context:
-            if context.get("contract") != {"name": "relay.handoff.context", "version": 1}:
-                self._fail_run_request(run_request, "Unsupported handoff context version.")
+            if context.get("contract") not in (
+                {"name": "relay.handoff.context", "version": 1},
+                {"name": "relay.handoff.context", "version": 2},
+            ):
+                self._fail_run_request(
+                    run_request, "Unsupported handoff context version."
+                )
+                return run_request
+            if context["contract"]["version"] == 2 and not isinstance(
+                context.get("receipt"), dict
+            ):
+                self._fail_run_request(
+                    run_request, "Handoff context is missing its required receipt."
+                )
                 return run_request
             if context.get("assignmentId") != assignment["assignmentId"]:
                 self._fail_run_request(
-                    run_request, "Handoff context does not match the receiving assignment."
+                    run_request,
+                    "Handoff context does not match the receiving assignment.",
                 )
                 return run_request
             # The accepted context is immutable across staging and delivery retries.
             # Remove every legacy prelude, including a stale carried handoff note.
-            for key in ("prior_conversation", "prior_agent_bridge", "prior_handoff_note"):
+            for key in (
+                "prior_conversation",
+                "prior_agent_bridge",
+                "prior_handoff_note",
+            ):
                 state.pop(key, None)
             state["task_goal"] = context["objective"]
             state["progress_file"] = context["progressFile"]
             state["prior_conversation"] = context["priorContext"]
+            if context.get("receipt") is not None:
+                from ..sessions.handoff_receipt import render_handoff_receipt
+
+                try:
+                    receipt_prompt = render_handoff_receipt(context["receipt"])
+                except ValueError as error:
+                    self._fail_run_request(run_request, str(error))
+                    return run_request
+                state["prior_conversation"] += "\n\n" + receipt_prompt
             if context.get("note"):
-                state["prior_handoff_note"] = "[Handoff instruction]\n" + context["note"]
+                state["prior_handoff_note"] = (
+                    "[Handoff instruction]\n" + context["note"]
+                )
         else:
             bridge = compute_prior_agent_bridge(
                 session_snapshot, assignment["executorKind"], self.store

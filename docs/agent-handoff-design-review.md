@@ -57,7 +57,8 @@ The runtime uses the database-backed store.
 ## Implemented handoff contract
 
 The recovery round carries optional `handoffContext`, using
-`relay.handoff.context` version 1. Its `decisionId` and `assignmentId` link it to
+`relay.handoff.context` version 2 for new captures and version 1 for legacy
+captures. Version 2 requires a structured work receipt. Its `decisionId` and `assignmentId` link it to
 the decision and receiving assignment. Capture records:
 
 - Source run/assignment when available, receiving logical agent ID, resolved
@@ -117,9 +118,16 @@ authority in either direction. Legacy task-linked rounds without scope require
 a restart through task dispatch, rather than guessing ownership from links.
 See `docs/testing/handoff-work-scope.tdd.md` for regression evidence.
 
-The next steps are structured work receipts (including acceptance criteria and
-versioned workspace evidence), then ownership revisions and receiver validation.
-These remain proposed work; the current scope field does not implement them.
+The second step adds versioned work receipts with verbatim requirements,
+attributed structured checkpoints, and stored artifact hashes. It preserves
+initial thread objectives and current requests separately, without extracting
+or inventing acceptance criteria from prose. Missing or stale checkpoints mean
+unknown progress. Prepared retries reuse accepted receipts even when later task
+edits would exceed the new-capture size limit.
+
+The remaining step is ownership revisions and runtime receiver validation.
+Current hashes identify historical snapshots; they do not certify a live Git
+tree or enforce a writer fence. See `docs/testing/handoff-receipt.tdd.md`.
 
 - Existing web recovery callers already use logical-agent `/recoveries`. The
   repository caller inventory found no active chat/core client calling the

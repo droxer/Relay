@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
@@ -30,6 +31,8 @@ from ..sessions.bridge import latest_user_turn_text
 from ..sessions.controller import SessionController
 from ..sessions.handoff_context import capture_handoff_context
 from .models import (
+    COLLABORATION_FINGERPRINT_STATE_KEY,
+    COLLABORATION_MANIFEST_STATE_KEY,
     CollaborationIdempotencyError,
     MessageIntent,
     RecoveryIntent,
@@ -442,11 +445,6 @@ class CollaborationConductor:
             collaboration_id=collaboration_id,
             round_id=round_id,
         )
-        if session and intent.decision and intent.decision.get("kind") == "handoff":
-            manifest["handoffContext"] = capture_handoff_context(
-                session, resolved[0], intent.decision.get("note"), self.ctx.session_store
-            )
-            manifest["handoffContext"]["decisionId"] = f"dec_{round_id}"
         parsed: dict[str, Any] = {
             "taskGoal": task_goal,
             "assignments": resolved,
@@ -463,6 +461,40 @@ class CollaborationConductor:
             if scope["kind"] == "task":
                 parsed["taskId"] = scope["taskId"]
             manifest["workScope"] = scope
+        if session and intent.decision and intent.decision.get("kind") == "handoff":
+            prepared = (
+                self.ctx.registry.daemon_store.active_run_request_for_session_any_node(
+                    session["id"]
+                )
+            )
+            prepared_state = (prepared or {}).get("state") or {}
+            frozen_context = (
+                prepared_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+            ).get("handoffContext")
+            if (
+                prepared
+                and prepared.get("status") == "prepared"
+                and prepared_state.get(COLLABORATION_FINGERPRINT_STATE_KEY)
+                == fingerprint
+                and frozen_context
+            ):
+                # Do not even revalidate newer requirement lengths or reread
+                # artifact snapshots for an already accepted operation.
+                manifest["handoffContext"] = deepcopy(frozen_context)
+            else:
+                task = (
+                    self.ctx.task_store.get_task(parsed["taskId"])
+                    if parsed.get("taskId")
+                    else None
+                )
+                manifest["handoffContext"] = capture_handoff_context(
+                    session,
+                    resolved[0],
+                    intent.decision.get("note"),
+                    self.ctx.session_store,
+                    task=task,
+                )
+                manifest["handoffContext"]["decisionId"] = f"dec_{round_id}"
         if intent.user_message_id:
             parsed["userMessageId"] = intent.user_message_id
         parsed["idempotencyFingerprint"] = fingerprint

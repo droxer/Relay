@@ -113,7 +113,27 @@ export interface CollaborationRoundManifest {
     synthesizer?: boolean;
   }>;
   handoffContext?: {
-    contract: { name: "relay.handoff.context"; version: 1 };
+    receipt?: {
+      contract: { name: "relay.handoff.receipt"; version: 1 };
+      workScope: { kind: "thread" } | { kind: "task"; taskId: string };
+      workDefinition: { objective: string; requirements: string; currentRequest: string; handoffInstruction: string };
+      source: { runId: string | null; assignmentId: string | null; sessionEventId: string | null; taskEventId: string | null; taskEventCount: number | null };
+      targetAssignmentId: string;
+      checkpoint: {
+        status: "missing" | "snapshot_missing" | "invalid" | "stale" | "recorded";
+        path: string;
+        artifactId?: string;
+        sha256?: string | null;
+        claims?: { assignmentId: string; completed?: string[]; pending?: string[]; blockers?: string[]; failedApproaches?: string[]; verification?: string[]; dirtyFiles?: string[]; workspaceRevision?: string; nextAction?: string };
+      };
+      workspace: {
+        computerId: string | null; layout: string; subpath: string | null;
+        artifacts: Array<{ artifactId: string; path: string; sha256: string | null }>;
+        coverage: "partial"; referencesOmitted: boolean;
+      };
+      verificationRequired: true;
+    };
+    contract: { name: "relay.handoff.context"; version: 1 | 2 };
     assignmentId: string;
     targetAgentId: string | null;
     targetExecutor: string;

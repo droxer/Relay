@@ -4,7 +4,17 @@ import { deriveHandoffStatus } from "../src/lib/handoffStatus.js";
 import { applySessionEvent } from "../src/lib/sessionEvents.js";
 import type { RelaySession } from "../src/types.js";
 
-const context = { targetAgentId: "reviewer", targetDisplayName: "Reviewer", assignmentId: "a", note: "verify", contract: {name: "relay.handoff.context", version: 1} };
+const receipt = {
+  contract: { name: "relay.handoff.receipt", version: 1 },
+  workScope: { kind: "task", taskId: "task-1" },
+  workDefinition: { objective: "Build", requirements: "Keyboard access", currentRequest: "Verify", handoffInstruction: "Check failures" },
+  source: { runId: "prior", assignmentId: "source", sessionEventId: "event", taskEventId: "revision", taskEventCount: 2 },
+  targetAssignmentId: "a",
+  checkpoint: { status: "recorded", path: "PROGRESS.md.handoff.json", artifactId: "snapshot", sha256: "abc", claims: { assignmentId: "source", pending: ["Verify keyboard access"] } },
+  workspace: { computerId: "computer", layout: "thread", subpath: null, artifacts: [], coverage: "partial", referencesOmitted: false },
+  verificationRequired: true,
+};
+const context = { targetAgentId: "reviewer", targetDisplayName: "Reviewer", assignmentId: "a", note: "verify", contract: {name: "relay.handoff.context", version: 1}, receipt };
 function session(): RelaySession {
   return { id: "s", taskGoal: "goal", workspacePath: "/workspace", status: "running", phase: "handoff:codex", events: [], agentRuns: [], artifacts: [], decisions: [], participants: [], createdAt: "now", updatedAt: "now", activeRoundId: "r", collaborationRounds: [{roundId: "r", handoffContext: context}] } as unknown as RelaySession;
 }
@@ -40,6 +50,7 @@ test("round context and delivery evidence survive core replay and browser SSE", 
   const streamed = applySessionEvent(applySessionEvent(materializeEvents([created]), accepted), delivery);
   assert.deepEqual(replay.collaborationRounds, streamed.collaborationRounds);
   assert.deepEqual(replay.collaborationRounds[0].handoffContext, context);
+  assert.deepEqual(streamed.collaborationRounds[0].handoffContext?.receipt, receipt);
   assert.deepEqual(replay.collaborationRounds[0].workScope, { kind: "task", taskId: "task-1" });
   assert.equal(deriveHandoffStatus(replay)?.status, "queued");
   assert.deepEqual(deriveHandoffStatus(replay), deriveHandoffStatus(streamed));
