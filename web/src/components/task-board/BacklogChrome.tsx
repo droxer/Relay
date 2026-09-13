@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { taskFlowMetrics } from "../../lib/taskFlow";
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,7 +26,10 @@ import { activeFilterCount, initialFilters, type BacklogView } from "./backlogVo
 export function BacklogStats({ tasks }: { tasks: RelayTaskListItem[] }) {
   const { t } = useTranslation();
   const flow = taskFlowMetrics(tasks);
-  const { data: policy } = useQuery<{ wipLimit: number; scope: string }>({ queryKey: ["task-flow-policy"], enabled: false });
+  const { data: policy } = useQuery<{ wipLimit: number; scope: string }>({
+    queryKey: ["task-flow-policy"],
+    queryFn: skipToken,
+  });
   const stats = useMemo(() => {
     const active = taskFlowMetrics(tasks).wip;
     const blocked = tasks.filter((task) => task.status === "blocked").length;
