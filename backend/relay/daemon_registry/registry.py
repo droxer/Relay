@@ -2516,6 +2516,11 @@ class DaemonNodeRegistry:
                 continue
             session = self.store.get_session(request["sessionId"])
             if session.get("status") in ("completed", "failed", "cancelled"):
+                command_record = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
+                terminal_event = ((command_record or {}).get("command") or {}).get("_terminalEvent")
+                if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
+                    self._claim_and_advance_run_request(terminal_event)
+                    continue
                 terminalized = self.daemon_store.update_run_request_if_status(
                     request["id"],
                     request["status"],
@@ -3200,6 +3205,19 @@ class DaemonNodeRegistry:
             )
             self.update_status(
                 run_request["nodeId"], {"status": "ready", "lastError": outcome}
+            )
+            return
+        if session_before.get("status") in ("completed", "failed", "cancelled"):
+            # The human/session terminal decision wins over a late daemon
+            # result. The command already retains the acknowledged result;
+            # only finish request bookkeeping, never reopen work or dispatch
+            # another assignment during crash recovery.
+            self.active_commands.pop(event["commandId"], None)
+            self.clear_run_output(event["runId"])
+            self.daemon_store.mark_cancel_commands_completed(run_request["nodeId"], event["commandId"])
+            self.daemon_store.update_run_request_if_claimed(
+                run_request["id"], TERMINAL_CLAIM_ID_STATE_KEY, terminal_claim_id,
+                {"status": session_before["status"], "error": session_before.get("finalOutcome")},
             )
             return
         existing_completion = next(
