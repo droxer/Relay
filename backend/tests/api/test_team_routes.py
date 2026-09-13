@@ -2772,3 +2772,46 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
     assert (response.json()["status"] != "failed") is accepted
     commands = client.app.state.registry.take_commands("test_node_alice", "node_token")
     assert bool(commands) is accepted
+
+
+@pytest.mark.parametrize("race_point", ["capture", "reservation"])
+def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch, race_point):
+    from relay.collaboration import service
+
+    client, controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+
+    def replace_owner():
+        controller.record_collaboration_round_started(
+            session["id"],
+            {"roundId": "new-owner", "collaborationId": "new-work", "workScope": {"kind": "thread"}},
+        )
+
+    if race_point == "capture":
+        original = service.capture_handoff_context
+
+        def capture(*args, **kwargs):
+            context = original(*args, **kwargs)
+            replace_owner()
+            return context
+
+        monkeypatch.setattr(service, "capture_handoff_context", capture)
+    else:
+        original = registry.daemon_store.create_run_request
+
+        def reserve(*args, **kwargs):
+            replace_owner()
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(registry.daemon_store, "create_run_request", reserve)
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 409, response.text
+    assert "handoff_source_changed" in response.text
+    current = client.app.state.session_store.get_session(session["id"])
+    assert current["activeRoundId"] == "new-owner"
+    assert registry.daemon_store.active_run_request_for_session_any_node(session["id"]) is None
+    assert registry.take_commands("test_node_alice", "node_token") == []
