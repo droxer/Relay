@@ -171,7 +171,7 @@ def resolve_agent_assignments(
             )
         policy_fields = [
             field
-            for field in ("skillPolicy", "toolPolicy", "modelPolicy")
+            for field in ("toolPolicy", "modelPolicy")
             if agent.get(field)
         ]
         if policy_fields:

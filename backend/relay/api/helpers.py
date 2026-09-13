@@ -638,6 +638,24 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
     lease_id = string_field(value, "leaseId")
     lease_field = {"leaseId": lease_id} if lease_id else {}
     if event_type == "run.executing":
+        raw_skips = value.get("skillsSkipped", [])
+        if not isinstance(raw_skips, list):
+            raise ValueError("invalid run.executing skillsSkipped.")
+        skills_skipped = []
+        for item in raw_skips:
+            if not isinstance(item, dict):
+                raise ValueError(  # noqa: TRY004 - request validation uses ValueError.
+                    "invalid run.executing skillsSkipped entry."
+                )
+            normalized = {}
+            for key, limit in (("skillId", 256), ("slug", 512), ("reason", 200)):
+                if key == "slug" and key not in item:
+                    continue
+                field = item.get(key)
+                if not isinstance(field, str) or not field.strip() or len(field) > limit:
+                    raise ValueError("invalid run.executing skillsSkipped entry.")
+                normalized[key] = field.strip()
+            skills_skipped.append(normalized)
         return {
             "type": event_type,
             "commandId": command_id,
@@ -645,6 +663,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "sessionId": session_id,
             "runId": run_id,
             "agent": agent,
+            **({"skillsSkipped": skills_skipped} if skills_skipped else {}),
         }
     if event_type == "run.workspace":
         if not isinstance(value.get("waiting"), bool):

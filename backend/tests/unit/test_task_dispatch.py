@@ -114,6 +114,7 @@ def app_context_for(app) -> AppContext:
         agent_store=state.agent_store,
         team_store=state.team_store,
         project_store=state.project_store,
+        skill_store=state.skill_store,
         agent_placement_store=state.agent_placement_store,
         profile_image_store=state.profile_image_store,
         org_settings_store=state.org_settings_store,

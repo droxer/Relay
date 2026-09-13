@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -190,6 +191,21 @@ class LocalAgentStore:
             self._append(agent_id, event_type, {"patch": normalized, "agent": updated})
             return updated
 
+    def transform_skill_policy(
+        self,
+        agent_id: str,
+        transform: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Atomically replace skillPolicy through the agent event log."""
+        with self._lock:
+            current = self.get_agent(agent_id)
+            if not current or current.get("deletedAt"):
+                raise KeyError(agent_id)
+            return self.update_agent(
+                agent_id,
+                {"skillPolicy": transform(dict(current.get("skillPolicy") or {}))},
+            )
+
     def delete_agent(self, agent_id: str) -> dict[str, Any]:
         with self._lock:
             current = self.get_agent(agent_id)
@@ -225,7 +241,9 @@ class LocalAgentStore:
             if not current:
                 raise KeyError(agent_id)
             updated = {
-                key: value for key, value in current.items() if key != "compatibilityKey"
+                key: value
+                for key, value in current.items()
+                if key != "compatibilityKey"
             }
             updated |= {
                 "computerId": computer_id,
@@ -354,6 +372,9 @@ class DatabaseAgentStore:
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
+        # SQLite ignores SELECT FOR UPDATE. This lock supplies equivalent
+        # same-process serialization; PostgreSQL additionally takes a row lock.
+        self._skill_policy_lock = RLock()
         if create_schema:
             create_all_tables(self.engine)
 
@@ -492,6 +513,65 @@ class DatabaseAgentStore:
         return self._append(
             agent_id, event_type, updated, {"patch": normalized, "agent": updated}
         )
+
+    def transform_skill_policy(
+        self,
+        agent_id: str,
+        transform: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Lock, transform, and append one authoritative agent event."""
+        with self._skill_policy_lock, store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    select(
+                        self.agents.c.id,
+                        self.agents.c.snapshot,
+                        self.agents.c.supervisor_employee_id,
+                        self.agents.c.event_version,
+                    )
+                    .where(self.agents.c.id == agent_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                raise KeyError(agent_id)
+            current = _normalized_agent_snapshot(
+                row["snapshot"], row["supervisor_employee_id"]
+            )
+            if current.get("deletedAt"):
+                raise KeyError(agent_id)
+            policy = transform(dict(current.get("skillPolicy") or {}))
+            updated, normalized, event_type = _updated_agent(
+                agent_id,
+                current,
+                {"skillPolicy": policy},
+                self._ensure_unique_name,
+            )
+            sequence = int(row["event_version"] or 0)
+            event = _agent_event(
+                agent_id,
+                event_type,
+                {"patch": normalized, "agent": updated},
+            )
+            conn.execute(
+                insert(self.events_table).values(
+                    **_agent_event_row(row["id"], sequence, event)
+                )
+            )
+            conn.execute(
+                update(self.agents)
+                .where(self.agents.c.id == row["id"])
+                .values(
+                    **_agent_row(
+                        updated,
+                        event_version=sequence + 1,
+                        database_id=row["id"],
+                    )
+                )
+            )
+        return updated
 
     def delete_agent(self, agent_id: str) -> dict[str, Any]:
         current = self.get_agent(agent_id)
@@ -901,9 +981,9 @@ def _policy(payload: dict[str, Any], field: str) -> dict[str, Any]:
         return {}
     if not isinstance(value, dict):
         raise ValueError(f"{field} must be an object.")
-    if value:
+    if value and field != "skillPolicy":
         raise ValueError(
             f"{field} is reserved until runtime enforcement is available; "
             "non-empty policies are not accepted."
         )
-    return {}
+    return dict(value) if field == "skillPolicy" else {}

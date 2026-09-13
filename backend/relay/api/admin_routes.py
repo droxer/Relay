@@ -14,6 +14,7 @@ from ..persistence.org_settings_store import (
     OrgSettingsValidationError,
     normalize_max_local_computers,
     normalize_max_task_rounds,
+    normalize_skill_import_hosts,
 )
 from ..security.auth import (
     get_admin_token,
@@ -114,9 +115,9 @@ def reissue_admin_token_route(request: Request, ctx: AppContextDep) -> dict[str,
 async def update_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = await json_body(request)
-    if "maxLocalComputersPerEmployee" not in body and "maxTaskRounds" not in body:
+    if not {"maxLocalComputersPerEmployee", "maxTaskRounds", "skillImportAllowedHosts"}.intersection(body):
         raise HTTPException(
-            400, "maxLocalComputersPerEmployee or maxTaskRounds is required."
+            400, "maxLocalComputersPerEmployee, maxTaskRounds or skillImportAllowedHosts is required."
         )
     try:
         settings = ctx.org_settings_store.update_settings(
@@ -129,6 +130,10 @@ async def update_org_settings(request: Request, ctx: AppContextDep) -> dict[str,
                 normalize_max_task_rounds(body["maxTaskRounds"])
                 if "maxTaskRounds" in body
                 else None
+            ),
+            skill_import_allowed_hosts=(
+                normalize_skill_import_hosts(body["skillImportAllowedHosts"])
+                if "skillImportAllowedHosts" in body else None
             ),
         )
     except OrgSettingsValidationError as error:

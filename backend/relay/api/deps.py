@@ -22,6 +22,7 @@ from ..persistence.protocols import (
     TaskStore,
     TeamStore,
 )
+from ..persistence.skill_store import DatabaseSkillStore
 from ..services.event_notifier import KeyedEventNotifier
 from ..services.workspace_query import WorkspaceQueryBroker
 
@@ -39,6 +40,7 @@ class AppContext:
     agent_store: AgentStore
     team_store: TeamStore
     project_store: ProjectStore
+    skill_store: DatabaseSkillStore
     agent_placement_store: AgentPlacementStore
     profile_image_store: ProfileImageStore
     org_settings_store: OrgSettingsStore
@@ -60,6 +62,7 @@ def app_context(request: Request) -> AppContext:
         agent_store=request.app.state.agent_store,
         team_store=request.app.state.team_store,
         project_store=request.app.state.project_store,
+        skill_store=request.app.state.skill_store,
         agent_placement_store=request.app.state.agent_placement_store,
         profile_image_store=request.app.state.profile_image_store,
         org_settings_store=request.app.state.org_settings_store,

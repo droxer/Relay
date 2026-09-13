@@ -52,6 +52,12 @@ def available_runtimes(nodes: list[dict[str, Any]]) -> set[str]:
 def create_agent_for_employee(
     ctx: Any, supervisor_employee_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
+    if "skillPolicy" in body:
+        raise AgentCreationError(
+            "skill_policy_grants_only",
+            "Use skill grant routes to manage skillPolicy.",
+            status=422,
+        )
     target_computer_id = (body.get("computerId") or "").strip()
     if not target_computer_id:
         raise AgentCreationError("computer_required", "computerId is required.")
@@ -83,7 +89,6 @@ def create_agent_for_employee(
                     "displayName",
                     "instructions",
                     "toolPolicy",
-                    "skillPolicy",
                     "modelPolicy",
                 )
             },

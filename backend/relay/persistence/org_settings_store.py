@@ -7,6 +7,8 @@ divergent code path to keep in sync.
 
 from __future__ import annotations
 
+import ipaddress
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -25,9 +27,12 @@ from sqlalchemy import (
 from .store_common import (
     _format_iso,
     create_all_tables,
-    metadata as shared_metadata,
+    json_type,
     shared_engine,
     store_transaction,
+)
+from .store_common import (
+    metadata as shared_metadata,
 )
 
 # The whole table is one row; the id is a constant so concurrent writers
@@ -51,6 +56,28 @@ MAX_MAX_TASK_ROUNDS = 50
 
 class OrgSettingsValidationError(ValueError):
     pass
+
+
+def normalize_skill_import_hosts(value: Any) -> list[str]:
+    if not isinstance(value, list) or len(value) > 32:
+        raise OrgSettingsValidationError("skillImportAllowedHosts must be a list of at most 32 DNS hostnames.")
+    hosts = set()
+    for host in value:
+        if not isinstance(host, str) or len(host) > 253:
+            raise OrgSettingsValidationError("Invalid skill import hostname.")
+        host = host.lower()
+        if "." not in host or any(
+            re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) is None
+            for label in host.split(".")
+        ):
+            raise OrgSettingsValidationError("Invalid skill import hostname.")
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            hosts.add(host)
+        else:
+            raise OrgSettingsValidationError("Skill import hosts must be DNS hostnames, not IP addresses.")
+    return sorted(hosts)
 
 
 def normalize_max_local_computers(value: Any) -> int:
@@ -111,6 +138,7 @@ class DatabaseOrgSettingsStore:
         ),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
+        Column("skill_import_allowed_hosts", json_type(), nullable=False, server_default='["github.com"]'),
         CheckConstraint(
             "max_task_rounds >= 1",
             name="ck_org_settings_max_task_rounds_positive",
@@ -141,6 +169,7 @@ class DatabaseOrgSettingsStore:
             return {
                 "maxLocalComputersPerEmployee": DEFAULT_MAX_LOCAL_COMPUTERS,
                 "maxTaskRounds": DEFAULT_MAX_TASK_ROUNDS,
+                "skillImportAllowedHosts": ["github.com"],
                 "updatedAt": None,
             }
         return _row_to_settings(row)
@@ -150,6 +179,7 @@ class DatabaseOrgSettingsStore:
         *,
         max_local_computers_per_employee: int | None = None,
         max_task_rounds: int | None = None,
+        skill_import_allowed_hosts: list[str] | None = None,
     ) -> dict[str, Any]:
         # Each field is optional so a caller can change one without having to
         # read and resend the other, which would race a concurrent edit.
@@ -162,20 +192,26 @@ class DatabaseOrgSettingsStore:
         rounds = normalize_max_task_rounds(
             current["maxTaskRounds"] if max_task_rounds is None else max_task_rounds
         )
+        hosts = normalize_skill_import_hosts(
+            current["skillImportAllowedHosts"] if skill_import_allowed_hosts is None else skill_import_allowed_hosts
+        )
         now = datetime.now(timezone.utc)
         with store_transaction(self.engine) as conn:
             existing = conn.scalar(
                 select(self.settings.c.id).where(self.settings.c.id == SETTINGS_ROW_ID)
             )
             if existing:
+                values: dict[str, Any] = {"updated_at": now}
+                if max_local_computers_per_employee is not None:
+                    values["max_local_computers_per_employee"] = limit
+                if max_task_rounds is not None:
+                    values["max_task_rounds"] = rounds
+                if skill_import_allowed_hosts is not None:
+                    values["skill_import_allowed_hosts"] = hosts
                 conn.execute(
                     update(self.settings)
                     .where(self.settings.c.id == SETTINGS_ROW_ID)
-                    .values(
-                        max_local_computers_per_employee=limit,
-                        max_task_rounds=rounds,
-                        updated_at=now,
-                    )
+                    .values(**values)
                 )
             else:
                 conn.execute(
@@ -183,20 +219,18 @@ class DatabaseOrgSettingsStore:
                         id=SETTINGS_ROW_ID,
                         max_local_computers_per_employee=limit,
                         max_task_rounds=rounds,
+                        skill_import_allowed_hosts=hosts,
                         created_at=now,
                         updated_at=now,
                     )
                 )
-        return {
-            "maxLocalComputersPerEmployee": limit,
-            "maxTaskRounds": rounds,
-            "updatedAt": _format_iso(now),
-        }
+        return self.get_settings()
 
 
 def _row_to_settings(row: Any) -> dict[str, Any]:
     return {
         "maxLocalComputersPerEmployee": int(row["max_local_computers_per_employee"]),
         "maxTaskRounds": int(row["max_task_rounds"]),
+        "skillImportAllowedHosts": list(row["skill_import_allowed_hosts"]),
         "updatedAt": _format_iso(row["updated_at"]),
     }

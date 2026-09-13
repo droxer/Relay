@@ -198,6 +198,7 @@ DAEMON_CAPABILITY_PRODUCED_FILES = "produced-files"
 DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
+        "agent-skills",
         DAEMON_CAPABILITY_GENERATED_FILES,
         DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
         DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
@@ -434,6 +435,9 @@ class DaemonNodeRegistry:
         self.logical_assignment_validator: Callable[[dict[str, Any]], None] | None = (
             None
         )
+        self.logical_skill_bundle_resolver: (
+            Callable[[str], tuple[dict[str, Any] | None, list[dict[str, Any]]]] | None
+        ) = None
         self._last_reap_at = 0.0
         self._last_prune_at = 0.0
         self._last_seen_persisted_at: dict[str, float] = {}
@@ -1437,8 +1441,67 @@ class DaemonNodeRegistry:
         event["id"] = event_id
         self.store.append_event(session_id, event)
 
+    def _record_skipped_skills(
+        self, command: dict[str, Any], daemon_skips: Any
+    ) -> None:
+        allowed = {
+            (skill.get("skillId"), skill.get("slug"))
+            for skill in (command.get("skills") or {}).get("skills", [])
+            if isinstance(skill, dict)
+        }
+        accepted = {}
+        slugs_by_id = dict(allowed)
+        for item in daemon_skips if isinstance(daemon_skips, list) else []:
+            if not isinstance(item, dict):
+                continue
+            key = (item.get("skillId"), item.get("slug", slugs_by_id.get(item.get("skillId"))))
+            if key not in allowed:
+                continue
+            accepted.setdefault(key,
+                {"skillId": key[0], "slug": key[1], "reason": item.get("reason")}
+            )
+        combined = [*(command.get("_skillsSkipped") or []), *accepted.values()]
+        unique = {
+            (item.get("skillId"), item.get("slug"), item.get("reason")): item
+            for item in combined
+            if isinstance(item, dict)
+        }
+        skipped = sorted(
+            unique.values(),
+            key=lambda item: (
+                item.get("slug") or "",
+                item.get("skillId") or "",
+                item.get("reason") or "",
+            ),
+        )
+        if not skipped:
+            return
+        event_id = f"skills_skipped_{command['runId']}"
+        session = self.store.get_session(command["sessionId"])
+        if any(event.get("id") == event_id for event in session.get("events", [])):
+            return
+        names = ", ".join(
+            f"{item.get('slug') or item['skillId']} ({item['reason']})"
+            for item in skipped
+        )
+        notice = relay_event(
+            "system.notice",
+            command["sessionId"],
+            {
+                "runId": command["runId"],
+                "agent": command["agent"],
+                "text": f"Some granted skills were unavailable: {names}.",
+                "reason": "skills-skipped",
+                "skillsSkipped": skipped,
+            },
+        )
+        notice["id"] = event_id
+        self.store.append_event(command["sessionId"], notice)
+
     def _track_active_command(self, sandbox_id: str, command: dict[str, Any]) -> None:
         self._record_handoff_delivery(command, "queued")
+        if command.get("_skillsSkipped") and "skills" not in command:
+            self._record_skipped_skills(command, [])
         if command["type"] == "run.start":
             self.active_commands[command["id"]] = {
                 "sandboxId": sandbox_id,
@@ -2244,6 +2307,7 @@ class DaemonNodeRegistry:
             return
         if event["type"] == "run.executing":
             self._record_handoff_delivery(command, "running")
+            self._record_skipped_skills(command, event.get("skillsSkipped"))
             self._note_run_progress(command)
             return
         if event["type"] == "run.output":
@@ -2762,10 +2826,17 @@ class DaemonNodeRegistry:
             if task_owner and task_owner != request_execution_owner(run_request):
                 # Do not fail the session: it may already belong to a newer
                 # round. Reject only this stale execution request.
-                return self.daemon_store.update_run_request_if_status(
-                    run_request["id"], run_request["status"],
-                    {"status": "failed", "error": "task_ownership_changed: task execution owner changed"},
-                ) or run_request
+                return (
+                    self.daemon_store.update_run_request_if_status(
+                        run_request["id"],
+                        run_request["status"],
+                        {
+                            "status": "failed",
+                            "error": "task_ownership_changed: task execution owner changed",
+                        },
+                    )
+                    or run_request
+                )
         assignments = run_request["assignments"]
         index = run_request.get("currentIndex", 0)
         if index >= len(assignments):
@@ -2853,7 +2924,9 @@ class DaemonNodeRegistry:
                     f"The {workspace_layout} thread is missing its workspaceSubpath.",
                 )
                 return run_request
-        manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        manifest = (run_request.get("state") or {}).get(
+            COLLABORATION_MANIFEST_STATE_KEY
+        ) or {}
         context = manifest.get("handoffContext")
         handoff_validation = None
         if context:
@@ -2900,17 +2973,26 @@ class DaemonNodeRegistry:
                     return run_request
                 state["prior_conversation"] += "\n\n" + receipt_prompt
             if context["contract"]["version"] == 3:
-                if DAEMON_CAPABILITY_HANDOFF_VALIDATION not in (sandbox.get("capabilities") or []):
-                    self._fail_run_request(run_request, "Handoff requires a daemon with handoff-validation support. Upgrade the daemon before retrying.")
+                if DAEMON_CAPABILITY_HANDOFF_VALIDATION not in (
+                    sandbox.get("capabilities") or []
+                ):
+                    self._fail_run_request(
+                        run_request,
+                        "Handoff requires a daemon with handoff-validation support. Upgrade the daemon before retrying.",
+                    )
                     return run_request
                 receipt = context["receipt"]
                 workspace = receipt.get("workspace") or {}
                 if (
                     receipt.get("targetAssignmentId") != assignment["assignmentId"]
                     or workspace.get("layout") != workspace_layout
-                    or workspace.get("subpath") != session_snapshot.get("workspaceSubpath")
+                    or workspace.get("subpath")
+                    != session_snapshot.get("workspaceSubpath")
                 ):
-                    self._fail_run_request(run_request, "Handoff receipt does not match the receiving workspace or assignment.")
+                    self._fail_run_request(
+                        run_request,
+                        "Handoff receipt does not match the receiving workspace or assignment.",
+                    )
                     return run_request
                 handoff_validation = {
                     "contract": {"name": "relay.handoff.validation", "version": 1},
@@ -2931,7 +3013,9 @@ class DaemonNodeRegistry:
                 state["prior_agent_bridge"] = bridge
             # Chat can grow into substantial work too. Provide a stable path on
             # every run; the prompt only asks to create a checkpoint for real work.
-            progress_file = task_progress_file(run_request["sessionId"], workspace_layout)
+            progress_file = task_progress_file(
+                run_request["sessionId"], workspace_layout
+            )
             state["progress_file"] = progress_file
             conversation = compute_conversation_history(
                 session_snapshot, self.store, progress_file=progress_file
@@ -3020,9 +3104,35 @@ class DaemonNodeRegistry:
             "_runRequestId": run_request["id"],
             "reportWorkspaceStatus": True,
             **({"reportExecutionStarted": True} if context else {}),
-            **({"handoffValidation": handoff_validation} if handoff_validation is not None else {}),
+            **(
+                {"handoffValidation": handoff_validation}
+                if handoff_validation is not None
+                else {}
+            ),
             "_nodeId": node_id,
         }
+        logical_agent_id = command.get("logicalAgentId")
+        if logical_agent_id and self.logical_skill_bundle_resolver:
+            skill_bundle, resolution_skips = self.logical_skill_bundle_resolver(
+                logical_agent_id
+            )
+            if skill_bundle is None:
+                pass
+            elif "agent-skills" in (sandbox.get("capabilities") or []):
+                command["skills"] = skill_bundle
+                command["_skillsSkipped"] = resolution_skips
+            else:
+                unsupported = [
+                    {
+                        "skillId": skill["skillId"],
+                        "slug": skill.get("slug"),
+                        "reason": "daemon-unsupported",
+                    }
+                    for skill in skill_bundle.get("skills", [])
+                ]
+                command["_skillsSkipped"] = [*resolution_skips, *unsupported]
+            if skill_bundle is not None or resolution_skips:
+                command["reportExecutionStarted"] = True
         collaboration_manifest = request_state.get(COLLABORATION_MANIFEST_STATE_KEY)
         if isinstance(collaboration_manifest, dict):
             command["delivery"] = {

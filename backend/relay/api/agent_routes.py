@@ -330,6 +330,8 @@ def _employee_exists(auth_store: Any, employee_id: str) -> bool:
 def _update_agent_and_realize_placements(
     ctx: AppContextDep, agent_id: str, patch: dict[str, Any]
 ) -> dict[str, Any]:
+    if "skillPolicy" in patch:
+        raise HTTPException(422, "Use skill grant routes to manage skillPolicy.")
     previous = ctx.agent_store.get_agent(agent_id)
     updated = ctx.agent_store.update_agent(agent_id, patch)
     if previous and updated.get("version") != previous.get("version"):
@@ -383,7 +385,7 @@ def _agent_with_placements(ctx: AppContextDep, agent: dict[str, Any]) -> dict[st
 
 def _agent_skills(
     ctx: AppContextDep, agent: dict[str, Any], placements: list[dict[str, Any]]
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """The skills this agent's runtime actually has on the computers it runs on.
 
     Skills are node-reported inventory rather than a stored agent field, so they
@@ -398,9 +400,7 @@ def _agent_skills(
         for placement in placements
         if placement.get("runtimeNodeId")
     }
-    if not node_ids:
-        return []
-    skills: list[dict[str, str]] = []
+    skills: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for node in ctx.registry.monitor_nodes():
         if node["id"] not in node_ids:
@@ -415,7 +415,26 @@ def _agent_skills(
             if key in seen:
                 continue
             seen.add(key)
-            skills.append(skill)
+            skills.append({**skill, "source": "node"})
+    from ..services.skill_bundle import resolve_bundle
+    from ..services.skill_grants import read_grants
+
+    bundle, skipped = resolve_bundle(ctx, agent)
+    available = {entry["skillId"] for entry in (bundle or {}).get("skills", [])}
+    reasons = {entry["skillId"]: entry["reason"] for entry in skipped}
+    for grant in read_grants(agent):
+        skill_id = grant["skillId"]
+        skill = ctx.skill_store.get_skill(skill_id)
+        skills.append({
+            "source": "catalog", "skillId": skill_id,
+            "name": skill["name"] if skill else skill_id,
+            "namespace": (skill or {}).get("namespace"),
+            "description": (skill or {}).get("description", ""),
+            "slug": (skill or {}).get("slug", skill_id),
+            "available": skill_id in available,
+            "pin": grant.get("pin"),
+            **({"reason": reasons[skill_id]} if skill_id in reasons else {}),
+        })
     return sorted(skills, key=lambda skill: (skill.get("namespace") or "", skill["name"]))
 
 
