@@ -15,7 +15,7 @@ const badgeVariants = cva(
      curve — reads wide against a 6px radius, so the badge takes the 8px step.
      The leading status dot is a `StateMark` child, not a pseudo-element —
      see the variant table below. */
-  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden rounded-md border px-2 py-0.5 text-micro font-bold whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
+  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden rounded-md border px-2 py-0.5 text-micro font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       /* Chrome only — border + ink per tone. The leading status dot is NOT
