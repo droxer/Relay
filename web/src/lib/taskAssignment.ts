@@ -1,6 +1,12 @@
 import type { AgentTeam, CurrentUser, LogicalAgentAvailability } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 
+/** Can this agent/team be offered for a task assigned to `assigneeEmployeeId`?
+ *
+ *  An owned record belongs to one employee and is offered only to them. An
+ *  OWNERLESS record is globally assignable — agents and teams are not always
+ *  employee-scoped, and hiding them left the picker with nothing to show.
+ *  This mirrors the backend rule that ownerless sessions are allowed. */
 export function assignmentOptionVisible(
   ownerEmployeeId: string | undefined,
   assigneeEmployeeId: string,
@@ -8,6 +14,7 @@ export function assignmentOptionVisible(
 ): boolean {
   if (selected) return true;
   if (!assigneeEmployeeId) return true;
+  if (!ownerEmployeeId) return true;
   return ownerEmployeeId === assigneeEmployeeId;
 }
 

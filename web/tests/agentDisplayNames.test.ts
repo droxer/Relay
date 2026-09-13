@@ -18,7 +18,7 @@ function agent(
   input: Partial<EmployeeAgent> & Pick<EmployeeAgent, "id" | "displayName" | "executorKind">,
 ): EmployeeAgent {
   return {
-    employeeId: "alice",
+    supervisorEmployeeId: "alice",
     skillPolicy: {},
     toolPolicy: {},
     modelPolicy: {},

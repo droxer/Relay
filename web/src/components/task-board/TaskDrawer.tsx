@@ -215,7 +215,7 @@ export function TaskDrawer({
   }
 
   const agentOptions = logicalAgents.filter((agent) => assignmentOptionVisible(
-    agent.employeeId,
+    agent.supervisorEmployeeId,
     form.assigneeEmployeeId,
     agent.id === form.assignedAgentId,
   ));
@@ -329,7 +329,9 @@ export function TaskDrawer({
                   assignedAgent: logicalAgent.executorKind,
                   assignedAgentId: logicalAgent.id,
                   assignedTeamId: "",
-                  assigneeEmployeeId: logicalAgent.employeeId,
+                  // An ownerless agent says nothing about who the task is
+                  // for, so it leaves the assignee as the employee chose it.
+                  assigneeEmployeeId: logicalAgent.supervisorEmployeeId ?? form.assigneeEmployeeId,
                   ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
                 });
                 return;

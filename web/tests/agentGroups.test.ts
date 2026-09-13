@@ -37,7 +37,7 @@ function placement(
 function agent(id: string, placements: AgentPlacement[]): EmployeeAgent {
   return {
     id,
-    employeeId: "alice",
+    supervisorEmployeeId: "alice",
     displayName: id,
     executorKind: "codex",
     enabled: true,

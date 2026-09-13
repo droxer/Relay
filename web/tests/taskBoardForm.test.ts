@@ -104,8 +104,12 @@ describe("taskBoardForm", () => {
     );
   });
 
-  it("hides ownerless assignment options unless they are already selected", () => {
-    assert.equal(assignmentOptionVisible(undefined, "alice", false), false);
+  it("offers ownerless assignment options to every assignee", () => {
+    // Agents and teams are not always employee-scoped: an ownerless record is
+    // globally assignable, mirroring the backend's "ownerless legacy sessions
+    // are allowed" rule. Filtering them out emptied the picker entirely.
+    assert.equal(assignmentOptionVisible(undefined, "alice", false), true);
+    assert.equal(assignmentOptionVisible("", "alice", false), true);
     assert.equal(assignmentOptionVisible(undefined, "alice", true), true);
     assert.equal(assignmentOptionVisible("alice", "alice", false), true);
     assert.equal(assignmentOptionVisible("bob", "alice", false), false);

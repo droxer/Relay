@@ -267,7 +267,7 @@ function placement(input: Partial<AgentPlacement> & Pick<AgentPlacement, "id" | 
 
 function agent(input: Partial<EmployeeAgent> & Pick<EmployeeAgent, "id">): EmployeeAgent {
   return {
-    employeeId: "someone",
+    supervisorEmployeeId: "someone",
     displayName: input.id,
     executorKind: "claude",
     skillPolicy: {},
@@ -291,14 +291,14 @@ describe("agentsOnNodes", () => {
   const agentsForEmployee = (member: typeof alice, agents: EmployeeAgent[]) =>
     agentsOnNodes(member.nodes.map((n) => n.id), agents);
 
-  it("resolves agents through the employee's nodes, not agent.employeeId", () => {
+  it("resolves agents through the employee's nodes, not the agent's supervisor", () => {
     const agents = [
-      // Placed on one of alice's nodes → hers, even though employeeId points elsewhere.
-      agent({ id: "on-node", employeeId: "bob", placements: [placement({ id: "p1", daemonNodeId: "n2" })] }),
-      // employeeId says alice but placed on a foreign node → not shown.
-      agent({ id: "elsewhere", employeeId: "alice", placements: [placement({ id: "p2", daemonNodeId: "other" })] }),
+      // Placed on one of alice's nodes → hers, even though the supervisor points elsewhere.
+      agent({ id: "on-node", supervisorEmployeeId: "bob", placements: [placement({ id: "p1", daemonNodeId: "n2" })] }),
+      // Supervised by alice but placed on a foreign node → not shown.
+      agent({ id: "elsewhere", supervisorEmployeeId: "alice", placements: [placement({ id: "p2", daemonNodeId: "other" })] }),
       // No placements at all → not shown.
-      agent({ id: "unplaced", employeeId: "alice", placements: [] }),
+      agent({ id: "unplaced", supervisorEmployeeId: "alice", placements: [] }),
     ];
     assert.deepEqual(agentsForEmployee(alice, agents).map((a) => a.id), ["on-node"]);
   });

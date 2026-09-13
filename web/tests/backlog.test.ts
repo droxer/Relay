@@ -150,7 +150,7 @@ describe("agentReadyForTask", () => {
     const backlogTask = task({ id: "a", title: "A", assignedAgent: "codex", assignedAgentId: "agent_builder" });
     const logicalAgent: EmployeeAgent = {
       id: "agent_builder",
-      employeeId: "alice",
+      supervisorEmployeeId: "alice",
       displayName: "Builder",
       executorKind: "codex",
       skillPolicy: {}, toolPolicy: {}, modelPolicy: {},
@@ -177,7 +177,7 @@ describe("discussionAgentsForTask", () => {
   it("uses ready logical agents without exposing their runtime nodes", () => {
     const backlogTask = task({ id: "a", title: "A", assigneeEmployeeId: "alice" });
     const base: Omit<EmployeeAgent, "id" | "displayName" | "executorKind"> = {
-      employeeId: "alice", skillPolicy: {}, toolPolicy: {}, modelPolicy: {},
+      supervisorEmployeeId: "alice", skillPolicy: {}, toolPolicy: {}, modelPolicy: {},
       enabled: true, version: 1, availability: "ready", placements: [],
       createdAt: "2026-07-10T00:00:00.000Z", updatedAt: "2026-07-10T00:00:00.000Z",
     };
