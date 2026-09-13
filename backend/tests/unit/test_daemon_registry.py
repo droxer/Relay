@@ -4944,6 +4944,19 @@ def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
             registry._record_round_result(request, {"status": "continue", "note": "old"}, "assigned")
             registry._complete_run_request(request, "old result")
             assert tasks.get_task(task_id) == finished
+            registry.daemon_store.mark_command_completed("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "exitCode": 0,
+            })
+            SessionController(_sessions).continue_session(command["sessionId"])
+            revived = registry.daemon_store.update_run_request(request["id"], {
+                "status": "running", "currentCommandId": None, "currentRunId": None,
+            })
+            registry._enqueue_current_assignment(revived)
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
+            assert registry.daemon_store.queued_command_count("sbx_alice") == 0
+            assert tasks.get_task(task_id) == finished
 
     asyncio.run(run_flow())
 
