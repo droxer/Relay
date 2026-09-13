@@ -783,6 +783,8 @@ class LocalDaemonStore:
                 request_id = command.get("_runRequestId")
                 if command.get("type") == "run.start" and request_id:
                     request = self.get_run_request(request_id)
+                    if record.get("status") == "dispatched" and ((request or {}).get("state") or {}).get("_relay_stop_command_id"):
+                        continue
                     if not (
                         request
                         and request.get("status") == "running"
@@ -2392,6 +2394,8 @@ class DatabaseDaemonStore:
                         and request_row.get("status") == "running"
                         and str(request_row.get("current_command_id")) == record["id"]
                     )
+                    if record.get("status") == "dispatched" and request_row and (request_row.get("state") or {}).get("_relay_stop_command_id"):
+                        continue
                     if not request_is_live:
                         terminal_event = {
                             "type": "run.cancelled",
