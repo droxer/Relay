@@ -796,15 +796,8 @@ class SessionController:
         extras = extras or {}
         if self.task_id:
             task_ids = [self.task_id]
-        elif extras.get("sessionId"):
-            # Routine templates link every occurrence for history, but a
-            # terminal occurrence must not complete or block its schedule.
-            task_ids = [
-                task["id"]
-                for task in self.task_store.list_tasks_for_session(extras["sessionId"])
-                if not task.get("isRoutine")
-            ]
         else:
+            # Links are history/navigation, never task execution authority.
             task_ids = []
         for task_id in task_ids:
             self.task_store.append_event(

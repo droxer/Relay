@@ -93,11 +93,19 @@ logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under
 `/threads/{id}/decisions` record session metadata only; they do not dispatch an
 agent. A successful metadata response is not evidence that a receiver started.
 
-Recovery of a thread linked to one non-routine task retains that task's runtime
-context, including workspace checks and the required round verdict on capable
-daemons. Missing verdicts leave the task waiting for a human. Routine-template
-links are history only. Threads linked to multiple non-routine tasks return
-409 with code `ambiguous_task_recovery` before dispatch.
+New rounds record `workScope`: `{ "kind": "thread" }` for thread contributions,
+or `{ "kind": "task", "taskId": "..." }` for task executions. Recovery inherits
+the active source round's scope, including task workspace checks and required
+round verdicts on capable daemons. Missing verdicts leave the task waiting for
+a human. New messages start thread-scoped work, even inside task-linked threads.
+Links alone never grant task execution ownership. Legacy linked threads without
+recorded scope return 409 `work_scope_required`; restart through the task run
+endpoint to establish scope. Unlinked legacy threads remain recoverable.
+
+Thread completion does not update linked tasks without an explicitly scoped
+task execution. Likewise, marking a task done only closes linked threads whose
+current run request or active round belongs to that task. Routine-template and
+reference links remain historical relationships.
 
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 1. It contains the receiving assignment and

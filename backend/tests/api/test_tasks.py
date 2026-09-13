@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import asyncio
 from datetime import date
 from tempfile import TemporaryDirectory
@@ -415,7 +417,10 @@ def test_routine_cadence_change_and_reenable_recalculate_next_run(monkeypatch) -
         assert title_changed.json()["routineNextRunDate"] == "2026-07-08"
 
 
-def test_marking_task_done_completes_linked_running_session(monkeypatch) -> None:
+@pytest.mark.parametrize("owns_task", [False, True])
+def test_marking_task_done_only_completes_task_scoped_session(
+    monkeypatch, owns_task
+) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -434,6 +439,19 @@ def test_marking_task_done_completes_linked_running_session(monkeypatch) -> None
         assert created.status_code == 201
         task = created.json()
         [session_id] = task["linkedSessionIds"]
+        if owns_task:
+            from relay.sessions.controller import SessionController
+
+            SessionController(
+                client.app.state.session_store
+            ).record_collaboration_round_started(
+                session_id,
+                {
+                    "roundId": "task-round",
+                    "collaborationId": "task-work",
+                    "workScope": {"kind": "task", "taskId": task["id"]},
+                },
+            )
 
         session = client.get(f"/api/v1/threads/{session_id}")
         assert session.status_code == 200
@@ -446,9 +464,10 @@ def test_marking_task_done_completes_linked_running_session(monkeypatch) -> None
         completed = client.get(f"/api/v1/threads/{session_id}")
         assert completed.status_code == 200
         body = completed.json()
-        assert body["status"] == "completed"
-        assert body["finalOutcome"] == "Task marked done."
-        assert body["events"][-1]["type"] == "session.completed"
+        assert body["status"] == ("completed" if owns_task else "running")
+        if owns_task:
+            assert body["finalOutcome"] == "Task marked done."
+            assert body["events"][-1]["type"] == "session.completed"
 
 
 def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(

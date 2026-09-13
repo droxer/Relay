@@ -86,6 +86,8 @@ export interface CollaborationWorkItem {
 }
 
 export interface CollaborationRoundManifest {
+  /** Absent on legacy rounds; task links do not imply execution ownership. */
+  workScope?: { kind: "thread" } | { kind: "task"; taskId: string };
   /** Absent only on rounds persisted before the conductor contract shipped. */
   contract?: {
     name: "relay.collaboration.round";

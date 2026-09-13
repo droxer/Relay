@@ -1530,6 +1530,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
             if event["type"] == "collaboration.round.started"
         )
         assert task_round["manifest"]["source"] == "task"
+        assert task_round["manifest"]["workScope"] == {"kind": "task", "taskId": task["id"]}
         assert task_round["manifest"]["strategy"] == "coordinate"
         assert all(
             assignment["assignmentId"]
@@ -2457,10 +2458,14 @@ def test_task_recovery_preserves_round_verdict(
     reference = store.create_task({"title": "Related work", "ownerEmployeeId": "alice"})
     for item in (task, routine, reference):
         store.link_session(item["id"], session["id"])
-    controller.record_collaboration_round_started(session["id"], {
-        "roundId": "source-task-round", "collaborationId": "source-work",
-        "workScope": {"kind": "task", "taskId": task["id"]},
-    })
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "source-task-round",
+            "collaborationId": "source-work",
+            "workScope": {"kind": "task", "taskId": task["id"]},
+        },
+    )
     routine_before = store.get_task(routine["id"])
     reference_before = store.get_task(reference["id"])
     controller.fail_session(session["id"], "Needs recovery")
@@ -2473,7 +2478,8 @@ def test_task_recovery_preserves_round_verdict(
     response = client.post(endpoint, json=body)
     assert response.status_code == 202, response.text
     assert response.json()["collaborationRounds"][-1]["workScope"] == {
-        "kind": "task", "taskId": task["id"],
+        "kind": "task",
+        "taskId": task["id"],
     }
     command = registry.take_commands("test_node_alice", "node_token")[0]
     registry.handle_event(
@@ -2524,6 +2530,38 @@ def test_recovery_rejects_ambiguous_task_links(recovery_team_thread):
     assert not client.app.state.session_store.get_session(session["id"])["agentRuns"]
 
 
+@pytest.mark.parametrize(
+    "scope,code",
+    [
+        (
+            {"kind": "task", "taskId": "00000000-0000-0000-0000-000000000000"},
+            "task_unavailable",
+        ),
+        ({"kind": "task"}, "work_scope_invalid"),
+        ({"kind": "future"}, "work_scope_invalid"),
+    ],
+)
+def test_recovery_rejects_unavailable_work_scope(recovery_team_thread, scope, code):
+    client, controller, session, _team, reviewer = recovery_team_thread
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "source-round",
+            "collaborationId": "source-work",
+            "workScope": scope,
+        },
+    )
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={
+            "kind": "handoff",
+            "targetAgentId": reviewer["id"],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == code
+
+
 def test_message_and_its_recovery_do_not_inherit_task_ownership(recovery_team_thread):
     client, controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
@@ -2531,23 +2569,37 @@ def test_message_and_its_recovery_do_not_inherit_task_ownership(recovery_team_th
     task = store.create_task({"title": "Task work", "ownerEmployeeId": "alice"})
     store.link_session(task["id"], session["id"])
     before = store.get_task(task["id"])
-    controller.record_collaboration_round_started(session["id"], {
-        "roundId": "task-round", "collaborationId": "task-work",
-        "workScope": {"kind": "task", "taskId": task["id"]},
-    })
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "task-round",
+            "collaborationId": "task-work",
+            "workScope": {"kind": "task", "taskId": task["id"]},
+        },
+    )
     for endpoint, body in (
         ("messages", {"text": "Explain the design", "addressAgentId": reviewer["id"]}),
         ("recoveries", {"kind": "handoff", "targetAgentId": reviewer["id"]}),
     ):
         response = client.post(f"/api/v1/threads/{session['id']}/{endpoint}", json=body)
         assert response.status_code == 202, response.text
-        assert response.json()["collaborationRounds"][-1]["workScope"] == {"kind": "thread"}
+        assert response.json()["collaborationRounds"][-1]["workScope"] == {
+            "kind": "thread"
+        }
         command = registry.take_commands("test_node_alice", "node_token")[0]
-        registry.handle_event("test_node_alice", {
-            "type": "run.completed", "commandId": command["id"],
-            "sessionId": session["id"], "runId": command["runId"],
-            "agent": command["agent"], "exitCode": 0, "agentLog": "Explanation",
-        }, "node_token")
+        registry.handle_event(
+            "test_node_alice",
+            {
+                "type": "run.completed",
+                "commandId": command["id"],
+                "sessionId": session["id"],
+                "runId": command["runId"],
+                "agent": command["agent"],
+                "exitCode": 0,
+                "agentLog": "Explanation",
+            },
+            "node_token",
+        )
         assert store.get_task(task["id"]) == before
 
 

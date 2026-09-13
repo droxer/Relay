@@ -31,7 +31,7 @@ test("legacy rounds remain readable and a newer round hides old handoffs", () =>
 
 test("round context and delivery evidence survive core replay and browser SSE", async () => {
   const { materializeEvents, relayEvent } = await import("../../packages/relay-core/src/session-store.js");
-  const round = session().collaborationRounds[0];
+  const round = { ...session().collaborationRounds[0], workScope: { kind: "task" as const, taskId: "task-1" } };
   const created = relayEvent("session.created", "s", { workspacePath: "/workspace", taskGoal: "goal", participants: ["human", "codex"] });
   const accepted = relayEvent("collaboration.round.started", "s", {manifest: round});
   const delivery = relayEvent("collaboration.delivery", "s", {roundId: "r", assignmentId: "a", runId: "run", status: "queued"});
@@ -40,6 +40,7 @@ test("round context and delivery evidence survive core replay and browser SSE", 
   const streamed = applySessionEvent(applySessionEvent(materializeEvents([created]), accepted), delivery);
   assert.deepEqual(replay.collaborationRounds, streamed.collaborationRounds);
   assert.deepEqual(replay.collaborationRounds[0].handoffContext, context);
+  assert.deepEqual(replay.collaborationRounds[0].workScope, { kind: "task", taskId: "task-1" });
   assert.equal(deriveHandoffStatus(replay)?.status, "queued");
   assert.deepEqual(deriveHandoffStatus(replay), deriveHandoffStatus(streamed));
 });

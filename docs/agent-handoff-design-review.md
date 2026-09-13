@@ -109,6 +109,18 @@ thread to another computer.
 
 ## Compatibility and remaining boundaries
 
+The first redesign step makes execution ownership explicit through each new
+round's `workScope`. Task runs record their authorized task ID; new messages
+record thread scope. Recovery inherits the source round's scope, and prepared
+replay retains its persisted task ID. Reference links cannot grant completion
+authority in either direction. Legacy task-linked rounds without scope require
+a restart through task dispatch, rather than guessing ownership from links.
+See `docs/testing/handoff-work-scope.tdd.md` for regression evidence.
+
+The next steps are structured work receipts (including acceptance criteria and
+versioned workspace evidence), then ownership revisions and receiver validation.
+These remain proposed work; the current scope field does not implement them.
+
 - Existing web recovery callers already use logical-agent `/recoveries`. The
   repository caller inventory found no active chat/core client calling the
   metadata-only `/handoffs` endpoint. Those legacy endpoints remain unchanged
