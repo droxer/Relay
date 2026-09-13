@@ -2807,7 +2807,7 @@ def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch
 
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
-        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+        json={"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "stale-source"},
     )
     assert response.status_code == 409, response.text
     assert "handoff_source_changed" in response.text
@@ -2815,3 +2815,29 @@ def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch
     assert current["activeRoundId"] == "new-owner"
     assert registry.daemon_store.active_run_request_for_session_any_node(session["id"]) is None
     assert registry.take_commands("test_node_alice", "node_token") == []
+    replay = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "stale-source"},
+    )
+    assert replay.status_code == 409, replay.text
+    assert "handoff_source_changed" in replay.text
+
+
+def test_handoff_replays_after_its_round_was_recorded(recovery_team_thread, monkeypatch):
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    endpoint = f"/api/v1/threads/{session['id']}/recoveries"
+    body = {"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "recorded-round"}
+    with monkeypatch.context() as patch:
+        def interrupt(*_args, **_kwargs):
+            raise RuntimeError("interrupted activation")
+
+        patch.setattr(registry, "activate_run_request", interrupt)
+        with pytest.raises(RuntimeError, match="interrupted activation"):
+            client.post(endpoint, json=body)
+    before = client.app.state.session_store.get_session(session["id"])
+    response = client.post(endpoint, json=body)
+    assert response.status_code == 202, response.text
+    assert response.json()["activeRoundId"] == before["activeRoundId"]
+    assert response.json()["collaborationRevision"] == before["collaborationRevision"]
+    assert len(registry.take_commands("test_node_alice", "node_token")) == 1
