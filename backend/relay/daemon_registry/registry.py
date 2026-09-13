@@ -2056,10 +2056,19 @@ class DaemonNodeRegistry:
             run_id=active["runId"],
             reason=reason,
         )
+        cancel_id = new_database_id()
+        request = self.daemon_store.run_request_for_command(active["commandId"])
+        if request:
+            stopping = self.daemon_store.request_run_stop(request["id"], active["commandId"], reason)
+            if not stopping:
+                return active
+            cancel_id = stopping["state"]["_relay_stop_command_id"]
+            if self.daemon_store.get_command(cancel_id):
+                return active
         self.enqueue(
             sandbox_id,
             {
-                "id": new_database_id(),
+                "id": cancel_id,
                 "type": "run.cancel",
                 "commandId": active["commandId"],
                 "sessionId": active["sessionId"],
@@ -2390,6 +2399,10 @@ class DaemonNodeRegistry:
         for run in orphaned:
             command_id = run.get("commandId")
             if not command_id:
+                continue
+            command = self.daemon_store.get_command(command_id)
+            if command and command.get("status") == "dispatched":
+                self._cancel_active_run_unlocked(run["nodeId"], run["sessionId"], "Runtime node retired; waiting for execution to stop.")
                 continue
             try:
                 self.daemon_store.mark_command_failed(
@@ -3798,6 +3811,12 @@ class DaemonNodeRegistry:
     def _fail_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
         run_id = run_request.get("currentRunId")
         command_id = run_request.get("currentCommandId")
+        command = self.daemon_store.get_command(command_id) if command_id else None
+        if command and command.get("status") == "dispatched":
+            # Timeout, loss of liveness, and retirement are not exit evidence.
+            # Keep both reservations until the daemon acknowledges termination.
+            self._cancel_active_run_unlocked(run_request["nodeId"], run_request["sessionId"], outcome)
+            return
         if command_id:
             self.active_commands.pop(command_id, None)
             event = {
