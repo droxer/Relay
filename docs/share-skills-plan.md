@@ -1,5 +1,12 @@
 # Share Skills Implementation Plan
 
+> **Implementation correction (2026-09-14):** Codex supports skills. All
+> instructions below to remove Codex inventory or claim it has no skills are
+> superseded. Preserve existing Codex inventory; verify its isolated delivery
+> mechanism before implementing grants. See [implementation progress and
+> corrections](share-skills-progress.md) for the current task state and other
+> reviewed corrections. Task 1 fixes Kimi paths only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a user publish a skill once and dispatch it to the specific agents they choose, with the granted skills delivered to those agents at run time.

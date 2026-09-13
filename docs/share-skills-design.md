@@ -1,5 +1,12 @@
 # Share Skills — Design
 
+> **Implementation correction (2026-09-14):** The original Codex capability
+> conclusion below is incorrect: [Codex supports skills](https://learn.chatgpt.com/docs/build-skills).
+> Preserve inventory support and verify delivery isolation separately. Statements
+> that Codex has no skills, and removal instructions based on them, are superseded.
+> See [implementation progress](share-skills-progress.md) for corrections to
+> persistence, concurrency, BoxLite delivery, and import validation.
+
 **Date:** 2026-09-14
 **Status:** Proposed
 **Branch:** `droxer/share-skills-feature`

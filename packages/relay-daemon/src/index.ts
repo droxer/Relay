@@ -1213,7 +1213,7 @@ async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Pr
   }
 }
 
-const LOCAL_AGENT_SKILL_DIRS = [".claude/skills", ".codex/skills", ".pi/skills", ".kimi/skills"];
+const LOCAL_AGENT_SKILL_DIRS = [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"];
 let localSkillsPreparedFor: string | undefined;
 
 /**
