@@ -4921,6 +4921,33 @@ async def _run_task_round(registry: Any, backend: Any, task_id: str) -> dict[str
     return command
 
 
+def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
+    async def run_flow() -> None:
+        from relay.persistence.store_common import relay_task_event
+
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            task_id = tasks.create_task({"title": "Versioned execution"})["id"]
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task_id)
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            owner = tasks.get_task(task_id)["executionOwner"]
+            assert owner == {"requestId": request["id"], "revision": 1}
+            assert request["state"]["_relay_task_execution_revision"] == 1
+
+            # A replacement can already have finished when an old finalizer resumes.
+            tasks.append_event(task_id, relay_task_event("task.execution.claimed", task_id, {
+                "requestId": "replacement", "expectedRevision": 1,
+            }))
+            finished = tasks.append_event(task_id, relay_task_event("task.status", task_id, {
+                "status": "done",
+            }))
+            registry._record_round_result(request, {"status": "continue", "note": "old"}, "assigned")
+            registry._complete_run_request(request, "old result")
+            assert tasks.get_task(task_id) == finished
+
+    asyncio.run(run_flow())
+
+
 def test_a_round_that_reports_done_closes_the_task() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
