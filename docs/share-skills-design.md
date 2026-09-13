@@ -60,6 +60,7 @@ mutate snapshot fields outside replay).
 | `id` | uuid |
 | `ownerEmployeeId` | the publisher; the authorization anchor |
 | `namespace`, `name` | `namespace` optional; `(ownerEmployeeId, namespace, name)` unique among live rows |
+| `slug` | the on-disk install path, unique **org-wide** among live rows (see below) |
 | `displayName`, `description` | `description` mirrors SKILL.md frontmatter and drives catalog search |
 | `visibility` | `"private"` \| `"org"` |
 | `source` | `"authored"` \| `"upload"` \| `"git"` |
@@ -70,13 +71,24 @@ mutate snapshot fields outside replay).
 **`skill_revisions`** — immutable. `id`, `skillId`, `revision` (monotonic int),
 `manifestSha256`, `bytes`, `createdAt`, `createdByEmployeeId`, `note`.
 Editing, re-uploading, or re-importing creates revision N+1; nothing is edited
-in place. `manifestSha256` is the sha256 over the sorted `(path, sha256)` list
-and is the cache key the daemon uses.
+in place. `manifestSha256` is the sha256 over the sorted `(path, sha256)` list. It is the
+*installed-state* key — the daemon compares it against what it last wrote for
+this agent to decide whether to touch the directory at all. It is distinct from
+the per-blob `sha256`, which keys the content cache.
 
 **`skill_files`** — `revisionId`, `path` (bundle-relative, `SKILL.md` required),
 `sha256`, `bytes`, `content`. Content lives in the database, matching the
 existing precedent that workspace artifacts keep a content snapshot so reads
 survive filesystem churn.
+
+**Install-path collisions.** Uniqueness on `(owner, namespace, name)` is not
+enough: two employees may each publish an `org`-visible `code-review`, and an
+agent granted both would install them to the same `skills/code-review/`
+directory. So a skill also carries `slug` — the directory name it installs as —
+unique org-wide among live rows. It defaults to `<namespace>/<name>`; when that
+is taken, publish appends the owner's handle (`code-review-alice`) and tells the
+publisher what it chose. Resolving this at publish, once, keeps grant and
+dispatch free of collision logic.
 
 **Caps** (rejected at publish, not at dispatch): 300 files, 1 MB per file,
 4 MB per revision. Paths must be relative, `..`-free, and non-symlink;
@@ -124,7 +136,10 @@ New module `backend/relay/api/skill_routes.py`:
 - `POST /api/v1/skills/{id}/import` — re-import from `sourceRef`.
 - `POST /api/v1/skills/{id}/grants` — **the feature verb**: dispatch this skill to a list of agents.
 - `DELETE /api/v1/skills/{id}/grants/{agentId}` — revoke.
-- `GET /api/v1/agents/{id}/skills` — granted plus node-installed, merged (see below).
+
+No separate `GET /agents/{id}/skills` route: the agent detail payload already
+carries `skills` (`agent_routes.py:380`), and a second endpoint answering the
+same question is how the two drift apart.
 
 Authorization: mutating a skill requires `ownerEmployeeId == caller`. Granting
 requires the caller to own the target agent *and* to be able to see the skill.
@@ -153,7 +168,7 @@ interface DaemonRunSkillBundle {
   skills: Array<{
     skillId: string;
     revisionId: string;
-    installPath: string;        // "<namespace>/<name>" or "<name>"
+    slug: string;               // the org-unique install directory name
     manifestSha256: string;
     files: Array<{ path: string; sha256: string; bytes: number }>;
   }>;
@@ -170,12 +185,15 @@ The daemon keeps a content-addressed cache at
 `~/.relay/daemon-nodes/<sandboxId>/skill-cache/<sha256>` and fetches only blobs
 it lacks, from a new daemon-token-authenticated endpoint:
 
-`GET /daemon-nodes/{nodeId}/skill-blobs/{sha256}`
+`GET /daemon-nodes/{nodeId}/skill-blobs/{sha256}?commandId=…`
 
-Served by `daemon_node_routes.py`, authorized by the same token check as every
-other daemon route, and answering `404` for a blob not reachable from any
-revision granted to an agent placed on that node. A steady-state run fetches
-nothing.
+Served by `daemon_node_routes.py` behind the same token check as every other
+daemon route, and authorized **against the issuing run command**, not against
+the node: the blob must belong to a revision named in that command's own
+manifest. Scoping to the command instead of to "anything granted anywhere on
+this node" is both narrower and cheaper — it is a lookup against one manifest
+rather than a scan of every placement and grant on the node. Anything else is
+`404`. A steady-state run fetches nothing.
 
 ### Isolation mechanism
 
@@ -194,7 +212,7 @@ reusing the `agent-<b64url>` naming already used by
 2. Mirror every entry of the node's config dir into it by symlink — **except
    `skills/`**, which the daemon owns outright. Credentials and settings are
    shared, never copied, so node-level provisioning still happens once.
-3. Write the granted skills into `skills/<installPath>/` from the cache.
+3. Write the granted skills into the content store and link `skills/<slug>` (see Concurrency).
 4. Prune anything under `skills/` that is not in this manifest.
 5. Point the CLI at it via the per-agent config env var.
 
@@ -240,6 +258,36 @@ present, and unchanged otherwise.
 
 `RELAY_AGENT_SKILL_ISOLATION=0` falls back to the node home — an escape hatch
 for debugging, not a supported mode.
+
+### Concurrency
+
+One agent can have two runs in flight at once on the same node (two threads, or
+two rounds of different tasks). They share one config directory, so a naive
+write-then-prune lets the second run delete a skill the first is actively
+reading. The codebase already learned this lesson with task workspaces, where
+rounds sharing a directory forced `workspaceRunGate` (`index.ts:239`) to key on
+the workspace.
+
+Materialization does not take a lock. It is made idempotent instead:
+
+- Skills install **content-addressed**: `skills/.store/<manifestSha256>/` holds
+  the unpacked bundle, and `skills/<slug>` is a symlink to it. Writing a
+  revision that is already present is a no-op; two runs racing to install the
+  same revision converge on the same bytes.
+- Publishing a new set is an atomic symlink swap per slug, so a concurrent run
+  sees either the old bundle or the new one, never a half-written directory.
+- **Pruning is deferred, not immediate.** A run removes only symlinks, and only
+  those not named by *any* manifest currently in flight for that agent; the
+  `.store` entries behind them are swept when the agent has no active run. A
+  revoked skill's bytes therefore linger briefly rather than vanishing out from
+  under a running agent.
+
+That last point has a user-visible consequence worth stating plainly rather than
+discovering later: **revocation takes effect at the agent's next dispatch, not
+immediately.** A run already executing keeps the skill it started with. Anyone
+reading "revoke" as "cut off now" is wrong, and the UI must say so — the Agents
+tab labels a revoked-but-not-yet-swept grant "removed at next run". If immediate
+cutoff is ever required, it needs run cancellation, not a change here.
 
 ### Capability and degradation
 
@@ -301,6 +349,8 @@ destroy work in progress.
 - Uniqueness of `(owner, namespace, name)` among live rows; soft delete frees the name.
 - Grant authorization matrix: own/other agent × private/org skill.
 - Bundle resolution: `latest` vs pinned, dangling skill, missing revision, dedupe across grants.
+- Slug allocation: a second owner publishing the same `namespace/name` gets a distinct slug, and two such skills granted to one agent install side by side.
+- Blob endpoint is scoped to the issuing command: a blob valid for command A is 404 for command B.
 - Blob endpoint: daemon token required; 404 for a blob not granted on that node.
 - Git import: host allowlist rejection, private-IP rejection, size cap, traversal and symlink rejection.
 
@@ -311,6 +361,8 @@ destroy work in progress.
 - Materialize writes the manifest; prune removes an ungranted leftover.
 - Cache hit by sha means zero fetches on a second identical run.
 - **Isolation:** two agents of the same executor kind on one node see disjoint `skills/` contents.
+- **Concurrency:** two in-flight runs for one agent with different manifests — neither deletes a skill the other is using; the symlink swap is never observed half-written.
+- Re-installing an already-present `manifestSha256` writes nothing.
 - Node config entries other than `skills/` are symlinked, not copied; the shared node `skills/` dir is never written.
 - Missing capability is a no-op, not an error.
 
@@ -336,5 +388,9 @@ is already a valid v1 grant set.
   CLI falls back to node home and reports the degradation rather than pretending
   to isolate. Isolation that silently does not isolate is the one outcome this
   design must not ship.
+- **Revoked content lingers until the next dispatch.** Accepted and documented
+  above. It is a capability boundary, not a secrets boundary — a skill bundle is
+  authored content, not a credential. If skills ever carry secrets, this design
+  needs revisiting before that ships.
 - **Database-stored bundles grow.** The caps plus content addressing keep this
   bounded; blobs are shared across revisions that did not change a file.
