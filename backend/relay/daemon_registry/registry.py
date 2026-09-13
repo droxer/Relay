@@ -1938,7 +1938,11 @@ class DaemonNodeRegistry:
     def cancel_run_request_before_delivery(
         self, request_id: str, reason: str
     ) -> dict[str, Any] | None:
-        """Persist a cancellation fence before any staged command is published."""
+        """Cancel undelivered work without releasing a delivered run's owner.
+
+        Delivered work keeps its reservation until normal daemon terminal-event
+        processing. Callers separately enqueue run.cancel for that case.
+        """
         request = self.daemon_store.get_run_request(request_id)
         if not request:
             return None
@@ -1957,6 +1961,7 @@ class DaemonNodeRegistry:
                 request_id,
                 request["status"],
                 {"status": "cancelled", "error": reason, "state": state},
+                require_undelivered=True,
             )
             if not cancelled:
                 return None

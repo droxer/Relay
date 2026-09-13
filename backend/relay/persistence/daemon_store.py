@@ -1122,13 +1122,18 @@ class LocalDaemonStore:
             return updated
 
     def update_run_request_if_status(
-        self, request_id: str, expected_status: str, patch: dict[str, Any]
+        self, request_id: str, expected_status: str, patch: dict[str, Any],
+        *, require_undelivered: bool = False,
     ) -> dict[str, Any] | None:
         """Apply a run-request transition only from the expected state."""
         with self._lock, self._run_request_claim_lock():
             current = self.get_run_request(request_id)
             if not current or current.get("status") != expected_status:
                 return None
+            if require_undelivered and current.get("currentCommandId"):
+                command = self.get_command(current["currentCommandId"])
+                if not command or command.get("status") not in ("pending", "queued"):
+                    return None
             return self.update_run_request(request_id, patch)
 
     def update_run_request_if_claimed(
@@ -2907,7 +2912,8 @@ class DatabaseDaemonStore:
         return updated
 
     def update_run_request_if_status(
-        self, request_id: str, expected_status: str, patch: dict[str, Any]
+        self, request_id: str, expected_status: str, patch: dict[str, Any],
+        *, require_undelivered: bool = False,
     ) -> dict[str, Any] | None:
         """Atomically apply a run-request transition from one status."""
         now = now_iso()
@@ -2926,6 +2932,13 @@ class DatabaseDaemonStore:
             current = row_to_run_request(row)
             if current.get("status") != expected_status:
                 return None
+            # Delivery and publication lock this same request row. Keep the
+            # delivery check inside that transaction: a registry-local lock
+            # cannot fence another backend replica's daemon poll.
+            if require_undelivered and current.get("currentCommandId"):
+                command = self.get_command(current["currentCommandId"])
+                if not command or command.get("status") not in ("pending", "queued"):
+                    return None
             updated = {**current, **patch, "updatedAt": now}
             if patch.get("status") in TERMINAL_DAEMON_STATUSES:
                 updated["completedAt"] = now
