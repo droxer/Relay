@@ -6,7 +6,7 @@ from relay.persistence.session_store import LocalSessionStore
 from relay.sessions import SessionController, initial_agent_state
 
 
-def test_local_controller_completes_linked_task_without_explicit_task_id() -> None:
+def test_local_controller_leaves_linked_task_without_explicit_task_id() -> None:
     from relay.persistence.task_store import LocalTaskStore
 
     with TemporaryDirectory() as root:
@@ -19,7 +19,7 @@ def test_local_controller_completes_linked_task_without_explicit_task_id() -> No
 
         controller.record_decision(session["id"], "mark_done")
 
-        assert tasks.get_task(task["id"])["status"] == "done"
+        assert tasks.get_task(task["id"])["status"] == task["status"]
         assert sessions.get_session(session["id"])["status"] == "completed"
 
 
