@@ -20,6 +20,9 @@ describe("Agent team management", () => {
     const sideNavSource = await readFile(resolve("web/src/components/SideNav.tsx"), "utf8");
     const drawerSource = await readFile(resolve("web/src/components/admin/TeamDrawer.tsx"), "utf8");
     const pickerSource = await readFile(resolve("web/src/components/assignment/AssignmentField.tsx"), "utf8");
+    // The identity rows the picker draws live in the shared roster row
+    // component now — every agent/team picker renders the same team mark.
+    const rosterRowSource = await readFile(resolve("web/src/components/roster/RosterOption.tsx"), "utf8");
 
     assert.doesNotMatch(adminPageSource, /adminTeam|adminAddTeam|<TeamsView/);
     assert.doesNotMatch(agentsSource, /agentsView|managementView|<TeamDrawer|useTeams/);
@@ -53,7 +56,7 @@ describe("Agent team management", () => {
     assert.match(teamWorkspaceSource, /<IdentityMark kind="team" variant="bare"/);
     // The assignment picker identifies a team by its profile image, whose
     // default is the shared team glyph — the same mark the empty state draws.
-    assert.match(pickerSource, /fallback=\{<IdentityMark kind="team" \/>\}/);
+    assert.match(rosterRowSource, /fallback=\{<IdentityMark kind="team" \/>\}/);
     assert.match(sideNavSource, /data-nav="teams"/);
     assert.match(sideNavSource, /handleRouteClick\(event, "teams"\)/);
     assert.match(drawerSource, /memberAgentIds/);
