@@ -66,6 +66,13 @@ export interface AgentState {
    * the thread workspace root; this names the agent's private area.
    */
   agent_home_subdir?: string;
+  /**
+   * Paths selected by managed skill delivery. Undefined leaves CLI discovery
+   * unmanaged; an empty array is an explicitly managed empty grant set.
+   */
+  skill_paths?: string[];
+  /** Per-run config directories. Command builders accept only their declared key. */
+  skill_env?: Record<string, string>;
 }
 
 export interface AgentRunOptions {

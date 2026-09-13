@@ -12,7 +12,7 @@ import type { AgentState } from "./state.js";
 
 export function buildCodexCommand(state: AgentState, workspacePath?: string): string {
   const argv = [...codexBaseArgv({ workspacePath }), codexTaskPrompt(state)];
-  return runAsAgent(shellCommand(argv), workspacePath);
+  return runAsAgent(withSkillEnv(shellCommand(argv), state, "CODEX_HOME"), workspacePath);
 }
 
 function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): string[] {
@@ -36,10 +36,11 @@ function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): stri
 }
 
 export function buildClaudeCommand(state: AgentState, workspacePath?: string): string {
-  return buildClaudeInvocation(claudeTaskPrompt(state), workspacePath);
+  return buildClaudeInvocation(claudeTaskPrompt(state), state, workspacePath);
 }
 function buildClaudeInvocation(
   prompt: string,
+  state: AgentState,
   workspacePath?: string,
 ): string {
   const workspace = workspacePath ?? agentWorkspacePath();
@@ -61,14 +62,18 @@ function buildClaudeInvocation(
   const model = anthropicModel();
   if (model) argv.push("--model", model);
   argv.push(prompt);
-  return runAsAgent(shellCommand(argv), workspacePath);
+  return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
 }
 
 export function buildPiCommand(state: AgentState, workspacePath?: string): string {
-  return buildPiInvocation(piTaskPrompt(state), workspacePath);
+  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath);
 }
-function buildPiInvocation(prompt: string, workspacePath?: string): string {
+function buildPiInvocation(prompt: string, skillPaths: string[] | undefined, workspacePath?: string): string {
   const argv = ["stdbuf", "-oL", "-eL", "pi", "--no-session"];
+  if (skillPaths !== undefined) {
+    argv.push("--no-skills");
+    for (const path of skillPaths) argv.push("--skill", path);
+  }
   const provider = piProvider();
   if (provider) argv.push("--provider", provider);
   const model = piModel();
@@ -89,19 +94,25 @@ function buildPiInvocation(prompt: string, workspacePath?: string): string {
 // Kimi (Moonshot AI) CLI. Flags verified against kimi-code 0.39; re-check
 // `--auto`/`--output-format` against the installed version when bumping it.
 export function buildKimiCommand(state: AgentState, workspacePath?: string): string {
-  return buildKimiInvocation(kimiTaskPrompt(state), workspacePath);
+  return buildKimiInvocation(kimiTaskPrompt(state), state.skill_paths, workspacePath);
 }
-function buildKimiInvocation(prompt: string, workspacePath?: string): string {
+function buildKimiInvocation(prompt: string, skillPaths: string[] | undefined, workspacePath?: string): string {
   // Kimi asks before tool calls by default. The run is headless, so nothing can
   // answer and the agent would stall; --auto is its equivalent of Claude's
   // bypassPermissions and Codex's approval bypass.
   const argv = ["kimi", "--auto"];
+  for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
   const model = kimiModel();
   if (model) argv.push("--model", model);
   // stream-json emits one JSON message object per stdout line (parsed by
   // KimiStreamRenderer) and keeps thinking + the resume notice off stdout.
   argv.push("--output-format", "stream-json", "--prompt", prompt);
   return runAsAgent(shellCommand(argv), workspacePath);
+}
+
+function withSkillEnv(command: string, state: AgentState, allowedKey: string): string {
+  const value = state.skill_env?.[allowedKey];
+  return value === undefined ? command : `export ${allowedKey}=${shellQuote(value)} && ${command}`;
 }
 
 export function buildPiPreflightCommand(): string {

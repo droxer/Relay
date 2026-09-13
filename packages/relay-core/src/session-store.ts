@@ -234,6 +234,17 @@ export interface RelaySession {
 export type RelayEvent =
   | {
       id: string;
+      type: "system.notice";
+      sessionId: string;
+      timestamp: string;
+      runId: string;
+      agent: AgentName;
+      text: string;
+      reason: "skills-skipped";
+      skillsSkipped: Array<{ skillId: string; slug?: string; reason: string }>;
+    }
+  | {
+      id: string;
       type: "session.created";
       sessionId: string;
       timestamp: string;
