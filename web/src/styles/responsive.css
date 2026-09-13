@@ -539,7 +539,8 @@
 
   /* Keep the agent picker but drop the name — the mark alone identifies
      the agent and keeps the composer footer compact on narrow screens. */
-  .chat-agent-select .chat-agent-select-name {
+  .chat-agent-select .chat-agent-select-name,
+  .chat-agent-select .roster-trigger-name {
     display: none;
   }
 

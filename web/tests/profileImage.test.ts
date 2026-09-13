@@ -56,8 +56,10 @@ describe("Profile images", () => {
     // straight off it. The new-thread landing speaks for Relay itself, not
     // whichever agent the picker happens to point at — the product mark, no
     // agent face, no executor tint.
-    assert.match(agentSelect, /src=\{activeLogicalAgent\.profileImageUrl\}/);
-    assert.match(agentSelect, /src=\{logicalAgent\.profileImageUrl\}/);
+    assert.match(agentSelect, /RosterTriggerValue agent=\{activeLogicalAgent\}/);
+    assert.match(agentSelect, /RosterOption agent=\{logicalAgent\}/);
+    const roster = await readFile(resolve("web/src/components/roster/RosterOption.tsx"), "utf8");
+    assert.match(roster, /imageUrl=\{agent\.profileImageUrl\}/);
     assert.doesNotMatch(agentSelect, /AgentMark/);
     assert.match(transcriptEmpty, /RelayMark/);
     assert.doesNotMatch(transcriptEmpty, /ProfileImage|AgentMark|agent-avatar/);

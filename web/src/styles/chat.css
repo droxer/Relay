@@ -99,8 +99,8 @@
 }
 
 .chat-agent-select {
-  font: var(--type-label);
-  color: var(--ink-2);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chat-agent-select[data-availability="unavailable"] {
@@ -119,6 +119,8 @@
 
 .chat-agent-select-name {
   overflow: hidden;
+  font: var(--type-label);
+  color: var(--ink-2);
   text-overflow: ellipsis;
 }
 
@@ -201,16 +203,6 @@
   font-size: var(--fs-1);
   font-weight: 500;
   line-height: var(--leading-none);
-}
-
-.header-agent-busy-pip {
-  flex: 0 0 auto;
-  width: var(--dot-sm);
-  height: var(--dot-sm);
-  border-radius: var(--r-full);
-  background: var(--live);
-  --pulse-color: var(--live);
-  animation: pulse-ring var(--t-pulse) var(--ease) infinite;
 }
 
 /* Flat landing: the canvas stays plain — the empty state composes itself

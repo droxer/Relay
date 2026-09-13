@@ -17,29 +17,14 @@
   background: transparent;
 }
 
-/* Runtime control: environment stays visible beside the agent. Keeping
-   it in the footer removes a second floating card above the composer.
-   The plate is reserved for the interactive picker on a new thread; the
-   read-only readout for a started thread (.thread-runtime-readout) wears
-   no chrome of its own — a bordered box inside the boxed composer footer
-   read as a control where there is nothing to click. */
+/* Runtime and target use the same SelectTrigger chrome. The runtime label
+   sits on the rail, leaving one focusable control with one visible border. */
 .thread-runtime-rail {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
-  /* Fixed token height, not min-height, so the border does not add onto the
-     trigger inside and overshoot by a pixel. --control-h-sm because that is
-     what every other control in the targets rail stands at: the agent picker
-     (SelectTrigger size="sm") and .composer-project-room. This rail was left
-     at --control-h-xs from when the agent picker was 32px too, so the row's
-     one interactive pair sat at two different heights. */
-  height: var(--control-h-sm);
-  padding: 0 var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  color: var(--ink-2);
+  max-width: 100%;
 }
 
 .thread-runtime-context {
@@ -49,25 +34,9 @@
   white-space: nowrap;
 }
 
-.thread-runtime-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--line-1);
-}
-
 .thread-runtime-select {
   max-width: min(240px, 34vw);
-  /* Fills the rail, which already carries the control height and border. */
-  height: 100%;
-  padding-inline: var(--sp-1);
-  border-color: transparent;
-  background: transparent;
-  color: var(--ink-1);
-  font: var(--type-label-strong);
-}
-
-.thread-runtime-select:hover:not(:disabled) {
-  background: var(--control-fill-hover);
+  min-width: 0;
 }
 
 .thread-runtime-select-name {
@@ -196,7 +165,6 @@
   /* Phone width goes to the machine name; the lead-in words are the first
      thing that can go, in the picker rail and the readout alike. */
   .thread-runtime-context,
-  .thread-runtime-divider,
   .thread-runtime-readout-label {
     display: none;
   }

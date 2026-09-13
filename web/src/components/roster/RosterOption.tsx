@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -75,8 +75,8 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
           name={agent.displayName}
         />
         <span className="roster-option-copy">
-          <span>{agent.displayName}</span>
-          <span>{executorLabel(agent.executorKind)}</span>
+          <span translate="no">{agent.displayName}</span>
+          <span translate="no">{executorLabel(agent.executorKind)}</span>
         </span>
       </span>
     );
@@ -87,7 +87,7 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
     <span className="roster-option">
       <TeamMark team={team} />
       <span className="roster-option-copy">
-        <span>{team.name}</span>
+        <span translate="no">{team.name}</span>
         <span>{t("backlog.team_member_count", { count: team.members.length })}</span>
       </span>
     </span>
@@ -97,39 +97,47 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
 /** A roster entry as a ready-made option — the row plus the typeahead label a
  *  select needs, so no call site re-derives that label. The value stays the
  *  caller's: a surface that picks an agent by id and one that stores an
- *  `agent:<id>` assignment both select the same row. */
-export function RosterAgentItem({ value, agent }: { value: string; agent: AgentView }) {
+ *  `agent:<id>` assignment both select the same row. Remaining SelectItem
+ *  props (disabled, className, data-*) pass straight through, and a surface
+ *  that shows more than the identity row — the composer spells out why a
+ *  target cannot take the thread — supplies its own children. */
+type RosterItemProps = Omit<ComponentProps<typeof SelectItem>, "value" | "label">;
+
+export function RosterAgentItem({ value, agent, children, ...itemProps }: { value: string; agent: AgentView } & RosterItemProps) {
   return (
-    <SelectItem value={value} label={`${agent.displayName} · ${agent.executorKind}`}>
-      <RosterOption agent={agent} />
+    <SelectItem value={value} label={`${agent.displayName} · ${agent.executorKind}`} {...itemProps}>
+      {children ?? <RosterOption agent={agent} />}
     </SelectItem>
   );
 }
 
-export function RosterTeamItem({ value, team }: { value: string; team: TeamView }) {
+export function RosterTeamItem({ value, team, children, ...itemProps }: { value: string; team: TeamView } & RosterItemProps) {
   return (
-    <SelectItem value={value} label={team.name}>
-      <RosterOption team={team} />
+    <SelectItem value={value} label={team.name} {...itemProps}>
+      {children ?? <RosterOption team={team} />}
     </SelectItem>
   );
 }
 
 /** The closed trigger carries identity only — mark + name on one line, at the
  *  same height and weight as every other select in the drawer. Any operational
- *  readout belongs outside the trigger, so the two never repeat each other. */
-export function RosterTriggerValue({ agent, team }: { agent?: AgentView; team?: TeamView }) {
+ *  readout belongs outside the trigger, so the two never repeat each other.
+ *  `hideBusyPulse` silences the busy corner pip for a surface that already
+ *  announces the same activity next to the trigger (the composer's running
+ *  rail), so the two pulses don't repeat each other. */
+export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { agent?: AgentView; team?: TeamView; hideBusyPulse?: boolean }) {
   if (team) {
     return (
       <span className="roster-trigger">
         <TeamMark team={team} />
-        <span className="roster-trigger-name">{team.name}</span>
+        <span className="roster-trigger-name" translate="no">{team.name}</span>
       </span>
     );
   }
   if (agent) {
     const availability = effectiveAgentAvailability(agent);
     return (
-      <span className="roster-trigger">
+      <span className={cn("roster-trigger", hideBusyPulse && "roster-trigger--no-busy-pulse")}>
         <AgentStateBadge
           agent={agent.executorKind}
           ready={availability === "ready"}
@@ -137,7 +145,7 @@ export function RosterTriggerValue({ agent, team }: { agent?: AgentView; team?: 
           imageUrl={agent.profileImageUrl}
           name={agent.displayName}
         />
-        <span className="roster-trigger-name">{agent.displayName}</span>
+        <span className="roster-trigger-name" translate="no">{agent.displayName}</span>
       </span>
     );
   }
