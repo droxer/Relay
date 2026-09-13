@@ -4204,6 +4204,31 @@ def test_reaper_recovers_ack_after_cancelled_session_without_rewriting_it(termin
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("reason", ["timeout", "retired"])
+def test_delivered_task_reservation_waits_for_exit_acknowledgement(reason):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            task = tasks.create_task({"title": "Stop before transfer"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            if reason == "timeout":
+                registry.daemon_store.update_run_request(request["id"], {"currentStartedAt": "2000-01-01T00:00:00Z"})
+            else:
+                registry.fence_managed_node("sbx_alice")
+            registry.reap_stale_runs()
+            assert registry.daemon_store.active_run_request_for_task(task["id"])["id"] == request["id"]
+            assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+            registry.handle_event("sbx_alice", {
+                "type": "run.cancelled", "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "reason": "process exited", "leaseId": command["leaseId"],
+            }, "node_token")
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+
+    asyncio.run(run_flow())
+
+
 def test_terminal_event_retry_recovers_after_handler_crash() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
