@@ -89,3 +89,58 @@ def test_concurrent_wip_admission_is_atomic(tmp_path, monkeypatch):
             return False
     with ThreadPoolExecutor(max_workers=4) as pool:
         assert sum(pool.map(attempt, tasks)) == 1
+
+
+def test_legacy_events_keep_automatic_acceptance():
+    from relay.persistence.store_common import materialize_task_events
+    task = materialize_task_events([relay_task_event('task.created', 'legacy', {'title': 'Historical'})])
+    assert task['acceptancePolicy'] == 'automatic'
+    assert task['workflowStage'] == 'backlog'
+
+
+def test_ready_backlog_and_templates_do_not_consume_wip(store, monkeypatch):
+    monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
+    store.create_task({'title': 'Template', 'isRoutine': True, 'status': 'review'})
+    store.create_task({'title': 'Ready', 'status': 'assigned'})
+    store.create_task({'title': 'Backlog'})
+    task = store.create_task({'title': 'Work'})
+    assert claim(store, task)['startedAt']
+
+
+def test_limit_must_be_positive(monkeypatch):
+    from relay.persistence.task_lifecycle import wip_limit
+    monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '0')
+    with pytest.raises(ValueError, match='positive integer'):
+        wip_limit()
+
+
+def test_stale_manual_transition_does_not_overwrite_a_new_execution(store):
+    task = store.create_task({'title': 'Work'})
+    claim(store, task)
+    with pytest.raises(ValueError, match='task_state_changed'):
+        store.update_task_if_not_dispatching(task['id'], {
+            'status': 'blocked', 'expectedStatus': 'backlog', 'expectedExecutionRevision': 0,
+        })
+    assert store.get_task(task['id'])['status'] == 'backlog'
+
+
+def test_reopening_finished_execution_requires_capacity(store, monkeypatch):
+    monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
+    old = store.create_task({'title': 'Old'})
+    claim(store, old)
+    status(store, old, 'done')
+    active = store.create_task({'title': 'Active'})
+    claim(store, active)
+    with pytest.raises(ValueError, match='task_wip_limit'):
+        store.append_event(old['id'], relay_task_event('task.execution.claimed', old['id'], {
+            'requestId': 'reopen', 'expectedRevision': 1,
+        }))
+
+
+def test_prepared_start_cannot_overwrite_a_new_block(store):
+    task = store.create_task({'title': 'Work'})
+    status(store, task, 'blocked')
+    with pytest.raises(ValueError, match='task_ownership_changed'):
+        store.append_event(task['id'], relay_task_event('task.execution.claimed', task['id'], {
+            'requestId': 'prepared', 'expectedRevision': 0, 'expectedStatus': 'backlog',
+        }))
