@@ -2900,3 +2900,33 @@ def test_handoff_validation_binds_receipt_evidence(recovery_team_thread, monkeyp
         assert commands[0]["handoffValidation"]["artifacts"] == evidence
         evidence[0]["sha256"] = "b" * 64
         assert commands[0]["handoffValidation"]["artifacts"][0]["sha256"] == "a" * 64
+
+
+def test_recovery_cannot_take_a_task_reserved_by_another_thread(recovery_team_thread):
+    client, controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    registry.update_status("test_node_alice", {"maxConcurrentRuns": 4})
+    task_store = client.app.state.task_store
+    task = task_store.create_task({"title": "Shared task", "ownerEmployeeId": "alice", "status": "blocked"})
+    task_store.link_session(task["id"], session["id"])
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "source-task", "collaborationId": "source-work",
+        "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    owner_session = controller.create_session("Current task owner")
+    owner = registry.daemon_store.create_run_request({
+        "nodeId": "test_node_alice", "sessionId": owner_session["id"],
+        "taskId": task["id"], "taskGoal": "Shared task", "assignments": [], "state": {},
+        "status": "prepared",
+    })
+    before = client.app.state.session_store.get_session(session["id"])
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 409, response.text
+    assert "task_ownership_conflict" in response.text
+    assert registry.daemon_store.get_run_request(owner["id"])["status"] == "prepared"
+    assert client.app.state.session_store.get_session(session["id"])["events"] == before["events"]
+    assert task_store.get_task(task["id"])["status"] == "blocked"
+    assert registry.take_commands("test_node_alice", "node_token") == []

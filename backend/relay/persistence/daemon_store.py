@@ -919,6 +919,12 @@ class LocalDaemonStore:
                 raise ValueError(
                     f"Session {record['sessionId']} already has an active daemon run."
                 )
+            if (
+                record.get("taskId")
+                and record["status"] in ACTIVE_RUN_REQUEST_STATUSES
+                and self.active_run_request_for_task(record["taskId"])
+            ):
+                raise ValueError("task_ownership_conflict: this task already has an active daemon run.")
             node = self.get_node(record["nodeId"])
             if node:
                 _assert_node_run_request_capacity(
@@ -986,6 +992,12 @@ class LocalDaemonStore:
                 for request in self.list_active_run_requests()
                 if request["sessionId"] == session_id
             ),
+            None,
+        )
+
+    def active_run_request_for_task(self, task_id: str) -> dict[str, Any] | None:
+        return next(
+            (request for request in self.list_active_run_requests() if request.get("taskId") == task_id),
             None,
         )
 
@@ -1586,6 +1598,13 @@ class DatabaseDaemonStore:
         unique=True,
         postgresql_where=run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
         sqlite_where=run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+    )
+    Index(
+        "uq_daemon_run_requests_active_task",
+        run_requests.c.task_id,
+        unique=True,
+        postgresql_where=(run_requests.c.task_id.is_not(None) & run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)),
+        sqlite_where=(run_requests.c.task_id.is_not(None) & run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)),
     )
     events = Table(
         "daemon_events",
@@ -2614,8 +2633,20 @@ class DatabaseDaemonStore:
                 raise ValueError(
                     f"Session {record['sessionId']} already has an active daemon run."
                 ) from error
+            if record.get("taskId") and self.active_run_request_for_task(record["taskId"]):
+                raise ValueError("task_ownership_conflict: this task already has an active daemon run.") from error
             raise
         return record
+
+    def active_run_request_for_task(self, task_id: str) -> dict[str, Any] | None:
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(
+                select(self.run_requests)
+                .where(self.run_requests.c.task_id == task_id)
+                .where(self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+                .limit(1)
+            ).mappings().first()
+        return row_to_run_request(row) if row else None
 
     def get_run_request(self, request_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
