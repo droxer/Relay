@@ -322,7 +322,7 @@ export class ProjectMessagesAccumulator {
           timestamp: event.timestamp,
           tone: "warn",
           label: t("message.skills_skipped", { defaultValue: "Some managed skills were skipped" }),
-          detail: event.text,
+          detail: event.skillsSkipped.map((skill) => `${skill.slug ?? skill.skillId}: ${t(`skills.skip_reason.${skill.reason}`, { defaultValue: skill.reason })}`).join("; ") || event.text,
         });
         return true;
       case "session.created":

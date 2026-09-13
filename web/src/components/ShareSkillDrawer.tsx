@@ -8,6 +8,7 @@ import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Drawer } from "@/components/ui/Drawer";
+import { useTranslation } from "react-i18next";
 
 export function ShareSkillDrawer({
   skill,
@@ -20,6 +21,13 @@ export function ShareSkillDrawer({
   teams: AgentTeam[];
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
+  const errorText = (value: unknown) => {
+    const code = value && typeof value === "object" && "code" in value && typeof value.code === "string"
+      ? value.code
+      : value instanceof Error ? value.message : "unknown";
+    return t(`skills.errors.${code}`, { defaultValue: t("skills.errors.unknown") });
+  };
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -61,7 +69,7 @@ export function ShareSkillDrawer({
       await refresh();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
       setBusy(false);
     }
   }
@@ -72,7 +80,7 @@ export function ShareSkillDrawer({
       await revokeSkill(skill.id, agentId);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -82,17 +90,16 @@ export function ShareSkillDrawer({
       open
       onClose={onClose}
       title={skill.displayName}
-      kicker="Share managed skill"
-      closeLabel="Close"
+      kicker={t("skills.share_managed")}
+      closeLabel={t("skills.close")}
       bodyClassName="skill-drawer"
     >
         <p className="skill-muted">
-          Grants are delivered to each logical agent on its next run. Revoking a
-          grant also takes effect on the next run.
+          {t("skills.share_delivery_note")}
         </p>
         {teams.length ? (
           <section>
-            <h3>Teams</h3>
+            <h3>{t("skills.teams")}</h3>
             <div className="skill-team-row">
               {teams.map((team) => (
                 <Button
@@ -101,14 +108,14 @@ export function ShareSkillDrawer({
                   onClick={() => selectTeam(team)}
                   disabled={busy}
                 >
-                  {team.name} · {team.memberAgentIds.length}
+                  {team.name} · {t("skills.member_count", { count: team.memberAgentIds.length })}
                 </Button>
               ))}
             </div>
           </section>
         ) : null}
         <section>
-          <h3>Agents</h3>
+          <h3>{t("skills.agents")}</h3>
           <div className="skill-picker-list">
             {candidates.map((agent) => (
               <label key={agent.id}>
@@ -124,14 +131,14 @@ export function ShareSkillDrawer({
             ))}
             {!candidates.length ? (
               <p className="skill-muted">
-                All available agents already have this skill.
+                {t("skills.all_agents_granted")}
               </p>
             ) : null}
           </div>
         </section>
         {skill.grantedAgentIds.length ? (
           <section>
-            <h3>Granted</h3>
+            <h3>{t("skills.granted")}</h3>
             <div className="skill-grant-list">
               {skill.grantedAgentIds.map((id) => {
                 const agent = agents.find((a) => a.id === id);
@@ -143,7 +150,7 @@ export function ShareSkillDrawer({
                       disabled={busy}
                       onClick={() => void revoke(id)}
                     >
-                      Revoke
+                      {t("skills.revoke")}
                     </Button>
                   </div>
                 );
@@ -158,13 +165,13 @@ export function ShareSkillDrawer({
         ) : null}
         <footer>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("skills.cancel")}
           </Button>
           <Button
             disabled={busy || !selected.length}
             onClick={() => void submit()}
           >
-            {busy ? "Sharing…" : `Share with ${selected.length || "selected"}`}
+            {busy ? t("skills.sharing") : t("skills.share_with_count", { count: selected.length })}
           </Button>
         </footer>
     </Drawer>

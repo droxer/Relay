@@ -14,5 +14,5 @@ it("keeps a skipped-skills notice in stream order and renders it in the thread",
   const messages = projectMessages(session, t);
   expect(messages.map((message) => message.id)).toEqual(["thread-1:goal", "user-1", "notice-1"]);
   render(<MessageBlock message={messages[2]} sessionId="thread-1" />);
-  expect(screen.getByText("Two skills could not be delivered.")).toBeTruthy();
+  expect(screen.getByText("relay/release: daemon unsupported")).toBeTruthy();
 });

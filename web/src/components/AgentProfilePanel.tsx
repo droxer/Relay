@@ -242,19 +242,26 @@ export function AgentProfilePanel({
 
   const placementDescriptions = describeAgentPlacements(agent.placements);
   const skills = agent.skills ?? [];
-  const grantedSkills = skills.filter((skill) => (skill as typeof skill & { source?: string }).source === "catalog");
-  const installedSkills = skills.filter((skill) => (skill as typeof skill & { source?: string }).source !== "catalog");
+  const grantedSkills = skills.filter((skill) => skill.source === "catalog");
+  const installedSkills = skills.filter((skill) => skill.source !== "catalog");
 
   async function handleRevokeSkill(skillId: string) {
-    setSaving(true); setError(null);
+    setSaving(true);
+    setError(null);
     try {
       await revokeSkill(skillId, agent.id);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
         queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] }),
       ]);
-    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
-    finally { setSaving(false); }
+    } catch (err) {
+      const code = err && typeof err === "object" && "code" in err && typeof err.code === "string"
+        ? err.code
+        : err instanceof Error ? err.message : "unknown";
+      setError(t(`skills.errors.${code}`, { defaultValue: t("skills.errors.unknown") }));
+    } finally {
+      setSaving(false);
+    }
   }
 
   /* The profile tab carries only what you can CHANGE about the record —
@@ -328,24 +335,59 @@ export function AgentProfilePanel({
           <p className="adm-cred-empty">{t("agents_page.skills_empty")}</p>
         ) : (
           <>
-          {grantedSkills.length ? <><h4 className="agent-skill-group-title">Granted by Relay</h4><ul className="agent-skill-list">
-            {grantedSkills.map((skill) => {
-              const managed = skill as typeof skill & { skillId?: string; available?: boolean; reason?: string };
-              return (
-              <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
-                <span className="agent-skill-name code" translate="no">
-                  {skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}
-                </span>
-                {skill.description ? (
-                  <span className="agent-skill-description">{skill.description}</span>
-                ) : null}
-                {managed.available === false ? <span className="agent-skill-unavailable">Unavailable · {managed.reason ?? "not supported on this computer"}</span> : null}
-                {canEditProfile && managed.skillId ? <Button variant="ghost" disabled={saving} onClick={() => void handleRevokeSkill(managed.skillId!)}>Revoke</Button> : null}
-              </li>
-            );})}
-          </ul></> : null}
-          {installedSkills.length ? <><h4 className="agent-skill-group-title">Installed on this computer</h4><ul className="agent-skill-list">{installedSkills.map((skill) => <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill"><span className="agent-skill-name code">{skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}</span>{skill.description ? <span className="agent-skill-description">{skill.description}</span> : null}</li>)}</ul></> : null}
-          <p className="agent-skill-footnote">Managed grants change on the next run. Claude and Codex can also discover project or administrator-installed skills independently.</p>
+            {grantedSkills.length ? (
+              <>
+                <h4 className="agent-skill-group-title">{t("skills.agent_granted_group")}</h4>
+                <ul className="agent-skill-list">
+                  {grantedSkills.map((skill) => (
+                    <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
+                      <span className="agent-skill-name code" translate="no">
+                        {skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}
+                      </span>
+                      {skill.description ? (
+                        <span className="agent-skill-description">{skill.description}</span>
+                      ) : null}
+                      {skill.available === false ? (
+                        <span className="agent-skill-unavailable">
+                          {t("skills.unavailable_reason", {
+                            reason: skill.reason
+                              ? t(`skills.skip_reason.${skill.reason}`, { defaultValue: skill.reason })
+                              : t("skills.not_supported"),
+                          })}
+                        </span>
+                      ) : null}
+                      {canEditProfile && skill.skillId ? (
+                        <Button
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={() => void handleRevokeSkill(skill.skillId!)}
+                        >
+                          {t("skills.revoke")}
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {installedSkills.length ? (
+              <>
+                <h4 className="agent-skill-group-title">{t("skills.agent_installed_group")}</h4>
+                <ul className="agent-skill-list">
+                  {installedSkills.map((skill) => (
+                    <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
+                      <span className="agent-skill-name code" translate="no">
+                        {skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}
+                      </span>
+                      {skill.description ? (
+                        <span className="agent-skill-description">{skill.description}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            <p className="agent-skill-footnote">{t("skills.agent_discovery_note")}</p>
           </>
         )}
       </div>

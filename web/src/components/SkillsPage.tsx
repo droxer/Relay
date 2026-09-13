@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
+import { useTranslation } from "react-i18next";
 
 type CreateMode = "author" | "upload" | "github";
 function encodeBytes(bytes: Uint8Array) {
@@ -39,6 +40,7 @@ async function encodeFiles(list: FileList): Promise<SkillFileInput[]> {
 }
 
 export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const skillsQuery = useSkills();
   const { agents } = useEmployeeAgents(currentUser.employeeId);
@@ -62,6 +64,12 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [revisionFiles, setRevisionFiles] = useState<SkillFileInput[]>([]);
   const [revisionNote, setRevisionNote] = useState("");
   const skill = detailQuery.data;
+  const errorText = (value: unknown) => {
+    const code = value && typeof value === "object" && "code" in value && typeof value.code === "string"
+      ? value.code
+      : value instanceof Error ? value.message : "unknown";
+    return t(`skills.errors.${code}`, { defaultValue: t("skills.errors.unknown") });
+  };
   const owned = skill?.ownerEmployeeId === currentUser.employeeId;
   useEffect(() => {
     if (!selectedId && skillsQuery.data?.skills[0])
@@ -128,7 +136,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       setSelectedId(created.id);
       await refresh(created.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -141,7 +149,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       await updateSkill(skill.id, { displayName, description, visibility });
       await refresh(skill.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -156,20 +164,20 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       setRevisionNote("");
       await refresh(skill.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
   }
   async function remove() {
-    if (!skill || !window.confirm(`Delete ${skill.displayName}?`)) return;
+    if (!skill || !window.confirm(t("skills.delete_confirm", { name: skill.displayName }))) return;
     setBusy(true);
     try {
       await deleteSkill(skill.id);
       setSelectedId(null);
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -179,38 +187,32 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     <main className="skills-page" id="skills-panel">
       <header className="skills-header">
         <div>
-          <p className="skill-eyebrow">Managed capabilities</p>
-          <h1>Skills</h1>
-          <p>
-            Publish once, then grant a versioned bundle to your Claude, Codex,
-            Pi, or Kimi agents.
-          </p>
+          <p className="skill-eyebrow">{t("skills.eyebrow")}</p>
+          <h1>{t("skills.title")}</h1>
+          <p>{t("skills.subtitle")}</p>
         </div>
-        <Button onClick={() => setMode("author")}>Publish skill</Button>
+        <Button onClick={() => setMode("author")}>{t("skills.publish_skill")}</Button>
       </header>
       {skillsQuery.isLoading ? (
         <section className="route-loading" role="status">
-          Loading skills…
+          {t("skills.loading")}
         </section>
       ) : skillsQuery.error ? (
         <section className="route-loading" role="alert">
-          <p>{String(skillsQuery.error)}</p>
-          <Button onClick={() => void skillsQuery.refetch()}>Try again</Button>
+          <p>{errorText(skillsQuery.error)}</p>
+          <Button onClick={() => void skillsQuery.refetch()}>{t("skills.try_again")}</Button>
         </section>
       ) : !skillsQuery.data?.skills.length ? (
         <section className="skills-empty">
-          <h2>Your skills library is empty</h2>
-          <p>
-            Author a skill, upload a directory bundle, or import one from
-            GitHub.
-          </p>
+          <h2>{t("skills.empty_title")}</h2>
+          <p>{t("skills.empty_body")}</p>
           <Button onClick={() => setMode("author")}>
-            Publish your first skill
+            {t("skills.publish_first")}
           </Button>
         </section>
       ) : (
         <div className="skills-layout">
-          <nav className="skills-list" aria-label="Skills library">
+          <nav className="skills-list" aria-label={t("skills.library_label")}>
             {skillsQuery.data.skills.map((item) => (
               <button
                 key={item.id}
@@ -220,63 +222,63 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 <strong>{item.displayName}</strong>
                 <span>{item.slug}</span>
                 <small>
-                  {item.visibility} · {item.grantedAgentCount ?? 0} granted
+                  {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
                 </small>
               </button>
             ))}
           </nav>
           <section className="skill-detail">
             {detailQuery.isLoading ? (
-              <p role="status">Loading skill…</p>
+              <p role="status">{t("skills.loading_detail")}</p>
             ) : detailQuery.error ? (
-              <p role="alert">{String(detailQuery.error)}</p>
+              <p role="alert">{errorText(detailQuery.error)}</p>
             ) : skill ? (
               <>
                 <header>
                   <div>
                     <p className="skill-eyebrow">
-                      {skill.source} · {skill.visibility}
+                      {t(`skills.source.${skill.source}`)} · {t(`skills.visibility.${skill.visibility}`)}
                     </p>
                     <h2>{skill.displayName}</h2>
                     <p className="skill-code">{skill.slug}</p>
                   </div>
-                  <Button onClick={() => setSharing(true)}>Share</Button>
+                  <Button onClick={() => setSharing(true)}>{t("skills.share")}</Button>
                 </header>
                 <p>{skill.description}</p>
                 <dl className="skill-stats">
                   <div>
-                    <dt>Current revision</dt>
+                    <dt>{t("skills.current_revision")}</dt>
                     <dd>v{skill.revisions[0]?.revision ?? 1}</dd>
                   </div>
                   <div>
-                    <dt>Files</dt>
+                    <dt>{t("skills.files")}</dt>
                     <dd>{skill.files.length}</dd>
                   </div>
                   <div>
-                    <dt>Granted</dt>
+                    <dt>{t("skills.granted")}</dt>
                     <dd>{skill.grantedAgentIds.length}</dd>
                   </div>
                 </dl>
                 <section>
-                  <h3>Bundle</h3>
+                  <h3>{t("skills.bundle")}</h3>
                   <ul className="skill-file-list">
                     {skill.files.map((file) => (
                       <li key={file.path}>
                         <code>{file.path}</code>
-                        <span>{file.bytes.toLocaleString()} bytes</span>
+                        <span>{t("skills.bytes", { count: file.bytes.toLocaleString(i18n.language) })}</span>
                       </li>
                     ))}
                   </ul>
                 </section>
                 <section>
-                  <h3>Revision history</h3>
+                  <h3>{t("skills.revision_history")}</h3>
                   <ol className="skill-revisions">
                     {skill.revisions.map((revision) => (
                       <li key={revision.id}>
                         <strong>v{revision.revision}</strong>
-                        <span>{revision.note || "Published bundle"}</span>
+                        <span>{revision.note || t("skills.published_bundle")}</span>
                         <time>
-                          {new Date(revision.createdAt).toLocaleDateString()}
+                          {new Date(revision.createdAt).toLocaleDateString(i18n.language)}
                         </time>
                       </li>
                     ))}
@@ -284,16 +286,16 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 </section>
                 {owned ? (
                   <section className="skill-owner-tools">
-                    <h3>Manage</h3>
+                    <h3>{t("skills.manage")}</h3>
                     <label>
-                      Display name
+                      {t("skills.display_name")}
                       <Input
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
                       />
                     </label>
                     <label>
-                      Description
+                      {t("skills.description")}
                       <Textarea
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -304,17 +306,17 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                         className={visibility === "private" ? "active" : ""}
                         onClick={() => setVisibility("private")}
                       >
-                        Private
+                        {t("skills.visibility.private")}
                       </button>
                       <button
                         className={visibility === "org" ? "active" : ""}
                         onClick={() => setVisibility("org")}
                       >
-                        Organization
+                        {t("skills.visibility.org")}
                       </button>
                     </div>
                     <Button disabled={busy} onClick={() => void saveMetadata()}>
-                      Save details
+                      {t("skills.save_details")}
                     </Button>
                     {skill.source === "git" ? (
                       <Button
@@ -330,12 +332,12 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                           }
                         }}
                       >
-                        Re-import from GitHub
+                        {t("skills.reimport")}
                       </Button>
                     ) : (
                       <>
                         <label>
-                          New bundle
+                          {t("skills.new_bundle")}
                           <input
                             type="file"
                             multiple
@@ -349,7 +351,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                           />
                         </label>
                         <label>
-                          Revision note
+                          {t("skills.revision_note")}
                           <Input
                             value={revisionNote}
                             onChange={(e) => setRevisionNote(e.target.value)}
@@ -360,7 +362,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                           disabled={busy || !revisionFiles.length}
                           onClick={() => void addRevision()}
                         >
-                          Publish revision
+                          {t("skills.publish_revision")}
                         </Button>
                       </>
                     )}
@@ -369,7 +371,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                       disabled={busy}
                       onClick={() => void remove()}
                     >
-                      Delete skill
+                      {t("skills.delete_skill")}
                     </Button>
                   </section>
                 ) : null}
@@ -382,8 +384,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
         <Drawer
           open
           onClose={resetCreate}
-          title="Publish a skill"
-          closeLabel="Close"
+          title={t("skills.publish_title")}
+          closeLabel={t("skills.close")}
           bodyClassName="skill-drawer"
         >
             <div className="skill-tabs">
@@ -391,23 +393,23 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 className={mode === "author" ? "active" : ""}
                 onClick={() => setMode("author")}
               >
-                Author
+                {t("skills.author")}
               </button>
               <button
                 className={mode === "upload" ? "active" : ""}
                 onClick={() => setMode("upload")}
               >
-                Upload bundle
+                {t("skills.upload_bundle")}
               </button>
               <button
                 className={mode === "github" ? "active" : ""}
                 onClick={() => setMode("github")}
               >
-                GitHub
+                {t("skills.github")}
               </button>
             </div>
             <label>
-              Skill name
+              {t("skills.skill_name")}
               <Input
                 required
                 value={name}
@@ -416,15 +418,15 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               />
             </label>
             <label>
-              Namespace
+              {t("skills.namespace")}
               <Input
                 value={namespace}
                 onChange={(e) => setNamespace(e.target.value)}
-                placeholder="optional"
+                placeholder={t("skills.optional")}
               />
             </label>
             <label>
-              Description
+              {t("skills.description")}
               <Textarea
                 required
                 value={description}
@@ -433,17 +435,17 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             </label>
             {mode === "author" ? (
               <label>
-                Instructions
+                {t("skills.instructions")}
                 <Textarea
                   rows={10}
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="Explain when and how the agent should use this skill."
+                  placeholder={t("skills.instructions_placeholder")}
                 />
               </label>
             ) : mode === "upload" ? (
               <label>
-                Bundle directory
+                {t("skills.bundle_directory")}
                 <input
                   type="file"
                   multiple
@@ -455,14 +457,14 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 />
                 <small>
                   {files.length
-                    ? `${files.length} files ready`
-                    : "Select a directory containing SKILL.md"}
+                    ? t("skills.files_ready", { count: files.length })
+                    : t("skills.select_directory")}
                 </small>
               </label>
             ) : (
               <>
                 <label>
-                  Repository URL
+                  {t("skills.repository_url")}
                   <Input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
@@ -470,11 +472,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                   />
                 </label>
                 <label>
-                  Git ref
+                  {t("skills.git_ref")}
                   <Input value={ref} onChange={(e) => setRef(e.target.value)} />
                 </label>
                 <label>
-                  Subpath
+                  {t("skills.subpath")}
                   <Input
                     value={subpath}
                     onChange={(e) => setSubpath(e.target.value)}
@@ -488,13 +490,13 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 className={visibility === "private" ? "active" : ""}
                 onClick={() => setVisibility("private")}
               >
-                Private
+                {t("skills.visibility.private")}
               </button>
               <button
                 className={visibility === "org" ? "active" : ""}
                 onClick={() => setVisibility("org")}
               >
-                Organization
+                {t("skills.visibility.org")}
               </button>
             </div>
             {error ? (
@@ -504,7 +506,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             ) : null}
             <footer>
               <Button variant="outline" onClick={resetCreate}>
-                Cancel
+                {t("skills.cancel")}
               </Button>
               <Button
                 disabled={
@@ -516,7 +518,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 }
                 onClick={() => void publish()}
               >
-                {busy ? "Publishing…" : "Publish"}
+                {busy ? t("skills.publishing") : t("skills.publish")}
               </Button>
             </footer>
         </Drawer>

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ShareSkillDrawer } from "../src/components/ShareSkillDrawer";
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: any) => ({ "skills.share_managed": "Share managed skill", "skills.close": "Close", "skills.share_delivery_note": "Grants take effect on the next run.", "skills.teams": "Teams", "skills.agents": "Agents", "skills.granted": "Granted", "skills.revoke": "Revoke", "skills.cancel": "Cancel", "skills.sharing": "Sharing…", "skills.share_with_count": `Share with ${options?.count}`, "skills.member_count": `${options?.count} members` }[key] ?? key) }) }));
 
 const { grantSkill, revokeSkill } = vi.hoisted(() => ({
   grantSkill: vi.fn(async () => ({ granted: [] })),
@@ -27,7 +28,7 @@ function wrapper({ children }: { children: ReactNode }) { return <QueryClientPro
 it("expands a team to its currently eligible agents when sharing", async () => {
   const user = userEvent.setup();
   render(<ShareSkillDrawer skill={skill} agents={agents} teams={teams} onClose={vi.fn()} />, { wrapper });
-  await user.click(screen.getByRole("button", { name: "Launch team · 2" }));
+  await user.click(screen.getByRole("button", { name: "Launch team · 2 members" }));
   await user.click(screen.getByRole("button", { name: "Share with 1" }));
   expect(grantSkill).toHaveBeenCalledWith("skill-1", ["agent-2"]);
 });

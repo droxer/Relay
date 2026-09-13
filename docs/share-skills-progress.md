@@ -94,13 +94,10 @@ Automated implementation checks and deployed-node acceptance are tracked separat
 - Desktop (1440×960) and mobile (390×844) browser checks passed using
   intercepted read fixtures in an isolated frontend process. No server was
   seeded. Mutation flows are covered by component interaction tests.
-- Deployed-node Claude discovery isolation remains unverified. A safe local
-  probe used the compiled materializer to create separate granted and empty
-  views, then initialized Claude 2.1.236 with temporary homes and `--bare`. Both
-  initializations succeeded without credentials or model prompts, but neither
-  response enumerated the test skill. This is not positive discovery evidence.
-- Skills workflow body copy is English; navigation labels exist in all three
-  shipped locales.
+- Real local Claude discovery isolation now passes the opt-in probe described
+  below. A deployed BoxLite/backend end-to-end run has not been performed.
+- The skills workflows are available in English, Simplified Chinese, and
+  Traditional Chinese. User-authored skill content and identifiers remain unchanged.
 
 ### Final-review evidence
 
@@ -152,6 +149,65 @@ Both scripts composing `npm test` passed against the final implementation:
 - Pre-commit hooks passed for all implementation commits; `git diff --check`
   passed. Dependency audits found no known vulnerabilities.
 
-All 12 implementation tasks are complete. The deployed-node discovery acceptance
-check and translation limitation above remain explicitly open; automated and
-initialization-only probes do not substitute for that discovery check.
+All 12 implementation tasks are complete. The continuation evidence below
+updates the initial discovery and translation limitations.
+
+## Continuation: real CLI discovery
+
+The previous `--bare` probe was inconclusive because Claude's debug log explicitly
+reported `[reduced mode] Skipping skill dir discovery`. Normal initialization
+exercises discovery, so the replacement runs normal Claude 2.1.236 inside a
+macOS OS sandbox instead of using reduced mode.
+
+The sandbox denies network access, reads of the real home and keychain, and
+writes outside the temporary test tree. Hooks and MCP are disabled; a temporary
+`security` shim returns an empty-keychain status while the real command remains
+blocked. The only stdin message is SDK initialization, followed by EOF. No model
+or user prompt is sent.
+
+The opt-in fixture invokes the real compiled daemon materializer and real Claude:
+
+```sh
+make build-packages
+node packages/relay-daemon/tests/fixtures/claude-skill-isolation.mjs
+```
+
+An optional first argument supplies the installed Claude binary path. This
+fixture requires macOS `sandbox-exec` and is deliberately outside the normal
+unit-test glob. It creates and removes its own temporary home and workspace.
+
+All four runtime assertions passed:
+
+1. Granted agent A enumerates the test skill.
+2. Ungranted agent B, using normal discovery on the same temporary node home,
+   does not enumerate A's skill.
+3. Revoked agent A does not enumerate it on the next initialization.
+4. A's captured pre-revocation view still enumerates it.
+
+This closes the local real-CLI discovery gap. It does not claim a deployed
+BoxLite acceptance run or replace the API authorization and dispatch tests.
+
+## Continuation: workflow localization
+
+The library, author/upload/import drawers, revisions, metadata, sharing,
+revocation, agent skill groups, and delivery notices use the existing i18next
+resources in all three shipped locales. This includes source and visibility
+labels, dynamic counts, 54 actionable error messages, and 10 skip reasons.
+User-authored `SKILL.md` content, names, descriptions, paths, and repository
+values are preserved.
+
+Real i18next tests exercise both Chinese locales, share/team counts, and
+localized delivery notices with unchanged skill identifiers. The authored-bundle
+regression still verifies the original user-supplied name and description in
+`SKILL.md`.
+
+Validation for this continuation:
+
+- Production build and all 1,468 compiled TypeScript tests passed.
+- Full React suite: all 48 tests passed, including the real locale/notice checks.
+- Pre-commit checks and `git diff --check` passed.
+- The four real Claude discovery assertions above passed; read-only review
+  approved the fixture and its documented scope.
+- The npm dependency audit reports zero known vulnerabilities.
+- Python runtime and database code were unchanged in this continuation; the
+  earlier 1,455-test Python result remains the applicable evidence.
