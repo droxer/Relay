@@ -143,7 +143,7 @@
      14px ≈ -0.01em) and sets the display tier and the uppercase captions
      solid. The tokens stay explicit so a role's tracking is decided here,
      once, not re-derived at every call site. */
-  --type-display:      500 var(--fs-6)/1.17 var(--font-display);
+  --type-display:      500 var(--fs-6)/var(--leading-display) var(--font-display);
   /* The display tier is 28px/500 — the display weight in this system is the
      MIDDLE of the ramp, not the top of it. Emphasis at reading sizes runs
      heavier (700) than the headline tier does, which is the source system's
@@ -154,14 +154,26 @@
      pane titles, and feature-tile headers. The 22px rung above it is reserved
      for KPI numerals and subsection headlines, where an oversized figure is
      the point. */
-  --type-title:        500 var(--fs-title)/1.25 var(--font-display);
+  --type-title:        500 var(--fs-title)/var(--leading-tight) var(--font-display);
   --type-heading:      700 var(--fs-heading)/var(--leading-heading) var(--font-display);
-  --type-body:         400 var(--fs-4)/1.5  var(--font-sans);
-  --type-body-sm:      400 var(--fs-2)/1.43 var(--font-sans);
-  --type-label:        500 var(--fs-2)/1.43 var(--font-sans);
-  --type-label-strong: 700 var(--fs-2)/1.43 var(--font-sans);
-  --type-micro:        700 var(--fs-1)/1.33 var(--font-sans); /* + uppercase */
-  --type-number:       500 var(--fs-5)/1.28 var(--font-display);
+  --type-body:         400 var(--fs-4)/var(--leading-normal) var(--font-sans);
+  --type-body-sm:      400 var(--fs-2)/var(--leading-snug) var(--font-sans);
+  --type-label:        500 var(--fs-2)/var(--leading-snug) var(--font-sans);
+  --type-label-strong: 700 var(--fs-2)/var(--leading-snug) var(--font-sans);
+  /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier.
+     text-transform: uppercase is already the marking on this role — 700 on top
+     of it double-marks the quietest text in the app, and at 12px in a variable
+     face the counters close up. It is also the app's most-applied role (63
+     rules), and the inverted ramp documented above only reads as emphasis
+     while 700 stays SCARCE: with micro on it, two elements in five were bold.
+
+     It lands on 500 rather than 600 because the weight ladder is three rungs
+     on purpose — shadcn-bridge.css maps font-semibold onto 700 precisely so a
+     fourth weight cannot creep back in, and dimensionScales.test.ts pins the
+     set. Sharing 500 with --type-label is fine: micro is separated from it by
+     CASE and size, which is the separator this role has always led with. */
+  --type-micro:        500 var(--fs-1)/var(--leading-caps) var(--font-sans); /* + uppercase */
+  --type-number:       500 var(--fs-5)/var(--leading-number) var(--font-display);
   /* Code sizes to the mono face's metrics, not the sans ladder. 1rem = 14px
      sits deliberately BETWEEN the 13px body-sm rung and the 15px body rung:
      mono advances are wider than sans at the same size, so 14px mono already
@@ -169,7 +181,7 @@
      make code read smaller than the prose around it, which is the one place
      legibility must not lose. It is a literal on purpose — do not "converge"
      it onto a sans rung. */
-  --type-code:         400 1rem/1.43 var(--font-mono);
+  --type-code:         400 1rem/var(--leading-snug) var(--font-mono);
 
   /* ----- Content-origin roles -----
      The three roles above the label tier answer "how loud", but the app also
@@ -196,8 +208,16 @@
      on the same size: they are generic containers for arbitrary translated
      copy, where forced uppercase is a localization hazard. That carve-out is
      pinned by typographyTokens.test.ts — do not "converge" it. */
-  --type-name:          700 var(--fs-4)/1.5 var(--font-sans);
-  --type-title-content: 400 var(--fs-title)/1.25 var(--font-sans);
+  --type-name:          700 var(--fs-4)/var(--leading-normal) var(--font-sans);
+  /* --type-meta  supporting text at the caption size, in SENTENCE case: row
+     meta lines ("3 agents · updated 2h ago"), eyebrows, kickers. It shares the
+     box with --type-micro and differs in TRACKING, which is the whole point —
+     micro is uppercase and needs the caps track, meta is prose and must not
+     get it. Six rules used to hand-roll this as `font: var(--type-label)`
+     followed by `font-size: var(--fs-1)`, which is how a role announces it is
+     missing. */
+  --type-meta:          500 var(--fs-1)/var(--leading-caps) var(--font-sans);
+  --type-title-content: 400 var(--fs-title)/var(--leading-tight) var(--font-sans);
 
   --type-display-track:      var(--track-display); /* the display tier sets solid */
   --type-title-track:        var(--track-display);
@@ -210,6 +230,7 @@
   --type-micro-track:        var(--track-caps);
   --type-code-track:         var(--track-0); /* never tighten a monospace column */
   --type-name-track:          var(--track-body);
+  --type-meta-track:          var(--track-body-sm);
   --type-title-content-track: var(--track-display);
 }
 

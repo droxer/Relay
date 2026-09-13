@@ -608,6 +608,12 @@
      it (`leading-(--leading-heading)`) instead of spelling a literal. */
   --leading-heading: 1.44;
   --leading-snug: 1.43;
+  /* The caps/meta line box (--type-micro, --type-meta) and the numeral tier
+     (--type-number, the source system's heading-lg leading). Both existed only
+     as literals inside roles.css, which is why the scale above looked complete
+     while 11 of 12 roles bypassed it. */
+  --leading-caps: 1.33;
+  --leading-number: 1.28;
   --leading-normal: 1.5;
   --leading-loose: 1.65;
   /* Long-form prose (transcript answers, document previews). Loose is the
@@ -627,7 +633,13 @@
   --track-body: -0.01em;
   --track-body-sm: -0.01em;
   --track-0: 0;
-  --track-caps: 0;
+  /* Uppercase captions were set SOLID because the source system sets them at
+     700, where the extra stroke weight holds the caps apart on its own. This
+     app runs --type-micro at 500 (see roles.css — micro is structure, not
+     emphasis, and at 700 it made two elements in five bold), so the tracking
+     has to do the work the weight used to. Sentence-case consumers of the same
+     size live on --type-meta, which tracks as body text. */
+  --track-caps: 0.03em;
 
   /* Families — Optimistic VF is Meta's proprietary variable display face and
      is not redistributable, so it leads the stack for anyone who has it
@@ -868,11 +880,19 @@ html:lang(zh-TW) {
      --type-body-sm shifts by the same one-rung substitution (--fs-2 → --fs-1):
      it is the app's supporting-text tier (hints, meta lines, empty-state copy),
      so a dense admin table would otherwise print its meta at the same size as
-     the names beside it. */
+     the names beside it.
+
+     --type-label and --type-label-strong are deliberately NOT restated, even
+     though they are built on --fs-2 like body-sm is. At :root the label and
+     supporting tiers share a size and separate by weight; in a dense table
+     that is not enough, so supporting text steps down and the labels hold the
+     rung. Dropping both would flatten the scope to a single 12px size and undo
+     the separation this block exists to create. The rule is therefore NOT
+     "restate everything built on --fs-2" — it is "restate the reading tiers". */
   --fs-4: var(--fs-3);
-  --type-body: 400 var(--fs-4)/1.43 var(--font-sans);
-  --type-name: 700 var(--fs-4)/1.43 var(--font-sans);
-  --type-body-sm: 400 var(--fs-1)/1.43 var(--font-sans);
+  --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
+  --type-name: 700 var(--fs-4)/var(--leading-snug) var(--font-sans);
+  --type-body-sm: 400 var(--fs-1)/var(--leading-snug) var(--font-sans);
 }
 
 /* CJK reading roles are looser; the compact scope must restate them too or a
@@ -881,6 +901,6 @@ html:lang(zh-CN) [data-density="compact"],
 html:lang(zh-TW) [data-density="compact"],
 html:lang(zh-CN)[data-density="compact"],
 html:lang(zh-TW)[data-density="compact"] {
-  --type-body: 400 var(--fs-4)/1.7 var(--font-sans);
-  --type-body-sm: 400 var(--fs-1)/1.7 var(--font-sans);
+  --type-body: 400 var(--fs-4)/var(--leading-normal) var(--font-sans);
+  --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
 }

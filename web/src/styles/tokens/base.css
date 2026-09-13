@@ -267,8 +267,12 @@ summary:focus-visible,
 .eyebrow {
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--track-0);
+  /* Sentence case on the caption size — generic containers for arbitrary
+     translated copy, where forced uppercase is a localization hazard. That is
+     exactly --type-meta, which carries prose tracking instead of the caps
+     track --type-micro now sets. */
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* Status tone driver — tone classes only set the variable; consumers

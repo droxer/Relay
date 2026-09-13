@@ -52,6 +52,5 @@
   padding: var(--sp-7);
   color: var(--ink-3);
   font: var(--type-body-sm);
-  font-family: var(--font-sans);
   letter-spacing: var(--track-0);
 }

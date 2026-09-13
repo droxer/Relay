@@ -130,6 +130,12 @@ describe("application typography roles", () => {
     assert.match(roles, /--type-number:\s+500[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-label-strong:\s+700[^;]+var\(--font-sans\);/);
     assert.match(roles, /--type-name:\s+700[^;]+var\(--font-sans\);/);
+    // Micro is deliberately NOT on the emphasis weight: uppercase already marks
+    // it, and it is the most-applied role in the app, so putting it at 700 made
+    // 42% of all typed elements bold and the emphasis tier stopped reading. It
+    // takes 500 rather than 600 because the ladder stays three rungs — see the
+    // weight-ladder test in dimensionScales.test.ts.
+    assert.match(roles, /--type-micro:\s+500[^;]+var\(--font-sans\);/);
     assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "no weight 800 exists in this system — Plex tops out at 700");
     assert.match(roles, /--type-code:\s+400[^;]+var\(--font-mono\);/);
     assert.match(roles, /--type-body:\s+400[^;]+var\(--font-sans\);/);
@@ -148,7 +154,12 @@ describe("application typography roles", () => {
     assert.match(palette, /--track-display:\s*0;/);
     assert.match(palette, /--track-body:\s*-0\.01em;/);
     assert.match(palette, /--track-body-sm:\s*-0\.01em;/);
-    assert.match(palette, /--track-caps:\s*0;/);
+    // Caps tracking is NOT solid any more. The source system sets its uppercase
+    // captions solid because it sets them at 700, where stroke weight holds the
+    // caps apart; --type-micro runs 500 here, so the track has to do that work
+    // instead. Sentence-case copy at the same size uses --type-meta, which
+    // tracks as body text and never picks this up.
+    assert.match(palette, /--track-caps:\s*0\.03em;/);
 
     // --track-tight was declared 0, so its name promised a tightening it never
     // applied and its single consumer meant --track-0 all along. A token whose

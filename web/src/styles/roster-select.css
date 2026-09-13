@@ -124,5 +124,4 @@
   color: var(--ink-3);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
-  text-transform: capitalize;
 }

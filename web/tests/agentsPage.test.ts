@@ -46,7 +46,12 @@ describe("agent meta line", () => {
   it("keeps the meta line on one type rung across surfaces", async () => {
     const css = await read("src/styles/agent-meta.css").catch(() => read("src/styles/agents.css"));
     const rule = css.match(/\.agent-meta \{([^}]*)\}/)?.[1] ?? "";
-    assert.match(rule, /--fs-1/);
+    // --type-meta IS the 12px sentence-case caption rung (roles.css). This rule
+    // used to spell `font: var(--type-label)` + `font-size: var(--fs-1)`, which
+    // is the shape a missing role takes; asserting the role rather than the raw
+    // token is the stronger check, since the role cannot drift a rung without
+    // every other meta line drifting with it.
+    assert.match(rule, /var\(--type-meta\)/);
 
     // The team surfaces used to redefine it a rung larger.
     for (const path of ["src/styles/teams.css", "src/styles/admin-v2-employees.css"]) {

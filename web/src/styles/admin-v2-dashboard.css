@@ -81,7 +81,7 @@
 .adm-dash-tile--hero .adm-dash-tile-value {
   font-family: var(--font-display);
   font-size: var(--fs-hero);
-  font-weight: 700;
+  font-weight: 500;
   line-height: var(--leading-none);
   letter-spacing: var(--track-display);
 }
@@ -390,7 +390,7 @@
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--fs-5);
-  font-weight: 700;
+  font-weight: 500;
   line-height: var(--leading-none);
   letter-spacing: var(--track-display);
   color: var(--ink-1);
