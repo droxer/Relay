@@ -134,9 +134,17 @@ serialization across replicas; the process-local dispatch lock alone does not.
 Legacy prepared manifests lack the token and retain their compatibility path.
 This does not establish exclusive task ownership across different threads.
 
-Runtime receiver validation and task-wide ownership revisions remain pending.
-Current hashes identify historical snapshots; they do not certify a live Git
-tree or enforce a writer fence. See `docs/testing/handoff-receipt.tdd.md`.
+Runtime receiver validation now compares recorded snapshot hashes with bounded
+regular files before preparation/execution. Version 3 handoffs require the
+`handoff-validation` daemon capability; prepared older versions keep their
+compatibility path. All workspace layouts, including threads, use the physical
+workspace gate, so validation runs after a preceding cooperative writer releases
+it. Missing hashes remain unknown, and matching partial evidence never certifies
+a whole Git tree or completion. See `docs/testing/handoff-runtime.tdd.md`.
+
+Task-wide ownership revisions and stronger termination/fencing guarantees for
+mixed-version or external writers remain pending. The local workspace gate is
+not an OS sandbox and cannot stop an unrelated process that ignores it.
 
 - Existing web recovery callers already use logical-agent `/recoveries`. The
   repository caller inventory found no active chat/core client calling the

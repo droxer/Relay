@@ -2867,3 +2867,36 @@ def test_handoff_requires_runtime_validation(recovery_team_thread, capable):
     else:
         assert commands == []
         assert response.json()["status"] == "failed"
+
+
+@pytest.mark.parametrize("mismatch", [None, "assignment", "workspace"])
+def test_handoff_validation_binds_receipt_evidence(recovery_team_thread, monkeypatch, mismatch):
+    from relay.collaboration import service
+
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    capture = service.capture_handoff_context
+    evidence = [{"artifactId": "snapshot", "path": "PROGRESS.md", "sha256": "a" * 64}]
+
+    def captured(*args, **kwargs):
+        context = capture(*args, **kwargs)
+        context["receipt"]["workspace"]["artifacts"] = evidence
+        if mismatch == "assignment":
+            context["receipt"]["targetAssignmentId"] = "different"
+        if mismatch == "workspace":
+            context["receipt"]["workspace"]["layout"] = "node-root"
+        return context
+
+    monkeypatch.setattr(service, "capture_handoff_context", captured)
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 202, response.text
+    commands = client.app.state.registry.take_commands("test_node_alice", "node_token")
+    if mismatch:
+        assert commands == []
+        assert response.json()["status"] == "failed"
+    else:
+        assert commands[0]["handoffValidation"]["artifacts"] == evidence
+        evidence[0]["sha256"] = "b" * 64
+        assert commands[0]["handoffValidation"]["artifacts"][0]["sha256"] == "a" * 64

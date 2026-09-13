@@ -118,11 +118,11 @@ current run request or active round belongs to that task. Routine-template and
 reference links remain historical relationships.
 
 New handoff rounds include optional `handoffContext` with contract
-`relay.handoff.context` version 2 (legacy version 1 remains readable). It contains the receiving assignment and
+`relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and
 logical agent, linked decision, source event boundary, bounded objective/note
 and prior-context excerpts, and run/artifact/progress-file references. Retrying
 an accepted operation preserves that context even if the thread later changes.
-Version 2 requires `handoffContext.receipt`, using
+Versions 2 and 3 require `handoffContext.receipt`, using
 `relay.handoff.receipt` version 1. The receipt preserves the work scope, verbatim
 task requirements or initial thread objective, current request, and handoff
 instruction. Requirements are never truncated: a combined protected-text budget
@@ -142,11 +142,31 @@ The receipt includes up to 24 source-run artifact references with SHA-256 hashes
 when stored bytes are available. Coverage is explicitly partial. Checkpoints
 must belong to the source run and match its assignment. Missing, unavailable,
 invalid, and stale checkpoints remain explicit unknown-progress states. Hashes
-identify historical bytes, not the live workspace; receiving agents are
-instructed to verify relevant files and claims. Legacy contexts without receipts
-remain supported. No new database migration is required.
-Older backends reject version 2 explicitly instead of silently dropping its
-protected requirements; upgrade backend replicas before producing new receipts.
+identify historical bytes, not correctness or completion; receiving agents must
+still verify relevant work and claims. No new database migration is required.
+
+Version 3 requires the daemon's `handoff-validation` capability. The backend
+binds `run.start.handoffValidation` (`relay.handoff.validation` version 1) to the
+receipt's receiving assignment, workspace layout/subpath, and artifact references.
+A daemon without the capability fails the handoff without publishing a command.
+Upgrade backend replicas and daemons before creating version 3 handoffs. Old
+backends reject version 3 rather than silently dropping the required validation.
+Previously prepared version 1/2 contexts retain their original behavior.
+
+The daemon validates under its physical workspace gate, before receiver
+preparation, control-file cleanup, or `run.executing`. Thread, task, project,
+and node-root runs all participate in the gate. Recorded hashes must match
+bounded regular files (2 MiB per file, at most 24 references). Changed, missing,
+oversized, or unsafe files stop the command with `handoff_validation_failed`.
+Relative-path traversal and symlinks are rejected; no file contents or host paths
+are returned in the failure. Nothing is restored or overwritten. Review changed
+work before requesting a new run; replaying the same receipt cannot bless drift.
+
+Null hashes and absent checkpoints remain explicitly unverified, not successful
+whole-workspace verification. The receiver prompt records matched/unavailable
+counts and partial coverage. The gate coordinates upgraded Relay writers, not
+external tools or older daemons that do not acquire it; this is not a hostile-host
+sandbox or a Git-tree attestation.
 
 `collaboration.delivery` SSE events carry `roundId`, `assignmentId`, `runId`, and
 `status` (`queued` or `running`). `agent.started` alone means the backend staged
