@@ -117,6 +117,23 @@ task execution. Likewise, marking a task done only closes linked threads whose
 current run request or active round belongs to that task. Routine-template and
 reference links remain historical relationships.
 
+Task-scoped work also reserves the task across threads and nodes: only one
+daemon run request may be `prepared`, `running`, `dispatching`, or `finalizing`
+for a non-null `taskId`. The database enforces this with
+`uq_daemon_run_requests_active_task`; the local daemon store serializes creates
+and transitions under its process-shared claim lock. One request may still
+coordinate several assignments. Unscoped threads do not reserve reference-linked
+tasks. A competing recovery returns 409 `collaboration_conflict` with
+`task_ownership_conflict` in the message, without replacing the current request.
+
+Database deployments must apply migration `20260913_0068` (`make backend-migrate`).
+Pause admissions during deployment. If duplicate active owners already exist,
+the migration stops without modifying runs; resolve them through normal lifecycle
+operations and confirm writers have stopped before retrying. The constraint
+releases when the request becomes terminal, and prevents stale requests from
+reactivating over a replacement. It is not proof that a cancelled process exited;
+task revision tokens and stronger process fencing remain separate work.
+
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and
 logical agent, linked decision, source event boundary, bounded objective/note

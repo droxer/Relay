@@ -142,7 +142,14 @@ workspace gate, so validation runs after a preceding cooperative writer releases
 it. Missing hashes remain unknown, and matching partial evidence never certifies
 a whole Git tree or completion. See `docs/testing/handoff-runtime.tdd.md`.
 
-Task-wide ownership revisions and stronger termination/fencing guarantees for
+Task-wide active reservations now prevent different threads or nodes from
+admitting competing requests for one task. Database uniqueness covers all four
+active phases, including preparation and finalization; the local store uses its
+process-shared claim lock for both creates and transitions. Migration 0068 refuses
+pre-existing duplicate owners instead of picking a winner or cancelling metadata.
+See `docs/testing/task-ownership-reservation.tdd.md`.
+
+Task-wide revision tokens and stronger termination/fencing guarantees for
 mixed-version or external writers remain pending. The local workspace gate is
 not an OS sandbox and cannot stop an unrelated process that ignores it.
 
