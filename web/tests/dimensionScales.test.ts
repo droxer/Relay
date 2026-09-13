@@ -317,6 +317,34 @@ describe("weight ladder", () => {
       assert.ok(["400", "500", "700"].includes(value), `--font-weight-${name} resolves to ${value}`);
     }
   });
+
+  it("keeps the utility layer on the same weight as the role at that size", () => {
+    // The app has TWO type systems: the --type-* roles in CSS, and the Tailwind
+    // utilities the shadcn primitives are built from. Auditing only the first
+    // one reports a weight distribution the UI does not actually have — the
+    // Button alone renders on 231 call sites and never appears in a stylesheet.
+    //
+    // The caption and control registers (--text-micro -> --fs-1,
+    // --text-xs -> --fs-2) are 500 on the CSS side: --type-micro and
+    // --type-label. A primitive that sets font-bold at those sizes puts the
+    // same visual register on screen at two different weights depending on
+    // which layer styled it, which reads as inconsistency rather than emphasis.
+    // 700 stays available above them — card.tsx pairs it with text-lg, the
+    // --type-heading rung, which is exactly right.
+    const offenders: string[] = [];
+    for (const { rel, text } of sources.filter((f) => f.rel.endsWith(".tsx"))) {
+      for (const m of text.matchAll(/\btext-(micro|xs)\b[^\n]*/g)) {
+        if (/\bfont-(semibold|bold|extrabold|black)\b/.test(m[0])) {
+          offenders.push(`${rel}: text-${m[1]} with a bold utility`);
+        }
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      `these render the 12-13px register heavier than --type-micro/--type-label do:\n  ${offenders.join("\n  ")}`,
+    );
+  });
 });
 
 describe("tabular figures keep the root's stylistic sets", () => {

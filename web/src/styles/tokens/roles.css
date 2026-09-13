@@ -237,8 +237,8 @@
 /* CJK — reading roles want looser leading. */
 html:lang(zh-CN),
 html:lang(zh-TW) {
-  --type-body:    400 var(--fs-4)/1.7 var(--font-sans);
-  --type-body-sm: 400 var(--fs-2)/1.7 var(--font-sans);
+  --type-body:    400 var(--fs-4)/var(--leading-normal) var(--font-sans);
+  --type-body-sm: 400 var(--fs-2)/var(--leading-normal) var(--font-sans);
 }
 
 /* Resolve locally, including on pseudo-elements: a root composite would
