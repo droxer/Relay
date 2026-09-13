@@ -45,16 +45,21 @@ DAEMON_STORE_FACTORIES = [LocalDaemonStore, database_daemon_store]
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
-@pytest.mark.parametrize("delivered", [False, True])
+@pytest.mark.parametrize("delivery", ["queued", "dispatched", "expired"])
 def test_cancel_before_delivery_preserves_delivered_task_reservation(
-    daemon_store_factory, delivered: bool,
+    daemon_store_factory, delivery: str,
 ) -> None:
     with TemporaryDirectory() as root:
         store = daemon_store_factory(root)
         store.register_node(store_node_payload())
+        sessions = LocalSessionStore(root)
+        session = sessions.create_session({
+            "workspacePath": "/workspace/alice", "ownerEmployeeId": "alice",
+            "taskGoal": "retain ownership until exit",
+        })
         task_id = new_database_id()
         request = store.create_run_request({
-            "nodeId": "sbx_alice", "sessionId": new_database_id(),
+            "nodeId": "sbx_alice", "sessionId": session["id"],
             "taskId": task_id, "taskGoal": "retain ownership until exit",
             "assignments": [{"executorKind": "codex", "mode": "action"}],
             "state": {}, "status": "running",
@@ -67,16 +72,21 @@ def test_cancel_before_delivery_preserves_delivered_task_reservation(
         }
         store.update_run_request(request["id"], {"currentCommandId": command["id"]})
         store.enqueue_command("sbx_alice", command)
-        if delivered:
-            assert len(store.take_queued_commands("sbx_alice")) == 1
-        registry = DaemonNodeRegistry(LocalSessionStore(root), store)
+        if delivery != "queued":
+            assert len(store.take_queued_commands(
+                "sbx_alice", lease_seconds=-1 if delivery == "expired" else 60,
+            )) == 1
+        registry = DaemonNodeRegistry(sessions, store)
 
         result = registry.cancel_run_request_before_delivery(request["id"], "stop")
 
-        if delivered:
+        if delivery != "queued":
             assert result is None
             assert store.active_run_request_for_task(task_id)["id"] == request["id"]
             assert store.get_command(command["id"])["status"] == "dispatched"
+            SessionController(sessions).cancel_session(session["id"], "stop")
+            registry.reap_stale_runs()
+            assert store.active_run_request_for_task(task_id)["id"] == request["id"]
         else:
             assert result["status"] == "cancelled"
             assert store.active_run_request_for_task(task_id) is None
