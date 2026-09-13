@@ -167,3 +167,32 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
     command.downgrade(config, "20260908_0066")
     command.upgrade(config, "head")
     assert store.get_project(project["id"]) == populated
+
+
+def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from relay.persistence.task_store import DatabaseTaskStore
+    from relay.persistence.store_common import relay_task_event
+    from relay.security.auth import DatabaseUserAuthStore
+
+    monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
+    url, _schema = migrated_schema
+    owner = DatabaseUserAuthStore(url).create_user(
+        'wip-owner', 'test-wip-password', employee_id='wip-owner',
+    )['employeeId']
+    store = DatabaseTaskStore(url)
+    tasks = [store.create_task({'title': str(i), 'ownerEmployeeId': owner}) for i in range(4)]
+
+    def attempt(task):
+        try:
+            DatabaseTaskStore(url).append_event(task['id'], relay_task_event(
+                'task.execution.claimed', task['id'], {'requestId': task['id'], 'expectedRevision': 0},
+            ))
+            return True
+        except ValueError as error:
+            assert 'task_wip_limit' in str(error)
+            return False
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert sum(pool.map(attempt, tasks)) == 1
+    assert sum(bool(task.get('startedAt')) for task in store.list_tasks()) == 1

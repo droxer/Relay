@@ -352,3 +352,24 @@ records `task.workspace_bound`; conflicting bindings are rejected. Commands with
 `reportWorkspaceStatus: true` accept a lease-validated `run.workspace` event with
 `waiting: boolean` and optional `blockingSessionId`. These transitions materialize
 as `task.workspace_wait` events; an acquire clears the matching run's wait state.
+
+### Task flow and acceptance
+
+Task consumers should use `workflowStage` for the five board stages (Backlog,
+Ready, In progress, Review, Done) while retaining `status` for execution and waiting
+conditions. `GET /tasks` and `GET /tasks?view=summary` also return
+`flowPolicy: { wipLimit, scope: "employee" }`.
+
+New tasks accept only Backlog/Ready as initial status. `acceptancePolicy` is
+`human` (default) or `automatic`; it is immutable once work starts. Successful
+human-policy work enters Review, and `PATCH /tasks/{id}` with `status=done`
+accepts it. Manual transitions to running or human waiting return 409; use the
+execution endpoint or thread controls. Blocking requires `blockerReason`;
+`action=unblock` restores the recorded prior state without pretending to restart
+execution. Active task runs and stale state assumptions reject workflow edits.
+
+Task detail and summary projections include `startedAt`, `finishedAt`,
+`workflowStage`, and blocker metadata when applicable. Dispatch can return
+`code=task_wip_limit` with `state=queued`; this is a capacity wait and does not
+consume a failure retry. See [the task lifecycle](task-kanban-lifecycle.md) for
+transition, capacity, history compatibility, and migration policies.

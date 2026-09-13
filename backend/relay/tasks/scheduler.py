@@ -618,7 +618,7 @@ class TaskScheduler:
                 code=code,
                 message=str(error),
             )
-            if code != "dispatch_failed":
+            if code not in ("dispatch_failed", "task_wip_limit"):
                 # A classified failure means the run was not accepted, so the
                 # retry budget applies. An unclassified ("dispatch_failed")
                 # failure keeps its claim because the run may have been

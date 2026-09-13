@@ -32,6 +32,7 @@ def dispatch_failure_code(error: Exception) -> str:
     for code in (
         "agent_policy_unsupported",
         "capacity_exhausted",
+        "task_wip_limit",
         "workspace_unavailable",
         "configuration_pending",
         "agent_offline",

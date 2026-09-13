@@ -93,6 +93,7 @@ export function BacklogTaskCard({
   const startDisabled =
     (!task.assignedAgentId && !task.assignedTeamId && !canDiscuss) ||
     task.status === "running" ||
+    task.status === "blocked" ||
     task.status === "done";
   const result = taskResultLine(task, session);
 
@@ -124,6 +125,7 @@ export function BacklogTaskCard({
         />
         <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
       </div>
+      <TaskFlowDetails task={task} />
       {task.description ? <p className="backlog-description">{task.description}</p> : null}
       <div className="backlog-meta">
         <PriorityBadge priority={task.priority} />
@@ -173,8 +175,8 @@ export function BacklogTaskCard({
             onClick={onStart}
             disabled={startDisabled}
             loading={starting}
-            aria-label={(task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-            title={(task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+            aria-label={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+            title={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
           >
             <ActionStart size={ICON.sm} />
           </Button>
@@ -184,10 +186,11 @@ export function BacklogTaskCard({
             type="button"
             className={task.status === "blocked" ? undefined : "backlog-action-block"}
             onClick={onToggleBlock}
+            disabled={task.status === "running" || task.status === "done"}
           >
-            {task.status === "blocked" ? t("backlog.reopen") : t("backlog.block")}
+            {task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
           </Button>
-          <Button variant="outline" type="button" className="backlog-action-done" onClick={onDone} disabled={task.status === "done"}>{t("backlog.done")}</Button>
+          <Button variant="outline" type="button" className="backlog-action-done" onClick={onDone} disabled={task.status !== "review"}>{t("backlog.done")}</Button>
         </div>
       </div>
     </article>
@@ -297,6 +300,7 @@ export function BacklogTaskRow({
   const startDisabled =
     (!task.assignedAgentId && !task.assignedTeamId && !canDiscuss) ||
     task.status === "running" ||
+    task.status === "blocked" ||
     task.status === "done";
 
   return (
@@ -315,6 +319,7 @@ export function BacklogTaskRow({
       <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell>
       <TableCell render={<div />} className="backlog-row-lead">
         <Button variant="ghost" type="button" className="backlog-row-title" onClick={onEdit}>{task.title}</Button>
+        <TaskFlowDetails task={task} />
         <RoutineOriginBadge task={task} routineTitle={routineTitle} />
       </TableCell>
       <TableCell render={<div />} className="backlog-row-tags">
@@ -363,8 +368,8 @@ export function BacklogTaskRow({
             onClick={onStart}
             disabled={startDisabled}
             loading={starting}
-            aria-label={(task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-            title={(task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+            aria-label={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+            title={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
           >
             <ActionStart size={ICON.sm} />
           </Button>
@@ -374,8 +379,9 @@ export function BacklogTaskRow({
             type="button"
             className={cn("backlog-action-icon", task.status !== "blocked" && "backlog-action-block")}
             onClick={onToggleBlock}
-            aria-label={task.status === "blocked" ? t("backlog.reopen") : t("backlog.block")}
-            title={task.status === "blocked" ? t("backlog.reopen") : t("backlog.block")}
+            disabled={task.status === "running" || task.status === "done"}
+            aria-label={task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
+            title={task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
           >
             {task.status === "blocked" ? <NavRefresh size={ICON.sm} /> : <ActionStop size={ICON.sm} />}
           </Button>
@@ -383,7 +389,7 @@ export function BacklogTaskRow({
             type="button"
             className="backlog-action-icon backlog-action-done"
             onClick={onDone}
-            disabled={task.status === "done"}
+            disabled={task.status !== "review"}
             aria-label={t("backlog.done")}
             title={t("backlog.done")}
           >
@@ -393,4 +399,14 @@ export function BacklogTaskRow({
       </TableCell>
     </TableRow>
   );
+}
+
+function TaskFlowDetails({ task }: { task: RelayTaskListItem }) {
+  const { t } = useTranslation();
+  const age = task.startedAt && task.status !== "done" ? Math.max(0, (Date.now() - Date.parse(task.startedAt)) / 86400000) : null;
+  return <div className="backlog-meta">
+    {task.status === "blocked" ? <span className="backlog-blocker" title={`${task.blockerOwnerEmployeeId ?? ""} · ${task.blockedAt ?? ""}`}>{t("backlog.statuses.blocked")}: {task.blockerReason}</span> : null}
+    {task.status === "waiting_for_human" ? <span className="backlog-due warn">{t("backlog.statuses.waiting_for_human")}</span> : null}
+    {age !== null ? <span>{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}
+  </div>;
 }

@@ -537,6 +537,8 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "description": created.get("description", ""),
         "priority": created.get("priority", "normal"),
         "status": "backlog",
+        "workflowStage": "backlog",
+        "acceptancePolicy": created.get("acceptancePolicy", "automatic"),
         "isRoutine": bool(created.get("isRoutine")),
         "routineEnabled": bool(created.get("routineEnabled")),
         "linkedSessionIds": [],
@@ -586,7 +588,7 @@ def _apply_task_workspace_bound(task: dict[str, Any], event: dict[str, Any]) -> 
 
 
 def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
-    for key in ("title", "description", "priority", "assigneeEmployeeId", "dueDate"):
+    for key in ("title", "description", "priority", "assigneeEmployeeId", "dueDate", "acceptancePolicy"):
         if key not in event or event[key] is None:
             continue
         if key in ("assigneeEmployeeId", "dueDate") and event[key] == "":
@@ -663,6 +665,9 @@ def _apply_task_round(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 
 def _apply_task_status(task: dict[str, Any], event: dict[str, Any]) -> None:
+    from .task_lifecycle import apply_flow_status
+
+    apply_flow_status(task, event)
     task["status"] = event["status"]
     if event["status"] != "running":
         task.pop("workspaceWaiting", None)
@@ -695,6 +700,8 @@ TaskEventHandler = Callable[[dict[str, Any], dict[str, Any]], None]
 
 
 def _apply_task_execution_claimed(task: dict[str, Any], event: dict[str, Any]) -> None:
+    task.setdefault("startedAt", event["timestamp"])
+    _apply_task_status(task, {**event, "status": "assigned"})
     task["executionOwner"] = {
         "requestId": event["requestId"], "revision": event["revision"],
     }

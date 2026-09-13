@@ -95,8 +95,11 @@ export function useRelayData(
         queryKey: TASKS_KEY,
         enabled,
         refetchInterval: RELAY_POLL_INTERVALS_MS.tasks,
-        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> =>
-          (await listTasks(signal)).tasks ?? [],
+        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> => {
+          const result = await listTasks(signal);
+          if (result.flowPolicy) queryClient.setQueryData(["task-flow-policy"], result.flowPolicy);
+          return result.tasks ?? [];
+        },
       },
       {
         queryKey: PROJECTS_KEY,

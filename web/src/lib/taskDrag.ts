@@ -1,3 +1,4 @@
+import { taskWorkflowStage } from "./taskFlow.ts";
 import type { RelayTaskListItem, TaskStatus } from "../types.js";
 
 /**
@@ -8,7 +9,7 @@ import type { RelayTaskListItem, TaskStatus } from "../types.js";
  */
 export const TASK_DRAG_MEDIA_TYPE = "application/x-relay-task-id";
 
-export type TaskDropRejection = "same_status" | "needs_assignment";
+export type TaskDropRejection = "same_status" | "needs_assignment" | "invalid_transition";
 
 /**
  * Why a lane refuses a dropped task, or `null` when the move is allowed.
@@ -17,8 +18,14 @@ export type TaskDropRejection = "same_status" | "needs_assignment";
  * will come back 400.
  */
 export function taskDropRejection(task: RelayTaskListItem, status: TaskStatus): TaskDropRejection | null {
-  if (task.status === status) return "same_status";
-  if (status === "assigned" && !task.assignedAgentId && !task.assignedTeamId) return "needs_assignment";
+  if (taskWorkflowStage(task) === status) return "same_status";
+  if (task.status === "running" || task.status === "blocked") return "invalid_transition";
+  if (status === "waiting_for_human" || status === "blocked") return "invalid_transition";
+  if (status === "running" && !["backlog", "assigned"].includes(task.status)) return "invalid_transition";
+  if (status === "review" && !task.startedAt) return "invalid_transition";
+  if (status === "done" && task.status !== "review") return "invalid_transition";
+  if (status === "backlog" && task.startedAt) return "invalid_transition";
+  if ((status === "assigned" || status === "running") && !task.projectId && !task.assignedAgentId && !task.assignedTeamId) return "needs_assignment";
   return null;
 }
 

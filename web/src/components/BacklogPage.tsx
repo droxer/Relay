@@ -1,5 +1,7 @@
 "use client";
 
+import { TASK_FLOW_STAGES } from "../lib/taskFlow";
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
@@ -11,7 +13,7 @@ import {
   ActionAdd,
   ICON,
 } from "./icons";
-import { agentReadyForTask, backlogSortColumns, canDiscussTask, discussionAgentsForTask, filterTasks, isTaskStatus, TASK_STATUSES, tasksByStatus } from "../lib/backlog";
+import { agentReadyForTask, backlogSortColumns, canDiscussTask, discussionAgentsForTask, filterTasks, isTaskStatus, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
 import { useLanePagination } from "../hooks/usePagination";
@@ -94,7 +96,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
   const { t } = useTranslation();
-  const { announce, confirm } = useDialogs();
+  const { announce, confirm, prompt } = useDialogs();
   const {
     startTaskMutation,
     updateTaskMutation,
@@ -155,7 +157,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
     [currentUser, employeeNames],
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
-  const { lanePages, setLanePage } = useLanePagination(TASK_STATUSES);
+  const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
   const filteredTasks = useMemo(
     () => applySort(filterTasks(backlogTasks, filters), sortColumns, sort),
     [backlogTasks, filters, sort, sortColumns],
@@ -170,7 +172,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
      nothing is in that state. Built here rather than inside the render loop
      so the drag handlers below can ask what a lane is actually showing. */
   const pagedLanes = useMemo(
-    () => Object.fromEntries(TASK_STATUSES.map((status) => [
+    () => Object.fromEntries(TASK_FLOW_STAGES.map((status) => [
       status,
       paginate(grouped[status], lanePages[status] ?? 1, LANE_PAGE_SIZE),
     ])) as Record<TaskStatus, ReturnType<typeof paginate<RelayTaskListItem>>>,
@@ -178,7 +180,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
   );
   /* Selection follows what is on screen in both views, so "select all" then
      Delete cannot reach a card or row on a lane page the reader never saw. */
-  const visibleTasks = TASK_STATUSES.flatMap((status) => pagedLanes[status].items);
+  const visibleTasks = TASK_FLOW_STAGES.flatMap((status) => pagedLanes[status].items);
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks]);
   // Derived, not stored: a task hidden by a filter (or deleted elsewhere) drops
   // out of the selection immediately, so a batch action can never reach a
@@ -260,6 +262,8 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
       description: task.description,
       priority: task.priority,
       status: task.status,
+      acceptancePolicy: task.acceptancePolicy ?? "automatic",
+      startedAt: task.startedAt,
       dueDate: task.dueDate ?? "",
       assigneeEmployeeId: task.assigneeEmployeeId ?? task.ownerEmployeeId ?? currentUser.employeeId ?? currentUser.username,
       assignedAgent: task.assignedAgent ?? "",
@@ -277,7 +281,8 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
         title: form.title.trim(),
         description: form.description,
         priority: form.priority,
-        status: form.status,
+        ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
+        acceptancePolicy: form.acceptancePolicy ?? "human",
         dueDate: form.dueDate,
         ...taskAssignmentMutationFields(form),
       };
@@ -437,6 +442,10 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
       return;
     }
     if (rejection) return;
+    if (status === "running") {
+      startTaskMutation.mutate(taskStartMutationInput(task));
+      return;
+    }
     updateTaskMutation.mutate({ taskId: task.id, input: { status } }, {
       onSuccess: () => announce({
         message: t("backlog.drop_moved", { title: task.title, status: t(`backlog.statuses.${status}`) }),
@@ -462,6 +471,10 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
       onAssign: () => assignTask(task),
       onStart: () => {
         if (startInFlight.current) return;
+        if (["review", "waiting_for_human"].includes(task.status)) {
+          updateTaskMutation.mutate({ taskId: task.id, input: { status: "assigned" } });
+          return;
+        }
         startInFlight.current = task.id;
         startTaskMutation.mutate(taskStartMutationInput(task, discussionAssignments), {
           onSuccess: (result) => {
@@ -470,10 +483,15 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
           onSettled: () => { startInFlight.current = null; },
         });
       },
-      onToggleBlock: () => void updateTaskMutation.mutate({
-        taskId: task.id,
-        input: { status: task.status === "blocked" ? "backlog" : "blocked" },
-      }),
+      onToggleBlock: () => {
+        if (task.status === "blocked") {
+          updateTaskMutation.mutate({ taskId: task.id, input: { action: "unblock" } });
+          return;
+        }
+        void prompt({ title: t("backlog.block_reason"), message: t("backlog.block_reason_hint") }).then((reason) => {
+          if (reason?.trim()) updateTaskMutation.mutate({ taskId: task.id, input: { status: "blocked", blockerReason: reason.trim() } });
+        });
+      },
       onDone: () => void updateTaskMutation.mutate({ taskId: task.id, input: { status: "done" } }),
     };
   }
@@ -560,7 +578,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
               }
             />
           </Table>
-          {TASK_STATUSES.map((status) => {
+          {TASK_FLOW_STAGES.map((status) => {
             const group = grouped[status];
             const opening = inlineCreateStatus === status;
             // An empty band is noise unless it is where the reader is typing.
@@ -575,7 +593,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
                 count={group.length}
                 shape={TASK_STATUS_SHAPE[status]}
                 addLabel={t("backlog.new_task")}
-                onAdd={() => setInlineCreateStatus(status)}
+                onAdd={status === "backlog" ? () => setInlineCreateStatus(status) : status === "assigned" ? () => openTaskForm({ ...emptyBacklogForm(currentUser), status: "assigned" }) : undefined}
               >
                 <Table className="list-group-rows" aria-label={label}>
                   {opening ? (
@@ -628,7 +646,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
           onDragOver={boardDragOver}
           onDragLeave={boardDragLeave}
         >
-          {TASK_STATUSES.map((status) => (
+          {TASK_FLOW_STAGES.map((status) => (
             <section
               key={status}
               className="backlog-lane"
@@ -676,17 +694,17 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
                     onSubmit={submitInlineCreate}
                     onClose={() => setInlineCreateStatus(null)}
                   />
-                ) : (
+                ) : (status === "backlog" || status === "assigned") ? (
                   <Button
                     variant="ghost"
                     type="button"
                     className="backlog-lane-add"
-                    onClick={() => setInlineCreateStatus(status)}
+                    onClick={() => status === "assigned" ? openTaskForm({ ...emptyBacklogForm(currentUser), status: "assigned" }) : setInlineCreateStatus("backlog")}
                   >
                     <ActionAdd size={ICON.sm} />
                     <span>{t("backlog.new_task")}</span>
                   </Button>
-                )}
+                ) : null}
               </div>
               {/* Inside the lane, under its cards — the cursor belongs to this
                   lane and nothing about it is true of the board. */}

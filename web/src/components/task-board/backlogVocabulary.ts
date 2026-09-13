@@ -28,8 +28,6 @@ export const TASK_STATUS_SHAPE: Record<TaskStatus, StateShape> = {
   done: "muted",
 };
 
-export const ACTIVE_STATUSES: TaskStatus[] = ["assigned", "running", "waiting_for_human", "review"];
-
 export const initialFilters: BacklogFilters = {
   query: "",
   status: "all",

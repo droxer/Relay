@@ -1034,7 +1034,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
 
         # The reviewer role contributes to the same adaptive round; the role
         # does not force a separate task mode or terminal status.
-        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "done"
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "review"
         session = client.get(f"/api/v1/threads/{lead_command['sessionId']}").json()
         assert [run["role"] for run in session["agentRuns"]] == [
             "implementer",
@@ -2425,7 +2425,7 @@ def test_recovery_dispatches_current_user_turn(
     "verdict,expected",
     [
         (None, "waiting_for_human"),
-        ("done", "done"),
+        ("done", "review"),
         ("continue", "assigned"),
         ("blocked", "waiting_for_human"),
     ],

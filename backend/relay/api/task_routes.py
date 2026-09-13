@@ -15,7 +15,8 @@ from ..persistence.stores import (
     task_status,
     valid_agent,
 )
-from ..persistence.task_store import TaskExecutionActiveError
+from ..persistence.task_lifecycle import validate_manual_transition, wip_limit
+from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
 from ..services.task_deletion import (
     TaskDeletionError,
     task_has_active_linked_session,
@@ -367,7 +368,7 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             if actor_can_access_record(actor, task)
         ]
         tasks = accessible if limit is None else accessible[:limit]
-    return {"tasks": tasks}
+    return {"tasks": tasks, "flowPolicy": {"wipLimit": wip_limit(), "scope": "employee"}}
 
 
 @router.post("/tasks", status_code=201)
@@ -411,10 +412,15 @@ async def create_task(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     )
     agent = logical_agent["executorKind"] if logical_agent else None
     status = task_status(body.get("status"))
+    acceptance_policy = body.get("acceptancePolicy")
+    if "acceptancePolicy" in body and acceptance_policy not in ("human", "automatic"):
+        raise HTTPException(400, "acceptancePolicy must be human or automatic.")
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
     if status == "assigned" and not (project or assigned_agent_id or assigned_team_id):
         raise HTTPException(400, "assigned status requires an agent or team.")
+    if status and status not in ("backlog", "assigned"):
+        raise HTTPException(400, "New tasks must enter Backlog or Ready.")
     routine = routine_fields(body, calendar_date=ctx.today())
     if (
         routine.get("isRoutine")
@@ -452,6 +458,7 @@ async def create_task(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             **({"projectId": project["id"]} if project else {}),
             "dueDate": date_field(body, "dueDate"),
             "status": status,
+            "acceptancePolicy": acceptance_policy or "human",
             **(
                 {
                     "assignedAgent": agent,
@@ -532,8 +539,23 @@ async def update_task(
     )
     priority = task_priority(body.get("priority"))
     status = task_status(body.get("status"))
+    acceptance_policy = body.get("acceptancePolicy")
+    if "acceptancePolicy" in body and acceptance_policy not in ("human", "automatic"):
+        raise HTTPException(400, "acceptancePolicy must be human or automatic.")
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
+    unblock = body.get("action") == "unblock"
+    if "action" in body and not unblock:
+        raise HTTPException(400, "Unknown task action.")
+    if unblock:
+        if "status" in body or current.get("status") != "blocked":
+            raise HTTPException(409, "task_not_blocked")
+        status = current.get("blockedFromStatus") or "backlog"
+        if status == "running":
+            status = "waiting_for_human"
+    blocker_reason = string_field(body, "blockerReason").strip()
+    if status == "blocked" and (not blocker_reason or len(blocker_reason) > 2000):
+        raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
     due_date = date_field(body, "dueDate")
     routine = routine_fields(body, current=current, calendar_date=ctx.today())
     assignee = (
@@ -628,6 +650,7 @@ async def update_task(
         and "assignedAgentId" not in body
         and "assignedTeamId" not in body
         and not routine
+        and acceptance_policy is None
     ):
         raise HTTPException(
             400,
@@ -692,19 +715,48 @@ async def update_task(
         "description": description,
         "priority": priority,
         "status": status,
+        "acceptancePolicy": acceptance_policy,
+        "blockerReason": blocker_reason,
+        "actorEmployeeId": actor["employeeId"],
+        "expectedStatus": current["status"],
+        "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
         "dueDate": due_date,
         "assigneeEmployeeId": assignee,
         **routine,
         **assignment_patch,
     }
-    task = (
-        update_task_unless_dispatching(ctx, task_id, update_payload)
-        if status or assignment_changed or assignee_changed
-        else ctx.task_store.update_task(task_id, update_payload)
-    )
-    if status == "done":
-        complete_linked_task_sessions(ctx, task, "Task marked done.")
-        task = ctx.task_store.get_task(task_id)
+    with ctx.registry.dispatch_lock:
+        if status:
+            try:
+                validate_manual_transition(
+                    current,
+                    status,
+                    active=bool(
+                        dispatch_claim_active(current)
+                        or ctx.registry.daemon_store.active_run_request_for_task(task_id)
+                    ),
+                    unblock=unblock,
+                )
+            except ValueError as error:
+                raise HTTPException(409, str(error)) from error
+        if (
+            acceptance_policy
+            and acceptance_policy != current.get("acceptancePolicy", "automatic")
+            and current.get("startedAt")
+        ):
+            raise HTTPException(409, "task_acceptance_policy_locked")
+        try:
+            task = (
+                update_task_unless_dispatching(ctx, task_id, update_payload)
+                if status or assignment_changed or assignee_changed or acceptance_policy
+                else ctx.task_store.update_task(task_id, update_payload)
+            )
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+        if status == "done":
+            complete_linked_task_sessions(ctx, task, "Task accepted after review.")
+            task = ctx.task_store.get_task(task_id)
+
     return task
 
 
@@ -1497,6 +1549,9 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
         elif status in RUN_TERMINAL_STATUSES:
             ended_at = event.get("timestamp")
             failure_message = event.get("reason") if status == "blocked" else None
+    if task.get("status") not in RUN_TERMINAL_STATUSES:
+        ended_at = None
+        failure_message = None
     session_ids = list(task.get("linkedSessionIds", []))
     artifacts = newest_artifacts_by_file(
         ctx, [(task["id"], session_id) for session_id in session_ids]

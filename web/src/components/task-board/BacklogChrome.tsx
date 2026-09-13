@@ -1,5 +1,7 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { taskFlowMetrics } from "../../lib/taskFlow";
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { type EmployeeAgent, type RelayTaskListItem } from "../../types";
@@ -14,7 +16,7 @@ import { FiltersBar, FilterSelect } from "../FiltersBar";
 import { Input } from "@/components/ui/input";
 import { StateMark } from "../StateMark";
 
-import { ACTIVE_STATUSES, activeFilterCount, initialFilters, type BacklogView } from "./backlogVocabulary";
+import { activeFilterCount, initialFilters, type BacklogView } from "./backlogVocabulary";
 
 /**
  * The board's chrome, as against its records: the inline stat bar, the filter
@@ -23,8 +25,10 @@ import { ACTIVE_STATUSES, activeFilterCount, initialFilters, type BacklogView } 
 
 export function BacklogStats({ tasks }: { tasks: RelayTaskListItem[] }) {
   const { t } = useTranslation();
+  const flow = taskFlowMetrics(tasks);
+  const { data: policy } = useQuery<{ wipLimit: number; scope: string }>({ queryKey: ["task-flow-policy"], enabled: false });
   const stats = useMemo(() => {
-    const active = tasks.filter((task) => ACTIVE_STATUSES.includes(task.status)).length;
+    const active = taskFlowMetrics(tasks).wip;
     const blocked = tasks.filter((task) => task.status === "blocked").length;
     const overdue = tasks.filter((task) => dueTone(task) === "bad").length;
     return { total: tasks.length, active, blocked, overdue };
@@ -41,6 +45,10 @@ export function BacklogStats({ tasks }: { tasks: RelayTaskListItem[] }) {
         <span className="backlog-stat-value">{stats.active}</span>
       </span>
       <span className="backlog-stat">
+        <span className="backlog-stat-eyebrow">{t("backlog.wip_limit")}</span>
+        <span className="backlog-stat-value">{policy?.wipLimit ?? "—"}</span>
+      </span>
+      <span className="backlog-stat">
         <span className="backlog-stat-eyebrow">{t("backlog.metric_blocked")}</span>
         <span className="backlog-stat-value">
           {stats.blocked > 0 ? <StateMark shape="ring" className="backlog-stat-mark" /> : null}
@@ -54,6 +62,10 @@ export function BacklogStats({ tasks }: { tasks: RelayTaskListItem[] }) {
           {stats.overdue}
         </span>
       </span>
+      <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.oldest_age")}</span><span className="backlog-stat-value">{flow.oldestAgeDays.toFixed(1)}d</span></span>
+      <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.throughput")}</span><span className="backlog-stat-value">{flow.throughput}</span></span>
+      <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.cycle_time")}</span><span className="backlog-stat-value">{flow.averageCycleDays === null ? "—" : `${flow.averageCycleDays.toFixed(1)}d`}</span></span>
+      <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t(flow.sleIsEstimate ? "backlog.sle_estimate" : "backlog.sle")}</span><span className="backlog-stat-value">{flow.sleDays.toFixed(1)}d</span></span>
     </p>
   );
 }

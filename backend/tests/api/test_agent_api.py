@@ -2637,12 +2637,14 @@ def test_employee_task_writes_require_named_agents_and_preserve_status(
             "/api/v1/tasks",
             json={
                 "title": "Explicitly blocked",
-                "status": "blocked",
+                "status": "backlog",
                 "assignedAgentId": agent["id"],
             },
         )
         assert created.status_code == 201
-        assert created.json()["status"] == "blocked"
+        blocked = client.patch(f"/api/v1/tasks/{created.json()['id']}", json={"status": "blocked", "blockerReason": "Waiting on requirements"})
+        assert blocked.status_code == 200
+        assert blocked.json()["status"] == "blocked"
         assert created.json()["assigneeEmployeeId"] == "alice"
 
         cleared = client.patch(

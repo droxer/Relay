@@ -417,3 +417,9 @@
   line-height: var(--leading-snug);
   white-space: nowrap;
 }
+
+.backlog-blocker {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--err);
+}
