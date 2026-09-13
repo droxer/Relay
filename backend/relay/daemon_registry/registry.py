@@ -3250,6 +3250,10 @@ class DaemonNodeRegistry:
         state.pop(TERMINAL_EVENT_STATE_KEY, None)
         state.pop(TERMINAL_CLAIM_ID_STATE_KEY, None)
         state.pop(TERMINAL_CLAIM_EXPIRES_STATE_KEY, None)
+        if state.get("_relay_stop_command_id"):
+            # Any terminal acknowledgement proves exit, but a late success
+            # must not override the durable stop decision or start a successor.
+            event = {**event, "type": "run.cancelled", "reason": run_request.get("error") or "Run stopped."}
         if event["type"] == "run.failed":
             agent_log = event.get("agentLog") or event["error"]
             exit_code = event.get("exitCode", 1)
