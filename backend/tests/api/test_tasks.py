@@ -457,6 +457,7 @@ def test_marking_task_done_only_completes_task_scoped_session(
         assert session.status_code == 200
         assert session.json()["status"] == "running"
 
+        client.app.state.task_store.update_task(task["id"], {"status": "review"})
         updated = client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "done"})
         assert updated.status_code == 200
         assert updated.json()["status"] == "done"
@@ -466,7 +467,7 @@ def test_marking_task_done_only_completes_task_scoped_session(
         body = completed.json()
         assert body["status"] == ("completed" if owns_task else "running")
         if owns_task:
-            assert body["finalOutcome"] == "Task marked done."
+            assert body["finalOutcome"] == "Task accepted after review."
             assert body["events"][-1]["type"] == "session.completed"
 
 
@@ -764,7 +765,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
 
         task = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert task.status_code == 200
-        assert task.json()["status"] == "done"
+        assert task.json()["status"] == "review"
         assert task.json()["linkedSessionIds"] == [session_id]
         assert all(
             item["message"] != "Discussion started." for item in task.json()["activity"]
@@ -907,7 +908,7 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
         assert completed_second.status_code == 200, completed_second.text
         finished = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert finished.status_code == 200
-        assert finished.json()["status"] == "done"
+        assert finished.json()["status"] == "review"
 
         removed = client.delete(
             f"/api/v1/admin/agents/{reviewer.json()['agent']['id']}"
@@ -1002,7 +1003,7 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
 
         task = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert task.status_code == 200
-        assert task.json()["status"] == "done"
+        assert task.json()["status"] == "review"
 
 
 def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
@@ -1656,10 +1657,11 @@ def test_pickup_rejects_terminal_tasks_without_creating_a_session(monkeypatch) -
                 "title": "Already done",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
-                "status": "done",
+                "status": "backlog",
             },
         ).json()
 
+        client.app.state.task_store.update_task(task["id"], {"status": "done"})
         pickup = client.post(
             f"/api/v1/tasks/{task['id']}/pickups",
             json={"agentId": agent["id"]},

@@ -23,6 +23,15 @@ export interface TaskWorkspaceBinding {
 }
 
 export interface RelayTask {
+  acceptancePolicy?: "human" | "automatic";
+  workflowStage?: "backlog" | "assigned" | "running" | "review" | "done";
+  startedAt?: string;
+  finishedAt?: string;
+  blockedAt?: string;
+  blockedFromStatus?: TaskStatus;
+  waitingFromStatus?: TaskStatus;
+  blockerReason?: string;
+  blockerOwnerEmployeeId?: string;
   executionOwner?: { requestId: string; revision: number };
   id: string;
   title: string;
@@ -90,6 +99,7 @@ export type RelayTaskEvent =
       requestId: string;
       expectedRevision: number;
       revision: number;
+      expectedStatus?: TaskStatus;
     }
   | {
       id: string;
@@ -114,6 +124,7 @@ export type RelayTaskEvent =
       title: string;
       description: string;
       priority: TaskPriority;
+      acceptancePolicy?: "human" | "automatic";
       ownerEmployeeId?: string;
       projectId?: string;
       assigneeEmployeeId?: string;
@@ -134,6 +145,7 @@ export type RelayTaskEvent =
       title?: string;
       description?: string;
       priority?: TaskPriority;
+      acceptancePolicy?: "human" | "automatic";
       assigneeEmployeeId?: string;
       dueDate?: string;
       isRoutine?: boolean;
@@ -203,6 +215,7 @@ export type RelayTaskEvent =
       timestamp: string;
       status: TaskStatus;
       reason?: string;
+      actorEmployeeId?: string;
     }
   | {
       id: string;
@@ -266,6 +279,8 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     ...(created.assigneeEmployeeId ? { assigneeEmployeeId: created.assigneeEmployeeId } : {}),
     ...(created.dueDate ? { dueDate: created.dueDate } : {}),
     status: "backlog",
+    workflowStage: "backlog",
+    acceptancePolicy: created.acceptancePolicy ?? "automatic",
     isRoutine: Boolean(created.isRoutine),
     routineEnabled: Boolean(created.routineEnabled),
     ...(created.sourceRoutineId ? { sourceRoutineId: created.sourceRoutineId } : {}),
@@ -283,6 +298,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     task.events.push(event);
     task.updatedAt = event.timestamp;
     if (event.type === "task.updated") {
+      if (event.acceptancePolicy != null) task.acceptancePolicy = event.acceptancePolicy;
       if (event.title !== undefined) task.title = event.title;
       if (event.description !== undefined) task.description = event.description;
       if (event.priority !== undefined) task.priority = event.priority;
@@ -324,8 +340,12 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     } else if (event.type === "task.occurrence_created") {
       if (!task.occurrenceIds?.includes(event.occurrenceId)) task.occurrenceIds?.push(event.occurrenceId);
     } else if (event.type === "task.execution.claimed") {
+      task.startedAt ??= event.timestamp;
+      applyFlowStatus(task, { ...event, type: "task.status", status: "assigned" });
+      task.status = "assigned";
       task.executionOwner = { requestId: event.requestId, revision: event.revision };
     } else if (event.type === "task.status") {
+      applyFlowStatus(task, event);
       task.status = event.status;
       if (event.status !== "running") delete task.workspaceWaiting;
     } else if (event.type === "task.deleted") {
@@ -378,4 +398,34 @@ export function taskRoutineType(value: unknown): TaskRoutineType | undefined {
 
 export function taskRoutineCadence(value: unknown): TaskRoutineCadence | undefined {
   return value === "daily" || value === "weekly" || value === "monthly" || value === "custom" ? value : undefined;
+}
+
+function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type: "task.status" }>): void {
+  const status = event.status;
+  let stage = task.workflowStage ?? "backlog";
+  if (status === "blocked" || status === "waiting_for_human") {
+    if (task.status !== status) {
+      if (status === "blocked") task.blockedFromStatus = task.status;
+      else task.waitingFromStatus = task.status;
+    }
+    if (status === "blocked") {
+      task.blockedAt ??= event.timestamp;
+      task.blockerReason = event.reason || task.blockerReason || "Execution needs attention.";
+      task.blockerOwnerEmployeeId = event.actorEmployeeId || task.assigneeEmployeeId || task.ownerEmployeeId || "unowned";
+    }
+    if (stage === "done" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
+  } else {
+    stage = status === "assigned" && task.startedAt ? "running" : status;
+  }
+  if (status !== "blocked") {
+    delete task.blockedAt;
+    delete task.blockedFromStatus;
+    delete task.blockerReason;
+    delete task.blockerOwnerEmployeeId;
+  }
+  if (status !== "waiting_for_human") delete task.waitingFromStatus;
+  if (["running", "review", "waiting_for_human"].includes(status) && !task.isRoutine) task.startedAt ??= event.timestamp;
+  if (status === "done") task.finishedAt ??= event.timestamp;
+  else delete task.finishedAt;
+  task.workflowStage = stage;
 }

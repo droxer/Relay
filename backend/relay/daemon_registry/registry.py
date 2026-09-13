@@ -153,6 +153,7 @@ ARTIFACT_SNAPSHOT_STATE_KEY = "_relay_artifact_snapshot"
 CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
     {
         "_relay_task_source_revision",
+        "_relay_task_source_status",
         "_relay_task_execution_revision",
         REPAIR_COUNT_STATE_KEY,
         REPAIR_RESUME_INDEX_STATE_KEY,
@@ -1789,13 +1790,14 @@ class DaemonNodeRegistry:
             manifest = state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
             state = {
                 **state,
+                "_relay_task_source_status": task["status"],
                 "_relay_task_source_revision": manifest.get(
                     "sourceTaskRevision", (task.get("executionOwner") or {}).get("revision", 0),
                 ),
             }
             # An expired prepared operation must keep its original generation,
             # even if a newer owner has since finished and released its slot.
-            for key in ("_relay_task_source_revision", "_relay_task_execution_revision"):
+            for key in ("_relay_task_source_revision", "_relay_task_execution_revision", "_relay_task_source_status"):
                 if key in ((existing or {}).get("state") or {}):
                     state[key] = existing["state"][key]
         if existing and (existing.get("state") or {}).get(
@@ -1876,12 +1878,16 @@ class DaemonNodeRegistry:
         try:
             task = self.task_store.append_event(task_id, relay_task_event(
                 "task.execution.claimed", task_id,
-                {"requestId": request["id"], "expectedRevision": state["_relay_task_source_revision"]},
+                {"requestId": request["id"], "expectedRevision": state["_relay_task_source_revision"], **({"expectedStatus": state["_relay_task_source_status"]} if "_relay_task_source_status" in state else {})},
             ))
         except ValueError as error:
             self.daemon_store.update_run_request_if_status(
                 request["id"], "prepared", {"status": "failed", "error": str(error)},
             )
+            if str(error).startswith("task_wip_limit:") and state.get(COLLABORATION_NEW_SESSION_STATE_KEY):
+                # Admission was refused before execution. Close only the newly
+                # allocated thread; an existing conversation remains usable.
+                SessionController(self.store).fail_session(request["sessionId"], str(error))
             raise
         revision = task["executionOwner"]["revision"]
         if state.get("_relay_task_execution_revision") == revision:
@@ -3706,6 +3712,10 @@ class DaemonNodeRegistry:
                     "The round ended without its required aggregate verdict. "
                     "Review the work before continuing or closing the task."
                 )
+        if task_status == "done" and self.task_store and run_request.get("taskId"):
+            task = self.task_store.get_task(run_request["taskId"])
+            if task.get("acceptancePolicy", "automatic") == "human":
+                task_status = "review"
         participant_failures = (run_request.get("state") or {}).get(
             PARTICIPANT_FAILURES_STATE_KEY
         )

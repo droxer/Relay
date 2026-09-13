@@ -9,6 +9,8 @@ export type TaskBoardFormBase = {
   assignedAgent: "" | AgentName;
   assignedAgentId?: string;
   assignedTeamId?: string;
+  acceptancePolicy?: "human" | "automatic";
+  startedAt?: string;
 };
 
 export type BacklogTaskFormState = TaskBoardFormBase & {
@@ -32,6 +34,7 @@ export function emptyBacklogForm(currentUser: CurrentUser): BacklogTaskFormState
     variant: "backlog",
     title: "",
     description: "",
+    acceptancePolicy: "human",
     priority: "normal",
     status: "backlog",
     dueDate: "",
@@ -47,6 +50,7 @@ export function emptyRoutineForm(currentUser: CurrentUser, date = new Date()): R
     variant: "routine",
     title: "",
     description: "",
+    acceptancePolicy: "human",
     priority: "normal",
     assigneeEmployeeId: currentUser.employeeId ?? currentUser.username,
     assignedAgent: "",
@@ -84,6 +88,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     || a.assignedAgent !== b.assignedAgent
     || a.assignedAgentId !== b.assignedAgentId
     || a.assignedTeamId !== b.assignedTeamId
+    || a.acceptancePolicy !== b.acceptancePolicy
   ) {
     return false;
   }

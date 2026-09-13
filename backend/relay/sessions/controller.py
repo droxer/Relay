@@ -802,9 +802,12 @@ class SessionController:
             # Links are history/navigation, never task execution authority.
             task_ids = []
         for task_id in task_ids:
+            next_status = status
+            if status == "done" and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human":
+                next_status = "review"
             self.task_store.append_event(
                 task_id,
-                relay_task_event("task.status", task_id, {"status": status}),
+                relay_task_event("task.status", task_id, {"status": next_status, "reason": message}),
                 execution_owner=self.task_execution_owner,
             )
             self.task_store.record_activity(

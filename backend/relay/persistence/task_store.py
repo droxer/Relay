@@ -27,6 +27,7 @@ from sqlalchemy import (
     delete,
     insert,
     inspect,
+    func,
     or_,
     select,
     text,
@@ -37,6 +38,7 @@ from sqlalchemy.exc import IntegrityError
 from ..core.ids import new_relay_id
 from .protocols import TaskDispatchAssignment
 from .task_execution import prepare_execution_events
+from .task_lifecycle import check_wip_admission, needs_wip_admission, flow_scope
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     AgentName,
@@ -153,6 +155,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "title": payload["title"],
         "description": payload.get("description", ""),
         "priority": payload.get("priority", "normal"),
+        "acceptancePolicy": payload.get("acceptancePolicy", "human"),
     }
     for field in (
         "ownerEmployeeId",
@@ -253,8 +256,12 @@ def task_update_events(
             "routineCadence",
             "routineNextRunDate",
             "routineEnabled",
+            "acceptancePolicy",
         )
     }
+    for field in ("expectedStatus", "expectedExecutionRevision"):
+        if field in payload:
+            updated[field] = payload[field]
     events = [relay_task_event("task.updated", task_id, updated)]
     assignment_supplied = "assignedAgentId" in payload or "assignedTeamId" in payload
     resolved_assignment = assignment
@@ -275,9 +282,12 @@ def task_update_events(
     if resolved_assignment is not None:
         events.extend(task_assignment_events(task_id, resolved_assignment))
     if payload.get("status"):
-        events.append(
-            relay_task_event("task.status", task_id, {"status": payload["status"]})
-        )
+        status_payload = {"status": payload["status"]}
+        if payload.get("blockerReason"):
+            status_payload["reason"] = payload["blockerReason"]
+        if payload.get("actorEmployeeId"):
+            status_payload["actorEmployeeId"] = payload["actorEmployeeId"]
+        events.append(relay_task_event("task.status", task_id, status_payload))
     return events
 
 
@@ -333,6 +343,8 @@ class LocalTaskStore:
                 return current
             # Validate immutable facts before writing the authoritative log.
             task = materialize_task_events([*current.get("events", []), *new_events])
+            if needs_wip_admission(current, task):
+                check_wip_admission(task, self.list_tasks())
             self._task_dir(task_id).mkdir(parents=True, exist_ok=True)
             for event in new_events:
                 _append_jsonl(self._events_path(task_id), event)
@@ -790,6 +802,16 @@ class DatabaseTaskStore:
     @contextmanager
     def task_write_scope(self, task_id: str):
         with store_transaction(self.engine) as conn:
+            # Bookkeeping may append a status event. Take admission's lock
+            # before the row lock, matching the event writer's lock order.
+            if self.engine.dialect.name == "postgresql":
+                conn.execute(text("SELECT pg_advisory_xact_lock(7265193401)"))
+            else:
+                conn.execute(
+                    update(self.tasks)
+                    .where(self.tasks.c.id == task_id)
+                    .values(version=self.tasks.c.version)
+                )
             self._task_pk(conn, task_id, lock=True)
             yield self.get_task(task_id)
 
@@ -987,6 +1009,22 @@ class DatabaseTaskStore:
         execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:
+            admitting = any(
+                event.get("type") in ("task.execution.claimed", "task.status", "task.updated")
+                for event in events
+            )
+            if admitting:
+                # Serialize the count and admission across backend replicas.
+                # PostgreSQL uses a transaction advisory lock; SQLite acquires
+                # its database writer lock before any snapshot is read.
+                if self.engine.dialect.name == "postgresql":
+                    conn.execute(text("SELECT pg_advisory_xact_lock(7265193401)"))
+                else:
+                    conn.execute(
+                        update(self.tasks)
+                        .where(self.tasks.c.id == task_id)
+                        .values(version=self.tasks.c.version)
+                    )
             if skip_linked_session_id:
                 self._lock_session_for_link(conn, skip_linked_session_id)
             row = (
@@ -1034,6 +1072,19 @@ class DatabaseTaskStore:
             ):
                 return current
             task = materialize_task_events([*existing_events, *events])
+            if admitting and needs_wip_admission(current, task):
+                snapshots = list(conn.execute(
+                    select(self.tasks.c.snapshot).where(
+                        self.tasks.c.status != "done",
+                        self.tasks.c.is_routine.is_(False),
+                        func.coalesce(
+                            self.tasks.c.snapshot["assigneeEmployeeId"].as_string(),
+                            self.tasks.c.snapshot["ownerEmployeeId"].as_string(),
+                            "unowned",
+                        ) == flow_scope(task),
+                    )
+                ).scalars())
+                check_wip_admission(task, snapshots)
             claimed = conn.execute(
                 update(self.tasks)
                 .where(
@@ -1255,6 +1306,7 @@ class DatabaseTaskStore:
                 _due_date_missing_expression(),
                 self.tasks.c.due_date.asc(),
                 self.tasks.c.created_at.asc(),
+                self.tasks.c.id.asc(),
             )
         )
         with store_transaction(self.engine) as conn:
@@ -1884,10 +1936,10 @@ def _priority_rank(priority: Any) -> int:
     return {"high": 0, "normal": 1, "low": 2}.get(priority, 1)
 
 
-def task_claim_sort_key(task: dict[str, Any]) -> tuple[int, str, str]:
+def task_claim_sort_key(task: dict[str, Any]) -> tuple[int, str, str, str]:
     priority_rank = _priority_rank(task.get("priority"))
     due_date = task.get("dueDate") or "9999-12-31"
-    return (priority_rank, due_date, task.get("createdAt") or "")
+    return (priority_rank, due_date, task.get("createdAt") or "", task["id"])
 
 
 def routine_due_sort_key(task: dict[str, Any]) -> tuple[str, int, str]:
@@ -1941,6 +1993,7 @@ def routine_occurrence_events(
                 "title": routine["title"],
                 "description": routine.get("description", ""),
                 "priority": routine.get("priority", "normal"),
+                "acceptancePolicy": routine.get("acceptancePolicy", "automatic"),
                 "dueDate": occurrence_date,
                 "sourceRoutineId": routine["id"],
                 "scheduledFor": occurrence_date,

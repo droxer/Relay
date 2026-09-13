@@ -544,7 +544,7 @@ class ServerDaemonNodeBackend:
     def _raise_rejected_recovery(request: dict[str, Any]) -> None:
         error = request.get("error")
         if request.get("status") == "failed" and isinstance(error, str) and (
-            error == _SOURCE_CHANGED_ERROR or error.startswith("task_ownership_changed:")
+            error == _SOURCE_CHANGED_ERROR or error.startswith(("task_ownership_changed:", "task_wip_limit:"))
         ):
             raise ValueError(error)
 

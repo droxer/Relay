@@ -1,3 +1,4 @@
+import { compareTaskQueue, taskWorkflowStage } from "./taskFlow.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, DaemonNodeMonitorRecord, EmployeeAgent, RelayTaskListItem, TaskPriority, TaskStatus } from "../types.js";
 
@@ -29,7 +30,10 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
     if (task.isRoutine) return false;
     if (filters.source === "direct" && task.sourceRoutineId) return false;
     if (filters.source === "routine" && !task.sourceRoutineId) return false;
-    if (filters.status !== "all" && task.status !== filters.status) return false;
+    if (filters.status !== "all") {
+      const status = filters.status === "blocked" || filters.status === "waiting_for_human" ? task.status : taskWorkflowStage(task);
+      if (status !== filters.status) return false;
+    }
     if (filters.priority !== "all" && task.priority !== filters.priority) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
     if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
@@ -83,7 +87,7 @@ export function isTaskStatus(value: string | null | undefined): value is TaskSta
 
 export function tasksByStatus(tasks: RelayTaskListItem[]): Record<TaskStatus, RelayTaskListItem[]> {
   return TASK_STATUSES.reduce((acc, status) => {
-    acc[status] = tasks.filter((task) => task.status === status);
+    acc[status] = tasks.filter((task) => taskWorkflowStage(task) === status);
     return acc;
   }, {} as Record<TaskStatus, RelayTaskListItem[]>);
 }
@@ -136,12 +140,4 @@ export function localDateKey(date = new Date()): string {
 
 export const isoToday = localDateKey;
 
-function compareTasks(left: RelayTaskListItem, right: RelayTaskListItem): number {
-  return priorityRank(left.priority) - priorityRank(right.priority)
-    || (left.dueDate ?? "9999-12-31").localeCompare(right.dueDate ?? "9999-12-31")
-    || right.updatedAt.localeCompare(left.updatedAt);
-}
-
-function priorityRank(priority: TaskPriority): number {
-  return { high: 0, normal: 1, low: 2 }[priority] ?? 1;
-}
+const compareTasks = compareTaskQueue;

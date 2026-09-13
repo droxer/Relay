@@ -219,8 +219,8 @@ def test_routine_run_reports_timing_and_failure(monkeypatch) -> None:
         agent = _create_agent(app)
         routine = _create_routine(client, agent["id"])
         occurrence = _promote(app, routine["id"])
-        assert client.patch(f"/api/v1/tasks/{occurrence['id']}", json={"status": "running"}).status_code == 200
-        assert client.patch(f"/api/v1/tasks/{occurrence['id']}", json={"status": "blocked"}).status_code == 200
+        app.state.task_store.update_task(occurrence["id"], {"status": "running"})
+        assert client.patch(f"/api/v1/tasks/{occurrence['id']}", json={"status": "blocked", "blockerReason": "Agent failed"}).status_code == 200
 
         run = _runs(client, routine["id"])[0]
         assert run["status"] == "blocked"
@@ -238,7 +238,7 @@ def test_routine_run_without_terminal_status_has_no_end(monkeypatch) -> None:
         agent = _create_agent(app)
         routine = _create_routine(client, agent["id"])
         occurrence = _promote(app, routine["id"])
-        assert client.patch(f"/api/v1/tasks/{occurrence['id']}", json={"status": "running"}).status_code == 200
+        app.state.task_store.update_task(occurrence["id"], {"status": "running"})
 
         run = _runs(client, routine["id"])[0]
         assert run["status"] == "running"

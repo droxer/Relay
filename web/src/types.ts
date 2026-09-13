@@ -340,6 +340,7 @@ export interface NodeWorkspaceFileResponse {
 }
 
 export interface TasksResponse {
+  flowPolicy?: { wipLimit: number; scope: "employee" };
   tasks: RelayTaskSummary[];
 }
 
@@ -792,6 +793,9 @@ export interface CreateSessionInput {
 }
 
 export interface TaskMutationInput {
+  acceptancePolicy?: "human" | "automatic";
+  blockerReason?: string;
+  action?: "unblock";
   title?: string;
   description?: string;
   priority?: TaskPriority;

@@ -624,7 +624,7 @@ class TaskDispatcher:
             self.ctx.task_store.update_task(self.task["id"], {"status": "backlog"})
         if not self.record_pending:
             raise
-        if code != "dispatch_failed":
+        if code not in ("dispatch_failed", "task_wip_limit"):
             # A classified failure means the run was not accepted; record the
             # retry under the same rules the scheduler uses. An unclassified
             # failure keeps its claim because acceptance is ambiguous, and an
@@ -778,7 +778,7 @@ def active_routine_occurrence_for_date(
             occurrence = task_store.get_task(occurrence_id)
         except (KeyError, FileNotFoundError):
             continue
-        if occurrence.get("status") in {"backlog", "assigned", "running", "review"}:
+        if not occurrence.get("deletedAt") and occurrence.get("status") in {"backlog", "assigned", "running", "review", "blocked", "waiting_for_human"}:
             return occurrence
     return None
 
@@ -797,7 +797,7 @@ def active_routine_occurrence(
             occurrence = task_store.get_task(occurrence_id)
         except (KeyError, FileNotFoundError):
             continue
-        if occurrence.get("status") in {"backlog", "assigned", "running", "review"}:
+        if not occurrence.get("deletedAt") and occurrence.get("status") in {"backlog", "assigned", "running", "review", "blocked", "waiting_for_human"}:
             return occurrence
     return None
 

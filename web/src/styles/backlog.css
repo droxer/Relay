@@ -438,3 +438,9 @@
 .backlog-task:focus-within .backlog-task-ref {
   opacity: 0;
 }
+
+.backlog-blocker {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--err);
+}

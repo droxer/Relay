@@ -24,7 +24,7 @@ describe("task board review regressions", () => {
   });
 
   it("limits backlog selection to records rendered on current lane pages", () => {
-    assert.match(backlogPage, /const visibleTasks = TASK_STATUSES\.flatMap\(\(status\) => pagedLanes\[status\]\.items\)/);
+    assert.match(backlogPage, /const visibleTasks = TASK_FLOW_STAGES\.flatMap\(\(status\) => pagedLanes\[status\]\.items\)/);
     assert.doesNotMatch(backlogPage, /const visibleTasks = view === "list"[\s\S]{0,120}: filteredTasks/);
   });
 

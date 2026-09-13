@@ -5047,12 +5047,13 @@ def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
     asyncio.run(run_flow())
 
 
-def test_a_round_that_reports_done_closes_the_task() -> None:
+@pytest.mark.parametrize("policy, expected", [("automatic", "done"), ("human", "review")])
+def test_a_round_that_reports_done_closes_the_task(policy, expected) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             _sessions, task_store, registry = _round_result_registry(root)
             backend = ServerDaemonNodeBackend(registry)
-            task = task_store.create_task({"title": "Migrate billing"})
+            task = task_store.create_task({"title": "Migrate billing", "acceptancePolicy": policy})
             command = await _run_task_round(registry, backend, task["id"])
 
             assert command["state"]["round_result_file"] == ".relay/round-result.json"
@@ -5071,7 +5072,7 @@ def test_a_round_that_reports_done_closes_the_task() -> None:
                 "node_token",
             )
 
-            assert task_store.get_task(task["id"])["status"] == "done"
+            assert task_store.get_task(task["id"])["status"] == expected
 
     asyncio.run(run_flow())
 
@@ -7342,3 +7343,32 @@ def test_two_employees_on_one_machine_do_not_supersede_each_other() -> None:
         registry.register(_machine_payload(sandboxId="node-bob", employeeId="bob"))
         assert not registry.get("node-alice").get("retiredAt")
         assert not registry.get("node-bob").get("retiredAt")
+
+
+def test_wip_admission_refuses_delivery_until_review_is_accepted(monkeypatch):
+    monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root)
+            backend = ServerDaemonNodeBackend(registry)
+            first = tasks.create_task({'title': 'First'})
+            second = tasks.create_task({'title': 'Second'})
+            command = await _run_task_round(registry, backend, first['id'])
+            registry.handle_event('sbx_alice', {
+                'type': 'run.completed', 'commandId': command['id'],
+                'sessionId': command['sessionId'], 'runId': command['runId'],
+                'agent': 'codex', 'exitCode': 0,
+                'roundResult': {'status': 'done', 'note': 'Ready for acceptance'},
+            }, 'node_token')
+            assert tasks.get_task(first['id'])['status'] == 'review'
+            with pytest.raises(ValueError, match='task_wip_limit'):
+                await _run_task_round(registry, backend, second['id'])
+            assert registry.take_commands('sbx_alice', 'node_token') == []
+            assert not registry.daemon_store.active_run_request_for_task(second['id'])
+            assert 'startedAt' not in tasks.get_task(second['id'])
+            assert all(session['status'] != 'running' for session in sessions.list_sessions())
+            tasks.update_task(first['id'], {'status': 'done'})
+            assert (await _run_task_round(registry, backend, second['id']))['agent'] == 'codex'
+
+    asyncio.run(run_flow())

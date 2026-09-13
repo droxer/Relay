@@ -38,11 +38,11 @@ describe("taskDropRejection", () => {
     assert.equal(taskDropRejection(task({ id: "b", assignedTeamId: "team_delivery" }), "assigned"), null);
   });
 
-  it("accepts every other lane, including moving a running task out", () => {
+  it("refuses moving a running task through manual workflow edits", () => {
     const running = task({ id: "a", status: "running" });
-    assert.equal(taskDropRejection(running, "done"), null);
-    assert.equal(taskDropRejection(running, "blocked"), null);
-    assert.equal(taskDropRejection(running, "backlog"), null);
+    assert.equal(taskDropRejection(running, "done"), "invalid_transition");
+    assert.equal(taskDropRejection(running, "blocked"), "invalid_transition");
+    assert.equal(taskDropRejection(running, "backlog"), "invalid_transition");
     assert.equal(taskDropRejection(task({ id: "b", status: "done" }), "backlog"), null);
   });
 });

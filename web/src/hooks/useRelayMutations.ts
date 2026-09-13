@@ -1,5 +1,6 @@
 "use client";
 
+import { taskFlowErrorKey } from "../lib/taskFlow";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -189,13 +190,14 @@ export function useRelayMutations() {
       await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY });
       const previous = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY);
       queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-        (current ?? []).map((task) => (task.id === taskId ? { ...task, status } : task)),
+        (current ?? []).map((task) => (task.id === taskId ? { ...task, status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status === "assigned" && task.startedAt ? "running" : status } : task)),
       );
       return { previous };
     },
     onError: (error, _input, context) => {
       if (context?.previous) queryClient.setQueryData(TASKS_QUERY_KEY, context.previous);
-      onRelayError("Failed to update task", "errors.save_task")(error);
+      const key = error instanceof RelayApiError ? taskFlowErrorKey(error.code) : undefined;
+      onRelayError("Failed to update task", key ?? "errors.save_task")(error);
     },
     // Settled, not success: a rolled-back failure must resync from the server
     // too, otherwise the board keeps showing the pre-mutation snapshot.
@@ -265,7 +267,7 @@ export function useRelayMutations() {
       void invalidateNodes();
       announce({
         message:
-          result.dispatch.message ??
+          (result.dispatch.code === "task_wip_limit" ? t("backlog.wip_wait") : result.dispatch.message) ??
           (result.dispatch.state === "rejected"
             ? t("backlog.toast_start_rejected")
             : t("backlog.toast_started")),

@@ -1728,7 +1728,7 @@ def test_scheduler_runs_a_second_round_in_the_same_thread() -> None:
             _report_round(registry, second, "done")
 
             finished = task_store.get_task(task["id"])
-            assert finished["status"] == "done"
+            assert finished["status"] == "review"
             assert finished["roundCount"] == 1
 
     asyncio.run(run_flow())

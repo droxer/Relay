@@ -179,6 +179,7 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
       variant: "routine",
       id: task.id,
       title: task.title,
+      acceptancePolicy: task.acceptancePolicy ?? "automatic",
       description: task.description,
       priority: task.priority,
       assigneeEmployeeId: task.assigneeEmployeeId ?? task.ownerEmployeeId ?? currentUser.employeeId ?? currentUser.username,
@@ -199,6 +200,7 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     try {
       const payload = {
         title: form.title.trim(),
+        acceptancePolicy: form.acceptancePolicy ?? "human",
         description: form.description,
         priority: form.priority,
         isRoutine: true,

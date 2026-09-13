@@ -16,7 +16,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentTeam, EmployeeAgent, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../../types";
-import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
+import { TASK_PRIORITIES } from "../../lib/backlog";
+import { manualTaskStatuses } from "../../lib/taskFlow";
 import { TASK_ROUTINE_CADENCES, TASK_ROUTINE_TYPES, isoToday } from "../../lib/routine";
 import { assignmentOptionVisible } from "../../lib/taskAssignment";
 import {
@@ -68,7 +69,7 @@ function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChang
   const statusLabelId = useId();
   return (
     <>
-      <Field label={t("backlog.status")} labelId={statusLabelId} wrapper="div">
+      <Field label={t("backlog.status")} labelId={statusLabelId} hint={t("backlog.ready_policy")} wrapper="div">
         <Select
           value={form.status}
           onValueChange={(value) => {
@@ -80,7 +81,7 @@ function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChang
             <SelectValue>{(value: TaskStatus) => t(`backlog.statuses.${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {TASK_STATUSES.map((status) => (
+            {manualTaskStatuses(form.status, Boolean(form.startedAt)).map((status) => (
               <SelectItem key={status} value={status} label={t(`backlog.statuses.${status}`)}>{t(`backlog.statuses.${status}`)}</SelectItem>
             ))}
           </SelectContent>
@@ -187,6 +188,7 @@ export function TaskDrawer({
   const { t } = useTranslation();
   const priorityLabelId = useId();
   const fieldPrefix = form.variant;
+  const acceptanceLabelId = useId();
   const assignmentFieldId = `${fieldPrefix}-assignment`;
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
   const busy = saving || deleting;
@@ -276,6 +278,23 @@ export function TaskDrawer({
             aria-invalid={Boolean(titleError) || undefined}
             aria-describedby={titleError ? "task-drawer-title-error" : undefined}
           />
+        </Field>
+        <Field label={t("backlog.acceptance_policy")} labelId={acceptanceLabelId} wrapper="div">
+          <Select
+            value={form.acceptancePolicy ?? "human"}
+            disabled={Boolean(form.startedAt)}
+            onValueChange={(value) => {
+              if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });
+            }}
+          >
+            <SelectTrigger className="w-full" aria-labelledby={acceptanceLabelId}>
+              <SelectValue>{(value: string) => t(value === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human")}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="human">{t("backlog.acceptance_human")}</SelectItem>
+              <SelectItem value="automatic">{t("backlog.acceptance_automatic")}</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
         <Field label={t("backlog.description")}>
           <Textarea
