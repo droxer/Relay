@@ -93,11 +93,118 @@ logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under
 `/threads/{id}/decisions` record session metadata only; they do not dispatch an
 agent. A successful metadata response is not evidence that a receiver started.
 
+New rounds record `workScope`: `{ "kind": "thread" }` for thread contributions,
+or `{ "kind": "task", "taskId": "..." }` for task executions. Recovery inherits
+the active source round's scope, including task workspace checks and required
+round verdicts on capable daemons. Missing verdicts leave the task waiting for
+a human. New messages start thread-scoped work, even inside task-linked threads.
+Links alone never grant task execution ownership. Legacy linked threads without
+recorded scope return 409 `work_scope_required`; restart through the task run
+endpoint to establish scope. Unlinked legacy threads remain recoverable.
+
+New recovery manifests also freeze `sourceOwnership: { revision, roundId }`
+from the source thread's `collaborationRevision` and `activeRoundId`. Admission
+checks this token after obtaining the durable active-session reservation and
+before recording the decision or receiver round. A replaced source returns 409
+`collaboration_conflict` with `handoff_source_changed` in the message; retrying
+that idempotency key preserves the rejection. Submit a new recovery after
+reviewing the current round. Prepared retries may resume their own recorded
+round, but cannot skip past a later round. Legacy prepared manifests without
+the token remain replayable; this is not a task-wide or filesystem writer lock.
+
+Thread completion does not update linked tasks without an explicitly scoped
+task execution. Likewise, marking a task done only closes linked threads whose
+current run request or active round belongs to that task. Routine-template and
+reference links remain historical relationships.
+
+Task-scoped work also reserves the task across threads and nodes: only one
+daemon run request may be `prepared`, `running`, `dispatching`, or `finalizing`
+for a non-null `taskId`. The database enforces this with
+`uq_daemon_run_requests_active_task`; the local daemon store serializes creates
+and transitions under its process-shared claim lock. One request may still
+coordinate several assignments. Unscoped threads do not reserve reference-linked
+tasks. A competing recovery returns 409 `collaboration_conflict` with
+`task_ownership_conflict` in the message, without replacing the current request.
+
+Database deployments must apply migration `20260913_0068` (`make backend-migrate`).
+Pause admissions during deployment. If duplicate active owners already exist,
+the migration stops without modifying runs; resolve them through normal lifecycle
+operations and confirm writers have stopped before retrying. The constraint
+releases when the request becomes terminal, and prevents stale requests from
+reactivating over an active replacement. It is not proof that a cancelled process
+exited; stronger process fencing remains separate work.
+Pre-delivery cancellation and terminal-session cleanup retain the reservation
+when the current command has already been delivered, even if its lease expired.
+Cancellation intent alone therefore does not release that delivered reservation;
+daemon terminal-event handling remains a separate lifecycle step.
+
+New task execution requests also claim a monotonic task revision through
+`task.execution.claimed`. Task records expose `executionOwner: { requestId,
+revision }`; completion does not erase it. Task-scoped recovery captures
+`sourceTaskRevision` in its frozen manifest. A superseded generation returns 409
+`collaboration_conflict` with `task_ownership_changed`, including on idempotent
+replay. Submit a new recovery after inspecting the current task.
+
+Daemon-originated task status, activity, round/continuation, and workspace-wait
+writes check that owner inside the task write transaction. Stale writes append
+no task event; stale redispatch is refused even after a replacement finishes.
+Prepared legacy requests use revision zero and cannot write over a versioned
+owner. These are control-plane write fences, not filesystem/process leases or
+restrictions on deliberate human edits. Upgrade all backend replicas together:
+older backends do not enforce this guard. No additional schema migration is
+needed for the ownership event and projection.
+
 New handoff rounds include optional `handoffContext` with contract
-`relay.handoff.context` version 1. It contains the receiving assignment and
+`relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and
 logical agent, linked decision, source event boundary, bounded objective/note
 and prior-context excerpts, and run/artifact/progress-file references. Retrying
 an accepted operation preserves that context even if the thread later changes.
+Versions 2 and 3 require `handoffContext.receipt`, using
+`relay.handoff.receipt` version 1. The receipt preserves the work scope, verbatim
+task requirements or initial thread objective, current request, and handoff
+instruction. Requirements are never truncated: a combined protected-text budget
+of 16,000 characters is enforced before admission. The serialized receipt has a
+separate 32,000-character ceiling, in addition to the existing 24,000-character
+history budget. An oversized new handoff returns a conflict requiring narrower
+work; prepared retries reuse the accepted receipt without recapturing it.
+
+For substantial work, agents are instructed to write
+`<progressFile>.handoff.json` with their assignment ID, completed/pending work,
+blockers, failed approaches, verification reports, dirty paths, observed workspace
+revision, and next action. These are attributed claims, not completion approval
+or new permissions. The existing generated-file pipeline snapshots the file when
+reported; the backend never opens daemon workspace paths.
+
+The receipt includes up to 24 source-run artifact references with SHA-256 hashes
+when stored bytes are available. Coverage is explicitly partial. Checkpoints
+must belong to the source run and match its assignment. Missing, unavailable,
+invalid, and stale checkpoints remain explicit unknown-progress states. Hashes
+identify historical bytes, not correctness or completion; receiving agents must
+still verify relevant work and claims. No new database migration is required.
+
+Version 3 requires the daemon's `handoff-validation` capability. The backend
+binds `run.start.handoffValidation` (`relay.handoff.validation` version 1) to the
+receipt's receiving assignment, workspace layout/subpath, and artifact references.
+A daemon without the capability fails the handoff without publishing a command.
+Upgrade backend replicas and daemons before creating version 3 handoffs. Old
+backends reject version 3 rather than silently dropping the required validation.
+Previously prepared version 1/2 contexts retain their original behavior.
+
+The daemon validates under its physical workspace gate, before receiver
+preparation, control-file cleanup, or `run.executing`. Thread, task, project,
+and node-root runs all participate in the gate. Recorded hashes must match
+bounded regular files (2 MiB per file, at most 24 references). Changed, missing,
+oversized, or unsafe files stop the command with `handoff_validation_failed`.
+Relative-path traversal and symlinks are rejected; no file contents or host paths
+are returned in the failure. Nothing is restored or overwritten. Review changed
+work before requesting a new run; replaying the same receipt cannot bless drift.
+
+Null hashes and absent checkpoints remain explicitly unverified, not successful
+whole-workspace verification. The receiver prompt records matched/unavailable
+counts and partial coverage. The gate coordinates upgraded Relay writers, not
+external tools or older daemons that do not acquire it; this is not a hostile-host
+sandbox or a Git-tree attestation.
+
 `collaboration.delivery` SSE events carry `roundId`, `assignmentId`, `runId`, and
 `status` (`queued` or `running`). `agent.started` alone means the backend staged
 an attempt. Daemons acknowledge requested execution with the lease-bound

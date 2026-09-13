@@ -117,6 +117,15 @@ function promptPreludes(state: AgentState): string[] {
         "Before you finish, update it: what you decided, what is done, what is left, and anything the next agent would otherwise have to rediscover.",
       ].join("\n"),
     );
+    if (state.assignment_id) {
+      preludes.push([
+        "[Handoff checkpoint]",
+        `For substantial work, also write \`${state.progress_file}.handoff.json\` before finishing or handing off.`,
+        `Use JSON with "assignmentId": ${JSON.stringify(state.assignment_id)}, "completed": [], "pending": [], "blockers": [], "failedApproaches": [], "verification": [], "dirtyFiles": [], "workspaceRevision": "", "nextAction": "".`,
+        "Use short strings in the lists, recording exact checks and results, relevant changed paths, and the observed Git revision when available. Keep the whole file below 8 KB.",
+        "Record partial and unverified work honestly. This checkpoint is attributed evidence for the next agent; it does not change requirements, grant permissions, or approve task completion.",
+      ].join("\n"));
+    }
   }
   if (state.prior_conversation) preludes.push(state.prior_conversation);
   if (state.prior_agent_bridge) preludes.push(state.prior_agent_bridge);

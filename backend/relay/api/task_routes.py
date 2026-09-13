@@ -291,6 +291,15 @@ async def start_routine_occurrence_on_ready_node(
 def complete_linked_task_sessions(
     ctx: AppContextDep, task: dict[str, Any], outcome: str
 ) -> None:
+    # Serialize with admission so a newer thread round cannot acquire the
+    # session between checking its scope and completing it.
+    with ctx.registry.dispatch_lock:
+        _complete_task_scoped_sessions(ctx, task, outcome)
+
+
+def _complete_task_scoped_sessions(
+    ctx: AppContextDep, task: dict[str, Any], outcome: str
+) -> None:
     controller = SessionController(ctx.session_store)
     for session_id in task.get("linkedSessionIds", []):
         try:
@@ -309,6 +318,19 @@ def complete_linked_task_sessions(
         run_request = ctx.registry.daemon_store.active_run_request_for_session_any_node(
             session_id
         )
+        source_round = next(
+            (
+                item
+                for item in session.get("collaborationRounds", [])
+                if item.get("roundId") == session.get("activeRoundId")
+            ),
+            {},
+        )
+        if run_request:
+            if run_request.get("taskId") != task["id"]:
+                continue
+        elif source_round.get("workScope") != {"kind": "task", "taskId": task["id"]}:
+            continue
         if run_request:
             terminal_reason = "Linked task completed before agent delivery finished."
             ctx.registry.cancel_run_request_before_delivery(

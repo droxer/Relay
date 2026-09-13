@@ -27,6 +27,7 @@ import {
 } from "./sandbox-session.js";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
 import { consumeRoundResult } from "./round-result.js";
+import { validateHandoffWorkspace } from "./handoff-validation.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
 import { defaultExecutionManager, type ExecutionManager } from "./execution.js";
@@ -62,6 +63,7 @@ import {
   agentCredentialEnv,
   allAgentCredentialEnvNames,
   DAEMON_CAPABILITY_GENERATED_FILES,
+  DAEMON_CAPABILITY_HANDOFF_VALIDATION,
   DAEMON_CAPABILITY_PRODUCED_FILES,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
   DAEMON_CAPABILITY_ROUND_RESULT,
@@ -288,6 +290,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ...(agentInventory[executorKind as AgentName] ? { inventory: agentInventory[executorKind as AgentName] } : {}),
     })),
     capabilities: [
+      DAEMON_CAPABILITY_HANDOFF_VALIDATION,
       DAEMON_CAPABILITY_GENERATED_FILES,
       DAEMON_CAPABILITY_PRODUCED_FILES,
       DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
@@ -529,7 +532,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             sharedWorkspaceKey = durableWorkspaceLayout(command.workspaceLayout)
               ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
               : command.workspaceLayout === "thread"
-                ? undefined
+                ? threadWorkspaces.resolve(command.sessionId).hostPath
                 : workspacePath;
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);
@@ -891,6 +894,10 @@ async function executeCommand(
     : durableWorkspaceLayout(command.workspaceLayout)
       ? threadWorkspaces.ensureSubpath(command.sessionId, requiredWorkspaceSubpath(command))
       : threadWorkspaces.nodeRoot(command.sessionId);
+  // executeCommand is inside WorkspaceRunGate. Validate before any receiver
+  // preparation, cleanup, or agent execution can change the inherited files.
+  const validation = validateHandoffWorkspace(threadWorkspace.hostPath, command);
+  if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
   // Discard control state from an interrupted previous run before execution.
   consumeRoundResult(threadWorkspace.hostPath);
   await environment.ensureAgentReady(command.agent, signal, threadWorkspace.hostPath);

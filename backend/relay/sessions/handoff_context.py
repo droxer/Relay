@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .handoff_receipt import capture_handoff_receipt
+
 from .bridge import (
     ArtifactReader,
     agent_log_for_run,
@@ -32,12 +34,15 @@ def capture_handoff_context(
     assignment: dict[str, Any],
     note: str | None,
     store: ArtifactReader,
+    *,
+    task: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     events = session.get("events") or []
     objective = session.get("taskGoal") or ""
     for event in events:
         if event.get("type") == "user.message":
             objective = event.get("text") or ""
+    full_objective = objective
     objective, goal_cut = _clip(objective, 6000)
     instruction, note_cut = _clip((note or "").strip(), 4000)
     runs = {
@@ -125,8 +130,8 @@ def capture_handoff_context(
     if reserved_report:
         prior = "\n\n".join(filter(None, [prior, reserved_report]))
     layout = session.get("workspaceLayout") or "node-root"
-    return {
-        "contract": {"name": "relay.handoff.context", "version": 1},
+    context = {
+        "contract": {"name": "relay.handoff.context", "version": 3},
         "assignmentId": assignment["assignmentId"],
         "targetAgentId": assignment.get("agentId"),
         "targetExecutor": assignment.get("executorKind") or assignment.get("agent"),
@@ -157,3 +162,12 @@ def capture_handoff_context(
         or len(run_ids) > 24
         or len(artifact_ids) > 48,
     }
+    context["receipt"] = capture_handoff_receipt(
+        session,
+        context,
+        store,
+        objective=full_objective,
+        note=(note or "").strip(),
+        task=task,
+    )
+    return context

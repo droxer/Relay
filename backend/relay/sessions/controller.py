@@ -53,6 +53,7 @@ class SessionController:
         *,
         task_store: TaskStore | None = None,
         task_id: str | None = None,
+        task_execution_owner: dict[str, Any] | None = None,
         workspace_path: str = "/workspace",
         owner_employee_id: str | None = None,
         owner_agent_id: str | None = None,
@@ -67,6 +68,7 @@ class SessionController:
         self.store = store
         self.task_store = task_store
         self.task_id = task_id
+        self.task_execution_owner = task_execution_owner
         self.workspace_path = workspace_path
         self.owner_employee_id = owner_employee_id
         self.owner_agent_id = owner_agent_id
@@ -796,19 +798,15 @@ class SessionController:
         extras = extras or {}
         if self.task_id:
             task_ids = [self.task_id]
-        elif extras.get("sessionId"):
-            # Routine templates link every occurrence for history, but a
-            # terminal occurrence must not complete or block its schedule.
-            task_ids = [
-                task["id"]
-                for task in self.task_store.list_tasks_for_session(extras["sessionId"])
-                if not task.get("isRoutine")
-            ]
         else:
+            # Links are history/navigation, never task execution authority.
             task_ids = []
         for task_id in task_ids:
             self.task_store.append_event(
                 task_id,
                 relay_task_event("task.status", task_id, {"status": status}),
+                execution_owner=self.task_execution_owner,
             )
-            self.task_store.record_activity(task_id, message, extras)
+            self.task_store.record_activity(
+                task_id, message, extras, execution_owner=self.task_execution_owner,
+            )

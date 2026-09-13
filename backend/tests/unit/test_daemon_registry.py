@@ -44,6 +44,55 @@ def database_daemon_store(root: str) -> DatabaseDaemonStore:
 DAEMON_STORE_FACTORIES = [LocalDaemonStore, database_daemon_store]
 
 
+@pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("delivery", ["queued", "dispatched", "expired"])
+def test_cancel_before_delivery_preserves_delivered_task_reservation(
+    daemon_store_factory, delivery: str,
+) -> None:
+    with TemporaryDirectory() as root:
+        store = daemon_store_factory(root)
+        store.register_node(store_node_payload())
+        sessions = LocalSessionStore(root)
+        session = sessions.create_session({
+            "workspacePath": "/workspace/alice", "ownerEmployeeId": "alice",
+            "taskGoal": "retain ownership until exit",
+        })
+        task_id = new_database_id()
+        request = store.create_run_request({
+            "nodeId": "sbx_alice", "sessionId": session["id"],
+            "taskId": task_id, "taskGoal": "retain ownership until exit",
+            "assignments": [{"executorKind": "codex", "mode": "action"}],
+            "state": {}, "status": "running",
+        })
+        command = {
+            "id": new_database_id(), "type": "run.start",
+            "sessionId": request["sessionId"], "runId": new_database_id(),
+            "agent": "codex", "taskGoal": request["taskGoal"],
+            "_runRequestId": request["id"],
+        }
+        store.update_run_request(request["id"], {"currentCommandId": command["id"]})
+        store.enqueue_command("sbx_alice", command)
+        if delivery != "queued":
+            assert len(store.take_queued_commands(
+                "sbx_alice", lease_seconds=-1 if delivery == "expired" else 60,
+            )) == 1
+        registry = DaemonNodeRegistry(sessions, store)
+
+        result = registry.cancel_run_request_before_delivery(request["id"], "stop")
+
+        if delivery != "queued":
+            assert result is None
+            assert store.active_run_request_for_task(task_id)["id"] == request["id"]
+            assert store.get_command(command["id"])["status"] == "dispatched"
+            SessionController(sessions).cancel_session(session["id"], "stop")
+            registry.reap_stale_runs()
+            assert store.active_run_request_for_task(task_id)["id"] == request["id"]
+        else:
+            assert result["status"] == "cancelled"
+            assert store.active_run_request_for_task(task_id) is None
+            assert store.take_queued_commands("sbx_alice") == []
+
+
 def stored_daemon_event_types(store: object) -> list[str]:
     events_dir = getattr(store, "events_dir", None)
     if events_dir is not None:
@@ -3336,6 +3385,65 @@ def test_active_session_run_request_claim_is_atomic_across_store_instances(
         assert "already has an active daemon run" in str(failure)
 
 
+@pytest.mark.parametrize("status", ["prepared", "running", "dispatching", "finalizing"])
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_active_task_reservation_is_atomic_across_threads_and_nodes(tmp_path, status, store_factory):
+    stores = (store_factory(str(tmp_path)), store_factory(str(tmp_path)))
+    for node in ("node_a", "node_b"):
+        stores[0].register_node({**store_node_payload(), "id": node, "workspaceId": node})
+    task_id = new_database_id()
+    barrier = Barrier(2)
+
+    def reserve(index):
+        barrier.wait()
+        return stores[index].create_run_request({
+            "nodeId": ("node_a", "node_b")[index], "sessionId": new_database_id(),
+            "taskId": task_id, "taskGoal": "one task", "assignments": [],
+            "state": {}, "status": status,
+        })
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        attempts = [executor.submit(reserve, index) for index in range(2)]
+    assert sum(attempt.exception() is None for attempt in attempts) == 1
+    error = next(attempt.exception() for attempt in attempts if attempt.exception())
+    assert isinstance(error, ValueError)
+    assert "task_ownership_conflict" in str(error)
+    assert len(stores[0].list_active_run_requests()) == 1
+
+
+@pytest.mark.parametrize("terminal", ["completed", "failed", "cancelled"])
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_terminal_task_reservation_releases_without_breaking_replay(tmp_path, terminal, store_factory):
+    store = store_factory(str(tmp_path))
+    store.register_node({**store_node_payload(), "maxConcurrentRuns": 8})
+    request = {
+        "id": new_database_id(), "nodeId": "sbx_alice", "sessionId": new_database_id(),
+        "taskId": new_database_id(), "taskGoal": "one task", "assignments": [],
+        "state": {}, "status": "prepared",
+    }
+    first = store.create_run_request(request)
+    assert store.create_run_request(request)["id"] == first["id"]
+    store.update_run_request(first["id"], {"status": terminal})
+    second = store.create_run_request({**request, "id": new_database_id(), "sessionId": new_database_id()})
+    assert second["id"] != first["id"]
+    # An old failed admission cannot revive on top of the replacement owner.
+    from sqlalchemy.exc import IntegrityError
+    with pytest.raises((IntegrityError, ValueError)):
+        store.update_run_request_if_status(first["id"], terminal, {"status": "prepared"})
+    assert store.get_run_request(first["id"])["status"] == terminal
+
+
+def test_reference_threads_do_not_reserve_linked_tasks(tmp_path):
+    store = database_daemon_store(str(tmp_path))
+    store.register_node({**store_node_payload(), "maxConcurrentRuns": 8})
+    for task_id in (None, None, new_database_id(), new_database_id()):
+        store.create_run_request({
+            "nodeId": "sbx_alice", "sessionId": new_database_id(), "taskId": task_id,
+            "taskGoal": "independent", "assignments": [], "state": {}, "status": "prepared",
+        })
+    assert len(store.list_active_run_requests()) == 4
+
+
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_same_idempotent_run_request_is_get_or_create_across_store_instances(
     store_factory,
@@ -4811,6 +4919,46 @@ async def _run_task_round(registry: Any, backend: Any, task_id: str) -> dict[str
     )
     [command] = registry.take_commands("sbx_alice", "node_token")
     return command
+
+
+def test_task_admission_versions_owner_and_fences_stale_finalization() -> None:
+    async def run_flow() -> None:
+        from relay.persistence.store_common import relay_task_event
+
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            task_id = tasks.create_task({"title": "Versioned execution"})["id"]
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task_id)
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            owner = tasks.get_task(task_id)["executionOwner"]
+            assert owner == {"requestId": request["id"], "revision": 1}
+            assert request["state"]["_relay_task_execution_revision"] == 1
+
+            # A replacement can already have finished when an old finalizer resumes.
+            tasks.append_event(task_id, relay_task_event("task.execution.claimed", task_id, {
+                "requestId": "replacement", "expectedRevision": 1,
+            }))
+            finished = tasks.append_event(task_id, relay_task_event("task.status", task_id, {
+                "status": "done",
+            }))
+            registry._record_round_result(request, {"status": "continue", "note": "old"}, "assigned")
+            registry._complete_run_request(request, "old result")
+            assert tasks.get_task(task_id) == finished
+            registry.daemon_store.mark_command_completed("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "exitCode": 0,
+            })
+            SessionController(_sessions).continue_session(command["sessionId"])
+            revived = registry.daemon_store.update_run_request(request["id"], {
+                "status": "running", "currentCommandId": None, "currentRunId": None,
+            })
+            registry._enqueue_current_assignment(revived)
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
+            assert registry.daemon_store.queued_command_count("sbx_alice") == 0
+            assert tasks.get_task(task_id) == finished
+
+    asyncio.run(run_flow())
 
 
 def test_a_round_that_reports_done_closes_the_task() -> None:

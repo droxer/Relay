@@ -26,7 +26,7 @@ a separate future feature.
 | `POST /threads/{id}/handoffs` | Records an executor-targeted decision, assignment artifact, and status | Metadata mutation only; success does not mean the receiving agent was dispatched |
 | `POST /threads/{id}/decisions`, kind `handoff` | Records a decision and optionally changes phase | A third meaning of handoff; no receiver assignment or dispatch by itself |
 | `SessionController.handoff_session` | Writes the decision, assignment artifact, `assigned` phase, and handoff phase | These must commit together because decision-ID replay otherwise skips unfinished work |
-| Registry command staging | Rebuilds history, current-turn bridge, and latest handoff note from session state | Useful continuity, but not an immutable handoff context receipt |
+| Registry command staging | Reuses the accepted immutable context and receipt; only legacy rounds without context reconstruct history | Prepared retries cannot silently replace accepted work with newer session text |
 | Prompt construction | Prepends progress-file instructions, history, prior results, and target note before the user turn | Workspace evidence and prior output remain necessary; a note alone is insufficient |
 
 Sources: `backend/relay/collaboration/service.py`,
@@ -57,7 +57,10 @@ The runtime uses the database-backed store.
 ## Implemented handoff contract
 
 The recovery round carries optional `handoffContext`, using
-`relay.handoff.context` version 1. Its `decisionId` and `assignmentId` link it to
+`relay.handoff.context` version 3 for new captures, with versions 1 and 2
+accepted for legacy prepared captures. Versions 2 and 3 require a structured
+work receipt; version 3 also requires receiver workspace validation. Its
+`decisionId` and `assignmentId` link it to
 the decision and receiving assignment. Capture records:
 
 - Source run/assignment when available, receiving logical agent ID, resolved
@@ -109,6 +112,68 @@ thread to another computer.
 
 ## Compatibility and remaining boundaries
 
+The first redesign step makes execution ownership explicit through each new
+round's `workScope`. Task runs record their authorized task ID; new messages
+record thread scope. Recovery inherits the source round's scope, and prepared
+replay retains its persisted task ID. Reference links cannot grant completion
+authority in either direction. Legacy task-linked rounds without scope require
+a restart through task dispatch, rather than guessing ownership from links.
+See `docs/testing/handoff-work-scope.tdd.md` for regression evidence.
+
+The second step adds versioned work receipts with verbatim requirements,
+attributed structured checkpoints, and stored artifact hashes. It preserves
+initial thread objectives and current requests separately, without extracting
+or inventing acceptance criteria from prose. Missing or stale checkpoints mean
+unknown progress. Prepared retries reuse accepted receipts even when later task
+edits would exceed the new-capture size limit.
+
+The third step is being delivered in two slices. Recovery admission now freezes
+the source round/revision and checks it after the durable session reservation.
+Stale requests release only their own prepared reservation, leaving the newer
+thread/task untouched. Retry accepts its own already-recorded round, never a
+later owner. The active-session database uniqueness constraint supplies admission
+serialization across replicas; the process-local dispatch lock alone does not.
+Legacy prepared manifests lack the token and retain their compatibility path.
+This source-round token alone does not establish task ownership across threads;
+the active-task reservation described below supplies that separate guarantee.
+
+Runtime receiver validation now compares recorded snapshot hashes with bounded
+regular files before preparation/execution. Version 3 handoffs require the
+`handoff-validation` daemon capability; prepared older versions keep their
+compatibility path. All workspace layouts, including threads, use the physical
+workspace gate, so validation runs after a preceding cooperative writer releases
+it. Missing hashes remain unknown, and matching partial evidence never certifies
+a whole Git tree or completion. See `docs/testing/handoff-runtime.tdd.md`.
+
+Task-wide active reservations now prevent different threads or nodes from
+admitting competing requests for one task. Database uniqueness covers all four
+active phases, including preparation and finalization; the local store uses its
+process-shared claim lock for both creates and transitions. Migration 0068 refuses
+pre-existing duplicate owners instead of picking a winner or cancelling metadata.
+See `docs/testing/task-ownership-reservation.tdd.md`.
+
+Pre-delivery cancellation now checks command delivery under the same store lock
+used by publication and polling. A delivered command, including one with an
+expired lease, cannot release its request reservation through that shortcut.
+Callers still send `run.cancel`; terminal-event processing remains responsible
+for finalization. This does not turn timeout or cancellation intent into proof
+of physical process exit.
+
+Task execution now has an event-backed monotonic revision independent of active
+reservation lifetime. Recovery freezes the source task revision; prepared replay
+reuses its claim, and expired admission retains the original generation. Runtime
+task status, activity, round/continuation, and workspace-wait writes check the
+request/revision inside the task append transaction. Replaced requests cannot
+redispatch or rewrite task results after their replacement finishes. Legacy
+snapshot projections cannot reset ownership because the fence reads authoritative
+events. See `docs/testing/task-execution-revisions.tdd.md`.
+
+Stronger termination/crash-recovery guarantees remain pending. The local
+workspace gate is not an OS sandbox and cannot stop an unrelated process that
+ignores it. All backend replicas must be upgraded: older writers do not enforce
+the new task guard. Human edits and dispatch bookkeeping retain their separate
+control-plane semantics; these runtime fences do not revoke API credentials.
+
 - Existing web recovery callers already use logical-agent `/recoveries`. The
   repository caller inventory found no active chat/core client calling the
   metadata-only `/handoffs` endpoint. Those legacy endpoints remain unchanged
@@ -124,7 +189,8 @@ thread to another computer.
   round, assignment, and run; duplicate or delayed queued events cannot regress
   the browser's running state. A newer round hides the old handoff status.
 - Context and delivery events survive Python storage, core replay, and browser
-  SSE. No relational migration is required. Terminal lifecycle comes from the
+  SSE. Those events require no relational migration; active-task reservations
+  require migration `20260913_0068`. Terminal lifecycle comes from the
   existing run/session records, not a second mutable handoff status.
 - This change does not repair old partial records, make the file-backed
   migration store transactional, or introduce distributed handoff serialization

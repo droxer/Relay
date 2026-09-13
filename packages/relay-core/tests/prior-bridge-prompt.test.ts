@@ -11,6 +11,16 @@ import {
 import { initialAgentState } from "../src/state.js";
 
 describe("prior agent bridge in prompts", () => {
+  it("asks all executors for an attributed checkpoint without granting completion authority", () => {
+    const state = { ...initialAgentState("continue"), progress_file: "PROGRESS.md", assignment_id: "assignment-1" };
+    for (const build of [claudeTaskPrompt, piTaskPrompt, kimiTaskPrompt, codexTaskPrompt]) {
+      const prompt = build(state);
+      assert.match(prompt, /PROGRESS\.md\.handoff\.json/);
+      assert.match(prompt, /"assignmentId": "assignment-1"/);
+      assert.match(prompt, /"pending": \[\]/);
+      assert.match(prompt, /does not change requirements, grant permissions, or approve task completion/);
+    }
+  });
   it("always gives the agent an adaptive execution policy", () => {
     const state = initialAgentState("do thing");
     for (const prompt of [

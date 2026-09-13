@@ -35,6 +35,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..core.ids import new_relay_id
 from .protocols import TaskDispatchAssignment
+from .task_execution import prepare_execution_events
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     AgentName,
@@ -302,8 +303,8 @@ class LocalTaskStore:
             _write_json(self._snapshot_path(task_id), compact_task_snapshot(task))
             return task
 
-    def append_event(self, task_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        return self.append_events(task_id, [event])
+    def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.append_events(task_id, [event], execution_owner=execution_owner)
 
     def append_events(
         self,
@@ -311,9 +312,13 @@ class LocalTaskStore:
         new_events: list[dict[str, Any]],
         *,
         skip_linked_session_id: str | None = None,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             current = self.get_task(task_id)
+            new_events = prepare_execution_events(current, new_events, execution_owner)
+            if not new_events:
+                return current
             if skip_linked_session_id and current.get("deletedAt"):
                 return current
             if skip_linked_session_id and skip_linked_session_id in current.get(
@@ -529,6 +534,7 @@ class LocalTaskStore:
         round_count: int | None = None,
         continuation_session_id: str | None = None,
         clear_continuation: bool = False,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.append_event(
             task_id,
@@ -539,6 +545,7 @@ class LocalTaskStore:
                 continuation_session_id=continuation_session_id,
                 clear_continuation=clear_continuation,
             ),
+            execution_owner=execution_owner,
         )
 
     def record_dispatch_outcome(
@@ -736,7 +743,8 @@ class LocalTaskStore:
         )
 
     def record_activity(
-        self, task_id: str, message: str, payload: dict[str, Any] | None = None
+        self, task_id: str, message: str, payload: dict[str, Any] | None = None,
+        *, execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         extras = payload or {}
         logger.debug("Task activity recorded", task_id=task_id, message=message)
@@ -759,6 +767,7 @@ class LocalTaskStore:
                     }
                 },
             ),
+            execution_owner=execution_owner,
         )
 
     def _task_dir(self, task_id: str) -> Path:
@@ -926,8 +935,8 @@ class DatabaseTaskStore:
                 )
         return task
 
-    def append_event(self, task_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        return self.append_events(task_id, [event])
+    def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self.append_events(task_id, [event], execution_owner=execution_owner)
 
     def append_events(
         self,
@@ -937,6 +946,7 @@ class DatabaseTaskStore:
         skip_linked_session_id: str | None = None,
         reject_active_claim: bool = False,
         active_linked_session: Callable[[dict[str, Any]], bool] | None = None,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         for attempt in range(3):
             try:
@@ -946,6 +956,7 @@ class DatabaseTaskStore:
                     skip_linked_session_id=skip_linked_session_id,
                     reject_active_claim=reject_active_claim,
                     active_linked_session=active_linked_session,
+                    execution_owner=execution_owner,
                 )
             except (IntegrityError, _TaskWriteConflict):
                 if attempt == 2:
@@ -961,6 +972,7 @@ class DatabaseTaskStore:
         skip_linked_session_id: str | None = None,
         reject_active_claim: bool = False,
         active_linked_session: Callable[[dict[str, Any]], bool] | None = None,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:
             if skip_linked_session_id:
@@ -979,6 +991,23 @@ class DatabaseTaskStore:
             task_pk = row["id"]
             sequence = int(row["version"] or 0)
             current = row["snapshot"] or {}
+            existing_events = self._events_for_task(conn, task_pk)
+            if not existing_events:
+                existing_events = list(current.get("events", []))
+            # Ownership is an event fact. An older projection writer may omit
+            # the new field, but must never reset the authoritative generation.
+            if existing_events:
+                current = {**current}
+                current.pop("executionOwner", None)
+                for event in reversed(existing_events):
+                    if event.get("type") == "task.execution.claimed":
+                        current["executionOwner"] = {
+                            "requestId": event["requestId"], "revision": event["revision"],
+                        }
+                        break
+            events = prepare_execution_events(current, events, execution_owner)
+            if not events:
+                return self.get_task(task_id)
             deleting = any(event.get("type") == "task.deleted" for event in events)
             if deleting and current.get("deletedAt"):
                 return current
@@ -992,9 +1021,6 @@ class DatabaseTaskStore:
                 "linkedSessionIds", []
             ):
                 return current
-            existing_events = self._events_for_task(conn, task_pk)
-            if not existing_events:
-                existing_events = list(current.get("events", []))
             task = materialize_task_events([*existing_events, *events])
             claimed = conn.execute(
                 update(self.tasks)
@@ -1376,6 +1402,7 @@ class DatabaseTaskStore:
         round_count: int | None = None,
         continuation_session_id: str | None = None,
         clear_continuation: bool = False,
+        execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.append_event(
             task_id,
@@ -1386,6 +1413,7 @@ class DatabaseTaskStore:
                 continuation_session_id=continuation_session_id,
                 clear_continuation=clear_continuation,
             ),
+            execution_owner=execution_owner,
         )
 
     def record_dispatch_outcome(
@@ -1718,7 +1746,8 @@ class DatabaseTaskStore:
         return task
 
     def record_activity(
-        self, task_id: str, message: str, payload: dict[str, Any] | None = None
+        self, task_id: str, message: str, payload: dict[str, Any] | None = None,
+        *, execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         extras = payload or {}
         logger.debug(
@@ -1743,6 +1772,7 @@ class DatabaseTaskStore:
                     }
                 },
             ),
+            execution_owner=execution_owner,
         )
 
     def _task_pk(self, conn: Any, task_id: str, *, lock: bool = False) -> str:

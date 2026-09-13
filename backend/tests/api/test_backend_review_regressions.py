@@ -204,12 +204,12 @@ def test_legacy_daemon_completion_does_not_collect_backend_files(review_app, tmp
 @pytest.mark.parametrize(
     "action,session_status,task_status",
     [
-        ("mark_done", "completed", "done"),
-        ("cancel", "cancelled", "blocked"),
-        ("cancellations", "cancelled", "blocked"),
+        ("mark_done", "completed", "waiting_for_human"),
+        ("cancel", "cancelled", "waiting_for_human"),
+        ("cancellations", "cancelled", "waiting_for_human"),
     ],
 )
-def test_terminal_thread_actions_update_linked_task(
+def test_terminal_thread_actions_leave_linked_task_unchanged(
     review_app, review_client, action, session_status, task_status
 ):
     task = review_client.post(
@@ -226,25 +226,24 @@ def test_terminal_thread_actions_update_linked_task(
     assert review_app.state.task_store.get_task(task["id"])["status"] == task_status
 
 
-def test_terminal_thread_action_rolls_back_on_task_write_failure(
+def test_terminal_thread_action_does_not_write_linked_tasks(
     review_app, review_client, monkeypatch
 ):
     task = review_client.post(
         "/api/v1/tasks", json={"title": "Atomic completion", "createSession": True}
     ).json()
     session_id = task["linkedSessionIds"][0]
-    session_before = review_app.state.session_store.get_session(session_id)
     task_before = review_app.state.task_store.get_task(task["id"])
 
     def fail(*args, **kwargs):
         raise RuntimeError("injected task write failure")
 
     monkeypatch.setattr(review_app.state.task_store, "record_activity", fail)
-    with pytest.raises(RuntimeError, match="injected task write failure"):
-        review_client.post(
-            f"/api/v1/threads/{session_id}/decisions", json={"kind": "mark_done"}
-        )
-    assert review_app.state.session_store.get_session(session_id) == session_before
+    response = review_client.post(
+        f"/api/v1/threads/{session_id}/decisions", json={"kind": "mark_done"}
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
     assert review_app.state.task_store.get_task(task["id"]) == task_before
 
 
@@ -267,10 +266,11 @@ def test_terminal_occurrence_keeps_routine_schedule_and_deleted_history(
     store.delete_task(deleted["id"])
     routine_before = store.get_task(routine["id"])
     deleted_before = store.get_task(deleted["id"])
+    task_before = store.get_task(task["id"])
     response = review_client.post(
         f"/api/v1/threads/{session_id}/decisions", json={"kind": "mark_done"}
     )
     assert response.status_code == 200
-    assert store.get_task(task["id"])["status"] == "done"
+    assert store.get_task(task["id"]) == task_before
     assert store.get_task(routine["id"]) == routine_before
     assert store.get_task(deleted["id"]) == deleted_before

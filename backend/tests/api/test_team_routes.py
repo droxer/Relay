@@ -76,7 +76,7 @@ def _agent(
             "workspacePath": f"/workspace/{employee_id}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": ["task-workspaces", "thread-workspaces"],
+            "capabilities": ["task-workspaces", "thread-workspaces", "handoff-validation"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -1530,6 +1530,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
             if event["type"] == "collaboration.round.started"
         )
         assert task_round["manifest"]["source"] == "task"
+        assert task_round["manifest"]["workScope"] == {"kind": "task", "taskId": task["id"]}
         assert task_round["manifest"]["strategy"] == "coordinate"
         assert all(
             assignment["assignmentId"]
@@ -2410,13 +2411,196 @@ def test_recovery_dispatches_current_user_turn(
     assert command["phase"] == "review"
     if followup:
         assert "Add a signup form" in command["state"]["prior_conversation"]
-        assert expected not in command["state"]["prior_conversation"]
+        assert expected not in command["state"]["prior_conversation"].split("[Handoff work receipt]")[0]
     replay = client.post(endpoint, json=body)
     assert replay.status_code == 202, replay.text
     assert len(replay.json()["agentRuns"]) == 1
     user_messages = [e for e in replay.json()["events"] if e["type"] == "user.message"]
     assert len(user_messages) == (2 if followup else 0)
     assert replay.json()["taskGoal"] == "Build a login page"
+
+
+@pytest.mark.parametrize("kind", ["handoff", "rerun"])
+@pytest.mark.parametrize(
+    "verdict,expected",
+    [
+        (None, "waiting_for_human"),
+        ("done", "done"),
+        ("continue", "assigned"),
+        ("blocked", "waiting_for_human"),
+    ],
+)
+def test_task_recovery_preserves_round_verdict(
+    recovery_team_thread, kind, verdict, expected
+):
+    client, controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    registry.register(
+        {
+            "sandboxId": "test_node_alice",
+            "employeeId": "alice",
+            "workspaceId": "machine-alice",
+            "token": "node_token",
+            "workspacePath": "/workspace/alice",
+            "protocolVersion": 1,
+            "supportedAgents": ["codex"],
+            "capabilities": ["thread-workspaces", "task-workspaces", "round-result", "handoff-validation"],
+            "status": "ready",
+        }
+    )
+    store = client.app.state.task_store
+    task = store.create_task(
+        {"title": "Unfinished work", "ownerEmployeeId": "alice", "status": "blocked"}
+    )
+    routine = store.create_task(
+        {"title": "Schedule", "ownerEmployeeId": "alice", "isRoutine": True}
+    )
+    reference = store.create_task({"title": "Related work", "ownerEmployeeId": "alice"})
+    for item in (task, routine, reference):
+        store.link_session(item["id"], session["id"])
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "source-task-round",
+            "collaborationId": "source-work",
+            "workScope": {"kind": "task", "taskId": task["id"]},
+        },
+    )
+    routine_before = store.get_task(routine["id"])
+    reference_before = store.get_task(reference["id"])
+    controller.fail_session(session["id"], "Needs recovery")
+    body = {
+        "kind": kind,
+        "targetAgentId": reviewer["id"],
+        "idempotencyKey": "task-recovery",
+    }
+    endpoint = f"/api/v1/threads/{session['id']}/recoveries"
+    response = client.post(endpoint, json=body)
+    assert response.status_code == 202, response.text
+    assert response.json()["collaborationRounds"][-1]["workScope"] == {
+        "kind": "task",
+        "taskId": task["id"],
+    }
+    command = registry.take_commands("test_node_alice", "node_token")[0]
+    registry.handle_event(
+        "test_node_alice",
+        {
+            "type": "run.completed",
+            "commandId": command["id"],
+            "sessionId": session["id"],
+            "runId": command["runId"],
+            "agent": command["agent"],
+            "exitCode": 0,
+            "agentLog": "Work remains unless explicitly verified.",
+            "leaseId": command.get("leaseId"),
+            **(
+                {"roundResult": {"status": verdict, "note": "Reviewed work"}}
+                if verdict
+                else {}
+            ),
+        },
+        "node_token",
+    )
+    updated = store.get_task(task["id"])
+    assert updated["status"] == expected
+    assert command["state"].get("round_result_file")
+    if verdict == "continue":
+        assert updated["continuationSessionId"] == session["id"]
+    assert store.get_task(routine["id"]) == routine_before
+    assert store.get_task(reference["id"]) == reference_before
+    assert client.post(endpoint, json=body).status_code == 202
+    assert store.get_task(task["id"]) == updated
+
+
+def test_recovery_rejects_ambiguous_task_links(recovery_team_thread):
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    store = client.app.state.task_store
+    for title in ("First", "Second"):
+        task = store.create_task({"title": title, "ownerEmployeeId": "alice"})
+        store.link_session(task["id"], session["id"])
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={
+            "kind": "handoff",
+            "targetAgentId": reviewer["id"],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "work_scope_required"
+    assert not client.app.state.session_store.get_session(session["id"])["agentRuns"]
+
+
+@pytest.mark.parametrize(
+    "scope,code",
+    [
+        (
+            {"kind": "task", "taskId": "00000000-0000-0000-0000-000000000000"},
+            "task_unavailable",
+        ),
+        ({"kind": "task"}, "work_scope_invalid"),
+        ({"kind": "future"}, "work_scope_invalid"),
+    ],
+)
+def test_recovery_rejects_unavailable_work_scope(recovery_team_thread, scope, code):
+    client, controller, session, _team, reviewer = recovery_team_thread
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "source-round",
+            "collaborationId": "source-work",
+            "workScope": scope,
+        },
+    )
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={
+            "kind": "handoff",
+            "targetAgentId": reviewer["id"],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == code
+
+
+def test_message_and_its_recovery_do_not_inherit_task_ownership(recovery_team_thread):
+    client, controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    store = client.app.state.task_store
+    task = store.create_task({"title": "Task work", "ownerEmployeeId": "alice"})
+    store.link_session(task["id"], session["id"])
+    before = store.get_task(task["id"])
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "task-round",
+            "collaborationId": "task-work",
+            "workScope": {"kind": "task", "taskId": task["id"]},
+        },
+    )
+    for endpoint, body in (
+        ("messages", {"text": "Explain the design", "addressAgentId": reviewer["id"]}),
+        ("recoveries", {"kind": "handoff", "targetAgentId": reviewer["id"]}),
+    ):
+        response = client.post(f"/api/v1/threads/{session['id']}/{endpoint}", json=body)
+        assert response.status_code == 202, response.text
+        assert response.json()["collaborationRounds"][-1]["workScope"] == {
+            "kind": "thread"
+        }
+        command = registry.take_commands("test_node_alice", "node_token")[0]
+        registry.handle_event(
+            "test_node_alice",
+            {
+                "type": "run.completed",
+                "commandId": command["id"],
+                "sessionId": session["id"],
+                "runId": command["runId"],
+                "agent": command["agent"],
+                "exitCode": 0,
+                "agentLog": "Explanation",
+            },
+            "node_token",
+        )
+        assert store.get_task(task["id"]) == before
 
 
 @pytest.mark.parametrize(
@@ -2444,12 +2628,31 @@ def test_addressed_team_reviewer_keeps_specialization(
     assert [a["agentId"] for a in request["assignments"]] == [reviewer["id"]]
 
 
+@pytest.mark.parametrize("task_backed", [False, True])
 def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
-    recovery_team_thread, monkeypatch
+    recovery_team_thread, monkeypatch, task_backed
 ) -> None:
     from relay.api.helpers import daemon_node_event
 
     client, controller, session, _team, reviewer = recovery_team_thread
+    task = None
+    if task_backed:
+        task = client.app.state.task_store.create_task(
+            {
+                "title": "Build login",
+                "description": "Acceptance: keyboard navigation works.",
+                "ownerEmployeeId": "alice",
+            }
+        )
+        client.app.state.task_store.link_session(task["id"], session["id"])
+        controller.record_collaboration_round_started(
+            session["id"],
+            {
+                "roundId": "source",
+                "collaborationId": "work",
+                "workScope": {"kind": "task", "taskId": task["id"]},
+            },
+        )
     endpoint = f"/api/v1/threads/{session['id']}/recoveries"
     body = {
         "kind": "handoff",
@@ -2473,6 +2676,10 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
         )
     )
     frozen = request["state"]["_relay_collaboration_manifest"]["handoffContext"]
+    if task:
+        client.app.state.task_store.update_task(
+            task["id"], {"description": "CHANGED AFTER ACCEPTANCE" * 1000}
+        )
     controller.record_user_message(
         session["id"], "A later message must not rewrite accepted work"
     )
@@ -2480,11 +2687,21 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
     assert response.status_code == 202, response.text
     stored = response.json()["collaborationRounds"][-1]["handoffContext"]
     assert stored == frozen
+    assert stored["receipt"]["contract"] == {
+        "name": "relay.handoff.receipt",
+        "version": 1,
+    }
+    if task:
+        assert (
+            stored["receipt"]["workDefinition"]["requirements"] == task["description"]
+        )
     assert stored["targetAgentId"] == reviewer["id"]
     assert stored["decisionId"] == response.json()["decisions"][-1]["id"]
     registry = client.app.state.registry
     command = registry.take_commands("test_node_alice", "node_token")[0]
     assert command["state"]["task_goal"] == session["taskGoal"]
+    assert "[Handoff work receipt]" in command["state"]["prior_conversation"]
+    assert "CHANGED AFTER ACCEPTANCE" not in command["state"]["prior_conversation"]
     assert "later message" not in command["state"]["prior_conversation"]
     assert (
         command["state"]["prior_handoff_note"]
@@ -2523,3 +2740,226 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
         if e["type"] == "collaboration.delivery"
     ]
     assert [e["status"] for e in deliveries] == ["queued", "running"]
+
+
+@pytest.mark.parametrize("variant,accepted", [("legacy", True), ("v2", True), ("missing", False), ("future", False)])
+def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatch, variant, accepted):
+    from relay.collaboration import service
+
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    capture = service.capture_handoff_context
+
+    def versioned(*args, **kwargs):
+        context = capture(*args, **kwargs)
+        if variant == "legacy":
+            context["contract"]["version"] = 1
+            context.pop("receipt")
+        elif variant == "v2":
+            context["contract"]["version"] = 2
+        elif variant == "missing":
+            context.pop("receipt")
+        else:
+            context["receipt"]["contract"]["version"] = 99
+        return context
+
+    monkeypatch.setattr(service, "capture_handoff_context", versioned)
+    if variant in ("legacy", "v2"):
+        client.app.state.registry.update_status("test_node_alice", {"capabilities": ["thread-workspaces"]})
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={
+            "kind": "handoff",
+            "targetAgentId": reviewer["id"],
+        },
+    )
+    assert response.status_code == 202, response.text
+    assert (response.json()["status"] != "failed") is accepted
+    commands = client.app.state.registry.take_commands("test_node_alice", "node_token")
+    assert bool(commands) is accepted
+
+
+@pytest.mark.parametrize("race_point", ["capture", "reservation"])
+def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch, race_point):
+    from relay.collaboration import service
+
+    client, controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+
+    def replace_owner():
+        controller.record_collaboration_round_started(
+            session["id"],
+            {"roundId": "new-owner", "collaborationId": "new-work", "workScope": {"kind": "thread"}},
+        )
+
+    if race_point == "capture":
+        original = service.capture_handoff_context
+
+        def capture(*args, **kwargs):
+            context = original(*args, **kwargs)
+            replace_owner()
+            return context
+
+        monkeypatch.setattr(service, "capture_handoff_context", capture)
+    else:
+        original = registry.daemon_store.create_run_request
+
+        def reserve(*args, **kwargs):
+            replace_owner()
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(registry.daemon_store, "create_run_request", reserve)
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "stale-source"},
+    )
+    assert response.status_code == 409, response.text
+    assert "handoff_source_changed" in response.text
+    current = client.app.state.session_store.get_session(session["id"])
+    assert current["activeRoundId"] == "new-owner"
+    assert registry.daemon_store.active_run_request_for_session_any_node(session["id"]) is None
+    assert registry.take_commands("test_node_alice", "node_token") == []
+    replay = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "stale-source"},
+    )
+    assert replay.status_code == 409, replay.text
+    assert "handoff_source_changed" in replay.text
+
+
+def test_handoff_rejects_replaced_task_generation_and_preserves_rejection(recovery_team_thread, monkeypatch):
+    from relay.persistence.store_common import relay_task_event
+
+    client, controller, session, _team, reviewer = recovery_team_thread
+    tasks = client.app.state.task_store
+    registry = client.app.state.registry
+    task = tasks.create_task({"title": "Owned task", "ownerEmployeeId": "alice"})
+    tasks.link_session(task["id"], session["id"])
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "task-source", "collaborationId": "task-work",
+        "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    original = registry.daemon_store.create_run_request
+    newer = []
+
+    def reserve(*args, **kwargs):
+        tasks.append_event(task["id"], relay_task_event("task.execution.claimed", task["id"], {
+            "requestId": "newer-owner", "expectedRevision": 0,
+        }))
+        newer.append(tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "done"})))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(registry.daemon_store, "create_run_request", reserve)
+    endpoint = f"/api/v1/threads/{session['id']}/recoveries"
+    body = {"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "stale-task"}
+    for _ in range(2):
+        response = client.post(endpoint, json=body)
+        assert response.status_code == 409, response.text
+        assert "task_ownership_changed" in response.text
+        assert tasks.get_task(task["id"]) == newer[0]
+        assert registry.take_commands("test_node_alice", "node_token") == []
+
+
+def test_handoff_replays_after_its_round_was_recorded(recovery_team_thread, monkeypatch):
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    endpoint = f"/api/v1/threads/{session['id']}/recoveries"
+    body = {"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "recorded-round"}
+    with monkeypatch.context() as patch:
+        def interrupt(*_args, **_kwargs):
+            raise RuntimeError("interrupted activation")
+
+        patch.setattr(registry, "activate_run_request", interrupt)
+        with pytest.raises(RuntimeError, match="interrupted activation"):
+            client.post(endpoint, json=body)
+    before = client.app.state.session_store.get_session(session["id"])
+    response = client.post(endpoint, json=body)
+    assert response.status_code == 202, response.text
+    assert response.json()["activeRoundId"] == before["activeRoundId"]
+    assert response.json()["collaborationRevision"] == before["collaborationRevision"]
+    assert len(registry.take_commands("test_node_alice", "node_token")) == 1
+
+
+@pytest.mark.parametrize("capable", [False, True])
+def test_handoff_requires_runtime_validation(recovery_team_thread, capable):
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    registry.update_status("test_node_alice", {"capabilities": ["thread-workspaces", *(["handoff-validation"] if capable else [])]})
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 202, response.text
+    commands = registry.take_commands("test_node_alice", "node_token")
+    if capable:
+        assert commands[0]["handoffValidation"] == {
+            "contract": {"name": "relay.handoff.validation", "version": 1},
+            "assignmentId": commands[0]["assignmentId"],
+            "workspaceLayout": "thread", "workspaceSubpath": None, "artifacts": [],
+        }
+    else:
+        assert commands == []
+        assert response.json()["status"] == "failed"
+
+
+@pytest.mark.parametrize("mismatch", [None, "assignment", "workspace"])
+def test_handoff_validation_binds_receipt_evidence(recovery_team_thread, monkeypatch, mismatch):
+    from relay.collaboration import service
+
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    capture = service.capture_handoff_context
+    evidence = [{"artifactId": "snapshot", "path": "PROGRESS.md", "sha256": "a" * 64}]
+
+    def captured(*args, **kwargs):
+        context = capture(*args, **kwargs)
+        context["receipt"]["workspace"]["artifacts"] = evidence
+        if mismatch == "assignment":
+            context["receipt"]["targetAssignmentId"] = "different"
+        if mismatch == "workspace":
+            context["receipt"]["workspace"]["layout"] = "node-root"
+        return context
+
+    monkeypatch.setattr(service, "capture_handoff_context", captured)
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 202, response.text
+    commands = client.app.state.registry.take_commands("test_node_alice", "node_token")
+    if mismatch:
+        assert commands == []
+        assert response.json()["status"] == "failed"
+    else:
+        assert commands[0]["handoffValidation"]["artifacts"] == evidence
+        evidence[0]["sha256"] = "b" * 64
+        assert commands[0]["handoffValidation"]["artifacts"][0]["sha256"] == "a" * 64
+
+
+def test_recovery_cannot_take_a_task_reserved_by_another_thread(recovery_team_thread):
+    client, controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    registry.update_status("test_node_alice", {"maxConcurrentRuns": 4})
+    task_store = client.app.state.task_store
+    task = task_store.create_task({"title": "Shared task", "ownerEmployeeId": "alice", "status": "blocked"})
+    task_store.link_session(task["id"], session["id"])
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "source-task", "collaborationId": "source-work",
+        "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    owner_session = controller.create_session("Current task owner")
+    owner = registry.daemon_store.create_run_request({
+        "nodeId": "test_node_alice", "sessionId": owner_session["id"],
+        "taskId": task["id"], "taskGoal": "Shared task", "assignments": [], "state": {},
+        "status": "prepared",
+    })
+    before = client.app.state.session_store.get_session(session["id"])
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 409, response.text
+    assert "task_ownership_conflict" in response.text
+    assert registry.daemon_store.get_run_request(owner["id"])["status"] == "prepared"
+    assert client.app.state.session_store.get_session(session["id"])["events"] == before["events"]
+    assert task_store.get_task(task["id"])["status"] == "blocked"
+    assert registry.take_commands("test_node_alice", "node_token") == []

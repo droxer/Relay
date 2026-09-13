@@ -919,6 +919,12 @@ class LocalDaemonStore:
                 raise ValueError(
                     f"Session {record['sessionId']} already has an active daemon run."
                 )
+            if (
+                record.get("taskId")
+                and record["status"] in ACTIVE_RUN_REQUEST_STATUSES
+                and self.active_run_request_for_task(record["taskId"])
+            ):
+                raise ValueError("task_ownership_conflict: this task already has an active daemon run.")
             node = self.get_node(record["nodeId"])
             if node:
                 _assert_node_run_request_capacity(
@@ -943,12 +949,21 @@ class LocalDaemonStore:
 
     @contextmanager
     def _run_request_claim_lock(self) -> Iterator[None]:
-        with self.run_request_claim_lock_path.open("a+", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
+        # Transitions call update_run_request while already holding this lock.
+        # Keep the process-shared flock reentrant under our per-instance RLock;
+        # opening a second descriptor and flocking it would deadlock ourselves.
+        with self._lock:
+            if getattr(self, "_run_request_claim_locked", False):
                 yield
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                return
+            with self.run_request_claim_lock_path.open("a+", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                self._run_request_claim_locked = True
+                try:
+                    yield
+                finally:
+                    self._run_request_claim_locked = False
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def get_run_request(self, request_id: str) -> dict[str, Any] | None:
         path = self.run_requests_dir / f"{safe_name(request_id)}.json"
@@ -986,6 +1001,12 @@ class LocalDaemonStore:
                 for request in self.list_active_run_requests()
                 if request["sessionId"] == session_id
             ),
+            None,
+        )
+
+    def active_run_request_for_task(self, task_id: str) -> dict[str, Any] | None:
+        return next(
+            (request for request in self.list_active_run_requests() if request.get("taskId") == task_id),
             None,
         )
 
@@ -1073,12 +1094,16 @@ class LocalDaemonStore:
     def update_run_request(
         self, request_id: str, patch: dict[str, Any]
     ) -> dict[str, Any]:
-        with self._lock:
+        with self._lock, self._run_request_claim_lock():
             current = self.get_run_request(request_id)
             if not current:
                 raise KeyError(request_id)
             now = now_iso()
             updated = {**current, **patch, "updatedAt": now}
+            if updated.get("taskId") and updated["status"] in ACTIVE_RUN_REQUEST_STATUSES:
+                owner = self.active_run_request_for_task(updated["taskId"])
+                if owner and owner["id"] != request_id:
+                    raise ValueError("task_ownership_conflict: this task already has an active daemon run.")
             if patch.get("status") in ("completed", "failed", "cancelled"):
                 updated["completedAt"] = now
             _write_json(
@@ -1097,13 +1122,18 @@ class LocalDaemonStore:
             return updated
 
     def update_run_request_if_status(
-        self, request_id: str, expected_status: str, patch: dict[str, Any]
+        self, request_id: str, expected_status: str, patch: dict[str, Any],
+        *, require_undelivered: bool = False,
     ) -> dict[str, Any] | None:
         """Apply a run-request transition only from the expected state."""
         with self._lock, self._run_request_claim_lock():
             current = self.get_run_request(request_id)
             if not current or current.get("status") != expected_status:
                 return None
+            if require_undelivered and current.get("currentCommandId"):
+                command = self.get_command(current["currentCommandId"])
+                if not command or command.get("status") not in ("pending", "queued"):
+                    return None
             return self.update_run_request(request_id, patch)
 
     def update_run_request_if_claimed(
@@ -1586,6 +1616,13 @@ class DatabaseDaemonStore:
         unique=True,
         postgresql_where=run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
         sqlite_where=run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+    )
+    Index(
+        "uq_daemon_run_requests_active_task",
+        run_requests.c.task_id,
+        unique=True,
+        postgresql_where=(run_requests.c.task_id.is_not(None) & run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)),
+        sqlite_where=(run_requests.c.task_id.is_not(None) & run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)),
     )
     events = Table(
         "daemon_events",
@@ -2614,8 +2651,20 @@ class DatabaseDaemonStore:
                 raise ValueError(
                     f"Session {record['sessionId']} already has an active daemon run."
                 ) from error
+            if record.get("taskId") and self.active_run_request_for_task(record["taskId"]):
+                raise ValueError("task_ownership_conflict: this task already has an active daemon run.") from error
             raise
         return record
+
+    def active_run_request_for_task(self, task_id: str) -> dict[str, Any] | None:
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(
+                select(self.run_requests)
+                .where(self.run_requests.c.task_id == task_id)
+                .where(self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+                .limit(1)
+            ).mappings().first()
+        return row_to_run_request(row) if row else None
 
     def get_run_request(self, request_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
@@ -2863,7 +2912,8 @@ class DatabaseDaemonStore:
         return updated
 
     def update_run_request_if_status(
-        self, request_id: str, expected_status: str, patch: dict[str, Any]
+        self, request_id: str, expected_status: str, patch: dict[str, Any],
+        *, require_undelivered: bool = False,
     ) -> dict[str, Any] | None:
         """Atomically apply a run-request transition from one status."""
         now = now_iso()
@@ -2882,6 +2932,13 @@ class DatabaseDaemonStore:
             current = row_to_run_request(row)
             if current.get("status") != expected_status:
                 return None
+            # Delivery and publication lock this same request row. Keep the
+            # delivery check inside that transaction: a registry-local lock
+            # cannot fence another backend replica's daemon poll.
+            if require_undelivered and current.get("currentCommandId"):
+                command = self.get_command(current["currentCommandId"])
+                if not command or command.get("status") not in ("pending", "queued"):
+                    return None
             updated = {**current, **patch, "updatedAt": now}
             if patch.get("status") in TERMINAL_DAEMON_STATUSES:
                 updated["completedAt"] = now

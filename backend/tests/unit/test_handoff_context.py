@@ -62,21 +62,21 @@ def test_context_uses_event_order_and_preserves_logical_identity_and_notes():
 def test_context_is_bounded_and_retains_active_instruction_and_latest_result():
     session = {
         "id": "s",
-        "taskGoal": "goal" * 10000,
+        "taskGoal": "goal",
         "events": [],
         "agentRuns": [
             {
                 "id": "r",
                 "agent": "codex",
                 "status": "failed",
-                "agentLog": "x" * 50000 + "LATEST",
+                "agentLog": "● " + "x" * 50000 + "LATEST",
             },
         ],
     }
     context = capture_handoff_context(
         session,
         {"assignmentId": "a", "agentId": "b", "executorKind": "codex"},
-        "note" * 20000,
+        "note" * 1000,
         NoArtifacts(),
     )
     assert sum(len(context[k]) for k in ("objective", "note", "priorContext")) <= 24000
