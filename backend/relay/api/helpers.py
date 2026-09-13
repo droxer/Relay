@@ -637,6 +637,15 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
         )
     lease_id = string_field(value, "leaseId")
     lease_field = {"leaseId": lease_id} if lease_id else {}
+    if event_type == "run.executing":
+        return {
+            "type": event_type,
+            "commandId": command_id,
+            **lease_field,
+            "sessionId": session_id,
+            "runId": run_id,
+            "agent": agent,
+        }
     if event_type == "run.workspace":
         if not isinstance(value.get("waiting"), bool):
             raise ValueError("invalid daemon workspace wait state.")

@@ -410,6 +410,24 @@ class SessionController:
         *,
         decision_id: str | None = None,
     ) -> dict[str, Any]:
+        # A decision ID is the retry receipt. It must not become durable
+        # before the assignment artifact and final handoff status do.
+        with self._transaction():
+            return self._handoff_session(
+                session_id, target_agent, assignments, note, target_agent_id,
+                decision_id=decision_id,
+            )
+
+    def _handoff_session(
+        self,
+        session_id: str,
+        target_agent: str,
+        assignments: list[dict[str, Any]],
+        note: str | None = None,
+        target_agent_id: str | None = None,
+        *,
+        decision_id: str | None = None,
+    ) -> dict[str, Any]:
         if decision_id:
             current = self.store.get_session(session_id)
             if any(

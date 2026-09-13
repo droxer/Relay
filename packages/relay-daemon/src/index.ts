@@ -1037,6 +1037,16 @@ async function executeCommand(
   const workspaceSnapshot = snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
   let patch;
   try {
+    if (command.reportExecutionStarted) {
+      await postJsonWithRetry(fetchFn, eventUrl, {
+        type: "run.executing",
+        commandId: command.id,
+        ...commandLeaseEventFields(command),
+        sessionId: command.sessionId,
+        runId: command.runId,
+        agent: command.agent,
+      } satisfies DaemonNodeEvent, token, signal);
+    }
     patch = await runAgentNode(command.agent, runState, options);
   } catch (error) {
     consumeRoundResult(threadWorkspace.hostPath);

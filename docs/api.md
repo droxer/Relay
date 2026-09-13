@@ -88,6 +88,21 @@ or `review`; omitting `addressAgentId` addresses the current room. Recovery
 placement, and immutable round assignments; clients do not send those transport
 details.
 
+Use `/threads/{id}/recoveries` with `kind: "handoff"` to dispatch a receiving
+logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under
+`/threads/{id}/decisions` record session metadata only; they do not dispatch an
+agent. A successful metadata response is not evidence that a receiver started.
+
+New handoff rounds include optional `handoffContext` with contract
+`relay.handoff.context` version 1. It contains the receiving assignment and
+logical agent, linked decision, source event boundary, bounded objective/note
+and prior-context excerpts, and run/artifact/progress-file references. Retrying
+an accepted operation preserves that context even if the thread later changes.
+`collaboration.delivery` SSE events carry `roundId`, `assignmentId`, `runId`, and
+`status` (`queued` or `running`). `agent.started` alone means the backend staged
+an attempt. Daemons acknowledge requested execution with the lease-bound
+`run.executing` event; old daemons may instead establish execution through output.
+
 ## Projects
 
 `GET /api/v1/projects` returns the current employee's active and archived

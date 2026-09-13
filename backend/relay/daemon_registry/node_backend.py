@@ -853,7 +853,7 @@ class ServerDaemonNodeBackend:
                 session_id,
                 decision,
                 request["assignments"],
-                round_id=request.get("_admissionId") or round_id,
+                round_id=(round_id if manifest and manifest.get("handoffContext") else request.get("_admissionId") or round_id),
             )
         if manifest:
             controller.record_collaboration_round_started(session_id, manifest)

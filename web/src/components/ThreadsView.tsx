@@ -22,6 +22,7 @@ import { TranscriptEmpty } from "./TranscriptEmpty";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { phaseDividerLabel } from "../lib/projectMessages";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
+import { HandoffStatus } from "./HandoffStatus";
 import { DecisionBar } from "./composer/DecisionBar";
 import { Composer, type ComposerHandle } from "./composer/Composer";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
@@ -377,6 +378,7 @@ export function ThreadsView({
                     </div>
                   );
                 })}
+                <HandoffStatus session={activeSession} />
                 {awaitingDecision ? (
                   <DecisionBar
                     logicalAgents={selectableLogicalAgents}

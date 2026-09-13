@@ -252,6 +252,12 @@
     "reject_confirm_message": "This records a rejection for the current turn. The agent won't rerun automatically."
   },
   "handoff": {
+    "status_accepted": "Handoff to {{agent}} accepted",
+    "status_queued": "Handoff to {{agent}} queued",
+    "status_running": "{{agent}} is working",
+    "status_completed": "{{agent}} completed the handoff",
+    "status_failed": "Handoff to {{agent}} failed",
+    "status_cancelled": "Handoff to {{agent}} cancelled",
     "title": "Hand off this turn",
     "route_to": "Route to",
     "note_label": "Note",

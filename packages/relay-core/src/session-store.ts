@@ -110,6 +110,29 @@ export interface CollaborationRoundManifest {
     coordinator?: boolean;
     synthesizer?: boolean;
   }>;
+  handoffContext?: {
+    contract: { name: "relay.handoff.context"; version: 1 };
+    assignmentId: string;
+    targetAgentId: string | null;
+    targetExecutor: string;
+    targetDisplayName: string | null;
+    decisionId: string;
+    sourceEventCount: number;
+    sourceEventId: string | null;
+    sourceRunId: string | null;
+    sourceAssignmentId: string | null;
+    computerId: string | null;
+    workspaceLayout: string;
+    workspaceSubpath: string | null;
+    progressFile: string;
+    objective: string;
+    note: string;
+    priorContext: string;
+    runIds: string[];
+    artifactIds: string[];
+    missingRunIds: string[];
+    truncated: boolean;
+  };
   completionPolicy: string;
   workGraph?: {
     contract: {
@@ -218,6 +241,16 @@ export type RelayEvent =
       status: SessionStatus;
       phase: string;
       pendingDecision?: RelaySession["pendingDecision"];
+    }
+  | {
+      id: string;
+      type: "collaboration.delivery";
+      sessionId: string;
+      timestamp: string;
+      roundId: string;
+      assignmentId: string;
+      runId: string;
+      status: "queued" | "running";
     }
   | {
       id: string;

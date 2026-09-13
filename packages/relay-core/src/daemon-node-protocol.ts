@@ -195,6 +195,7 @@ export interface DaemonNodeRunCommand {
     workItemId?: string;
   };
   reportWorkspaceStatus?: boolean;
+  reportExecutionStarted?: boolean;
   workspacePath?: string;
   /** Missing means node-root for compatibility with commands from older backends. */
   workspaceLayout?: DaemonWorkspaceLayout;
@@ -255,6 +256,14 @@ export type DaemonWorkspaceErrorCode = "invalid-path" | "not-found" | "is-direct
 export type DaemonNodeCommand = DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand;
 
 export type DaemonNodeEvent =
+  | {
+      type: "run.executing";
+      commandId: string;
+      leaseId?: string;
+      sessionId: string;
+      runId: string;
+      agent: AgentName;
+    }
   | {
       type: "run.workspace";
       commandId: string;

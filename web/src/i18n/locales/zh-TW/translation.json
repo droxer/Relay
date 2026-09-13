@@ -252,6 +252,12 @@
     "reject_confirm_message": "將把本輪標記為已拒絕，Agent 不會自動重跑。"
   },
   "handoff": {
+    "status_accepted": "已接受移交給 {{agent}}",
+    "status_queued": "正在等待 {{agent}} 執行",
+    "status_running": "{{agent}} 正在執行",
+    "status_completed": "{{agent}} 已完成移交工作",
+    "status_failed": "移交給 {{agent}} 失敗",
+    "status_cancelled": "已取消移交給 {{agent}}",
     "title": "轉交此回合",
     "route_to": "路由至",
     "note_label": "備註",

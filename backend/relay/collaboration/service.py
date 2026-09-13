@@ -28,6 +28,7 @@ from ..services.team_dispatch import (
 )
 from ..sessions.bridge import latest_user_turn_text
 from ..sessions.controller import SessionController
+from ..sessions.handoff_context import capture_handoff_context
 from .models import (
     CollaborationIdempotencyError,
     MessageIntent,
@@ -441,6 +442,11 @@ class CollaborationConductor:
             collaboration_id=collaboration_id,
             round_id=round_id,
         )
+        if session and intent.decision and intent.decision.get("kind") == "handoff":
+            manifest["handoffContext"] = capture_handoff_context(
+                session, resolved[0], intent.decision.get("note"), self.ctx.session_store
+            )
+            manifest["handoffContext"]["decisionId"] = f"dec_{round_id}"
         parsed: dict[str, Any] = {
             "taskGoal": task_goal,
             "assignments": resolved,
