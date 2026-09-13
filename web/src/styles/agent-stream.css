@@ -83,9 +83,13 @@
 .agent-text {
   color: var(--ink-1);
   font-family: var(--font-sans);
-  /* body-sm metrics, prose leading — shared with the user bubble so both
-     voices in the transcript read at the same rhythm. */
-  font-size: var(--fs-3);
+  /* The body rung, prose leading — shared with the user bubble so both voices
+     in the transcript read at the same rhythm. This is the surface the product
+     is actually read on, so it takes --fs-4 (the ladder's primary reading
+     size); it sat on the 14px dense-prose rung with a comment naming a tier
+     (body-sm, 13px) it was never on. The reasoning tier below stays --fs-3 and
+     keeps its one-step-quieter relationship to the answer. */
+  font-size: var(--fs-4);
   line-height: var(--leading-prose);
 }
 

@@ -311,7 +311,7 @@
   color: var(--ink-3);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
-  line-height: 20px;
+  line-height: var(--leading-snug);
 }
 
 .backlog-routine-origin-name {

@@ -273,7 +273,7 @@
   height: var(--avatar-xs);
   border-radius: var(--r-full);
   font-size: var(--fs-1);
-  font-weight: 700;
+  font-weight: 500;
   line-height: var(--leading-none);
   color: var(--ink-1);
   background: var(--surface-2);

@@ -359,8 +359,7 @@
 .workspace-dossier-name-value {
   margin: 0;
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  font-weight: 500;
+  font: var(--type-label);
   letter-spacing: var(--type-body-sm-track);
 }
 

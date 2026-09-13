@@ -99,7 +99,6 @@
 .workspace-path-segment.is-current {
   color: var(--ink-1);
   cursor: default;
-  font-weight: 700;
 }
 
 .workspace-home-status {

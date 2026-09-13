@@ -236,9 +236,8 @@
   overflow: hidden;
   gap: var(--sp-1-5);
   color: var(--ink-3);
-  font: var(--type-label);
-  font-size: var(--fs-1); /* compact metadata rung — 12px under a 13px name */
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
@@ -260,8 +259,7 @@
      compact-metadata rung as the computer names beside it. Mono is kept
      deliberately (a runtime is a technical identifier) with its paired
      --type-code-track. */
-  font: var(--type-label);
-  font-size: var(--fs-1);
+  font: var(--type-meta);
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
 }

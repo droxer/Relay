@@ -207,9 +207,8 @@
 .project-folder-count {
   margin-left: auto;
   color: var(--ink-4);
-  font: var(--type-label);
-  font-size: var(--fs-1); /* compact metadata rung */
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .project-folder-toggle {
@@ -426,9 +425,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--ink-3);
-  font: var(--type-label);
-  font-size: var(--fs-1); /* compact metadata rung — 12px under a 13px title */
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
@@ -600,9 +598,8 @@
 .conversation-stamp {
   flex-shrink: 0;
   color: var(--ink-3);
-  font: var(--type-label);
-  font-size: var(--fs-1); /* compact metadata rung, same as the meta line */
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .conversation-row[data-selected="true"] .conversation-stamp {

@@ -130,7 +130,6 @@
 .pref-nav-item.active {
   background: var(--surface-1);
   color: var(--ink-1);
-  font-weight: 700;
 }
 
 .pref-nav-item.active::before {
@@ -246,10 +245,6 @@
   line-height: var(--leading-snug);
 }
 
-.pref-option-row.selected .pref-option-label {
-  font-weight: 700;
-}
-
 .pref-option-check {
   flex-shrink: 0;
   display: flex;
@@ -326,7 +321,7 @@
   background: var(--control-fill);
   font-family: var(--font-mono);
   font-size: var(--fs-1);
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: var(--track-caps);
   color: var(--ink-1);
 }

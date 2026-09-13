@@ -185,9 +185,8 @@
 .teams-list-sub {
   overflow: hidden;
   color: var(--ink-3);
-  font: var(--type-label);
-  font-size: var(--fs-1); /* compact metadata rung — 12px under a 13px title */
-  letter-spacing: var(--type-label-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

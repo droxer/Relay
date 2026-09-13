@@ -126,7 +126,6 @@
 .relay-empty-hint {
   margin: var(--sp-1) 0 0;
   font: var(--type-label);
-  font-weight: 500;
   letter-spacing: var(--type-label-track);
   color: var(--ink-3);
 }
