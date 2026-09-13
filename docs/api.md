@@ -131,12 +131,28 @@ Pause admissions during deployment. If duplicate active owners already exist,
 the migration stops without modifying runs; resolve them through normal lifecycle
 operations and confirm writers have stopped before retrying. The constraint
 releases when the request becomes terminal, and prevents stale requests from
-reactivating over a replacement. It is not proof that a cancelled process exited;
-task revision tokens and stronger process fencing remain separate work.
+reactivating over an active replacement. It is not proof that a cancelled process
+exited; stronger process fencing remains separate work.
 Pre-delivery cancellation and terminal-session cleanup retain the reservation
 when the current command has already been delivered, even if its lease expired.
 Cancellation intent alone therefore does not release that delivered reservation;
 daemon terminal-event handling remains a separate lifecycle step.
+
+New task execution requests also claim a monotonic task revision through
+`task.execution.claimed`. Task records expose `executionOwner: { requestId,
+revision }`; completion does not erase it. Task-scoped recovery captures
+`sourceTaskRevision` in its frozen manifest. A superseded generation returns 409
+`collaboration_conflict` with `task_ownership_changed`, including on idempotent
+replay. Submit a new recovery after inspecting the current task.
+
+Daemon-originated task status, activity, round/continuation, and workspace-wait
+writes check that owner inside the task write transaction. Stale writes append
+no task event; stale redispatch is refused even after a replacement finishes.
+Prepared legacy requests use revision zero and cannot write over a versioned
+owner. These are control-plane write fences, not filesystem/process leases or
+restrictions on deliberate human edits. Upgrade all backend replicas together:
+older backends do not enforce this guard. No additional schema migration is
+needed for the ownership event and projection.
 
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and

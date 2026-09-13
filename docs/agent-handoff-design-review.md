@@ -159,9 +159,20 @@ Callers still send `run.cancel`; terminal-event processing remains responsible
 for finalization. This does not turn timeout or cancellation intent into proof
 of physical process exit.
 
-Task-wide revision tokens and stronger termination/fencing guarantees for
-mixed-version or external writers remain pending. The local workspace gate is
-not an OS sandbox and cannot stop an unrelated process that ignores it.
+Task execution now has an event-backed monotonic revision independent of active
+reservation lifetime. Recovery freezes the source task revision; prepared replay
+reuses its claim, and expired admission retains the original generation. Runtime
+task status, activity, round/continuation, and workspace-wait writes check the
+request/revision inside the task append transaction. Replaced requests cannot
+redispatch or rewrite task results after their replacement finishes. Legacy
+snapshot projections cannot reset ownership because the fence reads authoritative
+events. See `docs/testing/task-execution-revisions.tdd.md`.
+
+Stronger termination/crash-recovery guarantees remain pending. The local
+workspace gate is not an OS sandbox and cannot stop an unrelated process that
+ignores it. All backend replicas must be upgraded: older writers do not enforce
+the new task guard. Human edits and dispatch bookkeeping retain their separate
+control-plane semantics; these runtime fences do not revoke API credentials.
 
 - Existing web recovery callers already use logical-agent `/recoveries`. The
   repository caller inventory found no active chat/core client calling the
