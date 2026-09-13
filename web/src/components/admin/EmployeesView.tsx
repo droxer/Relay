@@ -198,7 +198,9 @@ export function EmployeesView({
           {FILTERS.map((id) => {
             const active = filter === id;
             return (
-              <Button variant="ghost"
+              <Button
+                variant="outline"
+                size="dense"
                 key={id}
                 type="button"
                 className="adm-fleet-chip"

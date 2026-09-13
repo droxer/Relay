@@ -316,20 +316,21 @@
   color: var(--ink-4);
 }
 
+/* Chip geometry (inline-flex, --sp-1 gap, --sp-0-5/--sp-2 pad, the --line-1
+   hairline, --r-2, overflow) is the neutral Badge variant's — it was restated
+   here declaration for declaration. This badge departs from the variant in
+   three ways it needs: it sits on --surface-1 rather than the raised step, it
+   may shrink (`max-width: 100%` against the variant's `w-fit`), and it carries
+   the reading tier rather than micro caps, because a node name is identity
+   text that has to stay legible at a glance. */
 .agent-placement-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  padding: var(--sp-0-5) var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
   background: var(--surface-1);
   color: var(--ink-3);
   font-size: var(--fs-2);
+  font-weight: 400;
   line-height: var(--leading-snug);
+  letter-spacing: var(--track-0);
 }
 
 .agent-placement-badge > svg {

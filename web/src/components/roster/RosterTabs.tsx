@@ -20,7 +20,15 @@ export type RosterTab<Id extends string> = {
  *
  * The strip is chrome, not options, so it renders through `SelectContent`'s
  * `header` slot: inside the popup, outside `Select.List` (the `role="listbox"`,
- * which may only contain options). That also decides the keyboard contract —
+ * which may only contain options).
+ *
+ * It is a RADIOGROUP, not a tablist. The two look alike and a tab is the
+ * wrong one: a `role="tab"` owes a `role="tabpanel"` it controls, and there is
+ * no panel here — switching a roster reloads the listbox below, which is not a
+ * panel and already has its own role. What the strip actually offers is one
+ * choice out of several, which is what a radiogroup says.
+ *
+ * The role choice also decides the keyboard contract —
  * focus stays inside the popup, so the tabs are not in the tab order and
  * ←/→ switch rosters while ↑/↓ walk the active one. Capture phase,
  * because the listbox's composite handler claims arrow keys first.
@@ -38,7 +46,7 @@ export function useRosterTabs<Id extends string>({
   /** The roster the current value belongs to — the popup opens there, so the
    *  checked row is the one on screen. */
   activeTab: Id;
-  /** Names the tablist for assistive tech. */
+  /** Names the roster group for assistive tech. */
   label: string;
 }): {
   tab: Id;
@@ -94,14 +102,14 @@ export function useRosterTabs<Id extends string>({
     onKeyDownCapture,
     resetTab: () => setTab(activeTab),
     header: tabbed ? (
-      <div className="roster-tabs" role="tablist" aria-label={label}>
+      <div className="roster-tabs" role="radiogroup" aria-label={label}>
         {tabs.map((entry) => (
           <button
             key={entry.id}
             type="button"
-            role="tab"
+            role="radio"
             tabIndex={-1}
-            aria-selected={current === entry.id}
+            aria-checked={current === entry.id}
             className="roster-tab"
             // Keep focus inside the popup until switchTab transfers it.
             onMouseDown={(event) => event.preventDefault()}

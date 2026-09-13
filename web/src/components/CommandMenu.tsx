@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { filterCommands, type CommandGroup, type CommandId, type CommandItem } from "@/lib/commandMenu";
 import {
   ActionSearch,
   ICON,
 } from "./icons";
-import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup as CommandGroupPart,
+  CommandGroupLabel,
+  CommandInput,
+  CommandItem as CommandItemPart,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogBackdrop,
@@ -17,8 +25,15 @@ import {
 } from "@/components/ui/dialog";
 
 /* ⌘K command palette — Linear-style. A thin renderer over lib/commandMenu.ts:
-   the catalogue and ranking live there; this owns focus, key handling, and
-   the combobox ARIA contract. */
+   the catalogue and ranking live there, the Dialog owns focus and the scrim,
+   and the Combobox owns the listbox contract.
+
+   What this file no longer does, because the primitive does it: the roving
+   highlight and its wraparound, Home/End, `aria-activedescendant`, the
+   `aria-controls`/`aria-expanded` pair, the option roles, and the
+   scroll-the-highlight-into-view effect. Those were ~50 lines of correct but
+   generic code; what is left below is the parts that are actually about
+   commands — the ranking call, and the group headers. */
 
 const GROUP_LABEL_KEYS: Record<CommandGroup, string> = {
   navigate: "command.group_navigate",
@@ -39,83 +54,24 @@ export function CommandMenu({
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
 
   const visible = useMemo(() => filterCommands(commands, query), [commands, query]);
 
-  // Only the query state is ours now: focus, the scroll lock, and focus
-  // restore on close come from the Dialog primitive, which also gives the
-  // palette the Tab trap it never had.
-  useEffect(() => {
-    if (!open) return;
-    setQuery("");
-    setActiveIndex(0);
-  }, [open]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
-
-  // Keep the active option in view during keyboard cycling.
-  useEffect(() => {
-    if (!open) return;
-    listRef.current
-      ?.querySelector(`[data-command-index="${activeIndex}"]`)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, open]);
-
-  /* No early return on `!open`: the Dialog renders nothing while closed and,
-     more importantly, keeps the panel mounted through its exit animation. */
-
-  function runAt(index: number) {
-    const command = visible[index];
-    if (!command) return;
-    onClose();
-    onRun(command.id);
-  }
-
-  function handleKeyDown(event: ReactKeyboardEvent) {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      if (visible.length === 0) return;
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) => (current + direction + visible.length) % visible.length);
-      return;
+  /* Group headers divide the flat RANKED list without disturbing its order: a
+     group opens where the group changes between adjacent items, so a command
+     that ranks first still appears first even if its group does not. That is
+     why this builds runs out of the ordered list rather than bucketing by
+     group — bucketing would sort the ranking away. */
+  const groups = useMemo(() => {
+    const out: { group: CommandGroup; items: CommandItem[] }[] = [];
+    for (const command of visible) {
+      const last = out[out.length - 1];
+      if (last && last.group === command.group) last.items.push(command);
+      else out.push({ group: command.group, items: [command] });
     }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      runAt(activeIndex);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key === "Home") {
-      event.preventDefault();
-      setActiveIndex(0);
-      return;
-    }
-    if (event.key === "End") {
-      event.preventDefault();
-      setActiveIndex(Math.max(0, visible.length - 1));
-    }
-  }
-
-  // Group headers divide the flat ranked list without disturbing its order:
-  // a header renders where the group changes between adjacent items.
-  const rows: ({ kind: "header"; group: CommandGroup } | { kind: "item"; command: CommandItem; index: number })[] = [];
-  let lastGroup: CommandGroup | null = null;
-  visible.forEach((command, index) => {
-    if (command.group !== lastGroup) {
-      rows.push({ kind: "header", group: command.group });
-      lastGroup = command.group;
-    }
-    rows.push({ kind: "item", command, index });
-  });
+    return out;
+  }, [visible]);
 
   return (
     <Dialog
@@ -132,53 +88,66 @@ export function CommandMenu({
             initialFocus={inputRef}
             aria-label={t("command.title")}
           >
-            <div className="command-input-row">
-              <ActionSearch size={ICON.sm} aria-hidden="true" />
-              <Input
-                ref={inputRef}
-                className="command-input"
-                name="command-query"
-                autoComplete="off"
-                spellCheck={false}
-                role="combobox"
-                aria-expanded="true"
-                aria-controls="command-list"
-                aria-activedescendant={visible[activeIndex] ? `command-option-${visible[activeIndex].id}` : undefined}
-                aria-label={t("command.title")}
-                placeholder={t("command.placeholder")}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-            {visible.length === 0 ? (
-              <p className="command-empty" role="status">{t("command.empty")}</p>
-            ) : (
-              <ul className="command-list" id="command-list" role="listbox" ref={listRef} aria-label={t("command.title")}>
-                {rows.map((row, i) => row.kind === "header" ? (
-                  <li key={`header-${row.group}-${i}`} className="command-group-label" role="presentation">
-                    {t(GROUP_LABEL_KEYS[row.group])}
-                  </li>
-                ) : (
-                  <li
-                    key={row.command.id}
-                    id={`command-option-${row.command.id}`}
-                    className="command-item"
-                    role="option"
-                    aria-selected={row.index === activeIndex}
-                    data-active={row.index === activeIndex ? "true" : undefined}
-                    data-command-index={row.index}
-                    onMouseMove={() => setActiveIndex(row.index)}
-                    onClick={() => runAt(row.index)}
-                  >
-                    <span className="command-item-label">{row.command.label}</span>
-                    {row.command.hint ? (
-                      <kbd className="command-kbd" aria-hidden="true">{row.command.hint}</kbd>
-                    ) : null}
-                  </li>
+            {/* `value` is never held: picking a command runs it and closes the
+                palette, so there is no selection to keep. The item value is
+                the command id, which is what `onValueChange` hands back. */}
+            <Command<CommandId | null>
+              items={groups}
+              value={null}
+              onValueChange={(id) => {
+                if (!id) return;
+                onClose();
+                onRun(id);
+              }}
+              inputValue={query}
+              onInputValueChange={setQuery}
+              /* Escape (and an outside press) should dismiss the whole
+                 surface, not just the list — the list IS the surface here.
+                 Picking an item is excluded because `onValueChange` above has
+                 already closed: without the guard a keyboard run closes the
+                 palette twice, once per path. */
+              onOpenChange={(next, details) => {
+                if (next || details.reason === "item-press") return;
+                onClose();
+              }}
+            >
+              <div className="command-input-row">
+                <ActionSearch size={ICON.sm} aria-hidden="true" />
+                <CommandInput
+                  ref={inputRef}
+                  className="command-input"
+                  name="command-query"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label={t("command.title")}
+                  placeholder={t("command.placeholder")}
+                />
+              </div>
+              <CommandEmpty className="command-empty">
+                {visible.length === 0 ? t("command.empty") : null}
+              </CommandEmpty>
+              <CommandList className="command-list">
+                {groups.map((group, i) => (
+                  <CommandGroupPart key={`${group.group}-${i}`} items={group.items}>
+                    <CommandGroupLabel className="command-group-label">
+                      {t(GROUP_LABEL_KEYS[group.group])}
+                    </CommandGroupLabel>
+                    {group.items.map((command) => (
+                      <CommandItemPart
+                        key={command.id}
+                        value={command.id}
+                        className="command-item"
+                      >
+                        <span className="command-item-label">{command.label}</span>
+                        {command.hint ? (
+                          <kbd className="command-kbd" aria-hidden="true">{command.hint}</kbd>
+                        ) : null}
+                      </CommandItemPart>
+                    ))}
+                  </CommandGroupPart>
                 ))}
-              </ul>
-            )}
+              </CommandList>
+            </Command>
             <div className="command-footer" aria-hidden="true">
               <span className="command-footer-hint"><kbd className="command-kbd">↑↓</kbd> {t("command.hint_navigate")}</span>
               <span className="command-footer-hint"><kbd className="command-kbd">↵</kbd> {t("command.hint_run")}</span>

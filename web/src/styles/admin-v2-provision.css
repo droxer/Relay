@@ -457,23 +457,16 @@
    Painted in the cobalt action, so call sites pair it with variant="default" — the variant
    prop names the rendered plate; this class only shrinks the geometry and
    adds the `.copied` success state. */
-.adm-copy-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  height: var(--control-h-xs);
-  padding: 0 var(--sp-3);
-  border: 0.5px solid transparent;
-  border-radius: var(--r-2);
-  background: var(--action);
-  color: var(--on-action);
-  font: var(--type-label-strong);
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-  flex-shrink: 0;
-}
+/* Nothing here paints the plate any more. `variant="default"` is the cobalt
+   fill with --on-action ink, `size="dense"` is the --control-h-xs height and
+   the --r-2 corner, and the variant's own `hover:bg-primary-active` is the
+   hover this rule used to restate as --action-hover. All of it was written
+   twice, and the class won by layer order — so the variant prop at the call
+   site described a button the reader never saw.
 
-.adm-copy-pill:hover { background: var(--action-hover); }
+   What survives is the CONFIRMED state, which no variant expresses: the
+   button inverts to a neutral plate with the --ok tone once the value is on
+   the clipboard. */
 .adm-copy-pill.copied {
   --tone: var(--ok);
   background: var(--surface-0);

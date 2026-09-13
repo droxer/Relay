@@ -14,7 +14,8 @@ import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete";
 import { parseMentions, replaceAddressRun, type MentionCandidate } from "../../lib/mentions";
 import { MentionHighlight } from "./MentionHighlight";
 import { Button } from "@/components/ui/button";
-import { MENTION_LIST_ID, MentionPopup, mentionOptionId } from "./MentionPopup";
+import { MentionPopup } from "./MentionPopup";
+import { CommandInput } from "@/components/ui/command";
 import { ThreadRuntimeReadout, ThreadRuntimeSelect } from "./ThreadRuntimeSelect";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -225,12 +226,7 @@ const ComposerView = forwardRef<ComposerHandle, {
       </div>
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
-          <MentionPopup
-            matches={mentions.matches}
-            activeIndex={mentions.activeIndex}
-            onHover={mentions.setActiveIndex}
-            onPick={mentions.pick}
-          />
+          <MentionPopup matches={mentions.matches} onPick={mentions.pick}>
           {/* The mirror sits under the textarea inside a positioned wrapper so
               the pills track the text through resize and scroll. */}
           <div className="composer-textarea-wrap">
@@ -242,23 +238,26 @@ const ComposerView = forwardRef<ComposerHandle, {
                 rather than the primitive's defaults. Going through the
                 primitive anyway keeps every multi-line field in the app one
                 component, and lets the CSS stop reaching through a tag name. */}
-            <Textarea
-              ref={textareaRef}
+            {/* The composer textarea IS the combobox input while `@` is open.
+                `Combobox.Input` renders an <input> by default, so the Textarea
+                comes in through `render` — and `type` is cleared because the
+                primitive sets `type="text"`, which is not a valid attribute on
+                a <textarea>.
+
+                The conditional ARIA this used to write by hand is gone and not
+                missed: base-ui applies `role="combobox"`, `aria-expanded`,
+                `aria-controls`, `aria-autocomplete` and `aria-activedescendant`
+                only while the list is open, so a composer with no `@` in
+                flight still announces as the plain multi-line field it is. */}
+            <CommandInput
+              render={<Textarea ref={textareaRef} rows={1} /> as never}
+              type={undefined}
               className="composer-textarea"
               aria-label={selectedEmployee
                 ? t("composer.aria_label", { employee: selectedEmployee, agent: activeAgentDisplayName })
                 : t("composer.aria_label_no_employee", { agent: activeAgentDisplayName })}
               autoComplete="off"
               disabled={readOnly}
-              // While `@` is open the textarea drives the list from the
-              // keyboard, so a screen reader has to hear the moving highlight.
-              role={mentions.matches.length > 0 ? "combobox" : undefined}
-              aria-expanded={mentions.matches.length > 0 || undefined}
-              aria-controls={mentions.matches.length > 0 ? MENTION_LIST_ID : undefined}
-              aria-autocomplete={mentions.matches.length > 0 ? "list" : undefined}
-              aria-activedescendant={mentions.matches.length > 0
-                ? mentionOptionId(mentions.matches[mentions.activeIndex].id)
-                : undefined}
               name="message"
               placeholder={selectedEmployee
                 ? t("composer.placeholder")
@@ -284,9 +283,9 @@ const ComposerView = forwardRef<ComposerHandle, {
                 // follow or the pills detach from their names.
                 if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop;
               }}
-              rows={1}
             />
           </div>
+          </MentionPopup>
           <div className="composer-footer">
             {/* One mounted element for send↔stop so keyboard focus survives
                 the run starting; the glyph cross-fades instead. */}

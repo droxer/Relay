@@ -165,111 +165,44 @@
   align-items: stretch;
 }
 
+/* Menu SHELL (surface, border, radius, shadow, float layer, entry animation)
+   now comes from DropdownMenuContent — it was declared identically here and
+   again for `.sidenav-more-menu`, which is two drawings of one object. What is
+   left is the rail's own sizing and the menu label's type tier.
+
+   The item's paint is the DropdownMenuItem variant's: the neutral row washes
+   with `--accent` on highlight, and Sign out takes the `danger` modifier, so
+   the local `.danger { color: --err }` that restated the destructive grammar
+   hue-only — and therefore vanished under forced-colors — is gone. `font`
+   stays: the menu label is deliberately the 500 tier, not the 700 button
+   label. */
 .sidenav-settings-menu {
-  position: fixed;
   min-width: 188px;
-  padding: var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
-  box-shadow: var(--shadow-2);
-  transform: translateY(-100%);
-  z-index: var(--z-float);
-  animation: settings-menu-in var(--t-fast) var(--ease) both;
 }
 
-/* GEOMETRY + the menu's own type tier. Paint is the variant's: the neutral
-   item is `ghost` (whose hover wash is --control-fill-hover — translucent ink,
-   so it lifts on this portaled --surface-0 plane instead of the --surface-2
-   step that used to read as RECESSED in the light register), and Sign out is
-   `destructive`, which brings its red ink and ring with it.
-
-   The border/background/color that used to be declared here defeated both, by
-   layer order rather than specificity — and a local `.danger { color: --err }`
-   restated the destructive grammar hue-only, so the signal vanished under
-   forced-colors. `font` stays: the menu label is deliberately the 500 tier,
-   not the 700 button label. */
-.sidenav-settings-menu button {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  gap: var(--sp-3);
-  width: 100%;
+.sidenav-settings-menu [data-slot="dropdown-menu-item"] {
   min-height: var(--control-h-sm);
+  gap: var(--sp-3);
   padding: 0 var(--sp-3);
-
-  border-radius: var(--r-2);
   font: var(--type-label);
-  text-align: left;
-  cursor: pointer;
-}
-
-.sidenav-settings-menu svg {
-  flex-shrink: 0;
 }
 
 /* Mobile-only More overflow (Channels / Admin): hidden on desktop where
    those destinations stay as primary rail items. The hide rule lives at the
-   end of this file so it outranks every `.sidenav-btn` display rule above. */
+   end of this file so it outranks every `.sidenav-btn` display rule above.
+
+   Rows are `--touch-target` tall rather than the settings menu's
+   `--control-h-sm`: this menu only ever opens from the mobile tab bar. */
 
 .sidenav-more-menu {
-  position: fixed;
   min-width: 188px;
-  padding: var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
-  box-shadow: var(--shadow-2);
-  transform: translateY(-100%);
-  z-index: var(--z-float);
-  animation: settings-menu-in var(--t-fast) var(--ease) both;
 }
 
-.sidenav-more-item {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  width: 100%;
+.sidenav-more-menu [data-slot="dropdown-menu-link-item"] {
   min-height: var(--touch-target);
+  gap: var(--sp-3);
   padding: 0 var(--sp-3);
-  border: 0.5px solid transparent;
-  border-radius: var(--r-1);
-  background: transparent;
-  color: var(--ink-1);
   font: var(--type-label);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-/* Hover and active share the neutral wash; active then overrides it with the
-   action wash below. A group rule plus a narrower override — not a duplicate
-   selector, and not a dead declaration. */
-.sidenav-more-item:hover,
-.sidenav-more-item.active {
-  background: var(--surface-2);
-  border-color: var(--line-2);
-}
-
-.sidenav-more-item.active {
-  background: var(--action-soft);
-  border-color: var(--line-strong);
-}
-
-
-.sidenav-more-item svg {
-  flex-shrink: 0;
-}
-
-@keyframes settings-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(calc(-100% + 4px));
-  }
-  to {
-    opacity: 1;
-    transform: translateY(-100%);
-  }
 }
 
 /* A nav button is a CONTROL, not a container: --r-2 puts it on the same
@@ -443,12 +376,12 @@
    pill trailing the item inside the mobile More overflow. Decorative only —
    the state also rides on the link's aria-label and collapsed tooltip. */
 .sidenav-btn[aria-disabled="true"],
-.sidenav-more-item[aria-disabled="true"] {
+[data-slot="dropdown-menu-link-item"][aria-disabled="true"] {
   cursor: default;
 }
 
 .sidenav-btn[aria-disabled="true"]:hover,
-.sidenav-more-item[aria-disabled="true"]:hover {
+[data-slot="dropdown-menu-link-item"][aria-disabled="true"]:hover {
   background: transparent;
   border-color: transparent;
   color: var(--ink-3);

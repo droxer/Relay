@@ -10,6 +10,7 @@ import {
   type AgentPlacementDescription,
 } from "../lib/agentPlacements";
 import { ICON, nodeOwnershipIcon } from "./icons";
+import { Badge } from "@/components/ui/badge";
 
 export function AgentPlacementBadge({
   description,
@@ -34,7 +35,7 @@ export function AgentPlacementBadge({
 
   return (
     <Tooltip content={detailTitle}>
-      <span
+      <Badge
         className="agent-placement-badge code"
         data-ownership={description.ownership}
       >
@@ -48,7 +49,7 @@ export function AgentPlacementBadge({
         {showsSandbox ? (
           <span className="agent-placement-badge-sandbox code">{sandboxLabel}</span>
         ) : null}
-      </span>
+      </Badge>
     </Tooltip>
   );
 }

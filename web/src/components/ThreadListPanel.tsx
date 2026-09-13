@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StateMark } from "./StateMark";
 import {
@@ -9,6 +9,7 @@ import {
   WorkspaceFolder,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
+import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { ThreadRow, type ThreadItem } from "./ThreadRow";
 import { groupThreads } from "../lib/threadGroups";
@@ -37,8 +38,6 @@ import type { ProjectCollectionStatus } from "../lib/projectPage";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
-
-const KEYBOARD_RESIZE_STEP = 16;
 
 /** The chat column, measured to work out how much width the list may still
  *  take. Read straight from the DOM rather than threaded down as a prop: the
@@ -110,57 +109,9 @@ export function ThreadListPanel({
     writeProjectExpansion(next);
   }, []);
 
-  // A drag registers listeners outside React; this releases them if the panel
-  // unmounts mid-gesture, which would otherwise leak the listeners and strand
-  // the shell in its resizing state.
-  const releaseDragRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => releaseDragRef.current?.(), []);
-
-  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const startX = event.clientX;
-    // Ceiling fixed at gesture start: the chat column shrinks as the drag
-    // proceeds, so re-measuring per move would let the list walk past it.
-    const max = maxThreadListWidth(width, chatWidth());
-    handle.setPointerCapture(event.pointerId);
-    onResizeActive(true);
-
-    // The list sits left of the chat column, so dragging right (positive
-    // delta) grows it — the mirror of the space panel's leftward drag.
-    const widthAt = (clientX: number) => clampThreadListWidth(width + (clientX - startX), max);
-    const move = (moveEvent: PointerEvent) => onResize(widthAt(moveEvent.clientX), false);
-    const finish = (finalX: number | null) => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
-      handle.removeEventListener("pointercancel", cancel);
-      releaseDragRef.current = null;
-      if (finalX !== null) onResize(widthAt(finalX), true);
-      onResizeActive(false);
-    };
-    const up = (upEvent: PointerEvent) => finish(upEvent.clientX);
-    // A cancelled gesture (system takeover, touch interruption) never fires
-    // pointerup — without this the shell keeps its resizing state forever.
-    const cancel = () => finish(null);
-
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", cancel);
-    releaseDragRef.current = () => finish(null);
-  }, [onResize, onResizeActive, width]);
-
-  const resizeByKeyboard = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    const max = maxThreadListWidth(width, chatWidth());
-    if (event.key === "Home") {
-      event.preventDefault();
-      onResize(clampThreadListWidth(THREAD_LIST_WIDTH_DEFAULT, max), true);
-      return;
-    }
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const delta = event.key === "ArrowRight" ? KEYBOARD_RESIZE_STEP : -KEYBOARD_RESIZE_STEP;
-    onResize(clampThreadListWidth(width + delta, max), true);
-  }, [onResize, width]);
+  /* Ceiling measured against the live chat column — read once per gesture and
+     once per key press, never per pointer move. */
+  const listCeiling = useCallback(() => maxThreadListWidth(width, chatWidth()), [width]);
 
   // Anything that narrows the chat column while the list is at a custom width
   // can push it under its floor — a narrowed window, but equally an expanding
@@ -414,17 +365,20 @@ export function ThreadListPanel({
         ) : null}
       </section>
       </div>
-      <div
+      <ResizeHandle
         className="thread-panel-resize"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t("thread.resize_label")}
-        aria-valuenow={width}
-        aria-valuemin={THREAD_LIST_WIDTH_MIN}
-        aria-valuemax={THREAD_LIST_WIDTH_MAX}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onKeyDown={resizeByKeyboard}
+        label={t("thread.resize_label")}
+        width={width}
+        min={THREAD_LIST_WIDTH_MIN}
+        max={THREAD_LIST_WIDTH_MAX}
+        defaultWidth={THREAD_LIST_WIDTH_DEFAULT}
+        /* The list sits left of the chat column, so dragging right grows it —
+           the mirror of the space panel's leftward drag. */
+        grows="inline-end"
+        clamp={clampThreadListWidth}
+        ceiling={listCeiling}
+        onResize={onResize}
+        onResizeActive={onResizeActive}
       />
     </aside>
   );

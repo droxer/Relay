@@ -1,6 +1,8 @@
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { formatRelativeTime, isNodeOnline } from "../../lib/adminHelpers";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface NodePresenceProps {
   node: ControlPanelDaemonNodeRecord;
@@ -27,14 +29,10 @@ export function NodePresence({ node, t, className, withLabel = false }: NodePres
   const dataOnline = online ? "true" : "false";
   if (withLabel) {
     return (
-      <span
-        className={`adm-presence-pill${className ? ` ${className}` : ""}`}
-        data-online={dataOnline}
-        title={title}
-      >
+      <Badge className={cn("adm-presence-pill", className)} data-online={dataOnline} title={title}>
         <span className="adm-presence" data-online={dataOnline} aria-hidden="true" />
         <span className="adm-presence-pill-label">{label}</span>
-      </span>
+      </Badge>
     );
   }
   return (

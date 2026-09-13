@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type ComponentType, type MouseEvent, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,16 +19,41 @@ import {
   NavThreads,
   WorkspaceFolder,
 } from "./icons";
+import type { LucideProps } from "lucide-react";
 import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { Button } from "@/components/ui/button";
+import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLinkItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { AppRoute } from "../lib/viewTypes";
 import {
   clampSidenavWidth, maxSidenavWidth, SIDENAV_WIDTH_DEFAULT, SIDENAV_WIDTH_MAX, SIDENAV_WIDTH_MIN,
 } from "../lib/sidenav";
 
-/** Keyboard resize step, matching the thread rail's separator. */
-const KEYBOARD_RESIZE_STEP = 16;
+/** Mobile-only More overflow: the destinations that do not fit the bottom tab
+ *  bar. A table rather than five repeated <a> blocks — the blocks differed
+ *  only in icon, label, and route, and the admin one only in being gated. */
+const MORE_ROUTES: readonly {
+  route: AppRoute;
+  /* `withStandardStroke` wrappers and bare lucide icons both appear in
+     icons.tsx and have different component types; this is the call shape they
+     share, which is all a table of icons needs. */
+  Icon: ComponentType<Pick<LucideProps, "size" | "className">>;
+  labelKey: string;
+  adminOnly?: boolean;
+}[] = [
+  { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
+  { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
+  { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
+  { route: "channels", Icon: NavChannels, labelKey: "nav.channels" },
+  { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
+];
 
 /** The chat column, measured to work out how much width the rail may still
  *  take. Read straight from the DOM rather than threaded down as a prop: the
@@ -59,100 +84,11 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   const { t } = useTranslation();
   const [navTooltip, setNavTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const tooltipSuppressRef = useRef<HTMLElement | null>(null);
-  const [preferencesMenu, setPreferencesMenu] = useState<{ x: number; y: number } | null>(null);
-  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
-  const preferencesButtonRef = useRef<HTMLButtonElement>(null);
-  const preferencesMenuRef = useRef<HTMLDivElement>(null);
-  const moreButtonRef = useRef<HTMLButtonElement>(null);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!preferencesMenu) return;
-
-    const firstMenuItem = preferencesMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
-    firstMenuItem?.focus();
-
-    function closeMenu(returnFocus: boolean) {
-      setPreferencesMenu(null);
-      if (returnFocus) preferencesButtonRef.current?.focus();
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (preferencesMenuRef.current?.contains(target) || preferencesButtonRef.current?.contains(target)) return;
-      closeMenu(false);
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeMenu(true);
-        return;
-      }
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      const items = Array.from(preferencesMenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
-      if (items.length === 0) return;
-      event.preventDefault();
-      const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      const nextIndex = currentIndex < 0
-        ? 0
-        : (currentIndex + direction + items.length) % items.length;
-      items[nextIndex].focus();
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [preferencesMenu]);
-
-  useEffect(() => {
-    if (!moreMenu) return;
-
-    const firstMenuItem = moreMenuRef.current?.querySelector<HTMLAnchorElement>('[role="menuitem"]');
-    firstMenuItem?.focus();
-
-    function closeMenu(returnFocus: boolean) {
-      setMoreMenu(null);
-      if (returnFocus) moreButtonRef.current?.focus();
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (moreMenuRef.current?.contains(target) || moreButtonRef.current?.contains(target)) return;
-      closeMenu(false);
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeMenu(true);
-        return;
-      }
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      const items = Array.from(moreMenuRef.current?.querySelectorAll<HTMLAnchorElement>('[role="menuitem"]') ?? []);
-      if (items.length === 0) return;
-      event.preventDefault();
-      const currentIndex = items.indexOf(document.activeElement as HTMLAnchorElement);
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      const nextIndex = currentIndex < 0
-        ? 0
-        : (currentIndex + direction + items.length) % items.length;
-      items[nextIndex].focus();
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [moreMenu]);
+  /* Open/closed only. The menus used to carry viewport coordinates because
+     they were positioned by hand; the Menu positioner anchors to the trigger
+     and handles flipping, so there is nothing left to store. */
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!navTooltip) return;
@@ -175,101 +111,38 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
     tooltipSuppressRef.current = null;
     setNavTooltip(null);
   }
-  function togglePreferencesMenu(el: HTMLElement) {
-    hideNavTooltip();
-    setMoreMenu(null);
-    setPreferencesMenu((current) => {
-      if (current) return null;
-      const rect = el.getBoundingClientRect();
-      // Collapsed: fly out to the right of the icon (like the nav tooltips).
-      // Expanded: the button is full-width, so align the menu to its left edge
-      // and rise above it — otherwise rect.right lands out in the main content
-      // area and the menu overlaps the page (e.g. the admin dashboard).
-      return sidenavExpanded
-        ? { x: rect.left, y: rect.top - 8 }
-        : { x: rect.right + 10, y: rect.top - 8 };
-    });
+  /* Only one rail menu at a time. Two Menu roots do not know about each other,
+     so the mutual close stays here — it is the one piece of this behaviour
+     that was ever app-specific. */
+  function onPreferencesOpenChange(open: boolean) {
+    if (open) {
+      hideNavTooltip();
+      setMoreOpen(false);
+    }
+    setPreferencesOpen(open);
   }
-  function toggleMoreMenu(el: HTMLElement) {
-    hideNavTooltip();
-    setPreferencesMenu(null);
-    setMoreMenu((current) => {
-      if (current) return null;
-      const rect = el.getBoundingClientRect();
-      // Mobile bottom tab: rise above the control, left-aligned to its plate
-      // but clamped so the 180px-min menu never clips the right viewport edge
-      // (More is the rightmost tab).
-      const menuWidth = 188;
-      const maxX = window.innerWidth - menuWidth - 8;
-      return { x: Math.max(8, Math.min(rect.left, maxX)), y: rect.top - 8 };
-    });
+  function onMoreOpenChange(open: boolean) {
+    if (open) {
+      hideNavTooltip();
+      setPreferencesOpen(false);
+    }
+    setMoreOpen(open);
   }
   function openPreferences() {
-    setPreferencesMenu(null);
     setPrefsOpen(true);
   }
   function handleLogout() {
-    setPreferencesMenu(null);
     onLogout();
   }
   function handleRouteClick(event: MouseEvent<HTMLAnchorElement>, nextRoute: AppRoute) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
     event.preventDefault();
-    setMoreMenu(null);
     onNavigateRoute(nextRoute);
   }
 
-  // A drag registers listeners outside React; this releases them if the rail
-  // unmounts mid-gesture, which would otherwise leak the listeners and strand
-  // the shell in its resizing state.
-  const releaseDragRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => releaseDragRef.current?.(), []);
-
-  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const startX = event.clientX;
-    // Ceiling fixed at gesture start: the chat column shrinks as the drag
-    // proceeds, so re-measuring per move would let the rail walk past it.
-    const max = maxSidenavWidth(width, chatWidth());
-    handle.setPointerCapture(event.pointerId);
-    onResizeActive(true);
-
-    // The rail is the leftmost track, so dragging right (positive delta)
-    // grows it — same orientation as the thread list.
-    const widthAt = (clientX: number) => clampSidenavWidth(width + (clientX - startX), max);
-    const move = (moveEvent: PointerEvent) => onResize(widthAt(moveEvent.clientX), false);
-    const finish = (finalX: number | null) => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
-      handle.removeEventListener("pointercancel", cancel);
-      releaseDragRef.current = null;
-      if (finalX !== null) onResize(widthAt(finalX), true);
-      onResizeActive(false);
-    };
-    const up = (upEvent: PointerEvent) => finish(upEvent.clientX);
-    // A cancelled gesture (system takeover, touch interruption) never fires
-    // pointerup — without this the shell keeps its resizing state forever.
-    const cancel = () => finish(null);
-
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", cancel);
-    releaseDragRef.current = () => finish(null);
-  }, [onResize, onResizeActive, width]);
-
-  const resizeByKeyboard = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    const max = maxSidenavWidth(width, chatWidth());
-    if (event.key === "Home") {
-      event.preventDefault();
-      onResize(clampSidenavWidth(SIDENAV_WIDTH_DEFAULT, max), true);
-      return;
-    }
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const delta = event.key === "ArrowRight" ? KEYBOARD_RESIZE_STEP : -KEYBOARD_RESIZE_STEP;
-    onResize(clampSidenavWidth(width + delta, max), true);
-  }, [onResize, width]);
+  /* Ceiling measured against the live chat column — read once per gesture and
+     once per key press, never per pointer move. */
+  const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatWidth()), [width]);
 
   const moreActive = ["routine", "teams", "computer", "channels", "admin"].includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
@@ -438,24 +311,48 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
               <span className="sidenav-label sr-only">{t("nav.admin")}</span>
             </a>
           ) : null}
-          <Button
-            ref={moreButtonRef}
-            type="button"
-            variant="ghost"
-            className={`sidenav-btn sidenav-more-btn ${moreActive || moreMenu ? "active" : ""}`}
-            data-nav="more"
-            aria-label={t("nav.more_label")}
-            aria-haspopup="menu"
-            aria-expanded={Boolean(moreMenu)}
-            onClick={(event) => toggleMoreMenu(event.currentTarget)}
-            onMouseEnter={(e) => showNavTooltip(t("nav.more"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.more"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavMore size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.more")}</span>
-          </Button>
+          <DropdownMenu open={moreOpen} onOpenChange={onMoreOpenChange}>
+            {/* aria-haspopup / aria-expanded come from the trigger now — the
+                pair used to be written by hand on both rail menus. */}
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={`sidenav-btn sidenav-more-btn ${moreActive || moreOpen ? "active" : ""}`}
+                  data-nav="more"
+                  aria-label={t("nav.more_label")}
+                  onMouseEnter={(e) => showNavTooltip(t("nav.more"), e.currentTarget)}
+                  onMouseLeave={hideNavTooltip}
+                  onFocus={(e) => showNavTooltip(t("nav.more"), e.currentTarget)}
+                  onBlur={hideNavTooltip}
+                >
+                  <NavMore size={ICON.lg} />
+                  <span className="sidenav-label sr-only">{t("nav.more")}</span>
+                </Button>
+              }
+            />
+            {/* Rises above the mobile tab bar. The old hand-clamped x (More is
+                the rightmost tab, so the menu had to be nudged off the right
+                edge by hand) is the positioner's `shift` now. */}
+            <DropdownMenuContent side="top" align="start" className="sidenav-more-menu">
+              {MORE_ROUTES.filter(({ adminOnly }) => !adminOnly || isAdmin).map(({ route: target, Icon, labelKey }) => (
+                <DropdownMenuLinkItem
+                  key={target}
+                  render={
+                    <a
+                      href={hrefForRoute(target)}
+                      aria-current={route === target ? "page" : undefined}
+                      onClick={(event: MouseEvent<HTMLAnchorElement>) => handleRouteClick(event, target)}
+                    />
+                  }
+                >
+                  <Icon size={ICON.md} />
+                  <span>{t(labelKey)}</span>
+                </DropdownMenuLinkItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </nav>
       <div className="sidenav-bottom">
@@ -495,110 +392,45 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           {sidenavExpanded ? <NavSidebarCollapse size={ICON.lg} /> : <NavSidebarExpand size={ICON.lg} />}
           <span className="sidenav-label sr-only">{sidenavExpanded ? t("nav.collapse") : t("nav.expand")}</span>
         </Button>
-        <Button
-          ref={preferencesButtonRef}
-          variant="ghost"
-          className={`sidenav-btn ${prefsOpen || preferencesMenu ? "active" : ""}`}
-          data-nav="settings"
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={Boolean(preferencesMenu)}
-          aria-label={t("nav.preferences")}
-          onClick={(event) => togglePreferencesMenu(event.currentTarget)}
-          onMouseEnter={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget)}
-          onMouseLeave={hideNavTooltip}
-          onFocus={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget)}
-          onBlur={hideNavTooltip}
-        >
-          <NavPreferences size={ICON.lg} />
-          <span className="sidenav-label sr-only">{t("nav.preferences")}</span>
-        </Button>
+        <DropdownMenu open={preferencesOpen} onOpenChange={onPreferencesOpenChange}>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                className={`sidenav-btn ${prefsOpen || preferencesOpen ? "active" : ""}`}
+                data-nav="settings"
+                type="button"
+                aria-label={t("nav.preferences")}
+                onMouseEnter={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget)}
+                onMouseLeave={hideNavTooltip}
+                onFocus={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget)}
+                onBlur={hideNavTooltip}
+              >
+                <NavPreferences size={ICON.lg} />
+                <span className="sidenav-label sr-only">{t("nav.preferences")}</span>
+              </Button>
+            }
+          />
+          {/* Collapsed: fly out to the right of the icon, like the nav
+              tooltips. Expanded: the trigger is full-width, so rise above it
+              — anchoring to the button's right edge would put the menu out in
+              the main content area. Both were hand-computed rectangles. */}
+          <DropdownMenuContent
+            side={sidenavExpanded ? "top" : "right"}
+            align={sidenavExpanded ? "start" : "end"}
+            className="sidenav-settings-menu"
+          >
+            <DropdownMenuItem onClick={openPreferences}>
+              <NavPreferences size={ICON.md} />
+              <span>{t("nav.preferences")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem danger onClick={handleLogout}>
+              <NavLogout size={ICON.md} />
+              <span>{t("nav.logout")}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      {/* Portaled to <body>: the mobile bottom bar is a horizontal scroll
-          container, so these viewport-coordinate overlays render against the
-          viewport instead of the panel. */}
-      {preferencesMenu ? createPortal(
-        <div
-          ref={preferencesMenuRef}
-          className="sidenav-settings-menu"
-          role="menu"
-          aria-label={t("nav.preferences")}
-          style={{ top: preferencesMenu.y, left: preferencesMenu.x }}
-        >
-          <Button type="button" variant="ghost" role="menuitem" onClick={openPreferences}>
-            <NavPreferences size={ICON.md} />
-            <span>{t("nav.preferences")}</span>
-          </Button>
-          <Button type="button" variant="destructive" role="menuitem" onClick={handleLogout}>
-            <NavLogout size={ICON.md} />
-            <span>{t("nav.logout")}</span>
-          </Button>
-        </div>,
-        document.body,
-      ) : null}
-      {moreMenu ? createPortal(
-        <div
-          ref={moreMenuRef}
-          className="sidenav-more-menu"
-          role="menu"
-          aria-label={t("nav.more_label")}
-          style={{ top: moreMenu.y, left: moreMenu.x }}
-        >
-          <a
-            className={`sidenav-more-item ${route === "routine" ? "active" : ""}`}
-            role="menuitem"
-            href={hrefForRoute("routine")}
-            aria-current={route === "routine" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "routine")}
-          >
-            <NavRoutine size={ICON.md} />
-            <span>{t("nav.routine")}</span>
-          </a>
-          <a
-            className={`sidenav-more-item ${route === "teams" ? "active" : ""}`}
-            role="menuitem"
-            href={hrefForRoute("teams")}
-            aria-current={route === "teams" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "teams")}
-          >
-            <NavTeams size={ICON.md} />
-            <span>{t("nav.teams")}</span>
-          </a>
-          <a
-            className={`sidenav-more-item ${route === "computer" ? "active" : ""}`}
-            role="menuitem"
-            href={hrefForRoute("computer")}
-            aria-current={route === "computer" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "computer")}
-          >
-            <NavComputer size={ICON.md} />
-            <span>{t("nav.computer")}</span>
-          </a>
-          <a
-            className={`sidenav-more-item ${route === "channels" ? "active" : ""}`}
-            role="menuitem"
-            href={hrefForRoute("channels")}
-            aria-current={route === "channels" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "channels")}
-          >
-            <NavChannels size={ICON.md} />
-            <span>{t("nav.channels")}</span>
-          </a>
-          {isAdmin ? (
-            <a
-              className={`sidenav-more-item ${route === "admin" ? "active" : ""}`}
-              role="menuitem"
-              href={hrefForRoute("admin")}
-              aria-current={route === "admin" ? "page" : undefined}
-              onClick={(event) => handleRouteClick(event, "admin")}
-            >
-              <NavAdmin size={ICON.md} />
-              <span>{t("nav.admin")}</span>
-            </a>
-          ) : null}
-        </div>,
-        document.body,
-      ) : null}
       {navTooltip ? createPortal(
         <div
           className="sidenav-tooltip"
@@ -614,17 +446,19 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           with the other separators (responsive.css), where the shell is
           single-column. */}
       {sidenavExpanded ? (
-        <div
+        <ResizeHandle
           className="sidenav-resize"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t("nav.resize_label")}
-          aria-valuenow={width}
-          aria-valuemin={SIDENAV_WIDTH_MIN}
-          aria-valuemax={SIDENAV_WIDTH_MAX}
-          tabIndex={0}
-          onPointerDown={startResize}
-          onKeyDown={resizeByKeyboard}
+          label={t("nav.resize_label")}
+          width={width}
+          min={SIDENAV_WIDTH_MIN}
+          max={SIDENAV_WIDTH_MAX}
+          defaultWidth={SIDENAV_WIDTH_DEFAULT}
+          /* The rail is the leftmost track, so dragging right grows it. */
+          grows="inline-end"
+          clamp={clampSidenavWidth}
+          ceiling={sidenavCeiling}
+          onResize={onResize}
+          onResizeActive={onResizeActive}
         />
       ) : null}
     </aside>

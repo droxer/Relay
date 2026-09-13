@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { artifactRenderMode } from "../../lib/artifactPreview";
 import {
@@ -34,9 +34,7 @@ import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
-
-
-const KEYBOARD_RESIZE_STEP = 16;
+import { ResizeHandle } from "@/components/ui/ResizeHandle";
 
 /** The chat column, measured to work out how much width the panel may still
  *  take. Read straight from the DOM rather than threaded down as a prop: the
@@ -103,55 +101,9 @@ export function ThreadSpacePanel({
   // word as the header pill that opened it.
   const panelName = projectId ? t("space.title_project") : t("space.title");
 
-  // A drag registers listeners outside React; this releases them if the panel
-  // unmounts (or the thread changes) mid-gesture, which would otherwise leak
-  // the listeners and strand the shell in its resizing state.
-  const releaseDragRef = useRef<(() => void) | null>(null);
-  useEffect(() => () => releaseDragRef.current?.(), []);
-
-  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const startX = event.clientX;
-    // Ceiling fixed at gesture start: the transcript shrinks as the drag
-    // proceeds, so re-measuring per move would let the panel walk past it.
-    const max = maxSpaceWidth(width, transcriptWidth());
-    handle.setPointerCapture(event.pointerId);
-    onResizeActive(true);
-
-    const widthAt = (clientX: number) => clampSpaceWidth(width + (startX - clientX), max);
-    const move = (moveEvent: PointerEvent) => onResize(widthAt(moveEvent.clientX), false);
-    const finish = (finalX: number | null) => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
-      handle.removeEventListener("pointercancel", cancel);
-      releaseDragRef.current = null;
-      if (finalX !== null) onResize(widthAt(finalX), true);
-      onResizeActive(false);
-    };
-    const up = (upEvent: PointerEvent) => finish(upEvent.clientX);
-    // A cancelled gesture (system takeover, touch interruption) never fires
-    // pointerup — without this the shell keeps `data-space-resizing` forever.
-    const cancel = () => finish(null);
-
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
-    handle.addEventListener("pointercancel", cancel);
-    releaseDragRef.current = () => finish(null);
-  }, [onResize, onResizeActive, width]);
-
-  const resizeByKeyboard = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    const max = maxSpaceWidth(width, transcriptWidth());
-    if (event.key === "Home") {
-      event.preventDefault();
-      onResize(clampSpaceWidth(SPACE_WIDTH_DEFAULT, max), true);
-      return;
-    }
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const delta = event.key === "ArrowLeft" ? KEYBOARD_RESIZE_STEP : -KEYBOARD_RESIZE_STEP;
-    onResize(clampSpaceWidth(width + delta, max), true);
-  }, [onResize, width]);
+  /* Ceiling measured against the live transcript — read once per gesture and
+     once per key press, never per pointer move. */
+  const spaceCeiling = useCallback(() => maxSpaceWidth(width, transcriptWidth()), [width]);
 
   // Anything that narrows the transcript while the panel is open can push it
   // under its floor — a narrowed window, but equally an expanding side rail;
@@ -166,17 +118,20 @@ export function ThreadSpacePanel({
 
   const panel = (
     <>
-      <div
+      <ResizeHandle
         className="thread-space-resize"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t("space.resize_label")}
-        aria-valuenow={width}
-        aria-valuemin={SPACE_WIDTH_MIN}
-        aria-valuemax={SPACE_WIDTH_MAX}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onKeyDown={resizeByKeyboard}
+        label={t("space.resize_label")}
+        width={width}
+        min={SPACE_WIDTH_MIN}
+        max={SPACE_WIDTH_MAX}
+        defaultWidth={SPACE_WIDTH_DEFAULT}
+        /* The panel sits RIGHT of the transcript, so the gesture and the arrow
+           keys both invert: dragging left is what grows it. */
+        grows="inline-start"
+        clamp={clampSpaceWidth}
+        ceiling={spaceCeiling}
+        onResize={onResize}
+        onResizeActive={onResizeActive}
       />
       {/* The Tabs root IS `.thread-space-inner`: that element owns the grid
           rows the header, tab strip, and body sit in, so a wrapper of its own
