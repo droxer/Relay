@@ -2420,38 +2420,72 @@ def test_recovery_dispatches_current_user_turn(
 
 
 @pytest.mark.parametrize("kind", ["handoff", "rerun"])
-@pytest.mark.parametrize("verdict,expected", [(None, "waiting_for_human"), ("done", "done"), ("continue", "assigned"), ("blocked", "waiting_for_human")])
-def test_task_recovery_preserves_round_verdict(recovery_team_thread, kind, verdict, expected):
+@pytest.mark.parametrize(
+    "verdict,expected",
+    [
+        (None, "waiting_for_human"),
+        ("done", "done"),
+        ("continue", "assigned"),
+        ("blocked", "waiting_for_human"),
+    ],
+)
+def test_task_recovery_preserves_round_verdict(
+    recovery_team_thread, kind, verdict, expected
+):
     client, controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
-    registry.register({
-        "sandboxId": "test_node_alice", "employeeId": "alice",
-        "workspaceId": "machine-alice", "token": "node_token",
-        "workspacePath": "/workspace/alice", "protocolVersion": 1,
-        "supportedAgents": ["codex"],
-        "capabilities": ["thread-workspaces", "task-workspaces", "round-result"],
-        "status": "ready",
-    })
+    registry.register(
+        {
+            "sandboxId": "test_node_alice",
+            "employeeId": "alice",
+            "workspaceId": "machine-alice",
+            "token": "node_token",
+            "workspacePath": "/workspace/alice",
+            "protocolVersion": 1,
+            "supportedAgents": ["codex"],
+            "capabilities": ["thread-workspaces", "task-workspaces", "round-result"],
+            "status": "ready",
+        }
+    )
     store = client.app.state.task_store
-    task = store.create_task({"title": "Unfinished work", "ownerEmployeeId": "alice", "status": "blocked"})
-    routine = store.create_task({"title": "Schedule", "ownerEmployeeId": "alice", "isRoutine": True})
+    task = store.create_task(
+        {"title": "Unfinished work", "ownerEmployeeId": "alice", "status": "blocked"}
+    )
+    routine = store.create_task(
+        {"title": "Schedule", "ownerEmployeeId": "alice", "isRoutine": True}
+    )
     for item in (task, routine):
         store.link_session(item["id"], session["id"])
     routine_before = store.get_task(routine["id"])
     controller.fail_session(session["id"], "Needs recovery")
-    body = {"kind": kind, "targetAgentId": reviewer["id"], "idempotencyKey": "task-recovery"}
+    body = {
+        "kind": kind,
+        "targetAgentId": reviewer["id"],
+        "idempotencyKey": "task-recovery",
+    }
     endpoint = f"/api/v1/threads/{session['id']}/recoveries"
     response = client.post(endpoint, json=body)
     assert response.status_code == 202, response.text
     command = registry.take_commands("test_node_alice", "node_token")[0]
-    registry.handle_event("test_node_alice", {
-        "type": "run.completed", "commandId": command["id"],
-        "sessionId": session["id"], "runId": command["runId"],
-        "agent": command["agent"], "exitCode": 0,
-        "agentLog": "Work remains unless explicitly verified.",
-        "leaseId": command.get("leaseId"),
-        **({"roundResult": {"status": verdict, "note": "Reviewed work"}} if verdict else {}),
-    }, "node_token")
+    registry.handle_event(
+        "test_node_alice",
+        {
+            "type": "run.completed",
+            "commandId": command["id"],
+            "sessionId": session["id"],
+            "runId": command["runId"],
+            "agent": command["agent"],
+            "exitCode": 0,
+            "agentLog": "Work remains unless explicitly verified.",
+            "leaseId": command.get("leaseId"),
+            **(
+                {"roundResult": {"status": verdict, "note": "Reviewed work"}}
+                if verdict
+                else {}
+            ),
+        },
+        "node_token",
+    )
     updated = store.get_task(task["id"])
     assert updated["status"] == expected
     assert command["state"].get("round_result_file")
@@ -2460,6 +2494,24 @@ def test_task_recovery_preserves_round_verdict(recovery_team_thread, kind, verdi
     assert store.get_task(routine["id"]) == routine_before
     assert client.post(endpoint, json=body).status_code == 202
     assert store.get_task(task["id"]) == updated
+
+
+def test_recovery_rejects_ambiguous_task_links(recovery_team_thread):
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    store = client.app.state.task_store
+    for title in ("First", "Second"):
+        task = store.create_task({"title": title, "ownerEmployeeId": "alice"})
+        store.link_session(task["id"], session["id"])
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={
+            "kind": "handoff",
+            "targetAgentId": reviewer["id"],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "ambiguous_task_recovery"
+    assert not client.app.state.session_store.get_session(session["id"])["agentRuns"]
 
 
 @pytest.mark.parametrize(

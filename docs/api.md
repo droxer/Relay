@@ -93,6 +93,12 @@ logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under
 `/threads/{id}/decisions` record session metadata only; they do not dispatch an
 agent. A successful metadata response is not evidence that a receiver started.
 
+Recovery of a thread linked to one non-routine task retains that task's runtime
+context, including workspace checks and the required round verdict on capable
+daemons. Missing verdicts leave the task waiting for a human. Routine-template
+links are history only. Threads linked to multiple non-routine tasks return
+409 with code `ambiguous_task_recovery` before dispatch.
+
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 1. It contains the receiving assignment and
 logical agent, linked decision, source event boundary, bounded objective/note

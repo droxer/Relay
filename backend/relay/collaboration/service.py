@@ -458,6 +458,22 @@ class CollaborationConductor:
         }
         if intent.session_id:
             parsed["sessionId"] = intent.session_id
+        if session and is_recovery:
+            # Recovery is still a task round: carry its verdict, continuation,
+            # authorization, and workspace checks through daemon admission.
+            # Routine templates link occurrences for history only.
+            tasks = [
+                task
+                for task in self.ctx.task_store.list_tasks_for_session(session["id"])
+                if not task.get("isRoutine")
+            ]
+            if len(tasks) > 1:
+                raise CollaborationError(
+                    "ambiguous_task_recovery",
+                    "This thread links multiple tasks; recover from a thread linked to one task.",
+                )
+            if tasks:
+                parsed["taskId"] = tasks[0]["id"]
         if intent.user_message_id:
             parsed["userMessageId"] = intent.user_message_id
         parsed["idempotencyFingerprint"] = fingerprint
