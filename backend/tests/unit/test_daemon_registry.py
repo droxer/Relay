@@ -4205,10 +4205,11 @@ def test_reaper_recovers_ack_after_cancelled_session_without_rewriting_it(termin
 
 
 @pytest.mark.parametrize("reason", ["timeout", "retired"])
-def test_delivered_task_reservation_waits_for_exit_acknowledgement(reason):
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_delivered_task_reservation_waits_for_exit_acknowledgement(reason, store_factory):
     async def run_flow():
         with TemporaryDirectory() as root:
-            _sessions, tasks, registry = _round_result_registry(root)
+            _sessions, tasks, registry = _round_result_registry(root, store_factory)
             task = tasks.create_task({"title": "Stop before transfer"})
             command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
             request = registry.daemon_store.run_request_for_command(command["id"])
@@ -4219,6 +4220,9 @@ def test_delivered_task_reservation_waits_for_exit_acknowledgement(reason):
             registry.reap_stale_runs()
             assert registry.daemon_store.active_run_request_for_task(task["id"])["id"] == request["id"]
             assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+            registry.daemon_store.renew_command_leases("sbx_alice", [(command["id"], command["leaseId"])], lease_seconds=-1)
+            commands = registry.daemon_store.take_queued_commands("sbx_alice")
+            assert [item["command"]["type"] for item in commands] == ["run.cancel"]
             registry.handle_event("sbx_alice", {
                 "type": "run.cancelled", "commandId": command["id"],
                 "sessionId": command["sessionId"], "runId": command["runId"],
@@ -4938,9 +4942,9 @@ def test_only_the_final_assignment_reports_the_round_result() -> None:
     asyncio.run(run_flow())
 
 
-def _round_result_registry(root: str) -> tuple[Any, Any, Any]:
+def _round_result_registry(root: str, store_factory=LocalDaemonStore) -> tuple[Any, Any, Any]:
     session_store = LocalSessionStore(root)
-    daemon_store = LocalDaemonStore(root)
+    daemon_store = store_factory(root)
     task_store = LocalTaskStore(root)
     registry = DaemonNodeRegistry(session_store, daemon_store, task_store=task_store)
     registry.register(
