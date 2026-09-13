@@ -1,0 +1,128 @@
+/* The shared agent / agent-team picker: the roster tab strip pinned inside a
+   select popup, and the identity rows the popup and its closed trigger draw.
+   Lives on its own because four surfaces render it now — the task drawer, the
+   composer target picker, the project member drawer, the team-lead field, and
+   the admin channel identity form — and none of them owns it. */
+
+/* Roster tabs pinned at the top of the picker popup. Agents and teams are two
+   rosters, so the popup switches between them instead of stacking both into
+   one scroll. Same segmented-control language as .workspace-page-tabs —
+   line-1 border, gapless segments, surface-0 active fill — sized to the popup
+   and split evenly so neither roster reads as the primary one. A surface that
+   can only offer one roster renders no strip at all. */
+.roster-tabs {
+  display: flex;
+  gap: 0;
+  margin: var(--sp-1) var(--sp-1) 0;
+  padding: var(--sp-0-5);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+}
+
+.roster-tab {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: calc(var(--r-2) - 2px);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  font: var(--type-label-strong);
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.roster-tab:hover {
+  color: var(--ink-1);
+}
+
+.roster-tab[aria-selected="true"] {
+  background: var(--surface-0);
+  color: var(--ink-1);
+  box-shadow: inset 0 0 0 0.5px var(--line-1);
+}
+
+.roster-tab-count {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.roster-tab[aria-selected="true"] .roster-tab-count {
+  color: var(--ink-2);
+}
+
+/* The closed trigger carries identity only — mark + name on one line — so it
+   keeps the standard control height. Whatever readout a surface wants (the
+   task drawer's assignment summary, the composer's availability pip) sits
+   outside the trigger. */
+.roster-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.roster-trigger-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-option {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Menu rows draw the board's `.agent-state` chip as their mark — one box
+   size across entity rows, the unassigned slot, and the nav actions. Action
+   rows put the class glyph inside the empty slot, so the slot's ghost dot
+   steps aside. */
+.roster-option.is-action .agent-state--empty {
+  color: var(--ink-2);
+}
+
+.roster-option.is-action .agent-state--empty::before {
+  content: none;
+}
+
+.roster-option.is-action .roster-option-copy > span:first-child {
+  color: var(--link);
+}
+
+.roster-option-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--leading-snug);
+}
+
+.roster-option-copy > span:first-child {
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-option-copy > span:last-child {
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  text-transform: capitalize;
+}

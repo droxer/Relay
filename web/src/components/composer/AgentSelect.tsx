@@ -6,6 +6,7 @@ import { ProfileImage } from "../ProfileImagePicker";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
 import { isEmployeeAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
 import { isTeamRoutable, teamAvailability } from "../../lib/taskAssignment";
+import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
 
 const TEAM_VALUE_PREFIX = "team:";
 const ROOM_VALUE = "room:all";
@@ -94,8 +95,32 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
     const next = logicalAgents.find((agent) => agent.id === value);
     if (next && isEmployeeAgentRoutable(next)) onLogicalAgentPicked(next);
   };
+  // Agents and agent teams are two rosters, so the popup tabs between them
+  // rather than stacking both into one scroll — the same picker the task
+  // drawer uses. A project thread offers teams nowhere (its targets are the
+  // room and its own members) and a started thread offers no teams either, so
+  // in both cases there is one roster and the strip does not render.
+  const teamsOffered = teamOptionsEnabled && teams.length > 0;
+  const tabs: RosterTab<"agents" | "teams">[] = teamsOffered
+    ? [
+        { id: "agents", label: t("composer.agents_group"), count: logicalAgents.length },
+        { id: "teams", label: t("composer.teams_group"), count: teams.length },
+      ]
+    : [{ id: "agents", label: t("composer.agents_group"), count: logicalAgents.length }];
+  const roster = useRosterTabs({
+    tabs,
+    activeTab: activeTeam ? "teams" : "agents",
+    label: t("thread.talk_to_agent_or_team"),
+  });
+
   return (
-    <Select value={activeRoom ? ROOM_VALUE : activeTeam ? teamSelectValue(activeTeam.id) : (activeLogicalAgent?.id ?? null)} onValueChange={handleSelected}>
+    <Select
+      value={activeRoom ? ROOM_VALUE : activeTeam ? teamSelectValue(activeTeam.id) : (activeLogicalAgent?.id ?? null)}
+      onValueChange={handleSelected}
+      onOpenChange={(open) => {
+        if (open) roster.resetTab();
+      }}
+    >
       <SelectTrigger
         size="sm"
         className="chat-agent-select"
@@ -160,77 +185,93 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
           </>
         ) : null}
       </SelectTrigger>
-      <SelectContent className="chat-agent-select-content" align="start" alignItemWithTrigger={false} side="top">
-        {room ? (
-          <SelectGroup>
-            <SelectLabel>{t("composer.project_group")}</SelectLabel>
-            <SelectItem
-              value={ROOM_VALUE}
-              className="chat-agent-option"
-              disabled={!roomRoutable}
-              data-availability={roomRoutable ? "ready" : "offline"}
-            >
-              <ProfileImage
-                src={null}
-                alt=""
-                fallback={<IdentityMark kind="team" />}
-                className="chat-agent-option-mark"
-              />
-              <span>{t("composer.project_room")}</span>
-              <span className="chat-agent-option-availability">
-                {t("teams.member_count", { count: room.memberCount })}
-              </span>
-            </SelectItem>
+      <SelectContent
+        className="chat-agent-select-content"
+        align="start"
+        alignItemWithTrigger={false}
+        side="top"
+        onKeyDownCapture={roster.onKeyDownCapture}
+        header={roster.header}
+      >
+        {roster.header ? (
+          // Tabbed: the strip names the roster, so the group labels it replaced
+          // are gone and only the active roster is listed.
+          <SelectGroup aria-label={rosterLabel(tabs, roster.tab)}>
+            {roster.tab === "teams"
+              ? teams.map((team) => teamOption({ team, t }))
+              : agentOptions({ logicalAgents, t })}
           </SelectGroup>
-        ) : null}
-        {teamOptionsEnabled && teams.length > 0 ? (
-          <SelectGroup>
-            <SelectLabel>{t("composer.teams_group")}</SelectLabel>
-            {teams.map((team) => {
-              const isRoutable = isTeamRoutable(team);
-              const availability = teamAvailability(team);
-              const availabilityLabel = !isRoutable
-                ? t(`status.${availability}`, { defaultValue: availability })
-                : null;
-              return (
-                <SelectItem
-                  key={team.id}
-                  value={teamSelectValue(team.id)}
-                  className="chat-agent-option"
-                  disabled={!isRoutable}
-                  data-availability={availability}
-                >
-                  <ProfileImage
-                    src={team.profileImageUrl}
-                    alt=""
-                    fallback={<IdentityMark kind="team" />}
-                    className="chat-agent-option-mark"
-                  />
-                  <span translate="no">{team.name}</span>
-                  <span className="chat-agent-option-availability">
-                    {t("teams.member_count", { count: team.members.length })}
-                  </span>
-                  {availabilityLabel ? (
-                    <span className="chat-agent-option-availability" data-availability={availability}>
-                      <StateMark tone={pipTone(availability)} />
-                      {availabilityLabel}
-                    </span>
-                  ) : null}
-                </SelectItem>
-              );
-            })}
-          </SelectGroup>
-        ) : null}
-        {room || (teamOptionsEnabled && teams.length > 0) ? (
-          <SelectGroup>
-            <SelectLabel>{room ? t("composer.project_members_group") : t("composer.agents_group")}</SelectLabel>
-            {agentOptions({ logicalAgents, t })}
-          </SelectGroup>
+        ) : room ? (
+          // A project thread's targets are one roster — the room and the
+          // members inside it — so they stay stacked under their own labels.
+          <>
+            <SelectGroup>
+              <SelectLabel>{t("composer.project_group")}</SelectLabel>
+              <SelectItem
+                value={ROOM_VALUE}
+                className="chat-agent-option"
+                disabled={!roomRoutable}
+                data-availability={roomRoutable ? "ready" : "offline"}
+              >
+                <ProfileImage
+                  src={null}
+                  alt=""
+                  fallback={<IdentityMark kind="team" />}
+                  className="chat-agent-option-mark"
+                />
+                <span>{t("composer.project_room")}</span>
+                <span className="chat-agent-option-availability">
+                  {t("teams.member_count", { count: room.memberCount })}
+                </span>
+              </SelectItem>
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel>{t("composer.project_members_group")}</SelectLabel>
+              {agentOptions({ logicalAgents, t })}
+            </SelectGroup>
+          </>
         ) : (
           agentOptions({ logicalAgents, t })
         )}
       </SelectContent>
     </Select>
+  );
+}
+
+function teamOption({ team, t }: {
+  team: AgentTeam;
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  const isRoutable = isTeamRoutable(team);
+  const availability = teamAvailability(team);
+  const availabilityLabel = !isRoutable
+    ? t(`status.${availability}`, { defaultValue: availability })
+    : null;
+  return (
+    <SelectItem
+      key={team.id}
+      value={teamSelectValue(team.id)}
+      className="chat-agent-option"
+      disabled={!isRoutable}
+      data-availability={availability}
+    >
+      <ProfileImage
+        src={team.profileImageUrl}
+        alt=""
+        fallback={<IdentityMark kind="team" />}
+        className="chat-agent-option-mark"
+      />
+      <span translate="no">{team.name}</span>
+      <span className="chat-agent-option-availability">
+        {t("teams.member_count", { count: team.members.length })}
+      </span>
+      {availabilityLabel ? (
+        <span className="chat-agent-option-availability" data-availability={availability}>
+          <StateMark tone={pipTone(availability)} />
+          {availabilityLabel}
+        </span>
+      ) : null}
+    </SelectItem>
   );
 }
 

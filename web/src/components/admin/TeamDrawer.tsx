@@ -9,7 +9,9 @@ import type { AgentTeam } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RosterAgentItem, RosterTriggerValue } from "../roster/RosterOption";
+import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { TeamMemberOption } from "../TeamMemberOption";
@@ -54,6 +56,16 @@ export function TeamDrawer({
     () => employeeAgents.filter((agent) => !agent.deletedAt),
     [employeeAgents],
   );
+  // The lead must be one of the team's own members, so this picker has a
+  // single roster and the shared picker draws no tab strip for it.
+  const leadCandidates = useMemo(
+    () => agents.filter((agent) => memberIds.includes(agent.id)),
+    [agents, memberIds],
+  );
+  const rosterTabs: RosterTab<"members">[] = [
+    { id: "members", label: t("teams.members"), count: leadCandidates.length },
+  ];
+  const roster = useRosterTabs({ tabs: rosterTabs, activeTab: "members", label: t("teams.lead") });
   const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
   const saving = createTeamMutation.isPending || updateTeamMutation.isPending;
   const hasUnsavedChanges = open && (
@@ -199,10 +211,15 @@ export function TeamDrawer({
           error={validationError === "lead" ? t("teams.lead_required") : undefined}
           errorId="team-lead-error"
         >
-          <Select value={leadId} disabled={memberIds.length === 0} onValueChange={(value) => {
-            if (value) setLeadId(value);
-            setValidationError(null);
-          }}>
+          <Select
+            value={leadId}
+            disabled={memberIds.length === 0}
+            onValueChange={(value) => {
+              if (value) setLeadId(value);
+              setValidationError(null);
+            }}
+            onOpenChange={(open) => { if (open) roster.resetTab(); }}
+          >
             <SelectTrigger
               ref={leadRef}
               className="w-full"
@@ -211,11 +228,22 @@ export function TeamDrawer({
               aria-describedby={validationError === "lead" ? "team-lead-error" : undefined}
             >
               <SelectValue>
-                {(value: string) => agents.find((agent) => agent.id === value)?.displayName ?? value}
+                {(value: string) => {
+                  const lead = agents.find((agent) => agent.id === value);
+                  return lead ? <RosterTriggerValue agent={lead} /> : value;
+                }}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent>
-              {agents.filter((agent) => memberIds.includes(agent.id)).map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>)}
+            <SelectContent
+              alignItemWithTrigger={false}
+              onKeyDownCapture={roster.onKeyDownCapture}
+              header={roster.header}
+            >
+              <SelectGroup aria-label={rosterLabel(rosterTabs, roster.tab)}>
+                {leadCandidates.map((agent) => (
+                  <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </Field>

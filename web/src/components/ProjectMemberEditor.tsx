@@ -20,8 +20,10 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RosterAgentItem, RosterTriggerValue } from "./roster/RosterOption";
+import { rosterLabel, useRosterTabs, type RosterTab } from "./roster/RosterTabs";
 import {
   AdminDelete,
   ICON,
@@ -113,6 +115,13 @@ export function ProjectMemberEditor({
     () => agents.find((agent) => agent.id === member?.agentId) ?? null,
     [agents, member],
   );
+  // Project membership is an agent roster only — a member is one agent with a
+  // role, never a whole team — so the shared picker renders no tab strip here.
+  const rosterTabs: RosterTab<"agents">[] = [
+    { id: "agents", label: t("project.member_agent"), count: candidates.length },
+  ];
+  const roster = useRosterTabs({ tabs: rosterTabs, activeTab: "agents", label: t("project.member_agent") });
+
   const busy = updateProjectMutation.isPending;
 
   useEffect(() => {
@@ -250,7 +259,11 @@ export function ProjectMemberEditor({
         {!member ? (
           candidates.length ? (
             <Field label={t("project.member_agent")} labelId={agentLabelId} wrapper="div" error={agentError ?? undefined} errorId="project-member-agent-error">
-              <Select value={draft.agentId} onValueChange={pickAgent}>
+              <Select
+                value={draft.agentId}
+                onValueChange={pickAgent}
+                onOpenChange={(open) => { if (open) roster.resetTab(); }}
+              >
                 <SelectTrigger
                   ref={agentTriggerRef}
                   className="w-full"
@@ -260,13 +273,22 @@ export function ProjectMemberEditor({
                   aria-describedby={agentError ? "project-member-agent-error" : undefined}
                 >
                   <SelectValue placeholder={t("project.member_choose_agent")}>
-                    {(value: string | null) => agents.find((candidate) => candidate.id === value)?.displayName ?? t("project.member_choose_agent")}
+                    {(value: string | null) => {
+                      const picked = agents.find((candidate) => candidate.id === value);
+                      return picked ? <RosterTriggerValue agent={picked} /> : t("project.member_choose_agent");
+                    }}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
-                  {candidates.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>
-                  ))}
+                <SelectContent
+                  alignItemWithTrigger={false}
+                  onKeyDownCapture={roster.onKeyDownCapture}
+                  header={roster.header}
+                >
+                  <SelectGroup aria-label={rosterLabel(rosterTabs, roster.tab)}>
+                    {candidates.map((agent) => (
+                      <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </Field>

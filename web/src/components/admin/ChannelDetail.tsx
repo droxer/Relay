@@ -15,7 +15,9 @@ import { agentsOnNodes } from "../../lib/adminHelpers";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RosterAgentItem, RosterTriggerValue } from "../roster/RosterOption";
+import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
 import { AdminDelete, ICON } from "../icons";
 import { RelayEmptyState } from "../RelayEmptyState";
 import { TonePill } from "../StatusPill";
@@ -113,6 +115,18 @@ export function ChannelDetail({
       .map((node) => node.id);
     return agentsOnNodes(nodeIds, agents);
   }, [agentRecords, nodes, identityForm.employeeId]);
+
+  // A channel identity routes to one agent, so this picker offers a single
+  // roster and the shared picker draws no tab strip for it. If a channel ever
+  // routes to a team, add its tab here and the strip appears.
+  const rosterTabs: RosterTab<"agents">[] = [
+    { id: "agents", label: t("admin.v2.chat_agent_placeholder"), count: identityAgentOptions.length },
+  ];
+  const roster = useRosterTabs({
+    tabs: rosterTabs,
+    activeTab: "agents",
+    label: t("admin.v2.chat_agent_placeholder"),
+  });
 
   async function onAddIdentity() {
     if (!selected) return;
@@ -366,6 +380,7 @@ export function ChannelDetail({
               onValueChange={(value) =>
                 setIdentityForm((prev) => ({ ...prev, defaultAgentId: value ?? "" }))
               }
+              onOpenChange={(open) => { if (open) roster.resetTab(); }}
             >
               <SelectTrigger
                 className="w-full"
@@ -375,16 +390,20 @@ export function ChannelDetail({
                   {(value: string | null) => {
                     if (!value) return t("admin.v2.chat_agent_placeholder");
                     const agent = identityAgentOptions.find((a) => a.id === value);
-                    return agent ? `${agent.displayName} · ${agent.executorKind}` : value;
+                    return agent ? <RosterTriggerValue agent={agent} /> : value;
                   }}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent>
-                {identityAgentOptions.map((agent) => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    {agent.displayName} · {agent.executorKind}
-                  </SelectItem>
-                ))}
+              <SelectContent
+                alignItemWithTrigger={false}
+                onKeyDownCapture={roster.onKeyDownCapture}
+                header={roster.header}
+              >
+                <SelectGroup aria-label={rosterLabel(rosterTabs, roster.tab)}>
+                  {identityAgentOptions.map((agent) => (
+                    <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
             <Button
