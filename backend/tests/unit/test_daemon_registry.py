@@ -3337,8 +3337,9 @@ def test_active_session_run_request_claim_is_atomic_across_store_instances(
 
 
 @pytest.mark.parametrize("status", ["prepared", "running", "dispatching", "finalizing"])
-def test_active_task_reservation_is_atomic_across_threads_and_nodes(tmp_path, status):
-    stores = (database_daemon_store(str(tmp_path)), database_daemon_store(str(tmp_path)))
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_active_task_reservation_is_atomic_across_threads_and_nodes(tmp_path, status, store_factory):
+    stores = (store_factory(str(tmp_path)), store_factory(str(tmp_path)))
     for node in ("node_a", "node_b"):
         stores[0].register_node({**store_node_payload(), "id": node, "workspaceId": node})
     task_id = new_database_id()
@@ -3362,8 +3363,9 @@ def test_active_task_reservation_is_atomic_across_threads_and_nodes(tmp_path, st
 
 
 @pytest.mark.parametrize("terminal", ["completed", "failed", "cancelled"])
-def test_terminal_task_reservation_releases_without_breaking_replay(tmp_path, terminal):
-    store = database_daemon_store(str(tmp_path))
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_terminal_task_reservation_releases_without_breaking_replay(tmp_path, terminal, store_factory):
+    store = store_factory(str(tmp_path))
     store.register_node({**store_node_payload(), "maxConcurrentRuns": 8})
     request = {
         "id": new_database_id(), "nodeId": "sbx_alice", "sessionId": new_database_id(),
@@ -3377,7 +3379,7 @@ def test_terminal_task_reservation_releases_without_breaking_replay(tmp_path, te
     assert second["id"] != first["id"]
     # An old failed admission cannot revive on top of the replacement owner.
     from sqlalchemy.exc import IntegrityError
-    with pytest.raises(IntegrityError):
+    with pytest.raises((IntegrityError, ValueError)):
         store.update_run_request_if_status(first["id"], terminal, {"status": "prepared"})
     assert store.get_run_request(first["id"])["status"] == terminal
 
