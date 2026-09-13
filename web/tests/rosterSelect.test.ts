@@ -31,16 +31,11 @@ describe("shared roster picker", () => {
   });
 
   it("draws identity rows from the shared row components, not per-surface markup", async () => {
-    for (const path of SURFACES.filter((entry) => !entry.endsWith("AgentSelect.tsx"))) {
+    for (const path of SURFACES) {
       const source = await read(path);
       assert.match(source, /Roster(Agent|Team)Item|RosterOption/, `${path} hand-rolls its option rows`);
       assert.match(source, /RosterTriggerValue/, `${path} hand-rolls its closed trigger`);
     }
-    // The composer keeps its own compact rows (availability chips, busy pip)
-    // — it is a footer control, not a drawer field — so it shares the strip
-    // and the keyboard contract without inheriting the drawer row geometry.
-    const composer = await read("web/src/components/composer/AgentSelect.tsx");
-    assert.match(composer, /className="chat-agent-option"/);
   });
 
   it("hides the strip when a surface has a single roster to offer", async () => {
@@ -94,5 +89,30 @@ describe("shared roster picker", () => {
     // so no surface inherits picker geometry through a task-named class.
     assert.doesNotMatch(taskDrawer, /\.task-assignment-(tab|option|trigger)/);
     assert.match(taskDrawer, /\.task-assignment-summary \{/);
+  });
+
+  it("keeps entity names out of machine translation", async () => {
+    const roster = await read("web/src/components/roster/RosterOption.tsx");
+    // Agent and team names are user-chosen proper nouns; the browser must not
+    // auto-translate them, in the menu rows and in the closed trigger alike.
+    const triggers = roster.match(/roster-trigger-name" translate="no"/g) ?? [];
+    assert.equal(triggers.length, 2, "both trigger branches must mark the name translate=no");
+    assert.match(roster, /<span translate="no">\{agent\.displayName\}/);
+    assert.match(roster, /<span translate="no">\{team\.name\}/);
+  });
+
+  it("lets a surface silence the trigger busy pulse without forking the row", async () => {
+    const roster = await read("web/src/components/roster/RosterOption.tsx");
+    const styles = await read("web/src/styles/roster-select.css");
+    const composer = await read("web/src/components/composer/AgentSelect.tsx");
+    const chat = await read("web/src/styles/chat.css");
+
+    // The composer's running rail already announces the thread's activity, so
+    // the trigger silences its busy pulse — through a prop the roster row
+    // owns, never by a surface reaching into the chip's internals.
+    assert.match(composer, /hideBusyPulse=\{running\}/);
+    assert.match(roster, /roster-trigger--no-busy-pulse/);
+    assert.match(styles, /\.roster-trigger--no-busy-pulse \.agent-state\.tone-info::after/);
+    assert.doesNotMatch(chat, /\.agent-state\.tone-info::after/);
   });
 });

@@ -79,6 +79,13 @@
   white-space: nowrap;
 }
 
+/* A surface that already announces the same activity beside the trigger (the
+   composer's running rail) sets hideBusyPulse, which silences the busy corner
+   pip so the two pulses don't repeat each other. */
+.roster-trigger--no-busy-pulse .agent-state.tone-info::after {
+  display: none;
+}
+
 .roster-option {
   display: flex;
   flex: 1;

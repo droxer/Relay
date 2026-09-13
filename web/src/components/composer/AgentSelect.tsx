@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { StateMark, type StateTone } from "../StateMark";
 import type { AgentTeam, EmployeeAgent } from "../../types";
 import { IdentityMark } from "../IdentityMark";
@@ -6,6 +7,7 @@ import { ProfileImage } from "../ProfileImagePicker";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
 import { isEmployeeAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
 import { isTeamRoutable, teamAvailability } from "../../lib/taskAssignment";
+import { RosterAgentItem, RosterOption, RosterTeamItem, RosterTriggerValue } from "../roster/RosterOption";
 import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
 
 const TEAM_VALUE_PREFIX = "team:";
@@ -32,7 +34,7 @@ const PIP_TONE: Record<string, StateTone> = {
 };
 const pipTone = (availability: string): StateTone => PIP_TONE[availability] ?? "neutral";
 
-// Target picker for the composer footer: selects who the thread talks to —
+// Target picker above the composer: selects who the thread talks to —
 // one logical (employee) agent, a whole agent team, or — in a project room —
 // the project's whole roster. Non-routable entries stay listed (disabled) with
 // their availability spelled out so users can see why a target cannot take the
@@ -149,41 +151,15 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
             <span className="chat-agent-select-name">{t("composer.project_room")}</span>
           </>
         ) : activeTeam ? (
-          <>
-            <ProfileImage
-              src={activeTeam.profileImageUrl}
-              alt=""
-              fallback={<IdentityMark kind="team" />}
-              className="chat-active-agent-mark"
-            />
-            <span className="chat-agent-select-name" translate="no">
-              {activeTeam.name}
-            </span>
-          </>
+          <RosterTriggerValue team={activeTeam} />
         ) : activeLogicalAgent ? (
-          <>
-            <ProfileImage
-              src={activeLogicalAgent.profileImageUrl}
-              alt=""
-              fallback={<IdentityMark kind="agent" />}
-              className="chat-active-agent-mark"
-            />
-            <span className="chat-agent-select-name" translate="no">
-              {activeLogicalAgent.displayName}
-            </span>
-          </>
+          <RosterTriggerValue agent={activeLogicalAgent} hideBusyPulse={running} />
         ) : (
           <span className="chat-agent-select-unavailable">
             <StateMark tone="bad" />
             {t("thread.no_available_agent")}
           </span>
         )}
-        {!activeRoom && !activeTeam && !running && activeLogicalAgent?.availability === "busy" ? (
-          <>
-            <span className="header-agent-busy-pip" aria-hidden="true" />
-            <span className="sr-only">{t("status.busy")}</span>
-          </>
-        ) : null}
       </SelectTrigger>
       <SelectContent
         className="chat-agent-select-content"
@@ -238,84 +214,60 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   );
 }
 
+// The task drawers and chat use the same identity rows. Only chat disables
+// unavailable targets — and spells out why, so users can see why a target
+// cannot take the thread: tasks can be assigned now and run when they are
+// ready.
 function teamOption({ team, t }: {
   team: AgentTeam;
-  t: ReturnType<typeof useTranslation>["t"];
+  t: TFunction;
 }) {
   const isRoutable = isTeamRoutable(team);
   const availability = teamAvailability(team);
-  const availabilityLabel = !isRoutable
-    ? t(`status.${availability}`, { defaultValue: availability })
-    : null;
   return (
-    <SelectItem
+    <RosterTeamItem
       key={team.id}
       value={teamSelectValue(team.id)}
+      team={team}
       className="chat-agent-option"
       disabled={!isRoutable}
       data-availability={availability}
     >
-      <ProfileImage
-        src={team.profileImageUrl}
-        alt=""
-        fallback={<IdentityMark kind="team" />}
-        className="chat-agent-option-mark"
-      />
-      <span translate="no">{team.name}</span>
-      <span className="chat-agent-option-availability">
-        {t("teams.member_count", { count: team.members.length })}
-      </span>
-      {availabilityLabel ? (
+      <RosterOption team={team} />
+      {!isRoutable ? (
         <span className="chat-agent-option-availability" data-availability={availability}>
           <StateMark tone={pipTone(availability)} />
-          {availabilityLabel}
+          {t(`status.${availability}`, { defaultValue: availability })}
         </span>
       ) : null}
-    </SelectItem>
+    </RosterTeamItem>
   );
 }
 
 function agentOptions({ logicalAgents, t }: {
   logicalAgents: EmployeeAgent[];
-  t: ReturnType<typeof useTranslation>["t"];
+  t: TFunction;
 }) {
   return logicalAgents.map((logicalAgent) => {
     const isRoutable = isEmployeeAgentRoutable(logicalAgent);
-    const isBusy = logicalAgent.availability === "busy";
     const visualAvailability = visualAvailabilityOf(logicalAgent);
-    const availabilityLabel = !isRoutable
-      ? t(`status.${visualAvailability}`, {
-          defaultValue: visualAvailability,
-        })
-      : null;
     return (
-      <SelectItem
+      <RosterAgentItem
         key={logicalAgent.id}
         value={logicalAgent.id}
+        agent={logicalAgent}
         className="chat-agent-option"
         disabled={!isRoutable}
         data-availability={visualAvailability}
       >
-        <ProfileImage
-          src={logicalAgent.profileImageUrl}
-          alt=""
-          fallback={<IdentityMark kind="agent" />}
-          className="chat-agent-option-mark"
-        />
-        <span translate="no">{logicalAgent.displayName}</span>
-        {availabilityLabel ? (
+        <RosterOption agent={logicalAgent} />
+        {!isRoutable ? (
           <span className="chat-agent-option-availability" data-availability={visualAvailability}>
             <StateMark tone={pipTone(visualAvailability)} />
-            {availabilityLabel}
+            {t(`status.${visualAvailability}`, { defaultValue: visualAvailability })}
           </span>
         ) : null}
-        {isBusy ? (
-          <>
-            <span className="header-agent-busy-pip" aria-hidden="true" />
-            <span className="sr-only">{t("status.busy")}</span>
-          </>
-        ) : null}
-      </SelectItem>
+      </RosterAgentItem>
     );
   });
 }

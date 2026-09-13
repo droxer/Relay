@@ -189,4 +189,24 @@ describe("composer agent selection", () => {
     assert.match(hook, /acceptedText === text/);
     assert.match(hook, /setAcceptedText\(applied\.text\)/);
   });
+
+  it("spells out why a listed target cannot take the thread", async () => {
+    const select = await readFile(resolve("web/src/components/composer/AgentSelect.tsx"), "utf8");
+    // Non-routable agents and teams stay listed (disabled), and each carries
+    // its availability as visible text beside a state pip — never hue alone.
+    const spelledOut = select.match(/chat-agent-option-availability" data-availability=\{/g) ?? [];
+    assert.equal(spelledOut.length, 2, "agent and team options must both spell out availability");
+    assert.match(select, /disabled=\{!isRoutable\}/);
+    assert.match(select, /<StateMark tone=\{pipTone\(/);
+  });
+
+  it("hides the trigger name on narrow screens", async () => {
+    const responsive = await readFile(resolve("web/src/styles/responsive.css"), "utf8");
+    // The agent/team trigger name renders through the shared roster row, so
+    // the narrow-screen rule covers it alongside the project-room label.
+    assert.match(
+      responsive,
+      /\.chat-agent-select \.chat-agent-select-name,\s*\.chat-agent-select \.roster-trigger-name \{\s*display: none;/,
+    );
+  });
 });
