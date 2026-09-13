@@ -4178,6 +4178,32 @@ def test_terminal_event_wins_over_stale_reaper_on_another_registry(monkeypatch) 
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("terminal", ["cancelled", "completed", "failed"])
+def test_reaper_recovers_ack_after_cancelled_session_without_rewriting_it(terminal):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root)
+            task = tasks.create_task({"title": "Cancellation crash boundary"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            SessionController(sessions).cancel_session(command["sessionId"], "human cancelled")
+            before_task = tasks.get_task(task["id"])
+            before_session = sessions.get_session(command["sessionId"])
+            event = {
+                "type": f"run.{terminal}", "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "exitCode": 0, "reason": "stopped", "error": "stopped",
+            }
+            assert getattr(registry.daemon_store, f"mark_command_{terminal}")("sbx_alice", event)
+            registry.reap_stale_runs()
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+            assert sessions.get_session(command["sessionId"]) == before_session
+            assert tasks.get_task(task["id"]) == before_task
+            registry.reap_stale_runs()
+            assert sessions.get_session(command["sessionId"]) == before_session
+
+    asyncio.run(run_flow())
+
+
 def test_terminal_event_retry_recovers_after_handler_crash() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
