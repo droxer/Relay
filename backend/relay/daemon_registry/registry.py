@@ -1568,6 +1568,7 @@ class DaemonNodeRegistry:
                     run_request,
                     f"The {workspace_layout} requires a daemon with "
                     f"{required_workspace_capability} support.",
+                    delivery_never_sent=record.get("attempt") == 1,
                 )
                 continue
             try:
@@ -3808,11 +3809,11 @@ class DaemonNodeRegistry:
             execution_owner=request_execution_owner(run_request),
         )
 
-    def _fail_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
+    def _fail_run_request(self, run_request: dict[str, Any], outcome: str, *, delivery_never_sent: bool = False) -> None:
         run_id = run_request.get("currentRunId")
         command_id = run_request.get("currentCommandId")
         command = self.daemon_store.get_command(command_id) if command_id else None
-        if command and command.get("status") == "dispatched":
+        if command and command.get("status") == "dispatched" and not delivery_never_sent:
             # Timeout, loss of liveness, and retirement are not exit evidence.
             # Keep both reservations until the daemon acknowledges termination.
             self._cancel_active_run_unlocked(run_request["nodeId"], run_request["sessionId"], outcome)
