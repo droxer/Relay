@@ -133,6 +133,10 @@ operations and confirm writers have stopped before retrying. The constraint
 releases when the request becomes terminal, and prevents stale requests from
 reactivating over a replacement. It is not proof that a cancelled process exited;
 task revision tokens and stronger process fencing remain separate work.
+Pre-delivery cancellation and terminal-session cleanup retain the reservation
+when the current command has already been delivered, even if its lease expired.
+Cancellation intent alone therefore does not release that delivered reservation;
+daemon terminal-event handling remains a separate lifecycle step.
 
 New handoff rounds include optional `handoffContext` with contract
 `relay.handoff.context` version 3 (legacy versions 1 and 2 remain readable). It contains the receiving assignment and

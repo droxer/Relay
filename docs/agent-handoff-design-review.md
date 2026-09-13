@@ -26,7 +26,7 @@ a separate future feature.
 | `POST /threads/{id}/handoffs` | Records an executor-targeted decision, assignment artifact, and status | Metadata mutation only; success does not mean the receiving agent was dispatched |
 | `POST /threads/{id}/decisions`, kind `handoff` | Records a decision and optionally changes phase | A third meaning of handoff; no receiver assignment or dispatch by itself |
 | `SessionController.handoff_session` | Writes the decision, assignment artifact, `assigned` phase, and handoff phase | These must commit together because decision-ID replay otherwise skips unfinished work |
-| Registry command staging | Rebuilds history, current-turn bridge, and latest handoff note from session state | Useful continuity, but not an immutable handoff context receipt |
+| Registry command staging | Reuses the accepted immutable context and receipt; only legacy rounds without context reconstruct history | Prepared retries cannot silently replace accepted work with newer session text |
 | Prompt construction | Prepends progress-file instructions, history, prior results, and target note before the user turn | Workspace evidence and prior output remain necessary; a note alone is insufficient |
 
 Sources: `backend/relay/collaboration/service.py`,
@@ -57,8 +57,10 @@ The runtime uses the database-backed store.
 ## Implemented handoff contract
 
 The recovery round carries optional `handoffContext`, using
-`relay.handoff.context` version 2 for new captures and version 1 for legacy
-captures. Version 2 requires a structured work receipt. Its `decisionId` and `assignmentId` link it to
+`relay.handoff.context` version 3 for new captures, with versions 1 and 2
+accepted for legacy prepared captures. Versions 2 and 3 require a structured
+work receipt; version 3 also requires receiver workspace validation. Its
+`decisionId` and `assignmentId` link it to
 the decision and receiving assignment. Capture records:
 
 - Source run/assignment when available, receiving logical agent ID, resolved
@@ -132,7 +134,8 @@ thread/task untouched. Retry accepts its own already-recorded round, never a
 later owner. The active-session database uniqueness constraint supplies admission
 serialization across replicas; the process-local dispatch lock alone does not.
 Legacy prepared manifests lack the token and retain their compatibility path.
-This does not establish exclusive task ownership across different threads.
+This source-round token alone does not establish task ownership across threads;
+the active-task reservation described below supplies that separate guarantee.
 
 Runtime receiver validation now compares recorded snapshot hashes with bounded
 regular files before preparation/execution. Version 3 handoffs require the
@@ -148,6 +151,13 @@ active phases, including preparation and finalization; the local store uses its
 process-shared claim lock for both creates and transitions. Migration 0068 refuses
 pre-existing duplicate owners instead of picking a winner or cancelling metadata.
 See `docs/testing/task-ownership-reservation.tdd.md`.
+
+Pre-delivery cancellation now checks command delivery under the same store lock
+used by publication and polling. A delivered command, including one with an
+expired lease, cannot release its request reservation through that shortcut.
+Callers still send `run.cancel`; terminal-event processing remains responsible
+for finalization. This does not turn timeout or cancellation intent into proof
+of physical process exit.
 
 Task-wide revision tokens and stronger termination/fencing guarantees for
 mixed-version or external writers remain pending. The local workspace gate is
@@ -168,7 +178,8 @@ not an OS sandbox and cannot stop an unrelated process that ignores it.
   round, assignment, and run; duplicate or delayed queued events cannot regress
   the browser's running state. A newer round hides the old handoff status.
 - Context and delivery events survive Python storage, core replay, and browser
-  SSE. No relational migration is required. Terminal lifecycle comes from the
+  SSE. Those events require no relational migration; active-task reservations
+  require migration `20260913_0068`. Terminal lifecycle comes from the
   existing run/session records, not a second mutable handoff status.
 - This change does not repair old partial records, make the file-backed
   migration store transactional, or introduce distributed handoff serialization
