@@ -90,6 +90,83 @@ for (const theme of ["light", "dark"] as const) {
       await expect(button).toHaveCSS("height", await select.evaluate(el => getComputedStyle(el).height));
     });
 
+    /* The menu keyboard contract. The two rail menus this primitive replaced
+       implemented ArrowUp/ArrowDown and Escape by hand and implemented neither
+       typeahead nor Home/End — omissions that are invisible on screen, which
+       is why they want a test rather than a review. */
+    test("dropdown menu carries the full menu keyboard contract", async ({ page }) => {
+      const trigger = page.getByRole("button", { name: "Open menu" });
+      await expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+
+      await trigger.click();
+      const menu = page.getByRole("menu");
+      await expect(menu).toBeVisible();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+      // Arrow keys move the highlight; Home/End jump to the ends.
+      await page.keyboard.press("ArrowDown");
+      await expect(page.getByRole("menuitem", { name: "First action" })).toBeFocused();
+      await page.keyboard.press("End");
+      await expect(page.getByRole("menuitem", { name: "Destructive action" })).toBeFocused();
+      await page.keyboard.press("Home");
+      await expect(page.getByRole("menuitem", { name: "First action" })).toBeFocused();
+
+      // Typeahead — the part neither hand-rolled menu had.
+      await page.keyboard.type("sec");
+      await expect(page.getByRole("menuitem", { name: "Second action" })).toBeFocused();
+
+      // Escape closes and returns focus to the trigger.
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
+
+    test("menu popup shares the select popup's floating surface", async ({ page }) => {
+      await page.getByRole("button", { name: "Open menu" }).click();
+      const menu = page.locator('[data-slot="dropdown-menu-content"]');
+      const shadow = await menu.evaluate(el => getComputedStyle(el).boxShadow);
+      const ring = await tokenStyle(menu, "box-shadow", "var(--shadow-2)");
+      // Flat elevation: the hairline ring, never a blurred drop shadow.
+      expect(shadow.replaceAll("rgba(0, 0, 0, 0) 0px 0px 0px 0px, ", "")).toBe(ring);
+      await expect(menu).toHaveCSS("background-color", await tokenStyle(menu, "background-color", "var(--popover)"));
+    });
+
+    /* The splitter's `grows` prop is the one thing the shared ResizeHandle can
+       get silently wrong: a panel whose arrow keys run backwards screenshots
+       identically and only fails under the hand. The three shell splitters do
+       not agree on direction — the rail and thread list grow rightward, the
+       space panel grows leftward — so both directions are pinned here. */
+    test("resize handle keyboard follows its grow direction", async ({ page }) => {
+      const growsEnd = page.getByRole("separator", { name: "Grows inline-end" });
+      await expect(growsEnd).toHaveAttribute("aria-valuenow", "240");
+      await growsEnd.focus();
+      await page.keyboard.press("ArrowRight");
+      // Grows inline-end: the right arrow widens it.
+      await expect(growsEnd).toHaveAttribute("aria-valuenow", "256");
+      await page.keyboard.press("ArrowLeft");
+      await expect(growsEnd).toHaveAttribute("aria-valuenow", "240");
+
+      const growsStart = page.getByRole("separator", { name: "Grows inline-start" });
+      await growsStart.focus();
+      await page.keyboard.press("ArrowRight");
+      // Grows inline-start: the SAME key narrows it. The inversion is the point.
+      await expect(growsStart).toHaveAttribute("aria-valuenow", "224");
+
+      // Home restores the default in both orientations.
+      await page.keyboard.press("Home");
+      await expect(growsStart).toHaveAttribute("aria-valuenow", "240");
+    });
+
+    test("resize handle exposes the splitter value contract", async ({ page }) => {
+      const handle = page.getByRole("separator", { name: "Grows inline-end" });
+      // A focusable separator with a value is an ARIA splitter; all three
+      // readings must be present or a screen reader announces no position.
+      await expect(handle).toHaveAttribute("aria-valuemin", "100");
+      await expect(handle).toHaveAttribute("aria-valuemax", "400");
+      await expect(handle).toHaveAttribute("aria-orientation", "vertical");
+      await expect(handle).toHaveAttribute("tabindex", "0");
+    });
+
     test("toast uses floating surface and motion roles", async ({ page }) => {
       await page.getByRole("button", { name: "Show toast" }).click();
       const toast = page.locator('[data-slot="toast"]').first();
