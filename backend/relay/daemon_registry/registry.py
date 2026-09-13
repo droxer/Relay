@@ -2725,6 +2725,16 @@ class DaemonNodeRegistry:
         active_runs: list[dict[str, Any]] | None = None,
         validate_logical_assignment: bool = True,
     ) -> dict[str, Any]:
+        task_id = run_request.get("taskId")
+        if task_id and self.task_store:
+            task_owner = self.task_store.get_task(task_id).get("executionOwner")
+            if task_owner and task_owner != request_execution_owner(run_request):
+                # Do not fail the session: it may already belong to a newer
+                # round. Reject only this stale execution request.
+                return self.daemon_store.update_run_request_if_status(
+                    run_request["id"], run_request["status"],
+                    {"status": "failed", "error": "task_ownership_changed: task execution owner changed"},
+                ) or run_request
         assignments = run_request["assignments"]
         index = run_request.get("currentIndex", 0)
         if index >= len(assignments):
