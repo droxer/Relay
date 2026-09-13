@@ -4204,6 +4204,27 @@ def test_reaper_recovers_ack_after_cancelled_session_without_rewriting_it(termin
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_reaper_republishes_durable_stop_after_crash(store_factory):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Recover stop publication"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            stopping = registry.daemon_store.request_run_stop(request["id"], command["id"], "human cancelled")
+            SessionController(sessions).cancel_session(command["sessionId"], "human cancelled")
+            registry.active_commands.clear()
+            registry.reap_stale_runs()
+            registry.reap_stale_runs()
+            [cancel] = registry.daemon_store.take_queued_commands("sbx_alice")
+            assert cancel["id"] == stopping["state"]["_relay_stop_command_id"]
+            assert cancel["command"]["type"] == "run.cancel"
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is not None
+
+    asyncio.run(run_flow())
+
+
 @pytest.mark.parametrize("reason", ["timeout", "retired"])
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 @pytest.mark.parametrize("ack", ["cancelled", "completed"])
