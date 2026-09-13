@@ -425,7 +425,7 @@
         "pending": "未開始"
       }
     },
-    "col_result": "結果",
+    "columns": "欄位",
     "result_title": "結果",
     "result_files_other": "{{count}} 個檔案",
     "linked": "已關聯",

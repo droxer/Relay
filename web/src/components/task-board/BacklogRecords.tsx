@@ -107,50 +107,53 @@ export function BacklogTaskCard({
       onDragEnd={onDragEnd}
       onTouchStart={onTouchStart}
     >
-      <div className="backlog-task-badges">
+      {/* Title first. The card used to open with a badge strip — checkbox,
+          priority, executor, routine origin, reference — five bordered
+          objects above a title quieter than any of them, so the one thing
+          the reader came for was the last thing they reached. The badges did
+          not go away; they moved below the title into the meta line, where
+          they read as facts about the task rather than as a header for it.
+          The checkbox keeps the top-left corner because it is the card's
+          handle, not a fact, and a selection column that moves is unusable. */}
+      <div className="backlog-task-head">
         <TaskSelectCheckbox
           className="backlog-select-box"
           checked={selected}
           label={t("backlog.select_task", { title: task.title })}
           onCheckedChange={onToggleSelect}
         />
+        <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
+      </div>
+      {task.description ? <p className="backlog-description">{task.description}</p> : null}
+      <div className="backlog-meta">
         <PriorityBadge priority={task.priority} />
         <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
         <RoutineOriginBadge task={task} routineTitle={routineTitle} />
-        <TaskReference taskId={task.id} />
-      </div>
-      <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-      {task.description ? <p className="backlog-description">{task.description}</p> : null}
-      <div className="backlog-meta">
         {assigneeIsSelf ? null : (
-          <>
-            <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
-            <span className="backlog-meta-sep" aria-hidden="true">·</span>
-          </>
+          <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
         )}
         <span className={cn("backlog-due", tone !== "neutral" && tone)}>
           <ActionCalendar size={ICON.sm} />
           {task.dueDate ? formatDueDate(task.dueDate) : t("backlog.no_due")}
         </span>
         {result ? (
-          <>
-            <span className="backlog-meta-sep" aria-hidden="true">·</span>
-            {/* The card carries no status text of its own, so the result names
-                the outcome. The list row's dot already does, and so does not. */}
-            <span className="backlog-result">
-              <StateMark shape={TASK_STATUS_SHAPE[result.status]} />
-              {t(`backlog.statuses.${result.status}`)}
-            </span>
+          /* The card carries no status text of its own, so the result names
+             the outcome. The list row's dot already does, and so does not. */
+          <span className="backlog-result">
+            <StateMark shape={TASK_STATUS_SHAPE[result.status]} />
+            {t(`backlog.statuses.${result.status}`)}
             {result.hasFiles ? (
-              <>
-                <span className="backlog-meta-sep" aria-hidden="true">·</span>
-                <span className="backlog-result-files tnum">
-                  {t("backlog.result_files", { count: result.fileCount })}
-                </span>
-              </>
+              <span className="backlog-result-files tnum">
+                {t("backlog.result_files", { count: result.fileCount })}
+              </span>
             ) : null}
-          </>
+          </span>
         ) : null}
+        {/* The reference is an address, not a fact about the work, so it
+            trails the line at the dimmest tier rather than heading the card.
+            On its own row it cost every card a line to state an id; pushed to
+            the meta line's far edge it costs none. */}
+        <TaskReference taskId={task.id} />
       </div>
       <div className="backlog-task-actions" role="group" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
@@ -191,13 +194,17 @@ export function BacklogTaskCard({
   );
 }
 /**
- * The column header row, repeated once per group.
+ * The column header row — rendered ONCE, above every group.
  *
- * Repeated rather than hoisted above the whole list because a group band
- * interrupts the columns: a single sticky header six bands up stops naming
- * the row under the reader's eye. Each group is therefore its own
- * `role="table"` with its own header — the sort state is shared, so every
- * copy carries the same caret and clicking any of them reorders all groups.
+ * It used to repeat per group, on the reasoning that a band interrupts the
+ * columns and a header six bands up stops naming the row under the eye. What
+ * that reasoning missed is the cost at the density these lists actually run
+ * at: four routine groups meant four band slabs and four identical header
+ * rows for six records, so the page read as four small tables rather than
+ * one list, and the furniture outweighed the content. One header, made
+ * sticky so it stays over the rows it names, answers the original concern
+ * without spending a row of chrome per group. The bands go quiet to match
+ * (see .list-group-band) — they name the group, they no longer restart it.
  */
 export function BacklogRowsHead({
   sort,
@@ -242,9 +249,6 @@ export function BacklogRowsHead({
         sort={sort}
         onSort={onSort}
       />
-      {/* Files come from the linked session, not the task record, so there is
-          no task field to order rows by. */}
-      <TableHead className="backlog-rows-head-cell backlog-rows-head-result">{t("backlog.col_result")}</TableHead>
       {/* Actions is not a column of data — there is nothing to order by. */}
       <TableHead className="backlog-rows-head-cell backlog-rows-head-actions">{t("backlog.actions")}</TableHead>
     </TableRow>
@@ -324,22 +328,22 @@ export function BacklogTaskRow({
           emptyLabel={t("backlog.add_due")}
           onEdit={onEdit}
         />
-      </TableCell>
-      <TableCell className="backlog-row-assignee">
-        <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} assigneeIsSelf={assigneeIsSelf} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} />
-      </TableCell>
-      <TableCell className="backlog-row-result">
-        {/* The row's status dot already names the outcome; restating it here
-            would spend a column on a fact the row has made twice. */}
+        {/* Files rode in a labelled RESULT column of their own, which stood
+            empty on nearly every row — a named column for a fact most rows
+            do not have. The count is a footnote to the date the run finished
+            against, so it trails it instead. */}
         {result?.hasFiles ? (
-          <span className="backlog-result-files tnum">
+          <span className="backlog-row-files tnum">
             {t("backlog.result_files", { count: result.fileCount })}
           </span>
         ) : null}
       </TableCell>
+      <TableCell className="backlog-row-assignee">
+        <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} assigneeIsSelf={assigneeIsSelf} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} />
+      </TableCell>
       <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
-          <Button variant="outline"
+          <Button variant="ghost"
             type="button"
             className="backlog-action-icon"
             onClick={onAssign}
@@ -349,7 +353,11 @@ export function BacklogTaskRow({
           >
             <NavAgents size={ICON.sm} />
           </Button>
-          <Button variant={startDisabled ? "ghost" : "default"}
+          {/* The tinted icon, not the filled default the card uses — see the
+              note on .backlog-row-actions. */}
+          <Button variant="icon"
+            size="icon-dense"
+            tinted
             type="button"
             className="backlog-action-primary backlog-action-icon"
             onClick={onStart}

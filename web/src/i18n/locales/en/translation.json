@@ -426,7 +426,7 @@
         "pending": "Not started"
       }
     },
-    "col_result": "Result",
+    "columns": "Columns",
     "result_title": "Result",
     "result_files_one": "{{count}} file",
     "result_files_other": "{{count}} files",

@@ -364,14 +364,37 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
       ) : view === "list" ? (
         /* Grouped by schedule health — the fact a routine list is read for.
            The per-row state word is gone with it: the band above the row has
-           already said it, and the column it held went to the record. */
-        <div className="backlog-rows routine-rows">
+           already said it, and the column it held went to the record.
+
+           One hoisted column header above every group — see RoutineRowsHead.
+           This list felt the repetition worst: six routines across four
+           schedule states meant four bands and four header rows of furniture
+           for six rows of content.
+
+           `data-density="compact"` is the same scope the backlog list opts
+           into. The two lists are one record grammar (see RoutineRecords),
+           and this one was running at the root rhythm while the backlog ran
+           compact — a 77px routine row against a 52px task row for the same
+           kind of record. */
+        <div className="backlog-rows routine-rows" data-density="compact">
+          <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
+            <RoutineRowsHead
+              sort={sort}
+              onSort={toggleSort}
+              selectAll={
+                <TaskSelectAllCheckbox
+                  state={selectionCheckState(visibleSelection, visibleIds)}
+                  label={t("routine.select_all_routines")}
+                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                />
+              }
+            />
+          </Table>
           {ROUTINE_STATE_ORDER.map((state) => {
             const group = grouped[state];
             if (group.length === 0) return null;
             const label = t(`routine.states.${state}`);
             const groupPage = pagedGroups[state];
-            const groupIds = groupPage.items.map((task) => task.id);
             return (
               <ListGroup
                 key={state}
@@ -381,17 +404,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
                 shape={ROUTINE_STATE_SHAPE[state]}
               >
                 <Table className="list-group-rows" aria-label={label}>
-                  <RoutineRowsHead
-                    sort={sort}
-                    onSort={toggleSort}
-                    selectAll={
-                      <TaskSelectAllCheckbox
-                        state={selectionCheckState(visibleSelection, groupIds)}
-                        label={t("routine.select_all_routines")}
-                        onToggle={() => setSelection((current) => toggleAllSelected(current, groupIds))}
-                      />
-                    }
-                  />
                   {groupPage.items.map((task) => {
                     const session = linkedSession(task);
                     const assignment = taskAssignmentDisplay(task);

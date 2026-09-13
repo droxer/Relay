@@ -26,7 +26,11 @@ import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 
 /* One routine, drawn three ways: the board card, the list row, and the meta
    header inside its drawer. Card and row are deliberately the same record in
-   two densities — keep their badge order and action group in step. */
+   two densities — keep their badge order and action group in step.
+
+   The drawer is the exception on default values: it passes `always` to both
+   badges, because a record being inspected has to show the value it holds
+   even when that value is the default one a scanning surface omits. */
 
 export function RoutineStartButton({
   disabled,
@@ -45,7 +49,7 @@ export function RoutineStartButton({
       size="icon-dense"
       tinted
       type="button"
-      className="backlog-action-icon"
+      className="backlog-action-primary backlog-action-icon"
       onClick={onStart}
       disabled={disabled}
       loading={starting}
@@ -112,39 +116,38 @@ export function RoutineCard({
   // paints every card the same.
   return (
     <article className="routine-card backlog-task list-virtual" data-priority={task.priority} data-routine-state={state} data-selected={selected ? "true" : undefined}>
-      <div className="backlog-task-badges">
+      {/* Title first — same restructure as the backlog card, and for the same
+          reason. The routine card was the worse of the two: state pill,
+          priority pill, executor chip, checkbox and reference all sat above
+          the title, and two of those pills (a `Scheduled` state beside a
+          neutral date, a `Normal` priority) were announcing defaults. Both
+          badges now stay silent at their default value, so a healthy routine
+          renders as a title and a schedule and nothing else. */}
+      <div className="backlog-task-head">
         <TaskSelectCheckbox
           className="backlog-select-box"
           checked={selected}
           label={t("routine.select_routine", { title: task.title })}
           onCheckedChange={onToggleSelect}
         />
+        <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
+      </div>
+      {task.description ? <p className="backlog-description">{task.description}</p> : null}
+      <div className="backlog-meta">
         <RoutineStateBadge state={state} />
         <PriorityBadge priority={task.priority} />
         <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
-        <TaskReference taskId={task.id} />
-      </div>
-      <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-      {task.description ? <p className="backlog-description">{task.description}</p> : null}
-      <div className="backlog-meta">
-        <span>{t(`routine.types.${task.routineType ?? "task"}`)} · {t(`routine.cadences.${task.routineCadence ?? "weekly"}`)}</span>
-        <span className="backlog-meta-sep" aria-hidden="true">·</span>
+        <span className="backlog-cadence">{t(`routine.types.${task.routineType ?? "task"}`)} · {t(`routine.cadences.${task.routineCadence ?? "weekly"}`)}</span>
         {assigneeIsSelf ? null : (
-          <>
-            <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
-            <span className="backlog-meta-sep" aria-hidden="true">·</span>
-          </>
+          <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
         )}
         <span className={cn("backlog-due", tone !== "neutral" && tone)}>
           <ActionCalendar size={ICON.sm} />
           {task.routineNextRunDate ? formatNextRunDate(task.routineNextRunDate) : t("routine.no_next_run")}
         </span>
-        {session ? (
-          <>
-            <span className="backlog-meta-sep" aria-hidden="true">·</span>
-            <span>{t("backlog.linked")}</span>
-          </>
-        ) : null}
+        {session ? <span className="backlog-linked">{t("backlog.linked")}</span> : null}
+        {/* Trails the line, same as the backlog card — see its note. */}
+        <TaskReference taskId={task.id} />
       </div>
       <div className="backlog-task-actions" role="group" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
@@ -157,9 +160,9 @@ export function RoutineCard({
 }
 
 /**
- * The routine list's column header row, repeated once per group — same
- * contract as `BacklogRowsHead`, and deliberately the same columns in the
- * same order: the two lists are one record grammar in two vocabularies.
+ * The routine list's column header row, rendered once above every group —
+ * same contract as `BacklogRowsHead`, and deliberately the same columns in
+ * the same order: the two lists are one record grammar in two vocabularies.
  */
 export function RoutineRowsHead({
   sort,
@@ -301,7 +304,7 @@ export function RoutineDrawerMeta({
   return (
     <section className="task-drawer-meta" aria-label={t("routine.meta")}>
       <div className="task-drawer-meta-row">
-        <RoutineStateBadge state={state} />
+        <RoutineStateBadge state={state} always />
         {session ? (
           <a
             data-slot="link-button"

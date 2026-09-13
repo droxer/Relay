@@ -14,14 +14,22 @@
   flex-direction: column;
 }
 
-/* The band is tinted by its own accent rather than by a neutral fill: seven
-   bands of one grey would separate the groups without naming them, which is
-   the job a group header exists to do. 10% keeps it a wash — the accent's
-   full strength stays spent on the 8px marks, where it has to carry meaning
-   at a size a tint cannot. */
+/* The band names its group; it is not a surface of its own.
+
+   It used to be a filled, radiused slab washed with its accent, which read
+   as a heading for a table that then restated its own column header below —
+   two rows of furniture before each group's first record, and on the routine
+   list more furniture than content. The tint is gone and so is the box: what
+   is left is the accent mark, the name, the count, and a rule under them
+   that ties the band to the rows it opens. Groups are still told apart —
+   that was always the mark and the name doing the work, at a strength a 10%
+   wash cannot reach anyway — and the list now reads as one list.
+
+   The accent still drives the mark, so a band and its rows cannot drift. */
 .list-group-band {
   position: sticky;
-  top: 0;
+  /* Clears the list's own hoisted column header, which sticks at 0. */
+  top: var(--list-band-top, 0px);
   z-index: 1;
   display: flex;
   align-items: center;
@@ -29,14 +37,16 @@
   /* --sp-2, not --sp-1-5: the sub-4px rungs are for binding glyph-tight pairs
      (palette.css), and this is a padded surface, not a pairing. */
   padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-2);
-  background: color-mix(in srgb, var(--row-accent) 10%, var(--surface-1));
+  border-bottom: 0.5px solid var(--line-2);
+  background: var(--surface-0);
 }
 
 /* Same contract as the row rail: the mark never picks its own colour, so the
    band tint and the mark inside it cannot disagree. `live` brings its own. */
 .list-group-band .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
 
+/* Small caps, the same tier the column header beneath it uses: the band is a
+   label for a group, not a title for a page. */
 .list-group-name {
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
@@ -91,9 +101,12 @@
    app has, rather than a second copy of the tone → hue mapping here. */
 .list-group[class*="tone-"] { --row-accent: var(--tone); }
 
-/* NOTE: the space BETWEEN groups belongs to the host container's `gap`
-   (.backlog-rows, .adm-grouped-list). A `.list-group + .list-group` margin
-   here would stack on top of that gap and silently double it. */
+/* NOTE: the space BETWEEN groups belongs to the HOST, never to this file — a
+   margin here would stack on top of whatever the host already declares and
+   silently double it. The two hosts express it differently on purpose:
+   .adm-grouped-list uses `gap`, .backlog-rows uses a `.list-group +
+   .list-group` margin because it also holds a hoisted column header that
+   must NOT be pushed a section-rung off its first band. */
 
 /* ── Admin variant ───────────────────────────────────────────────────────
    The admin tables are grid rows on a card-less canvas rather than the task
@@ -122,5 +135,5 @@
 }
 
 /* The band paints over the rows that scroll under it, so it cannot be
-   translucent — the accent wash is mixed into --surface-1, which is opaque. */
+   translucent — --surface-0 is opaque. */
 .adm-grouped-list .list-group-band { z-index: 2; }
