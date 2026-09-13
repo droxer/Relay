@@ -532,7 +532,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             sharedWorkspaceKey = durableWorkspaceLayout(command.workspaceLayout)
               ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
               : command.workspaceLayout === "thread"
-                ? undefined
+                ? threadWorkspaces.resolve(command.sessionId).hostPath
                 : workspacePath;
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);
