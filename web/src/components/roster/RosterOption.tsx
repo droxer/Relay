@@ -52,6 +52,14 @@ export function TeamMark({ team }: { team: TeamView }) {
   );
 }
 
+/** Agent CLI names are a fixed ASCII enum ("claude", "codex") rendered as the
+ *  product names they are. This used to be `text-transform: capitalize` in
+ *  roster-select.css, but that selector also caught the translated team
+ *  member-count line and the empty-option label — copy that must NOT be
+ *  title-cased, and would be wrong to title-case in German or French. Doing it
+ *  here keeps it on the one string that is a proper noun. */
+const executorLabel = (kind: string): string => kind.charAt(0).toUpperCase() + kind.slice(1);
+
 /** One roster row: mark, name, and the one-line descriptor under it. */
 export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamView }) {
   const { t } = useTranslation();
@@ -68,7 +76,7 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
         />
         <span className="roster-option-copy">
           <span>{agent.displayName}</span>
-          <span>{agent.executorKind}</span>
+          <span>{executorLabel(agent.executorKind)}</span>
         </span>
       </span>
     );

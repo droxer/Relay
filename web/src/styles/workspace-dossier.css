@@ -360,7 +360,7 @@
   margin: 0;
   color: var(--ink-1);
   font: var(--type-label);
-  letter-spacing: var(--type-body-sm-track);
+  letter-spacing: var(--type-label-track);
 }
 
 .workspace-dossier-rename-actions {
