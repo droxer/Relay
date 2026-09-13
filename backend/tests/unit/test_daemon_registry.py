@@ -3336,6 +3336,63 @@ def test_active_session_run_request_claim_is_atomic_across_store_instances(
         assert "already has an active daemon run" in str(failure)
 
 
+@pytest.mark.parametrize("status", ["prepared", "running", "dispatching", "finalizing"])
+def test_active_task_reservation_is_atomic_across_threads_and_nodes(tmp_path, status):
+    stores = (database_daemon_store(str(tmp_path)), database_daemon_store(str(tmp_path)))
+    for node in ("node_a", "node_b"):
+        stores[0].register_node({**store_node_payload(), "id": node, "workspaceId": node})
+    task_id = new_database_id()
+    barrier = Barrier(2)
+
+    def reserve(index):
+        barrier.wait()
+        return stores[index].create_run_request({
+            "nodeId": ("node_a", "node_b")[index], "sessionId": new_database_id(),
+            "taskId": task_id, "taskGoal": "one task", "assignments": [],
+            "state": {}, "status": status,
+        })
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        attempts = [executor.submit(reserve, index) for index in range(2)]
+    assert sum(attempt.exception() is None for attempt in attempts) == 1
+    error = next(attempt.exception() for attempt in attempts if attempt.exception())
+    assert isinstance(error, ValueError)
+    assert "task_ownership_conflict" in str(error)
+    assert len(stores[0].list_active_run_requests()) == 1
+
+
+@pytest.mark.parametrize("terminal", ["completed", "failed", "cancelled"])
+def test_terminal_task_reservation_releases_without_breaking_replay(tmp_path, terminal):
+    store = database_daemon_store(str(tmp_path))
+    store.register_node({**store_node_payload(), "maxConcurrentRuns": 8})
+    request = {
+        "id": new_database_id(), "nodeId": "sbx_alice", "sessionId": new_database_id(),
+        "taskId": new_database_id(), "taskGoal": "one task", "assignments": [],
+        "state": {}, "status": "prepared",
+    }
+    first = store.create_run_request(request)
+    assert store.create_run_request(request)["id"] == first["id"]
+    store.update_run_request(first["id"], {"status": terminal})
+    second = store.create_run_request({**request, "id": new_database_id(), "sessionId": new_database_id()})
+    assert second["id"] != first["id"]
+    # An old failed admission cannot revive on top of the replacement owner.
+    from sqlalchemy.exc import IntegrityError
+    with pytest.raises(IntegrityError):
+        store.update_run_request_if_status(first["id"], terminal, {"status": "prepared"})
+    assert store.get_run_request(first["id"])["status"] == terminal
+
+
+def test_reference_threads_do_not_reserve_linked_tasks(tmp_path):
+    store = database_daemon_store(str(tmp_path))
+    store.register_node({**store_node_payload(), "maxConcurrentRuns": 8})
+    for task_id in (None, None, new_database_id(), new_database_id()):
+        store.create_run_request({
+            "nodeId": "sbx_alice", "sessionId": new_database_id(), "taskId": task_id,
+            "taskGoal": "independent", "assignments": [], "state": {}, "status": "prepared",
+        })
+    assert len(store.list_active_run_requests()) == 4
+
+
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
 def test_same_idempotent_run_request_is_get_or_create_across_store_instances(
     store_factory,
