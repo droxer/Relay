@@ -44,6 +44,45 @@ def database_daemon_store(root: str) -> DatabaseDaemonStore:
 DAEMON_STORE_FACTORIES = [LocalDaemonStore, database_daemon_store]
 
 
+@pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("delivered", [False, True])
+def test_cancel_before_delivery_preserves_delivered_task_reservation(
+    daemon_store_factory, delivered: bool,
+) -> None:
+    with TemporaryDirectory() as root:
+        store = daemon_store_factory(root)
+        store.register_node(store_node_payload())
+        task_id = new_database_id()
+        request = store.create_run_request({
+            "nodeId": "sbx_alice", "sessionId": new_database_id(),
+            "taskId": task_id, "taskGoal": "retain ownership until exit",
+            "assignments": [{"executorKind": "codex", "mode": "action"}],
+            "state": {}, "status": "running",
+        })
+        command = {
+            "id": new_database_id(), "type": "run.start",
+            "sessionId": request["sessionId"], "runId": new_database_id(),
+            "agent": "codex", "taskGoal": request["taskGoal"],
+            "_runRequestId": request["id"],
+        }
+        store.update_run_request(request["id"], {"currentCommandId": command["id"]})
+        store.enqueue_command("sbx_alice", command)
+        if delivered:
+            assert len(store.take_queued_commands("sbx_alice")) == 1
+        registry = DaemonNodeRegistry(LocalSessionStore(root), store)
+
+        result = registry.cancel_run_request_before_delivery(request["id"], "stop")
+
+        if delivered:
+            assert result is None
+            assert store.active_run_request_for_task(task_id)["id"] == request["id"]
+            assert store.get_command(command["id"])["status"] == "dispatched"
+        else:
+            assert result["status"] == "cancelled"
+            assert store.active_run_request_for_task(task_id) is None
+            assert store.take_queued_commands("sbx_alice") == []
+
+
 def stored_daemon_event_types(store: object) -> list[str]:
     events_dir = getattr(store, "events_dir", None)
     if events_dir is not None:
