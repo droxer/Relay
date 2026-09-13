@@ -2478,6 +2478,7 @@ class DaemonNodeRegistry:
                             f"the session is {session['status']}."
                         ),
                     },
+                    require_undelivered=True,
                 )
                 if terminalized:
                     command_id = request.get("currentCommandId")
