@@ -949,12 +949,21 @@ class LocalDaemonStore:
 
     @contextmanager
     def _run_request_claim_lock(self) -> Iterator[None]:
-        with self.run_request_claim_lock_path.open("a+", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
+        # Transitions call update_run_request while already holding this lock.
+        # Keep the process-shared flock reentrant under our per-instance RLock;
+        # opening a second descriptor and flocking it would deadlock ourselves.
+        with self._lock:
+            if getattr(self, "_run_request_claim_locked", False):
                 yield
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                return
+            with self.run_request_claim_lock_path.open("a+", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                self._run_request_claim_locked = True
+                try:
+                    yield
+                finally:
+                    self._run_request_claim_locked = False
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def get_run_request(self, request_id: str) -> dict[str, Any] | None:
         path = self.run_requests_dir / f"{safe_name(request_id)}.json"
@@ -1085,12 +1094,16 @@ class LocalDaemonStore:
     def update_run_request(
         self, request_id: str, patch: dict[str, Any]
     ) -> dict[str, Any]:
-        with self._lock:
+        with self._lock, self._run_request_claim_lock():
             current = self.get_run_request(request_id)
             if not current:
                 raise KeyError(request_id)
             now = now_iso()
             updated = {**current, **patch, "updatedAt": now}
+            if updated.get("taskId") and updated["status"] in ACTIVE_RUN_REQUEST_STATUSES:
+                owner = self.active_run_request_for_task(updated["taskId"])
+                if owner and owner["id"] != request_id:
+                    raise ValueError("task_ownership_conflict: this task already has an active daemon run.")
             if patch.get("status") in ("completed", "failed", "cancelled"):
                 updated["completedAt"] = now
             _write_json(
