@@ -2528,6 +2528,12 @@ class DaemonNodeRegistry:
                             error=str(error),
                         )
                 continue
+            if request.get("status") == "running" and (request.get("state") or {}).get("_relay_stop_command_id"):
+                # Replay the durable intent if the coordinator died before
+                # publishing its stable-id cancel command.
+                self._cancel_active_run_unlocked(
+                    request["nodeId"], request["sessionId"], request.get("error") or "Run stopped."
+                )
             session = self.store.get_session(request["sessionId"])
             if session.get("status") in ("completed", "failed", "cancelled"):
                 command_record = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
