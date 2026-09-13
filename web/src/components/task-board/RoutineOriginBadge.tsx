@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import { ActionCalendar, ICON } from "../icons";
+import { ICON, NavRoutine } from "../icons";
 import type { RelayTaskListItem } from "../../types";
 
 /**
@@ -33,7 +33,10 @@ export function RoutineOriginBadge({
       className="backlog-routine-origin"
       title={t("backlog.routine_origin_of", { title: label })}
     >
-      <ActionCalendar size={ICON.sm} />
+      {/* The routine glyph, not the calendar one. The due date on the same
+          line is already a calendar, so provenance and deadline were reading
+          as the same kind of fact twice. */}
+      <NavRoutine size={ICON.sm} />
       <span className="backlog-routine-origin-name">{label}</span>
     </span>
   );

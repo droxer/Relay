@@ -6,6 +6,7 @@ import {
   ICON,
   nodeOwnershipIcon,
 } from "../icons";
+import { ComposerContextLine } from "./ComposerContext";
 import {
   Select,
   SelectContent,
@@ -29,32 +30,53 @@ function runtimeLabel(node: DaemonNodeMonitorRecord): string {
  * at the start. Unlike the picker (whose options are pre-filtered to live
  * computers) this can point at a machine that has since gone offline, so it
  * carries a liveness dot the picker deliberately omits.
+ *
+ * Context, not a control: it wears the shared `ComposerContextLine` — a
+ * lead-in word and the value, no plate, no divider, no chevron — the same
+ * shape the project room uses. The agent is the choice; the computer is a fact
+ * the thread was born with.
  */
-export function ThreadRuntimeReadout({ node }: { node: DaemonNodeMonitorRecord }) {
+export function ThreadRuntimeReadout({ node, nodeId }: {
+  node: DaemonNodeMonitorRecord | null;
+  /**
+   * The computer the thread is pinned to, even when the fleet no longer lists
+   * it. A retired or scoped-out machine used to resolve to `null` and take the
+   * whole line with it, so the rail went quiet about where the thread runs —
+   * while the picker, facing the same gap, says "no computer available" out
+   * loud. The fact survives its record: the id is named, offline.
+   */
+  nodeId?: string | null;
+}) {
   const { t } = useTranslation();
+  if (!node) {
+    if (!nodeId) return null;
+    return (
+      <ComposerContextLine
+        label={t("thread.runs_on")}
+        mark={<span className="adm-presence" data-online="false" aria-hidden="true" />}
+        name={nodeId}
+        online={false}
+        title={`${nodeId} · ${t("thread.runtime_unknown")} — ${t("thread.runtime_pinned")}`}
+        srDetail={`${t("thread.runtime_unknown")} · ${t("thread.runtime_pinned")}`}
+      />
+    );
+  }
   const ownership = nodeOwnershipProfile(node);
   const online = Boolean(node.online) && !node.stale;
   const name = runtimeLabel(node);
   const ownershipLabel = t(`admin.v2.node_ownership_${ownership}`);
   const presenceLabel = online ? t("nodes.presence_online") : t("nodes.presence_offline");
-  // Context, not a control: no plate, no divider, no chevron — a quiet
-  // "Runs on <machine>" line beside the agent picker. The lead-in word is what
-  // keeps it from reading as a second, mysteriously flat picker now that the
-  // pair sits on the panel ground: the agent is the choice, the computer is a
-  // fact the thread was born with. Ownership and presence stay in the tooltip
-  // and the sr-only line; the tooltip also says the pin out loud.
+  // Ownership and presence stay in the tooltip and the sr-only line; the
+  // tooltip also says the pin out loud.
   return (
-    <span
-      className="thread-runtime-readout"
-      data-online={online ? "true" : "false"}
-      aria-label={t("thread.runtime_label")}
+    <ComposerContextLine
+      label={t("thread.runs_on")}
+      mark={<span className="adm-presence" data-online={online ? "true" : "false"} aria-hidden="true" />}
+      name={name}
+      online={online}
       title={`${name} · ${ownershipLabel} · ${presenceLabel} — ${t("thread.runtime_pinned")}`}
-    >
-      <span className="thread-runtime-readout-label">{t("thread.runs_on")}</span>
-      <span className="adm-presence" data-online={online ? "true" : "false"} aria-hidden="true" />
-      <span className="thread-runtime-readout-name" translate="no">{name}</span>
-      <span className="sr-only">{ownershipLabel} · {presenceLabel} · {t("thread.runtime_pinned")}</span>
-    </span>
+      srDetail={`${ownershipLabel} · ${presenceLabel} · ${t("thread.runtime_pinned")}`}
+    />
   );
 }
 
@@ -104,7 +126,7 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
     : undefined;
   return (
     <div className="thread-runtime-rail" aria-label={t("thread.runtime_label")}>
-      <span className="thread-runtime-context">{t("thread.runs_on")}</span>
+      <span className="composer-context-label">{t("thread.runs_on")}</span>
       <Select value={selected?.id ?? null} onValueChange={(nodeId) => {
         if (nodeId) onValueChange(nodeId);
       }}>

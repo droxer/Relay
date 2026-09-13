@@ -348,7 +348,7 @@
 .backlog-task {
   position: relative;
   content-visibility: auto;
-  contain-intrinsic-size: auto 180px;
+  contain-intrinsic-size: auto 240px;
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
@@ -376,44 +376,65 @@
 
 /* Priority lives on the PriorityBadge alone — the badge's ascending bars
    already carry rank, so the old 3px colored card edge was double signaling
-   (and painted a red stripe down every high-priority card).
+   (and painted a red stripe down every high-priority card). */
 
-   The badge STRIP this rule used to lay out is gone: the card opened with
-   checkbox + priority + executor + routine origin + reference above a title
-   quieter than any of them, so the record's name was the last thing the eye
-   reached. Badges moved into .backlog-meta below the title, where they read
-   as facts about the task rather than a header for it. */
-
-/* Line 1: the selection handle and the title, and nothing else. The checkbox
-   holds the corner because it is the card's handle — a selection control
-   that moves with the content is unusable — and `align-items: start` keeps
-   it on the title's first line when the title wraps to two. */
-.backlog-task-head {
+/* The card is a control gutter and a text column, and nothing else. The
+   checkbox holds the gutter because it is the card's handle — a selection
+   control that moves with the content is unusable — and every other part of
+   the record (title, description, facts, footer) shares the column's single
+   left edge. Before this the title sat inside the flex row with the checkbox
+   while the description and meta started at the card's padding edge, so any
+   card with a description read as two blocks misaligned by 24px. */
+.backlog-card-head {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
 }
 
+.backlog-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
 /* The checkbox is 16px against a ~20px line; nudge it onto the title's
    optical centre rather than its box top. */
-.backlog-task-head .backlog-select-box {
+.backlog-card-head .backlog-select-box {
   flex: none;
   margin-top: 2px;
 }
 
-
+/* Footer: the record's address at rest, its actions on hover, in ONE reserved
+   row. The action bar used to be absolutely positioned across the card's
+   bottom edge and faded in on hover — which meant hovering a card hid its own
+   meta line, so every fact the reader was scanning vanished under the buttons
+   that appeared because the pointer arrived. Now the row is always laid out
+   and the only thing the actions cover is the reference. */
+.backlog-card-foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: var(--control-h-xs);
+  margin-top: var(--sp-3);
+}
 
 /* The card equivalent of the list's REF column. It is an address rather than
-   task metadata, so it stays quiet and trails the meta line, after the facts
-   rather than above them. */
+   task metadata, so it sits in the footer at the dimmest tier and steps aside
+   for the actions on hover — it used to ride the meta line on
+   `margin-inline-start: auto`, which put it on a line of its own the moment
+   that line wrapped, which at lane width is most cards. */
 .backlog-task-ref {
   display: inline-flex;
   align-items: baseline;
-  /* Pushed to the meta line's far edge. It never earns a line of its own —
-     that cost every card ~24px to state an id nobody scans for. */
-  margin-inline-start: auto;
   color: var(--ink-4);
   font-size: var(--fs-1);
   line-height: var(--leading-snug);
   white-space: nowrap;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.backlog-task:hover .backlog-task-ref,
+.backlog-task:focus-within .backlog-task-ref {
+  opacity: 0;
 }

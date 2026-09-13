@@ -66,7 +66,8 @@ export function RoutineAssignButton({ onAssign }: { onAssign: () => void }) {
 
   return (
     <Button
-      variant="ghost"
+      variant="icon"
+      size="icon-dense"
       type="button"
       className="backlog-action-icon"
       onClick={onAssign}
@@ -81,7 +82,6 @@ export function RoutineAssignButton({ onAssign }: { onAssign: () => void }) {
 export function RoutineCard({
   task,
   state,
-  session,
   ready,
   assigneeDisplayName,
   assigneeIsSelf,
@@ -95,7 +95,6 @@ export function RoutineCard({
 }: {
   task: RelayTaskListItem;
   state: RoutineState;
-  session?: RelaySession;
   ready: boolean;
   assigneeDisplayName?: string;
   assigneeIsSelf?: boolean;
@@ -110,49 +109,65 @@ export function RoutineCard({
   const { t } = useTranslation();
   const tone = routineDueTone(task);
   const startDisabled = (!task.assignedAgentId && !task.assignedTeamId) || !task.routineEnabled;
+  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
 
   // `data-routine-state`, not `data-status`: a routine definition never moves
   // through the board, so its `status` field is a constant and styling on it
   // paints every card the same.
   return (
     <article className="routine-card backlog-task list-virtual" data-priority={task.priority} data-routine-state={state} data-selected={selected ? "true" : undefined}>
-      {/* Title first — same restructure as the backlog card, and for the same
-          reason. The routine card was the worse of the two: state pill,
-          priority pill, executor chip, checkbox and reference all sat above
-          the title, and two of those pills (a `Scheduled` state beside a
-          neutral date, a `Normal` priority) were announcing defaults. Both
-          badges now stay silent at their default value, so a healthy routine
-          renders as a title and a schedule and nothing else. */}
-      <div className="backlog-task-head">
+      {/* The backlog card's structure, fact for fact: one control gutter, one
+          text column, one line of facts, one reserved footer. The two boards
+          are one record grammar in two vocabularies — see BacklogTaskCard for
+          what each part is for. Both badges stay silent at their default
+          value, so a healthy routine renders as a title, a schedule, and
+          nothing else. */}
+      <div className="backlog-card-head">
         <TaskSelectCheckbox
           className="backlog-select-box"
           checked={selected}
           label={t("routine.select_routine", { title: task.title })}
           onCheckedChange={onToggleSelect}
         />
-        <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-      </div>
-      {task.description ? <p className="backlog-description">{task.description}</p> : null}
-      <div className="backlog-meta">
-        <RoutineStateBadge state={state} />
-        <PriorityBadge priority={task.priority} />
-        <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
-        <span className="backlog-cadence">{t(`routine.types.${task.routineType ?? "task"}`)} · {t(`routine.cadences.${task.routineCadence ?? "weekly"}`)}</span>
-        {assigneeIsSelf ? null : (
-          <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
-        )}
-        <span className={cn("backlog-due", tone !== "neutral" && tone)}>
-          <ActionCalendar size={ICON.sm} />
-          {task.routineNextRunDate ? formatNextRunDate(task.routineNextRunDate) : t("routine.no_next_run")}
-        </span>
-        {session ? <span className="backlog-linked">{t("backlog.linked")}</span> : null}
-        {/* Trails the line, same as the backlog card — see its note. */}
-        <TaskReference taskId={task.id} />
-      </div>
-      <div className="backlog-task-actions" role="group" aria-label={t("backlog.actions")}>
-        <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
-          <RoutineAssignButton onAssign={onAssign} />
-          <RoutineStartButton disabled={startDisabled} onStart={onStart} starting={starting} />
+        <div className="backlog-card-body">
+          <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
+          {task.description ? <p className="backlog-description">{task.description}</p> : null}
+          <div className="backlog-meta">
+            <RoutineStateBadge state={state} />
+            <PriorityBadge priority={task.priority} />
+            {assigned ? (
+              <span className="backlog-agent">
+                <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
+                {agentDisplayName ? <span className="backlog-agent-name" aria-hidden="true">{agentDisplayName}</span> : null}
+              </span>
+            ) : null}
+            {/* The cadence, and only the cadence. Every routine on this page is
+                a task, so the type prefix was a constant printed on every
+                card; it survives only for a type that is not the default. */}
+            <span className="backlog-cadence">
+              {task.routineType && task.routineType !== "task"
+                ? `${t(`routine.types.${task.routineType}`)} · ${t(`routine.cadences.${task.routineCadence ?? "weekly"}`)}`
+                : t(`routine.cadences.${task.routineCadence ?? "weekly"}`)}
+            </span>
+            {assigneeIsSelf ? null : (
+              <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
+            )}
+            {task.routineNextRunDate ? (
+              <span className={cn("backlog-due", tone !== "neutral" && tone)}>
+                <ActionCalendar size={ICON.sm} />
+                {formatNextRunDate(task.routineNextRunDate)}
+              </span>
+            ) : null}
+          </div>
+          <div className="backlog-card-foot">
+            <TaskReference taskId={task.id} />
+            <div className="backlog-task-actions" role="group" aria-label={t("backlog.actions")}>
+              <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
+                <RoutineAssignButton onAssign={onAssign} />
+                <RoutineStartButton disabled={startDisabled} onStart={onStart} starting={starting} />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </article>
@@ -244,6 +259,7 @@ export function RoutineRow({
   const { t } = useTranslation();
   const tone = routineDueTone(task);
   const startDisabled = (!task.assignedAgentId && !task.assignedTeamId) || !task.routineEnabled;
+  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
 
   return (
     <TableRow render={<article />} className="backlog-row group list-virtual" data-routine-state={state} data-priority={task.priority} data-selected={selected ? "true" : undefined}>
