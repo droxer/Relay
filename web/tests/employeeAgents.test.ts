@@ -7,7 +7,7 @@ import type { EmployeeAgent } from "../src/types.js";
 function agent(id: string): EmployeeAgent {
   return {
     id,
-    employeeId: "alice",
+    supervisorEmployeeId: "alice",
     displayName: `Agent ${id}`,
     executorKind: "codex",
     skillPolicy: {},

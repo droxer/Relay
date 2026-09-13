@@ -46,7 +46,7 @@ const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
 
 const agent = (overrides: Partial<EmployeeAgent> = {}): EmployeeAgent => ({
   id: "lead",
-  employeeId: "employee-1",
+  supervisorEmployeeId: "employee-1",
   displayName: "Lead",
   executorKind: "codex",
   skillPolicy: {},

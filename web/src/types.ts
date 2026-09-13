@@ -634,7 +634,10 @@ export type AgentBindingStatus =
 
 export interface EmployeeAgent {
   id: string;
-  employeeId: string;
+  /** The employee who supervises this agent. `/agents` is already scoped to
+      the caller, and records that predate supervision carry no owner at all,
+      so this is optional — an agent without one is globally assignable. */
+  supervisorEmployeeId?: string;
   displayName: string;
   profileImageUrl?: string | null;
   executorKind: AgentName;
