@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 import os
 import time
 from collections import defaultdict
@@ -189,6 +191,7 @@ DAEMON_CAPABILITY_THREAD_WORKSPACES = "thread-workspaces"
 DAEMON_CAPABILITY_PROJECT_WORKSPACES = "project-workspaces"
 DAEMON_CAPABILITY_ROUND_RESULT = "round-result"
 DAEMON_CAPABILITY_PRODUCED_FILES = "produced-files"
+DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
         DAEMON_CAPABILITY_GENERATED_FILES,
@@ -199,6 +202,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_TASK_WORKSPACES,
         DAEMON_CAPABILITY_ROUND_RESULT,
         DAEMON_CAPABILITY_PRODUCED_FILES,
+        DAEMON_CAPABILITY_HANDOFF_VALIDATION,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -2756,16 +2760,18 @@ class DaemonNodeRegistry:
                 return run_request
         manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
         context = manifest.get("handoffContext")
+        handoff_validation = None
         if context:
             if context.get("contract") not in (
                 {"name": "relay.handoff.context", "version": 1},
                 {"name": "relay.handoff.context", "version": 2},
+                {"name": "relay.handoff.context", "version": 3},
             ):
                 self._fail_run_request(
                     run_request, "Unsupported handoff context version."
                 )
                 return run_request
-            if context["contract"]["version"] == 2 and not isinstance(
+            if context["contract"]["version"] >= 2 and not isinstance(
                 context.get("receipt"), dict
             ):
                 self._fail_run_request(
@@ -2798,6 +2804,26 @@ class DaemonNodeRegistry:
                     self._fail_run_request(run_request, str(error))
                     return run_request
                 state["prior_conversation"] += "\n\n" + receipt_prompt
+            if context["contract"]["version"] == 3:
+                if DAEMON_CAPABILITY_HANDOFF_VALIDATION not in (sandbox.get("capabilities") or []):
+                    self._fail_run_request(run_request, "Handoff requires a daemon with handoff-validation support. Upgrade the daemon before retrying.")
+                    return run_request
+                receipt = context["receipt"]
+                workspace = receipt.get("workspace") or {}
+                if (
+                    receipt.get("targetAssignmentId") != assignment["assignmentId"]
+                    or workspace.get("layout") != workspace_layout
+                    or workspace.get("subpath") != session_snapshot.get("workspaceSubpath")
+                ):
+                    self._fail_run_request(run_request, "Handoff receipt does not match the receiving workspace or assignment.")
+                    return run_request
+                handoff_validation = {
+                    "contract": {"name": "relay.handoff.validation", "version": 1},
+                    "assignmentId": assignment["assignmentId"],
+                    "workspaceLayout": workspace_layout,
+                    "workspaceSubpath": workspace.get("subpath"),
+                    "artifacts": deepcopy(workspace.get("artifacts", [])),
+                }
             if context.get("note"):
                 state["prior_handoff_note"] = (
                     "[Handoff instruction]\n" + context["note"]
@@ -2899,6 +2925,7 @@ class DaemonNodeRegistry:
             "_runRequestId": run_request["id"],
             "reportWorkspaceStatus": True,
             **({"reportExecutionStarted": True} if context else {}),
+            **({"handoffValidation": handoff_validation} if handoff_validation is not None else {}),
             "_nodeId": node_id,
         }
         collaboration_manifest = request_state.get(COLLABORATION_MANIFEST_STATE_KEY)

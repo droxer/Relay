@@ -36,6 +36,7 @@ import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
 import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/workspace-read.js";
 import { isMainModule } from "../src/cli.js";
 import { consumeRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
+import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
 import type { DaemonNodeCommand, DaemonNodeEvent, DaemonNodeRegistration, DaemonNodeRunCommand, StreamExecResult } from "relay-core";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -608,7 +609,8 @@ test("relay daemon ignores duplicate run.start commands already active", async (
   assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
 });
 
-test("handoff workspace drift stops the receiver before preparation or execution", async () => {
+for (const variant of ["drift", "matched", "queued-drift"] as const) {
+test(`handoff workspace validation before receiver execution: ${variant}`, async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-handoff-validation-"));
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
@@ -618,6 +620,7 @@ test("handoff workspace drift stops the receiver before preparation or execution
   const command = Object.assign(runCommand(), {
     workspacePath: root,
     reportExecutionStarted: true,
+    reportWorkspaceStatus: true,
     handoffValidation: {
       contract: { name: "relay.handoff.validation", version: 1 },
       assignmentId: "assignment_1",
@@ -627,7 +630,19 @@ test("handoff workspace drift stops the receiver before preparation or execution
     },
   });
   mkdirSync(join(root, "ses_1"));
-  writeFileSync(join(root, "ses_1", "PROGRESS.md"), "changed after capture");
+  writeFileSync(join(root, "ses_1", "PROGRESS.md"), variant === "drift" ? "changed after capture" : "accepted");
+  let releaseWriter = () => {};
+  let writer: Promise<void> | undefined;
+  if (variant === "queued-drift") {
+    let acquired!: () => void;
+    const ready = new Promise<void>((resolve) => { acquired = resolve; });
+    const held = new Promise<void>((resolve) => { releaseWriter = resolve; });
+    writer = new WorkspaceRunGate(root).run(join(root, "ses_1"), undefined, async () => {
+      acquired();
+      await held;
+    });
+    await ready;
+  }
   try {
     await runRelayDaemon({
       backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
@@ -652,21 +667,30 @@ test("handoff workspace drift stops the receiver before preparation or execution
         if (path.endsWith("/events")) {
           const event = await jsonBody<DaemonNodeEvent>(init);
           events.push(event);
+          if (variant === "queued-drift" && event.type === "run.workspace" && event.waiting) {
+            assert.equal(prepared, 0);
+            writeFileSync(join(root, "ses_1", "PROGRESS.md"), "changed by preceding writer");
+            releaseWriter();
+          }
           if (["run.completed", "run.failed"].includes(event.type)) stop.abort();
           return jsonResponse({ ok: true }, 202);
         }
         throw new Error(`unexpected URL ${url}`);
       },
     });
-    assert.equal(prepared, 0);
-    assert.equal(executed, 0);
-    assert.equal(events.some((event) => event.type === "run.executing"), false);
-    assert.equal(events.some((event) => event.type === "run.failed"), true);
+    const accepted = variant === "matched";
+    assert.equal(prepared, accepted ? 1 : 0);
+    assert.equal(executed, accepted ? 1 : 0);
+    assert.equal(events.some((event) => event.type === "run.executing"), accepted);
+    assert.equal(events.some((event) => event.type === "run.failed"), !accepted);
   } finally {
+    releaseWriter();
+    await writer;
     stop.abort();
     rmSync(root, { recursive: true, force: true });
   }
 });
+}
 
 test("relay daemon reports structured Codex collaboration events", async () => {
   const stop = new AbortController();

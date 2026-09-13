@@ -73,7 +73,7 @@ def test_receipt_freezes_requirements_claims_and_snapshot_digest():
         task=task,
     )
     receipt = context["receipt"]
-    assert context["contract"] == {"name": "relay.handoff.context", "version": 2}
+    assert context["contract"] == {"name": "relay.handoff.context", "version": 3}
     assert receipt["workDefinition"]["requirements"] == task["description"]
     assert receipt["source"]["taskEventId"] == "task-revision"
     assert receipt["checkpoint"]["claims"] == checkpoint

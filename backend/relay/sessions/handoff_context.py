@@ -131,7 +131,7 @@ def capture_handoff_context(
         prior = "\n\n".join(filter(None, [prior, reserved_report]))
     layout = session.get("workspaceLayout") or "node-root"
     context = {
-        "contract": {"name": "relay.handoff.context", "version": 2},
+        "contract": {"name": "relay.handoff.context", "version": 3},
         "assignmentId": assignment["assignmentId"],
         "targetAgentId": assignment.get("agentId"),
         "targetExecutor": assignment.get("executorKind") or assignment.get("agent"),

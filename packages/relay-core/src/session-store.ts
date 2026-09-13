@@ -134,7 +134,7 @@ export interface CollaborationRoundManifest {
       };
       verificationRequired: true;
     };
-    contract: { name: "relay.handoff.context"; version: 1 | 2 };
+    contract: { name: "relay.handoff.context"; version: 1 | 2 | 3 };
     assignmentId: string;
     targetAgentId: string | null;
     targetExecutor: string;

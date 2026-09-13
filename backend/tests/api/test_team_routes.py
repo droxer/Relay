@@ -76,7 +76,7 @@ def _agent(
             "workspacePath": f"/workspace/{employee_id}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": ["task-workspaces", "thread-workspaces"],
+            "capabilities": ["task-workspaces", "thread-workspaces", "handoff-validation"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -2444,7 +2444,7 @@ def test_task_recovery_preserves_round_verdict(
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces", "task-workspaces", "round-result"],
+            "capabilities": ["thread-workspaces", "task-workspaces", "round-result", "handoff-validation"],
             "status": "ready",
         }
     )
@@ -2742,7 +2742,7 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
     assert [e["status"] for e in deliveries] == ["queued", "running"]
 
 
-@pytest.mark.parametrize("variant,accepted", [("legacy", True), ("missing", False), ("future", False)])
+@pytest.mark.parametrize("variant,accepted", [("legacy", True), ("v2", True), ("missing", False), ("future", False)])
 def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatch, variant, accepted):
     from relay.collaboration import service
 
@@ -2754,6 +2754,8 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
         if variant == "legacy":
             context["contract"]["version"] = 1
             context.pop("receipt")
+        elif variant == "v2":
+            context["contract"]["version"] = 2
         elif variant == "missing":
             context.pop("receipt")
         else:
@@ -2761,6 +2763,8 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
         return context
 
     monkeypatch.setattr(service, "capture_handoff_context", versioned)
+    if variant in ("legacy", "v2"):
+        client.app.state.registry.update_status("test_node_alice", {"capabilities": ["thread-workspaces"]})
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
         json={

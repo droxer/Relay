@@ -59,7 +59,9 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "produced-files";
+export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "produced-files" | "handoff-validation";
+/** Checks recorded handoff hashes under the workspace gate before starting an agent. */
+export const DAEMON_CAPABILITY_HANDOFF_VALIDATION: DaemonNodeCapability = "handoff-validation";
 export const DAEMON_CAPABILITY_GENERATED_FILES: DaemonNodeCapability = "generated-files";
 /** The daemon can serve live file listings and reads from the workspace root it exposes. */
 export const DAEMON_CAPABILITY_WORKSPACE_READ_SHARED: DaemonNodeCapability = "workspace-read-shared";
@@ -196,6 +198,13 @@ export interface DaemonNodeRunCommand {
   };
   reportWorkspaceStatus?: boolean;
   reportExecutionStarted?: boolean;
+  handoffValidation?: {
+    contract: { name: "relay.handoff.validation"; version: 1 };
+    assignmentId: string;
+    workspaceLayout: DaemonWorkspaceLayout;
+    workspaceSubpath: string | null;
+    artifacts: Array<{ artifactId: string; path: string; sha256: string | null }>;
+  };
   workspacePath?: string;
   /** Missing means node-root for compatibility with commands from older backends. */
   workspaceLayout?: DaemonWorkspaceLayout;
