@@ -1405,7 +1405,32 @@ class DaemonNodeRegistry:
         )
         self._track_active_command(sandbox_id, command)
 
+    def _record_handoff_delivery(self, command: dict[str, Any], status: str) -> None:
+        if not command.get("reportExecutionStarted"):
+            return
+        delivery = command.get("delivery") or {}
+        if not delivery.get("roundId"):
+            return
+        session_id = command["sessionId"]
+        event_id = f"delivery_{command['runId']}_{status}"
+        session = self.store.get_session(session_id)
+        if any(event.get("id") == event_id for event in session.get("events", [])):
+            return
+        event = relay_event(
+            "collaboration.delivery",
+            session_id,
+            {
+                "roundId": delivery["roundId"],
+                "assignmentId": command["assignmentId"],
+                "runId": command["runId"],
+                "status": status,
+            },
+        )
+        event["id"] = event_id
+        self.store.append_event(session_id, event)
+
     def _track_active_command(self, sandbox_id: str, command: dict[str, Any]) -> None:
+        self._record_handoff_delivery(command, "queued")
         if command["type"] == "run.start":
             self.active_commands[command["id"]] = {
                 "sandboxId": sandbox_id,
@@ -2085,8 +2110,8 @@ class DaemonNodeRegistry:
 
         if (
             active.get("leaseId")
-            and event.get("leaseId")
-            and active["leaseId"] != event["leaseId"]
+            and (event.get("leaseId") or event["type"] == "run.executing")
+            and active["leaseId"] != event.get("leaseId")
         ):
             logger.warning(
                 "Daemon node event lease mismatch",
@@ -2144,6 +2169,10 @@ class DaemonNodeRegistry:
                         },
                     ),
                 )
+            return
+        if event["type"] == "run.executing":
+            self._record_handoff_delivery(command, "running")
+            self._note_run_progress(command)
             return
         if event["type"] == "run.output":
             seen = self._output_sequences_for_run(event["sessionId"], event["runId"])
@@ -2725,27 +2754,48 @@ class DaemonNodeRegistry:
                     f"The {workspace_layout} thread is missing its workspaceSubpath.",
                 )
                 return run_request
-        bridge = compute_prior_agent_bridge(
-            session_snapshot, assignment["executorKind"], self.store
-        )
-        if bridge:
-            state["prior_agent_bridge"] = bridge
-        # Chat can grow into substantial work too. Provide a stable path on
-        # every run; the prompt only asks to create a checkpoint for real work.
-        progress_file = task_progress_file(run_request["sessionId"], workspace_layout)
-        state["progress_file"] = progress_file
-        conversation = compute_conversation_history(
-            session_snapshot, self.store, progress_file=progress_file
-        )
-        if conversation:
-            state["prior_conversation"] = conversation
-        handoff_note = compute_prior_handoff_note(
-            session_snapshot,
-            assignment["executorKind"],
-            assignment.get("agentId"),
-        )
-        if handoff_note:
-            state["prior_handoff_note"] = handoff_note
+        manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        context = manifest.get("handoffContext")
+        if context:
+            if context.get("contract") != {"name": "relay.handoff.context", "version": 1}:
+                self._fail_run_request(run_request, "Unsupported handoff context version.")
+                return run_request
+            if context.get("assignmentId") != assignment["assignmentId"]:
+                self._fail_run_request(
+                    run_request, "Handoff context does not match the receiving assignment."
+                )
+                return run_request
+            # The accepted context is immutable across staging and delivery retries.
+            # Remove every legacy prelude, including a stale carried handoff note.
+            for key in ("prior_conversation", "prior_agent_bridge", "prior_handoff_note"):
+                state.pop(key, None)
+            state["task_goal"] = context["objective"]
+            state["progress_file"] = context["progressFile"]
+            state["prior_conversation"] = context["priorContext"]
+            if context.get("note"):
+                state["prior_handoff_note"] = "[Handoff instruction]\n" + context["note"]
+        else:
+            bridge = compute_prior_agent_bridge(
+                session_snapshot, assignment["executorKind"], self.store
+            )
+            if bridge:
+                state["prior_agent_bridge"] = bridge
+            # Chat can grow into substantial work too. Provide a stable path on
+            # every run; the prompt only asks to create a checkpoint for real work.
+            progress_file = task_progress_file(run_request["sessionId"], workspace_layout)
+            state["progress_file"] = progress_file
+            conversation = compute_conversation_history(
+                session_snapshot, self.store, progress_file=progress_file
+            )
+            if conversation:
+                state["prior_conversation"] = conversation
+            handoff_note = compute_prior_handoff_note(
+                session_snapshot,
+                assignment["executorKind"],
+                assignment.get("agentId"),
+            )
+            if handoff_note:
+                state["prior_handoff_note"] = handoff_note
         if assignment.get("agentDisplayName"):
             state["agent_display_name"] = assignment["agentDisplayName"]
         if assignment.get("agentInstructions"):
@@ -2786,7 +2836,7 @@ class DaemonNodeRegistry:
             "type": "run.start",
             "sessionId": run_request["sessionId"],
             "runId": run_id,
-            "taskGoal": run_request["taskGoal"],
+            "taskGoal": state.get("task_goal") or run_request["taskGoal"],
             "agent": assignment["executorKind"],
             "phase": state["team_phase"],
             "assignmentId": assignment["assignmentId"],
@@ -2820,6 +2870,7 @@ class DaemonNodeRegistry:
             "state": state,
             "_runRequestId": run_request["id"],
             "reportWorkspaceStatus": True,
+            **({"reportExecutionStarted": True} if context else {}),
             "_nodeId": node_id,
         }
         collaboration_manifest = request_state.get(COLLABORATION_MANIFEST_STATE_KEY)

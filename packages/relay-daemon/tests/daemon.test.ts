@@ -557,7 +557,7 @@ test("relay daemon ignores duplicate run.start commands already active", async (
   const events: DaemonNodeEvent[] = [];
   let execCount = 0;
   let commandBatchServed = false;
-  const command = runCommand();
+  const command = { ...runCommand(), reportExecutionStarted: true };
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
@@ -572,7 +572,10 @@ test("relay daemon ignores duplicate run.start commands already active", async (
       exec: async (_cmd, args, options) => {
         // The startup agent-inventory sweep also runs through execStream; only
         // count actual agent runs so the duplicate-suppression assertion holds.
-        if (!isInventoryProbe(args)) execCount += 1;
+        if (!isInventoryProbe(args)) {
+          assert.equal(events.filter((event) => event.type === "run.executing").length, 1);
+          execCount += 1;
+        }
         options?.sink?.("done\n");
         return { exit_code: 0, stdout: "done\n", stderr: "" };
       },
@@ -600,6 +603,7 @@ test("relay daemon ignores duplicate run.start commands already active", async (
   await daemon;
 
   assert.equal(execCount, 1);
+  assert.equal(events.filter((event) => event.type === "run.executing").length, 1);
   assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
 });
 

@@ -151,3 +151,20 @@ Coverage must prove semantic room and narrowed messages, disabled-team recovery,
 task manifests, stable assignment IDs, versioned contracts, lead-last
 discussion, revision parity across projections, pure advancement policy, and
 single-assignment daemon delivery envelopes.
+
+## Handoff context and execution evidence
+
+New handoff rounds include an optional versioned `handoffContext` linking the
+receiving assignment and decision to captured event boundaries, logical-agent
+identity, runtime/workspace identity, run/artifact references, and bounded
+context excerpts. Prepared admission freezes this context; staging retries do
+not reconstruct it from newer session state. Older rounds without the field
+continue through legacy continuity reconstruction.
+
+`agent.started` is a backend staging record, not proof of execution. Handoff
+commands request `reportExecutionStarted`; the daemon sends `run.executing`
+after workspace preparation and before entering the runner. The backend records
+`collaboration.delivery` events for queued and running evidence. The UI derives
+handoff lifecycle from these and existing terminal records. Older daemons remain
+compatible, with output serving as evidence of execution. The new acknowledgement
+uses the existing authorization boundary and requires a matching active lease.

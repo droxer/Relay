@@ -2442,3 +2442,84 @@ def test_addressed_team_reviewer_keeps_specialization(
         )
     )
     assert [a["agentId"] for a in request["assignments"]] == [reviewer["id"]]
+
+
+def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
+    recovery_team_thread, monkeypatch
+) -> None:
+    from relay.api.helpers import daemon_node_event
+
+    client, controller, session, _team, reviewer = recovery_team_thread
+    endpoint = f"/api/v1/threads/{session['id']}/recoveries"
+    body = {
+        "kind": "handoff",
+        "targetAgentId": reviewer["id"],
+        "note": "Check accessibility",
+        "idempotencyKey": "frozen-handoff",
+    }
+    with monkeypatch.context() as patch:
+
+        def fail_round(*_args, **_kwargs):
+            raise RuntimeError("interrupted round persistence")
+
+        patch.setattr(
+            type(controller), "record_collaboration_round_started", fail_round
+        )
+        with pytest.raises(RuntimeError, match="interrupted round persistence"):
+            client.post(endpoint, json=body)
+    request = (
+        client.app.state.registry.daemon_store.active_run_request_for_session_any_node(
+            session["id"]
+        )
+    )
+    frozen = request["state"]["_relay_collaboration_manifest"]["handoffContext"]
+    controller.record_user_message(
+        session["id"], "A later message must not rewrite accepted work"
+    )
+    response = client.post(endpoint, json=body)
+    assert response.status_code == 202, response.text
+    stored = response.json()["collaborationRounds"][-1]["handoffContext"]
+    assert stored == frozen
+    assert stored["targetAgentId"] == reviewer["id"]
+    assert stored["decisionId"] == response.json()["decisions"][-1]["id"]
+    registry = client.app.state.registry
+    command = registry.take_commands("test_node_alice", "node_token")[0]
+    assert command["state"]["task_goal"] == session["taskGoal"]
+    assert "later message" not in command["state"]["prior_conversation"]
+    assert (
+        command["state"]["prior_handoff_note"]
+        == "[Handoff instruction]\nCheck accessibility"
+    )
+    assert command["reportExecutionStarted"] is True
+    deliveries = [
+        e
+        for e in client.app.state.session_store.get_session(session["id"])["events"]
+        if e["type"] == "collaboration.delivery"
+    ]
+    assert [e["status"] for e in deliveries] == ["queued"]
+    execution = {
+        "type": "run.executing",
+        "commandId": command["id"],
+        "sessionId": session["id"],
+        "runId": command["runId"],
+        "agent": command["agent"],
+        "leaseId": command.get("leaseId"),
+    }
+    with pytest.raises(PermissionError):
+        registry.handle_event(
+            "test_node_alice", {**execution, "runId": "wrong-run"}, "node_token"
+        )
+    assert daemon_node_event(execution) == execution
+    for lease_id in (None, "wrong-lease"):
+        with pytest.raises(PermissionError):
+            registry.handle_event(
+                "test_node_alice", {**execution, "leaseId": lease_id}, "node_token"
+            )
+    registry.handle_event("test_node_alice", execution, "node_token")
+    registry.handle_event("test_node_alice", execution, "node_token")
+    deliveries = [
+        e
+        for e in client.app.state.session_store.get_session(session["id"])["events"]
+        if e["type"] == "collaboration.delivery"
+    ]
+    assert [e["status"] for e in deliveries] == ["queued", "running"]
