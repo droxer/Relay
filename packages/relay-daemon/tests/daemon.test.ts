@@ -446,6 +446,27 @@ test("collectExecution preserves UTF-8 split across byte chunks", async () => {
   assert.equal(rendered.some((chunk) => chunk.includes("\uFFFD")), false);
 });
 
+test("execution stream failures wait for termination before returning", async () => {
+  let finish!: (value: { exitCode: number }) => void;
+  const exited = new Promise<{ exitCode: number }>((resolve) => { finish = resolve; });
+  let settled = false;
+  let killed = false;
+  const pending = collectExecution({
+    stdin: async () => ({ close: async () => undefined }),
+    stdout: async () => ({ next: async () => { throw new Error("stream failed"); } }),
+    stderr: async () => ({ next: async () => null }),
+    kill: async () => { killed = true; },
+    wait: async () => exited,
+  }).catch((error) => error).finally(() => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const returnedEarly = settled;
+  finish({ exitCode: 1 });
+  const result = await pending;
+  assert.equal(returnedEarly, false);
+  assert.equal(killed, true);
+  assert.match(result.message, /stream failed/);
+});
+
 test("execution capture retains a bounded transcript tail", async () => {
   const output = `${"a".repeat(400_000)}terminal-jsonl\n`;
   const chunks: Array<string | null> = [output, null];
