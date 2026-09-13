@@ -32,6 +32,7 @@ const NAV_COMMANDS: readonly { route: AppRoute; labelKey: string; hint: string; 
   { route: "routine", labelKey: "nav.routine", hint: "G R", keywords: ["routines", "schedule"] },
   { route: "agents", labelKey: "nav.agents", hint: "G A", keywords: ["agents", "workforce"] },
   { route: "teams", labelKey: "nav.teams", hint: "G E", keywords: ["teams"] },
+  { route: "skills", labelKey: "nav.skills", hint: "G S", keywords: ["skills", "library", "capabilities"] },
   { route: "channels", labelKey: "nav.channels", hint: "G H", keywords: ["channels", "integrations"] },
   { route: "computer", labelKey: "nav.computer", hint: "G C", keywords: ["computer", "machines", "nodes"] },
   { route: "admin", labelKey: "nav.admin", hint: "G D", keywords: ["admin", "dashboard"] },

@@ -315,6 +315,16 @@ export class ProjectMessagesAccumulator {
 
   private applyEvent(event: RelaySession["events"][number], t: TFunction): boolean {
     switch (event.type) {
+      case "system.notice":
+        this.out.push({
+          kind: "system",
+          id: event.id,
+          timestamp: event.timestamp,
+          tone: "warn",
+          label: t("message.skills_skipped", { defaultValue: "Some managed skills were skipped" }),
+          detail: event.text,
+        });
+        return true;
       case "session.created":
       case "session.status":
       case "session.completed":

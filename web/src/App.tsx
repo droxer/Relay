@@ -62,12 +62,14 @@ const RoutinesPage = lazy(() => import("./components/RoutinesPage").then((m) => 
 const AgentsPage = lazy(() => import("./components/AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const TeamsPage = lazy(() => import("./components/TeamsPage").then((m) => ({ default: m.TeamsPage })));
 const ComputerPage = lazy(() => import("./components/ComputerPage").then((m) => ({ default: m.ComputerPage })));
+const SkillsPage = lazy(() => import("./components/SkillsPage").then((m) => ({ default: m.SkillsPage })));
 
 const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "backlog-panel",
   routine: "routine-panel",
   agents: "agents-panel",
   teams: "teams-panel",
+  skills: "skills-panel",
   channels: "channels-panel",
   admin: "admin-panel",
   computer: "computer-panel",
@@ -720,6 +722,8 @@ export function App() {
             onBackToAgents={() => navigateToAgent(null)}
             onOpenThread={openThread}
           />
+        ) : route === "skills" ? (
+          <SkillsPage currentUser={user} />
         ) : route === "computer" ? (
           <ComputerPage
             nodes={runtimeNodes}
