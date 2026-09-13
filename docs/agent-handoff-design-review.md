@@ -125,7 +125,16 @@ or inventing acceptance criteria from prose. Missing or stale checkpoints mean
 unknown progress. Prepared retries reuse accepted receipts even when later task
 edits would exceed the new-capture size limit.
 
-The remaining step is ownership revisions and runtime receiver validation.
+The third step is being delivered in two slices. Recovery admission now freezes
+the source round/revision and checks it after the durable session reservation.
+Stale requests release only their own prepared reservation, leaving the newer
+thread/task untouched. Retry accepts its own already-recorded round, never a
+later owner. The active-session database uniqueness constraint supplies admission
+serialization across replicas; the process-local dispatch lock alone does not.
+Legacy prepared manifests lack the token and retain their compatibility path.
+This does not establish exclusive task ownership across different threads.
+
+Runtime receiver validation and task-wide ownership revisions remain pending.
 Current hashes identify historical snapshots; they do not certify a live Git
 tree or enforce a writer fence. See `docs/testing/handoff-receipt.tdd.md`.
 

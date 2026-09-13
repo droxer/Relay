@@ -457,6 +457,10 @@ class CollaborationConductor:
         if intent.session_id:
             parsed["sessionId"] = intent.session_id
         if session and is_recovery:
+            manifest["sourceOwnership"] = {
+                "revision": session.get("collaborationRevision", 0),
+                "roundId": session.get("activeRoundId"),
+            }
             scope = self._recovery_work_scope(session)
             if scope["kind"] == "task":
                 parsed["taskId"] = scope["taskId"]

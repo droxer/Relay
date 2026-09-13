@@ -102,6 +102,16 @@ Links alone never grant task execution ownership. Legacy linked threads without
 recorded scope return 409 `work_scope_required`; restart through the task run
 endpoint to establish scope. Unlinked legacy threads remain recoverable.
 
+New recovery manifests also freeze `sourceOwnership: { revision, roundId }`
+from the source thread's `collaborationRevision` and `activeRoundId`. Admission
+checks this token after obtaining the durable active-session reservation and
+before recording the decision or receiver round. A replaced source returns 409
+`collaboration_conflict` with `handoff_source_changed` in the message; retrying
+that idempotency key preserves the rejection. Submit a new recovery after
+reviewing the current round. Prepared retries may resume their own recorded
+round, but cannot skip past a later round. Legacy prepared manifests without
+the token remain replayable; this is not a task-wide or filesystem writer lock.
+
 Thread completion does not update linked tasks without an explicitly scoped
 task execution. Likewise, marking a task done only closes linked threads whose
 current run request or active round belongs to that task. Routine-template and

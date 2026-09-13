@@ -25,6 +25,10 @@ from .credentials import sandbox_node_auth_error, sandbox_ui_auth_error
 from .registry import DaemonNodeRegistry
 from .scheduling import node_accepts_run
 
+_SOURCE_CHANGED_ERROR = (
+    "handoff_source_changed: the source round changed; request recovery again."
+)
+
 
 class ServerDaemonNodeBackend:
     def __init__(
@@ -75,6 +79,7 @@ class ServerDaemonNodeBackend:
                 assert_session_owned_by_employee(
                     self.registry.store, session["id"], actor_employee_id
                 )
+            self._raise_rejected_recovery(request)
             return self._reconcile_idempotent_participants(
                 request, session, actor_employee_id
             )
@@ -390,6 +395,7 @@ class ServerDaemonNodeBackend:
             request = self._resume_prepared_request(request, run_request)
             session_id = run_request["sessionId"]
             current_session = self.registry.store.get_session(session_id)
+            self._validate_source_ownership(run_request, current_session)
             if (
                 (run_request.get("state") or {}).get(
                     COLLABORATION_NEW_SESSION_STATE_KEY
@@ -527,7 +533,13 @@ class ServerDaemonNodeBackend:
             assert_session_owned_by_employee(
                 self.registry.store, session["id"], actor_employee_id
             )
+        self._raise_rejected_recovery(existing_request)
         return session
+
+    @staticmethod
+    def _raise_rejected_recovery(request: dict[str, Any]) -> None:
+        if request.get("status") == "failed" and request.get("error") == _SOURCE_CHANGED_ERROR:
+            raise ValueError(_SOURCE_CHANGED_ERROR)
 
     @staticmethod
     def _validate_idempotency_fingerprint(
@@ -800,6 +812,38 @@ class ServerDaemonNodeBackend:
             participants,
             session_id=run_request_id,
         )["id"]
+
+    def _validate_source_ownership(
+        self, run_request: dict[str, Any], session: dict[str, Any]
+    ) -> None:
+        # Check AFTER the durable reservation, not just under the process-local
+        # dispatch lock. The active-session unique index prevents a competing
+        # admission on another backend replica from replacing this owner while
+        # we persist its round. Check the frozen manifest on prepared retries.
+        manifest = (run_request.get("state") or {}).get(
+            COLLABORATION_MANIFEST_STATE_KEY
+        ) or {}
+        source = manifest.get("sourceOwnership")
+        if source is None:  # Legacy prepared requests have no revision token.
+            return
+        revision = session.get("collaborationRevision", 0)
+        round_id = session.get("activeRoundId")
+        expected = source.get("revision") if isinstance(source, dict) else None
+        valid = type(expected) is int and expected >= 0
+        if valid and (
+            (revision == expected and round_id == source.get("roundId"))
+            or (
+                revision == expected + 1
+                and round_id == manifest.get("roundId")
+            )
+        ):
+            return
+        # Do not fail the session or its task: they belong to the newer owner.
+        self.registry.daemon_store.update_run_request_if_status(
+            run_request["id"], "prepared",
+            {"status": "failed", "error": _SOURCE_CHANGED_ERROR, "completedAt": now_iso()},
+        )
+        raise ValueError(_SOURCE_CHANGED_ERROR)
 
     def _record_run_intent(
         self,
