@@ -73,10 +73,11 @@
   outline: none;
 }
 
+/* A div, not a <ul>: Combobox.List renders the listbox element itself, so the
+   list-reset that used to tame <ul> is gone with the tag. */
 .command-list {
   margin: 0;
   padding: var(--sp-2);
-  list-style: none;
   max-height: min(50vh, 420px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -102,7 +103,11 @@
   user-select: none;
 }
 
-.command-item[data-active="true"] {
+/* `data-highlighted`, not the old hand-written `data-active`: the Combobox
+   primitive owns the roving highlight now and marks it with its own
+   attribute. Keying on the old one left the palette with no visible
+   selection at all — which looks like nothing rather than like a bug. */
+.command-item[data-highlighted] {
   background: var(--action-soft);
   color: var(--ink-1);
 }

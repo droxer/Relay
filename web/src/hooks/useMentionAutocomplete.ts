@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   activeMentionQuery,
   applyMention,
@@ -8,12 +8,17 @@ import {
 export type MentionAutocomplete = {
   /** Rows to render; empty means the popup is closed. */
   matches: MentionCandidate[];
-  activeIndex: number;
-  setActiveIndex: (index: number) => void;
   /** Track the caret so the open `@…` fragment can be found. */
   onCaretChange: (caret: number) => void;
   close: () => void;
-  /** Handle a key while the popup is open; false means the composer keeps it. */
+  /**
+   * Handle a key while the popup is open; false means the composer keeps it.
+   *
+   * Only the two keys the Combobox does NOT bind. The highlight (ArrowUp /
+   * ArrowDown), its wraparound, and Enter-to-accept moved to the primitive
+   * when the popup became a `Combobox` — leaving them here too would run both
+   * paths on one keystroke and splice the accepted name in twice.
+   */
   handleKey: (key: string) => boolean;
   pick: (candidate: MentionCandidate) => void;
 };
@@ -34,7 +39,6 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
   const [caret, setCaret] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [acceptedText, setAcceptedText] = useState<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
 
   const open = useMemo(() => activeMentionQuery(text, caret), [text, caret]);
   const matches = useMemo(() => {
@@ -44,10 +48,6 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
       (candidate) => !needle || candidate.displayName.toLowerCase().includes(needle),
     );
   }, [acceptedText, candidates, dismissedAt, open, text]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [open?.query, open?.start]);
 
   const close = useCallback(() => {
     setDismissedAt(open ? open.start : null);
@@ -80,33 +80,32 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
   const handleKey = useCallback(
     (key: string) => {
       if (matches.length === 0) return false;
-      if (key === "ArrowDown") {
-        setActiveIndex((index) => (index + 1) % matches.length);
-        return true;
-      }
-      if (key === "ArrowUp") {
-        setActiveIndex((index) => (index - 1 + matches.length) % matches.length);
-        return true;
-      }
-      if (key === "Enter" || key === "Tab") {
-        const candidate = matches[Math.min(activeIndex, matches.length - 1)];
+      /* Tab accepts, because the Combobox binds Enter but not Tab, and a
+         half-typed `@Ad` completing on Tab is the habit this composer was
+         built around. It accepts the FIRST match rather than a tracked
+         highlight: the highlight lives in the primitive now, and Tab without
+         arrowing means "the obvious one". */
+      if (key === "Tab") {
+        const candidate = matches[0];
         if (!candidate?.eligible) return false;
         pick(candidate);
         return true;
       }
+      /* Escape dismisses THIS fragment. The Combobox cannot do it: `open` is
+         derived from `matches`, so the primitive closing itself would be
+         overridden on the next render — the fragment has to be marked
+         dismissed at the source. */
       if (key === "Escape") {
         close();
         return true;
       }
       return false;
     },
-    [activeIndex, close, matches, pick],
+    [close, matches, pick],
   );
 
   return {
     matches,
-    activeIndex: Math.min(activeIndex, Math.max(matches.length - 1, 0)),
-    setActiveIndex,
     onCaretChange: setCaret,
     close,
     handleKey,
