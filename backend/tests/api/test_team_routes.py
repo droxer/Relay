@@ -2841,3 +2841,25 @@ def test_handoff_replays_after_its_round_was_recorded(recovery_team_thread, monk
     assert response.json()["activeRoundId"] == before["activeRoundId"]
     assert response.json()["collaborationRevision"] == before["collaborationRevision"]
     assert len(registry.take_commands("test_node_alice", "node_token")) == 1
+
+
+@pytest.mark.parametrize("capable", [False, True])
+def test_handoff_requires_runtime_validation(recovery_team_thread, capable):
+    client, _controller, session, _team, reviewer = recovery_team_thread
+    registry = client.app.state.registry
+    registry.update_status("test_node_alice", {"capabilities": ["thread-workspaces", *(["handoff-validation"] if capable else [])]})
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/recoveries",
+        json={"kind": "handoff", "targetAgentId": reviewer["id"]},
+    )
+    assert response.status_code == 202, response.text
+    commands = registry.take_commands("test_node_alice", "node_token")
+    if capable:
+        assert commands[0]["handoffValidation"] == {
+            "contract": {"name": "relay.handoff.validation", "version": 1},
+            "assignmentId": commands[0]["assignmentId"],
+            "workspaceLayout": "thread", "workspaceSubpath": None, "artifacts": [],
+        }
+    else:
+        assert commands == []
+        assert response.json()["status"] == "failed"
