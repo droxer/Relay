@@ -542,8 +542,11 @@ class ServerDaemonNodeBackend:
 
     @staticmethod
     def _raise_rejected_recovery(request: dict[str, Any]) -> None:
-        if request.get("status") == "failed" and request.get("error") == _SOURCE_CHANGED_ERROR:
-            raise ValueError(_SOURCE_CHANGED_ERROR)
+        error = request.get("error")
+        if request.get("status") == "failed" and isinstance(error, str) and (
+            error == _SOURCE_CHANGED_ERROR or error.startswith("task_ownership_changed:")
+        ):
+            raise ValueError(error)
 
     @staticmethod
     def _validate_idempotency_fingerprint(
