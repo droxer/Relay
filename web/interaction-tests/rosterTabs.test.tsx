@@ -55,7 +55,7 @@ it("keeps focus inside an empty roster so the user can switch back", () => {
 it("moves focus into the new roster after a tab click", () => {
   render(<Picker />);
   screen.getByRole("option", { name: "Alice" }).focus();
-  fireEvent.click(screen.getByRole("tab", { name: /Teams/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /Teams/ }));
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "Team One" }));
 });
 

@@ -26,8 +26,11 @@ describe("Task assignment discoverability", () => {
     const selectSource = await readFile(resolve("web/src/components/ui/select.tsx"), "utf8");
     const rosterStyles = await readFile(resolve("web/src/styles/roster-select.css"), "utf8");
 
-    // One tab per roster, replacing the stacked group labels.
-    assert.match(tabsSource, /role="tablist"/);
+    // One choice per roster, replacing the stacked group labels. A RADIOGROUP,
+    // not a tablist: the strip has no tabpanel to control — switching a roster
+    // reloads the listbox, which carries its own role.
+    assert.match(tabsSource, /className="roster-tabs" role="radiogroup"/);
+    assert.match(tabsSource, /role="radio"\n\s+tabIndex=\{-1\}\n\s+aria-checked=/);
     assert.match(pickerSource, /id: "agents", label: t\("backlog\.agents_section"\)/);
     assert.match(pickerSource, /id: "teams", label: t\("backlog\.teams_section"\)/);
     assert.doesNotMatch(pickerSource, /<SelectLabel>/);
