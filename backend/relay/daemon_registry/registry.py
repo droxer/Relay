@@ -1568,6 +1568,7 @@ class DaemonNodeRegistry:
                     run_request,
                     f"The {workspace_layout} requires a daemon with "
                     f"{required_workspace_capability} support.",
+                    delivery_never_sent=record.get("attempt") == 1,
                 )
                 continue
             try:
@@ -2056,10 +2057,19 @@ class DaemonNodeRegistry:
             run_id=active["runId"],
             reason=reason,
         )
+        cancel_id = new_database_id()
+        request = self.daemon_store.run_request_for_command(active["commandId"])
+        if request:
+            stopping = self.daemon_store.request_run_stop(request["id"], active["commandId"], reason)
+            if not stopping:
+                return active
+            cancel_id = stopping["state"]["_relay_stop_command_id"]
+            if self.daemon_store.get_command(cancel_id):
+                return active
         self.enqueue(
             sandbox_id,
             {
-                "id": new_database_id(),
+                "id": cancel_id,
                 "type": "run.cancel",
                 "commandId": active["commandId"],
                 "sessionId": active["sessionId"],
@@ -2391,6 +2401,10 @@ class DaemonNodeRegistry:
             command_id = run.get("commandId")
             if not command_id:
                 continue
+            command = self.daemon_store.get_command(command_id)
+            if command and command.get("status") == "dispatched":
+                self._cancel_active_run_unlocked(run["nodeId"], run["sessionId"], "Runtime node retired; waiting for execution to stop.")
+                continue
             try:
                 self.daemon_store.mark_command_failed(
                     run["nodeId"],
@@ -2514,8 +2528,19 @@ class DaemonNodeRegistry:
                             error=str(error),
                         )
                 continue
+            if request.get("status") == "running" and (request.get("state") or {}).get("_relay_stop_command_id"):
+                # Replay the durable intent if the coordinator died before
+                # publishing its stable-id cancel command.
+                self._cancel_active_run_unlocked(
+                    request["nodeId"], request["sessionId"], request.get("error") or "Run stopped."
+                )
             session = self.store.get_session(request["sessionId"])
             if session.get("status") in ("completed", "failed", "cancelled"):
+                command_record = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
+                terminal_event = ((command_record or {}).get("command") or {}).get("_terminalEvent")
+                if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
+                    self._claim_and_advance_run_request(terminal_event)
+                    continue
                 terminalized = self.daemon_store.update_run_request_if_status(
                     request["id"],
                     request["status"],
@@ -3202,6 +3227,19 @@ class DaemonNodeRegistry:
                 run_request["nodeId"], {"status": "ready", "lastError": outcome}
             )
             return
+        if session_before.get("status") in ("completed", "failed", "cancelled"):
+            # The human/session terminal decision wins over a late daemon
+            # result. The command already retains the acknowledged result;
+            # only finish request bookkeeping, never reopen work or dispatch
+            # another assignment during crash recovery.
+            self.active_commands.pop(event["commandId"], None)
+            self.clear_run_output(event["runId"])
+            self.daemon_store.mark_cancel_commands_completed(run_request["nodeId"], event["commandId"])
+            self.daemon_store.update_run_request_if_claimed(
+                run_request["id"], TERMINAL_CLAIM_ID_STATE_KEY, terminal_claim_id,
+                {"status": session_before["status"], "error": session_before.get("finalOutcome")},
+            )
+            return
         existing_completion = next(
             (
                 item
@@ -3218,6 +3256,10 @@ class DaemonNodeRegistry:
         state.pop(TERMINAL_EVENT_STATE_KEY, None)
         state.pop(TERMINAL_CLAIM_ID_STATE_KEY, None)
         state.pop(TERMINAL_CLAIM_EXPIRES_STATE_KEY, None)
+        if state.get("_relay_stop_command_id"):
+            # Any terminal acknowledgement proves exit, but a late success
+            # must not override the durable stop decision or start a successor.
+            event = {**event, "type": "run.cancelled", "reason": run_request.get("error") or "Run stopped."}
         if event["type"] == "run.failed":
             agent_log = event.get("agentLog") or event["error"]
             exit_code = event.get("exitCode", 1)
@@ -3777,9 +3819,15 @@ class DaemonNodeRegistry:
             execution_owner=request_execution_owner(run_request),
         )
 
-    def _fail_run_request(self, run_request: dict[str, Any], outcome: str) -> None:
+    def _fail_run_request(self, run_request: dict[str, Any], outcome: str, *, delivery_never_sent: bool = False) -> None:
         run_id = run_request.get("currentRunId")
         command_id = run_request.get("currentCommandId")
+        command = self.daemon_store.get_command(command_id) if command_id else None
+        if command and command.get("status") == "dispatched" and not delivery_never_sent:
+            # Timeout, loss of liveness, and retirement are not exit evidence.
+            # Keep both reservations until the daemon acknowledges termination.
+            self._cancel_active_run_unlocked(run_request["nodeId"], run_request["sessionId"], outcome)
+            return
         if command_id:
             self.active_commands.pop(command_id, None)
             event = {

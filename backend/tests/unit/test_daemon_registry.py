@@ -4178,6 +4178,84 @@ def test_terminal_event_wins_over_stale_reaper_on_another_registry(monkeypatch) 
     asyncio.run(run_flow())
 
 
+@pytest.mark.parametrize("terminal", ["cancelled", "completed", "failed"])
+def test_reaper_recovers_ack_after_cancelled_session_without_rewriting_it(terminal):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root)
+            task = tasks.create_task({"title": "Cancellation crash boundary"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            SessionController(sessions).cancel_session(command["sessionId"], "human cancelled")
+            before_task = tasks.get_task(task["id"])
+            before_session = sessions.get_session(command["sessionId"])
+            event = {
+                "type": f"run.{terminal}", "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "exitCode": 0, "reason": "stopped", "error": "stopped",
+            }
+            assert getattr(registry.daemon_store, f"mark_command_{terminal}")("sbx_alice", event)
+            registry.reap_stale_runs()
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+            assert sessions.get_session(command["sessionId"]) == before_session
+            assert tasks.get_task(task["id"]) == before_task
+            registry.reap_stale_runs()
+            assert sessions.get_session(command["sessionId"]) == before_session
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_reaper_republishes_durable_stop_after_crash(store_factory):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Recover stop publication"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            stopping = registry.daemon_store.request_run_stop(request["id"], command["id"], "human cancelled")
+            SessionController(sessions).cancel_session(command["sessionId"], "human cancelled")
+            registry.active_commands.clear()
+            registry.reap_stale_runs()
+            registry.reap_stale_runs()
+            [cancel] = registry.daemon_store.take_queued_commands("sbx_alice")
+            assert cancel["id"] == stopping["state"]["_relay_stop_command_id"]
+            assert cancel["command"]["type"] == "run.cancel"
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is not None
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("reason", ["timeout", "retired"])
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("ack", ["cancelled", "completed"])
+def test_delivered_task_reservation_waits_for_exit_acknowledgement(reason, store_factory, ack):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Stop before transfer"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            if reason == "timeout":
+                registry.daemon_store.update_run_request(request["id"], {"currentStartedAt": "2000-01-01T00:00:00Z"})
+            else:
+                registry.fence_managed_node("sbx_alice")
+            registry.reap_stale_runs()
+            assert registry.daemon_store.active_run_request_for_task(task["id"])["id"] == request["id"]
+            assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+            registry.daemon_store.renew_command_leases("sbx_alice", [(command["id"], command["leaseId"])], lease_seconds=-1)
+            commands = registry.daemon_store.take_queued_commands("sbx_alice")
+            assert [item["command"]["type"] for item in commands] == ["run.cancel"]
+            registry.handle_event("sbx_alice", {
+                "type": f"run.{ack}", "commandId": command["id"], "exitCode": 0,
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "reason": "process exited", "leaseId": command["leaseId"],
+            }, "node_token")
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+            assert _sessions.get_session(command["sessionId"])["status"] == "cancelled"
+
+    asyncio.run(run_flow())
+
+
 def test_terminal_event_retry_recovers_after_handler_crash() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
@@ -4362,7 +4440,7 @@ def test_terminal_event_replay_is_claimed_by_only_one_backend_replica() -> None:
     asyncio.run(run_flow())
 
 
-def test_daemon_run_timeout_marks_session_failed(monkeypatch) -> None:
+def test_daemon_run_timeout_waits_for_stop_acknowledgement(monkeypatch) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
@@ -4421,9 +4499,17 @@ def test_daemon_run_timeout_marks_session_failed(monkeypatch) -> None:
             )
             registry.reap_stale_runs()
 
+            assert session_store.get_session(session["id"])["status"] == "running"
+            [cancel] = registry.take_commands("sbx_alice", "node_token")
+            assert cancel["type"] == "run.cancel"
+            registry.handle_event("sbx_alice", {
+                "type": "run.cancelled", "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "reason": cancel["reason"], "leaseId": command["leaseId"],
+            }, "node_token")
             failed = session_store.get_session(session["id"])
-            assert failed["status"] == "failed"
-            assert "timed out" in failed["finalOutcome"]
+            assert failed["status"] == "cancelled"
+            assert "timed out" in cancel["reason"]
             assert daemon_store.list_active_run_requests("sbx_alice") == []
             assert command["id"] not in registry.active_commands
             assert command["runId"] not in registry.outputs
@@ -4887,9 +4973,9 @@ def test_only_the_final_assignment_reports_the_round_result() -> None:
     asyncio.run(run_flow())
 
 
-def _round_result_registry(root: str) -> tuple[Any, Any, Any]:
+def _round_result_registry(root: str, store_factory=LocalDaemonStore) -> tuple[Any, Any, Any]:
     session_store = LocalSessionStore(root)
-    daemon_store = LocalDaemonStore(root)
+    daemon_store = store_factory(root)
     task_store = LocalTaskStore(root)
     registry = DaemonNodeRegistry(session_store, daemon_store, task_store=task_store)
     registry.register(
@@ -5246,8 +5332,9 @@ def test_streaming_output_defers_the_run_timeout(monkeypatch) -> None:
             registry.reap_stale_runs()
 
             reaped = session_store.get_session(session["id"])
-            assert reaped["status"] == "failed"
-            assert "maximum duration" in reaped["finalOutcome"]
+            assert reaped["status"] == "running"
+            [stopping] = daemon_store.list_active_run_requests("sbx_alice")
+            assert "maximum duration" in stopping["error"]
 
     monkeypatch.setattr("relay.daemon_registry.registry.DAEMON_RUN_TIMEOUT_MS", 60_000)
     asyncio.run(run_flow())

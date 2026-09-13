@@ -446,6 +446,27 @@ test("collectExecution preserves UTF-8 split across byte chunks", async () => {
   assert.equal(rendered.some((chunk) => chunk.includes("\uFFFD")), false);
 });
 
+test("execution stream failures wait for termination before returning", async () => {
+  let finish!: (value: { exitCode: number }) => void;
+  const exited = new Promise<{ exitCode: number }>((resolve) => { finish = resolve; });
+  let settled = false;
+  let killed = false;
+  const pending = collectExecution({
+    stdin: async () => ({ close: async () => undefined }),
+    stdout: async () => ({ next: async () => { throw new Error("stream failed"); } }),
+    stderr: async () => ({ next: async () => null }),
+    kill: async () => { killed = true; },
+    wait: async () => exited,
+  }).catch((error) => error).finally(() => { settled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const returnedEarly = settled;
+  finish({ exitCode: 1 });
+  const result = await pending;
+  assert.equal(returnedEarly, false);
+  assert.equal(killed, true);
+  assert.match(result.message, /stream failed/);
+});
+
 test("execution capture retains a bounded transcript tail", async () => {
   const output = `${"a".repeat(400_000)}terminal-jsonl\n`;
   const chunks: Array<string | null> = [output, null];
@@ -460,6 +481,28 @@ test("execution capture retains a bounded transcript tail", async () => {
 
   assert.ok(result.stdout.length <= 262_144);
   assert.match(result.stdout, /terminal-jsonl\n$/);
+});
+
+test("cancellation stops children even when the parent exits first", { skip: process.platform === "win32" }, async () => {
+  const controller = new AbortController();
+  let childPid = 0;
+  const childScript = 'process.on("SIGTERM", () => {}); process.send("ready"); setInterval(() => {}, 1000)';
+  const parentScript = `const {spawn}=require("node:child_process"); const child=spawn(process.execPath,["-e",${JSON.stringify(childScript)}],{stdio:["ignore","ignore","ignore","ipc"]}); child.on("message",()=>process.stdout.write(String(child.pid)+"\\n")); setInterval(()=>{},1000);`;
+  try {
+    await localProcessExecStream(process.execPath, ["-e", parentScript], {
+      signal: controller.signal,
+      sink: (text) => {
+        childPid = Number(text.trim());
+        if (Number.isInteger(childPid) && childPid > 0) controller.abort("stop tree");
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.throws(() => process.kill(childPid, 0), /ESRCH/);
+  } finally {
+    if (childPid > 0) {
+      try { process.kill(childPid, "SIGKILL"); } catch { /* Already exited. */ }
+    }
+  }
 });
 
 test("local execution capture retains a bounded transcript tail", async () => {

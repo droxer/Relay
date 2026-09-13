@@ -783,6 +783,8 @@ class LocalDaemonStore:
                 request_id = command.get("_runRequestId")
                 if command.get("type") == "run.start" and request_id:
                     request = self.get_run_request(request_id)
+                    if record.get("status") == "dispatched" and ((request or {}).get("state") or {}).get("_relay_stop_command_id"):
+                        continue
                     if not (
                         request
                         and request.get("status") == "running"
@@ -1135,6 +1137,15 @@ class LocalDaemonStore:
                 if not command or command.get("status") not in ("pending", "queued"):
                     return None
             return self.update_run_request(request_id, patch)
+
+    def request_run_stop(self, request_id: str, command_id: str, reason: str) -> dict[str, Any] | None:
+        with self._lock, self._run_request_claim_lock():
+            current = self.get_run_request(request_id)
+            if not current or current.get("status") != "running" or current.get("currentCommandId") != command_id:
+                return None
+            state = dict(current.get("state") or {})
+            state.setdefault("_relay_stop_command_id", new_database_id())
+            return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
         self,
@@ -2383,6 +2394,8 @@ class DatabaseDaemonStore:
                         and request_row.get("status") == "running"
                         and str(request_row.get("current_command_id")) == record["id"]
                     )
+                    if record.get("status") == "dispatched" and request_row and (request_row.get("state") or {}).get("_relay_stop_command_id"):
+                        continue
                     if not request_is_live:
                         terminal_event = {
                             "type": "run.cancelled",
@@ -2967,6 +2980,18 @@ class DatabaseDaemonStore:
                 ),
             )
         return updated
+
+    def request_run_stop(self, request_id: str, command_id: str, reason: str) -> dict[str, Any] | None:
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(select(self.run_requests).where(self.run_requests.c.id == request_id).with_for_update()).mappings().first()
+            if not row:
+                return None
+            current = row_to_run_request(row)
+            if current.get("status") != "running" or current.get("currentCommandId") != command_id:
+                return None
+            state = dict(current.get("state") or {})
+            state.setdefault("_relay_stop_command_id", new_database_id())
+            return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
         self,

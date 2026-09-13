@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -75,6 +76,7 @@ class SessionStore(Protocol):
 
 
 class TaskStore(Protocol):
+    def task_write_scope(self, task_id: str) -> AbstractContextManager[dict[str, Any]]: ...
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     def get_task(self, task_id: str) -> dict[str, Any]: ...
     def list_tasks(self) -> list[dict[str, Any]]: ...
@@ -287,6 +289,9 @@ class AuthStore(Protocol):
 
 
 class DaemonStore(Protocol):
+    def request_run_stop(
+        self, request_id: str, command_id: str, reason: str
+    ) -> dict[str, Any] | None: ...
     def claim_pending_node(
         self, node: dict[str, Any]
     ) -> tuple[dict[str, Any], bool]: ...

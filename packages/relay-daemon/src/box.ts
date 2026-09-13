@@ -419,6 +419,20 @@ export async function collectExecution(
   if (signal?.aborted) abortExecution();
   signal?.addEventListener("abort", abortExecution, { once: true });
 
+  async function waitForConfirmedExit(): Promise<any> {
+    let warned = false;
+    for (;;) {
+      try { return await execution.wait(); } catch {
+        if (!warned) {
+          process.stderr.write("[relay] Cannot confirm sandbox execution exit; retaining the run.\n");
+          warned = true;
+        }
+        await execution.kill?.().catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
   async function readStream(name: "stdout" | "stderr", capture: BoundedTextCapture): Promise<void> {
     const reader = await execution[name]();
     const decoder = new TextDecoder("utf-8");
@@ -450,8 +464,15 @@ export async function collectExecution(
 
   try {
     await closeExecutionStdin(execution);
-    await Promise.all([readStream("stdout", stdoutCapture), readStream("stderr", stderrCapture)]);
-    const result = await execution.wait();
+    try {
+      await Promise.all([readStream("stdout", stdoutCapture), readStream("stderr", stderrCapture)]);
+    } catch (error) {
+      // A broken output stream is not proof that its writer has exited.
+      await execution.kill?.().catch(() => undefined);
+      await waitForConfirmedExit();
+      throw error;
+    }
+    const result = await waitForConfirmedExit();
     return {
       exit_code: result.exitCode ?? -1,
       stdout: stdoutCapture.toString(),
