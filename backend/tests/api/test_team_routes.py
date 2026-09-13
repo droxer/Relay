@@ -2827,6 +2827,39 @@ def test_handoff_rejects_replaced_source_round(recovery_team_thread, monkeypatch
     assert "handoff_source_changed" in replay.text
 
 
+def test_handoff_rejects_replaced_task_generation_and_preserves_rejection(recovery_team_thread, monkeypatch):
+    from relay.persistence.store_common import relay_task_event
+
+    client, controller, session, _team, reviewer = recovery_team_thread
+    tasks = client.app.state.task_store
+    registry = client.app.state.registry
+    task = tasks.create_task({"title": "Owned task", "ownerEmployeeId": "alice"})
+    tasks.link_session(task["id"], session["id"])
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "task-source", "collaborationId": "task-work",
+        "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    original = registry.daemon_store.create_run_request
+    newer = []
+
+    def reserve(*args, **kwargs):
+        tasks.append_event(task["id"], relay_task_event("task.execution.claimed", task["id"], {
+            "requestId": "newer-owner", "expectedRevision": 0,
+        }))
+        newer.append(tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "done"})))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(registry.daemon_store, "create_run_request", reserve)
+    endpoint = f"/api/v1/threads/{session['id']}/recoveries"
+    body = {"kind": "handoff", "targetAgentId": reviewer["id"], "idempotencyKey": "stale-task"}
+    for _ in range(2):
+        response = client.post(endpoint, json=body)
+        assert response.status_code == 409, response.text
+        assert "task_ownership_changed" in response.text
+        assert tasks.get_task(task["id"]) == newer[0]
+        assert registry.take_commands("test_node_alice", "node_token") == []
+
+
 def test_handoff_replays_after_its_round_was_recorded(recovery_team_thread, monkeypatch):
     client, _controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
