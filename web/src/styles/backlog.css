@@ -124,25 +124,14 @@
 }
 
 /* button-secondary — toggles the filter panel; count uses badge-mono. */
+/* `variant="secondary"` at `size="sm"` is this control: the --control-fill
+   plate, the --control-h-sm height, the --r-2 corner, and the
+   --control-fill-hover wash the `:hover` rule below used to restate. The
+   Button underneath declared `ghost`, so the prop and the class disagreed and
+   the class won. Only the label tier and the gap are local. */
 .backlog-filter-chip {
-  display: inline-flex;
-  align-items: center;
   gap: var(--sp-2);
-  min-height: var(--control-h-sm);
-  padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid transparent;
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  color: var(--ink-1);
   font: var(--type-label);
-  cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease);
-}
-
-.backlog-filter-chip:hover {
-  background: var(--control-fill-hover);
 }
 
 .backlog-filter-chip[data-applied="true"],

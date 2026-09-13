@@ -61,7 +61,9 @@ export function FiltersBar({
         />
         <div className="backlog-filter-actions">
           {trailing}
-          <Button variant="ghost"
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             className="backlog-filter-chip"
             data-active={expanded ? "true" : "false"}

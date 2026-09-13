@@ -463,17 +463,18 @@
 .artifacts-empty-ghost:nth-child(2) { opacity: 0.6; animation-delay: calc(var(--t-stagger) * 2); }
 .artifacts-empty-ghost:nth-child(3) { opacity: 0.32; animation-delay: calc(var(--t-stagger) * 4); }
 
+/* The `state` Badge variant already draws a --tone-line hairline on the chip
+   geometry; this is a ghost in an empty-state illustration, so it overrides the
+   line to DASHED and softens the ink. Everything else — inline-flex, the
+   --sp-2 inline pad, --r-2, nowrap — came from restating the badge by hand. */
 .artifacts-empty-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--sp-hairline) var(--sp-2);
-  border: 1px dashed var(--tone-line);
   --tone: var(--info);
-  border-radius: var(--r-2);
+  border-style: dashed;
+  border-width: 1px;
+  padding-block: var(--sp-hairline);
   color: color-mix(in srgb, var(--info) 80%, transparent);
   font: var(--type-label-strong);
   letter-spacing: var(--track-0);
-  white-space: nowrap;
 }
 
 .artifacts-empty-line {

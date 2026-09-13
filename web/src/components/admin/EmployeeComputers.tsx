@@ -8,6 +8,7 @@ import {
   ICON,
   nodeOwnershipIcon,
 } from "../icons";
+import { Badge } from "@/components/ui/badge";
 
 /**
  * The computers assigned to one employee.
@@ -45,7 +46,7 @@ export function EmployeeComputers({
           t(`status.${status}`, { defaultValue: status }),
         ].join(" · ");
         return (
-          <span
+          <Badge
             key={node.id}
             className="adm-node-chip adm-computer-chip"
             data-ownership={ownership}
@@ -57,7 +58,7 @@ export function EmployeeComputers({
             <span className="adm-computer-chip-name code" translate="no">
               {node.displayName || node.id}
             </span>
-          </span>
+          </Badge>
         );
       })}
     </>

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { TaskPriority } from "../types";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
 
 /**
@@ -24,14 +25,14 @@ export function PriorityBadge({ priority, always = false }: { priority: TaskPrio
   const label = t(`backlog.priorities.${priority}`);
   return (
     <Tooltip content={label}>
-      <span className="priority-badge" data-priority={priority}>
+      <Badge variant="state" className="priority-badge" data-priority={priority}>
         <span className="priority-bars" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
         <span className="priority-badge-label">{label}</span>
-      </span>
+      </Badge>
     </Tooltip>
   );
 }

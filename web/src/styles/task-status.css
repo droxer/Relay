@@ -76,15 +76,21 @@
    Three ascending bars filled to the level (low 1 / normal 2 / high 3) so
    priority reads as a rank at a glance, distinct from the leading-dot status
    badges. The accent escalates muted → ink → danger to match the card rail. */
+/* The chip geometry is the `state` Badge variant's; this rule used to redraw
+   it. `state` is the right variant precisely because priority's tone scale is
+   not one of the five semantic ones — it runs low → normal → high on its own
+   --prio-accent ramp, which is what the rules below set.
+
+   The inline padding is asymmetric on purpose: the leading signal bars are
+   narrower than a text cap, so the badge's even --sp-2 pad would read as a gap
+   before them. Only the leading side is pulled in. */
 .priority-badge {
   --prio-accent: var(--ink-4);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  padding: var(--sp-0-5) var(--sp-2) var(--sp-0-5) var(--sp-1-5);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-0);
+  /* Explicit border-color, NOT a --tone-line override: roles.css derives
+     --tone-line from --tone, so pinning it here would also pin the high tier,
+     whose whole signal is that derivation turning warn. */
+  border-color: var(--line-1);
+  padding-left: var(--sp-1-5);
   color: var(--ink-2);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);

@@ -16,6 +16,7 @@ import { NodeProfileBadges } from "./NodeProfileBadges";
 import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { TonePill } from "../StatusPill";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ActionApprove,
@@ -124,10 +125,10 @@ export function NodeCard({
       />
 
       {employeeName ? (
-        <div className="adm-node-card-employee-badge" title={employeeName} translate="no">
+        <Badge className="adm-node-card-employee-badge" title={employeeName} translate="no">
           <AdminEmployees size={ICON.xs} className="adm-node-card-employee-icon" aria-hidden="true" />
           <span className="adm-node-card-employee-badge-text">{employeeName}</span>
-        </div>
+        </Badge>
       ) : null}
 
       <div className="adm-node-card-body">

@@ -2,6 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 import { RelayEmptyState } from "../RelayEmptyState";
+import { Badge } from "@/components/ui/badge";
 
 /* The specimen rows preview real artifact kinds so the ghost list reads as
    a promise, not decoration — labels come from the shared kind i18n table. */
@@ -22,7 +23,7 @@ export function ArtifactsEmpty({ title, hint }: { title: string; hint?: string }
         <ul className="artifacts-empty-ghosts">
           {GHOST_KINDS.map((kind) => (
             <li key={kind} className="artifacts-empty-ghost">
-              <span className="artifacts-empty-tag">{t(`artifact.kind.${kind}`)}</span>
+              <Badge variant="state" className="artifacts-empty-tag">{t(`artifact.kind.${kind}`)}</Badge>
               <span className="artifacts-empty-line" />
               <span className="artifacts-empty-date tnum">··:··</span>
             </li>

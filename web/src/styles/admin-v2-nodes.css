@@ -121,16 +121,12 @@
   color: var(--ink-3);
 }
 
+/* Chrome (inline-flex, gap, --sp-2 pad, --line-1 hairline, --r-2, the
+   --surface-2 fill) is the neutral Badge variant — it was restated here
+   declaration for declaration. What is left is this badge's fixed 20px height,
+   which the card's header row is measured against. */
 .adm-node-card-employee-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
   height: 20px;
-  padding: 0 var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  width: fit-content;
 }
 
 .adm-node-card-employee-icon {
@@ -464,20 +460,18 @@
    uppercase label on a quiet hairline pill, so liveness is readable at a
    glance without decoding the corner dot. Semantic hue stays on the dot;
    the label is ink, muted when offline. */
+/* Geometry and the hairline are the neutral Badge variant's — this rule used
+   to restate all of it. The badge is already on the CONTROL corner (--r-2, not
+   a lozenge: see badge.tsx), so the note that used to live here is upstream
+   now. What stays is the presence readout's own voice: uppercase micro caps,
+   a wider gap for the dot, and the fixed 20px the node rows align on. */
 .adm-presence-pill {
-  font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  display: inline-flex;
-  align-items: center;
   gap: var(--sp-1-5);
   flex: none;
   height: 20px;
-  padding: 0 var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  /* Labeled, so it takes the CONTROL corner; only the dot inside it is round. */
-  border-radius: var(--r-2);
+  background: transparent;
   text-transform: uppercase;
-  color: var(--ink-1);
 }
 
 .adm-presence-pill[data-online="false"] {

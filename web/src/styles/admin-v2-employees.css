@@ -221,24 +221,19 @@
   font-style: italic;
 }
 
+/* Chip geometry is the neutral Badge variant's. The `cursor: pointer` and
+   hover this rule used to carry are GONE rather than migrated: the only class
+   that ever used them — .adm-computer-chip below — explicitly cancelled both,
+   so the chip advertised a click nothing handled (it renders a <span>) and
+   then took the affordance back one rule later. */
 .adm-node-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
   height: var(--control-h-xs);
   padding: 0 var(--sp-3);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
   background: var(--surface-0);
   color: var(--ink-1);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
-  cursor: pointer;
   transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-}
-
-.adm-node-chip:hover {
-  border-color: var(--line-strong);
 }
 
 /* Official vendor glyph — identity, alongside the employee's agent name. */
@@ -248,16 +243,11 @@
 }
 
 /* Computer chip on the employee card/row — a readout, not a control: the
-   machine's actions live on its own node card, so no pointer and no hover
-   affordance. Anatomy mirrors the node card: presence dot, ownership mark,
-   name. */
+   machine's actions live on its own node card. It no longer has to say so by
+   cancelling a pointer and a hover, because the base chip stopped claiming
+   them. Anatomy mirrors the node card: presence dot, ownership mark, name. */
 .adm-computer-chip {
-  cursor: default;
   gap: var(--sp-2);
-}
-
-.adm-computer-chip:hover {
-  border-color: var(--line-1);
 }
 
 .adm-computer-chip .adm-node-chip-mark {
@@ -383,25 +373,15 @@
   margin-bottom: var(--sp-4);
 }
 
+/* Geometry and the resting hairline come from `variant="outline"` at
+   `size="dense"`; this rule used to restate both, on a Button that declared
+   `variant="ghost"` — so the prop and the class described two different
+   buttons and the class won. The only local declaration left is the label
+   tier: these filters carry the strong label, not the button's own 700. */
 .adm-fleet-chip {
-  display: inline-flex;
-  align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-1) var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--ink-2);
   font: var(--type-label-strong);
-  text-transform: none;
   letter-spacing: var(--type-label-strong-track);
-  cursor: pointer;
-  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
-}
-
-.adm-fleet-chip:hover {
-  color: var(--ink-1);
-  border-color: var(--line-strong);
 }
 
 
