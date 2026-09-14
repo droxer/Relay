@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 
 import pytest
 from relay.persistence.skill_object_store import LocalSkillObjectStore
@@ -47,3 +48,19 @@ def test_missing_local_skill_object_returns_none(tmp_path):
 
     assert store.get("0" * 64) is None
     assert store.exists("0" * 64) is False
+
+
+def test_local_skill_object_store_refuses_symlinked_objects(tmp_path):
+    store = LocalSkillObjectStore(tmp_path / "objects")
+    content = b"outside"
+    digest = hashlib.sha256(content).hexdigest()
+    outside = tmp_path / "outside"
+    outside.write_bytes(content)
+    destination = store.path_for(digest)
+    destination.parent.mkdir(parents=True)
+    os.symlink(outside, destination)
+
+    with pytest.raises(OSError, match="regular file"):
+        store.get(digest)
+    with pytest.raises(OSError, match="regular file"):
+        store.put(digest, content)
