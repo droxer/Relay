@@ -100,8 +100,11 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [navTooltip]);
 
-  function showNavTooltip(text: string, el: HTMLElement) {
-    if (sidenavExpanded) return;
+  /* `always` is for the footer's chrome controls: they are icon squares in
+     BOTH rail states, so their hint cannot be gated on the rail being
+     collapsed the way a labelled nav row's is. */
+  function showNavTooltip(text: string, el: HTMLElement, always = false) {
+    if (sidenavExpanded && !always) return;
     if (tooltipSuppressRef.current === el) return;
     const rect = el.getBoundingClientRect();
     setNavTooltip({ text, x: rect.right + 12, y: rect.top + rect.height / 2 });
@@ -368,28 +371,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             hideNavTooltip();
             onOpenCommandMenu();
           }}
-          onMouseEnter={(e) => showNavTooltip(commandMenuHint, e.currentTarget)}
-          onMouseLeave={hideNavTooltip}
-          onFocus={(e) => showNavTooltip(commandMenuHint, e.currentTarget)}
-          onBlur={hideNavTooltip}
         >
-          <ActionSearch size={ICON.lg} />
-          <span className="sidenav-label sr-only">{t("command.title")}</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          tooltip={sidenavExpanded ? t("nav.collapse_sidebar") : t("nav.expand_sidebar")}
-          className="sidenav-btn sidenav-toggle"
-          data-nav="collapse"
-          onClick={() => setSidenavExpanded(!sidenavExpanded)}
-          onMouseEnter={(e) => showNavTooltip(sidenavExpanded ? t("nav.collapse_sidebar") : t("nav.expand_sidebar"), e.currentTarget)}
-          onMouseLeave={hideNavTooltip}
-          onFocus={(e) => showNavTooltip(sidenavExpanded ? t("nav.collapse_sidebar") : t("nav.expand_sidebar"), e.currentTarget)}
-          onBlur={hideNavTooltip}
-        >
-          {sidenavExpanded ? <NavSidebarCollapse size={ICON.lg} /> : <NavSidebarExpand size={ICON.lg} />}
-          <span className="sidenav-label sr-only">{sidenavExpanded ? t("nav.collapse") : t("nav.expand")}</span>
+          <ActionSearch size={ICON.md} />
+          <span className="sr-only">{t("command.title")}</span>
         </Button>
         <DropdownMenu open={preferencesOpen} onOpenChange={onPreferencesOpenChange}>
           <DropdownMenuTrigger
@@ -400,25 +384,21 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
                 data-nav="settings"
                 type="button"
                 aria-label={t("nav.preferences")}
-                onMouseEnter={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget)}
+                onMouseEnter={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget, true)}
                 onMouseLeave={hideNavTooltip}
-                onFocus={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget)}
+                onFocus={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget, true)}
                 onBlur={hideNavTooltip}
               >
-                <NavPreferences size={ICON.lg} />
-                <span className="sidenav-label sr-only">{t("nav.preferences")}</span>
+                <NavPreferences size={ICON.md} />
+                <span className="sr-only">{t("nav.preferences")}</span>
               </Button>
             }
           />
-          {/* Collapsed: fly out to the right of the icon, like the nav
-              tooltips. Expanded: the trigger is full-width, so rise above it
-              — anchoring to the button's right edge would put the menu out in
-              the main content area. Both were hand-computed rectangles. */}
-          <DropdownMenuContent
-            side={sidenavExpanded ? "top" : "right"}
-            align={sidenavExpanded ? "start" : "end"}
-            className="sidenav-settings-menu"
-          >
+          {/* Flies out to the right of the icon in both states, like the nav
+              tooltips. The expanded rail used to rise above a full-width
+              trigger; the footer control is a dense square there now, so the
+              two states no longer need different anchors. */}
+          <DropdownMenuContent side="right" align="end" className="sidenav-settings-menu">
             <DropdownMenuItem onClick={openPreferences}>
               <NavPreferences size={ICON.md} />
               <span>{t("nav.preferences")}</span>
@@ -429,6 +409,17 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          type="button"
+          variant="ghost"
+          tooltip={sidenavExpanded ? t("nav.collapse_sidebar") : t("nav.expand_sidebar")}
+          className="sidenav-btn sidenav-toggle"
+          data-nav="collapse"
+          onClick={() => setSidenavExpanded(!sidenavExpanded)}
+        >
+          {sidenavExpanded ? <NavSidebarCollapse size={ICON.md} /> : <NavSidebarExpand size={ICON.md} />}
+          <span className="sr-only">{sidenavExpanded ? t("nav.collapse") : t("nav.expand")}</span>
+        </Button>
       </div>
       {navTooltip ? createPortal(
         <div

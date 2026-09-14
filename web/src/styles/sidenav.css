@@ -146,13 +146,19 @@
   letter-spacing: var(--track-0);
 }
 
+/* Rail CHROME, not destinations: search, collapse, preferences act on the
+   app shell rather than navigating it, so they read one tier quieter and one
+   tier denser than the nav ladder above — dense icon squares
+   (--control-h-xs), never the 44px route rows. Three full-width label rows
+   here cost 132px of rail and gave the footer the visual weight of a fourth
+   nav group. */
 .sidenav-bottom {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   width: 100%;
-  padding: var(--sp-3) 0 0;
+  padding: var(--sp-2) 0 0;
   /* The footer stays part of the rail instead of reading as a card. */
   border-width: 0.5px 0 0;
   border-style: solid;
@@ -161,8 +167,46 @@
   background: transparent;
 }
 
+/* Expanded: one row of icon squares rather than a stack of label rows. The
+   collapsed rail is 72px — 56px inside its padding — so the row is an
+   expanded-only layout; collapsed keeps the column, just at the dense tier. */
 .sidenav-panel[data-expanded="true"] .sidenav-bottom {
-  align-items: stretch;
+  flex-direction: row;
+  align-items: center;
+  padding: var(--sp-2) var(--sp-2) 0;
+}
+
+/* `padding: 0` is load-bearing: these three are <Button> primitives, whose
+   default size tier carries Tailwind inline padding that floors the square
+   ~18px wider than the width declared here. */
+.sidenav-bottom .sidenav-btn {
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
+  padding: 0;
+}
+
+/* The expanded row wins over the full-width label row that every other
+   expanded button takes. The footer's labels are plain `sr-only` spans rather
+   than `.sidenav-label` ones, so the expanded reveal never reaches them and
+   nothing here has to hide them again. */
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn {
+  flex: 0 0 auto;
+  width: var(--control-h-xs);
+  height: var(--control-h-xs);
+  padding: 0;
+  justify-content: center;
+}
+
+/* The toggle acts on the rail's own edge, so it sits at that edge. */
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-toggle {
+  margin-inline-start: auto;
+}
+
+/* The cobalt tick marks the CURRENT ROUTE. An open preferences menu is not a
+   route, and on a dense square the bar reads as a nav selection that is not
+   there — the open state keeps the wash alone. */
+.sidenav-bottom .sidenav-btn.active::after {
+  content: none;
 }
 
 /* Menu SHELL (surface, border, radius, shadow, float layer, entry animation)
@@ -314,7 +358,6 @@
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(2) .sidenav-label { transition-delay: calc(var(--t-stagger) * 2); }
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(3) .sidenav-label { transition-delay: calc(var(--t-stagger) * 3); }
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(4) .sidenav-label { transition-delay: calc(var(--t-stagger) * 4); }
-.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-label { transition-delay: calc(var(--t-stagger) * 4); }
 
 /* Expanded button layout: icon + label side by side. Compact rows at the
    40px control height (not the 48px collapsed square), tight label rhythm. */
