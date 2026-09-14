@@ -280,6 +280,7 @@ class DatabaseSkillStore:
                         "source": source,
                         "sourceRef": payload.get("sourceRef"),
                         "currentRevisionId": None,
+                        "stableRevisionId": None,
                         "createdAt": timestamp,
                         "updatedAt": timestamp,
                         "deletedAt": None,
@@ -298,7 +299,11 @@ class DatabaseSkillStore:
                         files,
                         payload.get("note"),
                     )
-                    skill = {**skill, "currentRevisionId": revision["id"]}
+                    skill = {
+                        **skill,
+                        "currentRevisionId": revision["id"],
+                        "stableRevisionId": revision["id"],
+                    }
                     conn.execute(
                         update(self.skills)
                         .where(self.skills.c.id == skill["id"])
@@ -309,7 +314,11 @@ class DatabaseSkillStore:
                         skill["id"],
                         1,
                         "skill.revision.added",
-                        {"revision": revision, "currentRevisionId": revision["id"]},
+                        {
+                            "revision": revision,
+                            "currentRevisionId": revision["id"],
+                            "stableRevisionId": revision["id"],
+                        },
                     )
                 return skill
             except IntegrityError as error:
@@ -395,6 +404,61 @@ class DatabaseSkillStore:
                 return updated
             except IntegrityError as error:
                 raise self._integrity_error(error) from error
+
+    def promote_revision(
+        self, skill_id: str, revision_id: str
+    ) -> dict[str, Any]:
+        with self._write_lock, store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    select(self.skills.c.id, self.skills.c.event_version)
+                    .where(self.skills.c.id == skill_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                raise KeyError(skill_id)
+            current = self._replay(conn, row["id"])
+            if current.get("deletedAt"):
+                raise SkillValidationError("skill-deleted")
+            revision = (
+                conn.execute(
+                    select(self.revisions.c.id).where(
+                        self.revisions.c.id == revision_id,
+                        self.revisions.c.skill_id == skill_id,
+                    )
+                )
+                .first()
+            )
+            if not revision:
+                raise SkillValidationError("revision-not-found")
+            timestamp = now_iso()
+            updated = {
+                **current,
+                "stableRevisionId": revision_id,
+                "updatedAt": timestamp,
+            }
+            sequence = int(row["event_version"])
+            claimed = conn.execute(
+                update(self.skills)
+                .where(
+                    self.skills.c.id == row["id"],
+                    self.skills.c.event_version == sequence,
+                )
+                .values(**_skill_row(updated, event_version=sequence + 1))
+            )
+            if claimed.rowcount != 1:
+                raise _SkillWriteConflict(skill_id)
+            self._append_event(
+                conn,
+                row["id"],
+                sequence,
+                "skill.revision.promoted",
+                {"stableRevisionId": revision_id, "updatedAt": timestamp},
+            )
+            return updated
 
     def get_skill(self, skill_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
@@ -852,6 +916,15 @@ class DatabaseSkillStore:
                 )
                 if payload.get("description") is not None:
                     skill["description"] = payload["description"]
+                if not skill.get("stableRevisionId"):
+                    skill["stableRevisionId"] = payload.get(
+                        "stableRevisionId", payload["currentRevisionId"]
+                    )
+            elif row["type"] == "skill.revision.promoted" and skill is not None:
+                skill.update(
+                    stableRevisionId=payload["stableRevisionId"],
+                    updatedAt=payload["updatedAt"],
+                )
             elif row["type"] == "skill.updated" and skill is not None:
                 skill.update(payload["patch"])
                 skill["updatedAt"] = payload["updatedAt"]

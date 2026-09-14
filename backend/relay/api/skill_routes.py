@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import io
 import json
+import zipfile
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -213,6 +215,56 @@ async def add_revision(skill_id: str, request: Request, ctx: AppContextDep) -> d
         raise skill_error(error) from error
     except KeyError as error:
         raise HTTPException(404, "skill-not-found") from error
+
+
+@router.post("/skills/{skill_id}/revisions/{revision_id}/promote")
+async def promote_revision(
+    skill_id: str, revision_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    owned_skill(ctx, skill_id, actor["employeeId"])
+    # Consume and validate the JSON envelope consistently with other writes.
+    await skill_body(request, set())
+    try:
+        return ctx.skill_store.promote_revision(skill_id, revision_id)
+    except SkillValidationError as error:
+        raise skill_error(error) from error
+    except KeyError as error:
+        raise HTTPException(404, "skill-not-found") from error
+
+
+@router.get("/skills/{skill_id}/export")
+async def export_skill(
+    skill_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    channel: str = "stable",
+) -> Response:
+    actor = request_actor(request, ctx.auth_store)
+    skill = visible_skill(ctx, skill_id, actor["employeeId"])
+    if channel not in {"stable", "latest"}:
+        raise HTTPException(422, "invalid-channel")
+    revision_id = (
+        skill["stableRevisionId"]
+        if channel == "stable"
+        else skill["currentRevisionId"]
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry in ctx.skill_store.revision_files(revision_id):
+            info = zipfile.ZipInfo(entry["path"])
+            info.external_attr = 0o600 << 16
+            archive.writestr(
+                info,
+                ctx.skill_store.blob(entry["sha256"]),
+                compress_type=zipfile.ZIP_DEFLATED,
+            )
+    filename = skill["slug"].replace("/", "-") + ".skill.zip"
+    return Response(
+        output.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("/skills/{skill_id}")
