@@ -91,15 +91,16 @@ describe("reviewed design regressions", () => {
 
     assert.match(responsive, /\.sidenav-secondary-item\s*\{[^}]*display:\s*none\s*!important/s);
 
-    // The five secondary destinations live in the More overflow. They used to
-    // be five hand-repeated <a className="sidenav-more-item"> blocks; they are
+    // The secondary destinations live in the More overflow. They used to be
+    // hand-repeated <a className="sidenav-more-item"> blocks; they are
     // one MORE_ROUTES table rendered through DropdownMenuLinkItem now, so the
     // check reads the table rather than the markup it expands to.
     const table = nav.match(/const MORE_ROUTES[\s\S]*?\n\];/)?.[0];
     assert.ok(table, "SideNav must declare a MORE_ROUTES table");
-    for (const route of ["routine", "teams", "computer", "channels", "admin"]) {
+    for (const route of ["routine", "teams", "computer", "admin"]) {
       assert.match(table, new RegExp(`route: "${route}"`));
     }
+    assert.doesNotMatch(nav, /data-nav="channels"|route: "channels"/);
     // Still real links, and still the app's own client-side navigation.
     assert.match(nav, /DropdownMenuLinkItem[\s\S]*?href=\{hrefForRoute\(target\)\}/);
     assert.match(nav, /onClick=\{\(event: MouseEvent<HTMLAnchorElement>\) => handleRouteClick\(event, target\)\}/);

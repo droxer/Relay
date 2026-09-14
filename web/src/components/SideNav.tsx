@@ -7,7 +7,6 @@ import {
   NavAdmin,
   NavAgents,
   NavBacklog,
-  NavChannels,
   NavComputer,
   NavLogout,
   NavMore,
@@ -52,7 +51,6 @@ const MORE_ROUTES: readonly {
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
   { route: "skills", Icon: BookOpen, labelKey: "nav.skills" },
   { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
-  { route: "channels", Icon: NavChannels, labelKey: "nav.channels" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
 
@@ -145,7 +143,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      once per key press, never per pointer move. */
   const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatWidth()), [width]);
 
-  const moreActive = ["routine", "teams", "skills", "computer", "channels", "admin"].includes(route);
+  const moreActive = ["routine", "teams", "skills", "computer", "admin"].includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (
@@ -279,21 +277,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           >
             <NavComputer size={ICON.lg} aria-hidden="true" />
             <span className="sidenav-label sr-only">{t("nav.computer")}</span>
-          </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "channels" ? "active" : ""}`}
-            data-nav="channels"
-            href={hrefForRoute("channels")}
-            aria-label={t("nav.channels")}
-            aria-current={route === "channels" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "channels")}
-            onMouseEnter={(e) => showNavTooltip(t("nav.channels"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.channels"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavChannels size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.channels")}</span>
           </a>
           {isAdmin ? (
             <a
