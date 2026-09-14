@@ -590,6 +590,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           skill={skill}
           agents={agents}
           teams={teams}
+          employeeId={currentUser.employeeId}
           onClose={() => setSharing(false)}
         />
       ) : null}
