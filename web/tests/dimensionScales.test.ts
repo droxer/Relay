@@ -352,8 +352,8 @@ describe("tabular figures keep the root's stylistic sets", () => {
     // font-feature-settings REPLACES the inherited declaration rather than
     // adding to it, so `font-feature-settings: "tnum" 1` switches OFF the
     // ss01/ss02 pair :root turns on — a pair base.css documents as
-    // inseparable. Invisible on the shipped faces, visible to anyone with
-    // Optimistic VF installed, which is who the root declaration is for.
+    // inseparable. The complete recipe must survive whichever Noto face is
+    // active for the document language.
     const offenders: string[] = [];
     for (const sheet of walk(stylesDir, /\.css$/)) {
       for (const m of stripComments(sheet.text).matchAll(/font-feature-settings:\s*([^;]+);/g)) {

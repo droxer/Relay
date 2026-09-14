@@ -122,11 +122,10 @@
   --focus-outline: var(--focus-w) solid var(--link);
   --focus-outline-danger: var(--focus-w) dashed var(--err);
 
-  /* Type roles — one family carries every tier (Optimistic VF where it is
-     installed, the vendored IBM Plex Sans otherwise). Hierarchy comes from
-     WEIGHT and SIZE, not face: the source system's display and heading tiers are
-     500, its emphasis and control tiers are 700, and reading is 400. The
-     mono face is technical text only, set 400 untracked.
+  /* Type roles — the active Noto Sans family carries every tier. Hierarchy
+     comes from WEIGHT and SIZE, not face: display and heading tiers are 500,
+     emphasis and control tiers are 700, and reading is 400. The mono face is
+     technical text only, set 400 untracked.
 
      EVERY role ships a paired *-track token. The `font:` shorthand cannot carry
      letter-spacing, so a role applied as `font: var(--type-title)` silently

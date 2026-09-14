@@ -130,7 +130,7 @@ describe("application typography roles", () => {
     // takes 500 rather than 600 because the ladder stays three rungs — see the
     // weight-ladder test in dimensionScales.test.ts.
     assert.match(roles, /--type-micro:\s+500[^;]+var\(--font-sans\);/);
-    assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "no weight 800 exists in this system — Plex tops out at 700");
+    assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "the product ladder deliberately stops at 700");
     assert.match(roles, /--type-code:\s+400[^;]+var\(--font-mono\);/);
     assert.match(roles, /--type-body:\s+400[^;]+var\(--font-sans\);/);
     assert.match(roles, /--type-label:\s+500[^;]+var\(--font-sans\);/);
@@ -140,9 +140,8 @@ describe("application typography roles", () => {
     const palette = readWebSource("styles/tokens/palette.css");
 
     // The source system tightens its READING roles fractionally (-0.16px at 16px,
-    // -0.14px at 14px ≈ -0.01em) — the snug-but-not-condensed setting
-    // Optimistic VF was drawn for — and sets the display tier and the
-    // uppercase captions solid, the opposite of the usual arrangement. The
+    // -0.14px at 14px ≈ -0.01em) and sets the display tier and the uppercase
+    // captions solid, the opposite of the usual arrangement. The
     // zero-valued tokens are the design, not missing values; they keep the
     // paired-track contract greppable.
     assert.match(palette, /--track-display:\s*0;/);
