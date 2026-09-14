@@ -109,6 +109,23 @@ test("reports network failures in safe empty views and refuses an unusable envir
   await assert.rejects(() => materializeSkills({ bundle: f.bundle(), agentId: "agent-a", delivery: configDelivery, agentHome: "/home/agent", cacheDir: "/home/agent/cache", fetchBlob: async (sha) => f.blobs[sha]!, execStream: async () => ({ exit_code: 1, stdout: "", stderr: "denied" }) }), /materialization failed/);
 }));
 
+test("blocks execution when a required skill cannot be materialized", async () => withFixture(async (f) => {
+  const bundle = f.bundle();
+  bundle.skills[0]!.assignmentMode = "required";
+  await assert.rejects(
+    () => materializeSkills({
+      bundle,
+      agentId: "agent-a",
+      delivery: configDelivery,
+      agentHome: f.agentHome,
+      cacheDir: f.cacheDir,
+      execStream: localProcessExecStream,
+      fetchBlob: async () => { throw new Error("offline"); },
+    }),
+    /required skill unavailable: review \(blob-fetch-failed\)/,
+  );
+}));
+
 test("reuses content-addressed blobs across different revisions", async () => withFixture(async (f) => {
   const common = Object.values(f.blobs)[0]!;
   const commonSha = createHash("sha256").update(common).digest("hex");

@@ -226,3 +226,33 @@ def test_explicit_assignment_does_not_auto_materialize():
 
     assert skipped == []
     assert bundle is None
+
+
+def test_required_assignment_failure_is_marked_as_blocking():
+    ctx = _ctx()
+    ctx.skill_store.assignments.append(
+        {
+            "id": "assignment",
+            "skillId": "missing",
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "required",
+            "pin": "stable",
+            "invocation": "implicit",
+            "updatedAt": "now",
+        }
+    )
+
+    bundle, skipped = resolve_bundle(
+        ctx,
+        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+    )
+
+    assert bundle["skills"] == []
+    assert skipped == [
+        {
+            "skillId": "missing",
+            "reason": "skill-missing",
+            "assignmentMode": "required",
+        }
+    ]
