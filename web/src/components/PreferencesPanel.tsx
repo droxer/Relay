@@ -13,6 +13,7 @@ import {
   PrefAppearance,
   PrefLanguage,
 } from "./icons";
+import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -45,6 +46,11 @@ const LANGUAGE_BADGES: Record<Language, string> = {
   "zh-TW": "繁",
 };
 
+/* Bespoke rather than an icons.tsx export, deliberately: this is a filled disc
+   with a knockout check in --action/--on-action, which says "you picked this".
+   The nearest export, StatusOk, is an outlined circle-check that says "this is
+   healthy". Same rough silhouette, different sentence — reusing it would make a
+   selected radio and a green status the same picture. */
 function PrefSelectedCheck() {
   return (
     <span className="pref-option-check" aria-hidden="true">
@@ -62,9 +68,9 @@ function ThemeSwatch({ tone }: { tone: Theme }) {
 
 function LanguageBadge({ code }: { code: Language }) {
   return (
-    <span className="pref-lang-badge" lang={code} aria-hidden="true">
+    <Badge className="pref-lang-badge" lang={code} aria-hidden="true">
       {LANGUAGE_BADGES[code]}
-    </span>
+    </Badge>
   );
 }
 

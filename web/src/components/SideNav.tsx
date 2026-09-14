@@ -14,11 +14,12 @@ import {
   NavRoutine,
   NavSidebarCollapse,
   NavSidebarExpand,
+  NavSkills,
   NavTeams,
   NavThreads,
   WorkspaceFolder,
+  type GlyphProps,
 } from "./icons";
-import { BookOpen, type LucideProps } from "lucide-react";
 import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { Button } from "@/components/ui/button";
@@ -40,16 +41,16 @@ import {
  *  only in icon, label, and route, and the admin one only in being gated. */
 const MORE_ROUTES: readonly {
   route: AppRoute;
-  /* `withStandardStroke` wrappers and bare lucide icons both appear in
-     icons.tsx and have different component types; this is the call shape they
-     share, which is all a table of icons needs. */
-  Icon: ComponentType<Pick<LucideProps, "size" | "className">>;
+  /* icons.tsx exports stroked wrappers, filled identity glyphs, and the odd
+     bespoke one, which have different component types; GlyphProps is the call
+     shape they share, which is all a table of icons needs. */
+  Icon: ComponentType<GlyphProps>;
   labelKey: string;
   adminOnly?: boolean;
 }[] = [
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
-  { route: "skills", Icon: BookOpen, labelKey: "nav.skills" },
+  { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
   { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
@@ -87,6 +88,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      they were positioned by hand; the Menu positioner anchors to the trigger
      and handles flipping, so there is nothing left to store. */
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  /* The expanded rail anchors the settings menu to the FOOTER rather than to
+     its trigger — see the menu's own note below. */
+  const footerRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
@@ -278,7 +282,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
             onBlur={hideNavTooltip}
           >
-            <BookOpen size={ICON.lg} />
+            <NavSkills size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.skills")}</span>
           </a>
           <a
@@ -357,7 +361,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           </DropdownMenu>
         </div>
       </nav>
-      <div className="sidenav-bottom">
+      <div className="sidenav-bottom" ref={footerRef}>
         {/* The palette's visible trigger lives with the other rail-level
             controls, not the destination list: it opens a command surface,
             it does not navigate anywhere. */}
@@ -394,11 +398,17 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
               </Button>
             }
           />
-          {/* Flies out to the right of the icon in both states, like the nav
-              tooltips. The expanded rail used to rise above a full-width
-              trigger; the footer control is a dense square there now, so the
-              two states no longer need different anchors. */}
-          <DropdownMenuContent side="right" align="end" className="sidenav-settings-menu">
+          {/* Collapsed: fly out to the right of the icon, like the nav
+              tooltips. Expanded: rise above the FOOTER — anchoring to the
+              32px trigger instead opens the menu straddling the rail|content
+              seam (the trigger sits mid-row, and the menu is wider than it),
+              so the anchor is the row the trigger sits in. */}
+          <DropdownMenuContent
+            side={sidenavExpanded ? "top" : "right"}
+            align={sidenavExpanded ? "start" : "end"}
+            anchor={sidenavExpanded ? footerRef : undefined}
+            className="sidenav-settings-menu"
+          >
             <DropdownMenuItem onClick={openPreferences}>
               <NavPreferences size={ICON.md} />
               <span>{t("nav.preferences")}</span>

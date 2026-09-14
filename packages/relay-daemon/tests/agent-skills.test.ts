@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import test from "node:test";
 
 import type { DaemonRunSkillBundle, SkillDelivery } from "relay-core";
@@ -41,6 +41,7 @@ test("materializes Pi paths in the execution environment and reuses the immutabl
   };
   const first = await materializeSkills(options);
   const second = await materializeSkills(options);
+  assert.equal(basename(first.skillPaths[0]!), "review");
   assert.equal(readFileSync(join(first.skillPaths[0]!, "SKILL.md"), "utf8"), f.blobs[Object.keys(f.blobs)[0]!]!.toString());
   assert.equal(readdirSync(join(f.cacheDir, ".store")).length, 1);
   assert.deepEqual(second.skillPaths, first.skillPaths);

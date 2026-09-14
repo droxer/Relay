@@ -80,11 +80,23 @@ def test_create_skill_is_event_authoritative_and_makes_revision(tmp_path):
     assert store.get_skill(skill["id"])["name"] == "review"
 
 
-def test_frontmatter_supports_yaml_folded_description_and_metadata(tmp_path):
+def test_frontmatter_supports_yaml_folded_description_and_string_metadata(tmp_path):
     store, alice, _ = _store(tmp_path)
-    content = b'---\nname: review\ndescription: >-\n  Reviews code\n  carefully.\nmetadata:\n  tags: [review, code]\n---\nBody'
+    content = b'---\nname: review\ndescription: >-\n  Reviews code\n  carefully.\nlicense: Apache-2.0\ncompatibility: Requires git\nmetadata:\n  author: relay\n  version: "1.0"\nallowed-tools: Read Bash(git:*)\n---\nBody'
     skill = _create(store, alice, files=[{"path": "SKILL.md", "content": content}])
     assert skill["description"] == "Reviews code carefully."
+
+
+def test_frontmatter_accepts_spec_length_boundaries(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    description = "d" * 1024
+    compatibility = "c" * 500
+    content = (
+        f"---\nname: n\ndescription: {description}\n"
+        f"compatibility: {compatibility}\n---\nBody"
+    ).encode()
+    skill = _create(store, alice, "n", files=[{"path": "SKILL.md", "content": content}])
+    assert skill["description"] == description
 
 
 @pytest.mark.parametrize("field", ["source", "visibility"])
@@ -163,8 +175,10 @@ def test_slug_allocation_prevents_exact_and_prefix_conflicts(tmp_path):
     third = _create(
         store, bob, "review", namespace="tools", visibility="org", ownerHandle="bob"
     )
-    assert second["slug"] == "tools-bob"
-    assert third["slug"] == "tools/review-bob"
+    assert second["slug"] == "bob/tools"
+    assert third["slug"] == "skill-2/tools/review"
+    assert second["slug"].split("/")[-1] == second["name"]
+    assert third["slug"].split("/")[-1] == third["name"]
 
 
 @pytest.mark.parametrize(
@@ -251,6 +265,43 @@ def test_bundle_limits_and_paths(tmp_path, files, code):
     ],
 )
 def test_skill_md_frontmatter_is_validated(tmp_path, body, code):
+    store, alice, _ = _store(tmp_path)
+    with pytest.raises(SkillValidationError) as exc:
+        _create(store, alice, "n", files=[{"path": "SKILL.md", "content": body}])
+    assert exc.value.code == code
+
+
+@pytest.mark.parametrize(
+    "body,code",
+    [
+        (b"---\nname: under_score\ndescription: d\n---\n", "invalid-name"),
+        (b"---\nname: dotted.name\ndescription: d\n---\n", "invalid-name"),
+        (b"---\nname: two--hyphens\ndescription: d\n---\n", "invalid-name"),
+        (b"---\nname: " + b"n" * 65 + b"\ndescription: d\n---\n", "invalid-name"),
+        (
+            b"---\nname: n\ndescription: " + b"d" * 1025 + b"\n---\n",
+            "skill-description-too-long",
+        ),
+        (
+            b"---\nname: n\ndescription: d\ncompatibility: " + b"x" * 501 + b"\n---\n",
+            "invalid-compatibility",
+        ),
+        (
+            b"---\nname: n\ndescription: d\nmetadata:\n  tags: [review, code]\n---\n",
+            "invalid-metadata",
+        ),
+        (
+            b"---\nname: n\ndescription: d\nargument-hint: file\n---\n",
+            "unexpected-frontmatter-field",
+        ),
+        (b"---\nname: n\ndescription: d\nlicense: []\n---\n", "invalid-license"),
+        (
+            b"---\nname: n\ndescription: d\nallowed-tools: []\n---\n",
+            "invalid-allowed-tools",
+        ),
+    ],
+)
+def test_skill_md_frontmatter_follows_agent_skills_spec(tmp_path, body, code):
     store, alice, _ = _store(tmp_path)
     with pytest.raises(SkillValidationError) as exc:
         _create(store, alice, "n", files=[{"path": "SKILL.md", "content": body}])

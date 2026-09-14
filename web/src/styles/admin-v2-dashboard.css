@@ -243,14 +243,12 @@
   pointer-events: none;
 }
 
+/* Caps treatment, ink, and fill. Geometry and label size come from Badge;
+   only the uppercase micro voice is this tag's own. */
 .adm-dash-empty-tag {
-  font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   text-transform: uppercase;
   color: var(--ink-3);
-  padding: var(--sp-0-5) var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
   background: var(--surface-1);
 }
 

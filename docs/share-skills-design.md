@@ -58,6 +58,22 @@ Required failures block dispatch or daemon execution. This includes a missing
 revision, lost visibility, unsupported daemon capability, failed blob fetch,
 or invalid materialization.
 
+## Agent Skills specification
+
+Published bundles conform to the Agent Skills specification:
+
+- Names are lowercase hyphen-separated identifiers of at most 64 characters.
+- `SKILL.md` requires `name` and `description`; supported optional frontmatter
+  is validated by type and length and unknown fields are rejected.
+- The installed directory leaf always matches the frontmatter name.
+- Catalog collisions add a parent namespace such as `alice/code-review`; they
+  never rewrite the leaf into a nonconforming name.
+- Pi receives paths from a named immutable run view rather than hash-named
+  content-store directories.
+
+The full compliance evidence is in
+`docs/testing/agent-skills-spec-compliance.tdd.md`.
+
 ## Storage
 
 Catalog metadata, immutable revision manifests, assignments, and their events
@@ -134,10 +150,11 @@ as Relay-managed assignments.
 
 ## Authorization and governance boundary
 
-- Owners may revise, promote, update, delete, and export their publications.
+- Owners may revise, promote, update, and delete their publications; visible
+  publications may be exported.
 - A caller may assign a visible publication only to a target they own.
 - Organization assignments require an administrator.
-- Private publications remain usable only by their owner’s targets; `org`
+- Private publications remain usable only by their owner targets; `org`
   visibility enables discovery and assignment by other employees.
 - Soft deletion and immutable events keep historical failures explainable.
 

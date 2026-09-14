@@ -3,11 +3,9 @@ import { clampSidenavWidth, SIDENAV_WIDTH_DEFAULT } from "../lib/sidenav";
 import { clampSpaceWidth, SPACE_WIDTH_DEFAULT } from "../lib/threadSpace";
 import { clampThreadListWidth, THREAD_LIST_WIDTH_DEFAULT } from "../lib/threadList";
 import {
-  readSidenavExpanded,
   readSidenavWidth,
   readThreadListWidth,
   readThreadSpaceWidth,
-  writeSidenavExpanded,
   writeSidenavWidth,
   writeThreadListWidth,
   writeThreadSpaceWidth,
@@ -44,18 +42,16 @@ export function usePanelLayout(mounted: boolean): PanelLayout {
     // Read after mount, not in the initializer: the export is prerendered, so
     // touching localStorage during the first render mismatches hydration.
     if (!mounted) return;
-    setSidenavExpandedState(readSidenavExpanded());
     setSidenavWidth(clampSidenavWidth(readSidenavWidth() ?? SIDENAV_WIDTH_DEFAULT));
     setThreadListWidth(clampThreadListWidth(readThreadListWidth() ?? THREAD_LIST_WIDTH_DEFAULT));
     setSpaceWidth(clampSpaceWidth(readThreadSpaceWidth() ?? SPACE_WIDTH_DEFAULT));
   }, [mounted]);
 
-  // Persisted on toggle rather than in an effect on `sidenavExpanded`: the
-  // effect would also fire for the hydration read above and write the
-  // pre-read default back over the stored value.
+  /* Collapse state is per-visit, not persisted: every session opens on the
+     collapsed rail. The WIDTH is still remembered (below) — that is the one
+     thing a drag makes expensive to redo, while expanding is one click. */
   const setSidenavExpanded = useCallback((expanded: boolean) => {
     setSidenavExpandedState(expanded);
-    writeSidenavExpanded(expanded);
   }, []);
 
   const resizeSidenav = useCallback((width: number, commit: boolean) => {
