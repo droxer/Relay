@@ -13,7 +13,6 @@ export const tokenStorageKey = "relay-web.tokens";
 export const selectedEmployeeKey = "relay-web.selectedEmployee";
 export const themeStorageKey = "relay-web.theme";
 export const languageStorageKey = "relay-web.language";
-export const sidenavExpandedKey = "relay-web.sidenavExpanded";
 export const threadSpaceWidthKey = "relay-web.threadSpaceWidth";
 export const threadListWidthKey = "relay-web.threadListWidth";
 export const sidenavWidthKey = "relay-web.sidenavWidth";
@@ -50,16 +49,6 @@ export function writeTheme(theme: Theme): void {
 
 export function writeLanguage(language: Language): void {
   if (typeof window !== "undefined") localStorage.setItem(languageStorageKey, language);
-}
-
-/** Rail collapse state. Defaults to collapsed; only an explicit "1" expands. */
-export function readSidenavExpanded(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(sidenavExpandedKey) === "1";
-}
-
-export function writeSidenavExpanded(expanded: boolean): void {
-  if (typeof window !== "undefined") localStorage.setItem(sidenavExpandedKey, expanded ? "1" : "0");
 }
 
 /** Dragged expanded-rail width in px, or null when never resized. Kept
