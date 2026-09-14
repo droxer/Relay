@@ -215,20 +215,37 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
         </section>
       ) : (
         <div className="skills-layout">
+          {/* The library rail is the same object as the thread, agent, and team
+              rails — a selectable roster beside a detail pane — so it wears
+              their row grammar: a .rail-row carrying the selection, the inset
+              on the inner button (that button is the focus target), and one
+              meta line under the name. */}
           <nav className="skills-list" aria-label={t("skills.library_label")}>
-            {skillsQuery.data.skills.map((item) => (
-              <button
-                key={item.id}
-                className={selectedId === item.id ? "active" : ""}
-                onClick={() => setSelectedId(item.id)}
-              >
-                <strong>{item.displayName}</strong>
-                <span>{item.slug}</span>
-                <small>
-                  {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
-                </small>
-              </button>
-            ))}
+            <ul className="skills-roster-list" data-density="compact">
+              {skillsQuery.data.skills.map((item) => (
+                <li
+                  key={item.id}
+                  className="skills-roster-row rail-row"
+                  data-selected={selectedId === item.id ? "true" : "false"}
+                >
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    className="skills-roster-row-select"
+                    aria-current={selectedId === item.id ? "page" : undefined}
+                    onClick={() => setSelectedId(item.id)}
+                  >
+                    <span className="skills-roster-row-name">{item.displayName}</span>
+                    <span className="skills-roster-row-meta">
+                      <span className="skills-roster-row-slug">{item.slug}</span>
+                      <span className="skills-roster-row-facts">
+                        {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
+                      </span>
+                    </span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
           </nav>
           <section className="skill-detail">
             {detailQuery.isLoading ? (

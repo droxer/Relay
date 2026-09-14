@@ -55,46 +55,110 @@
 
 .skills-layout {
   display: grid;
-  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
+  /* The same rail width as the agent roster; this pane is the same object. */
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   min-height: calc(100% - 142px);
 }
 
+/* Rail shell, on the .agents-roster recipe: the shared list elevation between
+   the nav rail and the detail canvas, not the canvas itself. */
 .skills-list {
-  padding: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-2) 0 var(--sp-7);
   border-right: 0.5px solid var(--line-1);
+  background: var(--surface-list);
 }
 
-.skills-list button {
-  display: grid;
+.skills-roster-list {
+  display: flex;
+  flex-direction: column;
   gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-1) var(--sp-3) 0;
+  list-style: none;
+}
+
+/* No border and no `overflow: hidden`: the inner button carries
+   `border-radius: inherit` and is the only thing that paints, while the clip
+   would erase the focus ring base.css draws 2px outside that button. */
+.skills-roster-row {
+  position: relative;
+  display: flex;
   width: 100%;
-  padding: var(--sp-3);
-  border: 0.5px solid transparent;
+  min-width: 0;
+  border: 0;
   border-radius: var(--r-2);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.skills-roster-row:hover {
+  background: var(--row-hover);
+}
+
+/* Selection is `.rail-row` (tokens/base.css) — never a local wash. */
+
+/* The row's inset lives on the button, which is the focus target. */
+.skills-roster-row-select {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: var(--sp-row) var(--sp-3);
+  border: 0;
+  border-radius: inherit;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.skills-list button:hover,
-.skills-list button.active {
-  border-color: var(--line-1);
-  background: var(--surface-2);
+.skills-roster-row-name {
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.skills-list small,
+/* One meta line, like every other rail: the identifier, then the facts that
+   tell two skills apart. Neither line wraps — the slug ellipsizes first. */
+.skills-roster-row-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+  font: var(--type-label);
+  font-size: var(--fs-1);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-4);
+}
+
+.skills-roster-row-slug {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  letter-spacing: var(--type-code-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skills-roster-row-facts {
+  flex: none;
+  white-space: nowrap;
+}
+
 .skill-muted {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
-/* Mono for the slug, the way .adm-drawer-sub--mono does it: keep the text role
-   and swap only the face, rather than sizing --type-code by hand. The code
-   track is mandatory on any rule that opts into the mono family — a fixed
-   advance is the point (typographyTokens.test.ts). */
-.skills-list span,
+/* Mono for the detail pane's slug, the way .adm-drawer-sub--mono does it:
+   keep the text role and swap only the face. The code track is mandatory on
+   any rule that opts into the mono family (typographyTokens.test.ts). */
 .skill-code {
   font: var(--type-body-sm);
   font-family: var(--font-mono);
