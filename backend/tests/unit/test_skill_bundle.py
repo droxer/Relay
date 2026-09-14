@@ -136,6 +136,18 @@ def test_reports_revision_missing_without_falling_back():
     assert skipped == [{"skillId": "b", "slug": "b", "reason": "revision-missing"}]
 
 
+def test_rejects_legacy_slug_whose_leaf_does_not_match_the_skill_name():
+    ctx = _ctx()
+    ctx.skill_store.skills["b"]["slug"] = "review-alice"
+
+    bundle, skipped = resolve_bundle(ctx, _agent([_grant("b")]))
+
+    assert bundle["skills"] == []
+    assert skipped == [
+        {"skillId": "b", "slug": "review-alice", "reason": "invalid-bundle"}
+    ]
+
+
 def test_unsupported_policy_is_reported():
     bundle, skipped = resolve_bundle(_ctx(), _agent([_grant("b")], version=2))
     assert bundle["skills"] == []
@@ -145,7 +157,7 @@ def test_unsupported_policy_is_reported():
 def test_kimi_same_name_candidates_keep_deterministic_slug_winner():
     ctx = _ctx()
     ctx.skill_store.skills["a"].update(name="review", slug="team-a/review")
-    ctx.skill_store.skills["b"].update(name="Review", slug="team-b/review")
+    ctx.skill_store.skills["b"].update(name="review", slug="team-b/review")
     agent = {**_agent([_grant("b"), _grant("a")]), "executorKind": "kimi"}
 
     bundle, skipped = resolve_bundle(ctx, agent)

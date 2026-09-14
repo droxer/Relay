@@ -96,13 +96,17 @@ enough: two employees may each publish an `org`-visible `code-review`, and an
 agent granted both would install them to the same `skills/code-review/`
 directory. So a skill also carries `slug` — the directory name it installs as —
 unique org-wide among live rows. It defaults to `<namespace>/<name>`; when that
-is taken, publish appends the owner's handle (`code-review-alice`) and tells the
-publisher what it chose. Resolving this at publish, once, keeps grant and
-dispatch free of collision logic.
+is taken, publish adds the owner's handle as a parent namespace
+(`alice/code-review`) and tells the publisher what it chose. The leaf directory
+always remains `<name>`, as required by the Agent Skills specification.
+Resolving this at publish, once, keeps grant and dispatch free of collision
+logic.
 
-**Caps** (rejected at publish, not at dispatch): 300 files, 1 MB per file,
-4 MB per revision. Paths must be relative, `..`-free, and non-symlink;
-executable bits are dropped.
+**Validation and caps** (rejected at publish, not at dispatch): `SKILL.md`
+frontmatter follows the [Agent Skills specification](https://agentskills.io/specification),
+including its name, description, optional-field, and metadata constraints.
+Bundles may contain at most 300 files, 1 MB per file, and 4 MB per revision.
+Paths must be relative, `..`-free, and non-symlink; executable bits are dropped.
 
 ### Grants live on `skillPolicy`
 
@@ -269,9 +273,10 @@ starts:
    `skills/.store/<manifestSha256>/`. This store is append-only and shared by
    every agent on the node — identical revisions are stored once.
 2. Then, per the agent's `skillDelivery` kind:
-   - **`skill-path-flag` / `skills-dir-flag`** (Pi, Kimi): pass the store paths
-     on the command line. Nothing is written per agent, nothing is pruned, and
-     the granted set is exactly what the CLI loads.
+   - **`skill-path-flag` / `skills-dir-flag`** (Pi, Kimi): build an immutable
+     run view whose symlink leaf is the declared skill name, then pass those
+     view paths on the command line. Nothing is written per agent, nothing is
+     pruned, and the granted set is exactly what the CLI loads.
    - **`config-dir`** (Claude): ensure the per-agent `.claude`, mirror the node's
      entries in by symlink except `skills/`, link `skills/<slug>` into the store
      (see Concurrency), prune stale links, and set `CLAUDE_CONFIG_DIR`.
@@ -305,9 +310,9 @@ fixed first, or the new feature inherits them:
 
 ### Concurrency
 
-This section governs the Claude path. Pi and Kimi take paths by flag straight
-out of the content-addressed cache, which is append-only, so they have no
-mutable per-agent directory to race over at all.
+This section governs the Claude path. Pi and Kimi take paths by flag from an
+immutable run view backed by the append-only content-addressed cache, so they
+have no mutable per-agent directory to race over at all.
 
 One Claude agent can have two runs in flight at once on the same node (two
 threads, or two rounds of different tasks). They share one config directory, so
