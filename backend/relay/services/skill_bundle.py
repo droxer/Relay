@@ -95,7 +95,14 @@ def resolve_bundle(
             or not isinstance(name, str)
             or slug.rsplit("/", 1)[-1] != name
         ):
-            skipped.append(_skipped(skill_id, slug, "invalid-bundle"))
+            skipped.append(
+                _skipped(
+                    skill_id,
+                    slug,
+                    "invalid-bundle",
+                    grant.get("assignmentMode"),
+                )
+            )
             continue
         pin = grant.get("pin")
         revision_id = (
