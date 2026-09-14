@@ -11,12 +11,17 @@ from relay.persistence.skill_store import (
     DatabaseSkillStore,
     SkillValidationError,
 )
+from relay.persistence.skill_object_store import LocalSkillObjectStore
 from relay.persistence.store_common import _parse_iso
 from sqlalchemy import func, insert, select
 
 
 def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
-    store = DatabaseSkillStore(f"sqlite:///{tmp_path}/relay.db", create_schema=True)
+    store = DatabaseSkillStore(
+        f"sqlite:///{tmp_path}/relay.db",
+        create_schema=True,
+        object_store=LocalSkillObjectStore(tmp_path / "skill-objects"),
+    )
     alice, bob = str(uuid4()), str(uuid4())
     with store.engine.begin() as conn:
         for employee_id, handle in ((alice, "alice"), (bob, "bob")):
@@ -95,7 +100,9 @@ def test_revisions_are_immutable_incrementing_and_listed(tmp_path):
     updated = store.add_revision(skill["id"], alice, _files(body=b"New"), note="v2")
     assert [r["revision"] for r in store.list_revisions(skill["id"])] == [2, 1]
     assert store.get_revision(updated["currentRevisionId"])["revision"] == 2
-    assert store.revision_files(first)[0]["content"].endswith(b"Body")
+    first_file = store.revision_files(first)[0]
+    assert "content" not in first_file
+    assert store.blob(first_file["sha256"]).endswith(b"Body")
 
 
 def test_manifest_order_independent_and_blob_deduplicated(tmp_path):
@@ -116,6 +123,7 @@ def test_manifest_order_independent_and_blob_deduplicated(tmp_path):
             )
             == 1
         )
+        assert conn.scalar(select(store.blobs.c.content).limit(1)) is None
     assert (
         store.blob(store.revision_files(a["currentRevisionId"])[1]["sha256"]) == b"same"
     )
