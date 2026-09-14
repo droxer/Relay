@@ -67,6 +67,7 @@ from .persistence.org_settings_store import DatabaseOrgSettingsStore
 from .persistence.profile_image_store import LocalProfileImageStore
 from .persistence.project_store import DatabaseProjectStore
 from .persistence.skill_store import DatabaseSkillStore
+from .persistence.skill_object_store import LocalSkillObjectStore
 from .persistence.stores import (
     DEFAULT_RELAY_DATA_DIR,
     DatabaseDaemonStore,
@@ -483,7 +484,9 @@ def project_store_from_env(root_dir: Path) -> Any:
 def skill_store_from_env(root_dir: Path) -> DatabaseSkillStore:
     database_url = database_url_from_env(setting="database-only skill storage")
     return DatabaseSkillStore(
-        database_url, create_schema=database_url.startswith("sqlite")
+        database_url,
+        create_schema=database_url.startswith("sqlite"),
+        object_store=LocalSkillObjectStore(root_dir / "skills" / "objects"),
     )
 
 

@@ -39,6 +39,7 @@ from .store_common import (
     store_transaction,
 )
 from .store_common import metadata as shared_metadata
+from .skill_object_store import SkillObjectStore
 
 MAX_FILES = 300
 MAX_FILE_BYTES = 1_048_576
@@ -137,7 +138,9 @@ class DatabaseSkillStore:
         "skill_blobs",
         metadata,
         Column("sha256", Text, primary_key=True),
-        Column("content", LargeBinary, nullable=False),
+        # Bundle bytes live in SkillObjectStore. This nullable compatibility
+        # column lets upgraded databases retain blobs written by older builds.
+        Column("content", LargeBinary, nullable=True),
         Column("bytes", BigInteger, nullable=False),
         CheckConstraint("bytes >= 0 AND bytes <= 1048576", name="ck_skill_blobs_bytes"),
     )
@@ -180,8 +183,15 @@ class DatabaseSkillStore:
         UniqueConstraint("skill_id", "sequence", name="uq_skill_events_sequence"),
     )
 
-    def __init__(self, database_url: str, *, create_schema: bool = False):
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        object_store: SkillObjectStore,
+        create_schema: bool = False,
+    ):
         self.engine = shared_engine(database_url)
+        self.object_store = object_store
         self._write_lock = RLock()
         if create_schema:
             create_all_tables(self.engine)
@@ -419,7 +429,6 @@ class DatabaseSkillStore:
                         self.files.c.path,
                         self.files.c.sha256,
                         self.files.c.bytes,
-                        self.blobs.c.content,
                     )
                     .join(self.blobs, self.blobs.c.sha256 == self.files.c.sha256)
                     .where(self.files.c.revision_id == revision_id)
@@ -432,9 +441,18 @@ class DatabaseSkillStore:
 
     def blob(self, sha256: str) -> bytes | None:
         with store_transaction(self.engine) as conn:
-            return conn.scalar(
-                select(self.blobs.c.content).where(self.blobs.c.sha256 == sha256)
+            row = (
+                conn.execute(
+                    select(self.blobs.c.content).where(self.blobs.c.sha256 == sha256)
+                )
+                .mappings()
+                .first()
             )
+        if not row:
+            return None
+        # Read legacy database bytes during rolling upgrades, but every new
+        # write goes through the filesystem object-store boundary.
+        return self.object_store.get(sha256) or row["content"]
 
     def events(self, skill_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
@@ -544,12 +562,13 @@ class DatabaseSkillStore:
         )
         for item in files:
             digest = hashlib.sha256(item["content"]).hexdigest()
+            self.object_store.put(digest, item["content"])
             try:
                 with conn.begin_nested():
                     conn.execute(
                         insert(self.blobs).values(
                             sha256=digest,
-                            content=item["content"],
+                            content=None,
                             bytes=len(item["content"]),
                         )
                     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
@@ -119,7 +120,7 @@ def test_manifest_order_independent_and_blob_deduplicated(tmp_path):
             conn.scalar(
                 select(func.count())
                 .select_from(store.blobs)
-                .where(store.blobs.c.content == b"same")
+                    .where(store.blobs.c.sha256 == hashlib.sha256(b"same").hexdigest())
             )
             == 1
         )

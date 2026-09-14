@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from relay.core.ids import now_iso
 from relay.persistence.skill_store import DatabaseSkillStore
+from relay.persistence.skill_object_store import LocalSkillObjectStore
 from relay.persistence.store_common import _parse_iso
 from relay.services.skill_assignments import (
     SkillAssignmentError,
@@ -28,7 +29,11 @@ def _files(name: str = "review") -> list[dict]:
 
 
 def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
-    store = DatabaseSkillStore(f"sqlite:///{tmp_path}/relay.db", create_schema=True)
+    store = DatabaseSkillStore(
+        f"sqlite:///{tmp_path}/relay.db",
+        create_schema=True,
+        object_store=LocalSkillObjectStore(tmp_path / "skill-objects"),
+    )
     alice, bob = str(uuid4()), str(uuid4())
     with store.engine.begin() as conn:
         for employee_id, handle in ((alice, "alice"), (bob, "bob")):
