@@ -25,10 +25,17 @@ const badgeVariants = cva(
          member badge on /projects and a status pill on a thread row two
          different drawings of the same object. */
       variant: {
+        /* One ratio across all four toned borders. These were 35/30/30/35 —
+           four tones at two ratios, with nothing saying why success and danger
+           should hold an edge a third heavier than info and warning. The split
+           made the set read as two pairs rather than one family, which is
+           exactly the drift the primitive exists to prevent. 35 is the kept
+           value: at 30 the cooler info and warning edges start dissolving into
+           the row divider in the light theme, and the badge loses its shape. */
         neutral: "border-hairline bg-surface-strong text-ink",
         success: "border-success/35 bg-background text-success",
-        info: "border-info/30 bg-background text-info",
-        warning: "border-warning/30 bg-background text-warning",
+        info: "border-info/35 bg-background text-info",
+        warning: "border-warning/35 bg-background text-warning",
         danger: "border-danger/35 bg-background text-danger",
         /* Chrome only — the caller's own stylesheet owns the border colour and
            ink. For badges whose tone scale is richer than the five semantic
