@@ -14,11 +14,12 @@ import {
   NavRoutine,
   NavSidebarCollapse,
   NavSidebarExpand,
+  NavSkills,
   NavTeams,
   NavThreads,
   WorkspaceFolder,
+  type GlyphProps,
 } from "./icons";
-import { BookOpen, type LucideProps } from "lucide-react";
 import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { Button } from "@/components/ui/button";
@@ -40,16 +41,16 @@ import {
  *  only in icon, label, and route, and the admin one only in being gated. */
 const MORE_ROUTES: readonly {
   route: AppRoute;
-  /* `withStandardStroke` wrappers and bare lucide icons both appear in
-     icons.tsx and have different component types; this is the call shape they
-     share, which is all a table of icons needs. */
-  Icon: ComponentType<Pick<LucideProps, "size" | "className">>;
+  /* icons.tsx exports stroked wrappers, filled identity glyphs, and the odd
+     bespoke one, which have different component types; GlyphProps is the call
+     shape they share, which is all a table of icons needs. */
+  Icon: ComponentType<GlyphProps>;
   labelKey: string;
   adminOnly?: boolean;
 }[] = [
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
-  { route: "skills", Icon: BookOpen, labelKey: "nav.skills" },
+  { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
   { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
@@ -281,7 +282,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
             onBlur={hideNavTooltip}
           >
-            <BookOpen size={ICON.lg} />
+            <NavSkills size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.skills")}</span>
           </a>
           <a

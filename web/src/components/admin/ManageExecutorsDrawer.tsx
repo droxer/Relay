@@ -219,9 +219,9 @@ export function ManageExecutorsDrawer({ open, onClose, node, employeeHandle, onU
                         <span className="adm-agent-inventory-label">{t("admin.v2.agent_skills", { count: skills.length })}</span>
                         <span className="adm-agent-inventory-pills">
                           {skills.map((skill) => (
-                            <span key={`${skill.namespace ?? ""}/${skill.name}`} className="adm-agent-inventory-pill code" title={skill.description ?? skill.name}>
+                            <Badge key={`${skill.namespace ?? ""}/${skill.name}`} className="adm-agent-inventory-pill code" title={skill.description ?? skill.name}>
                               {skill.name}
-                            </span>
+                            </Badge>
                           ))}
                         </span>
                       </div>
@@ -231,9 +231,9 @@ export function ManageExecutorsDrawer({ open, onClose, node, employeeHandle, onU
                         <span className="adm-agent-inventory-label">{t("admin.v2.agent_mcp", { count: mcpServers.length })}</span>
                         <span className="adm-agent-inventory-pills">
                           {mcpServers.map((server) => (
-                            <span key={server.name} className="adm-agent-inventory-pill code" title={server.command ?? server.name}>
+                            <Badge key={server.name} className="adm-agent-inventory-pill code" title={server.command ?? server.name}>
                               {server.name}
-                            </span>
+                            </Badge>
                           ))}
                         </span>
                       </div>

@@ -157,6 +157,22 @@ export function DesignSystemSpecimen() {
       <StatusPill value="running" />
     </Section>
 
+    {/* ---- Consolidated chips ----
+        The three chips that used to draw their own geometry, rendered beside
+        the primitive above so a divergence is visible rather than argued
+        about. Each should differ from a plain neutral Badge ONLY in fill, ink,
+        or its own layout residue — never in radius, hairline, inline pad, or
+        label size. If one of these looks like a different shape from the
+        Neutral badge overhead, that is the regression this section exists to
+        catch. */}
+    <Section title="Consolidated chips">
+      <Badge variant="neutral" className="badge-probe-ref">Neutral (reference)</Badge>
+      <Badge className="adm-agent-inventory-pill code">skill-name</Badge>
+      <Badge className="adm-dash-empty-tag">Coming soon</Badge>
+      <Badge className="pref-lang-badge">EN</Badge>
+      <Badge className="pref-lang-badge">简</Badge>
+    </Section>
+
     {/* ---- Form stack ---- */}
     <Section title="Field">
       <div className="flex min-w-0 flex-col gap-4">

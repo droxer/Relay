@@ -222,17 +222,13 @@
   min-width: 0;
 }
 
+/* Fill, ink, and the ellipsis behaviour a long skill or server name needs.
+   The rest — inline pad, hairline, radius, label type — comes from Badge,
+   which this rule used to restate in full. */
 .adm-agent-inventory-pill {
-  font-size: var(--fs-2);
-  padding: var(--sp-0-5) var(--sp-1-5);
-  border-radius: var(--r-2);
-  border: 0.5px solid var(--line-1);
+  max-width: 100%;
   color: var(--ink-1);
   background: var(--surface-0);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .adm-agent-toggle-meta {
