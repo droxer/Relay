@@ -15,7 +15,7 @@ vi.mock("react-i18next", async (load) => load());
 vi.mock("../src/hooks/useSkills", () => ({ SKILLS_QUERY_KEY: "skills", useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }), useSkill: () => ({ data: null, isLoading: false, error: null }) }));
 vi.mock("../src/hooks/useEmployeeAgents", () => ({ EMPLOYEE_AGENTS_QUERY_KEY: "employee-agents", useEmployeeAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
-vi.mock("../src/api", () => ({ createSkill: vi.fn(), deleteSkill: vi.fn(), importSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn(), grantSkill: vi.fn(), revokeSkill: vi.fn() }));
+vi.mock("../src/api", () => ({ createSkill: vi.fn(), deleteSkill: vi.fn(), importSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn(), assignSkill: vi.fn(), revokeSkillAssignment: vi.fn() }));
 
 async function locale(language: "zh-CN" | "zh-TW") {
   const instance = createInstance();
@@ -39,7 +39,7 @@ it.each([
 
 it("interpolates the Traditional Chinese team and selected-agent counts", async () => {
   const instance = await locale("zh-TW");
-  const skill = { id: "skill-1", displayName: "Release notes", grantedAgentIds: [], files: [], revisions: [] } as any;
+  const skill = { id: "skill-1", displayName: "Release notes", grantedAgentIds: [], assignments: [], files: [], revisions: [] } as any;
   const agents = [{ id: "agent-1", displayName: "Codex reviewer", executorKind: "codex", enabled: true }] as any;
   const teams = [{ id: "team-1", name: "Launch team", memberAgentIds: ["agent-1"] }] as any;
   render(providers(instance, <ShareSkillDrawer skill={skill} agents={agents} teams={teams} onClose={vi.fn()} />));

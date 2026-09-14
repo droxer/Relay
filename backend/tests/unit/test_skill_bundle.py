@@ -10,6 +10,7 @@ class Store:
         self.skills = {}
         self.revisions = {}
         self.files = {}
+        self.assignments = []
 
     def get_skill(self, skill_id):
         return self.skills.get(skill_id)
@@ -19,6 +20,15 @@ class Store:
 
     def revision_files(self, revision_id):
         return self.files[revision_id]
+
+    def list_assignments(self, *, targets=None, skill_id=None):
+        target_set = set(targets or [])
+        return [
+            assignment
+            for assignment in self.assignments
+            if (not target_set or (assignment["targetType"], assignment["targetId"]) in target_set)
+            and (skill_id is None or assignment["skillId"] == skill_id)
+        ]
 
 
 def _ctx():
@@ -148,6 +158,38 @@ def test_rejects_legacy_slug_whose_leaf_does_not_match_the_skill_name():
     ]
 
 
+def test_required_assignment_keeps_severity_for_a_legacy_invalid_slug():
+    ctx = _ctx()
+    ctx.skill_store.skills["b"]["slug"] = "review-alice"
+    ctx.skill_store.assignments.append(
+        {
+            "id": "assignment",
+            "skillId": "b",
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "required",
+            "pin": "stable",
+            "invocation": "implicit",
+            "updatedAt": "now",
+        }
+    )
+
+    bundle, skipped = resolve_bundle(
+        ctx,
+        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+    )
+
+    assert bundle["skills"] == []
+    assert skipped == [
+        {
+            "skillId": "b",
+            "slug": "review-alice",
+            "reason": "invalid-bundle",
+            "assignmentMode": "required",
+        }
+    ]
+
+
 def test_unsupported_policy_is_reported():
     bundle, skipped = resolve_bundle(_ctx(), _agent([_grant("b")], version=2))
     assert bundle["skills"] == []
@@ -178,3 +220,83 @@ def test_kimi_different_names_do_not_conflict():
 
     assert [skill["skillId"] for skill in bundle["skills"]] == ["a", "b"]
     assert skipped == []
+
+
+def test_employee_assignment_is_resolved_without_legacy_agent_policy():
+    ctx = _ctx()
+    ctx.skill_store.assignments.append(
+        {
+            "id": "assignment",
+            "skillId": "b",
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "optional",
+            "pin": "stable",
+            "invocation": "implicit",
+            "updatedAt": "now",
+        }
+    )
+    ctx.skill_store.skills["b"]["stableRevisionId"] = "rev-b"
+
+    bundle, skipped = resolve_bundle(
+        ctx,
+        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+    )
+
+    assert skipped == []
+    assert bundle["skills"][0]["skillId"] == "b"
+    assert bundle["skills"][0]["assignmentMode"] == "optional"
+
+
+def test_explicit_assignment_does_not_auto_materialize():
+    ctx = _ctx()
+    ctx.skill_store.assignments.append(
+        {
+            "id": "assignment",
+            "skillId": "b",
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "suggested",
+            "pin": "latest",
+            "invocation": "explicit",
+            "updatedAt": "now",
+        }
+    )
+
+    bundle, skipped = resolve_bundle(
+        ctx,
+        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+    )
+
+    assert skipped == []
+    assert bundle is None
+
+
+def test_required_assignment_failure_is_marked_as_blocking():
+    ctx = _ctx()
+    ctx.skill_store.assignments.append(
+        {
+            "id": "assignment",
+            "skillId": "missing",
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "required",
+            "pin": "stable",
+            "invocation": "implicit",
+            "updatedAt": "now",
+        }
+    )
+
+    bundle, skipped = resolve_bundle(
+        ctx,
+        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+    )
+
+    assert bundle["skills"] == []
+    assert skipped == [
+        {
+            "skillId": "missing",
+            "reason": "skill-missing",
+            "assignmentMode": "required",
+        }
+    ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
@@ -11,12 +12,17 @@ from relay.persistence.skill_store import (
     DatabaseSkillStore,
     SkillValidationError,
 )
+from relay.persistence.skill_object_store import LocalSkillObjectStore
 from relay.persistence.store_common import _parse_iso
 from sqlalchemy import func, insert, select
 
 
 def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
-    store = DatabaseSkillStore(f"sqlite:///{tmp_path}/relay.db", create_schema=True)
+    store = DatabaseSkillStore(
+        f"sqlite:///{tmp_path}/relay.db",
+        create_schema=True,
+        object_store=LocalSkillObjectStore(tmp_path / "skill-objects"),
+    )
     alice, bob = str(uuid4()), str(uuid4())
     with store.engine.begin() as conn:
         for employee_id, handle in ((alice, "alice"), (bob, "bob")):
@@ -107,7 +113,9 @@ def test_revisions_are_immutable_incrementing_and_listed(tmp_path):
     updated = store.add_revision(skill["id"], alice, _files(body=b"New"), note="v2")
     assert [r["revision"] for r in store.list_revisions(skill["id"])] == [2, 1]
     assert store.get_revision(updated["currentRevisionId"])["revision"] == 2
-    assert store.revision_files(first)[0]["content"].endswith(b"Body")
+    first_file = store.revision_files(first)[0]
+    assert "content" not in first_file
+    assert store.blob(first_file["sha256"]).endswith(b"Body")
 
 
 def test_manifest_order_independent_and_blob_deduplicated(tmp_path):
@@ -124,10 +132,11 @@ def test_manifest_order_independent_and_blob_deduplicated(tmp_path):
             conn.scalar(
                 select(func.count())
                 .select_from(store.blobs)
-                .where(store.blobs.c.content == b"same")
+                    .where(store.blobs.c.sha256 == hashlib.sha256(b"same").hexdigest())
             )
             == 1
         )
+        assert conn.scalar(select(store.blobs.c.content).limit(1)) is None
     assert (
         store.blob(store.revision_files(a["currentRevisionId"])[1]["sha256"]) == b"same"
     )
@@ -313,3 +322,27 @@ def test_concurrent_revisions_get_distinct_monotonic_numbers(tmp_path):
         )
     numbers = {store.get_revision(r["currentRevisionId"])["revision"] for r in results}
     assert numbers == {2, 3}
+
+
+def test_stable_revision_is_explicitly_promoted(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    skill = _create(store, alice)
+    first = skill["currentRevisionId"]
+
+    updated = store.add_revision(skill["id"], alice, _files(body=b"New"))
+    assert updated["currentRevisionId"] != first
+    assert updated["stableRevisionId"] == first
+
+    promoted = store.promote_revision(skill["id"], updated["currentRevisionId"])
+    assert promoted["stableRevisionId"] == updated["currentRevisionId"]
+    assert store.events(skill["id"])[-1]["type"] == "skill.revision.promoted"
+
+
+def test_cannot_promote_revision_from_another_skill(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    first = _create(store, alice, "first")
+    second = _create(store, alice, "second")
+
+    with pytest.raises(SkillValidationError) as exc:
+        store.promote_revision(first["id"], second["currentRevisionId"])
+    assert exc.value.code == "revision-not-found"

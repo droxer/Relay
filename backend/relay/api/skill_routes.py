@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import io
 import json
+import zipfile
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -14,7 +16,7 @@ from ..persistence.skill_store import (
     MAX_REVISION_BYTES,
     SkillValidationError,
 )
-from ..services import skill_grants, skill_import
+from ..services import skill_assignments, skill_grants, skill_import
 from .deps import AppContextDep
 from .helpers import request_actor
 
@@ -95,8 +97,18 @@ async def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     for agent in agents:
         for skill_id in {entry["skillId"] for entry in skill_grants.read_grants(agent)}:
             counts[skill_id] = counts.get(skill_id, 0) + 1
+    assignment_counts: dict[str, int] = {}
+    for assignment in ctx.skill_store.list_assignments():
+        if assignment["createdByEmployeeId"] == actor["employeeId"] or actor["isAdmin"]:
+            assignment_counts[assignment["skillId"]] = (
+                assignment_counts.get(assignment["skillId"], 0) + 1
+            )
     return {"skills": [
-        {**skill, "grantedAgentCount": counts.get(skill["id"], 0)}
+        {
+            **skill,
+            "grantedAgentCount": counts.get(skill["id"], 0),
+            "assignmentCount": assignment_counts.get(skill["id"], 0),
+        }
         for skill in ctx.skill_store.list_skills(actor["employeeId"])
     ]}
 
@@ -130,6 +142,12 @@ async def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict
             if any(entry["skillId"] == skill_id for entry in skill_grants.read_grants(agent))
         ],
         "revisions": ctx.skill_store.list_revisions(skill_id),
+        "assignments": [
+            assignment
+            for assignment in ctx.skill_store.list_assignments(skill_id=skill_id)
+            if actor["isAdmin"]
+            or assignment["createdByEmployeeId"] == actor["employeeId"]
+        ],
         "files": [
             {key: entry[key] for key in ("path", "sha256", "bytes")}
             for entry in ctx.skill_store.revision_files(skill["currentRevisionId"])
@@ -199,6 +217,56 @@ async def add_revision(skill_id: str, request: Request, ctx: AppContextDep) -> d
         raise HTTPException(404, "skill-not-found") from error
 
 
+@router.post("/skills/{skill_id}/revisions/{revision_id}/promote")
+async def promote_revision(
+    skill_id: str, revision_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    owned_skill(ctx, skill_id, actor["employeeId"])
+    # Consume and validate the JSON envelope consistently with other writes.
+    await skill_body(request, set())
+    try:
+        return ctx.skill_store.promote_revision(skill_id, revision_id)
+    except SkillValidationError as error:
+        raise skill_error(error) from error
+    except KeyError as error:
+        raise HTTPException(404, "skill-not-found") from error
+
+
+@router.get("/skills/{skill_id}/export")
+async def export_skill(
+    skill_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    channel: str = "stable",
+) -> Response:
+    actor = request_actor(request, ctx.auth_store)
+    skill = visible_skill(ctx, skill_id, actor["employeeId"])
+    if channel not in {"stable", "latest"}:
+        raise HTTPException(422, "invalid-channel")
+    revision_id = (
+        skill["stableRevisionId"]
+        if channel == "stable"
+        else skill["currentRevisionId"]
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry in ctx.skill_store.revision_files(revision_id):
+            info = zipfile.ZipInfo(entry["path"])
+            info.external_attr = 0o600 << 16
+            archive.writestr(
+                info,
+                ctx.skill_store.blob(entry["sha256"]),
+                compress_type=zipfile.ZIP_DEFLATED,
+            )
+    filename = skill["slug"].replace("/", "-") + ".skill.zip"
+    return Response(
+        output.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.patch("/skills/{skill_id}")
 async def update_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
@@ -223,6 +291,64 @@ async def delete_skill(skill_id: str, request: Request, ctx: AppContextDep) -> R
 def grant_error(error: skill_grants.SkillGrantError) -> HTTPException:
     status = {"not-agent-owner": 403, "skill-not-found": 404, "agent-not-found": 404}.get(error.code, 422)
     return HTTPException(status, error.code)
+
+
+def assignment_error(error: skill_assignments.SkillAssignmentError) -> HTTPException:
+    status = {
+        "not-target-owner": 403,
+        "skill-not-found": 404,
+        "assignment-not-found": 404,
+        "assignment-target-not-found": 404,
+    }.get(error.code, 422)
+    return HTTPException(status, error.code)
+
+
+@router.post("/skills/{skill_id}/assignments", status_code=201)
+async def assign_skill(
+    skill_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    body = await skill_body(
+        request, {"targetType", "targetId", "mode", "pin", "invocation"}
+    )
+    if not isinstance(body.get("targetType"), str) or not isinstance(
+        body.get("targetId"), str
+    ):
+        raise HTTPException(422, "invalid-assignment-target")
+    try:
+        return skill_assignments.assign(
+            ctx,
+            skill_id,
+            body["targetType"],
+            body["targetId"],
+            actor["employeeId"],
+            mode=body.get("mode", "optional"),
+            pin=body.get("pin", "stable"),
+            invocation=body.get("invocation", "implicit"),
+            actor_is_admin=actor["isAdmin"],
+        )
+    except skill_assignments.SkillAssignmentError as error:
+        raise assignment_error(error) from error
+
+
+@router.delete("/skills/{skill_id}/assignments/{assignment_id}", status_code=204)
+async def revoke_assignment(
+    skill_id: str, assignment_id: str, request: Request, ctx: AppContextDep
+) -> Response:
+    actor = request_actor(request, ctx.auth_store)
+    assignment = ctx.skill_store.get_assignment(assignment_id)
+    if not assignment or assignment["skillId"] != skill_id:
+        raise HTTPException(404, "assignment-not-found")
+    try:
+        skill_assignments.revoke(
+            ctx,
+            assignment_id,
+            actor["employeeId"],
+            actor_is_admin=actor["isAdmin"],
+        )
+    except skill_assignments.SkillAssignmentError as error:
+        raise assignment_error(error) from error
+    return Response(status_code=204)
 
 
 @router.post("/skills/{skill_id}/grants")

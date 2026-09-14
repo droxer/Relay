@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import io
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -273,3 +275,121 @@ def test_same_node_agents_receive_only_their_own_catalog_grants(client):
         headers={"Authorization": "Bearer skill-token-alice"},
     )
     assert response.status_code == 404, response.text
+
+
+def test_employee_assignment_dynamically_delivers_to_current_and_future_agents(client):
+    first, node = create_agent(client, name="First reviewer")
+    skill = publish(client, visibility="org")
+    response = client.post(
+        f"/api/v1/skills/{skill['id']}/assignments",
+        json={
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "optional",
+            "pin": "stable",
+            "invocation": "implicit",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assignment = response.json()
+    assert assignment["targetType"] == "employee"
+    detail = client.get(f"/api/v1/skills/{skill['id']}").json()
+    assert detail["assignments"] == [assignment]
+
+    second, _ = create_agent(client, name="Future reviewer")
+    client.app.state.registry.update_status(node["id"], {"maxConcurrentRuns": 2})
+    for agent in (first, second):
+        response = client.post(
+            "/api/v1/agent-runs",
+            json={
+                "taskGoal": "Review the workspace",
+                "assignments": [{"agentId": agent["id"]}],
+            },
+        )
+        assert response.status_code == 202, response.text
+    commands = [
+        command
+        for command in client.app.state.registry.take_commands(
+            node["id"], "skill-token-alice"
+        )
+        if command["type"] == "run.start"
+    ]
+    assert len(commands) == 2
+    assert all(
+        command["skills"]["skills"][0]["skillId"] == skill["id"]
+        for command in commands
+    )
+
+    assert client.delete(
+        f"/api/v1/skills/{skill['id']}/assignments/{assignment['id']}"
+    ).status_code == 204
+    assert client.get(f"/api/v1/skills/{skill['id']}").json()["assignments"] == []
+
+
+def test_assignment_api_prevents_cross_employee_targeting(client):
+    skill = publish(client, visibility="org")
+    response = client.post(
+        f"/api/v1/skills/{skill['id']}/assignments",
+        json={"targetType": "employee", "targetId": "bob"},
+    )
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "not-target-owner"
+
+
+def test_assignment_api_rejects_unknown_fields_and_invalid_policy(client):
+    skill = publish(client)
+    url = f"/api/v1/skills/{skill['id']}/assignments"
+    assert client.post(
+        url,
+        json={"targetType": "employee", "targetId": "alice", "unexpected": True},
+    ).status_code == 422
+    response = client.post(
+        url,
+        json={
+            "targetType": "employee",
+            "targetId": "alice",
+            "mode": "suggested",
+            "invocation": "implicit",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "suggested-requires-explicit-invocation"
+
+
+def test_owner_can_promote_and_export_a_portable_skill_bundle(client):
+    skill = publish(client, name="portable")
+    first_revision = skill["currentRevisionId"]
+    revised = client.post(
+        f"/api/v1/skills/{skill['id']}/revisions",
+        json={
+            "files": [
+                {
+                    "path": "SKILL.md",
+                    "contentBase64": base64.b64encode(
+                        b"---\nname: portable\ndescription: Portable\n---\nsecond"
+                    ).decode(),
+                }
+            ]
+        },
+    )
+    assert revised.status_code == 201, revised.text
+    second_revision = revised.json()["currentRevisionId"]
+
+    detail = client.get(f"/api/v1/skills/{skill['id']}").json()
+    assert detail["stableRevisionId"] == first_revision
+    promoted = client.post(
+        f"/api/v1/skills/{skill['id']}/revisions/{second_revision}/promote",
+        json={},
+    )
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["stableRevisionId"] == second_revision
+
+    exported = client.get(
+        f"/api/v1/skills/{skill['id']}/export?channel=stable"
+    )
+    assert exported.status_code == 200, exported.text
+    assert exported.headers["content-type"] == "application/zip"
+    assert "portable.skill.zip" in exported.headers["content-disposition"]
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        assert archive.namelist() == ["SKILL.md"]
+        assert archive.read("SKILL.md").endswith(b"second")

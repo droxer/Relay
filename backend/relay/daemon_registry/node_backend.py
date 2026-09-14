@@ -40,6 +40,8 @@ class ServerDaemonNodeBackend:
         employee_agent_store: AgentStore | None = None,
         agent_placement_store: AgentPlacementStore | None = None,
         skill_store: Any | None = None,
+        team_store: Any | None = None,
+        project_store: Any | None = None,
     ):
         if (
             agent_store is not None
@@ -53,20 +55,30 @@ class ServerDaemonNodeBackend:
         self.registry = registry
         self.agent_store = agent_store
         self.skill_store = skill_store
+        self.team_store = team_store
+        self.project_store = project_store
         self.agent_placement_store = agent_placement_store
         self.registry.logical_assignment_validator = self._validate_logical_assignment
         self.registry.logical_skill_bundle_resolver = self._resolve_logical_skill_bundle
 
     def _resolve_logical_skill_bundle(
-        self, agent_id: str
+        self, agent_id: str, project_id: str | None = None
     ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         if self.agent_store is None or self.skill_store is None:
             return None, []
         agent = self.agent_store.get_agent(agent_id)
         if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
             raise ValueError("logical agent is disabled or missing")
-        context = type("SkillBundleContext", (), {"skill_store": self.skill_store})()
-        return resolve_bundle(context, agent)
+        context = type(
+            "SkillBundleContext",
+            (),
+            {
+                "skill_store": self.skill_store,
+                "team_store": self.team_store,
+                "project_store": self.project_store,
+            },
+        )()
+        return resolve_bundle(context, agent, project_id=project_id)
 
     def idempotent_run(
         self,

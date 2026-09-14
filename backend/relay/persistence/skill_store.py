@@ -18,6 +18,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    delete,
     insert,
     or_,
     select,
@@ -39,6 +40,7 @@ from .store_common import (
     store_transaction,
 )
 from .store_common import metadata as shared_metadata
+from .skill_object_store import SkillObjectStore
 
 MAX_FILES = 300
 MAX_FILE_BYTES = 1_048_576
@@ -146,7 +148,9 @@ class DatabaseSkillStore:
         "skill_blobs",
         metadata,
         Column("sha256", Text, primary_key=True),
-        Column("content", LargeBinary, nullable=False),
+        # Bundle bytes live in SkillObjectStore. This nullable compatibility
+        # column lets upgraded databases retain blobs written by older builds.
+        Column("content", LargeBinary, nullable=True),
         Column("bytes", BigInteger, nullable=False),
         CheckConstraint("bytes >= 0 AND bytes <= 1048576", name="ck_skill_blobs_bytes"),
     )
@@ -188,9 +192,60 @@ class DatabaseSkillStore:
         Column("payload", json_type(), nullable=False),
         UniqueConstraint("skill_id", "sequence", name="uq_skill_events_sequence"),
     )
+    assignments = Table(
+        "skill_assignments",
+        metadata,
+        database_id_column(),
+        Column(
+            "skill_id",
+            entity_uuid_type(),
+            ForeignKey("skills.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        Column("target_type", Text, nullable=False),
+        Column("target_id", Text, nullable=False),
+        Column("mode", Text, nullable=False),
+        Column("pin", json_type(), nullable=False),
+        Column("invocation", Text, nullable=False),
+        Column(
+            "created_by_employee_id",
+            entity_uuid_type(),
+            ForeignKey("employees.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("updated_at", DateTime(timezone=True), nullable=False),
+        CheckConstraint(
+            "target_type IN ('employee', 'team', 'project', 'agent', 'org')",
+            name="ck_skill_assignments_target_type",
+        ),
+        CheckConstraint(
+            "mode IN ('optional', 'required', 'suggested')",
+            name="ck_skill_assignments_mode",
+        ),
+        CheckConstraint(
+            "invocation IN ('implicit', 'explicit')",
+            name="ck_skill_assignments_invocation",
+        ),
+        UniqueConstraint(
+            "skill_id",
+            "target_type",
+            "target_id",
+            name="uq_skill_assignments_target",
+        ),
+        Index("ix_skill_assignments_target", "target_type", "target_id"),
+        Index("ix_skill_assignments_skill", "skill_id"),
+    )
 
-    def __init__(self, database_url: str, *, create_schema: bool = False):
+    def __init__(
+        self,
+        database_url: str,
+        *,
+        object_store: SkillObjectStore,
+        create_schema: bool = False,
+    ):
         self.engine = shared_engine(database_url)
+        self.object_store = object_store
         self._write_lock = RLock()
         if create_schema:
             create_all_tables(self.engine)
@@ -234,6 +289,7 @@ class DatabaseSkillStore:
                         "source": source,
                         "sourceRef": payload.get("sourceRef"),
                         "currentRevisionId": None,
+                        "stableRevisionId": None,
                         "createdAt": timestamp,
                         "updatedAt": timestamp,
                         "deletedAt": None,
@@ -252,7 +308,11 @@ class DatabaseSkillStore:
                         files,
                         payload.get("note"),
                     )
-                    skill = {**skill, "currentRevisionId": revision["id"]}
+                    skill = {
+                        **skill,
+                        "currentRevisionId": revision["id"],
+                        "stableRevisionId": revision["id"],
+                    }
                     conn.execute(
                         update(self.skills)
                         .where(self.skills.c.id == skill["id"])
@@ -263,7 +323,11 @@ class DatabaseSkillStore:
                         skill["id"],
                         1,
                         "skill.revision.added",
-                        {"revision": revision, "currentRevisionId": revision["id"]},
+                        {
+                            "revision": revision,
+                            "currentRevisionId": revision["id"],
+                            "stableRevisionId": revision["id"],
+                        },
                     )
                 return skill
             except IntegrityError as error:
@@ -350,6 +414,61 @@ class DatabaseSkillStore:
             except IntegrityError as error:
                 raise self._integrity_error(error) from error
 
+    def promote_revision(
+        self, skill_id: str, revision_id: str
+    ) -> dict[str, Any]:
+        with self._write_lock, store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    select(self.skills.c.id, self.skills.c.event_version)
+                    .where(self.skills.c.id == skill_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                raise KeyError(skill_id)
+            current = self._replay(conn, row["id"])
+            if current.get("deletedAt"):
+                raise SkillValidationError("skill-deleted")
+            revision = (
+                conn.execute(
+                    select(self.revisions.c.id).where(
+                        self.revisions.c.id == revision_id,
+                        self.revisions.c.skill_id == skill_id,
+                    )
+                )
+                .first()
+            )
+            if not revision:
+                raise SkillValidationError("revision-not-found")
+            timestamp = now_iso()
+            updated = {
+                **current,
+                "stableRevisionId": revision_id,
+                "updatedAt": timestamp,
+            }
+            sequence = int(row["event_version"])
+            claimed = conn.execute(
+                update(self.skills)
+                .where(
+                    self.skills.c.id == row["id"],
+                    self.skills.c.event_version == sequence,
+                )
+                .values(**_skill_row(updated, event_version=sequence + 1))
+            )
+            if claimed.rowcount != 1:
+                raise _SkillWriteConflict(skill_id)
+            self._append_event(
+                conn,
+                row["id"],
+                sequence,
+                "skill.revision.promoted",
+                {"stableRevisionId": revision_id, "updatedAt": timestamp},
+            )
+            return updated
+
     def get_skill(self, skill_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             exists = conn.scalar(
@@ -396,6 +515,165 @@ class DatabaseSkillStore:
     def delete_skill(self, skill_id: str) -> dict[str, Any]:
         return self._mutate(skill_id, "skill.deleted", {}, deleting=True)
 
+    def upsert_assignment(
+        self,
+        skill_id: str,
+        *,
+        target_type: str,
+        target_id: str,
+        mode: str,
+        pin: str | dict[str, str],
+        invocation: str,
+        created_by_employee_id: str,
+    ) -> dict[str, Any]:
+        if target_type not in {"employee", "team", "project", "agent", "org"}:
+            raise SkillValidationError("invalid-assignment-target")
+        if not isinstance(target_id, str) or not target_id:
+            raise SkillValidationError("invalid-assignment-target")
+        if mode not in {"optional", "required", "suggested"}:
+            raise SkillValidationError("invalid-assignment-mode")
+        if invocation not in {"implicit", "explicit"}:
+            raise SkillValidationError("invalid-invocation-policy")
+        if not (isinstance(pin, str) and pin in {"latest", "stable"}) and not (
+            isinstance(pin, dict)
+            and set(pin) == {"revisionId"}
+            and isinstance(pin["revisionId"], str)
+        ):
+            raise SkillValidationError("invalid-pin")
+        with self._write_lock, store_transaction(self.engine) as conn:
+            skill_row = (
+                conn.execute(
+                    select(self.skills.c.id, self.skills.c.event_version)
+                    .where(self.skills.c.id == skill_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not skill_row:
+                raise KeyError(skill_id)
+            existing = (
+                conn.execute(
+                    select(self.assignments).where(
+                        self.assignments.c.skill_id == skill_id,
+                        self.assignments.c.target_type == target_type,
+                        self.assignments.c.target_id == target_id,
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            timestamp = now_iso()
+            assignment_id = str(existing["id"]) if existing else new_database_id()
+            created_at = (
+                _format_iso(existing["created_at"]) if existing else timestamp
+            )
+            assignment = {
+                "id": assignment_id,
+                "skillId": str(skill_id),
+                "targetType": target_type,
+                "targetId": target_id,
+                "mode": mode,
+                "pin": pin,
+                "invocation": invocation,
+                "createdByEmployeeId": created_by_employee_id,
+                "createdAt": created_at,
+                "updatedAt": timestamp,
+            }
+            values = _assignment_row(assignment)
+            if existing:
+                conn.execute(
+                    update(self.assignments)
+                    .where(self.assignments.c.id == existing["id"])
+                    .values(**values)
+                )
+            else:
+                conn.execute(insert(self.assignments).values(**values))
+            self._record_assignment_event(
+                conn,
+                skill_row,
+                "skill.assignment.upserted",
+                {"assignment": assignment},
+            )
+            return assignment
+
+    def get_assignment(self, assignment_id: str) -> dict[str, Any] | None:
+        with store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    select(self.assignments).where(
+                        self.assignments.c.id == assignment_id
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        return _assignment_dict(row) if row else None
+
+    def list_assignments(
+        self,
+        *,
+        skill_id: str | None = None,
+        targets: list[tuple[str, str]] | None = None,
+    ) -> list[dict[str, Any]]:
+        statement = select(self.assignments)
+        if skill_id is not None:
+            statement = statement.where(self.assignments.c.skill_id == skill_id)
+        if targets is not None:
+            if not targets:
+                return []
+            statement = statement.where(
+                or_(
+                    *(
+                        (self.assignments.c.target_type == target_type)
+                        & (self.assignments.c.target_id == target_id)
+                        for target_type, target_id in targets
+                    )
+                )
+            )
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+        return sorted(
+            (_assignment_dict(row) for row in rows),
+            key=lambda item: (item["skillId"], item["targetType"], item["targetId"]),
+        )
+
+    def delete_assignment(self, assignment_id: str) -> dict[str, Any]:
+        with self._write_lock, store_transaction(self.engine) as conn:
+            assignment_row = (
+                conn.execute(
+                    select(self.assignments)
+                    .where(self.assignments.c.id == assignment_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not assignment_row:
+                raise KeyError(assignment_id)
+            skill_row = (
+                conn.execute(
+                    select(self.skills.c.id, self.skills.c.event_version)
+                    .where(self.skills.c.id == assignment_row["skill_id"])
+                    .with_for_update()
+                )
+                .mappings()
+                .one()
+            )
+            assignment = _assignment_dict(assignment_row)
+            conn.execute(
+                delete(self.assignments).where(
+                    self.assignments.c.id == assignment_row["id"]
+                )
+            )
+            self._record_assignment_event(
+                conn,
+                skill_row,
+                "skill.assignment.revoked",
+                {"assignment": assignment},
+            )
+            return assignment
+
     def get_revision(self, revision_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
@@ -428,7 +706,6 @@ class DatabaseSkillStore:
                         self.files.c.path,
                         self.files.c.sha256,
                         self.files.c.bytes,
-                        self.blobs.c.content,
                     )
                     .join(self.blobs, self.blobs.c.sha256 == self.files.c.sha256)
                     .where(self.files.c.revision_id == revision_id)
@@ -441,9 +718,18 @@ class DatabaseSkillStore:
 
     def blob(self, sha256: str) -> bytes | None:
         with store_transaction(self.engine) as conn:
-            return conn.scalar(
-                select(self.blobs.c.content).where(self.blobs.c.sha256 == sha256)
+            row = (
+                conn.execute(
+                    select(self.blobs.c.content).where(self.blobs.c.sha256 == sha256)
+                )
+                .mappings()
+                .first()
             )
+        if not row:
+            return None
+        # Read legacy database bytes during rolling upgrades, but every new
+        # write goes through the filesystem object-store boundary.
+        return self.object_store.get(sha256) or row["content"]
 
     def events(self, skill_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
@@ -553,12 +839,13 @@ class DatabaseSkillStore:
         )
         for item in files:
             digest = hashlib.sha256(item["content"]).hexdigest()
+            self.object_store.put(digest, item["content"])
             try:
                 with conn.begin_nested():
                     conn.execute(
                         insert(self.blobs).values(
                             sha256=digest,
-                            content=item["content"],
+                            content=None,
                             bytes=len(item["content"]),
                         )
                     )
@@ -594,6 +881,26 @@ class DatabaseSkillStore:
             )
         )
 
+    def _record_assignment_event(
+        self,
+        conn: Any,
+        skill_row: Any,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> None:
+        sequence = int(skill_row["event_version"])
+        claimed = conn.execute(
+            update(self.skills)
+            .where(
+                self.skills.c.id == skill_row["id"],
+                self.skills.c.event_version == sequence,
+            )
+            .values(event_version=sequence + 1)
+        )
+        if claimed.rowcount != 1:
+            raise _SkillWriteConflict(str(skill_row["id"]))
+        self._append_event(conn, skill_row["id"], sequence, event_type, payload)
+
     def _replay(self, conn: Any, skill_id: str) -> dict[str, Any]:
         rows = (
             conn.execute(
@@ -618,6 +925,15 @@ class DatabaseSkillStore:
                 )
                 if payload.get("description") is not None:
                     skill["description"] = payload["description"]
+                if not skill.get("stableRevisionId"):
+                    skill["stableRevisionId"] = payload.get(
+                        "stableRevisionId", payload["currentRevisionId"]
+                    )
+            elif row["type"] == "skill.revision.promoted" and skill is not None:
+                skill.update(
+                    stableRevisionId=payload["stableRevisionId"],
+                    updatedAt=payload["updatedAt"],
+                )
             elif row["type"] == "skill.updated" and skill is not None:
                 skill.update(payload["patch"])
                 skill["updatedAt"] = payload["updatedAt"]
@@ -700,6 +1016,36 @@ def _revision_dict(row: Any) -> dict[str, Any]:
         "createdAt": _format_iso(row["created_at"]),
         "createdByEmployeeId": str(row["created_by_employee_id"]),
         "note": row["note"],
+    }
+
+
+def _assignment_row(assignment: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": assignment["id"],
+        "skill_id": assignment["skillId"],
+        "target_type": assignment["targetType"],
+        "target_id": assignment["targetId"],
+        "mode": assignment["mode"],
+        "pin": assignment["pin"],
+        "invocation": assignment["invocation"],
+        "created_by_employee_id": assignment["createdByEmployeeId"],
+        "created_at": _parse_iso(assignment["createdAt"]),
+        "updated_at": _parse_iso(assignment["updatedAt"]),
+    }
+
+
+def _assignment_dict(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "skillId": str(row["skill_id"]),
+        "targetType": row["target_type"],
+        "targetId": row["target_id"],
+        "mode": row["mode"],
+        "pin": row["pin"],
+        "invocation": row["invocation"],
+        "createdByEmployeeId": str(row["created_by_employee_id"]),
+        "createdAt": _format_iso(row["created_at"]),
+        "updatedAt": _format_iso(row["updated_at"]),
     }
 
 

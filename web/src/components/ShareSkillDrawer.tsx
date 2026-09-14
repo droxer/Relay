@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { grantSkill, revokeSkill } from "../api";
+import { assignSkill, revokeSkillAssignment } from "../api";
 import type { AgentTeam, EmployeeAgent, SkillDetail } from "../types";
 import { EMPLOYEE_AGENTS_QUERY_KEY } from "../hooks/useEmployeeAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
@@ -14,11 +14,13 @@ export function ShareSkillDrawer({
   skill,
   agents,
   teams,
+  employeeId,
   onClose,
 }: {
   skill: SkillDetail;
   agents: EmployeeAgent[];
   teams: AgentTeam[];
+  employeeId?: string;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -32,27 +34,23 @@ export function ShareSkillDrawer({
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const granted = useMemo(
-    () => new Set(skill.grantedAgentIds),
-    [skill.grantedAgentIds],
+  const targetTypes = {
+    employee: { targetType: "employee" as const },
+    team: { targetType: "team" as const },
+    agent: { targetType: "agent" as const },
+  };
+  const assignments = skill.assignments ?? [];
+  const assigned = useMemo(
+    () => new Set(assignments.map((item) => `${item.targetType}:${item.targetId}`)),
+    [assignments],
   );
   const candidates = agents.filter(
-    (agent) => agent.enabled && !granted.has(agent.id),
+    (agent) => agent.enabled && !assigned.has(`agent:${agent.id}`),
   );
   function toggle(id: string) {
     setSelected((value) =>
       value.includes(id) ? value.filter((item) => item !== id) : [...value, id],
     );
-  }
-  function selectTeam(team: AgentTeam) {
-    setSelected((value) => [
-      ...new Set([
-        ...value,
-        ...team.memberAgentIds.filter((id) =>
-          candidates.some((a) => a.id === id),
-        ),
-      ]),
-    ]);
   }
   async function refresh() {
     await Promise.all([
@@ -65,7 +63,12 @@ export function ShareSkillDrawer({
     setBusy(true);
     setError(null);
     try {
-      await grantSkill(skill.id, selected);
+      await Promise.all(selected.map((target) => {
+        const separator = target.indexOf(":");
+        const targetType = target.slice(0, separator) as "employee" | "team" | "agent";
+        const targetId = target.slice(separator + 1);
+        return assignSkill(skill.id, { ...targetTypes[targetType], targetId, mode: "optional", pin: "stable", invocation: "implicit" });
+      }));
       await refresh();
       onClose();
     } catch (err) {
@@ -73,11 +76,11 @@ export function ShareSkillDrawer({
       setBusy(false);
     }
   }
-  async function revoke(agentId: string) {
+  async function revoke(assignmentId: string) {
     setBusy(true);
     setError(null);
     try {
-      await revokeSkill(skill.id, agentId);
+      await revokeSkillAssignment(skill.id, assignmentId);
       await refresh();
     } catch (err) {
       setError(errorText(err));
@@ -97,6 +100,18 @@ export function ShareSkillDrawer({
         <p className="skill-muted">
           {t("skills.share_delivery_note")}
         </p>
+        {employeeId ? (
+          <section>
+            <h3>{t("skills.employee_scope")}</h3>
+            <Button
+              variant="outline"
+              onClick={() => toggle(`employee:${employeeId}`)}
+              disabled={busy || assigned.has(`employee:${employeeId}`)}
+            >
+              {t("skills.all_current_future_agents")}
+            </Button>
+          </section>
+        ) : null}
         {teams.length ? (
           <section>
             <h3>{t("skills.teams")}</h3>
@@ -105,8 +120,8 @@ export function ShareSkillDrawer({
                 <Button
                   key={team.id}
                   variant="outline"
-                  onClick={() => selectTeam(team)}
-                  disabled={busy}
+                  onClick={() => toggle(`team:${team.id}`)}
+                  disabled={busy || assigned.has(`team:${team.id}`)}
                 >
                   {team.name} · {t("skills.member_count", { count: team.memberAgentIds.length })}
                 </Button>
@@ -120,8 +135,8 @@ export function ShareSkillDrawer({
             {candidates.map((agent) => (
               <label key={agent.id}>
                 <Checkbox
-                  checked={selected.includes(agent.id)}
-                  onCheckedChange={() => toggle(agent.id)}
+                  checked={selected.includes(`agent:${agent.id}`)}
+                  onCheckedChange={() => toggle(`agent:${agent.id}`)}
                 />
                 <span>
                   <strong>{agent.displayName}</strong>
@@ -136,19 +151,23 @@ export function ShareSkillDrawer({
             ) : null}
           </div>
         </section>
-        {skill.grantedAgentIds.length ? (
+        {assignments.length ? (
           <section>
             <h3>{t("skills.granted")}</h3>
             <div className="skill-grant-list">
-              {skill.grantedAgentIds.map((id) => {
-                const agent = agents.find((a) => a.id === id);
+              {assignments.map((assignment) => {
+                const agent = assignment.targetType === "agent" ? agents.find((a) => a.id === assignment.targetId) : undefined;
+                const team = assignment.targetType === "team" ? teams.find((item) => item.id === assignment.targetId) : undefined;
+                const label = assignment.targetType === "employee"
+                  ? t("skills.all_current_future_agents")
+                  : agent?.displayName ?? team?.name ?? assignment.targetId;
                 return (
-                  <div key={id}>
-                    <span>{agent?.displayName ?? id}</span>
+                  <div key={assignment.id}>
+                    <span>{label}</span>
                     <Button
                       variant="ghost"
                       disabled={busy}
-                      onClick={() => void revoke(id)}
+                      onClick={() => void revoke(assignment.id)}
                     >
                       {t("skills.revoke")}
                     </Button>

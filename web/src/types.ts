@@ -900,6 +900,18 @@ export type SkillSource = "authored" | "upload" | "git";
 export interface SkillFileInput { path: string; contentBase64: string }
 export interface SkillRevision { id: string; revision: number; bytes: number; manifestSha256: string; createdAt: string; createdByEmployeeId: string; note?: string | null }
 export interface SkillFileSummary { path: string; sha256: string; bytes: number }
+export interface SkillAssignment {
+  id: string;
+  skillId: string;
+  targetType: "employee" | "team" | "project" | "agent" | "org";
+  targetId: string;
+  mode: "optional" | "required" | "suggested";
+  pin: "stable" | "latest" | { revisionId: string };
+  invocation: "implicit" | "explicit";
+  createdByEmployeeId: string;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface SkillRecord {
   id: string;
   ownerEmployeeId: string;
@@ -912,13 +924,16 @@ export interface SkillRecord {
   source: SkillSource;
   sourceRef?: { url: string; ref: string; subpath: string } | null;
   currentRevisionId: string;
+  stableRevisionId: string;
   createdAt: string;
   updatedAt: string;
   grantedAgentCount?: number;
+  assignmentCount?: number;
 }
 export interface SkillDetail extends SkillRecord {
   revisions: SkillRevision[];
   files: SkillFileSummary[];
   grantedAgentIds: string[];
+  assignments: SkillAssignment[];
 }
 export interface SkillsResponse { skills: SkillRecord[] }

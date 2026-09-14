@@ -436,7 +436,11 @@ class DaemonNodeRegistry:
             None
         )
         self.logical_skill_bundle_resolver: (
-            Callable[[str], tuple[dict[str, Any] | None, list[dict[str, Any]]]] | None
+            Callable[
+                [str, str | None],
+                tuple[dict[str, Any] | None, list[dict[str, Any]]],
+            ]
+            | None
         ) = None
         self._last_reap_at = 0.0
         self._last_prune_at = 0.0
@@ -3114,14 +3118,42 @@ class DaemonNodeRegistry:
         logical_agent_id = command.get("logicalAgentId")
         if logical_agent_id and self.logical_skill_bundle_resolver:
             skill_bundle, resolution_skips = self.logical_skill_bundle_resolver(
-                logical_agent_id
+                logical_agent_id, session_snapshot.get("projectId")
             )
+            required_skip = next(
+                (
+                    item
+                    for item in resolution_skips
+                    if item.get("assignmentMode") == "required"
+                ),
+                None,
+            )
+            if required_skip:
+                raise ValueError(
+                    "required_skill_unavailable: "
+                    f"{required_skip.get('slug') or required_skip['skillId']} "
+                    f"({required_skip['reason']})"
+                )
             if skill_bundle is None:
                 pass
             elif "agent-skills" in (sandbox.get("capabilities") or []):
                 command["skills"] = skill_bundle
                 command["_skillsSkipped"] = resolution_skips
             else:
+                required = next(
+                    (
+                        skill
+                        for skill in skill_bundle.get("skills", [])
+                        if skill.get("assignmentMode") == "required"
+                    ),
+                    None,
+                )
+                if required:
+                    raise ValueError(
+                        "required_skill_unavailable: "
+                        f"{required.get('slug') or required['skillId']} "
+                        "(daemon-unsupported)"
+                    )
                 unsupported = [
                     {
                         "skillId": skill["skillId"],
