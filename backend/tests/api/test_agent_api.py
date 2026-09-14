@@ -3280,11 +3280,12 @@ def test_agent_view_lists_skills_installed_for_its_runtime(monkeypatch) -> None:
             item for item in response.json()["agents"] if item["id"] == agent_id
         )
         assert agent["skills"] == [
-            {"name": "tdd"},
+            {"name": "tdd", "source": "node"},
             {
                 "name": "brainstorming",
                 "namespace": "superpowers",
                 "description": "Ideas.",
+                "source": "node",
             },
         ]
 

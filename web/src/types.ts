@@ -894,3 +894,31 @@ export interface ChatIntegration {
 export interface ChatIntegrationsResponse {
   integrations: ChatIntegration[];
 }
+
+export type SkillVisibility = "private" | "org";
+export type SkillSource = "authored" | "upload" | "git";
+export interface SkillFileInput { path: string; contentBase64: string }
+export interface SkillRevision { id: string; revision: number; bytes: number; manifestSha256: string; createdAt: string; createdByEmployeeId: string; note?: string | null }
+export interface SkillFileSummary { path: string; sha256: string; bytes: number }
+export interface SkillRecord {
+  id: string;
+  ownerEmployeeId: string;
+  namespace: string;
+  name: string;
+  slug: string;
+  displayName: string;
+  description: string;
+  visibility: SkillVisibility;
+  source: SkillSource;
+  sourceRef?: { url: string; ref: string; subpath: string } | null;
+  currentRevisionId: string;
+  createdAt: string;
+  updatedAt: string;
+  grantedAgentCount?: number;
+}
+export interface SkillDetail extends SkillRecord {
+  revisions: SkillRevision[];
+  files: SkillFileSummary[];
+  grantedAgentIds: string[];
+}
+export interface SkillsResponse { skills: SkillRecord[] }

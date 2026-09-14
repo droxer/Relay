@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
 import test, { after, type TestContext } from "node:test";
 
 import {
@@ -2374,11 +2376,52 @@ test("parseInventoryOutput reads skill frontmatter and MCP servers per agent", (
 
 test("agent skills are provisioned and inventoried for every supported CLI", () => {
   const boxSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/box.ts"), "utf8");
-  for (const directory of [".claude/skills", ".codex/skills", ".pi/skills", ".kimi/skills"]) {
-    assert.match(boxSource, new RegExp(directory.replace(".", "\\.")));
-  }
   const daemonSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/index.ts"), "utf8");
+  for (const directory of [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"]) {
+    assert.match(boxSource, new RegExp(directory.replace(".", "\\.")));
+    assert.match(daemonSource, new RegExp(directory.replace(".", "\\.")));
+  }
   assert.match(daemonSource, /ensureLocalAgentReady[\s\S]*prepareHostAgentSkills/);
+});
+
+test("discoverAgentInventory scans live Kimi and Codex homes while ignoring legacy Kimi files", async () => {
+  const home = mkdtempSync(join(tmpdir(), "relay-agent-inventory-"));
+  try {
+    const writeFixture = (relativePath: string, content: string): void => {
+      const path = join(home, relativePath);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, content);
+    };
+    writeFixture(".kimi-code/skills/live/SKILL.md", "---\nname: kimi-live\ndescription: current\n---\n");
+    writeFixture(".kimi-code/mcp.json", JSON.stringify({ mcpServers: { kimiLive: { command: "kimi-mcp" } } }));
+    writeFixture(".kimi/skills/stale/SKILL.md", "---\nname: kimi-stale\n---\n");
+    writeFixture(".kimi/mcp.json", JSON.stringify({ mcpServers: { kimiStale: { command: "stale-mcp" } } }));
+    writeFixture(".codex/skills/review/SKILL.md", "---\nname: codex-review\n---\n");
+
+    const execute = promisify(execFile);
+    const inventory = await discoverAgentInventory(async (cmd, args, options) => {
+      try {
+        const result = await execute(cmd, args ?? [], {
+          env: { ...process.env, HOME: home },
+          signal: options?.signal,
+        });
+        return { exit_code: 0, stdout: result.stdout, stderr: result.stderr };
+      } catch (error) {
+        const failure = error as Error & { code?: number; stdout?: string; stderr?: string };
+        return {
+          exit_code: typeof failure.code === "number" ? failure.code : 1,
+          stdout: failure.stdout ?? "",
+          stderr: failure.stderr ?? failure.message,
+        };
+      }
+    });
+
+    assert.deepEqual(inventory.kimi?.skills.map((skill) => skill.name), ["kimi-live"]);
+    assert.deepEqual(inventory.kimi?.mcpServers.map((server) => server.name), ["kimiLive"]);
+    assert.deepEqual(inventory.codex?.skills.map((skill) => skill.name), ["codex-review"]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test("devbox pins every installed agent CLI to an exact version", () => {
@@ -2493,6 +2536,7 @@ test("relay daemon reports generated workspace documents in run.completed", asyn
   assert.equal(registrations[0]?.capabilities?.includes("generated-files"), true);
   assert.equal(registrations[0]?.capabilities?.includes("thread-workspaces"), true);
   assert.equal(registrations[0]?.capabilities?.includes("produced-files"), true);
+  assert.equal(registrations[0]?.capabilities?.includes("agent-skills"), true);
   const completed = events.find((event) => event.type === "run.completed");
   assert.ok(completed && completed.type === "run.completed");
   const byPath = new Map(

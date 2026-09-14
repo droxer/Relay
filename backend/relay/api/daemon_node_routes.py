@@ -670,6 +670,39 @@ async def daemon_commands(
         raise HTTPException(404, str(error))
 
 
+@router.get("/daemon-nodes/{sandbox_id}/skill-blobs/{sha256}")
+async def daemon_skill_blob(
+    sandbox_id: str, sha256: str, request: Request, ctx: AppContextDep
+) -> Response:
+    """Serve only content named by this node's active issuing run command."""
+    try:
+        ctx.registry.assert_node_event_authorized(sandbox_id, bearer_token(request))
+    except (PermissionError, KeyError) as error:
+        raise HTTPException(401, "Unauthorized daemon node.") from error
+    command_id = request.query_params.get("commandId") or ""
+    record = ctx.daemon_store.get_command(command_id) if command_id else None
+    command = (record or {}).get("command") or {}
+    authorized = bool(
+        record
+        and record.get("nodeId") == sandbox_id
+        and record.get("status") == "dispatched"
+        and command.get("type") == "run.start"
+        and any(
+            file.get("sha256") == sha256
+            for skill in (command.get("skills") or {}).get("skills", [])
+            if isinstance(skill, dict)
+            for file in skill.get("files", [])
+            if isinstance(file, dict)
+        )
+    )
+    if not authorized:
+        raise HTTPException(404, "Skill blob not found.")
+    content = ctx.skill_store.blob(sha256)
+    if content is None:
+        raise HTTPException(404, "Skill blob not found.")
+    return Response(content=content, media_type="application/octet-stream")
+
+
 @router.post("/daemon-nodes/{sandbox_id}/events")
 async def daemon_events(
     sandbox_id: str, request: Request, ctx: AppContextDep

@@ -255,7 +255,7 @@ const GUEST_AGENT_SKILLS_DIRS = [
   "/home/agent/.claude/skills",
   "/home/agent/.codex/skills",
   "/home/agent/.pi/skills",
-  "/home/agent/.kimi/skills",
+  "/home/agent/.kimi-code/skills",
 ] as const;
 
 interface SkillFile {

@@ -63,6 +63,7 @@ import {
   agentCredentialEnv,
   allAgentCredentialEnvNames,
   DAEMON_CAPABILITY_GENERATED_FILES,
+  DAEMON_CAPABILITY_AGENT_SKILLS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,
   DAEMON_CAPABILITY_PRODUCED_FILES,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
@@ -79,6 +80,7 @@ import { ThreadWorkspaceManager } from "./thread-workspace.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { BoundedTextCapture } from "./bounded-text.js";
+import { materializeSkills } from "./agent-skills.js";
 
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
 const DEFAULT_DAEMON_SANDBOX_MODE: DaemonSandboxMode = "boxlite";
@@ -290,6 +292,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ...(agentInventory[executorKind as AgentName] ? { inventory: agentInventory[executorKind as AgentName] } : {}),
     })),
     capabilities: [
+      DAEMON_CAPABILITY_AGENT_SKILLS,
       DAEMON_CAPABILITY_HANDOFF_VALIDATION,
       DAEMON_CAPABILITY_GENERATED_FILES,
       DAEMON_CAPABILITY_PRODUCED_FILES,
@@ -911,6 +914,25 @@ async function executeCommand(
     return;
   }
   logger.info("agent ready", commandLogFields(sandboxId, command));
+  const executionAgentHome = environment.sandboxMode === "boxlite" ? "/home/agent" : agentHomePath();
+  const materialized = await materializeSkills({
+    bundle: command.skills,
+    agentId: command.logicalAgentId ?? `${command.agent}:${command.sessionId}`,
+    delivery: getAgent(command.agent).skillDelivery,
+    agentHome: executionAgentHome,
+    cacheDir: join(executionAgentHome, ".relay", "managed-skills"),
+    execStream: environment.execStream,
+    signal,
+    fetchBlob: async (sha) => {
+      const url = relayApiUrl(
+        backendUrl,
+        `/daemon-nodes/${encodeURIComponent(sandboxId)}/skill-blobs/${sha}?commandId=${encodeURIComponent(command.id)}`,
+      );
+      const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) });
+      if (!response.ok) throw new Error(`skill blob unavailable (${response.status})`);
+      return Buffer.from(await response.arrayBuffer());
+    },
+  });
   let outputSequence = 0;
   let outputPostFailure: Error | undefined;
   const maxOutputBacklogBytes = positiveIntEnv("RELAY_DAEMON_OUTPUT_BACKLOG_BYTES") ?? 16_777_216;
@@ -1036,9 +1058,12 @@ async function executeCommand(
     signal,
     workspacePath: threadWorkspace.executionPath,
   };
+  const skillState = command.skills === undefined
+    ? state
+    : { ...state, skill_paths: materialized.skillPaths, skill_env: materialized.env };
   const runState = agentHomeSubdir
-    ? { ...state, agent_home_subdir: agentHomeSubdir }
-    : state;
+    ? { ...skillState, agent_home_subdir: agentHomeSubdir }
+    : skillState;
   // Snapshot document-type workspace files so a successful run can report
   // exactly what it created or changed (see generated-files.ts).
   const workspaceSnapshot = snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
@@ -1052,6 +1077,9 @@ async function executeCommand(
         sessionId: command.sessionId,
         runId: command.runId,
         agent: command.agent,
+        ...((command.skillsSkipped?.length || materialized.skipped.length) ? {
+          skillsSkipped: [...(command.skillsSkipped ?? []), ...materialized.skipped],
+        } : {}),
       } satisfies DaemonNodeEvent, token, signal);
     }
     patch = await runAgentNode(command.agent, runState, options);
@@ -1213,7 +1241,7 @@ async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Pr
   }
 }
 
-const LOCAL_AGENT_SKILL_DIRS = [".claude/skills", ".codex/skills", ".pi/skills", ".kimi/skills"];
+const LOCAL_AGENT_SKILL_DIRS = [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"];
 let localSkillsPreparedFor: string | undefined;
 
 /**

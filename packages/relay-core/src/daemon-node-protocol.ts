@@ -30,6 +30,12 @@ export type DaemonMcpTransport = "stdio" | "sse" | "http";
 
 /** A SKILL.md directory installed in an agent's home inside the node. */
 export interface DaemonAgentSkill {
+  source?: "node" | "catalog";
+  skillId?: string;
+  slug?: string;
+  available?: boolean;
+  reason?: string;
+  pin?: "latest" | { revisionId: string };
   name: string;
   namespace?: string;
   description?: string;
@@ -59,7 +65,9 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "produced-files" | "handoff-validation";
+export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "produced-files" | "handoff-validation" | "agent-skills";
+/** The daemon can materialize and isolate skill revisions attached to a run. */
+export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
 export const DAEMON_CAPABILITY_HANDOFF_VALIDATION: DaemonNodeCapability = "handoff-validation";
 export const DAEMON_CAPABILITY_GENERATED_FILES: DaemonNodeCapability = "generated-files";
@@ -129,6 +137,23 @@ export interface DaemonGeneratedFile {
    * Absent whenever `contentBase64` is present.
    */
   snapshotSkipped?: SnapshotSkippedReason;
+}
+
+export interface DaemonRunSkillBundle {
+  contract: { name: "relay.agent.skills"; version: 1 };
+  skills: Array<{
+    skillId: string;
+    revisionId: string;
+    slug: string;
+    manifestSha256: string;
+    files: Array<{ path: string; sha256: string; bytes: number }>;
+  }>;
+}
+
+export interface DaemonSkippedSkill {
+  skillId: string;
+  slug?: string;
+  reason: string;
 }
 
 export interface DaemonNodeRegistration {
@@ -211,6 +236,8 @@ export interface DaemonNodeRunCommand {
   /** Required when workspaceLayout is project. */
   workspaceSubpath?: string;
   state?: AgentState;
+  skills?: DaemonRunSkillBundle;
+  skillsSkipped?: DaemonSkippedSkill[];
 }
 
 export interface DaemonNodeCancelCommand {
@@ -272,6 +299,7 @@ export type DaemonNodeEvent =
       sessionId: string;
       runId: string;
       agent: AgentName;
+      skillsSkipped?: DaemonSkippedSkill[];
     }
   | {
       type: "run.workspace";

@@ -16,6 +16,7 @@ import {
   updateAgentProfileImage,
   updateEmployeeAgent,
   updateOwnEmployeeAgent,
+  revokeSkill,
 } from "../api";
 import type { AgentPlacement, ControlPanelDaemonNodeRecord, EmployeeAgent } from "../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -29,6 +30,7 @@ import { PlacementList } from "./PlacementList";
 import { describeAgentPlacements, placementRuntimeNodeId } from "../lib/agentPlacements";
 import { ProfileImagePicker } from "./ProfileImagePicker";
 import { Alert } from "@/components/ui/alert";
+import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
 
 export interface AgentProfilePanelProps {
   agent: EmployeeAgent;
@@ -240,6 +242,27 @@ export function AgentProfilePanel({
 
   const placementDescriptions = describeAgentPlacements(agent.placements);
   const skills = agent.skills ?? [];
+  const grantedSkills = skills.filter((skill) => skill.source === "catalog");
+  const installedSkills = skills.filter((skill) => skill.source !== "catalog");
+
+  async function handleRevokeSkill(skillId: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      await revokeSkill(skillId, agent.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] }),
+      ]);
+    } catch (err) {
+      const code = err && typeof err === "object" && "code" in err && typeof err.code === "string"
+        ? err.code
+        : err instanceof Error ? err.message : "unknown";
+      setError(t(`skills.errors.${code}`, { defaultValue: t("skills.errors.unknown") }));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   /* The profile tab carries only what you can CHANGE about the record —
      portrait, name, role, instructions. Runtime, computer, availability,
@@ -311,18 +334,61 @@ export function AgentProfilePanel({
         {skills.length === 0 ? (
           <p className="adm-cred-empty">{t("agents_page.skills_empty")}</p>
         ) : (
-          <ul className="agent-skill-list">
-            {skills.map((skill) => (
-              <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
-                <span className="agent-skill-name code" translate="no">
-                  {skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}
-                </span>
-                {skill.description ? (
-                  <span className="agent-skill-description">{skill.description}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <>
+            {grantedSkills.length ? (
+              <>
+                <h4 className="agent-skill-group-title">{t("skills.agent_granted_group")}</h4>
+                <ul className="agent-skill-list">
+                  {grantedSkills.map((skill) => (
+                    <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
+                      <span className="agent-skill-name code" translate="no">
+                        {skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}
+                      </span>
+                      {skill.description ? (
+                        <span className="agent-skill-description">{skill.description}</span>
+                      ) : null}
+                      {skill.available === false ? (
+                        <span className="agent-skill-unavailable">
+                          {t("skills.unavailable_reason", {
+                            reason: skill.reason
+                              ? t(`skills.skip_reason.${skill.reason}`, { defaultValue: skill.reason })
+                              : t("skills.not_supported"),
+                          })}
+                        </span>
+                      ) : null}
+                      {canEditProfile && skill.skillId ? (
+                        <Button
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={() => void handleRevokeSkill(skill.skillId!)}
+                        >
+                          {t("skills.revoke")}
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {installedSkills.length ? (
+              <>
+                <h4 className="agent-skill-group-title">{t("skills.agent_installed_group")}</h4>
+                <ul className="agent-skill-list">
+                  {installedSkills.map((skill) => (
+                    <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
+                      <span className="agent-skill-name code" translate="no">
+                        {skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name}
+                      </span>
+                      {skill.description ? (
+                        <span className="agent-skill-description">{skill.description}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            <p className="agent-skill-footnote">{t("skills.agent_discovery_note")}</p>
+          </>
         )}
       </div>
 

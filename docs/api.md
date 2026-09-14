@@ -22,6 +22,7 @@ documentation locations, and UI metadata from the backend's shared constants.
 /agents/{agentId}
 /teams
 /teams/{teamId}
+/skills
 /channels
 /computer
 /admin
@@ -45,6 +46,7 @@ route. `/` is replaced with `/threads`.
 | `/api/v1/threads` | Session-backed threads, events, artifacts, decisions, handoffs |
 | `/api/v1/tasks` | Backlog and routine resources, assignment, pickups, runs |
 | `/api/v1/agents`, `/api/v1/teams` | Current-user agents and teams |
+| `/api/v1/skills` | Employee-owned catalog, immutable revisions, and agent grants |
 | `/api/v1/admin/agents`, `/api/v1/admin/agent-placements` | Admin logical-agent and placement CRUD |
 | `/api/v1/agent-runs` | Ad-hoc agent-targeted run dispatch |
 | `/api/v1/projects` | Computer-bound project rosters and shared-workspace rooms |
@@ -325,6 +327,50 @@ operation.
 Resource creation returns `201`. Runs, cancellations, and provisioning that are
 queued return `202`. A synchronous deletion returns `200` when it returns a
 representation and `204` otherwise.
+
+## Shared skills
+
+Catalog routes require an authenticated employee. Private skills are visible
+only to their owner; organization skills can be browsed and granted by other
+employees. Only the publisher can edit or delete a skill. Each employee can
+grant only to their own logical agents.
+
+| Method and path under `/api/v1` | Request / result |
+| :- | :- |
+| `GET /skills` | `{skills}` with the caller's granted-agent counts |
+| `POST /skills` | Metadata plus `files: [{path, contentBase64}]`; returns the created skill |
+| `GET /skills/{id}` | Skill, revision history, current file manifest, caller-owned granted agent IDs |
+| `PATCH /skills/{id}` | `displayName`, `description`, or `visibility` |
+| `DELETE /skills/{id}` | Soft deletion; returns 204 |
+| `POST /skills/{id}/revisions` | `files` and optional `note`; creates an immutable revision |
+| `POST /skills/import` | Metadata, GitHub `url`, optional `ref` (HEAD), `subpath` |
+| `POST /skills/{id}/import` | Re-import the saved Git source as a new revision |
+| `POST /skills/{id}/grants` | `agentIds`, optional `pin`: `"latest"` or `{revisionId}` |
+| `DELETE /skills/{id}/grants/{agentId}` | Revoke a grant, including a dangling grant; returns 204 |
+
+Bundles require a root `SKILL.md` with YAML `name` and `description`.
+Limits are 300 regular files, 1 MiB per file, and 4 MiB per revision. Paths must
+be safe relative paths of at most 512 characters, with components of at most
+255 characters. Skill slugs also have a 512-character limit. Invalid input
+returns 422; size limits return 413.
+Publishing and revision creation return 201.
+
+Imports support public GitHub repositories over HTTPS, without redirects.
+Admin organization settings expose `skillImportAllowedHosts`, initially
+`["github.com"]`; adding a host does not add another Git provider implementation.
+DNS, download, and archive processing share a 30-second deadline.
+
+Grants resolve at dispatch time. Revocation takes effect on the next run;
+running commands keep their captured manifests. Generic agent creation and
+patching cannot write `skillPolicy`. Agents that have never used managed grants
+retain normal skill discovery. An explicitly managed empty grant set stays
+empty for managed delivery.
+
+Daemons advertising `agent-skills` receive a versioned `skills` manifest on
+`run.start`. `GET /daemon-nodes/{id}/skill-blobs/{sha256}?commandId=...` requires
+the node bearer token and an active dispatched command containing that digest.
+Skipped skills produce a persisted `system.notice` in the thread, including
+when an older daemon cannot deliver them.
 
 ## Cutover Policy
 

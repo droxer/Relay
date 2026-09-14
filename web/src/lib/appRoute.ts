@@ -6,6 +6,7 @@ const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   routine: "/routines",
   agents: "/agents",
   teams: "/teams",
+  skills: "/skills",
   channels: "/channels",
   admin: "/admin",
   computer: "/computer",

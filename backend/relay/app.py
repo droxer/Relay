@@ -29,6 +29,7 @@ from .api import (
     project_routes,
     sandbox_routes,
     session_routes,
+    skill_routes,
     task_routes,
     team_routes,
     web_routes,
@@ -65,6 +66,7 @@ from .persistence.agent_store import DatabaseAgentStore, LocalAgentStore
 from .persistence.org_settings_store import DatabaseOrgSettingsStore
 from .persistence.profile_image_store import LocalProfileImageStore
 from .persistence.project_store import DatabaseProjectStore
+from .persistence.skill_store import DatabaseSkillStore
 from .persistence.stores import (
     DEFAULT_RELAY_DATA_DIR,
     DatabaseDaemonStore,
@@ -229,6 +231,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     agent_store = agent_store_from_env(root_dir)
     team_store = team_store_from_env(root_dir)
     project_store = project_store_from_env(root_dir)
+    skill_store = skill_store_from_env(root_dir)
     agent_placement_store = agent_placement_store_from_env(root_dir)
     profile_image_store = LocalProfileImageStore(root_dir)
     org_settings_store = org_settings_store_from_env(root_dir)
@@ -265,6 +268,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         registry,
         agent_store=agent_store,
         agent_placement_store=agent_placement_store,
+        skill_store=skill_store,
     )
     try:
         migrated_placements = migrate_agent_placement_computer_ids(
@@ -337,6 +341,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.state.agent_store = agent_store
     app.state.team_store = team_store
     app.state.project_store = project_store
+    app.state.skill_store = skill_store
     app.state.employee_agent_store = (
         agent_store  # compatibility for migrations still reading the old name
     )
@@ -375,6 +380,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         agent_routes.router,
         team_routes.router,
         project_routes.router,
+        skill_routes.router,
         node_workspace_routes.router,
         admin_routes.router,
         chat_routes.router,
@@ -470,6 +476,13 @@ def team_store_from_env(root_dir: Path) -> Any:
 def project_store_from_env(root_dir: Path) -> Any:
     database_url = database_url_from_env(setting="database-only project storage")
     return DatabaseProjectStore(
+        database_url, create_schema=database_url.startswith("sqlite")
+    )
+
+
+def skill_store_from_env(root_dir: Path) -> DatabaseSkillStore:
+    database_url = database_url_from_env(setting="database-only skill storage")
+    return DatabaseSkillStore(
         database_url, create_schema=database_url.startswith("sqlite")
     )
 

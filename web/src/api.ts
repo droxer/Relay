@@ -67,6 +67,11 @@ import type {
   ProjectWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
   TaskWorkspaceFileResponse,
+  SkillDetail,
+  SkillFileInput,
+  SkillRecord,
+  SkillsResponse,
+  SkillVisibility,
 } from "./types.js";
 import type { Language, Theme } from "./lib/appStorage.js";
 
@@ -973,3 +978,14 @@ export function renameSession(sessionId: string, title: string, token?: string):
     body: { title },
   });
 }
+
+export function listSkills(signal?: AbortSignal): Promise<SkillsResponse> { return apiJson("/skills", { signal }); }
+export function getSkill(skillId: string, signal?: AbortSignal): Promise<SkillDetail> { return apiJson(`/skills/${encodeURIComponent(skillId)}`, { signal }); }
+export function createSkill(input: { name: string; namespace?: string; displayName?: string; description?: string; visibility: SkillVisibility; source: "authored" | "upload"; files: SkillFileInput[] }): Promise<SkillRecord> { return apiJson("/skills", { method: "POST", body: input }); }
+export function importSkill(input: { name: string; namespace?: string; displayName?: string; description?: string; visibility?: SkillVisibility; url: string; ref: string; subpath: string }): Promise<SkillRecord> { return apiJson("/skills/import", { method: "POST", body: input }); }
+export function reimportSkill(skillId: string) { return apiJson(`/skills/${encodeURIComponent(skillId)}/import`, { method: "POST", body: {} }); }
+export function reviseSkill(skillId: string, files: SkillFileInput[], note?: string) { return apiJson(`/skills/${encodeURIComponent(skillId)}/revisions`, { method: "POST", body: { files, ...(note ? { note } : {}) } }); }
+export function updateSkill(skillId: string, patch: { displayName?: string; description?: string; visibility?: SkillVisibility }): Promise<SkillRecord> { return apiJson(`/skills/${encodeURIComponent(skillId)}`, { method: "PATCH", body: patch }); }
+export function deleteSkill(skillId: string): Promise<void> { return apiJson(`/skills/${encodeURIComponent(skillId)}`, { method: "DELETE" }); }
+export function grantSkill(skillId: string, agentIds: string[], pin: "latest" | { revisionId: string } = "latest") { return apiJson<{ granted: unknown[] }>(`/skills/${encodeURIComponent(skillId)}/grants`, { method: "POST", body: { agentIds, pin } }); }
+export function revokeSkill(skillId: string, agentId: string): Promise<void> { return apiJson(`/skills/${encodeURIComponent(skillId)}/grants/${encodeURIComponent(agentId)}`, { method: "DELETE" }); }

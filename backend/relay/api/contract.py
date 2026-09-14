@@ -20,6 +20,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
         "login",
         "projects",
         "routines",
+        "skills",
         "teams",
         "threads",
     }

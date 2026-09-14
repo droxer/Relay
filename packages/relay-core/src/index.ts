@@ -77,11 +77,13 @@ export {
   getAgent,
   isAgentName,
   type AgentDefinition,
+  type SkillDelivery,
   type StreamRenderer,
 } from "./agents.js";
 
 export {
   DAEMON_CAPABILITY_GENERATED_FILES,
+  DAEMON_CAPABILITY_AGENT_SKILLS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,
   DAEMON_CAPABILITY_PRODUCED_FILES,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
@@ -100,6 +102,8 @@ export {
   type DaemonAgentMcpServer,
   type DaemonAgentSkill,
   type DaemonGeneratedFile,
+  type DaemonRunSkillBundle,
+  type DaemonSkippedSkill,
   type DaemonRoundResult,
   type DaemonWorkspaceEntry,
   type DaemonWorkspaceErrorCode,

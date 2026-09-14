@@ -31,6 +31,7 @@ export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
   r: "routine",
   a: "agents",
   e: "teams",
+  s: "skills",
   h: "channels",
   c: "computer",
   d: "admin",

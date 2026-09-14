@@ -19,7 +19,7 @@ import {
   NavThreads,
   WorkspaceFolder,
 } from "./icons";
-import type { LucideProps } from "lucide-react";
+import { BookOpen, type LucideProps } from "lucide-react";
 import { RelayMark } from "./RelayMark";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ const MORE_ROUTES: readonly {
 }[] = [
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
+  { route: "skills", Icon: BookOpen, labelKey: "nav.skills" },
   { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
   { route: "channels", Icon: NavChannels, labelKey: "nav.channels" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
@@ -144,7 +145,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      once per key press, never per pointer move. */
   const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatWidth()), [width]);
 
-  const moreActive = ["routine", "teams", "computer", "channels", "admin"].includes(route);
+  const moreActive = ["routine", "teams", "skills", "computer", "channels", "admin"].includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (

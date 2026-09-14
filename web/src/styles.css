@@ -68,6 +68,7 @@
 @import "./styles/list-group.css" layer(relay);
 @import "./styles/backlog-list.css" layer(relay);
 @import "./styles/agents.css" layer(relay);
+@import "./styles/skills.css" layer(relay);
 @import "./styles/teams.css" layer(relay);
 @import "./styles/computer.css" layer(relay);
 @import "./styles/profile-image.css" layer(relay);

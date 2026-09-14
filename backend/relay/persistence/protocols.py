@@ -182,6 +182,11 @@ class AgentStore(Protocol):
         employee_id: str | None = None,
     ) -> list[dict[str, Any]]: ...
     def update_agent(self, agent_id: str, patch: dict[str, Any]) -> dict[str, Any]: ...
+    def transform_skill_policy(
+        self,
+        agent_id: str,
+        transform: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any]: ...
     def delete_agent(self, agent_id: str) -> dict[str, Any]: ...
     def ensure_compatibility_agent(
         self,
@@ -328,7 +333,11 @@ class ManagedNodeStore(Protocol):
 class OrgSettingsStore(Protocol):
     def get_settings(self) -> dict[str, Any]: ...
     def update_settings(
-        self, *, max_local_computers_per_employee: int
+        self,
+        *,
+        max_local_computers_per_employee: int | None = None,
+        max_task_rounds: int | None = None,
+        skill_import_allowed_hosts: list[str] | None = None,
     ) -> dict[str, Any]: ...
 
 

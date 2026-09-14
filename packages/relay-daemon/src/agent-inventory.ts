@@ -33,14 +33,13 @@ interface AgentInventorySource {
   readonly mcpToml?: readonly string[];
 }
 
-// Conservative, easily-extended per-agent source map. Only Claude has a
-// well-established on-disk layout today; the others are wired so that any
-// skills/MCP a node does install surface without further code changes.
-const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
+// Conservative, easily-extended per-agent source map. Each path follows the
+// corresponding CLI's active home so installed skills and MCP servers surface.
+export const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
   claude: { skillsDir: ".claude/skills", mcpJson: [".claude.json", ".mcp.json"] },
   codex: { skillsDir: ".codex/skills", mcpJson: [".codex/mcp.json"], mcpToml: [".codex/config.toml"] },
   pi: { skillsDir: ".pi/skills", mcpJson: [".pi/mcp.json"] },
-  kimi: { skillsDir: ".kimi/skills", mcpJson: [".kimi/mcp.json"] },
+  kimi: { skillsDir: ".kimi-code/skills", mcpJson: [".kimi-code/mcp.json"] },
 };
 
 const RECORD_SEPARATOR = "\t";

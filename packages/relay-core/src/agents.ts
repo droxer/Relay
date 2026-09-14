@@ -19,6 +19,11 @@ export interface StreamRenderer {
   feed(chunk: string): string;
 }
 
+export type SkillDelivery =
+  | { kind: "config-dir"; envVar: string; subdir: string; skillsSubpath: string }
+  | { kind: "skills-dir-flag"; flag: string }
+  | { kind: "skill-path-flag"; flag: string; disableDiscoveryFlag: string };
+
 export interface AgentDefinition {
   name: AgentName;
   /** Human-facing name used in readiness output and avatars. */
@@ -33,6 +38,7 @@ export interface AgentDefinition {
   label: string;
   /** Whether the daemon must provision guest auth files before this agent can run. */
   needsGuestAuth: boolean;
+  skillDelivery: SkillDelivery;
   preflight: { label: string; command(): string };
 }
 
@@ -46,6 +52,13 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     createRenderer: () => new ClaudeStreamRenderer(),
     label: "Claude Code",
     needsGuestAuth: false,
+    // Project skills remain additive to this isolated per-run config directory.
+    skillDelivery: {
+      kind: "config-dir",
+      envVar: "CLAUDE_CONFIG_DIR",
+      subdir: ".claude",
+      skillsSubpath: "skills",
+    },
     preflight: {
       label: "Claude Code auth",
       command: () => runAsAgent(
@@ -62,6 +75,12 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     createRenderer: () => new PiStreamRenderer(),
     label: "Pi",
     needsGuestAuth: true,
+    // Pi keeps explicit --skill paths when --no-skills disables discovery.
+    skillDelivery: {
+      kind: "skill-path-flag",
+      flag: "--skill",
+      disableDiscoveryFlag: "--no-skills",
+    },
     preflight: { label: "Pi coding agent", command: buildPiPreflightCommand },
   },
   codex: {
@@ -73,6 +92,13 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     createRenderer: () => new CodexStreamRenderer(),
     label: "Codex",
     needsGuestAuth: true,
+    // CODEX_HOME/skills is isolated; project/admin skill discovery stays additive.
+    skillDelivery: {
+      kind: "config-dir",
+      envVar: "CODEX_HOME",
+      subdir: ".codex",
+      skillsSubpath: "skills",
+    },
     preflight: { label: "Codex auth", command: () => runAsAgent("codex login status") },
   },
   kimi: {
@@ -84,6 +110,8 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     createRenderer: () => new KimiStreamRenderer(),
     label: "Kimi",
     needsGuestAuth: true,
+    // Each path is a container whose direct children are skill directories.
+    skillDelivery: { kind: "skills-dir-flag", flag: "--skills-dir" },
     preflight: { label: "Kimi", command: () => runAsAgent("kimi --version && kimi doctor") },
   },
 };
