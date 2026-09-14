@@ -617,8 +617,10 @@ describe("workspace status colors", () => {
    transparent, and its error line lost the red. Every sheet is checked, since
    the failure is silent wherever it happens. */
 describe("custom property definitions", () => {
-  // Injected onto <html> by the Next font loader, so no sheet declares them.
-  const EXTERNAL = new Set(["--font-app-sans", "--font-app-mono"]);
+  /* Injected onto <html> by the Next font loader (`variable:` in app/layout.tsx),
+     so no sheet declares them. Matched by prefix — the CJK faces were added
+     upstream and this guard should not need a line per font. */
+  const EXTERNAL = /^--font-app-/;
 
   it("defines every custom property a stylesheet paints with", () => {
     const sheets = [
@@ -627,7 +629,7 @@ describe("custom property definitions", () => {
         .filter((name) => name.endsWith(".css"))
         .map((name) => [`tokens/${name}`, readStyle(`tokens/${name}`)] as const),
     ];
-    const defined = new Set<string>(EXTERNAL);
+    const defined = new Set<string>();
     for (const [, css] of sheets) {
       for (const [, , name] of css.matchAll(/(^|[;{\s])(--[A-Za-z0-9_-]+)\s*:/g)) defined.add(name!);
     }
@@ -639,7 +641,7 @@ describe("custom property definitions", () => {
     for (const [sheet, css] of sheets) {
       // `var(--x, fallback)` is deliberate; only a bare reference must resolve.
       for (const [, name] of css.matchAll(/var\(\s*(--[A-Za-z0-9_-]+)\s*\)/g)) {
-        if (!defined.has(name!)) undefinedUses.push(`${sheet}: ${name}`);
+        if (!defined.has(name!) && !EXTERNAL.test(name!)) undefinedUses.push(`${sheet}: ${name}`);
       }
     }
     assert.deepEqual([...new Set(undefinedUses)].sort(), []);
