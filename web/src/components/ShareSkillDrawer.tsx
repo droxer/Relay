@@ -39,9 +39,10 @@ export function ShareSkillDrawer({
     team: { targetType: "team" as const },
     agent: { targetType: "agent" as const },
   };
+  const assignments = skill.assignments ?? [];
   const assigned = useMemo(
-    () => new Set(skill.assignments.map((item) => `${item.targetType}:${item.targetId}`)),
-    [skill.assignments],
+    () => new Set(assignments.map((item) => `${item.targetType}:${item.targetId}`)),
+    [assignments],
   );
   const candidates = agents.filter(
     (agent) => agent.enabled && !assigned.has(`agent:${agent.id}`),
@@ -150,11 +151,11 @@ export function ShareSkillDrawer({
             ) : null}
           </div>
         </section>
-        {skill.assignments.length ? (
+        {assignments.length ? (
           <section>
             <h3>{t("skills.granted")}</h3>
             <div className="skill-grant-list">
-              {skill.assignments.map((assignment) => {
+              {assignments.map((assignment) => {
                 const agent = assignment.targetType === "agent" ? agents.find((a) => a.id === assignment.targetId) : undefined;
                 const team = assignment.targetType === "team" ? teams.find((item) => item.id === assignment.targetId) : undefined;
                 const label = assignment.targetType === "employee"
