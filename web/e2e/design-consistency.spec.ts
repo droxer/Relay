@@ -34,6 +34,41 @@ for (const theme of ["light", "dark"] as const) {
       await expect(control).toHaveCSS("background-color", await tokenStyle(control, "background-color", "var(--action)"));
     });
 
+    /* A chip that was migrated onto Badge must keep the primitive's SHAPE and
+       differ only in fill, ink, or its own layout residue. Three surfaces used
+       to draw their own radius, hairline, inline pad and label size; nothing
+       but review memory kept them equal to the primitive afterwards, which is
+       how they drifted in the first place. Geometry is compared property by
+       property against a reference Badge rather than asserted as literals, so
+       this test follows the primitive when it is tuned instead of pinning it. */
+    test("consolidated chips keep the Badge geometry", async ({ page }) => {
+      const GEOMETRY = [
+        "borderRadius", "borderTopWidth",
+        "paddingLeft", "paddingRight", "paddingTop", "paddingBottom",
+        "fontSize", "fontWeight", "lineHeight", "height",
+      ];
+      const measured = await page.evaluate((props) => {
+        const read = (selector: string) => {
+          const el = document.querySelector(selector);
+          if (!el) return null;
+          const cs = getComputedStyle(el);
+          return Object.fromEntries(props.map((p) => [p, cs[p as never] as string]));
+        };
+        return {
+          reference: read(".badge-probe-ref"),
+          inventory: read(".adm-agent-inventory-pill"),
+          emptyTag: read(".adm-dash-empty-tag"),
+          langBadge: read(".pref-lang-badge"),
+        };
+      }, GEOMETRY);
+
+      expect(measured.reference).not.toBeNull();
+      for (const key of ["inventory", "emptyTag", "langBadge"] as const) {
+        expect(measured[key], `${key} is missing from the specimen`).not.toBeNull();
+        expect(measured[key], `${key} drifted from the Badge geometry`).toEqual(measured.reference);
+      }
+    });
+
     test("status edges resolve each component's tone", async ({ page }) => {
       for (const [id, tone] of [["warning-badge", "--warn"], ["error-badge", "--err"], ["live-badge", "--live"]]) {
         const badge = page.getByTestId(id);

@@ -7,6 +7,7 @@ import {
   ArrowRightLeft,
   ArrowUp,
   ArrowUpRight,
+  BookOpen,
   Bot,
   Check,
   CircleAlert,
@@ -85,6 +86,14 @@ import { IdentityMark } from "./IdentityMark";
 // Standard refined stroke for every icon in the product. Lucide defaults to
 // 2 which feels chunky next to the rest of the type; 1.75 reads as
 // engineering-precise without losing legibility at 13–18 px.
+/**
+ * The prop surface a glyph accepts. Re-exported here so a caller that needs to
+ * type an icon slot does not have to import from lucide-react to do it — the
+ * module's "only place allowed to import lucide" rule covers the type as well
+ * as the pictures, or the import creeps back in one `type` keyword at a time.
+ */
+export type GlyphProps = Pick<LucideProps, "size" | "className">;
+
 export const ICON_STROKE = 1.75;
 
 // Large decorative strokes thin out as size grows so big glyphs (empty-state
@@ -194,6 +203,11 @@ export const NavAgents = identityGlyph("agent", "NavAgents");
 // employees (actual people), so the roster chip and the teams nav are not the
 // same silhouette.
 export const NavTeams = identityGlyph("team", "NavTeams");
+// The skills section: a reference manual, not a tool or a document. SideNav
+// reached for lucide's BookOpen directly, so the one nav item in the rail that
+// bypassed this module also shipped lucide's default stroke 2 beside eleven
+// siblings drawn at 1.75 — the rail's only visibly heavier glyph.
+export const NavSkills = withStandardStroke(BookOpen, "NavSkills");
 export const NavPreferences = withStandardStroke(Settings, "NavPreferences");
 export const NavLogout = withStandardStroke(LogOut, "NavLogout");
 export const NavRefresh = withStandardStroke(RefreshCw, "NavRefresh");

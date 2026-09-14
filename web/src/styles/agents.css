@@ -327,10 +327,15 @@
   max-width: 100%;
   background: var(--surface-1);
   color: var(--ink-3);
-  font-size: var(--fs-2);
-  font-weight: 400;
-  line-height: var(--leading-snug);
-  letter-spacing: var(--track-0);
+  /* Supporting text takes --type-body-sm. This rule used to hand-assemble
+     the role from --fs-2 + 400 + --leading-snug + --track-0, which is the
+     role's default-scope shape but NOT its behaviour: the compact scope
+     restates --type-body-sm one rung down (--fs-2 → --fs-1), so the badge
+     alone held 13px while the text around it dropped to 12px, and it sat at
+     --track-0 where body-sm tracks -0.01em. Taking the role is a small,
+     deliberate change, not a no-op. */
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .agent-placement-badge > svg {

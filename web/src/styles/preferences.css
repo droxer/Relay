@@ -309,19 +309,16 @@
 
 /* ── Language badges ──────────────────────────────────────────────────────── */
 
+/* Monospace voice, fill, and a floor wide enough that "EN" and the CJK
+   single-glyph codes line up down the option column. The floor is stated on
+   the ch grid rather than as a fixed 2.25rem x 1.375rem box: pinning height
+   fought Badge's padding, and pinning width in rem drifted from the type it
+   was sized against. Geometry, hairline, and radius come from Badge. */
 .pref-lang-badge {
-  flex-shrink: 0;
-  width: 2.25rem;
-  height: 1.375rem;
-  display: flex;
-  align-items: center;
+  min-width: 4ch;
   justify-content: center;
-  border-radius: var(--r-2);
-  border: 0.5px solid var(--line-1);
   background: var(--control-fill);
   font-family: var(--font-mono);
-  font-size: var(--fs-1);
-  font-weight: 500;
   letter-spacing: var(--track-caps);
   color: var(--ink-1);
 }
