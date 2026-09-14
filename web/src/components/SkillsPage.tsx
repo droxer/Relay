@@ -21,6 +21,15 @@ import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
 
 type CreateMode = "author" | "upload" | "github";
+interface SkillDraft {
+  name: string; namespace: string; displayName: string; description: string;
+  visibility: SkillVisibility; instructions: string; files: SkillFileInput[];
+  url: string; ref: string; subpath: string;
+}
+const EMPTY_DRAFT: SkillDraft = {
+  name: "", namespace: "", displayName: "", description: "",
+  visibility: "private", instructions: "", files: [], url: "", ref: "HEAD", subpath: "",
+};
 function encodeBytes(bytes: Uint8Array) {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000)
@@ -51,16 +60,16 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  /* The publish drawer and the detail editor both edit a display name, a
+     description, and a visibility. They used to share one set of fields, so
+     selecting a skill pre-filled the publish form with that skill's metadata
+     and typing in the drawer rewrote the pending edits underneath it. */
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const patchDraft = (patch: Partial<SkillDraft>) =>
+    setDraft((current) => ({ ...current, ...patch }));
   const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
-  const [namespace, setNamespace] = useState("");
   const [visibility, setVisibility] = useState<SkillVisibility>("private");
-  const [instructions, setInstructions] = useState("");
-  const [files, setFiles] = useState<SkillFileInput[]>([]);
-  const [url, setUrl] = useState("");
-  const [ref, setRef] = useState("HEAD");
-  const [subpath, setSubpath] = useState("");
   const [revisionFiles, setRevisionFiles] = useState<SkillFileInput[]>([]);
   const [revisionNote, setRevisionNote] = useState("");
   const skill = detailQuery.data;
@@ -87,38 +96,32 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     if (id)
       await queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY, id] });
   }
+  function openCreate() {
+    setDraft(EMPTY_DRAFT);
+    setError(null);
+    setMode("author");
+  }
   function resetCreate() {
     setMode(null);
-    setName("");
-    setDisplayName("");
-    setDescription("");
-    setNamespace("");
-    setInstructions("");
-    setFiles([]);
+    setDraft(EMPTY_DRAFT);
     setError(null);
   }
   async function publish() {
     setBusy(true);
     setError(null);
     try {
+      const shared = {
+        name: draft.name,
+        ...(draft.namespace ? { namespace: draft.namespace } : {}),
+        ...(draft.displayName ? { displayName: draft.displayName } : {}),
+        ...(draft.description ? { description: draft.description } : {}),
+        visibility: draft.visibility,
+      };
       const created =
         mode === "github"
-          ? await importSkill({
-              name,
-              ...(namespace ? { namespace } : {}),
-              ...(displayName ? { displayName } : {}),
-              ...(description ? { description } : {}),
-              visibility,
-              url,
-              ref,
-              subpath,
-            })
+          ? await importSkill({ ...shared, url: draft.url, ref: draft.ref, subpath: draft.subpath })
           : await createSkill({
-              name,
-              ...(namespace ? { namespace } : {}),
-              ...(displayName ? { displayName } : {}),
-              ...(description ? { description } : {}),
-              visibility,
+              ...shared,
               source: mode === "upload" ? "upload" : "authored",
               files:
                 mode === "author"
@@ -126,11 +129,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                       {
                         path: "SKILL.md",
                         contentBase64: encodeText(
-                          `---\nname: ${JSON.stringify(name)}\ndescription: ${JSON.stringify(description)}\n---\n\n${instructions}\n`,
+                          `---\nname: ${JSON.stringify(draft.name)}\ndescription: ${JSON.stringify(draft.description)}\n---\n\n${draft.instructions}\n`,
                         ),
                       },
                     ]
-                  : files,
+                  : draft.files,
             });
       resetCreate();
       setSelectedId(created.id);
@@ -191,7 +194,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           <h1>{t("skills.title")}</h1>
           <p>{t("skills.subtitle")}</p>
         </div>
-        <Button onClick={() => setMode("author")}>{t("skills.publish_skill")}</Button>
+        <Button onClick={openCreate}>{t("skills.publish_skill")}</Button>
       </header>
       {skillsQuery.isLoading ? (
         <section className="route-loading" role="status">
@@ -206,7 +209,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
         <section className="skills-empty">
           <h2>{t("skills.empty_title")}</h2>
           <p>{t("skills.empty_body")}</p>
-          <Button onClick={() => setMode("author")}>
+          <Button onClick={openCreate}>
             {t("skills.publish_first")}
           </Button>
         </section>
@@ -265,7 +268,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                     {skill.files.map((file) => (
                       <li key={file.path}>
                         <code>{file.path}</code>
-                        <span>{t("skills.bytes", { count: file.bytes.toLocaleString(i18n.language) })}</span>
+                        <span>{t("skills.bytes", { count: file.bytes, value: file.bytes.toLocaleString(i18n.language) })}</span>
                       </li>
                     ))}
                   </ul>
@@ -412,16 +415,16 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               {t("skills.skill_name")}
               <Input
                 required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={draft.name}
+                onChange={(e) => patchDraft({ name: e.target.value })}
                 placeholder="release-notes"
               />
             </label>
             <label>
               {t("skills.namespace")}
               <Input
-                value={namespace}
-                onChange={(e) => setNamespace(e.target.value)}
+                value={draft.namespace}
+                onChange={(e) => patchDraft({ namespace: e.target.value })}
                 placeholder={t("skills.optional")}
               />
             </label>
@@ -429,8 +432,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               {t("skills.description")}
               <Textarea
                 required
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                value={draft.description}
+                onChange={(e) => patchDraft({ description: e.target.value })}
               />
             </label>
             {mode === "author" ? (
@@ -438,8 +441,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 {t("skills.instructions")}
                 <Textarea
                   rows={10}
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
+                  value={draft.instructions}
+                  onChange={(e) => patchDraft({ instructions: e.target.value })}
                   placeholder={t("skills.instructions_placeholder")}
                 />
               </label>
@@ -452,12 +455,12 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                   {...({ webkitdirectory: "" } as object)}
                   onChange={(e) =>
                     e.target.files &&
-                    void encodeFiles(e.target.files).then(setFiles)
+                    void encodeFiles(e.target.files).then((files) => patchDraft({ files }))
                   }
                 />
                 <small>
-                  {files.length
-                    ? t("skills.files_ready", { count: files.length })
+                  {draft.files.length
+                    ? t("skills.files_ready", { count: draft.files.length })
                     : t("skills.select_directory")}
                 </small>
               </label>
@@ -466,20 +469,20 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 <label>
                   {t("skills.repository_url")}
                   <Input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
+                    value={draft.url}
+                    onChange={(e) => patchDraft({ url: e.target.value })}
                     placeholder="https://github.com/org/repo"
                   />
                 </label>
                 <label>
                   {t("skills.git_ref")}
-                  <Input value={ref} onChange={(e) => setRef(e.target.value)} />
+                  <Input value={draft.ref} onChange={(e) => patchDraft({ ref: e.target.value })} />
                 </label>
                 <label>
                   {t("skills.subpath")}
                   <Input
-                    value={subpath}
-                    onChange={(e) => setSubpath(e.target.value)}
+                    value={draft.subpath}
+                    onChange={(e) => patchDraft({ subpath: e.target.value })}
                     placeholder="skills/my-skill"
                   />
                 </label>
@@ -487,14 +490,14 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             )}
             <div className="skill-segment">
               <button
-                className={visibility === "private" ? "active" : ""}
-                onClick={() => setVisibility("private")}
+                className={draft.visibility === "private" ? "active" : ""}
+                onClick={() => patchDraft({ visibility: "private" })}
               >
                 {t("skills.visibility.private")}
               </button>
               <button
-                className={visibility === "org" ? "active" : ""}
-                onClick={() => setVisibility("org")}
+                className={draft.visibility === "org" ? "active" : ""}
+                onClick={() => patchDraft({ visibility: "org" })}
               >
                 {t("skills.visibility.org")}
               </button>
@@ -511,10 +514,10 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               <Button
                 disabled={
                   busy ||
-                  !name ||
-                  !description ||
-                  (mode === "upload" && !files.length) ||
-                  (mode === "github" && !url)
+                  !draft.name ||
+                  !draft.description ||
+                  (mode === "upload" && !draft.files.length) ||
+                  (mode === "github" && !draft.url)
                 }
                 onClick={() => void publish()}
               >
