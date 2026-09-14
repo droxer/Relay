@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import io
+import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
@@ -352,3 +354,42 @@ def test_assignment_api_rejects_unknown_fields_and_invalid_policy(client):
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "suggested-requires-explicit-invocation"
+
+
+def test_owner_can_promote_and_export_a_portable_skill_bundle(client):
+    skill = publish(client, name="portable")
+    first_revision = skill["currentRevisionId"]
+    revised = client.post(
+        f"/api/v1/skills/{skill['id']}/revisions",
+        json={
+            "files": [
+                {
+                    "path": "SKILL.md",
+                    "contentBase64": base64.b64encode(
+                        b"---\nname: portable\ndescription: Portable\n---\nsecond"
+                    ).decode(),
+                }
+            ]
+        },
+    )
+    assert revised.status_code == 201, revised.text
+    second_revision = revised.json()["currentRevisionId"]
+
+    detail = client.get(f"/api/v1/skills/{skill['id']}").json()
+    assert detail["stableRevisionId"] == first_revision
+    promoted = client.post(
+        f"/api/v1/skills/{skill['id']}/revisions/{second_revision}/promote",
+        json={},
+    )
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["stableRevisionId"] == second_revision
+
+    exported = client.get(
+        f"/api/v1/skills/{skill['id']}/export?channel=stable"
+    )
+    assert exported.status_code == 200, exported.text
+    assert exported.headers["content-type"] == "application/zip"
+    assert "portable.skill.zip" in exported.headers["content-disposition"]
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        assert archive.namelist() == ["SKILL.md"]
+        assert archive.read("SKILL.md").endswith(b"second")

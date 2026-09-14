@@ -271,3 +271,27 @@ def test_concurrent_revisions_get_distinct_monotonic_numbers(tmp_path):
         )
     numbers = {store.get_revision(r["currentRevisionId"])["revision"] for r in results}
     assert numbers == {2, 3}
+
+
+def test_stable_revision_is_explicitly_promoted(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    skill = _create(store, alice)
+    first = skill["currentRevisionId"]
+
+    updated = store.add_revision(skill["id"], alice, _files(body=b"New"))
+    assert updated["currentRevisionId"] != first
+    assert updated["stableRevisionId"] == first
+
+    promoted = store.promote_revision(skill["id"], updated["currentRevisionId"])
+    assert promoted["stableRevisionId"] == updated["currentRevisionId"]
+    assert store.events(skill["id"])[-1]["type"] == "skill.revision.promoted"
+
+
+def test_cannot_promote_revision_from_another_skill(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    first = _create(store, alice, "first")
+    second = _create(store, alice, "second")
+
+    with pytest.raises(SkillValidationError) as exc:
+        store.promote_revision(first["id"], second["currentRevisionId"])
+    assert exc.value.code == "revision-not-found"
