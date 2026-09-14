@@ -1583,8 +1583,10 @@
   },
   "skills": {
     "title": "技能",
+    "count_one": "{{count}} 個技能",
+    "count_other": "{{count}} 個技能",
+    "load_failed": "無法載入技能庫",
     "eyebrow": "託管能力",
-    "subtitle": "發佈一次，即可將有版本的技能包授予 Claude、Codex、Pi 或 Kimi 智慧體。",
     "publish_skill": "發佈技能",
     "publish_first": "發佈第一個技能",
     "publish_title": "發佈技能",

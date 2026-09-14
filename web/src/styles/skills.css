@@ -10,41 +10,32 @@
  * scales for geometry.
  */
 
+/* The route is the roster shell every rail page uses: a fixed rail beside a
+   scrolling detail pane, with the header INSIDE the rail rather than a
+   full-width banner over both columns. */
 .skills-page {
   min-width: 0;
-  height: 100%;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  /* The same rail width as the agent roster; this pane is the same object. */
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   background: var(--surface-0);
   color: var(--ink-2);
 }
 
-.skills-header {
+/* Rail shell, on the .agents-roster recipe: the shared list elevation between
+   the nav rail and the detail canvas, not the canvas itself. */
+.skills-list {
+  min-width: 0;
+  min-height: 0;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--sp-6);
-  padding: var(--sp-8) var(--sp-8) var(--sp-7);
-  border-bottom: 0.5px solid var(--line-1);
+  flex-direction: column;
+  border-right: 0.5px solid var(--line-1);
+  background: var(--surface-list);
 }
 
-.skills-header h1,
-.skill-detail h2,
-.skill-drawer h2 {
-  margin: 0;
-  font: var(--type-title);
-  letter-spacing: var(--type-title-track);
-  color: var(--ink-1);
-}
-
-.skills-header > div > p:last-child {
-  margin: var(--sp-2) 0 0;
-  max-width: 650px;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  color: var(--ink-3);
-}
-
-/* The library's own kicker, on the same micro role the drawer header uses. */
+/* The detail pane's kicker, on the same micro role the rail header uses. */
 .skill-eyebrow {
   margin: 0 0 var(--sp-2);
   font: var(--type-micro);
@@ -53,48 +44,99 @@
   color: var(--ink-3);
 }
 
-.skills-layout {
-  display: grid;
-  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
-  min-height: calc(100% - 142px);
-}
-
-.skills-list {
-  padding: var(--sp-4);
-  border-right: 0.5px solid var(--line-1);
-}
-
-.skills-list button {
-  display: grid;
+.skills-roster-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-7);
+  list-style: none;
+}
+
+/* No border and no `overflow: hidden`: the inner button carries
+   `border-radius: inherit` and is the only thing that paints, while the clip
+   would erase the focus ring base.css draws 2px outside that button. */
+.skills-roster-row {
+  position: relative;
+  display: flex;
   width: 100%;
-  padding: var(--sp-3);
-  border: 0.5px solid transparent;
+  min-width: 0;
+  border: 0;
   border-radius: var(--r-2);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.skills-roster-row:hover {
+  background: var(--row-hover);
+}
+
+/* Selection is `.rail-row` (tokens/base.css) — never a local wash. */
+
+/* The row's inset lives on the button, which is the focus target. */
+.skills-roster-row-select {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: var(--sp-row) var(--sp-3);
+  border: 0;
+  border-radius: inherit;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.skills-list button:hover,
-.skills-list button.active {
-  border-color: var(--line-1);
-  background: var(--surface-2);
+.skills-roster-row-name {
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.skills-list small,
+/* One meta line, like every other rail: the identifier, then the facts that
+   tell two skills apart. Neither line wraps — the slug ellipsizes first. */
+.skills-roster-row-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+  font: var(--type-label);
+  font-size: var(--fs-1);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-4);
+}
+
+.skills-roster-row-slug {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  letter-spacing: var(--type-code-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skills-roster-row-facts {
+  flex: none;
+  white-space: nowrap;
+}
+
 .skill-muted {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
-/* Mono for the slug, the way .adm-drawer-sub--mono does it: keep the text role
-   and swap only the face, rather than sizing --type-code by hand. The code
-   track is mandatory on any rule that opts into the mono family — a fixed
-   advance is the point (typographyTokens.test.ts). */
-.skills-list span,
+/* Mono for the detail pane's slug, the way .adm-drawer-sub--mono does it:
+   keep the text role and swap only the face. The code track is mandatory on
+   any rule that opts into the mono family (typographyTokens.test.ts). */
 .skill-code {
   font: var(--type-body-sm);
   font-family: var(--font-mono);
@@ -102,18 +144,22 @@
   color: var(--ink-3);
 }
 
+/* The pane scrolls; its header sits flush at the top like a record page's,
+   so the inset lives on the body below it. */
 .skill-detail {
-  padding: var(--sp-7) var(--sp-8) var(--sp-8);
-  max-width: 920px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-.skill-detail > header,
-.skill-drawer > header,
-.skill-drawer > footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-4);
+.skill-detail-body {
+  max-width: 920px;
+  padding: var(--sp-6) var(--sp-8) var(--sp-8);
+}
+
+.skill-description {
+  margin: 0;
+  color: var(--ink-2);
 }
 
 .skill-stats {
@@ -140,12 +186,12 @@
   color: var(--ink-1);
 }
 
-.skill-detail section {
+.skill-detail-body section {
   margin-top: var(--sp-7);
 }
 
 /* Section titles, on the drawer's own section-title role. */
-.skill-detail h3,
+.skill-detail-body h3,
 .skill-drawer h3 {
   margin: 0;
   font: var(--type-micro);
@@ -197,6 +243,26 @@
   padding: var(--sp-6);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
+}
+
+/* Actions in one row, destructive pushed to the leading edge — the
+   .adm-form-actions shape. */
+.skill-owner-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding-top: var(--sp-2);
+}
+
+.skill-owner-actions-leading {
+  margin-right: auto;
+}
+
+/* A segmented control is a control, not a field: it sizes to its options
+   instead of stretching the width of a 920px pane. */
+.skill-owner-tools .skill-segment {
+  justify-self: start;
+  min-width: 260px;
 }
 
 .skill-owner-tools label,
@@ -258,21 +324,6 @@
   background: var(--surface-0);
   color: var(--ink-1);
   box-shadow: inset 0 0 0 0.5px var(--line-1);
-}
-
-.skills-empty {
-  max-width: 520px;
-  margin: 12vh auto;
-  padding: var(--sp-7);
-  border: 0.5px dashed var(--line-1);
-  border-radius: var(--r-3);
-  text-align: center;
-}
-
-.skills-empty p {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  color: var(--ink-3);
 }
 
 /* A flex column, not a grid: this element IS the drawer body (the Drawer
@@ -354,13 +405,9 @@
 }
 
 @media (max-width: 820px) {
-  .skills-header {
-    align-items: flex-start;
-    padding: var(--sp-6);
-  }
-
-  .skills-layout {
+  .skills-page {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 
   .skills-list {
@@ -368,8 +415,14 @@
     border-bottom: 0.5px solid var(--line-1);
   }
 
+  /* Stacked, both panes size to content and the page owns the scroll. */
+  .skills-roster-list,
   .skill-detail {
-    padding: var(--sp-7) var(--sp-6);
+    overflow: visible;
+  }
+
+  .skill-detail-body {
+    padding: var(--sp-6);
   }
 
   .skill-stats {

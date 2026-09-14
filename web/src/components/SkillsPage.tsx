@@ -13,9 +13,12 @@ import { useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
 import type { CurrentUser, SkillFileInput, SkillVisibility } from "../types";
+import { ActionAdd, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "./PageHeader";
+import { RelayEmptyState } from "./RelayEmptyState";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
@@ -186,203 +189,259 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     }
   }
 
+  const skills = skillsQuery.data?.skills ?? [];
+
+  /* The landing frame is the roster frame every other rail route uses: a
+     <PageHeader> over the list inside the rail, not a full-width banner above
+     both columns, and the shared zero-data surface instead of a local dashed
+     card. The create affordance is the ghost plus the projects, threads and
+     agents rails all carry. */
   return (
-    <main className="skills-page" id="skills-panel">
-      <header className="skills-header">
-        <div>
-          <p className="skill-eyebrow">{t("skills.eyebrow")}</p>
-          <h1>{t("skills.title")}</h1>
-          <p>{t("skills.subtitle")}</p>
-        </div>
-        <Button onClick={openCreate}>{t("skills.publish_skill")}</Button>
-      </header>
-      {skillsQuery.isLoading ? (
-        <section className="route-loading" role="status">
-          {t("skills.loading")}
-        </section>
-      ) : skillsQuery.error ? (
-        <section className="route-loading" role="alert">
-          <p>{errorText(skillsQuery.error)}</p>
-          <Button onClick={() => void skillsQuery.refetch()}>{t("skills.try_again")}</Button>
-        </section>
-      ) : !skillsQuery.data?.skills.length ? (
-        <section className="skills-empty">
-          <h2>{t("skills.empty_title")}</h2>
-          <p>{t("skills.empty_body")}</p>
-          <Button onClick={openCreate}>
-            {t("skills.publish_first")}
-          </Button>
-        </section>
-      ) : (
-        <div className="skills-layout">
-          <nav className="skills-list" aria-label={t("skills.library_label")}>
-            {skillsQuery.data.skills.map((item) => (
-              <button
+    <main className="skills-page" id="skills-panel" data-view={skills.length ? "list" : "empty"}>
+      <nav className="skills-list" aria-label={t("skills.library_label")}>
+        <PageHeader
+          kicker={t("skills.eyebrow")}
+          title={t("skills.title")}
+          count={t("skills.count", { count: skills.length })}
+          titleVariant="display"
+          layout="stacked"
+          actions={
+            <Button
+              variant="ghost"
+              type="button"
+              className="page-header-icon-action"
+              tooltip={t("skills.publish_skill")}
+              onClick={openCreate}
+            >
+              <ActionAdd size={ICON.md} aria-hidden="true" />
+            </Button>
+          }
+        />
+        {skillsQuery.isLoading ? (
+          <div className="route-loading" role="status" aria-live="polite">
+            {t("skills.loading")}
+          </div>
+        ) : skillsQuery.error ? (
+          <RelayEmptyState
+            title={t("skills.load_failed")}
+            body={errorText(skillsQuery.error)}
+            actions={
+              <Button type="button" variant="outline" onClick={() => void skillsQuery.refetch()}>
+                {t("skills.try_again")}
+              </Button>
+            }
+          />
+        ) : !skills.length ? (
+          <RelayEmptyState
+            title={t("skills.empty_title")}
+            body={t("skills.empty_body")}
+            actions={
+              <Button type="button" variant="outline" onClick={openCreate}>
+                {t("skills.publish_first")}
+              </Button>
+            }
+          />
+        ) : (
+          /* The library rail is the same object as the thread, agent, and team
+             rails — a selectable roster beside a detail pane — so it wears
+             their row grammar: a .rail-row carrying the selection, the inset
+             on the inner button (that button is the focus target), and one
+             meta line under the name. */
+          <ul className="skills-roster-list" data-density="compact">
+            {skills.map((item) => (
+              <li
                 key={item.id}
-                className={selectedId === item.id ? "active" : ""}
-                onClick={() => setSelectedId(item.id)}
+                className="skills-roster-row rail-row"
+                data-selected={selectedId === item.id ? "true" : "false"}
               >
-                <strong>{item.displayName}</strong>
-                <span>{item.slug}</span>
-                <small>
-                  {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
-                </small>
-              </button>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className="skills-roster-row-select"
+                  aria-current={selectedId === item.id ? "page" : undefined}
+                  onClick={() => setSelectedId(item.id)}
+                >
+                  <span className="skills-roster-row-name">{item.displayName}</span>
+                  <span className="skills-roster-row-meta">
+                    <span className="skills-roster-row-slug">{item.slug}</span>
+                    <span className="skills-roster-row-facts">
+                      {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
+                    </span>
+                  </span>
+                </Button>
+              </li>
             ))}
-          </nav>
-          <section className="skill-detail">
-            {detailQuery.isLoading ? (
-              <p role="status">{t("skills.loading_detail")}</p>
-            ) : detailQuery.error ? (
-              <p role="alert">{errorText(detailQuery.error)}</p>
-            ) : skill ? (
-              <>
-                <header>
-                  <div>
-                    <p className="skill-eyebrow">
-                      {t(`skills.source.${skill.source}`)} · {t(`skills.visibility.${skill.visibility}`)}
-                    </p>
-                    <h2>{skill.displayName}</h2>
-                    <p className="skill-code">{skill.slug}</p>
-                  </div>
-                  <Button onClick={() => setSharing(true)}>{t("skills.share")}</Button>
-                </header>
-                <p>{skill.description}</p>
-                <dl className="skill-stats">
-                  <div>
-                    <dt>{t("skills.current_revision")}</dt>
-                    <dd>v{skill.revisions[0]?.revision ?? 1}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("skills.files")}</dt>
-                    <dd>{skill.files.length}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("skills.granted")}</dt>
-                    <dd>{skill.grantedAgentIds.length}</dd>
-                  </div>
-                </dl>
-                <section>
-                  <h3>{t("skills.bundle")}</h3>
-                  <ul className="skill-file-list">
-                    {skill.files.map((file) => (
-                      <li key={file.path}>
-                        <code>{file.path}</code>
-                        <span>{t("skills.bytes", { count: file.bytes, value: file.bytes.toLocaleString(i18n.language) })}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h3>{t("skills.revision_history")}</h3>
-                  <ol className="skill-revisions">
-                    {skill.revisions.map((revision) => (
-                      <li key={revision.id}>
-                        <strong>v{revision.revision}</strong>
-                        <span>{revision.note || t("skills.published_bundle")}</span>
-                        <time>
-                          {new Date(revision.createdAt).toLocaleDateString(i18n.language)}
-                        </time>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-                {owned ? (
-                  <section className="skill-owner-tools">
-                    <h3>{t("skills.manage")}</h3>
+          </ul>
+        )}
+      </nav>
+      <section className="skill-detail">
+        {detailQuery.isLoading ? (
+          <p className="route-loading" role="status">{t("skills.loading_detail")}</p>
+        ) : detailQuery.error ? (
+          <p className="route-loading" role="alert">{errorText(detailQuery.error)}</p>
+        ) : skill ? (
+          <>
+            {/* One header vocabulary for the whole route: the record variant a
+                detail pane under a roster takes, demoted to h2 so the rail's
+                title stays the page's only h1. */}
+            <PageHeader
+              kicker={`${t(`skills.source.${skill.source}`)} · ${t(`skills.visibility.${skill.visibility}`)}`}
+              title={skill.displayName}
+              subtitle={<span className="skill-code">{skill.slug}</span>}
+              titleVariant="record"
+              titleAs="h2"
+              layout="stacked"
+              actions={
+                <Button type="button" onClick={() => setSharing(true)}>
+                  {t("skills.share")}
+                </Button>
+              }
+            />
+            <div className="skill-detail-body">
+            <p className="skill-description">{skill.description}</p>
+            <dl className="skill-stats">
+              <div>
+                <dt>{t("skills.current_revision")}</dt>
+                <dd>v{skill.revisions[0]?.revision ?? 1}</dd>
+              </div>
+              <div>
+                <dt>{t("skills.files")}</dt>
+                <dd>{skill.files.length}</dd>
+              </div>
+              <div>
+                <dt>{t("skills.granted")}</dt>
+                <dd>{skill.grantedAgentIds.length}</dd>
+              </div>
+            </dl>
+            <section>
+              <h3>{t("skills.bundle")}</h3>
+              <ul className="skill-file-list">
+                {skill.files.map((file) => (
+                  <li key={file.path}>
+                    <code>{file.path}</code>
+                    <span>{t("skills.bytes", { count: file.bytes, value: file.bytes.toLocaleString(i18n.language) })}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section>
+              <h3>{t("skills.revision_history")}</h3>
+              <ol className="skill-revisions">
+                {skill.revisions.map((revision) => (
+                  <li key={revision.id}>
+                    <strong>v{revision.revision}</strong>
+                    <span>{revision.note || t("skills.published_bundle")}</span>
+                    <time>
+                      {new Date(revision.createdAt).toLocaleDateString(i18n.language)}
+                    </time>
+                  </li>
+                ))}
+              </ol>
+            </section>
+            {owned ? (
+              <section className="skill-owner-tools">
+                <h3>{t("skills.manage")}</h3>
+                <label>
+                  {t("skills.display_name")}
+                  <Input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("skills.description")}
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </label>
+                <div className="skill-segment">
+                  <button
+                    className={visibility === "private" ? "active" : ""}
+                    onClick={() => setVisibility("private")}
+                  >
+                    {t("skills.visibility.private")}
+                  </button>
+                  <button
+                    className={visibility === "org" ? "active" : ""}
+                    onClick={() => setVisibility("org")}
+                  >
+                    {t("skills.visibility.org")}
+                  </button>
+                </div>
+                {skill.source === "git" ? null : (
+                  <>
                     <label>
-                      {t("skills.display_name")}
+                      {t("skills.new_bundle")}
+                      <input
+                        type="file"
+                        multiple
+                        {...({ webkitdirectory: "" } as object)}
+                        onChange={(e) =>
+                          e.target.files &&
+                          void encodeFiles(e.target.files).then(
+                            setRevisionFiles,
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      {t("skills.revision_note")}
                       <Input
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
+                        value={revisionNote}
+                        onChange={(e) => setRevisionNote(e.target.value)}
                       />
                     </label>
-                    <label>
-                      {t("skills.description")}
-                      <Textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                      />
-                    </label>
-                    <div className="skill-segment">
-                      <button
-                        className={visibility === "private" ? "active" : ""}
-                        onClick={() => setVisibility("private")}
-                      >
-                        {t("skills.visibility.private")}
-                      </button>
-                      <button
-                        className={visibility === "org" ? "active" : ""}
-                        onClick={() => setVisibility("org")}
-                      >
-                        {t("skills.visibility.org")}
-                      </button>
-                    </div>
-                    <Button disabled={busy} onClick={() => void saveMetadata()}>
-                      {t("skills.save_details")}
-                    </Button>
-                    {skill.source === "git" ? (
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          try {
-                            await reimportSkill(skill.id);
-                            await refresh(skill.id);
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        {t("skills.reimport")}
-                      </Button>
-                    ) : (
-                      <>
-                        <label>
-                          {t("skills.new_bundle")}
-                          <input
-                            type="file"
-                            multiple
-                            {...({ webkitdirectory: "" } as object)}
-                            onChange={(e) =>
-                              e.target.files &&
-                              void encodeFiles(e.target.files).then(
-                                setRevisionFiles,
-                              )
-                            }
-                          />
-                        </label>
-                        <label>
-                          {t("skills.revision_note")}
-                          <Input
-                            value={revisionNote}
-                            onChange={(e) => setRevisionNote(e.target.value)}
-                          />
-                        </label>
-                        <Button
-                          variant="outline"
-                          disabled={busy || !revisionFiles.length}
-                          onClick={() => void addRevision()}
-                        >
-                          {t("skills.publish_revision")}
-                        </Button>
-                      </>
-                    )}
+                  </>
+                )}
+                {/* Fields above, actions in one row below — the shape every
+                    other form in the app has. These used to be four stretched
+                    full-width buttons interleaved with the fields, so a
+                    920px-wide primary bar sat between two inputs. */}
+                <footer className="skill-owner-actions">
+                  <Button
+                    variant="destructive"
+                    className="skill-owner-actions-leading"
+                    disabled={busy}
+                    onClick={() => void remove()}
+                  >
+                    {t("skills.delete_skill")}
+                  </Button>
+                  {skill.source === "git" ? (
                     <Button
-                      variant="destructive"
+                      variant="outline"
                       disabled={busy}
-                      onClick={() => void remove()}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await reimportSkill(skill.id);
+                          await refresh(skill.id);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
                     >
-                      {t("skills.delete_skill")}
+                      {t("skills.reimport")}
                     </Button>
-                  </section>
-                ) : null}
-              </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      disabled={busy || !revisionFiles.length}
+                      onClick={() => void addRevision()}
+                    >
+                      {t("skills.publish_revision")}
+                    </Button>
+                  )}
+                  <Button disabled={busy} onClick={() => void saveMetadata()}>
+                    {t("skills.save_details")}
+                  </Button>
+                </footer>
+              </section>
             ) : null}
-          </section>
-        </div>
-      )}
+            </div>
+          </>
+        ) : null}
+      </section>
       {mode ? (
         <Drawer
           open

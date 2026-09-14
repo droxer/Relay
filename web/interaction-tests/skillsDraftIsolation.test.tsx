@@ -64,7 +64,9 @@ it("keeps the publish draft out of the selected skill's editor", async () => {
   expect(descriptions()).toHaveLength(1);
   expect(descriptions()[0]!.value).toBe("Draft concise release notes");
 
-  await user.click(screen.getByRole("button", { name: "Publish skill" }));
+  /* The create affordance is the rails' shared ghost plus, named by its
+     tooltip; query it by the class every roster header uses. */
+  await user.click(document.querySelector(".page-header-icon-action") as HTMLElement);
   // The editor's field stays first in the DOM; the drawer's is the second.
   const [editorDescription, draftDescription] = descriptions();
   expect((screen.getByLabelText("Skill name") as HTMLInputElement).value).toBe("");

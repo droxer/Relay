@@ -1588,8 +1588,10 @@
   },
   "skills": {
     "title": "Skills",
+    "count_one": "{{count}} skill",
+    "count_other": "{{count}} skills",
+    "load_failed": "Could not load the skills library",
     "eyebrow": "Managed capabilities",
-    "subtitle": "Publish once, then grant a versioned bundle to your Claude, Codex, Pi, or Kimi agents.",
     "publish_skill": "Publish skill",
     "publish_first": "Publish your first skill",
     "publish_title": "Publish a skill",
