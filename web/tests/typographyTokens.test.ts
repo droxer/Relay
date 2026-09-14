@@ -284,6 +284,11 @@ describe("application typography roles", () => {
       palette,
       /html:lang\(zh-TW\)\s*\{[^}]*--font-sans:\s*"PingFang TC"[^;]+var\(--font-app-sans\)[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
     );
+    for (const [locale, region] of [["zh-CN", "SC"], ["zh-TW", "TC"]] as const) {
+      const localeBlock = palette.match(new RegExp(`html:lang\\(${locale}\\)\\s*\\{([^}]*)\\}`, "s"))?.[1] ?? "";
+      assert.match(localeBlock, new RegExp(`--font-sans:[^;]*"Noto Sans CJK ${region}"`));
+      assert.match(localeBlock, new RegExp(`--font-mono:[^;]*"Noto Sans Mono CJK ${region}"`));
+    }
     assert.match(
       palette,
       /html:lang\(zh-CN\),\s*html:lang\(zh-TW\)\s*\{[^}]*--track-display:\s*0;/s,
@@ -311,5 +316,14 @@ describe("application typography roles", () => {
       assert.match(family, /"Microsoft YaHei/, `${role} is missing the Windows CJK fallback`);
       assert.match(family, /"Noto Sans/, `${role} is missing the Linux CJK fallback`);
     }
+  });
+
+  it("applies a saved CJK language before first paint", () => {
+    const layout = readWebSource("app/layout.tsx");
+
+    assert.match(layout, /localStorage\.getItem\(["']relay-web\.language["']\)/);
+    assert.match(layout, /(?:l|language)===["']zh-CN["']/);
+    assert.match(layout, /(?:l|language)===["']zh-TW["']/);
+    assert.match(layout, /setAttribute\(["']lang["'],\s*(?:l|language)\)/);
   });
 });
