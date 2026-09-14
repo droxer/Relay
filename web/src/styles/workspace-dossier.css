@@ -532,6 +532,25 @@
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
-.agent-skill-group-title { margin: 14px 0 7px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-.agent-skill-unavailable { color: var(--danger); font-size: 12px; }
-.agent-skill-footnote { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+/* Group heading over the granted/installed split, on the same micro role every
+   other section title in a record pane takes. */
+.agent-skill-group-title {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.agent-skill-unavailable {
+  color: var(--err);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.agent-skill-footnote {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  line-height: var(--leading-normal);
+}

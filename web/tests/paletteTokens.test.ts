@@ -608,3 +608,53 @@ describe("workspace status colors", () => {
     );
   });
 });
+
+/* A `var(--token)` with no fallback and no definition resolves to nothing, and
+   CSS says nothing about it: skills.css shipped painting with `--bg`, `--text`,
+   `--text-muted`, `--surface`, `--surface-hover`, `--surface-subtle`,
+   `--shadow` and `--danger` — eight names the token layer never declared — so
+   its muted text read at full ink, its segment track and active tab chip were
+   transparent, and its error line lost the red. Every sheet is checked, since
+   the failure is silent wherever it happens. */
+describe("custom property definitions", () => {
+  // Injected onto <html> by the Next font loader, so no sheet declares them.
+  const EXTERNAL = new Set(["--font-app-sans", "--font-app-mono"]);
+
+  it("defines every custom property a stylesheet paints with", () => {
+    const sheets = [
+      ...surfaceSheetNames().map((name) => [name, readStyle(name)] as const),
+      ...readdirSync(path.join(repoRoot, STYLES_DIR, "tokens"))
+        .filter((name) => name.endsWith(".css"))
+        .map((name) => [`tokens/${name}`, readStyle(`tokens/${name}`)] as const),
+    ];
+    const defined = new Set<string>(EXTERNAL);
+    for (const [, css] of sheets) {
+      for (const [, , name] of css.matchAll(/(^|[;{\s])(--[A-Za-z0-9_-]+)\s*:/g)) defined.add(name!);
+    }
+    // Components may declare a property inline (style={{ "--x": … }}).
+    for (const source of componentSources()) {
+      for (const [, name] of source.matchAll(/"(--[A-Za-z0-9_-]+)"\s*:/g)) defined.add(name!);
+    }
+    const undefinedUses: string[] = [];
+    for (const [sheet, css] of sheets) {
+      // `var(--x, fallback)` is deliberate; only a bare reference must resolve.
+      for (const [, name] of css.matchAll(/var\(\s*(--[A-Za-z0-9_-]+)\s*\)/g)) {
+        if (!defined.has(name!)) undefinedUses.push(`${sheet}: ${name}`);
+      }
+    }
+    assert.deepEqual([...new Set(undefinedUses)].sort(), []);
+  });
+});
+
+function componentSources(): string[] {
+  const sources: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) sources.push(readFileSync(full, "utf8"));
+    }
+  };
+  walk(path.join(repoRoot, "web", "src"));
+  return sources;
+}
