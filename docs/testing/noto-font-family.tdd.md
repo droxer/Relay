@@ -33,6 +33,7 @@ Chinese while retaining JetBrains Mono for technical text.
 | 2 | SC and TC expose separate CSS variables and neither regional family is preloaded eagerly | `web/tests/typographyTokens.test.ts` | Unit contract | PASS | Focused run: 17/17 tests passed |
 | 3 | The old Plex binary and license are removed while JetBrains Mono remains materialized and licensed | `web/tests/typographyTokens.test.ts` | Asset contract | PASS | Focused run: 17/17 tests passed |
 | 4 | Next.js can resolve, self-host, compile, typecheck, and prerender the selected Google fonts | `npm run build -w web` | Build integration | PASS | Next.js 16.3.5 production build completed |
+| 5 | The complete TypeScript and React suites remain green with the new global font configuration | `npm run test:ts` | Regression | PASS | 1,471 Node tests and 56 React tests passed |
 
 ## RED / GREEN evidence
 
@@ -47,6 +48,7 @@ Chinese while retaining JetBrains Mono for technical text.
 The changed font configuration, token stacks, preload policy, and asset removal
 are covered directly by source and asset contracts. The production build is
 the integration check for Next's build-time Google download and self-hosting.
+Repository-wide TypeScript verification passed with 1,527 tests total.
 The generated media directory contains the complete region-subset catalog, but
 the CJK fonts are not preloaded and Unicode-range selection limits browser
 downloads to glyph shards used by the active language and page content.
