@@ -59,10 +59,9 @@ Phosphor.
   doing *right now*. Splitting them across hues rather than across channels is
   deliberate: a pulsing blue dot beside a blue button would put "working" and
   "press me" in the same colour.
-- **One sans, every job.** The source face is **Optimistic VF**, which Meta
-  does not license for redistribution: it leads `--font-sans` for anyone who
-  has it installed, and the vendored **IBM Plex Sans Variable** behind it is
-  the face this app actually ships. Hierarchy is built from **size and
+- **One sans, every job.** Relay self-hosts **Noto Sans Variable** through
+  `next/font`, with region-matched **Noto Sans SC/TC** families for Chinese.
+  Hierarchy is built from **size and
   weight** (400/500/700), never from a second face. The weight ramp is
   inverted against the usual expectation: the display tiers are 500 and the
   heaviest weight belongs to the *small* roles — button labels, badges, body
@@ -311,8 +310,8 @@ declaration — pairing the tokens by name makes the omission greppable, and
 
 **The tracking runs the other way round here.** The source system tightens its
 *reading* roles fractionally (−0.16px at 16px, −0.14px at 14px ≈ −0.01em) —
-the snug-but-not-condensed setting Optimistic VF was drawn for — and sets the
-display tier and the uppercase captions **solid**. Several paired tracks
+the snug-but-not-condensed setting carried from the source reference — and
+sets the display tier and the uppercase captions **solid**. Several paired tracks
 therefore resolve to 0 by design; the tokens stay explicit so a role's
 tracking is decided in `roles.css`, once.
 
@@ -322,10 +321,9 @@ alternates package for every heading role, never one without the other.
 the sets ignore it, so fencing it to headings would buy nothing but a second
 place to forget one of them.
 
-**There is no 800.** IBM Plex Sans Variable tops out at 700 and `base.css`
-disables font synthesis, so an 800 declaration would silently render as 700.
-Nothing in the roles asks for it — in this system the heaviest weight (700)
-already belongs to the small emphasis tiers, and the display tiers sit at 500.
+**There is no 800 role.** Noto Sans supports it, but Relay deliberately exposes
+only the 400/500/700 product ladder. The heaviest product weight already belongs
+to the small emphasis tiers, while display tiers sit at 500.
 
 The size ladder is **12 / 13 / 14 / 15 / 17 / 19 / 22 / 28px** at the
 browser's default font size (`--fs-1/2/3/4/heading/title/5/6`). All sizes use
@@ -345,18 +343,17 @@ the sweep requires exactly one correct declaration per display-tier rule.
 The one deliberate exclusion is `.relay-bleed-mark`, a single decorative
 glyph with no inter-character spacing to track.
 
-**CJK:** `html:lang(zh-CN)` / `html:lang(zh-TW)` put a system CJK family first
-for both Latin and Han glyphs, keeping mixed-script labels internally
-coherent. Neither Optimistic VF nor IBM Plex Sans has Han coverage, so every
-role joins that same sans stack — and **every** track is pinned to 0 there,
-because Han glyphs are square and must never be tightened. Reading leading
-loosens (1.7/1.8/1.9).
+**CJK:** `html:lang(zh-CN)` / `html:lang(zh-TW)` select Noto Sans SC/TC for
+both Latin and Han glyphs, keeping mixed-script labels internally coherent.
+Both region families are self-hosted by `next/font` but set `preload: false`,
+so the browser fetches only the family selected by the pre-paint language.
+Platform CJK faces remain resilient fallbacks. Every track is pinned to 0 in
+Chinese because Han glyphs are square and must never be tightened; reading
+leading loosens to 1.7/1.8/1.9.
 
-The vendored WOFF2 files are fontsource's **latin** subsets
-(`@fontsource-variable/ibm-plex-sans` 5.3.0, OFL-1.1, wght 100–700;
-`@fontsource-variable/jetbrains-mono` 5.3.0, OFL-1.1, wght 100–800). Latin
-covers U+00C0–00FF, so accented names render in-face; latin-ext glyphs fall
-through to the system sans by design rather than shipping a second file.
+JetBrains Mono remains a vendored fontsource **latin** subset (5.3.0,
+OFL-1.1, wght 100–800). Technical CJK glyphs fall through to the regional
+system and Noto Mono CJK faces named in the locale stacks.
 
 ## Geometry, elevation, motion
 
@@ -485,8 +482,8 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Don't hand-write a `ch` width for prose; reach for the `--measure*` tier.
 - Don't add a size step off the source system's ladder — separate by weight
   instead.
-- Don't declare `font-weight: 800` — Plex tops out at 700 and synthesis is
-  disabled; the declaration would be a lie.
+- Don't declare `font-weight: 800` — the Relay product ladder deliberately
+  stops at 700 even though Noto Sans exposes heavier weights.
 
 ## Shell dimensions
 
@@ -718,9 +715,10 @@ Source principles:
 24 / 36 / 48 plus a hero clamp. The 28px/300 editorial tier is not adopted as a
 size — Relay expresses the same "visual rest" idea as `--type-title-content`
 (24px/400), because a dense operator tool has no editorial intro headlines. The
-proprietary face is not redistributable, so `--font-sans` names it first and
-ships vendored IBM Plex Sans behind it; Plex tops out at 700, which is why no
-role declares 800 and why the 300 weight is unused.
+proprietary source face is not redistributable, so Relay uses the open-licensed
+Noto Sans family instead. The product keeps only the 400/500/700 rungs; 300 and
+800 remain outside the role system even though the variable Noto files support
+them.
 
 ## Source layout scales
 

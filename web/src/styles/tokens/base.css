@@ -40,11 +40,10 @@ html {
 
 /* overflow-x: hidden is a last-resort clip — reflow regressions must be
    caught at the 320px floor (WCAG 1.4.10), not papered over here. */
-/* Body tracking is set ONCE, here, and inherited. The source system tightens its
-   READING roles fractionally (-0.16px at 16px, -0.14px at 14px ≈ -0.01em) —
-   Optimistic VF is drawn for that snug-but-not-condensed setting — and leaves
-   the display tier and uppercase captions solid. The global hook is what makes
-   the tightening real, because `font: var(--type-body)` cannot carry
+/* Body tracking is set ONCE, here, and inherited. The reading roles stay
+   fractionally tight (-0.16px at 16px, -0.14px at 14px ≈ -0.01em), while the
+   display tier and uppercase captions stay solid. The global hook is what
+   makes the tightening real, because `font: var(--type-body)` cannot carry
    letter-spacing. Faces that must NEVER be tightened — the monospace column,
    tabular figures, Han text — opt back out via --track-0 (or the CJK pin in
    palette.css). */
@@ -206,12 +205,9 @@ summary:focus-visible,
    declaration rather than adding to it, so asking for "tnum" alone silently
    switched OFF the ss01/ss02 pair :root turns on — and the note at the top of
    this file calls those two "a paired alternates package" precisely so they
-   are never separated. On the two faces this app ships the loss is invisible
-   (neither IBM Plex Sans nor JetBrains Mono has ss01/ss02, or tnum for that
-   matter — Plex's figures are already uniform-width at every weight). It bites
-   the reader the root declaration exists for: someone with Optimistic VF
-   installed, who would see every tabular figure and every identifier drop out
-   of the alternate forms its neighbours keep.
+   are never separated. Keeping the base feature recipe intact also prevents a
+   figure or identifier from changing glyph forms when the active Noto family
+   supports the configured alternates.
 
    `.tnum` — figures that must align in a column: counts, timestamps, ratios,
    byte sizes. Stays in the sans on purpose. */

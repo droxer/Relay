@@ -19,20 +19,19 @@ const fontsDir = path.join(repoRoot, "web", "src", "app", "fonts");
 const readWebSource = (rel: string) => readFileSync(path.join(repoRoot, "web", "src", rel), "utf8");
 
 describe("local typography assets", () => {
-  it("ships real WOFF2 binaries for both application families", () => {
-    // Fieldnotes runs two families: IBM Plex Sans carries every role —
-    // reading, control, and display — and JetBrains Mono covers technical
-    // text only.
-    for (const file of ["IBMPlexSans-Variable.woff2", "JetBrainsMono-Variable.woff2"]) {
-      const absolute = path.join(fontsDir, file);
-      assert.ok(existsSync(absolute), `missing ${file}`);
-      assert.ok(statSync(absolute).size > 1024, `${file} is not a materialized font binary`);
-      assert.equal(readFileSync(absolute).subarray(0, 4).toString("ascii"), "wOF2", `${file} is not WOFF2`);
-    }
+  it("ships the technical face locally and lets next/font self-host the Google UI families", () => {
+    const mono = path.join(fontsDir, "JetBrainsMono-Variable.woff2");
+    assert.ok(existsSync(mono), "missing JetBrainsMono-Variable.woff2");
+    assert.ok(statSync(mono).size > 1024, "JetBrainsMono-Variable.woff2 is not a materialized font binary");
+    assert.equal(readFileSync(mono).subarray(0, 4).toString("ascii"), "wOF2", "JetBrainsMono-Variable.woff2 is not WOFF2");
+
     const attributes = readFileSync(path.join(repoRoot, ".gitattributes"), "utf8");
     assert.doesNotMatch(attributes, /web\/src\/app\/fonts\/.*filter=lfs/);
-    assert.ok(existsSync(path.join(fontsDir, "OFL-IBMPlexSans.txt")), "missing IBM Plex Sans license");
     assert.ok(existsSync(path.join(fontsDir, "OFL-JetBrainsMono.txt")), "missing JetBrains Mono license");
+
+    for (const file of ["IBMPlexSans-Variable.woff2", "OFL-IBMPlexSans.txt"]) {
+      assert.ok(!existsSync(path.join(fontsDir, file)), `${file} should leave with the retired family`);
+    }
   });
 
   it("retires Mona Sans, Geist, and Geist Mono rather than leaving them dormant", () => {
@@ -40,16 +39,15 @@ describe("local typography assets", () => {
     for (const file of ["MonaSans-Variable.woff2", "Geist-Variable.woff2", "GeistMono-Variable.woff2", "OFL-MonaSans.txt"]) {
       assert.ok(!existsSync(path.join(fontsDir, file)), `${file} should have been removed`);
     }
-    // No Geist reference may survive in the token layer, and the layout must
-    // load the Plex binary — a renamed stack pointing at a retired file is
-    // the same bug wearing a new name.
+    // No retired face may survive in the token layer, and the layout must get
+    // the UI families from Next's self-hosted Google font integration.
     for (const file of ["styles/tokens/palette.css", "styles/tokens/roles.css", "styles/tokens/base.css", "styles/tokens/shadcn-bridge.css"]) {
       const code = readWebSource(file).replace(/\/\*[\s\S]*?\*\//g, "");
-      assert.doesNotMatch(code, /Geist/, `${file} still references the retired Geist family`);
+      assert.doesNotMatch(code, /Geist|IBM Plex|Optimistic VF|Montserrat/, `${file} still references a retired family`);
     }
     const layout = readWebSource("app/layout.tsx");
-    assert.match(layout, /src:\s*["']\.\/fonts\/IBMPlexSans-Variable\.woff2["']/);
-    assert.match(layout, /variable:\s*["']--font-app-sans["']/);
+    assert.match(layout, /import\s*\{[^}]*Noto_Sans[^}]*Noto_Sans_SC[^}]*Noto_Sans_TC[^}]*\}\s*from\s*["']next\/font\/google["']/s);
+    assert.doesNotMatch(layout, /IBMPlexSans|Optimistic VF|Montserrat/);
   });
 });
 
@@ -90,28 +88,24 @@ describe("application typography roles", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
-    assert.match(layout, /src:\s*["']\.\/fonts\/IBMPlexSans-Variable\.woff2["']/);
-    assert.match(layout, /variable:\s*["']--font-app-sans["']/);
+    assert.match(layout, /const appSans\s*=\s*Noto_Sans\(\{[^}]*weight:\s*["']variable["'][^}]*variable:\s*["']--font-app-sans["']/s);
+    assert.match(layout, /const appCjkSc\s*=\s*Noto_Sans_SC\(\{[^}]*variable:\s*["']--font-app-cjk-sc["'][^}]*preload:\s*false/s);
+    assert.match(layout, /const appCjkTc\s*=\s*Noto_Sans_TC\(\{[^}]*variable:\s*["']--font-app-cjk-tc["'][^}]*preload:\s*false/s);
     assert.match(layout, /src:\s*["']\.\/fonts\/JetBrainsMono-Variable\.woff2["']/);
     assert.match(layout, /variable:\s*["']--font-app-mono["']/);
     assert.doesNotMatch(layout, /MonaSans|--font-app-display|Geist/);
+    assert.doesNotMatch(layout, /fonts\.(?:googleapis|gstatic)\.com/, "Google fonts must be self-hosted by next/font");
 
     // The display tier is the SANS family at a heavier weight — hierarchy
     // comes from weight and size, never from a second face. The mono is
     // technical text only.
-    //
-    // The source system's face is Optimistic VF, which Meta does not license for
-    // redistribution: it leads the stack for anyone who has it installed, and
-    // the vendored IBM Plex Sans behind it is the face this app actually
-    // ships. Both must be present — a stack that names only the proprietary
-    // face renders from whatever the OS guesses.
-    assert.match(palette, /--font-sans:\s*["']Optimistic VF["'],\s*var\(--font-app-sans\),\s*["']IBM Plex Sans["']/);
+    assert.match(palette, /--font-sans:\s*var\(--font-app-sans\),\s*["']Noto Sans["']/);
     assert.match(palette, /--font-display:\s*var\(--font-sans\);/);
     assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*["']JetBrains Mono["']/);
     assert.doesNotMatch(
       palette,
       /--font-display:[^;]*(--font-app-mono|JetBrains|Mono)/,
-      "the display tier is no longer mono — it resolves to the Plex sans stack",
+      "the display tier is no longer mono — it resolves to the Noto sans stack",
     );
   });
 
@@ -121,9 +115,9 @@ describe("application typography roles", () => {
     // The source system's weight ramp is inverted against the usual expectation: the
     // display and heading-sm tiers are 500 and the heaviest weight in the
     // system (700) belongs to the SMALL roles — button labels, badges, body
-    // emphasis. Size carries hierarchy; weight carries emphasis. An 800 would
-    // render as 700 anyway (IBM Plex Sans Variable tops out there and base.css
-    // disables font synthesis), so it stays out of the roles entirely.
+    // emphasis. Size carries hierarchy; weight carries emphasis. The product
+    // deliberately exposes only the 400/500/700 ladder even though Noto Sans
+    // supports more weights.
     assert.match(roles, /--type-display:\s+500[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-title:\s+500[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-heading:\s+700[^;]+var\(--font-display\);/);
@@ -136,7 +130,7 @@ describe("application typography roles", () => {
     // takes 500 rather than 600 because the ladder stays three rungs — see the
     // weight-ladder test in dimensionScales.test.ts.
     assert.match(roles, /--type-micro:\s+500[^;]+var\(--font-sans\);/);
-    assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "no weight 800 exists in this system — Plex tops out at 700");
+    assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "the product ladder deliberately stops at 700");
     assert.match(roles, /--type-code:\s+400[^;]+var\(--font-mono\);/);
     assert.match(roles, /--type-body:\s+400[^;]+var\(--font-sans\);/);
     assert.match(roles, /--type-label:\s+500[^;]+var\(--font-sans\);/);
@@ -146,9 +140,8 @@ describe("application typography roles", () => {
     const palette = readWebSource("styles/tokens/palette.css");
 
     // The source system tightens its READING roles fractionally (-0.16px at 16px,
-    // -0.14px at 14px ≈ -0.01em) — the snug-but-not-condensed setting
-    // Optimistic VF was drawn for — and sets the display tier and the
-    // uppercase captions solid, the opposite of the usual arrangement. The
+    // -0.14px at 14px ≈ -0.01em) and sets the display tier and the uppercase
+    // captions solid, the opposite of the usual arrangement. The
     // zero-valued tokens are the design, not missing values; they keep the
     // paired-track contract greppable.
     assert.match(palette, /--track-display:\s*0;/);
@@ -273,17 +266,22 @@ describe("application typography roles", () => {
     const base = readWebSource("styles/tokens/base.css");
     const atelier = readWebSource("styles/atelier.css");
 
-    // IBM Plex Sans has no Han coverage, so CJK display falls back to the
-    // PingFang-first sans stack (Plex remains the Latin fallback inside it) —
-    // and the display tracking must be neutralised or Han titles crush.
+    // The matching regional Noto family carries Latin and Han together. The
+    // system faces remain fallbacks, and display tracking is neutralised so
+    // Han titles do not crush.
     assert.match(
       palette,
-      /html:lang\(zh-CN\)\s*\{[^}]*--font-sans:\s*"PingFang SC"[^;]+var\(--font-app-sans\)[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
+      /html:lang\(zh-CN\)\s*\{[^}]*--font-sans:\s*var\(--font-app-cjk-sc\),\s*"Noto Sans SC"[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
     );
     assert.match(
       palette,
-      /html:lang\(zh-TW\)\s*\{[^}]*--font-sans:\s*"PingFang TC"[^;]+var\(--font-app-sans\)[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
+      /html:lang\(zh-TW\)\s*\{[^}]*--font-sans:\s*var\(--font-app-cjk-tc\),\s*"Noto Sans TC"[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
     );
+    for (const [locale, region] of [["zh-CN", "SC"], ["zh-TW", "TC"]] as const) {
+      const localeBlock = palette.match(new RegExp(`html:lang\\(${locale}\\)\\s*\\{([^}]*)\\}`, "s"))?.[1] ?? "";
+      assert.match(localeBlock, new RegExp(`--font-sans:[^;]*"Noto Sans CJK ${region}"`));
+      assert.match(localeBlock, new RegExp(`--font-mono:[^;]*"Noto Sans Mono CJK ${region}"`));
+    }
     assert.match(
       palette,
       /html:lang\(zh-CN\),\s*html:lang\(zh-TW\)\s*\{[^}]*--track-display:\s*0;/s,
@@ -311,5 +309,14 @@ describe("application typography roles", () => {
       assert.match(family, /"Microsoft YaHei/, `${role} is missing the Windows CJK fallback`);
       assert.match(family, /"Noto Sans/, `${role} is missing the Linux CJK fallback`);
     }
+  });
+
+  it("applies a saved CJK language before first paint", () => {
+    const layout = readWebSource("app/layout.tsx");
+
+    assert.match(layout, /localStorage\.getItem\(["']relay-web\.language["']\)/);
+    assert.match(layout, /(?:l|language)===["']zh-CN["']/);
+    assert.match(layout, /(?:l|language)===["']zh-TW["']/);
+    assert.match(layout, /setAttribute\(["']lang["'],\s*(?:l|language)\)/);
   });
 });
