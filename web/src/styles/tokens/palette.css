@@ -839,9 +839,8 @@ html:lang(zh-TW) {
 
 html:lang(zh-CN),
 html:lang(zh-TW) {
-  /* The Latin tracks are negative in this system (Optimistic VF is drawn for
-     a snug body setting); Han glyphs are square and must never be tightened,
-     so every track is pinned solid here. */
+  /* The default reading tracks are fractionally negative; Han glyphs are
+     square and must never be tightened, so every track is pinned solid here. */
   --track-display: 0;
   --track-body: 0;
   --track-body-sm: 0;
