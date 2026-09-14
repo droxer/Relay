@@ -834,15 +834,15 @@ html[data-theme="light"] {
    has Han coverage, so every Latin role joins the sans stack; technical text
    keeps the mono with CJK glyph fallback. */
 html:lang(zh-CN) {
-  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", var(--font-app-sans), "IBM Plex Sans", sans-serif;
+  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", var(--font-app-sans), "IBM Plex Sans", sans-serif;
   --font-display: var(--font-sans);
-  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", monospace;
+  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans Mono CJK SC", "Noto Sans SC", monospace;
 }
 
 html:lang(zh-TW) {
-  --font-sans: "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans TC", var(--font-app-sans), "IBM Plex Sans", sans-serif;
+  --font-sans: "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", var(--font-app-sans), "IBM Plex Sans", sans-serif;
   --font-display: var(--font-sans);
-  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", monospace;
+  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans Mono CJK TC", "Noto Sans TC", monospace;
 }
 
 html:lang(zh-CN),

@@ -57,11 +57,13 @@ export const viewport: Viewport = {
 };
 
 const themeScript = `(function(){try{
+  var root=document.documentElement;
+  var l=localStorage.getItem("relay-web.language");
+  if(l==="en"||l==="zh-CN"||l==="zh-TW")root.setAttribute("lang",l);
   var t=localStorage.getItem("relay-web.theme")||"system";
   if(t==="contrast"||t==="contrast-dark"){t="system";localStorage.setItem("relay-web.theme","system");}
   var d=matchMedia("(prefers-color-scheme: dark)").matches;
   var r=(t==="dark"||(t!=="light"&&d))?"dark":"light";
-  var root=document.documentElement;
   root.setAttribute("data-theme",r);
   var sync=function(){
     var color=getComputedStyle(root).getPropertyValue("--surface-0").trim();
@@ -91,8 +93,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
     >
       <head>
-        {/* Resolve the saved theme before first paint, then derive browser
-            chrome from the same canvas token as the rendered page. */}
+        {/* Resolve the saved language and theme before first paint, then derive
+            browser chrome from the same canvas token as the rendered page. */}
         <InlineScript html={themeScript} />
       </head>
       <body>
