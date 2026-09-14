@@ -641,22 +641,14 @@
      size live on --type-meta, which tracks as body text. */
   --track-caps: 0.03em;
 
-  /* Families — Optimistic VF is Meta's proprietary variable display face and
-     is not redistributable, so it leads the stack for anyone who has it
-     licensed and installed, and the published fallback chain (Montserrat,
-     Helvetica, Arial, Noto Sans) carries everyone else. IBM Plex Sans is the
-     vendored variable file this app actually ships — a humanist grotesque
-     that holds the source system's 400/500/700 weight ladder — and it sits ahead of
-     the metric fallbacks so the app renders from a font it controls rather
-     than from whatever Helvetica the OS supplies.
-
-     ONE family carries every role: reading, control, and display text,
-     separated by weight (400/500/700), never by face. The mono is technical
-     text only — JetBrains Mono, sized to its own metrics. */
+  /* Families — Noto Sans carries reading, control, and display text, separated
+     by the 400/500/700 product ladder rather than by face. next/font self-hosts
+     the variable Latin family behind --font-app-sans. JetBrains Mono remains
+     technical text only and is sized to its own metrics. */
   /* Transcript content is multilingual even when the UI language is English.
      Keep explicit Han fallbacks in the default stacks so agent-authored CJK
      never depends on a browser's last-resort missing-glyph substitution. */
-  --font-sans: "Optimistic VF", var(--font-app-sans), "IBM Plex Sans", Montserrat, "PingFang SC", "PingFang TC", "Microsoft YaHei UI", "Microsoft JhengHei UI", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans SC", "Noto Sans TC", Helvetica, Arial, "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-app-sans), "Noto Sans", "PingFang SC", "PingFang TC", "Microsoft YaHei UI", "Microsoft JhengHei UI", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans SC", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans SC", "Noto Sans TC", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
@@ -829,18 +821,18 @@ html[data-theme="light"] {
   --scrim: rgba(10, 19, 23, 0.55);
 }
 
-/* CJK — choose one system CJK face for both Latin and Han glyphs so mixed
-   labels remain internally coherent. Neither Optimistic VF nor IBM Plex Sans
-   has Han coverage, so every Latin role joins the sans stack; technical text
-   keeps the mono with CJK glyph fallback. */
+/* CJK — choose the region-matched Noto family for both Latin and Han glyphs so
+   mixed labels remain internally coherent. The platform families stay behind
+   it as resilient local fallbacks. Technical text keeps the mono with CJK
+   glyph fallback. */
 html:lang(zh-CN) {
-  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", var(--font-app-sans), "IBM Plex Sans", sans-serif;
+  --font-sans: var(--font-app-cjk-sc), "Noto Sans SC", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", var(--font-app-sans), "Noto Sans", sans-serif;
   --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans Mono CJK SC", "Noto Sans SC", monospace;
 }
 
 html:lang(zh-TW) {
-  --font-sans: "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", var(--font-app-sans), "IBM Plex Sans", sans-serif;
+  --font-sans: var(--font-app-cjk-tc), "Noto Sans TC", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", var(--font-app-sans), "Noto Sans", sans-serif;
   --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans Mono CJK TC", "Noto Sans TC", monospace;
 }

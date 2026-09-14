@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Noto_Sans, Noto_Sans_SC, Noto_Sans_TC } from "next/font/google";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
@@ -7,33 +8,36 @@ import "../styles.css";
 import { InlineScript } from "../components/InlineScript";
 import { Providers } from "./providers";
 
-// One sans carries every role — reading, control, and display — with
-// hierarchy built from size and weight (400/500/700) rather than from a
-// second face. The source system's own face is Optimistic VF, which Meta does not
-// license for redistribution: palette.css names it first for anyone who has
-// it installed, and IBM Plex Sans (loaded here) is the variable file this app
-// actually ships behind it. JetBrains Mono remains for technical text only:
-// session IDs, logs, and code, set 400 untracked. Both are local variable
-// fonts to avoid layout drift.
-//
-// The vendored WOFF2 is fontsource's latin subset of IBM Plex Sans
-// (@fontsource-variable/ibm-plex-sans 5.3.0, OFL-1.1, wght 100–700). Latin
-// covers U+00C0–00FF, so accented names render in-face; latin-ext glyphs fall
-// through to the system sans by design rather than shipping a second file.
-// The same arrangement holds for JetBrains Mono (fontsource 5.3.0, OFL-1.1,
-// wght 100–800).
-//
-// CJK stays system-first (PingFang / YaHei / etc. in palette.css). We do
-// not load Noto Sans SC/TC through next/font — those unicode-range chunks
-// balloon Turbopack compile and only matter on bare Linux.
-const appSans = localFont({
-  src: "./fonts/IBMPlexSans-Variable.woff2",
+// Noto Sans carries reading, control, and display text. The regional SC/TC
+// builds include Latin as well as Han, so mixed-script labels stay in one
+// family when the UI language is Chinese. next/font downloads the Google
+// assets during the build and self-hosts them; browsers never depend on Google
+// at runtime. The CJK families are not preloaded together — CSS selects only
+// the region matching the pre-paint lang attribute.
+const appSans = Noto_Sans({
+  subsets: ["latin"],
+  weight: "variable",
   variable: "--font-app-sans",
   display: "swap",
-  weight: "100 700",
-  style: "normal",
 });
 
+const appCjkSc = Noto_Sans_SC({
+  weight: "variable",
+  variable: "--font-app-cjk-sc",
+  display: "swap",
+  preload: false,
+});
+
+const appCjkTc = Noto_Sans_TC({
+  weight: "variable",
+  variable: "--font-app-cjk-tc",
+  display: "swap",
+  preload: false,
+});
+
+// Technical text stays on the compact JetBrains Mono face already vendored by
+// the application. Its Latin subset is sufficient because the locale-specific
+// mono stacks retain native and Noto CJK fallbacks for Han glyphs.
 const appMono = localFont({
   src: "./fonts/JetBrainsMono-Variable.woff2",
   variable: "--font-app-mono",
@@ -89,7 +93,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${appMono.variable} ${appSans.variable}`}
+      className={`${appMono.variable} ${appSans.variable} ${appCjkSc.variable} ${appCjkTc.variable}`}
       suppressHydrationWarning
     >
       <head>

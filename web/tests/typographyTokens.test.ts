@@ -88,7 +88,7 @@ describe("application typography roles", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
-    assert.match(layout, /const appSans\s*=\s*Noto_Sans\(\{[^}]*weight:\s*\[[^\]]*["']400["'][^\]]*["']500["'][^\]]*["']700["'][^\]]*\][^}]*variable:\s*["']--font-app-sans["']/s);
+    assert.match(layout, /const appSans\s*=\s*Noto_Sans\(\{[^}]*weight:\s*["']variable["'][^}]*variable:\s*["']--font-app-sans["']/s);
     assert.match(layout, /const appCjkSc\s*=\s*Noto_Sans_SC\(\{[^}]*variable:\s*["']--font-app-cjk-sc["'][^}]*preload:\s*false/s);
     assert.match(layout, /const appCjkTc\s*=\s*Noto_Sans_TC\(\{[^}]*variable:\s*["']--font-app-cjk-tc["'][^}]*preload:\s*false/s);
     assert.match(layout, /src:\s*["']\.\/fonts\/JetBrainsMono-Variable\.woff2["']/);
