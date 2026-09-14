@@ -270,6 +270,8 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         agent_store=agent_store,
         agent_placement_store=agent_placement_store,
         skill_store=skill_store,
+        team_store=team_store,
+        project_store=project_store,
     )
     try:
         migrated_placements = migrate_agent_placement_computer_ids(

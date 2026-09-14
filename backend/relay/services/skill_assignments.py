@@ -164,7 +164,7 @@ def _validate_policy(
         raise SkillAssignmentError("invalid-invocation-policy")
     if mode == "suggested" and invocation != "explicit":
         raise SkillAssignmentError("suggested-requires-explicit-invocation")
-    if pin in {"latest", "stable"}:
+    if isinstance(pin, str) and pin in {"latest", "stable"}:
         return
     if (
         not isinstance(pin, dict)

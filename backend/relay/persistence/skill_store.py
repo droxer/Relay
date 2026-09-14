@@ -461,7 +461,7 @@ class DatabaseSkillStore:
             raise SkillValidationError("invalid-assignment-mode")
         if invocation not in {"implicit", "explicit"}:
             raise SkillValidationError("invalid-invocation-policy")
-        if pin not in {"latest", "stable"} and not (
+        if not (isinstance(pin, str) and pin in {"latest", "stable"}) and not (
             isinstance(pin, dict)
             and set(pin) == {"revisionId"}
             and isinstance(pin["revisionId"], str)

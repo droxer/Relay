@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .skill_grants import GRANTS_VERSION, read_grants
+from .skill_assignments import effective_assignments
 
 EMPTY_SKILL_BUNDLE = {
     "contract": {"name": "relay.agent.skills", "version": 1},
@@ -11,11 +12,25 @@ EMPTY_SKILL_BUNDLE = {
 
 
 def resolve_bundle(
-    ctx: Any, agent: dict[str, Any]
+    ctx: Any, agent: dict[str, Any], *, project_id: str | None = None
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     policy = agent.get("skillPolicy") or {}
-    if not isinstance(policy, dict) or "version" not in policy:
+    scoped = (
+        effective_assignments(ctx, agent, project_id=project_id)
+        if hasattr(ctx.skill_store, "list_assignments")
+        else []
+    )
+    managed_legacy = isinstance(policy, dict) and "version" in policy
+    if not managed_legacy and not scoped:
         return None, []
+    grants = [
+        {
+            "skillId": item["skillId"],
+            "pin": item["pin"],
+            "assignmentMode": item["mode"],
+        }
+        for item in scoped
+    ]
     if isinstance(policy, dict) and policy.get("version") not in (None, GRANTS_VERSION):
         skipped = []
         raw = policy.get("grants", [])
@@ -30,11 +45,19 @@ def resolve_bundle(
                     "unsupported-policy",
                 )
             )
-        return _empty_bundle(), skipped
+    else:
+        skipped = []
+        # Direct v1 agent grants are retained as the compatibility override.
+        direct = {
+            item["skillId"]: {**item, "assignmentMode": "optional"}
+            for item in read_grants(agent)
+        }
+        grants = [item for item in grants if item["skillId"] not in direct]
+        grants.extend(direct.values())
 
     owner = agent.get("supervisorEmployeeId")
-    resolved, skipped, seen = [], [], set()
-    for grant in read_grants(agent):
+    resolved, seen = [], set()
+    for grant in grants:
         skill_id = grant["skillId"]
         if skill_id in seen:
             continue
@@ -54,6 +77,8 @@ def resolve_bundle(
         revision_id = (
             skill.get("currentRevisionId")
             if pin == "latest"
+            else skill.get("stableRevisionId") or skill.get("currentRevisionId")
+            if pin == "stable"
             else pin.get("revisionId")
             if isinstance(pin, dict)
             else None
@@ -70,6 +95,7 @@ def resolve_bundle(
                 "revisionId": revision_id,
                 "slug": slug,
                 "manifestSha256": revision["manifestSha256"],
+                "assignmentMode": grant.get("assignmentMode", "optional"),
                 "files": [
                     {key: item[key] for key in ("path", "sha256", "bytes")}
                     for item in files

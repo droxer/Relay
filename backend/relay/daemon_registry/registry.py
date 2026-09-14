@@ -436,7 +436,11 @@ class DaemonNodeRegistry:
             None
         )
         self.logical_skill_bundle_resolver: (
-            Callable[[str], tuple[dict[str, Any] | None, list[dict[str, Any]]]] | None
+            Callable[
+                [str, str | None],
+                tuple[dict[str, Any] | None, list[dict[str, Any]]],
+            ]
+            | None
         ) = None
         self._last_reap_at = 0.0
         self._last_prune_at = 0.0
@@ -3114,7 +3118,7 @@ class DaemonNodeRegistry:
         logical_agent_id = command.get("logicalAgentId")
         if logical_agent_id and self.logical_skill_bundle_resolver:
             skill_bundle, resolution_skips = self.logical_skill_bundle_resolver(
-                logical_agent_id
+                logical_agent_id, session_snapshot.get("projectId")
             )
             if skill_bundle is None:
                 pass
