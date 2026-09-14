@@ -4,6 +4,7 @@ import { createInstance } from "i18next";
 import { I18nextProvider } from "react-i18next";
 import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
+import en from "../src/i18n/locales/en/translation.json";
 import zhCN from "../src/i18n/locales/zh-CN/translation.json";
 import zhTW from "../src/i18n/locales/zh-TW/translation.json";
 import { SkillsPage } from "../src/components/SkillsPage";
@@ -65,4 +66,23 @@ it.each([
     detail: `team/review: ${instance.t("skills.skip_reason.daemon-unsupported")}`,
   });
   expect(notice?.detail).not.toContain("daemon-unsupported");
+});
+
+/* `skills.bytes` used to be a single form fed a pre-formatted string as
+   i18next's `count`, which selects the plural. Both halves stay explicit: a
+   numeric `count` chooses the form, `value` carries the localized digits. */
+it.each([
+  ["en" as const, en, "1 byte", "1,024 bytes"],
+  ["zh-CN" as const, zhCN, "1 字节", "1,024 字节"],
+  ["zh-TW" as const, zhTW, "1 位元組", "1,024 位元組"],
+])("pluralizes the %s bundle file size on a numeric count", async (language, resource, one, many) => {
+  const instance = createInstance();
+  await instance.init({
+    lng: language, fallbackLng: false, interpolation: { escapeValue: false },
+    resources: { [language]: { translation: resource } },
+  });
+  const render = (bytes: number) =>
+    instance.t("skills.bytes", { count: bytes, value: bytes.toLocaleString("en-US") });
+  expect(render(1)).toBe(one);
+  expect(render(1024)).toBe(many);
 });
