@@ -50,6 +50,14 @@ def resolve_bundle(
         if skill.get("visibility") != "org" and skill.get("ownerEmployeeId") != owner:
             skipped.append(_skipped(skill_id, slug, "visibility-revoked"))
             continue
+        name = skill.get("name")
+        if (
+            not isinstance(slug, str)
+            or not isinstance(name, str)
+            or slug.rsplit("/", 1)[-1] != name
+        ):
+            skipped.append(_skipped(skill_id, slug, "invalid-bundle"))
+            continue
         pin = grant.get("pin")
         revision_id = (
             skill.get("currentRevisionId")
