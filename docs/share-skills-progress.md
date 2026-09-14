@@ -94,8 +94,8 @@ Automated implementation checks and deployed-node acceptance are tracked separat
 - Desktop (1440×960) and mobile (390×844) browser checks passed using
   intercepted read fixtures in an isolated frontend process. No server was
   seeded. Mutation flows are covered by component interaction tests.
-- Real local Claude discovery isolation now passes the opt-in probe described
-  below. A deployed BoxLite/backend end-to-end run has not been performed.
+- Real local and BoxLite-guest Claude discovery isolation pass the opt-in probes
+  described below. A live backend-to-daemon paid agent run has not been performed.
 - The skills workflows are available in English, Simplified Chinese, and
   Traditional Chinese. User-authored skill content and identifiers remain unchanged.
 
@@ -133,6 +133,7 @@ Automated implementation checks and deployed-node acceptance are tracked separat
 - `a96fd6ee` — catalog, immutable revisions, import, grants, dispatch, and notices.
 - `f339b2ec` — shared protocol and isolated daemon delivery.
 - `de16d017` — library, share drawer, agent controls, and UI regression coverage.
+- `67f67f2d` — workflow localization and sandboxed host CLI isolation fixture.
 
 No changes were pushed, deployed, or applied to the operator's database. The
 new schema was exercised only through disposable test databases/schemas.
@@ -186,6 +187,29 @@ All four runtime assertions passed:
 
 This closes the local real-CLI discovery gap. It does not claim a deployed
 BoxLite acceptance run or replace the API authorization and dispatch tests.
+
+The continuation also exercises the guest boundary with an existing devbox
+image. This fixture never builds or exports an image:
+
+```sh
+make build-packages
+node packages/relay-daemon/tests/fixtures/boxlite-claude-skill-isolation.mjs \
+  /path/to/.oci/relay-devbox-v1
+```
+
+It boots a disposable BoxLite VM, transfers the revision through the daemon's
+real `execStream` seam as the guest `agent` user, and initializes the guest
+Claude CLI against granted, ungranted, revoked, and captured views. Hooks and
+MCP are disabled, proxy variables point at a closed local port, and stdin
+contains only the SDK initialization control message. All four discovery
+assertions passed with Claude 2.1.251 from the devbox image. This verifies the
+BoxLite materialization and CLI boundary, but still does not execute a paid
+agent run through a live backend.
+
+The fixture first failed because its initial command construction redirected
+Claude's stdin away from the initialization pipe. After replacing that helper
+with literal argv quoting, the identical four guest assertions passed. This
+RED/GREEN cycle changed only the opt-in acceptance harness, not production code.
 
 ## Continuation: workflow localization
 
