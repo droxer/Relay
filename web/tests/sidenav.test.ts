@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import {
@@ -62,5 +64,46 @@ describe("maxSidenavWidth", () => {
     // floor — three panes competing for one column with three different
     // floors would let two of them each think there was room.
     assert.equal(maxSidenavWidth(200, TRANSCRIPT_MIN_WIDTH), 200);
+  });
+});
+
+describe("sidenav destinations", () => {
+  const readWeb = (path: string) => readFileSync(resolve("web", path), "utf8");
+  const source = readWeb("src/components/SideNav.tsx");
+  const routes = [...readWeb("src/lib/viewTypes.ts")
+    .match(/export type AppRoute =([^;]+);/)![1]!
+    .matchAll(/"([a-z]+)"/g)].map((match) => match[1]!);
+  const anchors = new Map(
+    [...source.matchAll(/className=\{`sidenav-btn ([^`]*)`\}[\s\S]{0,120}?href=\{hrefForRoute\("([a-z]+)"\)\}/g)]
+      .map((match) => [match[2]!, match[1]!] as const),
+  );
+  const overflow = new Set(
+    [...source.matchAll(/\{\s*route:\s*"([a-z]+)"/g)].map((match) => match[1]!),
+  );
+
+  /* `skills` shipped listed only in MORE_ROUTES — the mobile overflow — while
+     the More button itself is hidden on desktop, so the rail never offered it.
+     Every destination needs a rail anchor, and every anchor hidden on phones
+     needs its More entry. */
+  /* `channels` is deliberately kept out of the nav — designIssues.test.ts
+     enforces its absence — and stays reachable through the command palette. */
+  const HIDDEN_ROUTES = new Set(["channels"]);
+
+  it("gives every app route a rail anchor", () => {
+    assert.ok(routes.length >= 10);
+    for (const route of routes) {
+      if (HIDDEN_ROUTES.has(route)) {
+        assert.ok(!anchors.has(route), `${route} is meant to stay out of the rail`);
+        continue;
+      }
+      assert.ok(anchors.has(route), `${route} has no sidenav anchor`);
+    }
+  });
+
+  it("keeps mobile-hidden routes in the More menu", () => {
+    for (const [route, classes] of anchors) {
+      if (!classes.includes("sidenav-secondary-item") && !classes.includes("sidenav-overflow-item")) continue;
+      assert.ok(overflow.has(route), `${route} is hidden on mobile but missing from MORE_ROUTES`);
+    }
   });
 });

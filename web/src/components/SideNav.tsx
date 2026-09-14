@@ -264,6 +264,21 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.manage")}>
           <span className="sidenav-group-label sidenav-overflow-item sr-only" aria-hidden="true">{t("nav.manage")}</span>
           <a
+            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "skills" ? "active" : ""}`}
+            data-nav="skills"
+            href={hrefForRoute("skills")}
+            aria-label={t("nav.skills")}
+            aria-current={route === "skills" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "skills")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <BookOpen size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.skills")}</span>
+          </a>
+          <a
             className={`sidenav-btn sidenav-secondary-item ${route === "computer" ? "active" : ""}`}
             data-nav="computer"
             href={hrefForRoute("computer")}
