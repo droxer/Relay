@@ -64,14 +64,30 @@ def resolve_bundle(
         seen.add(skill_id)
         skill = ctx.skill_store.get_skill(skill_id)
         if not skill:
-            skipped.append(_skipped(skill_id, None, "skill-missing"))
+            skipped.append(
+                _skipped(
+                    skill_id,
+                    None,
+                    "skill-missing",
+                    grant.get("assignmentMode"),
+                )
+            )
             continue
         slug = skill.get("slug")
         if skill.get("deletedAt"):
-            skipped.append(_skipped(skill_id, slug, "deleted"))
+            skipped.append(
+                _skipped(skill_id, slug, "deleted", grant.get("assignmentMode"))
+            )
             continue
         if skill.get("visibility") != "org" and skill.get("ownerEmployeeId") != owner:
-            skipped.append(_skipped(skill_id, slug, "visibility-revoked"))
+            skipped.append(
+                _skipped(
+                    skill_id,
+                    slug,
+                    "visibility-revoked",
+                    grant.get("assignmentMode"),
+                )
+            )
             continue
         pin = grant.get("pin")
         revision_id = (
@@ -85,7 +101,14 @@ def resolve_bundle(
         )
         revision = ctx.skill_store.get_revision(revision_id) if revision_id else None
         if not revision or revision.get("skillId") != skill_id:
-            skipped.append(_skipped(skill_id, slug, "revision-missing"))
+            skipped.append(
+                _skipped(
+                    skill_id,
+                    slug,
+                    "revision-missing",
+                    grant.get("assignmentMode"),
+                )
+            )
             continue
         files = ctx.skill_store.revision_files(revision_id)
         resolved.append(
@@ -110,7 +133,12 @@ def resolve_bundle(
             name_key = item["_catalogName"].casefold()
             if name_key in names:
                 skipped.append(
-                    _skipped(item["skillId"], item.get("slug"), "name-conflict")
+                    _skipped(
+                        item["skillId"],
+                        item.get("slug"),
+                        "name-conflict",
+                        item.get("assignmentMode"),
+                    )
                 )
                 continue
             names.add(name_key)
@@ -128,5 +156,19 @@ def _empty_bundle() -> dict[str, Any]:
     return {"contract": dict(EMPTY_SKILL_BUNDLE["contract"]), "skills": []}
 
 
-def _skipped(skill_id: str, slug: str | None, reason: str) -> dict[str, Any]:
-    return {"skillId": skill_id, **({"slug": slug} if slug else {}), "reason": reason}
+def _skipped(
+    skill_id: str,
+    slug: str | None,
+    reason: str,
+    assignment_mode: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "skillId": skill_id,
+        **({"slug": slug} if slug else {}),
+        "reason": reason,
+        **(
+            {"assignmentMode": "required"}
+            if assignment_mode == "required"
+            else {}
+        ),
+    }

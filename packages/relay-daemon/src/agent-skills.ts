@@ -32,6 +32,7 @@ export async function materializeSkills(options: MaterializeSkillsOptions): Prom
     skipped.push(skippedSkill(skill, "manifest-digest-mismatch"));
     return false;
   });
+  failIfRequiredSkipped(supplied, skipped);
   const cache = await inspectCache(options, manifests);
   const transferId = `${process.pid}-${randomBytes(12).toString("hex")}`;
   const transferred = new Set<string>();
@@ -54,6 +55,7 @@ export async function materializeSkills(options: MaterializeSkillsOptions): Prom
       }
       if (!failed) ready.push(skill);
     }
+    failIfRequiredSkipped(supplied, skipped);
     const viewId = sha256(Buffer.from(JSON.stringify({ agentId: options.agentId, delivery: options.delivery, skills: ready.map((skill) => [skill.slug, skill.manifestSha256]) }))).slice(0, 32);
     const result = await executeJson(options, MATERIALIZER_SCRIPT, { agentHome: options.agentHome, cacheDir: options.cacheDir, delivery: options.delivery, transferId, viewId, skills: ready, cachedManifests: [...cache.validManifests] });
     if (result.exit_code !== 0) throw new Error(`skill materialization failed: ${(result.stderr || result.error_message || "unknown error").trim()}`);
@@ -65,8 +67,14 @@ export async function materializeSkills(options: MaterializeSkillsOptions): Prom
   }
 }
 
-function skippedSkill(skill: { skillId?: string; slug?: string }, reason: string): DaemonSkippedSkill {
-  return { skillId: skill.skillId || "unknown", ...(skill.slug ? { slug: skill.slug } : {}), reason };
+function skippedSkill(skill: { skillId?: string; slug?: string; assignmentMode?: "optional" | "required" }, reason: string): DaemonSkippedSkill {
+  return { skillId: skill.skillId || "unknown", ...(skill.slug ? { slug: skill.slug } : {}), reason, ...(skill.assignmentMode ? { assignmentMode: skill.assignmentMode } : {}) };
+}
+
+function failIfRequiredSkipped(skills: DaemonRunSkillBundle["skills"], skipped: DaemonSkippedSkill[]): void {
+  const required = skipped.find((item) => item.assignmentMode === "required"
+    || skills.some((skill) => skill.skillId === item.skillId && skill.assignmentMode === "required"));
+  if (required) throw new Error(`required skill unavailable: ${required.slug ?? required.skillId} (${required.reason})`);
 }
 
 async function inspectCache(options: MaterializeSkillsOptions, skills: DaemonRunSkillBundle["skills"]): Promise<{ validManifests: Set<string>; validBlobs: Set<string> }> {
@@ -111,6 +119,7 @@ function executeArgv(options: MaterializeSkillsOptions, script: string, payload:
 function validBundleHeader(bundle: DaemonRunSkillBundle): boolean { return bundle.contract?.name === "relay.agent.skills" && bundle.contract.version === 1 && Array.isArray(bundle.skills); }
 function validateSkill(skill: DaemonRunSkillBundle["skills"][number]): string | undefined {
   if (!SAFE_ID.test(skill.skillId) || !SAFE_ID.test(skill.revisionId) || !SHA256.test(skill.manifestSha256) || !validSlug(skill.slug)) return "invalid-bundle";
+  if (skill.assignmentMode !== undefined && skill.assignmentMode !== "optional" && skill.assignmentMode !== "required") return "invalid-bundle";
   if (!Array.isArray(skill.files) || skill.files.length === 0 || skill.files.length > MAX_FILES) return "invalid-bundle";
   let total = 0; const seen = new Set<string>();
   for (const file of skill.files) {

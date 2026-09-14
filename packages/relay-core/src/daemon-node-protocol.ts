@@ -146,6 +146,7 @@ export interface DaemonRunSkillBundle {
     revisionId: string;
     slug: string;
     manifestSha256: string;
+    assignmentMode?: "optional" | "required";
     files: Array<{ path: string; sha256: string; bytes: number }>;
   }>;
 }
@@ -154,6 +155,7 @@ export interface DaemonSkippedSkill {
   skillId: string;
   slug?: string;
   reason: string;
+  assignmentMode?: "optional" | "required";
 }
 
 export interface DaemonNodeRegistration {
