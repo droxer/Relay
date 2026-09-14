@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import stat
 import tempfile
 from pathlib import Path
 from typing import Protocol
@@ -38,7 +39,7 @@ class LocalSkillObjectStore:
         if not hashlib.sha256(content).hexdigest() == digest:
             raise ValueError("skill object digest does not match content")
         destination = self.path_for(digest)
-        if destination.exists():
+        if destination.exists() or destination.is_symlink():
             self._verify(destination, digest)
             return
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -59,8 +60,9 @@ class LocalSkillObjectStore:
 
     def get(self, digest: str) -> bytes | None:
         path = self.path_for(digest)
-        if not path.is_file():
+        if not path.exists() and not path.is_symlink():
             return None
+        self._ensure_regular(path)
         content = path.read_bytes()
         if hashlib.sha256(content).hexdigest() != digest:
             raise OSError(f"skill object {digest} failed digest verification")
@@ -68,12 +70,21 @@ class LocalSkillObjectStore:
 
     def exists(self, digest: str) -> bool:
         path = self.path_for(digest)
-        return path.is_file()
+        if not path.exists() and not path.is_symlink():
+            return False
+        self._ensure_regular(path)
+        return True
 
     @staticmethod
     def _verify(path: Path, digest: str) -> None:
+        LocalSkillObjectStore._ensure_regular(path)
         if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
             raise OSError(f"skill object {digest} failed digest verification")
+
+    @staticmethod
+    def _ensure_regular(path: Path) -> None:
+        if path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
+            raise OSError(f"skill object path is not a regular file: {path}")
 
 
 def _validate_digest(digest: str) -> None:
