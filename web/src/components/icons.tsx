@@ -225,6 +225,20 @@ export const NavThreads = withStandardStroke(MessageSquare, "NavThreads");
 // framed the whole admin surface as "edit a person", when what it actually
 // holds is employees, departments, org settings and the fleet. A building is
 // the organisation those belong to, and no other glyph in the app claims it.
+//
+// The obvious objection is that the rail LABELS this "Control panel", and a
+// slider bank matches those words better than a building does. Tested, and
+// the answer is no — twice over:
+//   - `SlidersHorizontal` is three horizontal rules with one of them marked,
+//     which is `NavBacklog` (see navGlyphs.tsx) at 18px. Rendered side by
+//     side in the rail column they are the same glyph. Hard collision.
+//   - `Settings2` is the same shape again AND is already `AdminManageExecutors`.
+//   - `SlidersVertical` genuinely clears both — vertical faders collide with
+//     nothing here — but it describes tweaking knobs, and this destination
+//     holds employees, departments and a fleet of machines. Building2 names
+//     what the page CONTAINS; faders name what you imagine doing there.
+// If this pairing is ever revisited, the weaker half is the label, not the
+// glyph — renaming the destination is a product call, not an icon one.
 export const NavAdmin = withStandardStroke(Building2, "NavAdmin");
 // Drawn in-house — see `navGlyphs.tsx` for why no lucide task list survives
 // the rail at 18px.
