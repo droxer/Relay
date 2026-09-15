@@ -502,22 +502,62 @@
 }
 
 /* ---- agent skills ---------------------------------------------------
-   Node-reported inventory printed as a read-only list on the agent record:
-   the qualified skill id in mono (it is an identifier, like the record's
-   other technical facts), its one-line description as supporting text. */
+   The agent's inventory, printed as a record list: one bordered container per
+   group, one row per skill. Same list chrome as the skills library's bundle
+   list (skills.css), so a skill reads the same object on the agent record as
+   it does in its own catalog. */
 
-.agent-skill-list {
-  display: grid;
-  gap: var(--sp-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.agent-skill-group + .agent-skill-group {
+  margin-top: var(--sp-6);
 }
 
+.agent-skill-list {
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+
+/* Two columns: the skill and its supporting lines on the left, the row's one
+   action held at the right edge, vertically centred against the whole stack. */
 .agent-skill {
   display: grid;
-  gap: var(--sp-0-5);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-1) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.agent-skill:last-child {
+  border-bottom: 0;
+}
+
+/* A row that can be read gets the affordance — without it, a previewable
+   skill and a node-reported one are the same static line of text. */
+.agent-skill:has(.agent-skill-preview):hover {
+  background: var(--surface-2);
+}
+
+.agent-skill:hover .agent-skill-preview {
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.agent-skill-head {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
   min-width: 0;
+}
+
+.agent-skill-action {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  align-self: center;
 }
 
 .agent-skill-name {
@@ -527,28 +567,36 @@
   overflow-wrap: anywhere;
 }
 
-.agent-skill-description {
-  color: var(--ink-3);
+/* The name doubles as the way into the bundle: a text affordance, not button
+   chrome — the row is a record line, not a toolbar. */
+.agent-skill-preview {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: start;
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.agent-skill-description,
+.agent-skill-unavailable {
+  grid-column: 1;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
-/* Group heading over the granted/installed split, on the same micro role every
-   other section title in a record pane takes. */
-.agent-skill-group-title {
-  margin: var(--sp-4) 0 var(--sp-2);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
+
+.agent-skill-description {
   color: var(--ink-3);
 }
 
+/* The badge beside the name already carries the alarm; the reason is
+   supporting text, so a second red line would just shout twice. */
 .agent-skill-unavailable {
-  color: var(--err);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
 }
 
 .agent-skill-footnote {
+  margin: var(--sp-6) 0 0;
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
