@@ -322,6 +322,32 @@ with `--password` or `RELAY_INITIAL_ADMIN_PASSWORD`; there is no built-in
 password. Pass `--username`, `--role`, `--email`, `--employee-id`,
 `--department-id`, or `--department-name` to customize the initial user.
 
+### Demo data for UI snapshots
+
+Create a regular demo user once so screenshots and manual UI checks stay
+isolated from administrator data:
+
+```bash
+script/init_users.sh \
+  --username demo \
+  --password 'choose-a-local-test-password' \
+  --role user \
+  --employee-id demo \
+  --department-id product \
+  --department-name Product
+```
+
+With the web UI running on port `5000`, seed the demo user's computers,
+agents, teams, tasks, and threads through the public API:
+
+```bash
+RELAY_DEMO_PASSWORD='choose-a-local-test-password' python3 script/seed_demo.py
+```
+
+The seed is idempotent and can be run again before a snapshot to refresh the
+demo computer's ready state. Set `RELAY_DEMO_BASE_URL` or
+`RELAY_DEMO_USERNAME` when testing another local instance or account.
+
 For a token-gated bootstrap instead, set `RELAY_ADMIN_TOKEN` and create the
 first admin explicitly:
 

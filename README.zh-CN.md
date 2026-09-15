@@ -20,6 +20,7 @@ Relay 守护进程在本地或托管计算机上，通过 BoxLite 沙箱或配�
 - **任务与例行任务**：在待办中规划工作、安排周期性例行任务、分配智能体或团队、设置截止日期，并查看派发及事件历史。
 - **智能体与团队**：创建具名智能体和团队，管理其资料、计算机部署、工作区文件、生成产物和近期活动。
 - **项目**：将持久共享工作区和有序的项目智能体名册绑定到一台计算机，并运行共享该工作区的项目对话。
+- **技能**：发布可复用的技能包，查看其中的文件与版本，并通过共享技能库将技能授予单个智能体或团队。
 - **计算机**：注册员工计算机或协调托管计算机，同时跟踪健康状态、容量、命令租约和持久身份。
 - **聊天网关**：通过统一聊天网关连接 Discord、Telegram 和 Lark，将外部身份与会话映射到 Relay。
 - **管理**：在管理区域统一管理员工、智能体、计算机、集群健康、活动和令牌用量。
@@ -31,7 +32,7 @@ Relay 守护进程在本地或托管计算机上，通过 BoxLite 沙箱或配�
 选择工作在哪台计算机运行、由哪个具名智能体处理；Relay 将目标交给所选参与者，由每个智能体自行选择合适的执行路径。
 
 <p align="center">
-  <img src="docs/images/relay-threads-phosphor-zh-CN.png" alt="Relay 对话编辑器，可选择智能体和计算机" width="960">
+  <img src="docs/images/relay-threads-zh-CN.png" alt="Relay 对话编辑器，可选择智能体和计算机" width="960">
 </p>
 
 ### 规划并派发工作
@@ -39,7 +40,7 @@ Relay 守护进程在本地或托管计算机上，通过 BoxLite 沙箱或配�
 待办视图集中展示优先级、分配对象、截止日期、状态和派发上下文。
 
 <p align="center">
-  <img src="docs/images/relay-backlog-phosphor-zh-CN.png" alt="Relay 任务看板" width="960">
+  <img src="docs/images/relay-backlog-zh-CN.png" alt="Relay 任务看板" width="960">
 </p>
 
 ### 协调智能体团队
@@ -47,7 +48,7 @@ Relay 守护进程在本地或托管计算机上，通过 BoxLite 沙箱或配�
 团队工作区将该团队的活跃运行、最近对话和进行中的任务集中在一个视图。
 
 <p align="center">
-  <img src="docs/images/relay-teams-phosphor-zh-CN.png" alt="Relay 团队工作区" width="960">
+  <img src="docs/images/relay-teams-zh-CN.png" alt="Relay 团队工作区" width="960">
 </p>
 
 ## 快速开始
