@@ -1,11 +1,17 @@
 type IdentityMarkProps = {
   /** Which class of identity the mark stands for. */
   kind: "agent" | "team";
-  /** `chip` (default) draws the glyph on the profile-image surface; `bare`
-      draws the glyph alone, for empty states that supply their own frame. */
-  variant?: "chip" | "bare";
-  /** Bare marks size themselves; chip marks always fill their profile box. */
+  /** `chip` (default) draws the filled glyph on the profile-image surface;
+      `bare` draws the filled glyph alone, for empty states that supply their
+      own frame; `outline` draws it hairline, for the nav rail — see the
+      fill-vs-stroke note below. */
+  variant?: "chip" | "bare" | "outline";
+  /** Bare and outline marks size themselves; chip marks fill their profile box. */
   size?: number;
+  /** Outline only: the stroke width to draw at, so the caller can hand the
+      mark the same `ICON_STROKE` every other glyph in its row uses. Ignored
+      by the filled variants. */
+  strokeWidth?: number;
   className?: string;
 };
 
@@ -39,10 +45,20 @@ type IdentityMarkProps = {
  * and pulling in from full bleed is what buys the margin inside the chip, so
  * the glyph never touches the hairline, at 16px or at 64.
  *
- * Filled, not stroked. Strokes are the lighter, more current idiom and were
- * tried first, but a member hexagon is ~5px across in a 16px chip; a 1px
- * ring inside that is mud. Fill is what survives the smallest chip, so fill
- * is what both marks use.
+ * Filled, not stroked, *at chip sizes*. Strokes are the lighter, more current
+ * idiom and were tried first, but a member hexagon is ~5px across in a 16px
+ * chip; a 1px ring inside that is mud. Fill is what survives the smallest
+ * chip, so fill is what the chip and bare variants use.
+ *
+ * The `outline` variant is the deliberate exception, and it exists for one
+ * caller: the side-nav rail. There the mark is not a profile image standing
+ * in for a face — it is a section glyph sitting in a row of eleven hairline
+ * lucide siblings, and two solid blobs among them read as *permanently
+ * active*, because a fill is exactly how the rail paints its selected state.
+ * At the rail's 18px a member hexagon is ~6px with a 1.3px ring, which still
+ * leaves ~3px of open interior — the chip's mud argument is a statement about
+ * 16px chips with 12% padding, not about a bare 18px glyph. Nothing below
+ * 16px may ask for it.
  */
 const AGENT_PATHS = [
   "M9.75 4.5Q12 3.2 14.25 4.5L17.37 6.3Q19.62 7.6 19.62 10.2L19.62 13.8Q19.62 16.4 17.37 17.7L14.25 19.5Q12 20.8 9.75 19.5L6.63 17.7Q4.38 16.4 4.38 13.8L4.38 10.2Q4.38 7.6 6.63 6.3Z",
@@ -54,19 +70,23 @@ const TEAM_PATHS = [
   "M15.63 12.53Q16.8 11.85 17.97 12.53L19.61 13.47Q20.78 14.15 20.78 15.5L20.78 17.4Q20.78 18.75 19.61 19.43L17.97 20.37Q16.8 21.05 15.63 20.37L13.99 19.43Q12.82 18.75 12.82 17.4L12.82 15.5Q12.82 14.15 13.99 13.47Z",
 ] as const;
 
-export function IdentityMark({ kind, variant = "chip", size, className }: IdentityMarkProps) {
+export function IdentityMark({ kind, variant = "chip", size, strokeWidth, className }: IdentityMarkProps) {
   const paths = kind === "team" ? TEAM_PATHS : AGENT_PATHS;
+  const outline = variant === "outline";
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      width={variant === "bare" ? size : undefined}
-      height={variant === "bare" ? size : undefined}
+      width={variant === "chip" ? undefined : size}
+      height={variant === "chip" ? undefined : size}
       data-variant={variant}
       className={`identity-mark${className ? ` ${className}` : ""}`}
       aria-hidden="true"
       focusable="false"
-      fill="currentColor"
+      fill={outline ? "none" : "currentColor"}
+      stroke={outline ? "currentColor" : undefined}
+      strokeWidth={outline ? strokeWidth : undefined}
+      strokeLinejoin={outline ? "round" : undefined}
     >
       {paths.map((d) => (
         <path key={d} d={d} />

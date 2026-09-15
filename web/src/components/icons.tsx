@@ -9,14 +9,13 @@ import {
   ArrowUpRight,
   BookOpen,
   Bot,
+  Building2,
   Check,
   CircleAlert,
   CircleCheck,
   CircleStop,
   Coins,
   Copy,
-  Cpu,
-  CalendarClock,
   CalendarDays,
   Cloud,
   Columns3,
@@ -37,12 +36,13 @@ import {
   Laptop,
   LayoutDashboard,
   LayoutGrid,
+  Layers,
   Link2,
-  ListTodo,
+  ListChecks,
   LockKeyhole,
   Palette,
   LogOut,
-  MessagesSquare,
+  MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -52,6 +52,7 @@ import {
   Plus,
   Power,
   RefreshCw,
+  Repeat,
   RotateCcw,
   ScanEye,
   Search,
@@ -66,7 +67,6 @@ import {
   Users,
   WifiOff,
   TriangleAlert,
-  UserCog,
   UserPlus,
   X,
   Check as LucideCheck,
@@ -82,6 +82,7 @@ import {
 import { forwardRef } from "react";
 
 import { IdentityMark } from "./IdentityMark";
+import { ChipGlyph, TaskListGlyph, type RelayGlyphProps } from "./navGlyphs";
 
 // Standard refined stroke for every icon in the product. Lucide defaults to
 // 2 which feels chunky next to the rest of the type; 1.75 reads as
@@ -159,8 +160,13 @@ export const AVATAR = {
   xl: 56,
 } as const;
 
-function withStandardStroke(Icon: LucideIcon, displayName: string) {
-  const Wrapped = forwardRef<SVGSVGElement, LucideProps>((props, ref) => (
+/* Accepts a lucide icon or one of Relay's own glyphs from `navGlyphs` — they
+   publish the same call shape on purpose, so the stroke contract is applied
+   once for both and a bespoke glyph cannot drift off the shared weight. */
+type StrokedGlyph = LucideIcon | typeof TaskListGlyph;
+
+function withStandardStroke(Icon: StrokedGlyph, displayName: string) {
+  const Wrapped = forwardRef<SVGSVGElement, LucideProps & RelayGlyphProps>((props, ref) => (
     <Icon ref={ref} strokeWidth={ICON_STROKE} aria-hidden="true" {...props} />
   ));
   Wrapped.displayName = displayName;
@@ -174,13 +180,30 @@ function withStandardStroke(Icon: LucideIcon, displayName: string) {
  * while every profile slot in the app drew the agent node and the team cluster
  * from `IdentityMark`. That is two pictures for one class: the rail said one
  * thing about an agent and the row beside it said another. The section glyph
- * is now the same silhouette as the thing the section contains, so a reader
- * learns each shape once. These marks are filled, not stroked, so they take
- * no `strokeWidth` — size and colour are the whole contract.
+ * is the same silhouette as the thing the section contains, so a reader
+ * learns each shape once.
+ *
+ * It draws the OUTLINE variant, not the filled one the profile chips use.
+ * Two solid marks in a rail of eleven hairline lucide siblings were the only
+ * heavy ink in the column, and heavy ink is precisely how the rail paints a
+ * selected row — so Agents and Teams read as permanently active. Hairline at
+ * the shared `ICON_STROKE` puts them on one weight with their neighbours and
+ * gives the active state somewhere to go. (The filled `bare` variant also
+ * pinned itself to `--ink-2` through `.identity-mark`, so these two glyphs
+ * were additionally the only ones in the rail that did not brighten when
+ * their row was selected; the outline variant inherits row ink.)
  */
 function identityGlyph(kind: "agent" | "team", displayName: string) {
   function Glyph({ size = ICON.sm, className }: Pick<LucideProps, "size" | "className">) {
-    return <IdentityMark kind={kind} variant="bare" size={Number(size)} className={className} />;
+    return (
+      <IdentityMark
+        kind={kind}
+        variant="outline"
+        size={Number(size)}
+        strokeWidth={ICON_STROKE}
+        className={className}
+      />
+    );
   }
   Glyph.displayName = displayName;
   return Glyph;
@@ -192,11 +215,38 @@ function identityGlyph(kind: "agent" | "team", displayName: string) {
 // reached for directly ships lucide's default stroke (2) next to our 1.75
 // chrome, and a second component can then pick a different picture for a
 // meaning that already has one.
-export const NavThreads = withStandardStroke(MessagesSquare, "NavThreads");
-export const NavAdmin = withStandardStroke(UserCog, "NavAdmin");
-export const NavBacklog = withStandardStroke(ListTodo, "NavBacklog");
+// One bubble, not lucide's stacked pair. `MessagesSquare` draws a second
+// bubble offset behind the first, and at the rail's 18px the offset is ~2px:
+// the two outlines converge into a thick smudge along one corner and the
+// glyph reads as a blot rather than a bubble. Plurality is the label's job.
+export const NavThreads = withStandardStroke(MessageSquare, "NavThreads");
+// The org console, not a user's settings. `UserCog` put a SECOND gear in the
+// rail — directly above Preferences' `Settings` gear in the footer — and
+// framed the whole admin surface as "edit a person", when what it actually
+// holds is employees, departments, org settings and the fleet. A building is
+// the organisation those belong to, and no other glyph in the app claims it.
+export const NavAdmin = withStandardStroke(Building2, "NavAdmin");
+// Drawn in-house — see `navGlyphs.tsx` for why no lucide task list survives
+// the rail at 18px.
+export const NavBacklog = withStandardStroke(TaskListGlyph, "NavBacklog");
+// A project, as distinct from a directory. The rail used to render projects
+// with `WorkspaceFolder` — literally the same component the file tree draws
+// beside every folder row — so "the Projects destination" and "a folder on
+// disk" were one picture. A project HAS a workspace; it is not one.
+//
+// `FolderKanban` fixed the meaning and lost it again on form: a folder with
+// three bars inside is the busiest silhouette available for the calmest idea,
+// and it still opened with a folder. The stack keeps the "a body of related
+// work" reading, and — the deciding constraint — it is the only glyph in the
+// rail with a horizontal-stack outline, where the boxed alternatives all
+// collided with Threads, Computer and Control panel.
+export const NavProjects = withStandardStroke(Layers, "NavProjects");
 export const NavChannels = withStandardStroke(Hash, "NavChannels");
-export const NavRoutine = withStandardStroke(CalendarClock, "NavRoutine");
+// Recurrence, not a point in time. `CalendarClock` says "something is
+// scheduled"; a routine's whole content is that it happens AGAIN. The loop
+// also survives `RoutineOriginBadge`, which draws this same glyph at 14px,
+// where a calendar grid plus an overlaid clock face closes up into hatching.
+export const NavRoutine = withStandardStroke(Repeat, "NavRoutine");
 export const NavAgents = identityGlyph("agent", "NavAgents");
 // A team is a cluster of agent nodes — no longer *the same idea
 // as* the bespoke team IdentityMark, but that mark itself. `Users` stays with
@@ -214,12 +264,13 @@ export const NavRefresh = withStandardStroke(RefreshCw, "NavRefresh");
 export const NavSidebarCollapse = withStandardStroke(PanelLeftClose, "NavSidebarCollapse");
 export const NavSidebarExpand = withStandardStroke(PanelLeftOpen, "NavSidebarExpand");
 export const NavMore = withStandardStroke(MoreHorizontal, "NavMore");
-// The computers section is a machine, not a data-centre rack. Every computer
-// *inside* it is drawn by its ownership glyph (a cloud or a laptop, below);
-// the rack was the picture that set deliberately abandoned, so the section and
-// its members disagreed. `Cpu` is claimed by no ownership variant, so section
-// and member never collapse into the same silhouette.
-export const NavComputer = withStandardStroke(Cpu, "NavComputer");
+// The computers section is a machine, not a data-centre rack, and not a
+// screen either: every computer *inside* it is drawn by its ownership glyph
+// (a cloud or a laptop, below), so `Monitor` and `Laptop` would collapse the
+// section into one of its own members. `Cpu` said the right thing and was
+// kept through two passes for it, but it was the densest mark in the rail;
+// `ChipGlyph` is the same noun at two pins instead of eight.
+export const NavComputer = withStandardStroke(ChipGlyph, "NavComputer");
 // Compose a new thread (pencil-in-square), the messaging-app convention.
 export const ActionCompose = withStandardStroke(SquarePen, "ActionCompose");
 
@@ -322,7 +373,11 @@ export const MetricTokens = withStandardStroke(Coins, "MetricTokens");
 // one FileText, collapsing three of the eight kinds into one silhouette. The
 // three paper-shaped kinds now separate by their mark — plus/minus for a
 // diff, ruled lines for written prose, blank sheet for a produced file.
-export const ArtifactPlan = withStandardStroke(ListTodo, "ArtifactPlan");
+// A checklist an agent produced, NOT the backlog. This drew `ListTodo` — the
+// very picture `NavBacklog` uses — so one silhouette stood for both "the
+// workspace's task queue" and "this run's plan". `ListChecks` keeps the
+// list-of-tasks reading and leaves the checkbox-list shape to the rail.
+export const ArtifactPlan = withStandardStroke(ListChecks, "ArtifactPlan");
 export const ArtifactDiff = withStandardStroke(FileDiff, "ArtifactDiff");
 export const ArtifactReview = withStandardStroke(ScanEye, "ArtifactReview");
 export const ArtifactTest = withStandardStroke(CircleCheck, "ArtifactTest");
@@ -358,7 +413,7 @@ export const ActionToggle = withStandardStroke(Power, "ActionToggle");
 // Admin page glyphs — node/employee management and channel setup.
 // Same machine as NavComputer — the admin fleet section and the computers
 // nav are one object seen from two surfaces.
-export const AdminNode = withStandardStroke(Cpu, "AdminNode");
+export const AdminNode = withStandardStroke(ChipGlyph, "AdminNode");
 export const AdminManageExecutors = withStandardStroke(Settings2, "AdminManageExecutors");
 export const AdminDelete = withStandardStroke(Trash2, "AdminDelete");
 export const AdminRestore = withStandardStroke(RotateCcw, "AdminRestore");
