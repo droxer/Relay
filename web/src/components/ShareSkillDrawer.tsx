@@ -100,11 +100,21 @@ export function ShareSkillDrawer({
         <p className="skill-muted">
           {t("skills.share_delivery_note")}
         </p>
+        {/* The only requirement this drawer has is a target; say so rather than
+            leaving a disabled Share button as the only signal. */}
+        {!selected.length ? (
+          <p className="skill-muted skill-requirement">
+            {t("skills.select_target_required")}
+          </p>
+        ) : null}
         {employeeId ? (
           <section>
             <h3>{t("skills.employee_scope")}</h3>
             <Button
               variant="outline"
+              className="skill-target-chip"
+              aria-pressed={selected.includes(`employee:${employeeId}`)}
+              data-selected={selected.includes(`employee:${employeeId}`) ? "true" : undefined}
               onClick={() => toggle(`employee:${employeeId}`)}
               disabled={busy || assigned.has(`employee:${employeeId}`)}
             >
@@ -120,6 +130,9 @@ export function ShareSkillDrawer({
                 <Button
                   key={team.id}
                   variant="outline"
+                  className="skill-target-chip"
+                  aria-pressed={selected.includes(`team:${team.id}`)}
+                  data-selected={selected.includes(`team:${team.id}`) ? "true" : undefined}
                   onClick={() => toggle(`team:${team.id}`)}
                   disabled={busy || assigned.has(`team:${team.id}`)}
                 >
@@ -133,7 +146,10 @@ export function ShareSkillDrawer({
           <h3>{t("skills.agents")}</h3>
           <div className="skill-picker-list">
             {candidates.map((agent) => (
-              <label key={agent.id}>
+              <label
+                key={agent.id}
+                data-selected={selected.includes(`agent:${agent.id}`) ? "true" : undefined}
+              >
                 <Checkbox
                   checked={selected.includes(`agent:${agent.id}`)}
                   onCheckedChange={() => toggle(`agent:${agent.id}`)}
