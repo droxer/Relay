@@ -11,13 +11,13 @@ import {
   NavLogout,
   NavMore,
   NavPreferences,
+  NavProjects,
   NavRoutine,
   NavSidebarCollapse,
   NavSidebarExpand,
   NavSkills,
   NavTeams,
   NavThreads,
-  WorkspaceFolder,
   type GlyphProps,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
@@ -198,7 +198,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             onFocus={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
             onBlur={hideNavTooltip}
           >
-            <WorkspaceFolder size={ICON.lg} />
+            <NavProjects size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("project.projects")}</span>
           </a>
         </div>

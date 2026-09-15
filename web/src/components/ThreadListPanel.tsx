@@ -6,7 +6,7 @@ import {
   ActionAdd,
   ChevronDownIcon,
   ICON,
-  WorkspaceFolder,
+  NavProjects,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
@@ -295,7 +295,7 @@ export function ThreadListPanel({
                 }}
               >
                 <span className="project-folder-icon">
-                  <WorkspaceFolder size={ICON.sm} aria-hidden="true" />
+                  <NavProjects size={ICON.sm} aria-hidden="true" />
                   {projectState ? (
                     <StateMark
                       tone={projectState === "run" ? "live" : "warn"}

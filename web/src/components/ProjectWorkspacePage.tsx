@@ -26,7 +26,7 @@ import {
   ActionEdit,
   ICON,
   NavBack,
-  WorkspaceFolder,
+  NavProjects,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,7 +47,7 @@ const PROJECT_ACTIVITY_POLL_MS = 3000;
 function ProjectMark({ size = 18 }: { size?: number }) {
   return (
     <span className="project-mark" aria-hidden="true">
-      <WorkspaceFolder size={size} />
+      <NavProjects size={size} />
     </span>
   );
 }

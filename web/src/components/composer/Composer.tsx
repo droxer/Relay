@@ -6,7 +6,7 @@ import {
   ActionSend,
   ComposerStop,
   ICON,
-  WorkspaceFolder,
+  NavProjects,
 } from "../icons";
 import { AgentSelect } from "./AgentSelect";
 import { ComposerContextLine } from "./ComposerContext";
@@ -182,7 +182,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     // thread's settled fact is its shared workspace, not a machine.
     <ComposerContextLine
       label={t("thread.runs_in")}
-      mark={<WorkspaceFolder size={ICON.sm} aria-hidden="true" />}
+      mark={<NavProjects size={ICON.sm} aria-hidden="true" />}
       name={projectName}
       title={t("project.shared_workspace")}
       srDetail={t("project.shared_workspace")}

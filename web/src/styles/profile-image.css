@@ -31,14 +31,23 @@
   color: var(--ink-2);
 }
 
-/* Empty states frame the mark themselves, so the bare variant is the glyph
-   alone at its own size — same geometry, no chip. */
-.identity-mark[data-variant="bare"] {
+/* Empty states and the nav rail frame the mark themselves, so these variants
+   are the glyph alone at their own size — same geometry, no chip. */
+.identity-mark[data-variant="bare"],
+.identity-mark[data-variant="outline"] {
   width: auto;
   height: auto;
   padding: 0;
   background: none;
   box-shadow: none;
+}
+
+/* The rail variant inherits the row's ink like every lucide sibling beside
+   it, instead of pinning itself to --ink-2 the way a profile chip does — a
+   nav glyph has to go dim when its row is idle and bright when it is
+   selected. */
+.identity-mark[data-variant="outline"] {
+  color: inherit;
 }
 
 .profile-image-picker {
