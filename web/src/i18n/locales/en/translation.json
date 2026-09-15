@@ -1607,6 +1607,8 @@
     "try_again": "Try again",
     "empty_title": "Your skills library is empty",
     "empty_body": "Upload a skill directory or import one from GitHub.",
+    "empty_filtered_title": "No skills match",
+    "empty_filtered_body": "Try a different search.",
     "library_label": "Skills library",
     "granted_count": "{{count}} granted",
     "member_count": "{{count}} members",
@@ -1770,7 +1772,9 @@
       "invalid-pin": "Select a valid skill version.",
       "revision-not-found": "The selected revision is no longer available.",
       "unsupported-policy-version": "This grant policy version is not supported."
-    }
+    },
+    "search_label": "Search skills",
+    "search_placeholder": "Search skills…"
   },
   "list": {
     "sort_by_ascending": "Sort by {{column}}, ascending",

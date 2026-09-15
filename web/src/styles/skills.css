@@ -44,6 +44,10 @@
   color: var(--ink-3);
 }
 
+/* Same inset as .conversation-list, .agents-roster-groups + .agents-roster-list
+   and .teams-list: --sp-3 top and sides over a --sp-7 bottom run-off. This sat
+   at --sp-2 on top, so the library was the one rail whose first row rode 4px
+   higher under its header than the three beside it. */
 .skills-roster-list {
   flex: 1;
   min-height: 0;
@@ -52,7 +56,7 @@
   flex-direction: column;
   gap: var(--sp-1);
   margin: 0;
-  padding: var(--sp-2) var(--sp-3) var(--sp-7);
+  padding: var(--sp-3) var(--sp-3) var(--sp-7);
   list-style: none;
 }
 

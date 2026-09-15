@@ -1602,6 +1602,8 @@
     "try_again": "再試一次",
     "empty_title": "技能庫仍是空的",
     "empty_body": "上傳技能目錄，或從 GitHub 匯入。",
+    "empty_filtered_title": "沒有符合的技能",
+    "empty_filtered_body": "請嘗試其他搜尋詞。",
     "library_label": "技能庫",
     "granted_count": "已授予 {{count}} 個",
     "member_count": "{{count}} 位成員",
@@ -1765,7 +1767,9 @@
       "invalid-pin": "請選擇有效的技能版本。",
       "revision-not-found": "所選版本已無法使用。",
       "unsupported-policy-version": "不支援此授權策略版本。"
-    }
+    },
+    "search_label": "搜尋技能",
+    "search_placeholder": "搜尋技能…"
   },
   "list": {
     "sort_by_ascending": "依{{column}}升冪排序",
