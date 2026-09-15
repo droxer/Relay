@@ -139,7 +139,10 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
           aria-label={t("thread.choose_computer")}
           title={selectedTitle}
         >
-          {SelectedMark ? <SelectedMark size={ICON.md} aria-hidden="true" /> : null}
+          {/* --icon-sm, matching the readout that replaces this trigger once the
+              thread starts (ThreadRuntimeReadout draws its mark at ICON.sm) and
+              the compact tier the rail sits at. */}
+          {SelectedMark ? <SelectedMark size={ICON.sm} aria-hidden="true" /> : null}
           <span className="thread-runtime-select-name">
             {selected ? runtimeLabel(selected) : t("thread.no_computers")}
           </span>

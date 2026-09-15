@@ -104,7 +104,10 @@
    The agent is the primary choice, so it gets the wider share. */
 .chat-agent-select {
   min-width: 0;
-  max-width: min(280px, 44vw);
+  /* Capped against the rail's compact type (see the density block in
+     composer.css): the same name fits in fewer pixels at --type-label-strong,
+     so the cap comes in with it rather than leaving a 280px plate half-empty. */
+  max-width: min(232px, 40vw);
 }
 
 .chat-agent-select[data-availability="unavailable"] {
