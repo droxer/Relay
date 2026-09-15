@@ -23,6 +23,7 @@ Relay daemons run [Claude Code](https://github.com/anthropics/claude-code), Code
 | **Tasks & routines** | Plan work in a backlog, schedule recurring routines, assign agents or teams, set due dates, and follow dispatch and event history. |
 | **Agents & teams** | Create named agents and teams with profiles, computer placement, workspace files, generated artifacts, and recent activity. |
 | **Projects** | Bind a persistent shared workspace and an ordered roster of project agents to one computer, then run project conversations that share that workspace. |
+| **Skills** | Publish reusable skill bundles, inspect their files and versions, and grant them to individual agents or teams from a shared library. |
 | **Computers** | Enroll employee computers or reconcile managed computers while tracking health, capacity, command leases, and durable identity. |
 | **Chat gateway** | Connect Discord, Telegram, and Lark through one gateway that maps external identities and conversations to Relay. |
 | **Administration** | Operate employees, agents, computers, fleet health, activity, and token usage from one admin area. |
@@ -34,7 +35,7 @@ Relay daemons run [Claude Code](https://github.com/anthropics/claude-code), Code
 Choose where work runs and which named agent or team handles it; Relay gives the goal to the selected participants and lets each agent choose the appropriate execution path.
 
 <p align="center">
-  <img src="docs/images/relay-threads-phosphor.png" alt="Relay thread composer with agent and computer selection" width="960">
+  <img src="docs/images/relay-threads.png" alt="Relay thread composer with agent and computer selection" width="960">
 </p>
 
 ### Plan and dispatch work
@@ -42,7 +43,7 @@ Choose where work runs and which named agent or team handles it; Relay gives the
 The backlog keeps priority, assignment, due date, status, and dispatch context in one view.
 
 <p align="center">
-  <img src="docs/images/relay-backlog-phosphor.png" alt="Relay task backlog" width="960">
+  <img src="docs/images/relay-backlog.png" alt="Relay task backlog" width="960">
 </p>
 
 ### Coordinate agent teams
@@ -50,7 +51,7 @@ The backlog keeps priority, assignment, due date, status, and dispatch context i
 A team workspace gathers the team's active runs, recent threads, and open tasks in one view.
 
 <p align="center">
-  <img src="docs/images/relay-teams-phosphor.png" alt="Relay team workspace" width="960">
+  <img src="docs/images/relay-teams.png" alt="Relay team workspace" width="960">
 </p>
 
 ## Quick start
