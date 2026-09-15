@@ -113,7 +113,7 @@ export function hrefForRoute(route: AppRoute, sessionId?: string | null): string
   });
 }
 
-const AGENT_TABS = new Set(["profile", "activities"]);
+const AGENT_TABS = new Set(["profile", "skills", "activities"]);
 const TEAM_TABS = new Set(["profile", "activities"]);
 const PROJECT_TABS = new Set(["profile", "workspace", "activities"]);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);

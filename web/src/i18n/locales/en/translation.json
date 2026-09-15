@@ -1454,7 +1454,6 @@
     }
   },
   "agents_page": {
-    "skills_title": "Skills",
     "skills_empty": "No skills installed on this agent's computer.",
     "title": "Agents",
     "sub_one": "{{count}} assigned",
@@ -1487,6 +1486,7 @@
     "detail_label": "{{name}} agent details",
     "detail_sections": "Agent detail sections",
     "tab_profile": "Profile",
+    "tab_skills": "Skills",
     "tab_activities": "Activities",
     "activities_load_failed": "Agent activity unavailable.",
     "record_label": "Agent record",
@@ -1653,8 +1653,19 @@
     "agent_granted_group": "Granted by Relay",
     "agent_installed_group": "Installed on this computer",
     "agent_discovery_note": "Managed grants change on the next run. Claude and Codex can also discover project or administrator-installed skills independently.",
-    "unavailable_reason": "Unavailable · {{reason}}",
+    "unavailable": "Unavailable",
     "not_supported": "not supported on this computer",
+    "preview_kicker": "Skill preview",
+    "preview_loading": "Loading file…",
+    "preview_binary": "Binary file — not previewable.",
+    "file_count_one": "{{count}} file",
+    "file_count_other": "{{count}} files",
+    "preview_truncated": "Preview truncated — export the bundle to read the whole file.",
+    "preview_revision": "Revision v{{revision}} · {{channel}}",
+    "channel": {
+      "stable": "stable channel",
+      "latest": "latest channel"
+    },
     "source": {
       "authored": "Authored",
       "upload": "Uploaded",

@@ -9,6 +9,7 @@ import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { AgentMark } from "./AgentMark";
 import { AgentPlacementBadge } from "./AgentPlacementBadge";
 import { AgentProfilePanel } from "./AgentProfilePanel";
+import { AgentSkillsPanel } from "./AgentSkillsPanel";
 import { IdentityMark } from "./IdentityMark";
 import { PageHeader } from "./PageHeader";
 import { ProfileImage } from "./ProfileImagePicker";
@@ -24,9 +25,9 @@ import { RecordBand, type RecordFact } from "./workspace/RecordBand";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ICON } from "./icons";
 
-export type AgentDetailTab = "profile" | "activities";
+export type AgentDetailTab = "profile" | "skills" | "activities";
 
-const DETAIL_TABS: readonly AgentDetailTab[] = ["profile", "activities"];
+const DETAIL_TABS: readonly AgentDetailTab[] = ["profile", "skills", "activities"];
 const ACTIVITY_POLL_MS = 3000;
 
 interface AgentDetailPageProps {
@@ -66,6 +67,7 @@ export function AgentDetailPage({
     ? activityQuery.error instanceof Error ? activityQuery.error.message : String(activityQuery.error)
     : "";
 
+  const skillCount = (agent.skills ?? []).length;
   const placementDescriptions = describeAgentPlacements(agent.placements);
   const primaryPlacement = placementDescriptions.find(
     ({ placement }) => placement.desiredState === "active",
@@ -133,7 +135,9 @@ export function AgentDetailPage({
         toolbar={(
           <TabsList className="workspace-page-tabs" aria-label={t("agents_page.detail_sections")}>
             {DETAIL_TABS.map((tab) => {
-              const count = tab === "activities" && brief ? brief.metrics.sessionCount || undefined : undefined;
+              const count = tab === "activities"
+                ? brief ? brief.metrics.sessionCount || undefined : undefined
+                : tab === "skills" ? skillCount || undefined : undefined;
               return (
                 <TabsTrigger
                   key={tab}
@@ -158,6 +162,9 @@ export function AgentDetailPage({
             canEditMeta={canEditMeta}
             onDirtyChange={onProfileDirtyChange}
           />
+        </TabsContent>
+        <TabsContent value="skills" className="workspace-profile">
+          <AgentSkillsPanel agent={agent} canEdit={canEditMeta} />
         </TabsContent>
         <TabsContent value="activities">
           {activitiesLoading ? (

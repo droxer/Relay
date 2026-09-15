@@ -29,7 +29,8 @@ describe("Agent team management", () => {
     assert.match(appSource, /route === "teams" \? \(\s*<TeamsPage/s);
     assert.match(teamsSource, /className="teams-list"/);
     assert.match(teamsSource, /<TeamWorkspacePage/);
-    assert.match(agentDetailSource, /"profile", "activities"/);
+    // Skills is the agent record's own tab; a workspace tab is what must stay out.
+    assert.match(agentDetailSource, /"profile", "skills", "activities"/);
     assert.doesNotMatch(agentDetailSource, /"workspace"|ThreadWorkspaceFiles|listAgentWorkspaceFiles|getAgentArtifacts|type: "artifact"/);
     assert.match(teamWorkspaceSource, /"profile", "activities"/);
     assert.doesNotMatch(teamWorkspaceSource, /"workspace"|ThreadWorkspaceFiles|teamWorkspaceAgentId/);
