@@ -18,9 +18,10 @@ import { forwardRef, type ReactNode, type SVGProps } from "react";
  *
  *   - 24×24 grid, content inside 3.8–20.2, so the glyph fills the same
  *     optical box as the lucide siblings either side of it (~20 units).
- *   - Corner round-overs of 2.6 on the large shapes and 1.2 on the small
- *     ones — the same 2.6/1.35 relationship the identity marks use, which is
- *     what keeps a hand-drawn shape from reading as a plotted polygon.
+ *   - Corner round-overs on a roughly 2:1 ratio between a glyph's outer shape
+ *     and anything nested inside it (the chip is 3 / 1.5) — the same
+ *     relationship the identity marks use at 2.6 / 1.35, and what keeps a
+ *     hand-drawn shape from reading as a plotted polygon.
  *   - Round caps and joins, and the caller's stroke width (`icons.tsx` wraps
  *     these in `withStandardStroke` exactly as it wraps a lucide icon, so
  *     they take ICON_STROKE by default and the hero tier can still override).
@@ -83,15 +84,22 @@ export const TaskListGlyph = relayGlyph(
 );
 
 /**
- * A computer: a package with a die in it, and two legs.
+ * A computer: a package with a die in it, and four legs.
  *
  * `Cpu` is the accurate noun and was kept through two passes for that reason,
  * but it spends eight pin strokes plus an inner square on a 18px glyph and
  * resolves to hatching — it was measurably the densest mark in the column.
- * Two pins carry the same "this is silicon, not a screen" reading, and they
- * are what stops the outline collapsing into the generic rounded square that
- * a bare package would be. The die is a rounded rect rather than a hard one
- * so the glyph's two shapes agree about corners.
+ * Four pins carry the same "this is silicon, not a screen" reading at a
+ * quarter of the ink, and they are what stops the outline collapsing into the
+ * generic rounded square that a bare package would be. The die is a rounded
+ * rect rather than a hard one so the glyph's two shapes agree about corners.
+ *
+ * The body is 16 units wide so the glyph FILLS the optical box rather than
+ * floating inside it. A first cut drew it at 14.4 against lucide's ~20: no
+ * one can see that at the rail's 18px, and it is unmistakable at the 40px
+ * `ICON.hero` this glyph reaches through `AdminNode` in the computers and
+ * fleet empty states, where it sat small and thin in the middle of its slot.
+ * Check a bespoke glyph inside a drawn 40px guide box, not only in the rail.
  *
  * Sized against its members, not just its siblings: a computer in the list
  * below this destination is drawn by its ownership glyph (`Cloud`, `Laptop`,
@@ -100,10 +108,12 @@ export const TaskListGlyph = relayGlyph(
  */
 export const ChipGlyph = relayGlyph(
   <>
-    <path d="M7.4 5.2h9.2a2.6 2.6 0 0 1 2.6 2.6v8.4a2.6 2.6 0 0 1-2.6 2.6H7.4a2.6 2.6 0 0 1-2.6-2.6V7.8a2.6 2.6 0 0 1 2.6-2.6Z" />
-    <path d="M10.6 9.9h2.8a1.2 1.2 0 0 1 1.2 1.2v1.8a1.2 1.2 0 0 1-1.2 1.2h-2.8a1.2 1.2 0 0 1-1.2-1.2v-1.8a1.2 1.2 0 0 1 1.2-1.2Z" />
-    <path d="M12 2.6v2.6" />
-    <path d="M12 18.8v2.6" />
+    <path d="M7 4.6h10a3 3 0 0 1 3 3v8.8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7.6a3 3 0 0 1 3-3Z" />
+    <path d="M10.8 9.3h2.4a1.5 1.5 0 0 1 1.5 1.5v2.4a1.5 1.5 0 0 1-1.5 1.5h-2.4a1.5 1.5 0 0 1-1.5-1.5v-2.4a1.5 1.5 0 0 1 1.5-1.5Z" />
+    <path d="M9.2 2.6v2" />
+    <path d="M14.8 2.6v2" />
+    <path d="M9.2 19.4v2" />
+    <path d="M14.8 19.4v2" />
   </>,
   "ChipGlyph",
 );
