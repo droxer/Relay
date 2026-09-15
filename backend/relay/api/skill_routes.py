@@ -24,6 +24,9 @@ router = APIRouter()
 # Base64 expands content by 4/3; reserve bounded space for paths and metadata.
 MAX_SKILL_REQUEST_BYTES = ((MAX_REVISION_BYTES + 2) // 3) * 4 + 512 * 1024
 _SIZE_ERRORS = {"file-too-large", "too-many-files", "revision-too-large"}
+# A preview is for reading, not for transferring the bundle: cap the body and
+# say so rather than streaming a megabyte into a drawer.
+PREVIEW_MAX_BYTES = 128 * 1024
 
 
 def skill_error(error: SkillValidationError) -> HTTPException:
@@ -233,6 +236,56 @@ async def promote_revision(
         raise HTTPException(404, "skill-not-found") from error
 
 
+def revision_for_channel(skill: dict[str, Any], channel: str) -> str:
+    if channel not in {"stable", "latest"}:
+        raise HTTPException(422, "invalid-channel")
+    return skill["stableRevisionId"] if channel == "stable" else skill["currentRevisionId"]
+
+
+@router.get("/skills/{skill_id}/files")
+async def read_skill_file(
+    skill_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    path: str,
+    channel: str = "stable",
+) -> dict[str, Any]:
+    """One bundle file's text, for previewing a skill without downloading it.
+
+    Read-only and scoped by the same visibility rule as the skill record, so a
+    preview can never reach a private bundle the viewer cannot already see.
+    Binary files report their size and no content — a preview is for reading.
+    """
+    actor = request_actor(request, ctx.auth_store)
+    skill = visible_skill(ctx, skill_id, actor["employeeId"])
+    revision_id = revision_for_channel(skill, channel)
+    entry = next(
+        (item for item in ctx.skill_store.revision_files(revision_id) if item["path"] == path),
+        None,
+    )
+    if entry is None:
+        raise HTTPException(404, "file-not-found")
+    content = ctx.skill_store.blob(entry["sha256"])
+    if content is None:
+        raise HTTPException(404, "file-not-found")
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return {
+            "path": entry["path"], "bytes": entry["bytes"], "sha256": entry["sha256"],
+            "binary": True, "truncated": False, "content": "",
+        }
+    truncated = len(content) > PREVIEW_MAX_BYTES
+    if truncated:
+        # Decode the whole file first, then cut: slicing bytes can split a
+        # multi-byte character and make a text file look binary.
+        text = content[:PREVIEW_MAX_BYTES].decode("utf-8", errors="ignore")
+    return {
+        "path": entry["path"], "bytes": entry["bytes"], "sha256": entry["sha256"],
+        "binary": False, "truncated": truncated, "content": text,
+    }
+
+
 @router.get("/skills/{skill_id}/export")
 async def export_skill(
     skill_id: str,
@@ -242,13 +295,7 @@ async def export_skill(
 ) -> Response:
     actor = request_actor(request, ctx.auth_store)
     skill = visible_skill(ctx, skill_id, actor["employeeId"])
-    if channel not in {"stable", "latest"}:
-        raise HTTPException(422, "invalid-channel")
-    revision_id = (
-        skill["stableRevisionId"]
-        if channel == "stable"
-        else skill["currentRevisionId"]
-    )
+    revision_id = revision_for_channel(skill, channel)
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry in ctx.skill_store.revision_files(revision_id):

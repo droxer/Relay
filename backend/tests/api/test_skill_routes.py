@@ -393,3 +393,63 @@ def test_owner_can_promote_and_export_a_portable_skill_bundle(client):
     with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
         assert archive.namelist() == ["SKILL.md"]
         assert archive.read("SKILL.md").endswith(b"second")
+
+
+def test_viewer_can_preview_a_skill_file_without_downloading_the_bundle(client):
+    skill = publish(client, name="previewable", visibility="org")
+    url = f"/api/v1/skills/{skill['id']}/files"
+
+    preview = client.get(url, params={"path": "SKILL.md"})
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["path"] == "SKILL.md"
+    assert body["binary"] is False
+    assert body["truncated"] is False
+    assert "Review carefully." in body["content"]
+
+    assert client.get(url, params={"path": "MISSING.md"}).status_code == 404
+    assert client.get(url, params={"path": "SKILL.md", "channel": "nope"}).status_code == 422
+
+    # An org-visible skill previews for a colleague; a private one never does.
+    login(client, "bob")
+    assert client.get(url, params={"path": "SKILL.md"}).status_code == 200
+    login(client, "alice")
+    private = publish(client, name="sealed")
+    login(client, "bob")
+    response = client.get(
+        f"/api/v1/skills/{private['id']}/files", params={"path": "SKILL.md"}
+    )
+    assert response.status_code == 404
+
+
+def test_preview_reports_binary_and_truncated_bundle_files(client):
+    skill = publish(client, name="mixed")
+    long_text = "x" * (200 * 1024)
+    revised = client.post(
+        f"/api/v1/skills/{skill['id']}/revisions",
+        json={
+            "files": [
+                {
+                    "path": "SKILL.md",
+                    "contentBase64": base64.b64encode(
+                        f"---\nname: mixed\ndescription: Mixed\n---\n{long_text}".encode()
+                    ).decode(),
+                },
+                {
+                    "path": "logo.png",
+                    "contentBase64": base64.b64encode(b"\x89PNG\r\n\x1a\n\xff\xfe").decode(),
+                },
+            ]
+        },
+    )
+    assert revised.status_code == 201, revised.text
+    url = f"/api/v1/skills/{skill['id']}/files"
+
+    text = client.get(url, params={"path": "SKILL.md", "channel": "latest"}).json()
+    assert text["truncated"] is True
+    assert len(text["content"]) == 128 * 1024
+    assert text["bytes"] > len(text["content"])
+
+    binary = client.get(url, params={"path": "logo.png", "channel": "latest"}).json()
+    assert binary["binary"] is True
+    assert binary["content"] == ""

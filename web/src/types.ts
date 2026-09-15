@@ -937,3 +937,12 @@ export interface SkillDetail extends SkillRecord {
   assignments: SkillAssignment[];
 }
 export interface SkillsResponse { skills: SkillRecord[] }
+/** One bundle file read back for preview — text only, capped server-side. */
+export interface SkillFilePreview {
+  path: string;
+  bytes: number;
+  sha256: string;
+  binary: boolean;
+  truncated: boolean;
+  content: string;
+}

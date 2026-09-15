@@ -1449,7 +1449,6 @@
     }
   },
   "agents_page": {
-    "skills_title": "技能",
     "skills_empty": "该智能体的电脑上未安装技能。",
     "title": "智能体",
     "sub_one": "已分配 {{count}} 个",
@@ -1482,6 +1481,7 @@
     "detail_label": "{{name}} 智能体详情",
     "detail_sections": "智能体详情分区",
     "tab_profile": "配置",
+    "tab_skills": "技能",
     "tab_activities": "活动",
     "activities_load_failed": "智能体活动不可用。",
     "record_label": "智能体档案",
@@ -1648,8 +1648,19 @@
     "agent_granted_group": "Relay 授予",
     "agent_installed_group": "此电脑已安装",
     "agent_discovery_note": "托管授权会在下次运行时变更。Claude 和 Codex 仍可独立发现项目或管理员安装的技能。",
-    "unavailable_reason": "不可用 · {{reason}}",
+    "unavailable": "不可用",
     "not_supported": "此电脑不支持",
+    "preview_kicker": "技能预览",
+    "preview_loading": "正在加载文件…",
+    "preview_binary": "二进制文件 — 无法预览。",
+    "file_count_one": "{{count}} 个文件",
+    "file_count_other": "{{count}} 个文件",
+    "preview_truncated": "预览已截断 — 导出技能包可查看完整文件。",
+    "preview_revision": "版本 v{{revision}} · {{channel}}",
+    "channel": {
+      "stable": "稳定通道",
+      "latest": "最新通道"
+    },
     "source": {
       "authored": "编写",
       "upload": "上传",

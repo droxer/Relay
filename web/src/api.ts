@@ -69,6 +69,7 @@ import type {
   TaskWorkspaceFileResponse,
   SkillDetail,
   SkillFileInput,
+  SkillFilePreview,
   SkillRecord,
   SkillsResponse,
   SkillVisibility,
@@ -992,4 +993,5 @@ export function revokeSkill(skillId: string, agentId: string): Promise<void> { r
 export function assignSkill(skillId: string, input: { targetType: "employee" | "team" | "project" | "agent" | "org"; targetId: string; mode?: "optional" | "required" | "suggested"; pin?: "stable" | "latest" | { revisionId: string }; invocation?: "implicit" | "explicit" }) { return apiJson(`/skills/${encodeURIComponent(skillId)}/assignments`, { method: "POST", body: input }); }
 export function revokeSkillAssignment(skillId: string, assignmentId: string): Promise<void> { return apiJson(`/skills/${encodeURIComponent(skillId)}/assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" }); }
 export function promoteSkillRevision(skillId: string, revisionId: string): Promise<SkillRecord> { return apiJson(`/skills/${encodeURIComponent(skillId)}/revisions/${encodeURIComponent(revisionId)}/promote`, { method: "POST", body: {} }); }
+export function readSkillFile(skillId: string, path: string, channel: "stable" | "latest" = "stable", signal?: AbortSignal): Promise<SkillFilePreview> { return apiJson(`/skills/${encodeURIComponent(skillId)}/files?path=${encodeURIComponent(path)}&channel=${channel}`, { signal }); }
 export function skillExportUrl(skillId: string, channel: "stable" | "latest" = "stable") { return `/api/v1/skills/${encodeURIComponent(skillId)}/export?channel=${channel}`; }
