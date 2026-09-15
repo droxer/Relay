@@ -32,7 +32,7 @@
 }
 
 .thread-runtime-select {
-  max-width: min(240px, 34vw);
+  max-width: min(208px, 30vw);
   min-width: 0;
 }
 
@@ -195,8 +195,71 @@
   gap: var(--sp-2);
   width: min(100%, var(--thread-measure));
   min-width: 0;
-  min-height: var(--control-h-sm);
+  /* Matches the compact tier its triggers now sit at (see below), so the rail
+     reserves exactly the height it draws instead of padding 8px of air above
+     the card. */
+  min-height: var(--control-h-xs);
   margin: 0 auto var(--sp-2);
+}
+
+/* Rail density — the whole rail is dense in-row chrome, not a form.
+   Both pickers came in at the standalone-control tier (--control-h-sm, 40px,
+   a 24px identity mark, body type), which is the size a filter chip or a page
+   tab gets when it IS the row. Here they are not: they sit on the panel ground
+   as the two-line preamble to a draft, beside a chrome-less "Runs on <machine>"
+   readout set in --type-label. At 40px the pair out-weighed the card they
+   describe — two plates the height of the send disc, stacked above a 56px
+   field — and the picker type read a full rung larger than the fact next to it.
+
+   --control-h-xs is the ladder's entry for exactly this ("dense in-row chrome,
+   small toggles, segmented buttons"), and it is safe to drop to on desktop
+   because a11y.css raises every [data-slot="select-trigger"] back to
+   --touch-target on coarse pointers. Scoped to .composer-targets so the same
+   primitives keep their normal size in the drawers and forms. */
+.composer-targets [data-slot="select-trigger"] {
+  height: var(--control-h-xs);
+  gap: var(--sp-1-5);
+  padding-inline: var(--sp-2);
+  /* One type size across the rail: the picker and the readout beside it now
+     agree, and the pickable one separates by weight rather than by scale. */
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+/* The trigger's own glyphs — the computer's ownership mark and the chevron —
+   step down with it. Direct children only: an identity mark's artwork is
+   nested inside .agent-state and takes its size from that box. */
+.composer-targets [data-slot="select-trigger"] > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* The identity mark drops to the dense-row avatar rung, and its presence pip
+   with it — --dot-lg on a 20px box is a quarter of the mark. Same
+   half-on/half-off corner straddle as .agent-state::after, re-struck for the
+   smaller dot. */
+/* Mark-to-name gap follows the mark down a rung: --sp-2 was struck for the
+   24px box and leaves the 20px one looking detached from its name. */
+.composer-targets .roster-trigger {
+  gap: var(--sp-1-5);
+}
+
+.composer-targets .agent-state {
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+}
+
+.composer-targets .agent-state::after {
+  right: -2px;
+  bottom: -2px;
+  width: var(--dot);
+  height: var(--dot);
+}
+
+/* The settled readout sits on the same 32px line as the pickers without
+   forcing the rail taller. */
+.composer-context {
+  min-height: var(--control-h-xs);
 }
 
 .composer-input-wrap {
