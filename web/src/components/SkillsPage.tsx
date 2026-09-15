@@ -19,6 +19,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "./PageHeader";
+import { SearchInput } from "@/components/ui/search-input";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
@@ -72,6 +73,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const { agents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const detailQuery = useSkill(selectedId);
   const [mode, setMode] = useState<CreateMode | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -222,6 +224,15 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const sourceLabelId = `${drawerId}-source`;
   const visibilityLabelId = `${drawerId}-visibility`;
   const editorVisibilityLabelId = `${drawerId}-editor-visibility`;
+  /* Matched against everything the row actually prints — the display name and
+     the slug beneath it — so a search never hides a row whose visible text
+     contains the term. */
+  const needle = query.trim().toLowerCase();
+  const visibleSkills = needle
+    ? skills.filter((item) =>
+        `${item.displayName} ${item.slug} ${item.description}`.toLowerCase().includes(needle),
+      )
+    : skills;
 
   /* The landing frame is the roster frame every other rail route uses: a
      <PageHeader> over the list inside the rail, not a full-width banner above
@@ -249,6 +260,23 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             </Button>
           }
         />
+
+        {/* The shared filter band every list rail carries (inputs.css). The
+            library rail shipped without one, so it was the only roster of the
+            four that could not be searched — and the only one whose header sat
+            straight on its list. */}
+        <div className="list-filter-bar">
+          <SearchInput
+            className="list-filter-search"
+            iconSize={ICON.sm}
+            label={t("skills.search_label")}
+            name="skills-query"
+            value={query}
+            placeholder={t("skills.search_placeholder")}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+
         {skillsQuery.isLoading ? (
           <div className="route-loading" role="status" aria-live="polite">
             {t("skills.loading")}
@@ -263,14 +291,19 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               </Button>
             }
           />
-        ) : !skills.length ? (
+        ) : !visibleSkills.length ? (
+          /* Same split the agent and team rosters make: a library with nothing
+             in it offers the create action, a library filtered down to nothing
+             does not — the fix there is to change the search, not to publish. */
           <RelayEmptyState
-            title={t("skills.empty_title")}
-            body={t("skills.empty_body")}
+            title={skills.length ? t("skills.empty_filtered_title") : t("skills.empty_title")}
+            body={skills.length ? t("skills.empty_filtered_body") : t("skills.empty_body")}
             actions={
-              <Button type="button" variant="outline" onClick={openCreate}>
-                {t("skills.publish_first")}
-              </Button>
+              skills.length ? undefined : (
+                <Button type="button" variant="outline" onClick={openCreate}>
+                  {t("skills.publish_first")}
+                </Button>
+              )
             }
           />
         ) : (
@@ -280,7 +313,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
              on the inner button (that button is the focus target), and one
              meta line under the name. */
           <ul className="skills-roster-list" data-density="compact">
-            {skills.map((item) => (
+            {visibleSkills.map((item) => (
               <li
                 key={item.id}
                 className="skills-roster-row rail-row"
