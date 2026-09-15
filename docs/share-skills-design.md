@@ -71,8 +71,8 @@ Published bundles conform to the Agent Skills specification:
 - Pi receives paths from a named immutable run view rather than hash-named
   content-store directories.
 
-The full compliance evidence is in
-`docs/testing/agent-skills-spec-compliance.tdd.md`.
+Compliance is enforced by the skills test suites under `backend/tests/`
+(bundle, store, import, grants, routes, and dispatch coverage).
 
 ## Storage
 
