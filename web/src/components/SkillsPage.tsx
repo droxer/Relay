@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createSkill,
@@ -12,9 +12,10 @@ import {
 import { useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
-import type { CurrentUser, SkillFileInput, SkillVisibility } from "../types";
+import type { CurrentUser, SkillFileInput, SkillsResponse, SkillVisibility } from "../types";
 import { ActionAdd, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "./PageHeader";
@@ -23,15 +24,19 @@ import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
 
-type CreateMode = "author" | "upload" | "github";
+type CreateMode = "upload" | "github";
+const SOURCE_LABELS: Record<CreateMode, string> = {
+  upload: "skills.upload_bundle",
+  github: "skills.github",
+};
 interface SkillDraft {
-  name: string; namespace: string; displayName: string; description: string;
-  visibility: SkillVisibility; instructions: string; files: SkillFileInput[];
+  name: string; namespace: string;
+  visibility: SkillVisibility; files: SkillFileInput[];
   url: string; ref: string; subpath: string;
 }
 const EMPTY_DRAFT: SkillDraft = {
-  name: "", namespace: "", displayName: "", description: "",
-  visibility: "private", instructions: "", files: [], url: "", ref: "HEAD", subpath: "",
+  name: "", namespace: "",
+  visibility: "private", files: [], url: "", ref: "HEAD", subpath: "",
 };
 function encodeBytes(bytes: Uint8Array) {
   let binary = "";
@@ -39,14 +44,22 @@ function encodeBytes(bytes: Uint8Array) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
   return btoa(binary);
 }
-function encodeText(value: string) {
-  return encodeBytes(new TextEncoder().encode(value));
-}
 async function encodeFiles(list: FileList): Promise<SkillFileInput[]> {
+  const files = [...list];
+  if (files.length > 300) throw new Error("too-many-files");
+  if (files.some((file) => file.size > 1024 * 1024)) throw new Error("file-too-large");
+  if (files.reduce((bytes, file) => bytes + file.size, 0) > 4 * 1024 * 1024)
+    throw new Error("revision-too-large");
+  const paths = files.map((file) => file.webkitRelativePath
+    ? file.webkitRelativePath.split("/").slice(1).join("/") : file.name);
+  if (!paths.includes("SKILL.md")) throw new Error("skill-md-required");
   return Promise.all(
-    [...list].map(async (file) => ({
-      path: (file.webkitRelativePath || file.name).replace(/^\.\//, ""),
-      contentBase64: encodeBytes(new Uint8Array(await file.arrayBuffer())),
+    files.map(async (file, index) => ({
+      // Directory pickers include the selected folder; bundle paths start inside it.
+      path: paths[index]!,
+      contentBase64: encodeBytes(new Uint8Array(await file.arrayBuffer().catch(() => {
+        throw new Error("file-read-failed");
+      }))),
     })),
   );
 }
@@ -54,6 +67,7 @@ async function encodeFiles(list: FileList): Promise<SkillFileInput[]> {
 export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const drawerId = useId();
   const skillsQuery = useSkills();
   const { agents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
@@ -63,10 +77,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* The publish drawer and the detail editor both edit a display name, a
-     description, and a visibility. They used to share one set of fields, so
-     selecting a skill pre-filled the publish form with that skill's metadata
-     and typing in the drawer rewrote the pending edits underneath it. */
+  const uploadRequest = useRef({ draft: 0, revision: 0 });
+  // Publication drafts must not overwrite the selected skill's metadata editor.
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const patchDraft = (patch: Partial<SkillDraft>) =>
     setDraft((current) => ({ ...current, ...patch }));
@@ -83,6 +95,29 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     return t(`skills.errors.${code}`, { defaultValue: t("skills.errors.unknown") });
   };
   const owned = skill?.ownerEmployeeId === currentUser.employeeId;
+  useEffect(() => () => {
+    uploadRequest.current.draft++;
+    uploadRequest.current.revision++;
+  }, []);
+  useEffect(() => {
+    uploadRequest.current.revision++;
+    setRevisionFiles([]);
+    setRevisionNote("");
+    setError(null);
+  }, [selectedId]);
+  async function readBundle(list: FileList, target: "draft" | "revision") {
+    const request = ++uploadRequest.current[target];
+    const setFiles = (files: SkillFileInput[]) => target === "draft"
+      ? patchDraft({ files }) : setRevisionFiles(files);
+    setFiles([]);
+    setError(null);
+    try {
+      const files = await encodeFiles(list);
+      if (request === uploadRequest.current[target]) setFiles(files);
+    } catch (error) {
+      if (request === uploadRequest.current[target]) setError(errorText(error));
+    }
+  }
   useEffect(() => {
     if (!selectedId && skillsQuery.data?.skills[0])
       setSelectedId(skillsQuery.data.skills[0].id);
@@ -102,9 +137,10 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   function openCreate() {
     setDraft(EMPTY_DRAFT);
     setError(null);
-    setMode("author");
+    setMode("upload");
   }
   function resetCreate() {
+    uploadRequest.current.draft++;
     setMode(null);
     setDraft(EMPTY_DRAFT);
     setError(null);
@@ -116,8 +152,6 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       const shared = {
         name: draft.name,
         ...(draft.namespace ? { namespace: draft.namespace } : {}),
-        ...(draft.displayName ? { displayName: draft.displayName } : {}),
-        ...(draft.description ? { description: draft.description } : {}),
         visibility: draft.visibility,
       };
       const created =
@@ -125,18 +159,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           ? await importSkill({ ...shared, url: draft.url, ref: draft.ref, subpath: draft.subpath })
           : await createSkill({
               ...shared,
-              source: mode === "upload" ? "upload" : "authored",
-              files:
-                mode === "author"
-                  ? [
-                      {
-                        path: "SKILL.md",
-                        contentBase64: encodeText(
-                          `---\nname: ${JSON.stringify(draft.name)}\ndescription: ${JSON.stringify(draft.description)}\n---\n\n${draft.instructions}\n`,
-                        ),
-                      },
-                    ]
-                  : draft.files,
+              source: "upload",
+              files: draft.files,
             });
       resetCreate();
       setSelectedId(created.id);
@@ -180,6 +204,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     setBusy(true);
     try {
       await deleteSkill(skill.id);
+      // Remove the cached roster entry before automatic selection can pick it again.
+      await queryClient.cancelQueries({ queryKey: [SKILLS_QUERY_KEY], exact: true });
+      queryClient.setQueryData<SkillsResponse>([SKILLS_QUERY_KEY], (current) => current
+        ? { ...current, skills: current.skills.filter((item) => item.id !== skill.id) }
+        : current);
       setSelectedId(null);
       await refresh();
     } catch (err) {
@@ -190,6 +219,9 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   }
 
   const skills = skillsQuery.data?.skills ?? [];
+  const sourceLabelId = `${drawerId}-source`;
+  const visibilityLabelId = `${drawerId}-visibility`;
+  const editorVisibilityLabelId = `${drawerId}-editor-visibility`;
 
   /* The landing frame is the roster frame every other rail route uses: a
      <PageHeader> over the list inside the rail, not a full-width banner above
@@ -341,57 +373,81 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             {owned ? (
               <section className="skill-owner-tools">
                 <h3>{t("skills.manage")}</h3>
-                <label>
-                  {t("skills.display_name")}
+                <Field label={t("skills.display_name")} required hint={t("skills.display_name_hint")}>
                   <Input
+                    required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                   />
-                </label>
-                <label>
-                  {t("skills.description")}
+                </Field>
+                <Field label={t("skills.description")} required hint={t("skills.description_hint")}>
                   <Textarea
+                    required
+                    rows={2}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
-                </label>
-                <div className="skill-segment">
-                  <button
-                    className={visibility === "private" ? "active" : ""}
-                    onClick={() => setVisibility("private")}
+                </Field>
+                <Field
+                  className="skill-visibility-field"
+                  label={t("skills.visibility_label")}
+                  labelId={editorVisibilityLabelId}
+                  wrapper="div"
+                  hint={t(`skills.visibility_hints.${visibility}`)}
+                >
+                  <div
+                    className="skill-segment"
+                    role="group"
+                    aria-labelledby={editorVisibilityLabelId}
                   >
-                    {t("skills.visibility.private")}
-                  </button>
-                  <button
-                    className={visibility === "org" ? "active" : ""}
-                    onClick={() => setVisibility("org")}
-                  >
-                    {t("skills.visibility.org")}
-                  </button>
-                </div>
+                    {(["private", "org"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={visibility === option ? "active" : ""}
+                        aria-pressed={visibility === option}
+                        onClick={() => setVisibility(option)}
+                      >
+                        {t(`skills.visibility.${option}`)}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
                 {skill.source === "git" ? null : (
                   <>
-                    <label>
-                      {t("skills.new_bundle")}
+                    <Field
+                      label={t("skills.new_bundle")}
+                      optional={t("skills.optional")}
+                      hint={
+                        revisionFiles.length
+                          ? t("skills.files_ready", { count: revisionFiles.length })
+                          : t("skills.select_directory")
+                      }
+                    >
                       <input
+                        key={skill.id}
                         type="file"
+                        disabled={busy}
+                        className="skill-file-input"
+                        data-filled={revisionFiles.length ? "true" : undefined}
                         multiple
                         {...({ webkitdirectory: "" } as object)}
                         onChange={(e) =>
                           e.target.files &&
-                          void encodeFiles(e.target.files).then(
-                            setRevisionFiles,
-                          )
+                          void readBundle(e.target.files, "revision")
                         }
                       />
-                    </label>
-                    <label>
-                      {t("skills.revision_note")}
+                    </Field>
+                    <Field
+                      label={t("skills.revision_note")}
+                      optional={t("skills.optional")}
+                      hint={t("skills.revision_note_hint")}
+                    >
                       <Input
                         value={revisionNote}
                         onChange={(e) => setRevisionNote(e.target.value)}
                       />
-                    </label>
+                    </Field>
                   </>
                 )}
                 {/* Fields above, actions in one row below — the shape every
@@ -432,7 +488,10 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                       {t("skills.publish_revision")}
                     </Button>
                   )}
-                  <Button disabled={busy} onClick={() => void saveMetadata()}>
+                  <Button
+                    disabled={busy || !displayName.trim() || !description.trim()}
+                    onClick={() => void saveMetadata()}
+                  >
                     {t("skills.save_details")}
                   </Button>
                 </footer>
@@ -445,136 +504,155 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       {mode ? (
         <Drawer
           open
-          onClose={resetCreate}
+          onClose={() => { if (!busy) resetCreate(); }}
+          kicker={t("skills.eyebrow")}
           title={t("skills.publish_title")}
+          subtitle={t("skills.publish_subtitle")}
+          width="form"
           closeLabel={t("skills.close")}
           bodyClassName="skill-drawer"
         >
-            <div className="skill-tabs">
-              <button
-                className={mode === "author" ? "active" : ""}
-                onClick={() => setMode("author")}
-              >
-                {t("skills.author")}
-              </button>
-              <button
-                className={mode === "upload" ? "active" : ""}
-                onClick={() => setMode("upload")}
-              >
-                {t("skills.upload_bundle")}
-              </button>
-              <button
-                className={mode === "github" ? "active" : ""}
-                onClick={() => setMode("github")}
-              >
-                {t("skills.github")}
-              </button>
-            </div>
-            <label>
-              {t("skills.skill_name")}
+            <Field
+              label={t("skills.source_label")}
+              labelId={sourceLabelId}
+              wrapper="div"
+              hint={t(`skills.source_hints.${mode}`)}
+            >
+              <div className="skill-tabs" role="group" aria-labelledby={sourceLabelId}>
+                {(["upload", "github"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={mode === option ? "active" : ""}
+                    aria-pressed={mode === option}
+                    disabled={busy}
+                    onClick={() => {
+                      if (mode === option) return;
+                      uploadRequest.current.draft++;
+                      patchDraft({ files: [] });
+                      setError(null);
+                      setMode(option);
+                    }}
+                  >
+                    {t(SOURCE_LABELS[option])}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label={t("skills.skill_name")} required hint={t("skills.skill_name_hint")}>
               <Input
+                data-modal-initial-focus
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={draft.name}
                 onChange={(e) => patchDraft({ name: e.target.value })}
                 placeholder="release-notes"
               />
-            </label>
-            <label>
-              {t("skills.namespace")}
+            </Field>
+            <Field
+              label={t("skills.namespace")}
+              optional={t("skills.optional")}
+              hint={t("skills.namespace_hint")}
+            >
               <Input
+                autoComplete="off"
+                spellCheck={false}
                 value={draft.namespace}
                 onChange={(e) => patchDraft({ namespace: e.target.value })}
-                placeholder={t("skills.optional")}
+                placeholder="acme"
               />
-            </label>
-            <label>
-              {t("skills.description")}
-              <Textarea
+            </Field>
+            {mode === "upload" ? (
+              <Field
+                label={t("skills.bundle_directory")}
                 required
-                value={draft.description}
-                onChange={(e) => patchDraft({ description: e.target.value })}
-              />
-            </label>
-            {mode === "author" ? (
-              <label>
-                {t("skills.instructions")}
-                <Textarea
-                  rows={10}
-                  value={draft.instructions}
-                  onChange={(e) => patchDraft({ instructions: e.target.value })}
-                  placeholder={t("skills.instructions_placeholder")}
-                />
-              </label>
-            ) : mode === "upload" ? (
-              <label>
-                {t("skills.bundle_directory")}
+                hint={
+                  draft.files.length
+                    ? t("skills.files_ready", { count: draft.files.length })
+                    : t("skills.select_directory")
+                }
+              >
                 <input
                   type="file"
+                  disabled={busy}
+                  className="skill-file-input"
+                  data-filled={draft.files.length ? "true" : undefined}
+                  required
                   multiple
                   {...({ webkitdirectory: "" } as object)}
                   onChange={(e) =>
                     e.target.files &&
-                    void encodeFiles(e.target.files).then((files) => patchDraft({ files }))
+                    void readBundle(e.target.files, "draft")
                   }
                 />
-                <small>
-                  {draft.files.length
-                    ? t("skills.files_ready", { count: draft.files.length })
-                    : t("skills.select_directory")}
-                </small>
-              </label>
+              </Field>
             ) : (
               <>
-                <label>
-                  {t("skills.repository_url")}
+                <Field label={t("skills.repository_url")} required>
                   <Input
+                    required
+                    autoComplete="off"
+                    spellCheck={false}
                     value={draft.url}
                     onChange={(e) => patchDraft({ url: e.target.value })}
                     placeholder="https://github.com/org/repo"
                   />
-                </label>
-                <label>
-                  {t("skills.git_ref")}
-                  <Input value={draft.ref} onChange={(e) => patchDraft({ ref: e.target.value })} />
-                </label>
-                <label>
-                  {t("skills.subpath")}
-                  <Input
-                    value={draft.subpath}
-                    onChange={(e) => patchDraft({ subpath: e.target.value })}
-                    placeholder="skills/my-skill"
-                  />
-                </label>
+                </Field>
+                <div className="skill-field-row">
+                  <Field label={t("skills.git_ref")} optional={t("skills.optional")}>
+                    <Input
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={draft.ref}
+                      onChange={(e) => patchDraft({ ref: e.target.value })}
+                    />
+                  </Field>
+                  <Field label={t("skills.subpath")} optional={t("skills.optional")}>
+                    <Input
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={draft.subpath}
+                      onChange={(e) => patchDraft({ subpath: e.target.value })}
+                      placeholder="skills/my-skill"
+                    />
+                  </Field>
+                </div>
               </>
             )}
-            <div className="skill-segment">
-              <button
-                className={draft.visibility === "private" ? "active" : ""}
-                onClick={() => patchDraft({ visibility: "private" })}
-              >
-                {t("skills.visibility.private")}
-              </button>
-              <button
-                className={draft.visibility === "org" ? "active" : ""}
-                onClick={() => patchDraft({ visibility: "org" })}
-              >
-                {t("skills.visibility.org")}
-              </button>
-            </div>
+            <Field
+              label={t("skills.visibility_label")}
+              labelId={visibilityLabelId}
+              wrapper="div"
+              hint={t(`skills.visibility_hints.${draft.visibility}`)}
+            >
+              <div className="skill-segment" role="group" aria-labelledby={visibilityLabelId}>
+                {(["private", "org"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={draft.visibility === option ? "active" : ""}
+                    aria-pressed={draft.visibility === option}
+                    onClick={() => patchDraft({ visibility: option })}
+                  >
+                    {t(`skills.visibility.${option}`)}
+                  </button>
+                ))}
+              </div>
+            </Field>
             {error ? (
               <p role="alert" className="skill-error">
                 {error}
               </p>
             ) : null}
             <footer>
-              <Button variant="outline" onClick={resetCreate}>
+              <Button variant="outline" disabled={busy} onClick={resetCreate}>
                 {t("skills.cancel")}
               </Button>
               <Button
                 disabled={
                   busy ||
-                  !draft.name ||
-                  !draft.description ||
+                  !draft.name.trim() ||
                   (mode === "upload" && !draft.files.length) ||
                   (mode === "github" && !draft.url)
                 }

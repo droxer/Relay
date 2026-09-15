@@ -259,29 +259,21 @@
 }
 
 /* A segmented control is a control, not a field: it sizes to its options
-   instead of stretching the width of a 920px pane. */
-.skill-owner-tools .skill-segment {
+   instead of stretching the width of a 920px pane. The width now lives on the
+   <Field> wrapper, since that — not the segment — is the grid item. */
+.skill-owner-tools .skill-visibility-field {
   justify-self: start;
   min-width: 260px;
 }
 
-.skill-owner-tools label,
-.skill-drawer label {
+/* Only the share drawer's target rows hand-roll a label now — every editable
+   field in this surface renders through the <Field> primitive, which owns its
+   own label / required / optional / hint stack. A descendant `label` rule here
+   would outrank the primitive's utilities and silently restyle it. */
+.skill-picker-list label {
   display: grid;
-  gap: var(--sp-2);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
-}
-
-/* The label wraps its own control, so the strong label role cascaded into the
-   field: every value and placeholder in these drawers rendered at 700 while
-   the same primitives read 400 everywhere else in the app. Only the weight is
-   reset — size, face and chrome stay the primitive's. */
-.skill-owner-tools label [data-slot="input"],
-.skill-owner-tools label [data-slot="textarea"],
-.skill-drawer label [data-slot="input"],
-.skill-drawer label [data-slot="textarea"] {
-  font-weight: 400;
 }
 
 /* Segmented control and drawer tabs, on the .adm-profile-segment recipe: a
@@ -380,14 +372,10 @@
   gap: var(--sp-0-5);
 }
 
-.skill-picker-list small,
-.skill-drawer label small {
+.skill-picker-list small {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
-}
-
-.skill-picker-list small {
   text-transform: capitalize;
 }
 
@@ -398,10 +386,74 @@
   color: var(--err);
 }
 
-.skill-drawer input[type="file"] {
+/* The bundle picker is the one native control in these drawers. It keeps the
+   OS file dialog but takes the field's shape: a dashed well (nothing is chosen
+   until you choose it) whose own button borrows the outline-button recipe.
+   Once a directory is picked the well solidifies, so "empty" and "ready" read
+   apart at a glance. */
+.skill-file-input {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--control-h);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--control-border);
+  border-radius: var(--r-2);
+  background: var(--field-on-overlay);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
+  cursor: pointer;
+}
+
+.skill-file-input[data-filled="true"] {
+  border-style: solid;
+  color: var(--ink-1);
+}
+
+.skill-file-input::file-selector-button {
+  height: var(--control-h-sm);
+  margin-right: var(--sp-3);
+  padding: 0 var(--sp-3);
+  border: 0.5px solid var(--control-border);
+  border-radius: var(--r-2);
+  background: var(--control-fill);
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.skill-file-input:hover::file-selector-button {
+  background: var(--control-fill-hover);
+}
+
+/* Keep the two short GitHub fields together when there is room. */
+.skill-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+}
+
+/* A share target is selected, not merely hoverable: the chip and the agent row
+   both take the action's tint so the footer count always has a visible
+   antecedent. Before this, clicking "All current and future agents" changed
+   nothing on screen. */
+.skill-target-chip[data-selected="true"],
+.skill-picker-list label[data-selected="true"] {
+  border-color: var(--action);
+  background: var(--action-soft);
+  color: var(--ink-1);
+}
+
+@media (max-width: 480px) {
+  /* Below the drawer's own width the paired GitHub fields stack rather than
+     splitting a phone-width sheet into two unusably narrow inputs. */
+  .skill-field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 820px) {
@@ -428,4 +480,10 @@
   .skill-stats {
     grid-template-columns: 1fr;
   }
+}
+
+/* The share drawer's one requirement, stated where the fields would be. It
+   reads as guidance, not as an error, until the user tries to act. */
+.skill-requirement {
+  color: var(--ink-2);
 }

@@ -23,6 +23,10 @@ const LABELS: Record<string, string> = {
   "skills.cancel": "Cancel",
   "skills.visibility.private": "Private",
   "skills.visibility.org": "Organization",
+  "skills.visibility_label": "Visibility",
+  "skills.optional": "optional",
+  "skills.revision_note": "Revision note",
+  "skills.new_bundle": "New bundle",
 };
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => LABELS[key] ?? key, i18n: { language: "en" } }),
@@ -58,8 +62,8 @@ it("keeps the publish draft out of the selected skill's editor", async () => {
       <SkillsPage currentUser={{ employeeId: "employee-1" } as any} />
     </QueryClientProvider>,
   );
-  const editorName = () => screen.getByLabelText("Display name") as HTMLInputElement;
-  const descriptions = () => screen.getAllByLabelText("Description") as HTMLTextAreaElement[];
+  const editorName = () => screen.getByLabelText(/^Display name/) as HTMLInputElement;
+  const descriptions = () => screen.getAllByLabelText(/^Description/) as HTMLTextAreaElement[];
   expect(editorName().value).toBe("Release notes");
   expect(descriptions()).toHaveLength(1);
   expect(descriptions()[0]!.value).toBe("Draft concise release notes");
@@ -67,16 +71,40 @@ it("keeps the publish draft out of the selected skill's editor", async () => {
   /* The create affordance is the rails' shared ghost plus, named by its
      tooltip; query it by the class every roster header uses. */
   await user.click(document.querySelector(".page-header-icon-action") as HTMLElement);
-  // The editor's field stays first in the DOM; the drawer's is the second.
-  const [editorDescription, draftDescription] = descriptions();
-  expect((screen.getByLabelText("Skill name") as HTMLInputElement).value).toBe("");
-  expect(draftDescription!.value).toBe("");
+  // Bundle metadata comes from SKILL.md, so only the editor has a description.
+  const [editorDescription] = descriptions();
+  expect((screen.getByLabelText(/^Skill name/) as HTMLInputElement).value).toBe("");
+  expect(descriptions()).toHaveLength(1);
   expect(editorDescription!.value).toBe("Draft concise release notes");
 
-  await user.type(draftDescription!, "Summarize an incident");
+  await user.type(screen.getByLabelText(/^Skill name/), "incident-summary");
   expect(descriptions()[0]!.value).toBe("Draft concise release notes");
 
   await user.click(screen.getByRole("button", { name: "Cancel" }));
   expect(editorName().value).toBe("Release notes");
   expect(descriptions()[0]!.value).toBe("Draft concise release notes");
+});
+
+/* The editor's fields carry the same required grammar as the publish drawer,
+   and Save cannot fire on a record stripped of the two fields it needs. */
+it("marks the editor's required fields and gates Save on them", async () => {
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <SkillsPage currentUser={{ employeeId: "employee-1" } as any} />
+    </QueryClientProvider>,
+  );
+  const field = (label: string) =>
+    screen.getByLabelText(new RegExp(`^${label}`)).closest('[data-slot="field"]') as HTMLElement;
+  expect(field("Display name").textContent).toContain("*");
+  expect(field("Description").textContent).toContain("*");
+  expect(field("Revision note").textContent).toContain("optional");
+  expect(field("Revision note").textContent).not.toContain("*");
+
+  const save = () => screen.getByRole("button", { name: "Save details" }) as HTMLButtonElement;
+  expect(save().disabled).toBe(false);
+  await user.clear(screen.getByLabelText(/^Display name/));
+  expect(save().disabled).toBe(true);
+  await user.type(screen.getByLabelText(/^Display name/), "Release notes");
+  expect(save().disabled).toBe(false);
 });
