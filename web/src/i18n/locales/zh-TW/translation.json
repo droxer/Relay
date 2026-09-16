@@ -201,6 +201,8 @@
     "node_offline": "電腦離線",
     "origin_backlog": "待辦任務：{{title}}",
     "origin_routine": "例行任務：{{title}}",
+    "origin_kind_backlog": "待辦",
+    "origin_kind_routine": "例行任務",
     "agent_working": "{{agent}} 正在運作",
     "open_workspace": "開啟對話工作區",
     "no_agent_yet": "尚無 Agent",

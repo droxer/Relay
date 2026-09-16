@@ -12,6 +12,7 @@ import type { RelaySession } from "../types";
 import { canDeleteThread, sessionAgents, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { agentLabel } from "../lib/plan";
 import { AgentMark } from "./AgentMark";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export type { ThreadItem };
@@ -117,6 +118,7 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
   const { subline, inlineAgents } = threadRowMeta({
     layout,
     hasStatus: Boolean(status),
+    hasOrigin: Boolean(item.origin),
     agentCount: agents.length,
   });
   const agentCluster = agents.length > 0 ? (
@@ -142,19 +144,16 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
     </span>
   ) : null;
 
-  // Which backlog task or routine started the thread. Icon only — the
-  // source's name reads from the tooltip and the row's accessible label.
+  // Which backlog task or routine started the thread, in words: a kind badge
+  // ("Backlog" / "Routine") and, on full rows, the source's name beside it.
+  // Nested rows are single-line, so they carry the badge alone and the name
+  // reads from its tooltip. The row's aria-label already speaks both.
   const OriginGlyph = item.origin?.kind === "routine" ? NavRoutine : NavBacklog;
-  const originMark = item.origin ? (
-    <span
-      className="conversation-origin"
-      data-kind={item.origin.kind}
-      role="img"
-      aria-label={originLabel}
-      title={originLabel}
-    >
+  const originBadge = item.origin ? (
+    <Badge className="conversation-origin-kind" data-kind={item.origin.kind} title={originLabel} aria-hidden="true">
       <OriginGlyph size={ICON.xs} />
-    </span>
+      {t(item.origin.kind === "routine" ? "thread.origin_kind_routine" : "thread.origin_kind_backlog")}
+    </Badge>
   ) : null;
 
   return (
@@ -179,9 +178,6 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
             ) : null}
             <span className="conversation-name">
               <strong>{label}</strong>
-              {/* Origin rides the title in both layouts, like the offline
-                  badge: it is a fixed property of the thread, not its state. */}
-              {originMark}
               {/* The offline badge rides the title in both layouts: it is a
                   property of the thread itself, and the name line survives
                   the hover swap that hides the timestamp. */}
@@ -190,6 +186,7 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
                   they ride here rather than keeping a second line alive for
                   one decorative glyph. */}
               {inlineAgents ? agentCluster : null}
+              {layout === "nested" ? originBadge : null}
             </span>
             {stamp ? (
               <span className="conversation-stamp tnum">
@@ -197,13 +194,21 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
               </span>
             ) : null}
           </span>
-          {subline && status ? (
+          {subline ? (
             <span className="conversation-subline">
-              <span className="conversation-status" data-tone={status.tone}>
-                <StateMark {...PIP[status.tone]} />
-                <span>{status.text}</span>
-              </span>
-              {agentCluster}
+              {status ? (
+                <span className="conversation-status" data-tone={status.tone}>
+                  <StateMark {...PIP[status.tone]} />
+                  <span>{status.text}</span>
+                </span>
+              ) : null}
+              {item.origin ? (
+                <span className="conversation-origin" data-kind={item.origin.kind}>
+                  {originBadge}
+                  <span className="conversation-origin-name">{item.origin.title}</span>
+                </span>
+              ) : null}
+              {inlineAgents ? null : agentCluster}
             </span>
           ) : null}
         </span>

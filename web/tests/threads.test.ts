@@ -411,14 +411,14 @@ describe("adaptive composer contract", () => {
 describe("threadRowMeta", () => {
   it("keeps the second line for a row that has status to speak", () => {
     assert.deepEqual(
-      threadRowMeta({ layout: "full", hasStatus: true, agentCount: 2 }),
+      threadRowMeta({ layout: "full", hasStatus: true, hasOrigin: false, agentCount: 2 }),
       { subline: true, inlineAgents: false },
     );
   });
 
   it("drops the second line and inlines the marks for a settled row", () => {
     assert.deepEqual(
-      threadRowMeta({ layout: "full", hasStatus: false, agentCount: 2 }),
+      threadRowMeta({ layout: "full", hasStatus: false, hasOrigin: false, agentCount: 2 }),
       { subline: false, inlineAgents: true },
     );
   });
@@ -426,8 +426,26 @@ describe("threadRowMeta", () => {
   // Nothing to inline, nothing to line-break for: the row is its title.
   it("collapses a settled row that no agent has touched", () => {
     assert.deepEqual(
-      threadRowMeta({ layout: "full", hasStatus: false, agentCount: 0 }),
+      threadRowMeta({ layout: "full", hasStatus: false, hasOrigin: false, agentCount: 0 }),
       { subline: false, inlineAgents: false },
+    );
+  });
+
+  /* A backlog or routine thread names its source in words on the meta line,
+     so a settled task thread keeps its second line even with no status. */
+  it("keeps the second line for a settled row that names its origin", () => {
+    assert.deepEqual(
+      threadRowMeta({ layout: "full", hasStatus: false, hasOrigin: true, agentCount: 2 }),
+      { subline: true, inlineAgents: true },
+    );
+  });
+
+  /* The origin's name is the meta segment a narrow rail must not crush, so
+     the decorative agent marks move up to the title line whenever it shows. */
+  it("inlines the agent marks when status and origin share the meta line", () => {
+    assert.deepEqual(
+      threadRowMeta({ layout: "full", hasStatus: true, hasOrigin: true, agentCount: 1 }),
+      { subline: true, inlineAgents: true },
     );
   });
 
@@ -436,11 +454,11 @@ describe("threadRowMeta", () => {
      marks would undo the density that layout exists for. */
   it("leaves nested rows single-line whatever their state", () => {
     assert.deepEqual(
-      threadRowMeta({ layout: "nested", hasStatus: true, agentCount: 3 }),
+      threadRowMeta({ layout: "nested", hasStatus: true, hasOrigin: true, agentCount: 3 }),
       { subline: false, inlineAgents: false },
     );
     assert.deepEqual(
-      threadRowMeta({ layout: "nested", hasStatus: false, agentCount: 3 }),
+      threadRowMeta({ layout: "nested", hasStatus: false, hasOrigin: false, agentCount: 3 }),
       { subline: false, inlineAgents: false },
     );
   });

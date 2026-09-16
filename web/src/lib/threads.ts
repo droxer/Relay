@@ -193,13 +193,18 @@ export function matchesThreadQuery(session: Labelled, query: string): boolean {
  *  their own state pip because the flat in-project list has no group headers,
  *  and marks would undo the density that layout exists for. */
 export function threadRowMeta(
-  { layout, hasStatus, agentCount }: {
+  { layout, hasStatus, hasOrigin, agentCount }: {
     layout: "full" | "nested";
     hasStatus: boolean;
+    /** A backlog / routine thread names its source on the meta line. */
+    hasOrigin: boolean;
     agentCount: number;
   },
 ): { subline: boolean; inlineAgents: boolean } {
   if (layout !== "full") return { subline: false, inlineAgents: false };
+  // The origin's name needs the meta line's width more than the decorative
+  // agent marks do, so they ride the title line whenever an origin shows.
+  if (hasOrigin) return { subline: true, inlineAgents: agentCount > 0 };
   if (hasStatus) return { subline: true, inlineAgents: false };
   return { subline: false, inlineAgents: agentCount > 0 };
 }
