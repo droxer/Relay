@@ -5,7 +5,8 @@ import type { RelaySession } from "../src/types";
 
 function setup(existing = false) {
   let accept!: (session: RelaySession) => void;
-  const response = new Promise<RelaySession>((resolve) => { accept = resolve; });
+  let reject!: (error: Error) => void;
+  const response = new Promise<RelaySession>((resolve, fail) => { accept = resolve; reject = fail; });
   const session = { id: "thread-1", status: "waiting_for_human" } as RelaySession;
   const cancel = vi.fn().mockResolvedValue({ ...session, status: "cancelled" });
   const dispatch = vi.fn().mockReturnValue(response);
@@ -29,7 +30,7 @@ function setup(existing = false) {
     setPendingUserMessage: vi.fn(), setIsRunning: vi.fn(), setHandoffNote: vi.fn(), setHandoffOpen: vi.fn(),
     syncThreadUrl: vi.fn(), navigateToRoute: vi.fn(), reportMutationError: vi.fn(), t: (key: string) => key,
   } as unknown as ThreadDispatchDeps;
-  return { deps, accept, cancel, dispatch, session };
+  return { deps, accept, reject, cancel, dispatch, session };
 }
 
 describe("composer stop during dispatch", () => {
@@ -41,9 +42,43 @@ describe("composer stop during dispatch", () => {
     expect(dispatch).toHaveBeenCalledOnce();
     rerender({ ...deps, threadRunning: true });
     await act(async () => { await result.current.cancelActiveRun(); });
+    await act(async () => { await result.current.cancelActiveRun(); });
     expect(cancel).not.toHaveBeenCalled();
     await act(async () => { accept({ ...session, status: "running" }); await sending; });
     expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
     expect(cancel).toHaveBeenCalledOnce();
   });
+});
+
+it("does not cancel a send without a stop request", async () => {
+  const { deps, accept, cancel, session } = setup();
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  await act(async () => {
+    const sending = result.current.sendMessage();
+    accept({ ...session, status: "running" });
+    await sending;
+  });
+  expect(cancel).not.toHaveBeenCalled();
+});
+
+it("clears a pending stop when dispatch fails", async () => {
+  const { deps, reject, cancel } = setup();
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  await act(async () => {
+    const sending = result.current.sendMessage();
+    await result.current.cancelActiveRun();
+    reject(new Error("offline"));
+    await sending;
+  });
+  expect(cancel).not.toHaveBeenCalled();
+  expect(deps.reportMutationError).toHaveBeenCalled();
+  expect(deps.setIsRunning).toHaveBeenLastCalledWith(false);
+});
+
+it("cancels an already running thread immediately", async () => {
+  const { deps, cancel, session } = setup(true);
+  deps.activeSession = { ...session, status: "running" };
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  await act(async () => { await result.current.cancelActiveRun(); });
+  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
 });
