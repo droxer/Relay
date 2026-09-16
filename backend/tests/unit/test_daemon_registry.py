@@ -7392,3 +7392,34 @@ def test_wip_admission_refuses_delivery_until_review_is_accepted(monkeypatch):
             assert (await _run_task_round(registry, backend, second['id']))['agent'] == 'codex'
 
     asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_finalization_retries_are_bounded_and_preserve_terminal_evidence(store_factory, monkeypatch):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Recover finalization"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            event = {"type": "run.completed", "commandId": command["id"],
+                     "sessionId": command["sessionId"], "runId": command["runId"],
+                     "agent": "codex", "exitCode": 0, "leaseId": command["leaseId"]}
+            registry.daemon_store.mark_command_completed("sbx_alice", event)
+            attempts = []
+            def broken(*args):
+                attempts.append(True)
+                raise RuntimeError("persistent storage failure")
+            monkeypatch.setattr(registry, "_advance_run_request", broken)
+            for _ in range(5):
+                registry.reap_stale_runs()
+                request = registry.daemon_store.run_request_for_command(command["id"])
+                state = {**request["state"], "_relay_finalization_retry_at": "2000-01-01T00:00:00+00:00",
+                         "_relay_terminal_claim_expires_at": "2000-01-01T00:00:00+00:00"}
+                registry.daemon_store.update_run_request(request["id"], {"state": state})
+            registry.reap_stale_runs()
+            assert len(attempts) == 5
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            assert request["state"]["_relay_recovery_required"] is True
+            assert request["state"]["_relay_terminal_event"] == event
+            assert registry.daemon_store.active_run_request_for_task(task["id"])
+    asyncio.run(run_flow())

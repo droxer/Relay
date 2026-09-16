@@ -1,5 +1,7 @@
 "use client";
 
+import { retryExecutionRecovery } from "./api";
+
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logout } from "./api";
@@ -559,13 +561,13 @@ export function App() {
     const ok = await confirm({
       title: t("thread.delete_confirm", { name: label }),
       message: t("thread.delete_message"),
-      confirmLabel: t("thread.delete"),
+      confirmLabel: t("thread.stop_and_delete"),
       tone: "danger",
     });
     if (!ok) return;
     try {
-      await deleteSessionMutation.mutateAsync({ sessionId, token: selectedToken });
-      if (activeSession?.id === sessionId) {
+      const pending = await deleteSessionMutation.mutateAsync({ sessionId, token: selectedToken });
+      if (!pending && activeSession?.id === sessionId) {
         setSelectedSessionId(undefined);
         setActiveSessionId(null);
         navigateToRoute("main");
@@ -807,6 +809,11 @@ export function App() {
             onSend={handleComposerSend}
             onCancelRun={handleCancelRun}
             onRetryAgent={handleRetryAgent}
+            onRetryExecutionRecovery={async () => {
+              if (!activeSession) return;
+              await retryExecutionRecovery(activeSession.id, selectedToken);
+              await refresh();
+            }}
             running={threadRunning}
           />
         )}

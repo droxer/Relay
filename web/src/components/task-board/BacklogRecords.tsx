@@ -128,7 +128,7 @@ export function BacklogTaskCard({
         />
         <div className="backlog-card-body">
           <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-          <TaskFlowDetails task={task} showAge={false} />
+          <TaskFlowDetails task={task} execution={session?.execution} showAge={false} />
           {task.description ? <p className="backlog-description">{task.description}</p> : null}
           {/* One line of facts, and only facts the lane above does not already
               state. What used to be here and is gone: the task's status word
@@ -365,7 +365,7 @@ export function BacklogTaskRow({
       <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell>
       <TableCell render={<div />} className="backlog-row-lead">
         <Button variant="ghost" type="button" className="backlog-row-title" onClick={onEdit}>{task.title}</Button>
-        <TaskFlowDetails task={task} />
+        <TaskFlowDetails task={task} execution={session?.execution} />
         <RoutineOriginBadge task={task} routineTitle={routineTitle} />
       </TableCell>
       <TableCell render={<div />} className="backlog-row-tags">
@@ -459,14 +459,16 @@ function workAgeDays(task: RelayTaskListItem): number | null {
  * card is a fixed frame and an exception that spans two rows was clipping its
  * own second row in half.
  */
-function TaskFlowDetails({ task, showAge = true }: { task: RelayTaskListItem; showAge?: boolean }) {
+function TaskFlowDetails({ task, execution, showAge = true }: { task: RelayTaskListItem; execution?: RelaySession["execution"]; showAge?: boolean }) {
   const { t } = useTranslation();
   const age = showAge ? workAgeDays(task) : null;
   // Nothing to say is nothing to draw. The element used to render empty, and
   // an empty flex row still carries its own margin — 12px of nowhere on every
   // card that was neither blocked, waiting, nor in flight.
-  if (task.status !== "blocked" && task.status !== "waiting_for_human" && age === null) return null;
+  const recovering = execution && !["running", "terminal"].includes(execution.phase);
+  if (!recovering && task.status !== "blocked" && task.status !== "waiting_for_human" && age === null) return null;
   return <div className="backlog-meta backlog-flow">
+    {recovering ? <span role="status">{t(`thread.execution_${execution.phase}`)}</span> : null}
     {/* The reason is one line on the card and the full text in the drawer —
         a three-line blocker used to push the card's own action row out
         through the bottom edge. A blocker with no reason recorded states the

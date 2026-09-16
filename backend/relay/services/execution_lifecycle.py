@@ -1,0 +1,204 @@
+"""Execution truth and durable stop-and-delete recovery.
+
+Task/session outcomes are projections, not proof that a remote process exited.
+Only terminal command evidence releases a delivered execution reservation.
+"""
+from __future__ import annotations
+
+import asyncio
+from contextlib import nullcontext
+from datetime import datetime, timezone
+from typing import Any
+
+from loguru import logger
+
+from ..persistence.store_common import relay_event
+from ..sessions.controller import SessionController
+from ..persistence.task_execution import request_execution_owner
+
+TERMINAL = {"completed", "failed", "cancelled"}
+
+
+def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
+                     command: dict[str, Any] | None, *, now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    state = (request or {}).get("state") or {}
+    phase, reason = "terminal", None
+    confirmed = False
+    lease = (command or {}).get("leaseExpiresAt")
+    live = False
+    if lease:
+        try:
+            live = datetime.fromisoformat(lease.replace("Z", "+00:00")) > now
+        except (ValueError, TypeError):
+            pass
+    if request:
+        if state.get("_relay_recovery_required"):
+            phase, reason = "recovery_required", state.get("_relay_recovery_reason") or "finalization_failed"
+        elif request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL:
+            phase, reason = "finalizing", "saving_results"
+        elif (command or {}).get("status") == "dispatched":
+            confirmed = live
+            if not live:
+                phase, reason = "unresponsive", "execution_unconfirmed"
+            elif state.get("_relay_stop_command_id") or session.get("deletionRequestedAt"):
+                phase, reason = "stopping", "awaiting_termination"
+            else:
+                phase, reason = "running", "execution_active"
+        else:
+            phase, reason = "queued", "awaiting_dispatch"
+    elif any(run.get("status") == "running" for run in session.get("agentRuns", [])):
+        # Legacy records without durable ownership need reconciliation, not a
+        # guess based on a completed/failed session label.
+        if session.get("status") != "cancelled":
+            phase, reason = "recovery_required", "orphaned_run"
+    if phase == "stopping" and state.get("_relay_stop_requested_at"):
+        try:
+            stopped_at = datetime.fromisoformat(state["_relay_stop_requested_at"].replace("Z", "+00:00"))
+            if (now - stopped_at).total_seconds() >= 60:
+                phase, reason = "recovery_required", "termination_unconfirmed"
+        except (ValueError, TypeError):
+            phase, reason = "recovery_required", "termination_unconfirmed"
+    return {
+        "phase": phase, "executionConfirmed": confirmed,
+        "deletionRequested": bool(session.get("deletionRequestedAt")),
+        "canDelete": phase == "terminal", "blockingReason": reason,
+        "lastConfirmedAt": (request or {}).get("currentProgressAt"),
+        "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
+    }
+
+
+class ExecutionLifecycleService:
+    def __init__(self, registry: Any, chat_store: Any, *, interval_seconds: float = 5.0):
+        self.registry = registry
+        self.chat_store = chat_store
+        self.interval_seconds = interval_seconds
+        self._task: asyncio.Task | None = None
+        self._stop = asyncio.Event()
+
+    def status(self, session: dict[str, Any]) -> dict[str, Any]:
+        store = self.registry.daemon_store
+        request = store.active_run_request_for_session_any_node(session["id"])
+        command = store.get_command(request["currentCommandId"]) if request and request.get("currentCommandId") else None
+        if not request:
+            # Preserve protection for old commands that predate run requests.
+            run = next((r for r in store.list_active_runs() if r.get("sessionId") == session["id"]), None)
+            if run:
+                command = store.get_command(run["commandId"])
+                if command and command.get("status") not in TERMINAL:
+                    request = {"status": "running", "state": {}}
+        return execution_status(session, request, command)
+
+    def annotate(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        store = self.registry.daemon_store
+        requests = {r["sessionId"]: r for r in store.list_active_run_requests()}
+        legacy = {r["sessionId"]: r for r in store.list_active_runs()}
+        result = []
+        for session in sessions:
+            request = requests.get(session["id"])
+            command_id = (request or {}).get("currentCommandId") or (legacy.get(session["id"]) or {}).get("commandId")
+            command = store.get_command(command_id) if command_id else None
+            if not request and command and command.get("status") not in TERMINAL:
+                request = {"status": "running", "state": {}}
+            result.append({**session, "execution": execution_status(session, request, command)})
+        return result
+
+    def admission_scope(self):
+        # File-backed command admission uses the same interprocess lock. The
+        # database store instead locks the session row during admission/delete.
+        return getattr(self.registry.daemon_store, "_run_request_claim_lock", nullcontext)()
+
+    def request_delete(self, session_id: str, employee_id: str) -> dict[str, Any] | None:
+        with self.registry.dispatch_lock, self.admission_scope():
+            session = self.registry.store.get_session(session_id)
+            if not session.get("deletionRequestedAt"):
+                session = self.registry.store.append_event(session_id, relay_event(
+                    "session.deletion_requested", session_id, {"requestedBy": employee_id},
+                ))
+            return self.finish_delete(session_id)
+
+    def finish_delete(self, session_id: str) -> dict[str, Any] | None:
+        with self.registry.dispatch_lock, self.admission_scope():
+            session = self.registry.store.get_session(session_id)
+            if not session.get("deletionRequestedAt"):
+                return self.status(session)
+            request = self.registry.daemon_store.active_run_request_for_session_any_node(session_id)
+            controller = SessionController(self.registry.store, task_store=self.registry.task_store,
+                                           task_id=(request or {}).get("taskId") or session.get("taskId"),
+                                           task_execution_owner=request_execution_owner(request) if request else None)
+            if request:
+                if request.get("status") != "finalizing":
+                    cancelled = self.registry.cancel_run_request_before_delivery(request["id"], "Thread deletion requested.")
+                    if not cancelled:
+                        self.registry.cancel_active_run(request["nodeId"], session_id, "Thread deletion requested.")
+                # Persist the human stop decision too; a racing terminal event
+                # may complete bookkeeping but must not start another assignment.
+                if session.get("status") not in TERMINAL:
+                    session = controller.cancel_session(session_id, "Thread deletion requested.")
+            if not request:
+                for run in self.registry.daemon_store.list_active_runs():
+                    if run.get("sessionId") == session_id:
+                        self.registry.cancel_active_run(run["nodeId"], session_id, "Thread deletion requested.")
+            # Old finalizers preserved an already-terminal session verbatim,
+            # including stale running agent projections. Repair those records
+            # from retained daemon exit evidence, never from session status.
+            if not self.registry.daemon_store.active_run_request_for_session_any_node(session_id):
+                running = {run["id"] for run in session.get("agentRuns", []) if run.get("status") == "running"}
+                if running:
+                    for event in self.registry.daemon_store.terminal_events_for_session(session_id):
+                        if event.get("runId") not in running:
+                            continue
+                        outcome = "cancelled" if event["type"] == "run.cancelled" else (
+                            "completed" if event["type"] == "run.completed" and event.get("exitCode") == 0 else "failed")
+                        session = self.registry.store.append_event(session_id, relay_event("agent.completed", session_id, {
+                            "runId": event["runId"], "agent": event["agent"], "status": outcome,
+                            "exitCode": event.get("exitCode", 130 if outcome == "cancelled" else 1),
+                            "agentLog": event.get("agentLog", ""),
+                        }))
+                        running.remove(event["runId"])
+            status = self.status(session)
+            if not status["canDelete"]:
+                return status
+            # Clear external bindings first. Repeating this after a crash is safe.
+            self.chat_store.clear_conversation_sessions(session_id)
+            controller.delete_session(session_id, snapshot=session,
+                                      deleted_by=session.get("deletionRequestedBy"))
+            return None
+
+    def tick(self) -> None:
+        try:
+            self.registry.reap_stale_runs()
+        except Exception:
+            logger.exception("Execution reconciliation failed; deletion recovery continues")
+        pending = self.registry.store.list_pending_deletions(limit=100, offset=getattr(self, "_deletion_offset", 0))
+        self._deletion_offset = getattr(self, "_deletion_offset", 0) + len(pending) if len(pending) == 100 else 0
+        for session in pending:
+            try:
+                self.finish_delete(session["id"])
+            except KeyError:
+                pass  # Another replica completed deletion.
+            except Exception:
+                logger.exception("Thread deletion recovery failed", session_id=session["id"])
+
+    def start(self) -> None:
+        if self._task and not self._task.done():
+            return
+        self._stop.clear()
+        self._task = asyncio.create_task(self._run(), name="relay-execution-recovery")
+
+    async def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                await asyncio.to_thread(self.tick)
+            except Exception:
+                logger.exception("Execution recovery tick failed; retrying")
+            try:
+                await asyncio.wait_for(self._stop.wait(), self.interval_seconds)
+            except TimeoutError:
+                pass
+
+    async def stop(self) -> None:
+        self._stop.set()
+        if self._task:
+            await self._task  # Don't abandon a thread still mutating stores.
+            self._task = None

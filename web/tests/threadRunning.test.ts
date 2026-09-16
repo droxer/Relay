@@ -106,3 +106,12 @@ describe("threadRunning", () => {
     }), "sbx_alice");
   });
 });
+
+it("uses backend lifecycle over a stale session label", () => {
+  const settled = { ...session("running"), execution: {
+    phase: "terminal", canDelete: true, executionConfirmed: false, deletionRequested: false,
+    blockingReason: null, lastConfirmedAt: null, nextRecoveryAt: null,
+  } } as unknown as RelaySession;
+  assert.equal(isThreadRunInFlight({ session: settled, activeRun: undefined, pendingSend: false, dispatchingRun: false }), false);
+  assert.equal(canCancelThreadRun({ session: settled, activeRun: undefined }), false);
+});

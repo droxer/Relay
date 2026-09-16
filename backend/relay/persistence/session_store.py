@@ -363,6 +363,9 @@ class LocalSessionStore:
                 for placement_id in placement_ids
             )
 
+    def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        return [s for s in self.list_sessions() if s.get("deletionRequestedAt")][offset:offset + limit]
+
     def list_session_summaries(
         self, *, owner_employee_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
@@ -1052,6 +1055,8 @@ class DatabaseSessionStore:
             if not row:
                 raise KeyError(session_id)
             session_pk = row["id"]
+            if event.get("type") == "session.deletion_requested" and (row["snapshot"] or {}).get("deletionRequestedAt"):
+                return row["snapshot"]
             sequence = int(row["version"] or 0)
             conn.execute(
                 insert(self.events).values(
@@ -1264,6 +1269,16 @@ class DatabaseSessionStore:
             if not session_row:
                 raise KeyError(session_id)
             snapshot = session_row["snapshot"] or {}
+            # Admission locks this same session row before reserving a run.
+            # Inspect durable requests inside this transaction, not only in the
+            # HTTP handler's replica-local dispatch lock.
+            from .daemon_store import ACTIVE_RUN_REQUEST_STATUSES
+            requests = shared_metadata.tables.get("daemon_run_requests")
+            if requests is not None and conn.execute(
+                select(requests.c.id).where(requests.c.session_id == session_id)
+                .where(requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)).limit(1)
+            ).first():
+                return False
             if snapshot.get("status") != "cancelled" and any(
                 run.get("status") == "running" for run in snapshot.get("agentRuns", [])
             ):
@@ -1371,6 +1386,15 @@ class DatabaseSessionStore:
                 placement_id=run.get("placementId"),
             )
         )
+
+    def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(
+                select(self.sessions.c.snapshot)
+                .where(self.sessions.c.snapshot["deletionRequestedAt"].as_string().is_not(None))
+                .order_by(self.sessions.c.updated_at, self.sessions.c.id).offset(offset).limit(limit)
+            ).scalars().all()
+        return list(rows)
 
     def list_session_summaries(
         self, *, owner_employee_id: str | None = None, limit: int = 100
@@ -1686,6 +1710,8 @@ class DatabaseSessionStore:
             if not row:
                 raise KeyError(session_id)
             session_pk = row["id"]
+            if event.get("type") == "session.deletion_requested" and (row["snapshot"] or {}).get("deletionRequestedAt"):
+                return row["snapshot"]
             sequence = int(row["version"] or 0)
             conn.execute(
                 insert(self.artifacts).values(

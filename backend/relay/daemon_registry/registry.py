@@ -8,7 +8,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -416,6 +416,7 @@ class DaemonNodeRegistry:
     ):
         self.store = store
         self.daemon_store = daemon_store
+        self.daemon_store.session_store = store
         self.task_store = task_store
         self.liveness_timeout_ms = liveness_timeout_ms
         self.sandboxes: dict[str, dict[str, Any]] = {}
@@ -1580,7 +1581,15 @@ class DaemonNodeRegistry:
                     lease_seconds=lease_seconds,
                 )
             observed = self.sandboxes[sandbox_id]
+            accepted = []
+            for command_id, lease_id in command_leases or []:
+                record = self.daemon_store.get_command(command_id)
+                if (record and record.get("nodeId") == sandbox_id
+                    and record.get("status") == "dispatched"
+                    and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
+                    accepted.append({"commandId": command_id, "leaseId": lease_id, "leaseExpiresAt": record["leaseExpiresAt"]})
             return {
+                "commandLeases": accepted,
                 "observedAt": observed["lastSeenAt"],
                 **self.heartbeat_settings(),
             }
@@ -2520,240 +2529,259 @@ class DaemonNodeRegistry:
         self._last_reap_at = monotonic_now
         self._maybe_prune_terminal_records(monotonic_now)
         self._reap_orphaned_runs_unlocked()
-        for request in self.daemon_store.list_active_run_requests():
-            if request.get("status") == "prepared":
-                manifest = (request.get("state") or {}).get(
-                    COLLABORATION_MANIFEST_STATE_KEY
-                )
-                try:
-                    session = self.store.get_session(request["sessionId"])
-                except KeyError:
-                    self.daemon_store.update_run_request(
-                        request["id"],
-                        {
-                            "status": "failed",
-                            "error": "Prepared collaboration session no longer exists.",
-                        },
+        requests = self.daemon_store.list_active_run_requests()
+        offset = getattr(self, "_recovery_offset", 0) % max(1, len(requests))
+        batch = (requests[offset:] + requests[:offset])[:100]
+        self._recovery_offset = offset + len(batch)
+        for request in batch:
+            try:
+                if request.get("status") == "prepared":
+                    manifest = (request.get("state") or {}).get(
+                        COLLABORATION_MANIFEST_STATE_KEY
                     )
+                    try:
+                        session = self.store.get_session(request["sessionId"])
+                    except KeyError:
+                        self.daemon_store.update_run_request(
+                            request["id"],
+                            {
+                                "status": "failed",
+                                "error": "Prepared collaboration session no longer exists.",
+                            },
+                        )
+                        continue
+                    if session.get("status") in ("completed", "failed", "cancelled"):
+                        self.daemon_store.update_run_request(
+                            request["id"],
+                            {
+                                "status": session["status"],
+                                "error": (
+                                    "Prepared collaboration was not activated because "
+                                    f"the session is {session['status']}."
+                                ),
+                            },
+                        )
+                        continue
+                    round_id = (
+                        manifest.get("roundId") if isinstance(manifest, dict) else None
+                    )
+                    round_is_durable = bool(
+                        round_id
+                        and any(
+                            event.get("type") == "collaboration.round.started"
+                            and (event.get("manifest") or {}).get("roundId") == round_id
+                            for event in session.get("events", [])
+                        )
+                    )
+                    if round_is_durable:
+                        self.activate_run_request(request["id"])
+                        continue
+                    updated_at = datetime.fromisoformat(request["updatedAt"])
+                    age_seconds = (datetime.now(timezone.utc) - updated_at).total_seconds()
+                    if age_seconds >= PREPARED_ADMISSION_LEASE_SECONDS:
+                        state = {
+                            **(request.get("state") or {}),
+                            COLLABORATION_ADMISSION_EXPIRED_STATE_KEY: True,
+                        }
+                        self.daemon_store.update_run_request(
+                            request["id"],
+                            {
+                                "status": "failed",
+                                "error": COLLABORATION_ADMISSION_EXPIRED_ERROR,
+                                "state": state,
+                            },
+                        )
+                        if state.get(COLLABORATION_NEW_SESSION_STATE_KEY):
+                            SessionController(
+                                self.store,
+                                task_store=self.task_store,
+                                task_id=request.get("taskId"),
+                                task_execution_owner=request_execution_owner(request),
+                            ).fail_session(
+                                request["sessionId"],
+                                COLLABORATION_ADMISSION_EXPIRED_OUTCOME,
+                            )
                     continue
+                if request.get("status") == "finalizing":
+                    recovery_state = request.get("state") or {}
+                    retry_at = recovery_state.get("_relay_finalization_retry_at")
+                    if recovery_state.get("_relay_recovery_required") or (retry_at and datetime.fromisoformat(retry_at) > datetime.now(timezone.utc)):
+                        continue
+                    terminal_event = (request.get("state") or {}).get(
+                        TERMINAL_EVENT_STATE_KEY
+                    )
+                    if not isinstance(terminal_event, dict):
+                        command = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
+                        terminal_event = ((command or {}).get("command") or {}).get("_terminalEvent")
+                    if not isinstance(terminal_event, dict):
+                        self.daemon_store.update_run_request_if_status(request["id"], "finalizing", {
+                            "state": {**recovery_state, "_relay_recovery_required": True,
+                                      "_relay_recovery_reason": "missing_terminal_evidence"},
+                        })
+                    if isinstance(terminal_event, dict):
+                        # Reaping runs inside monitor_nodes(), which most routes
+                        # call, so one request that cannot be finalized must not
+                        # take the rest of the API down with it. Log and move on;
+                        # the claim lease brings it back on the next pass.
+                        try:
+                            self._claim_and_advance_run_request(terminal_event)
+                        except Exception as error:
+                            logger.exception(
+                                "Failed finalizing a stale run request",
+                                run_request_id=request.get("id"),
+                                node_id=request.get("nodeId"),
+                                error=str(error),
+                            )
+                    continue
+                if request.get("status") == "running" and (request.get("state") or {}).get("_relay_stop_command_id"):
+                    # Replay the durable intent if the coordinator died before
+                    # publishing its stable-id cancel command.
+                    self._cancel_active_run_unlocked(
+                        request["nodeId"], request["sessionId"], request.get("error") or "Run stopped."
+                    )
+                session = self.store.get_session(request["sessionId"])
                 if session.get("status") in ("completed", "failed", "cancelled"):
-                    self.daemon_store.update_run_request(
+                    command_record = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
+                    terminal_event = ((command_record or {}).get("command") or {}).get("_terminalEvent")
+                    if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
+                        self._claim_and_advance_run_request(terminal_event)
+                        continue
+                    terminalized = self.daemon_store.update_run_request_if_status(
                         request["id"],
+                        request["status"],
                         {
                             "status": session["status"],
                             "error": (
-                                "Prepared collaboration was not activated because "
+                                "Collaboration delivery was suppressed because "
                                 f"the session is {session['status']}."
                             ),
                         },
+                        require_undelivered=True,
                     )
+                    if terminalized:
+                        command_id = request.get("currentCommandId")
+                        staged = (
+                            self.daemon_store.get_command(command_id)
+                            if command_id
+                            else self.daemon_store.pending_command_for_run_request(
+                                request["id"]
+                            )
+                        )
+                        if staged and staged.get("status") == "pending":
+                            self.daemon_store.discard_staged_command(staged["id"])
                     continue
-                round_id = (
-                    manifest.get("roundId") if isinstance(manifest, dict) else None
-                )
-                round_is_durable = bool(
-                    round_id
-                    and any(
-                        event.get("type") == "collaboration.round.started"
-                        and (event.get("manifest") or {}).get("roundId") == round_id
-                        for event in session.get("events", [])
+                if request.get("status") == "dispatching":
+                    claim_expires_at = (request.get("state") or {}).get(
+                        "_relay_dispatch_claim_expires_at"
                     )
-                )
-                if round_is_durable:
-                    self.activate_run_request(request["id"])
-                    continue
-                updated_at = datetime.fromisoformat(request["updatedAt"])
-                age_seconds = (datetime.now(timezone.utc) - updated_at).total_seconds()
-                if age_seconds >= PREPARED_ADMISSION_LEASE_SECONDS:
-                    state = {
-                        **(request.get("state") or {}),
-                        COLLABORATION_ADMISSION_EXPIRED_STATE_KEY: True,
-                    }
-                    self.daemon_store.update_run_request(
-                        request["id"],
-                        {
-                            "status": "failed",
-                            "error": COLLABORATION_ADMISSION_EXPIRED_ERROR,
-                            "state": state,
-                        },
+                    staged_for_request = self.daemon_store.pending_command_for_run_request(
+                        request["id"]
                     )
-                    if state.get(COLLABORATION_NEW_SESSION_STATE_KEY):
-                        SessionController(
-                            self.store,
-                            task_store=self.task_store,
-                            task_id=request.get("taskId"),
-                            task_execution_owner=request_execution_owner(request),
-                        ).fail_session(
-                            request["sessionId"],
-                            COLLABORATION_ADMISSION_EXPIRED_OUTCOME,
-                        )
-                continue
-            if request.get("status") == "finalizing":
-                terminal_event = (request.get("state") or {}).get(
-                    TERMINAL_EVENT_STATE_KEY
-                )
-                if isinstance(terminal_event, dict):
-                    # Reaping runs inside monitor_nodes(), which most routes
-                    # call, so one request that cannot be finalized must not
-                    # take the rest of the API down with it. Log and move on;
-                    # the claim lease brings it back on the next pass.
-                    try:
-                        self._claim_and_advance_run_request(terminal_event)
-                    except Exception as error:
-                        logger.exception(
-                            "Failed finalizing a stale run request",
-                            run_request_id=request.get("id"),
-                            node_id=request.get("nodeId"),
-                            error=str(error),
-                        )
-                continue
-            if request.get("status") == "running" and (request.get("state") or {}).get("_relay_stop_command_id"):
-                # Replay the durable intent if the coordinator died before
-                # publishing its stable-id cancel command.
-                self._cancel_active_run_unlocked(
-                    request["nodeId"], request["sessionId"], request.get("error") or "Run stopped."
-                )
-            session = self.store.get_session(request["sessionId"])
-            if session.get("status") in ("completed", "failed", "cancelled"):
-                command_record = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
-                terminal_event = ((command_record or {}).get("command") or {}).get("_terminalEvent")
-                if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
-                    self._claim_and_advance_run_request(terminal_event)
-                    continue
-                terminalized = self.daemon_store.update_run_request_if_status(
-                    request["id"],
-                    request["status"],
-                    {
-                        "status": session["status"],
-                        "error": (
-                            "Collaboration delivery was suppressed because "
-                            f"the session is {session['status']}."
-                        ),
-                    },
-                    require_undelivered=True,
-                )
-                if terminalized:
-                    command_id = request.get("currentCommandId")
-                    staged = (
-                        self.daemon_store.get_command(command_id)
-                        if command_id
-                        else self.daemon_store.pending_command_for_run_request(
-                            request["id"]
-                        )
+                    if (
+                        not staged_for_request
+                        and isinstance(claim_expires_at, str)
+                        and datetime.fromisoformat(claim_expires_at)
+                        > datetime.now(timezone.utc)
+                    ):
+                        continue
+                command_id = request.get("currentCommandId")
+                if not command_id:
+                    staged = self.daemon_store.pending_command_for_run_request(
+                        request["id"]
                     )
-                    if staged and staged.get("status") == "pending":
-                        self.daemon_store.discard_staged_command(staged["id"])
-                continue
-            if request.get("status") == "dispatching":
-                claim_expires_at = (request.get("state") or {}).get(
-                    "_relay_dispatch_claim_expires_at"
-                )
-                staged_for_request = self.daemon_store.pending_command_for_run_request(
-                    request["id"]
-                )
-                if (
-                    not staged_for_request
-                    and isinstance(claim_expires_at, str)
-                    and datetime.fromisoformat(claim_expires_at)
-                    > datetime.now(timezone.utc)
-                ):
-                    continue
-            command_id = request.get("currentCommandId")
-            if not command_id:
-                staged = self.daemon_store.pending_command_for_run_request(
-                    request["id"]
-                )
-                if staged:
-                    command = staged["command"]
-                    session = self.store.get_session(request["sessionId"])
-                    has_started = any(
-                        agent_run.get("id") == command["runId"]
-                        for agent_run in session.get("agentRuns", [])
-                    )
-                    if not has_started:
-                        claimed = self.daemon_store.claim_run_request_dispatch(
-                            request["id"],
-                            new_relay_id("claim"),
-                            DISPATCH_CLAIM_LEASE_SECONDS,
+                    if staged:
+                        command = staged["command"]
+                        session = self.store.get_session(request["sessionId"])
+                        has_started = any(
+                            agent_run.get("id") == command["runId"]
+                            for agent_run in session.get("agentRuns", [])
                         )
-                        if not claimed:
-                            continue
-                        request = claimed
-                        command["_dispatchClaimId"] = request["state"][
-                            "_relay_dispatch_claim_id"
-                        ]
-                        self.daemon_store.update_staged_command(command["id"], command)
-                        if not (
-                            request.get("taskId")
-                            and command.get("reportExecutionStarted")
-                        ):
-                            self._ensure_agent_started_for_command(request, command)
-                    request = self.daemon_store.update_run_request_if_claimed(
-                        request["id"],
-                        "_relay_dispatch_claim_id",
-                        command.get("_dispatchClaimId", ""),
-                        self._run_request_command_link(command),
-                    )
-                    if not request:
-                        claimed = self.daemon_store.claim_run_request_dispatch(
-                            command["_runRequestId"],
-                            new_relay_id("claim"),
-                            DISPATCH_CLAIM_LEASE_SECONDS,
-                        )
-                        if not claimed:
-                            continue
-                        command["_dispatchClaimId"] = claimed["state"][
-                            "_relay_dispatch_claim_id"
-                        ]
-                        self.daemon_store.update_staged_command(command["id"], command)
+                        if not has_started:
+                            claimed = self.daemon_store.claim_run_request_dispatch(
+                                request["id"],
+                                new_relay_id("claim"),
+                                DISPATCH_CLAIM_LEASE_SECONDS,
+                            )
+                            if not claimed:
+                                continue
+                            request = claimed
+                            command["_dispatchClaimId"] = request["state"][
+                                "_relay_dispatch_claim_id"
+                            ]
+                            self.daemon_store.update_staged_command(command["id"], command)
+                            if not (
+                                request.get("taskId")
+                                and command.get("reportExecutionStarted")
+                            ):
+                                self._ensure_agent_started_for_command(request, command)
                         request = self.daemon_store.update_run_request_if_claimed(
-                            claimed["id"],
+                            request["id"],
                             "_relay_dispatch_claim_id",
-                            command["_dispatchClaimId"],
+                            command.get("_dispatchClaimId", ""),
                             self._run_request_command_link(command),
                         )
                         if not request:
-                            continue
+                            claimed = self.daemon_store.claim_run_request_dispatch(
+                                command["_runRequestId"],
+                                new_relay_id("claim"),
+                                DISPATCH_CLAIM_LEASE_SECONDS,
+                            )
+                            if not claimed:
+                                continue
+                            command["_dispatchClaimId"] = claimed["state"][
+                                "_relay_dispatch_claim_id"
+                            ]
+                            self.daemon_store.update_staged_command(command["id"], command)
+                            request = self.daemon_store.update_run_request_if_claimed(
+                                claimed["id"],
+                                "_relay_dispatch_claim_id",
+                                command["_dispatchClaimId"],
+                                self._run_request_command_link(command),
+                            )
+                            if not request:
+                                continue
+                        published = self.daemon_store.publish_command(
+                            command["id"], request_id=request["id"]
+                        )
+                        if published:
+                            self._track_active_command(staged["nodeId"], command)
+                    else:
+                        self._enqueue_current_assignment(request)
+                    continue
+                command_record = self.daemon_store.get_command(command_id)
+                if command_record and command_record.get("status") == "pending":
                     published = self.daemon_store.publish_command(
-                        command["id"], request_id=request["id"]
+                        command_id, request_id=request["id"]
                     )
                     if published:
-                        self._track_active_command(staged["nodeId"], command)
-                else:
-                    self._enqueue_current_assignment(request)
-                continue
-            command_record = self.daemon_store.get_command(command_id)
-            if command_record and command_record.get("status") == "pending":
-                published = self.daemon_store.publish_command(
-                    command_id, request_id=request["id"]
-                )
-                if published:
-                    self._track_active_command(
-                        command_record["nodeId"], command_record["command"]
+                        self._track_active_command(
+                            command_record["nodeId"], command_record["command"]
+                        )
+                if command_record and command_record.get("status") in (
+                    "completed",
+                    "failed",
+                    "cancelled",
+                ):
+                    terminal_event = command_record["command"].get("_terminalEvent")
+                    if isinstance(terminal_event, dict):
+                        self._claim_and_advance_run_request(terminal_event)
+                        continue
+                sandbox = self.sandboxes.get(request["nodeId"])
+                if not sandbox:
+                    self._fail_run_request(
+                        request, f"Daemon node {request['nodeId']} disappeared."
                     )
-            if command_record and command_record.get("status") in (
-                "completed",
-                "failed",
-                "cancelled",
-            ):
-                terminal_event = command_record["command"].get("_terminalEvent")
-                if isinstance(terminal_event, dict):
-                    self._claim_and_advance_run_request(terminal_event)
                     continue
-            sandbox = self.sandboxes.get(request["nodeId"])
-            if not sandbox:
-                self._fail_run_request(
-                    request, f"Daemon node {request['nodeId']} disappeared."
-                )
-                continue
-            # A node heartbeat can land on a different backend replica from
-            # this reaper. Command leases are the durable ownership signal,
-            # so replica-local liveness must not make the run terminal.
-            outcome = self._stale_run_outcome(request)
-            if outcome:
-                self.cancel_active_run(request["nodeId"], request["sessionId"], outcome)
-                self._fail_run_request(request, outcome)
-                continue
+                # A node heartbeat can land on a different backend replica from
+                # this reaper. Command leases are the durable ownership signal,
+                # so replica-local liveness must not make the run terminal.
+                outcome = self._stale_run_outcome(request)
+                if outcome:
+                    self.cancel_active_run(request["nodeId"], request["sessionId"], outcome)
+                    self._fail_run_request(request, outcome)
+                    continue
+            except Exception:
+                logger.exception("Run recovery failed", run_request_id=request.get("id"))
 
     def _stale_run_outcome(self, request: dict[str, Any]) -> str | None:
         """Name why a run should be reaped, or None while it is still allowed to run.
@@ -2833,6 +2861,10 @@ class DaemonNodeRegistry:
         active_runs: list[dict[str, Any]] | None = None,
         validate_logical_assignment: bool = True,
     ) -> dict[str, Any]:
+        session = self.store.get_session(run_request["sessionId"])
+        if session.get("deletionRequestedAt"):
+            self.cancel_run_request_before_delivery(run_request["id"], "Thread deletion requested.")
+            return self.daemon_store.get_run_request(run_request["id"]) or run_request
         task_id = run_request.get("taskId")
         if task_id and self.task_store:
             task_owner = self.task_store.get_task(task_id).get("executionOwner")
@@ -3343,7 +3375,23 @@ class DaemonNodeRegistry:
         )
         if not run_request:
             return False
-        self._advance_run_request(run_request, event)
+        try:
+            self._advance_run_request(run_request, event)
+        except Exception:
+            state = dict(run_request.get("state") or {})
+            attempts = int(state.get("_relay_finalization_attempts") or 0) + 1
+            retry_at = (datetime.now(timezone.utc) + timedelta(seconds=min(300, 5 * 2 ** min(attempts - 1, 6)))).isoformat()
+            state.update({
+                "_relay_finalization_attempts": attempts,
+                "_relay_finalization_retry_at": retry_at,
+                "_relay_recovery_required": attempts >= 5,
+                TERMINAL_CLAIM_EXPIRES_STATE_KEY: retry_at,
+            })
+            self.daemon_store.update_run_request_if_claimed(
+                run_request["id"], TERMINAL_CLAIM_ID_STATE_KEY,
+                state[TERMINAL_CLAIM_ID_STATE_KEY], {"state": state},
+            )
+            raise
         return True
 
     def _advance_run_request(
@@ -3365,8 +3413,10 @@ class DaemonNodeRegistry:
         run_request = fenced_request
         sandbox = self.sandboxes.get(run_request["nodeId"])
         if not sandbox:
-            self.clear_run_output(event["runId"])
-            return
+            self._hydrate_node(run_request["nodeId"])
+            sandbox = self.sandboxes.get(run_request["nodeId"])
+        if not sandbox:
+            raise ValueError("Runtime node unavailable during finalization.")
         controller = self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
         try:
             session_before = self.store.get_session(run_request["sessionId"])
@@ -3391,7 +3441,7 @@ class DaemonNodeRegistry:
                 run_request["nodeId"], {"status": "ready", "lastError": outcome}
             )
             return
-        if session_before.get("status") in ("completed", "failed", "cancelled"):
+        if session_before.get("status") in ("completed", "failed", "cancelled") or session_before.get("deletionRequestedAt"):
             # The human/session terminal decision wins over a late daemon
             # result. The command already retains the acknowledged result;
             # only finish request bookkeeping, never reopen work or dispatch
@@ -3401,7 +3451,7 @@ class DaemonNodeRegistry:
             self.daemon_store.mark_cancel_commands_completed(run_request["nodeId"], event["commandId"])
             self.daemon_store.update_run_request_if_claimed(
                 run_request["id"], TERMINAL_CLAIM_ID_STATE_KEY, terminal_claim_id,
-                {"status": session_before["status"], "error": session_before.get("finalOutcome")},
+                {"status": "cancelled" if session_before.get("deletionRequestedAt") else session_before["status"], "error": session_before.get("finalOutcome")},
             )
             return
         existing_completion = next(

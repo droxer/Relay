@@ -254,3 +254,12 @@ describe("applySessionEvent", () => {
     assert.equal("pendingDecision" in updated, false);
   });
 });
+
+it("new execution events invalidate a previous terminal lifecycle snapshot", () => {
+  const original = session({ execution: { phase: "terminal", canDelete: true, executionConfirmed: false,
+    deletionRequested: false, blockingReason: null, lastConfirmedAt: null, nextRecoveryAt: null } });
+  const next = applySessionEvent(original, { id: "event-new-run", type: "session.status", sessionId: original.id,
+    timestamp: "2026-09-16T00:00:00Z", status: "running", phase: "action" });
+  assert.equal(next.execution, undefined);
+  assert.equal(original.execution?.phase, "terminal");
+});

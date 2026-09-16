@@ -23,20 +23,24 @@ export function findActiveRunOwnerForSession(
 /** True when the UI should show the stop control and block new sends. */
 export function isThreadRunInFlight(input: {
   activeRun: DaemonNodeMonitorRecord["activeRuns"][number] | undefined;
-  session: Pick<RelaySession, "status"> | undefined;
+  session: Pick<RelaySession, "status" | "execution" | "deletionRequestedAt"> | undefined;
   pendingSend: boolean;
   dispatchingRun: boolean;
 }): boolean {
   const { activeRun, session, pendingSend, dispatchingRun } = input;
-  if (activeRun || pendingSend || dispatchingRun) return true;
+  if (pendingSend || dispatchingRun || session?.deletionRequestedAt) return true;
+  if (session?.execution) return session.execution.phase !== "terminal";
+  if (activeRun) return true;
   return session?.status === "running";
 }
 
 /** True when cancel should be offered for the open thread. */
 export function canCancelThreadRun(input: {
   activeRun: DaemonNodeMonitorRecord["activeRuns"][number] | undefined;
-  session: Pick<RelaySession, "id" | "status"> | undefined;
+  session: Pick<RelaySession, "id" | "status" | "execution" | "deletionRequestedAt"> | undefined;
 }): boolean {
+  if (input.session?.deletionRequestedAt) return false;
+  if (input.session?.execution) return ["queued", "running", "unresponsive"].includes(input.session.execution.phase);
   return Boolean(input.activeRun || input.session?.status === "running");
 }
 

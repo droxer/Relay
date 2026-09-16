@@ -500,6 +500,11 @@ def _apply_session_renamed(session: dict[str, Any], event: dict[str, Any]) -> No
     session["title"] = event["title"]
 
 
+def _apply_deletion_requested(session: dict[str, Any], event: dict[str, Any]) -> None:
+    session.setdefault("deletionRequestedAt", event["timestamp"])
+    session.setdefault("deletionRequestedBy", event["requestedBy"])
+
+
 def _apply_participants_joined(session: dict[str, Any], event: dict[str, Any]) -> None:
     """Grow the thread's room. Membership only ever grows, never shrinks."""
     roster = session.setdefault("participantAgentIds", [])
@@ -521,6 +526,7 @@ SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
     "session.archived": _apply_session_archived,
     "session.runtime_affinity": _apply_session_runtime_affinity,
     "session.renamed": _apply_session_renamed,
+    "session.deletion_requested": _apply_deletion_requested,
     "thread.participants_joined": _apply_participants_joined,
 }
 

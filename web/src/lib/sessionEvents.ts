@@ -41,6 +41,12 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
     updatedAt: event.timestamp,
   };
 
+  // A newly accepted run supersedes the last polled execution summary.
+  // Keep deletion intent, which remains authoritative across every run event.
+  if (event.type === "agent.started" || (event.type === "session.status" && event.status === "running")) {
+    delete next.execution;
+  }
+
   switch (event.type) {
     case "collaboration.round.started": {
       const existingRounds = next.collaborationRounds ?? [];
@@ -180,6 +186,8 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
       }
     case "session.archived":
       return { ...next, archived: true };
+    case "session.deletion_requested":
+      return { ...next, deletionRequestedAt: next.deletionRequestedAt ?? event.timestamp, deletionRequestedBy: next.deletionRequestedBy ?? event.requestedBy };
     case "session.renamed":
       return { ...next, title: event.title };
     default:

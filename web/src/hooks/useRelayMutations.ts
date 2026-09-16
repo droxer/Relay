@@ -81,29 +81,17 @@ export function useRelayMutations() {
 
   const deleteSessionMutation = useMutation({
     mutationFn: ({ sessionId, token }: { sessionId: string } & TokenArg) => deleteSession(sessionId, token),
-    onMutate: async ({ sessionId }) => {
-      await queryClient.cancelQueries({ queryKey: SESSIONS_QUERY_KEY });
-      const previous = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY);
+    onSuccess: (execution, { sessionId }) => {
       queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
-        (current ?? []).filter((session) => session.id !== sessionId),
-      );
-      return { deleted: previous?.find((session) => session.id === sessionId) };
-    },
-    onSuccess: () => {
+        execution
+          ? (current ?? []).map((session) => session.id === sessionId
+            ? { ...session, execution, deletionRequestedAt: session.deletionRequestedAt ?? new Date().toISOString() }
+            : session)
+          : (current ?? []).filter((session) => session.id !== sessionId));
       void invalidateSessions();
       void invalidateTasks();
     },
-    onError: (error, _input, context) => {
-      if (context?.deleted) {
-        const deleted = context.deleted;
-        queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
-          current?.some((session) => session.id === deleted.id)
-            ? current
-            : [deleted, ...(current ?? [])]);
-      }
-      void invalidateSessions();
-      onRelayError("Failed to delete thread", "errors.delete_thread")(error);
-    },
+    onError: onRelayError("Failed to delete thread", "errors.delete_thread"),
   });
 
   const cancelRunMutation = useMutation({
