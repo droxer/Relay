@@ -1129,7 +1129,8 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
         assert command["logicalAgentId"] == lead["id"]
 
 
-def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> None:
+@pytest.mark.parametrize("executing", [False, True])
+def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, executing) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -1177,8 +1178,10 @@ def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> No
         assert started.json()["dispatch"]["state"] == "started"
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "assigned"
         [command] = app.state.registry.take_commands("node_alice", "node_token")
-        _mark_executing(app, "node_alice", command)
-        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "running"
+        if executing:
+            _mark_executing(app, "node_alice", command)
+        expected_status = "running" if executing else "assigned"
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == expected_status
 
         # Disabling the team makes resolution fail permanently; a second start
         # must not blocked-out a task whose run is still in flight.
@@ -1191,9 +1194,10 @@ def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> No
         again = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert again.status_code == 202
-        assert again.json()["dispatch"]["state"] == "rejected"
-        assert again.json()["dispatch"]["code"] == "invalid_state"
-        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "running"
+        assert again.json()["dispatch"]["state"] == ("rejected" if executing else "queued")
+        assert again.json()["dispatch"]["code"] == ("invalid_state" if executing else "task_execution_active")
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == expected_status
+        assert app.state.registry.take_commands("node_alice", "node_token") == []
 
 
 def test_team_task_create_session_uses_assignee_lead_and_team_ownership(
