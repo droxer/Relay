@@ -47,6 +47,22 @@ def _login(client: TestClient, username: str, password: str = "userpass") -> Non
     assert response.status_code == 200
 
 
+def _mark_run_executing(client: TestClient, command: dict) -> None:
+    response = client.post(
+        "/api/v1/daemon-nodes/sbx_alice/events",
+        json={
+            "type": "run.executing",
+            "commandId": command["id"],
+            **({"leaseId": command["leaseId"]} if command.get("leaseId") else {}),
+            "sessionId": command["sessionId"],
+            "runId": command["runId"],
+            "agent": command["agent"],
+        },
+        headers={"Authorization": "Bearer node_token"},
+    )
+    assert response.status_code == 200, response.text
+
+
 def _create_agent(
     client: TestClient,
     employee_id: str,
@@ -527,7 +543,8 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert started.status_code == 202
         assert started.json()["session"]["id"]
         assert started.json()["task"]["id"] == task["id"]
-        assert started.json()["task"]["status"] == "running"
+        assert started.json()["task"]["status"] == "assigned"
+        assert started.json()["task"]["workflowStage"] == "assigned"
         assert started.json()["task"]["linkedSessionIds"] == [
             started.json()["session"]["id"]
         ]
@@ -543,6 +560,24 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert command["agent"] == "codex"
         assert command["sessionId"] == started.json()["session"]["id"]
         assert command["taskGoal"] == "Run from backlog"
+        assert command["reportExecutionStarted"] is True
+
+        executing = client.post(
+            "/api/v1/daemon-nodes/sbx_alice/events",
+            json={
+                "type": "run.executing",
+                "commandId": command["id"],
+                "leaseId": command["leaseId"],
+                "sessionId": command["sessionId"],
+                "runId": command["runId"],
+                "agent": command["agent"],
+            },
+            headers={"Authorization": "Bearer node_token"},
+        )
+        assert executing.status_code == 200, executing.text
+        active = client.get(f"/api/v1/tasks/{task['id']}").json()
+        assert active["status"] == "running"
+        assert active["workflowStage"] == "running"
 
 
 def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
@@ -706,7 +741,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
         assert started.status_code == 202
         session_id = started.json()["session"]["id"]
         assert started.json()["task"]["linkedSessionIds"] == [session_id]
-        assert started.json()["task"]["status"] == "running"
+        assert started.json()["task"]["status"] == "assigned"
 
         commands = client.get(
             "/api/v1/daemon-nodes/sbx_alice/commands",
@@ -720,6 +755,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
             first["taskGoal"]
             == "Plan onboarding\n\nDiscuss rollout and implementation."
         )
+        _mark_run_executing(client, first)
 
         completed_first = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
@@ -746,6 +782,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
         assert second["agent"] == "codex"
         assert "mode" not in second
         assert "prior_agent_bridge" in second["state"]
+        _mark_run_executing(client, second)
 
         completed_second = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
@@ -865,6 +902,7 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
         assert commands.status_code == 200
         [first] = commands.json()["commands"]
         assert first["logicalAgentId"] == named.json()["agent"]["id"]
+        _mark_run_executing(client, first)
 
         completed_first = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
@@ -890,6 +928,7 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
         [second] = commands.json()["commands"]
         assert second["logicalAgentId"] == reviewer.json()["agent"]["id"]
         assert "prior_agent_bridge" in second["state"]
+        _mark_run_executing(client, second)
 
         completed_second = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
@@ -984,6 +1023,7 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
         assert commands.status_code == 200
         [command] = commands.json()["commands"]
         assert "mode" not in command
+        _mark_run_executing(client, command)
 
         completed = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
@@ -1176,7 +1216,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         occurrence = start.json()["task"]
         assert occurrence["id"] != task["id"]
         assert occurrence["isRoutine"] is False
-        assert occurrence["status"] == "running"
+        assert occurrence["status"] == "assigned"
         assert occurrence["dueDate"] == "2026-06-25"
         assert occurrence["sourceRoutineId"] == task["id"]
         assert occurrence["scheduledFor"] == "2026-06-25"

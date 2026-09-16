@@ -39,6 +39,21 @@ def _employee(client: TestClient, employee_id: str) -> None:
     )
 
 
+def _mark_executing(app, node_id: str, command: dict) -> None:
+    app.state.registry.handle_event(
+        node_id,
+        {
+            "type": "run.executing",
+            "commandId": command["id"],
+            **({"leaseId": command["leaseId"]} if command.get("leaseId") else {}),
+            "sessionId": command["sessionId"],
+            "runId": command["runId"],
+            "agent": command["agent"],
+        },
+        "node_token",
+    )
+
+
 def _agent(
     client: TestClient,
     employee_id: str,
@@ -568,7 +583,7 @@ def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
             f"/api/v1/tasks/{task['id']}/pickups", json={"agentId": agent["id"]}
         )
         assert duplicate.status_code == 409
-        assert duplicate.json()["detail"] == "task_not_dispatchable"
+        assert duplicate.json()["detail"] == "task_execution_active"
 
 
 def test_task_owner_can_edit_delegated_team_task_without_reassigning_it(
@@ -746,10 +761,14 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
             client.get(f"/api/v1/threads/{payload['session']['id']}").json()["teamId"]
             == team["id"]
         )
-        assert len(payload["session"]["agentRuns"]) == 1
-        assert payload["session"]["agentRuns"][0]["logicalAgentId"] == lead["id"]
+        assert payload["session"]["agentRuns"] == []
         [lead_command] = app.state.registry.take_commands("node_alice", "node_token")
         assert lead_command["logicalAgentId"] == lead["id"]
+        _mark_executing(app, "node_alice", lead_command)
+        [lead_run] = app.state.session_store.get_session(
+            payload["session"]["id"]
+        )["agentRuns"]
+        assert lead_run["logicalAgentId"] == lead["id"]
         app.state.registry.handle_event(
             "node_alice",
             {
@@ -999,6 +1018,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
         assert lead_command["phase"] == "execution"
         assert lead_command["role"] == "implementer"
         assert lead_command["state"]["agent_role"] == "implementer"
+        _mark_executing(app, "node_alice", lead_command)
         app.state.registry.handle_event(
             "node_alice",
             {
@@ -1018,6 +1038,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
         assert review_command["phase"] == "review"
         assert review_command["role"] == "reviewer"
         assert review_command["state"]["agent_role"] == "reviewer"
+        _mark_executing(app, "node_alice", review_command)
         app.state.registry.handle_event(
             "node_alice",
             {
@@ -1108,7 +1129,8 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
         assert command["logicalAgentId"] == lead["id"]
 
 
-def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> None:
+@pytest.mark.parametrize("executing", [False, True])
+def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, executing) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -1152,13 +1174,14 @@ def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> No
                 "assignedTeamId": team["id"],
             },
         ).json()
-        assert (
-            client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()["dispatch"][
-                "state"
-            ]
-            == "started"
-        )
-        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "running"
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert started.json()["dispatch"]["state"] == "started"
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "assigned"
+        [command] = app.state.registry.take_commands("node_alice", "node_token")
+        if executing:
+            _mark_executing(app, "node_alice", command)
+        expected_status = "running" if executing else "assigned"
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == expected_status
 
         # Disabling the team makes resolution fail permanently; a second start
         # must not blocked-out a task whose run is still in flight.
@@ -1171,9 +1194,10 @@ def test_start_on_a_running_team_task_leaves_its_status_alone(monkeypatch) -> No
         again = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
         assert again.status_code == 202
-        assert again.json()["dispatch"]["state"] == "rejected"
-        assert again.json()["dispatch"]["code"] == "invalid_state"
-        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "running"
+        assert again.json()["dispatch"]["state"] == ("rejected" if executing else "queued")
+        assert again.json()["dispatch"]["code"] == ("invalid_state" if executing else "task_execution_active")
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == expected_status
+        assert app.state.registry.take_commands("node_alice", "node_token") == []
 
 
 def test_team_task_create_session_uses_assignee_lead_and_team_ownership(

@@ -2513,9 +2513,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
         assert task.json()["assignedAgent"] == "codex"
         assert task.json()["assignedAgentId"] == agent["id"]
         assert started.status_code == 202
-        assert (
-            started.json()["session"]["agentRuns"][0]["logicalAgentId"] == agent["id"]
-        )
+        assert started.json()["session"]["agentRuns"] == []
         commands = client.get(
             "/api/v1/daemon-nodes/node_a/commands",
             headers={"Authorization": "Bearer node_token"},
@@ -2719,10 +2717,9 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
         assert started.status_code == 202
         updated = app.state.task_store.get_task(legacy["id"])
         assert updated["assignedAgentId"] == declared["id"]
-        assert (
-            started.json()["session"]["agentRuns"][0]["logicalAgentId"]
-            == declared["id"]
-        )
+        assert started.json()["session"]["agentRuns"] == []
+        [command] = app.state.registry.take_commands("node_a", "node_token")
+        assert command["logicalAgentId"] == declared["id"]
 
 
 def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> None:

@@ -8,8 +8,8 @@ deliverable; ending an attempt does not necessarily finish the task.
 | Board stage | API representation | Policy |
 | --- | --- | --- |
 | Backlog | `status=backlog` | Uncommitted demand. Assignment may be recorded without starting work. |
-| Ready | `status=assigned`, no `startedAt` | Selected, executable demand. The scheduler pulls when runtime and WIP capacity permit. |
-| In progress | `workflowStage=running` | Work has been admitted. Includes execution, queued continuations, and waits. |
+| Ready | `status=assigned` | Selected or admitted demand waiting for an agent to start. The scheduler pulls when runtime and WIP capacity permit. |
+| In progress | `workflowStage=running` | An agent has started executing. Human waits remain on this stage until review or another queued continuation. |
 | Review | `workflowStage=review` | Work awaits acceptance by a person with access to the task. Rework returns it to the execution queue. |
 | Done | `status=done` | Accepted delivery. Frees the task's WIP slot. |
 
@@ -46,11 +46,13 @@ rather than reopening accepted work with new scope.
 the task's human assignee, falling back to its owner; tasks with neither share an
 unowned scope. All backend replicas must use the same configured limit.
 
-The start boundary is the first accepted execution claim. Legacy event histories
-also recognize the first running/review/human-waiting transition. Ready inventory
-and routine templates do not consume WIP. All started, unfinished tasks do,
-including blocked work, review, and queued continuations. Retries use the same
-slot; reopening a finished task or moving WIP to another employee requires capacity.
+The WIP-admission boundary is the first accepted execution claim. It reserves a
+slot but stays in Ready until the daemon reports that an agent has started.
+Legacy event histories also recognize the first running/review/human-waiting
+transition. Unadmitted Ready inventory and routine templates do not consume WIP.
+All admitted, unfinished tasks do, including blocked work, review, and queued
+continuations. Retries use the same slot; reopening a finished task or moving WIP
+to another employee requires capacity.
 
 Manual starts, scheduled starts, and task-scoped thread recovery share the event
 store admission check. PostgreSQL serializes count-and-admit with a transaction
@@ -91,6 +93,10 @@ Migration `20260913_0069` rebuilds flow fields in existing task snapshots from t
 authoritative events. It does not rewrite task events, start agents, change
 assignments, or invent historical timestamps. It processes one task history at a
 time. Downgrade removes only the added snapshot fields.
+
+Migration `20260916_0074` replays the workflow-stage projection so executions
+claimed before an agent actually started return to Ready. It leaves task events,
+execution ownership, WIP admission timestamps, and run requests unchanged.
 
 Stop backend writers, run `make backend-migrate` against the intended database,
 then restart the backend and deploy the matching web build. Pause writers during

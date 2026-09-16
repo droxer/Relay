@@ -23,6 +23,7 @@ from ..persistence.protocols import (
     TeamStore,
 )
 from ..persistence.stores import valid_agent
+from ..persistence.task_store import dispatch_claim_active
 from ..tasks import (
     ensure_managed_capacity_for_task,
     next_routine_date,
@@ -41,6 +42,7 @@ from .dispatch_retry import (
     safe_dispatch_error_message,
 )
 from .project_runtime import ProjectDispatchError, resolve_project_task_assignments
+from .task_deletion import task_has_active_linked_session
 from .task_workspace import (
     recorded_task_workspace,
     resolve_task_workspace,
@@ -239,6 +241,17 @@ class TaskDispatcher:
                 "rejected",
                 code="invalid_state",
                 message=f"A {self.task.get('status')} task cannot be started.",
+            )
+        # Queued executions remain assigned until the daemon starts. Do not
+        # re-resolve (and potentially block) work that already has an owner.
+        if dispatch_claim_active(self.task) or task_has_active_linked_session(
+            self.ctx.session_store, self.task
+        ):
+            return _result(
+                self.task,
+                "queued",
+                code="task_execution_active",
+                message="This task already has a dispatch or execution in progress.",
             )
         project_result = self._resolve_project_assignments()
         if project_result:
@@ -533,18 +546,17 @@ class TaskDispatcher:
             return self._record_dispatch_started(session, node)
 
     def _record_dispatch_started(self, session: dict[str, Any], node: dict[str, Any]) -> DispatchResult:
-        self.ctx.task_store.update_task(self.task["id"], {"status": "running"})
         self.ctx.task_store.clear_dispatch_retry(self.task["id"])
         if self.claim_id:
             self.ctx.task_store.release_dispatch_claim(self.task["id"], self.claim_id)
-        message = f"{self.agent} started the task."
+        message = f"Dispatched to {self.agent}; waiting for agent execution."
         self.ctx.task_store.record_activity(
             self.task["id"],
             message,
             {"agent": self.agent, "sessionId": session["id"]},
         )
         logger.info(
-            "Task started",
+            "Task dispatched",
             task_id=self.task["id"],
             session_id=session["id"],
             agent=self.agent,
@@ -713,16 +725,20 @@ async def start_routine_occurrence_on_ready_node(
         occurrence = _create_manual_occurrence(ctx, routine, agent, today_iso)
         if not occurrence:
             return None
-    if occurrence.get("status") in {"running", "review"}:
+    if occurrence.get("status") in {"running", "review"} or (
+        occurrence.get("status") == "assigned"
+        and occurrence.get("linkedSessionIds")
+    ):
         existing = _existing_occurrence_result(ctx, routine, occurrence)
         if existing:
             return existing
-        return _result(
-            occurrence,
-            "queued",
-            code="already_active",
-            message="The current routine occurrence is already active.",
-        )
+        if occurrence.get("status") in {"running", "review"}:
+            return _result(
+                occurrence,
+                "queued",
+                code="already_active",
+                message="The current routine occurrence is already active.",
+            )
     # The occurrence is an immutable assignment snapshot. A routine may be
     # reassigned after promotion, but that must only affect later occurrences.
     result = await start_task_on_ready_node(ctx, occurrence, actor, assignments=None)
@@ -753,6 +769,11 @@ def _existing_occurrence_result(
         try:
             session = ctx.session_store.get_session(session_id)
         except (KeyError, FileNotFoundError):
+            continue
+        if (
+            occurrence.get("status") == "assigned"
+            and session.get("status") in ("completed", "failed", "cancelled")
+        ):
             continue
         if session_id not in routine.get("linkedSessionIds", []):
             ctx.task_store.link_session(routine["id"], session_id)

@@ -415,7 +415,9 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
     }
     if (stage === "done" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
   } else {
-    stage = status === "assigned" && task.startedAt ? "running" : status;
+    // An execution claim reserves WIP before the daemon starts the agent.
+    // Keep that admitted work Ready until an actual running event arrives.
+    stage = status;
   }
   if (status !== "blocked") {
     delete task.blockedAt;

@@ -46,3 +46,14 @@ test("workflow errors give actionable messages and edits cannot claim execution"
   assert.deepEqual(manualTaskStatuses("backlog", false), ["backlog", "assigned"]);
   assert.ok(manualTaskStatuses("review", true).includes("done"));
 });
+
+test("an admitted but not yet running execution stays in Ready", () => {
+  const admitted = materializeTaskEvents([
+    relayTaskEvent("task.created", "queued", { title: "Queued", description: "", priority: "normal" }),
+    relayTaskEvent("task.status", "queued", { status: "assigned" }),
+    relayTaskEvent("task.execution.claimed", "queued", { requestId: "request", expectedRevision: 0, revision: 1 }),
+  ]);
+
+  assert.ok(admitted.startedAt);
+  assert.equal(taskWorkflowStage(admitted), "assigned");
+});

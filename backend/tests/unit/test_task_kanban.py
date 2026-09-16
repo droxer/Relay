@@ -36,7 +36,7 @@ def test_blocking_preserves_stage_and_age_across_rework(store):
     task = status(store, task, "review")
     assert "blockedAt" not in task
     task = status(store, task, "assigned")
-    assert task["workflowStage"] == "running"
+    assert task["workflowStage"] == "assigned"
     assert task["startedAt"] == started
     task = status(store, task, "done")
     assert task["finishedAt"]
@@ -104,6 +104,19 @@ def test_wip_admission_counts_review_waiting_and_blocked_but_not_ready(
     assert claim(store, second)["startedAt"]
     other = store.create_task({"title": "Other employee", "ownerEmployeeId": "bob"})
     assert claim(store, other)["startedAt"]
+
+
+def test_execution_claim_stays_ready_until_an_agent_starts(store):
+    task = store.create_task({"title": "Wait for the daemon", "status": "assigned"})
+
+    admitted = claim(store, task)
+
+    assert admitted["status"] == "assigned"
+    assert admitted["workflowStage"] == "assigned"
+    assert admitted["startedAt"]
+
+    executing = status(store, admitted, "running")
+    assert executing["workflowStage"] == "running"
 
 
 def test_concurrent_wip_admission_is_atomic(tmp_path, monkeypatch):

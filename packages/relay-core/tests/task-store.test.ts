@@ -4,6 +4,24 @@ import assert from "node:assert/strict";
 import { materializeTaskEvents, relayTaskEvent } from "../src/index.js";
 
 describe("task team assignment events", () => {
+  it("keeps an admitted execution ready until the agent starts", () => {
+    const taskId = "task-stage";
+    const admitted = materializeTaskEvents([
+      relayTaskEvent("task.created", taskId, { title: "Wait for the daemon", description: "", priority: "normal" }),
+      relayTaskEvent("task.status", taskId, { status: "assigned" }),
+      relayTaskEvent("task.execution.claimed", taskId, { requestId: "request", expectedRevision: 0, revision: 1 }),
+    ]);
+
+    assert.equal(admitted.status, "assigned");
+    assert.equal(admitted.workflowStage, "assigned");
+
+    const executing = materializeTaskEvents([
+      ...admitted.events,
+      relayTaskEvent("task.status", taskId, { status: "running" }),
+    ]);
+    assert.equal(executing.workflowStage, "running");
+  });
+
   it("replays the task execution generation after completion", () => {
     const rebuilt = materializeTaskEvents([
       relayTaskEvent("task.created", "task-owned", { title: "Owned", description: "", priority: "normal" }),
