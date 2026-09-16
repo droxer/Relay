@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { readThreadListBesideSpace, writeThreadListBesideSpace } from "../lib/appStorage";
 import { useUrlSearchState } from "./useUrlSearchState";
 
 /**
@@ -14,7 +15,8 @@ import { useUrlSearchState } from "./useUrlSearchState";
  *
  * The thread rail's collapse rides along because the two are one gesture:
  * opening the panel makes room by hiding the rail, closing it gives the room
- * back.
+ * back. Whether the list stays hidden is the user's standing choice: showing
+ * it beside the panel is remembered across panels, threads, and reloads.
  */
 export interface ThreadSpace {
   open: boolean;
@@ -41,11 +43,18 @@ export function useThreadSpace(activeSessionId: string | undefined): ThreadSpace
     (value) => value,
     (value) => value,
   );
-  const [threadListHidden, setThreadListHidden] = useState(false);
+  const [threadListHidden, setThreadListHiddenState] = useState(false);
+
+  // A header toggle is the user stating where they want the list, so it is
+  // the one path that writes; open/close/session resets only apply it.
+  const setThreadListHidden = useCallback((hidden: boolean) => {
+    setThreadListHiddenState(hidden);
+    writeThreadListBesideSpace(!hidden);
+  }, []);
 
   const openSpace = useCallback((nextArtifactId: string | null = null) => {
     if (!activeSessionId) return;
-    setThreadListHidden(true);
+    setThreadListHiddenState(!readThreadListBesideSpace());
     // space=1 must land first: the canonical URL keeps ?artifact only while
     // the panel is open, so writing the selection first would drop it.
     setOpen(true);
@@ -55,7 +64,7 @@ export function useThreadSpace(activeSessionId: string | undefined): ThreadSpace
   const closeSpace = useCallback(() => {
     setOpen(false);
     setArtifactId(null);
-    setThreadListHidden(false);
+    setThreadListHiddenState(false);
   }, [setArtifactId, setOpen]);
 
   const toggleSpace = useCallback(() => {
@@ -66,8 +75,11 @@ export function useThreadSpace(activeSessionId: string | undefined): ThreadSpace
 
   useEffect(() => {
     // Session switches navigate to a new path, which drops the space/artifact
-    // search params; only the local rail collapse needs resetting.
-    setThreadListHidden(false);
+    // search params; only the local rail collapse needs resetting. It also runs
+    // on mount, where a reload may land with ?space=1 already open — so apply
+    // the remembered choice rather than always revealing the list. Deferred to
+    // an effect for the same prerender/hydration reason as usePanelLayout.
+    setThreadListHiddenState(!readThreadListBesideSpace());
   }, [activeSessionId]);
 
   return {
