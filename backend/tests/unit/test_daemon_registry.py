@@ -7423,3 +7423,45 @@ def test_finalization_retries_are_bounded_and_preserve_terminal_evidence(store_f
             assert request["state"]["_relay_terminal_event"] == event
             assert registry.daemon_store.active_run_request_for_task(task["id"])
     asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("delivered", [False, True])
+def test_failed_session_closes_agent_projection_only_after_execution_is_settled(store_factory, delivered):
+    from relay.services.execution_lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, _tasks, registry = _round_result_registry(root, store_factory)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "reject capacity without orphaning the agent",
+                "assignments": [{"agent": "codex"}],
+            })
+            request = registry.daemon_store.active_run_request_for_session_any_node(session["id"])
+            command = registry.daemon_store.get_command(request["currentCommandId"])["command"]
+            assert sessions.get_session(session["id"])["agentRuns"][-1]["status"] == "running"
+            if delivered:
+                [command] = registry.take_commands("sbx_alice", "node_token")
+            outcome = "Agent placement is no longer eligible: Runtime node capacity is exhausted."
+            SessionController(sessions).fail_session(session["id"], outcome)
+            registry.reap_stale_runs()
+            if delivered:
+                assert sessions.get_session(session["id"])["agentRuns"][-1]["status"] == "running"
+                assert registry.daemon_store.active_run_request_for_session_any_node(session["id"]) is not None
+                registry.handle_event("sbx_alice", {
+                    "type": "run.failed", "commandId": command["id"], "runId": command["runId"],
+                    "sessionId": session["id"], "agent": command["agent"], "exitCode": 1,
+                    "error": "process exited", "agentLog": "preserved output", "leaseId": command["leaseId"],
+                }, "node_token")
+            else:
+                assert registry.take_commands("sbx_alice", "node_token") == []
+            snapshot = sessions.get_session(session["id"])
+            assert snapshot["status"] == "failed"
+            assert snapshot["finalOutcome"] == outcome
+            assert snapshot["agentRuns"][-1]["status"] != "running"
+            assert ExecutionLifecycleService(registry, None).status(snapshot)["phase"] == "terminal"
+            before = snapshot["events"]
+            registry.reap_stale_runs()
+            assert sessions.get_session(session["id"])["events"] == before
+
+    asyncio.run(run_flow())
