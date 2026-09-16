@@ -1,4 +1,4 @@
-import type { AgentName, ProjectRecord, RelaySession } from "../types.js";
+import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary } from "../types.js";
 
 // A thread is one owner-scoped session. The row binds to the session
 // itself (not an employee), so the logged-in employee can hold several in
@@ -9,7 +9,47 @@ export type ThreadItem = {
   runningAgent?: AgentName;
   /** The computer this thread is pinned to is unreachable. */
   nodeOffline?: boolean;
+  /** The backlog task or routine that started this thread; absent for a chat. */
+  origin?: ThreadOrigin;
 };
+
+/** Where a task-driven thread came from. Project membership is not an origin:
+ *  project threads live under their project folder, so the rail says so by
+ *  placement rather than with a mark. */
+export type ThreadOrigin = {
+  kind: "backlog" | "routine";
+  taskId: string;
+  /** The backlog task's title, or the parent routine's for an occurrence. */
+  title: string;
+};
+
+type OriginTask = Pick<
+  RelayTaskSummary,
+  "id" | "title" | "isRoutine" | "sourceRoutineId" | "linkedSessionIds" | "deletedAt"
+>;
+
+/**
+ * Session id → origin, inverted from the task list. Only a task records which
+ * sessions it ran (`linkedSessionIds`); a session carries no task id, so the
+ * rail builds this once per task-list change instead of scanning per row.
+ */
+export function threadOriginIndex(tasks: readonly OriginTask[]): Map<string, ThreadOrigin> {
+  const live = tasks.filter((task) => !task.deletedAt);
+  const titles = new Map(live.map((task) => [task.id, task.title]));
+  const index = new Map<string, ThreadOrigin>();
+  for (const task of live) {
+    const isRoutine = task.isRoutine || Boolean(task.sourceRoutineId);
+    const origin: ThreadOrigin = {
+      kind: isRoutine ? "routine" : "backlog",
+      taskId: task.id,
+      title: (task.sourceRoutineId && titles.get(task.sourceRoutineId)) || task.title,
+    };
+    for (const sessionId of task.linkedSessionIds) {
+      if (!index.has(sessionId)) index.set(sessionId, origin);
+    }
+  }
+  return index;
+}
 
 export type ProjectThreadBucket = {
   project: ProjectRecord;
@@ -153,13 +193,18 @@ export function matchesThreadQuery(session: Labelled, query: string): boolean {
  *  their own state pip because the flat in-project list has no group headers,
  *  and marks would undo the density that layout exists for. */
 export function threadRowMeta(
-  { layout, hasStatus, agentCount }: {
+  { layout, hasStatus, hasOrigin, agentCount }: {
     layout: "full" | "nested";
     hasStatus: boolean;
+    /** A backlog / routine thread names its source on the meta line. */
+    hasOrigin: boolean;
     agentCount: number;
   },
 ): { subline: boolean; inlineAgents: boolean } {
   if (layout !== "full") return { subline: false, inlineAgents: false };
+  // The origin's name needs the meta line's width more than the decorative
+  // agent marks do, so they ride the title line whenever an origin shows.
+  if (hasOrigin) return { subline: true, inlineAgents: agentCount > 0 };
   if (hasStatus) return { subline: true, inlineAgents: false };
   return { subline: false, inlineAgents: agentCount > 0 };
 }

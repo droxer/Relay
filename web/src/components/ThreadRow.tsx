@@ -2,6 +2,8 @@ import {
   ActionEdit,
   ActionRemove,
   ICON,
+  NavBacklog,
+  NavRoutine,
   NodeOffline,
 } from "./icons";
 import { useTranslation } from "react-i18next";
@@ -10,6 +12,7 @@ import type { RelaySession } from "../types";
 import { canDeleteThread, sessionAgents, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { agentLabel } from "../lib/plan";
 import { AgentMark } from "./AgentMark";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export type { ThreadItem };
@@ -79,7 +82,10 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
       : tone === "run"
         ? t("thread.group_running")
         : t("thread.group_idle");
-  const rowLabel = [label, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
+  const originLabel = item.origin
+    ? t(item.origin.kind === "routine" ? "thread.origin_routine" : "thread.origin_backlog", { title: item.origin.title })
+    : "";
+  const rowLabel = [label, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
 
   // The meta line's status text. A live run names its agent; a thread
@@ -112,6 +118,7 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
   const { subline, inlineAgents } = threadRowMeta({
     layout,
     hasStatus: Boolean(status),
+    hasOrigin: Boolean(item.origin),
     agentCount: agents.length,
   });
   const agentCluster = agents.length > 0 ? (
@@ -135,6 +142,18 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
     >
       <NodeOffline size={ICON.xs} />
     </span>
+  ) : null;
+
+  // Which backlog task or routine started the thread, in words: a kind badge
+  // ("Backlog" / "Routine") and, on full rows, the source's name beside it.
+  // Nested rows are single-line, so they carry the badge alone and the name
+  // reads from its tooltip. The row's aria-label already speaks both.
+  const OriginGlyph = item.origin?.kind === "routine" ? NavRoutine : NavBacklog;
+  const originBadge = item.origin ? (
+    <Badge className="conversation-origin-kind" data-kind={item.origin.kind} title={originLabel} aria-hidden="true">
+      <OriginGlyph size={ICON.xs} />
+      {t(item.origin.kind === "routine" ? "thread.origin_kind_routine" : "thread.origin_kind_backlog")}
+    </Badge>
   ) : null;
 
   return (
@@ -167,6 +186,7 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
                   they ride here rather than keeping a second line alive for
                   one decorative glyph. */}
               {inlineAgents ? agentCluster : null}
+              {layout === "nested" ? originBadge : null}
             </span>
             {stamp ? (
               <span className="conversation-stamp tnum">
@@ -174,13 +194,21 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
               </span>
             ) : null}
           </span>
-          {subline && status ? (
+          {subline ? (
             <span className="conversation-subline">
-              <span className="conversation-status" data-tone={status.tone}>
-                <StateMark {...PIP[status.tone]} />
-                <span>{status.text}</span>
-              </span>
-              {agentCluster}
+              {status ? (
+                <span className="conversation-status" data-tone={status.tone}>
+                  <StateMark {...PIP[status.tone]} />
+                  <span>{status.text}</span>
+                </span>
+              ) : null}
+              {item.origin ? (
+                <span className="conversation-origin" data-kind={item.origin.kind}>
+                  {originBadge}
+                  <span className="conversation-origin-name">{item.origin.title}</span>
+                </span>
+              ) : null}
+              {inlineAgents ? null : agentCluster}
             </span>
           ) : null}
         </span>

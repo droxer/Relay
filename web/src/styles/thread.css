@@ -505,6 +505,37 @@
   white-space: nowrap;
 }
 
+/* Backlog / routine origin: a neutral kind badge plus the source's name. It is
+   provenance, not state, so it stays out of the tone hues the status pips
+   spend. The name is the segment that gives up width on a narrow rail — the
+   status before it and the badge itself hold their size. */
+.conversation-origin {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--sp-1-5);
+  min-width: 0;
+}
+
+.conversation-origin-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The shared badge chip, set in the meta line's own type and trimmed to its
+   line height: at the primitive's caption size and block pad it outgrew the
+   status text beside it and added 6px to every task row. */
+.conversation-origin-kind {
+  flex: none;
+  gap: var(--sp-1);
+  padding-block: 0;
+  padding-inline: var(--sp-1-5);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-2);
+}
+
 /* Badges a thread whose computer is unreachable. Sits inside the name line
    so it survives the hover swap that hides the timestamp. */
 .conversation-offline {
