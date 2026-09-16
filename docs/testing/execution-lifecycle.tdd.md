@@ -66,10 +66,10 @@ now surface `termination_unconfirmed`, retaining their reservations.
 
 | Verification | Result |
 | --- | --- |
-| Full Python suite (`npm run test:py`) | 1,518 passed, 5 skipped |
+| Full Python suite (`npm run test:py`, final rerun) | 1,521 passed, 5 skipped |
 | Backend after terminal-evidence repair (deletion, lifecycle, daemon API, registry) | 341 passed |
 | Final backend regression run including stop deadline | 263 passed |
-| Full built Node suites | 1,508 passed |
+| Full built Node suites (final rerun) | 1,509 passed |
 | React interaction suite | 68 passed |
 | Final focused Node tests including SSE invalidation | 54 passed |
 | Package TypeScript and web `tsc --noEmit` | Passed |
@@ -78,13 +78,14 @@ now surface `termination_unconfirmed`, retaining their reservations.
 | `npm audit --registry=https://registry.npmjs.org` | No known vulnerabilities |
 | `pip-audit` | No known vulnerabilities; local Relay package is not published on PyPI |
 
-The full Python suite preceded the last focused terminal-evidence/deadline
-regressions; those were checked separately afterward. Node process/signal tests
-passed after rerunning with sandbox permission to spawn their fixtures.
+The final full Python and Node runs include the terminal-evidence, stop-deadline,
+and SSE regressions. Node process/signal tests passed with sandbox permission to
+spawn their fixtures. The final React rerun passed all 68 interaction tests.
 
-`npm test` was attempted, including an escalated retry. Its production build
-cannot finish because Google Fonts resources fail to download (Noto Sans / SC /
-TC). The constituent Python, Node, React, and typecheck suites above were run
-separately. No font assets or build configuration were changed to conceal this
-external failure. PostgreSQL-only tests are among the skipped tests; the database
+`npm run build` passed on the verification retry, including TypeScript and static
+page generation. A subsequent `npm test` attempt, including an escalated retry,
+hit an intermittent Google Fonts download failure (Noto Sans SC). The constituent
+Python, Node, React, and typecheck suites above were run separately. No font assets
+or build configuration were changed to conceal this external dependency.
+PostgreSQL-only tests are among the skipped tests; the database
 admission/deletion regression ran against SQLite.
