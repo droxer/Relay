@@ -621,11 +621,15 @@
 }
 
 .routine-card {
+  /* Its own rung on the card ladder: a routine has no exception line, so the
+     task card's frame would leave a band of empty card under every routine in
+     the grid. */
+  height: var(--card-h-routine);
   /* Render-skip. Card tier — see the note on .agents-roster-row. The
      placeholder matches the real frame, so nothing reflows when a skipped
      card paints. */
   content-visibility: auto;
-  contain-intrinsic-size: auto var(--card-h-record);
+  contain-intrinsic-size: auto var(--card-h-routine);
   min-width: 0;
 }
 

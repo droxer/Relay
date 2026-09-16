@@ -129,10 +129,7 @@ export function BacklogTaskCard({
         <div className="backlog-card-body">
           <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
           <TaskFlowDetails task={task} showAge={false} />
-          {/* Always rendered, empty when the task has no description: the two
-              lines are reserved by the card's frame, so a described and an
-              undescribed task are the same shape. */}
-          <p className="backlog-description">{task.description ?? ""}</p>
+          {task.description ? <p className="backlog-description">{task.description}</p> : null}
           {/* One line of facts, and only facts the lane above does not already
               state. What used to be here and is gone: the task's status word
               (the lane IS the status — `taskResultLine.status` is literally
