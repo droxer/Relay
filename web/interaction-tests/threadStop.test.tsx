@@ -97,3 +97,25 @@ it("does not apply a stop in another thread to the pending send", async () => {
   expect(cancel).toHaveBeenCalledOnce();
   expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "other-thread" }));
 });
+
+it.each(["retry", "handoff"] as const)("retains Stop while a %s is being dispatched", async (kind) => {
+  const { deps, accept, dispatch, cancel, session } = setup(true);
+  deps.effectiveSelectableLogicalAgents = [{
+    id: "agent-1", executorKind: "codex", enabled: true, availability: "ready",
+  }] as ThreadDispatchDeps["effectiveSelectableLogicalAgents"];
+  deps.handoffAgentId = "agent-1";
+  deps.requestThreadRecoveryMutation = { mutateAsync: dispatch } as ThreadDispatchDeps["requestThreadRecoveryMutation"];
+  const { result, rerender } = renderHook((props) => useThreadDispatch(props), { initialProps: deps });
+  let sending!: Promise<void>;
+  act(() => {
+    sending = kind === "retry"
+      ? result.current.retryAgentMessage("codex", "agent-1")
+      : result.current.sendHandoff();
+  });
+  expect(dispatch).toHaveBeenCalledOnce();
+  rerender({ ...deps, threadRunning: true });
+  await act(async () => { await result.current.cancelActiveRun(); });
+  await act(async () => { accept({ ...session, status: "running" }); await sending; });
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+});
