@@ -96,6 +96,7 @@ export function BacklogTaskCard({
     task.status === "blocked" ||
     task.status === "done";
   const result = taskResultLine(task, session);
+  const age = workAgeDays(task);
   // Nothing is assigned yet: the empty dashed slot said so with a glyph that
   // named nobody, on the one lane where unassigned is the normal condition.
   // The assign action is two icons away.
@@ -127,7 +128,7 @@ export function BacklogTaskCard({
         />
         <div className="backlog-card-body">
           <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-          <TaskFlowDetails task={task} />
+          <TaskFlowDetails task={task} showAge={false} />
           {/* Always rendered, empty when the task has no description: the two
               lines are reserved by the card's frame, so a described and an
               undescribed task are the same shape. */}
@@ -141,6 +142,7 @@ export function BacklogTaskCard({
               nothing on a card with room to spell it. */}
           <div className="backlog-meta">
             <PriorityBadge priority={task.priority} />
+            {age !== null ? <span className="tnum">{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}
             {assigned ? (
               <span className="backlog-agent">
                 <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
@@ -448,15 +450,40 @@ export function BacklogTaskRow({
   );
 }
 
-function TaskFlowDetails({ task }: { task: RelayTaskListItem }) {
+/** Days since the task started, for work still in flight. */
+function workAgeDays(task: RelayTaskListItem): number | null {
+  if (!task.startedAt || task.status === "done") return null;
+  return Math.max(0, (Date.now() - Date.parse(task.startedAt)) / 86400000);
+}
+
+/**
+ * The exception line: why this task is not simply moving. `showAge` is false
+ * on the card, where the work age belongs to the facts line instead — the
+ * card is a fixed frame and an exception that spans two rows was clipping its
+ * own second row in half.
+ */
+function TaskFlowDetails({ task, showAge = true }: { task: RelayTaskListItem; showAge?: boolean }) {
   const { t } = useTranslation();
-  const age = task.startedAt && task.status !== "done" ? Math.max(0, (Date.now() - Date.parse(task.startedAt)) / 86400000) : null;
+  const age = showAge ? workAgeDays(task) : null;
   // Nothing to say is nothing to draw. The element used to render empty, and
   // an empty flex row still carries its own margin — 12px of nowhere on every
   // card that was neither blocked, waiting, nor in flight.
   if (task.status !== "blocked" && task.status !== "waiting_for_human" && age === null) return null;
   return <div className="backlog-meta backlog-flow">
-    {task.status === "blocked" ? <span className="backlog-blocker" title={`${task.blockerOwnerEmployeeId ?? ""} · ${task.blockedAt ?? ""}`}>{t("backlog.statuses.blocked")}: {task.blockerReason}</span> : null}
+    {/* The reason is one line on the card and the full text in the drawer —
+        a three-line blocker used to push the card's own action row out
+        through the bottom edge. A blocker with no reason recorded states the
+        word alone; it used to print a bare "Blocked:" with nothing after the
+        colon. The tooltip carries the reason, which is what a reader hovering
+        a truncated line is reaching for — who blocked it and when are facts
+        the drawer states in full. */
+    task.status === "blocked" ? (
+      <span className="backlog-blocker" title={task.blockerReason || undefined}>
+        {task.blockerReason
+          ? `${t("backlog.statuses.blocked")}: ${task.blockerReason}`
+          : t("backlog.statuses.blocked")}
+      </span>
+    ) : null}
     {task.status === "waiting_for_human" ? <span className="backlog-due warn">{t("backlog.statuses.waiting_for_human")}</span> : null}
     {age !== null ? <span>{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}
   </div>;

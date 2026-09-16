@@ -465,8 +465,14 @@
   opacity: 0;
 }
 
+/* One line, ellipsised, tooltip for the rest. The reason is free text an
+   operator typed and it ran to three lines on a lane-width card, which in a
+   fixed frame meant the card's own action row was pushed out through the
+   bottom edge. The drawer holds the full sentence. */
 .backlog-blocker {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--err);
 }

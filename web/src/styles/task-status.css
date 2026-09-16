@@ -324,13 +324,22 @@
   flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
+  /* No bottom fade here, deliberately. This region is sized to its content
+     (`0 1 auto`), so its box ends ON the last row and a fade would dim a row
+     that fits — on every card carrying an exception line. The frame is sized
+     to hold the facts instead; the fleet card's body, which does own its
+     slack, is where a fade earns its place. */
 }
 
-/* The flow line (blocked reason, waiting, work age) is an exception state
-   stated above the description, not the card's slack — it takes the height it
-   needs and leaves the remainder to the facts line below. */
+/* The exception line — why this task is not simply moving — is exactly one
+   row on a card: the reason clamps (see .backlog-blocker) and the work age
+   moved down to the facts line, which is where a fact belongs. It used to
+   carry both, wrap to two rows, and get sliced through the middle of the
+   second one. One row cannot be sliced, so it holds its height outright. */
 .backlog-task .backlog-flow {
   flex: none;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .backlog-due {

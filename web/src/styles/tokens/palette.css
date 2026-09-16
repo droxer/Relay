@@ -412,7 +412,7 @@
 
      A card that wants a height off this ladder is telling you it is not a
      card — it is a panel or a row; check which before adding a rung. */
-  --card-h-record: 232px;
+  --card-h-record: 264px;
   --card-h-fleet: 232px;
   --card-h-kpi: 132px;
   --card-h-panel: 288px;
@@ -912,7 +912,7 @@ html:lang(zh-TW) {
   /* The card ladder steps down with the type it frames — same clamps, one
      rung less air. Restated here for the same substitution reason as the
      roles above. */
-  --card-h-record: 208px;
+  --card-h-record: 236px;
   --card-h-fleet: 196px;
 }
 
