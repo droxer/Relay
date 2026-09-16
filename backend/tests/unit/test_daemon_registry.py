@@ -7459,9 +7459,77 @@ def test_failed_session_closes_agent_projection_only_after_execution_is_settled(
             assert snapshot["status"] == "failed"
             assert snapshot["finalOutcome"] == outcome
             assert snapshot["agentRuns"][-1]["status"] != "running"
+            if delivered:
+                assert snapshot["agentRuns"][-1]["agentLog"] == "preserved output"
             assert ExecutionLifecycleService(registry, None).status(snapshot)["phase"] == "terminal"
             before = snapshot["events"]
             registry.reap_stale_runs()
             assert sessions.get_session(session["id"])["events"] == before
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_terminal_projection_recovery_survives_event_write_failure(store_factory, monkeypatch):
+    from relay.persistence.daemon_store import TERMINAL_CLAIM_EXPIRES_STATE_KEY
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, _tasks, registry = _round_result_registry(root, store_factory)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "recover suppressed delivery after a write failure",
+                "assignments": [{"agent": "codex"}],
+            })
+            request = registry.daemon_store.active_run_request_for_session_any_node(session["id"])
+            SessionController(sessions).fail_session(session["id"], "capacity rejected")
+            original_append = sessions.append_event
+            def fail_completion(sid, event, **kwargs):
+                if event["type"] == "agent.completed":
+                    raise RuntimeError("completion storage unavailable")
+                return original_append(sid, event, **kwargs)
+            monkeypatch.setattr(sessions, "append_event", fail_completion)
+            registry.reap_stale_runs()
+            retained = registry.daemon_store.get_run_request(request["id"])
+            assert retained["status"] == "finalizing"
+            assert sessions.get_session(session["id"])["agentRuns"][-1]["status"] == "running"
+            assert registry.take_commands("sbx_alice", "node_token") == []
+            monkeypatch.setattr(sessions, "append_event", original_append)
+            state = dict(retained["state"])
+            state[TERMINAL_CLAIM_EXPIRES_STATE_KEY] = "2000-01-01T00:00:00Z"
+            state["_relay_finalization_retry_at"] = "2000-01-01T00:00:00Z"
+            registry.daemon_store.update_run_request(request["id"], {"state": state})
+            registry.reap_stale_runs()
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
+            assert sessions.get_session(session["id"])["agentRuns"][-1]["status"] == "cancelled"
+            assert sessions.get_session(session["id"])["finalOutcome"] == "capacity rejected"
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_capacity_rejection_of_next_assignment_does_not_create_orphan(store_factory, monkeypatch):
+    from relay.services.execution_lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, _tasks, registry = _round_result_registry(root, store_factory)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "capacity changes between assignments",
+                "assignments": [{"agent": "codex"}, {"agent": "codex"}],
+            })
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            monkeypatch.setattr("relay.daemon_registry.registry.node_accepts_run", lambda *args, **kwargs: False)
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
+                "sessionId": session["id"], "agent": command["agent"], "exitCode": 0,
+                "agentLog": "first assignment finished", "leaseId": command["leaseId"],
+            }, "node_token")
+            snapshot = sessions.get_session(session["id"])
+            assert snapshot["status"] == "failed"
+            assert "capacity is exhausted" in snapshot["finalOutcome"]
+            assert len(snapshot["agentRuns"]) == 1
+            assert snapshot["agentRuns"][0]["status"] == "completed"
+            assert ExecutionLifecycleService(registry, None).status(snapshot)["phase"] == "terminal"
+            assert registry.take_commands("sbx_alice", "node_token") == []
 
     asyncio.run(run_flow())
