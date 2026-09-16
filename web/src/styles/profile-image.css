@@ -227,8 +227,23 @@
    forms and the picker popover. The tile is the image alone; selection is an
    --action ring drawn as a box-shadow so it never competes with the focus
    outline that base.css owns. */
-/* Column counts divide each set evenly (16 robots, 12 grids) so no row is
-   left with a stranded tile. */
+.preset-avatar-picker {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.preset-avatar-section {
+  display: grid;
+  gap: var(--sp-1-5);
+}
+
+.preset-avatar-section-title {
+  color: var(--ink-3);
+  font: var(--type-label);
+}
+
+/* Column counts divide each set evenly (16 per agent style, 12 team grids)
+   so no row is left with a stranded tile. */
 .preset-avatar-grid {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -271,10 +286,16 @@
   opacity: var(--opacity-disabled);
 }
 
+/* Four agent styles make the popover taller than a phone viewport, so it
+   caps at the space the positioner reports and scrolls; the upload action
+   stays last in the scroll so the presets lead. */
 .profile-image-presets {
   display: grid;
   gap: var(--sp-3);
   width: min(320px, calc(100vw - var(--sp-6)));
+  max-height: min(480px, var(--available-height, 480px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--sp-3);
   border-radius: var(--r-3);
   background: var(--surface-3);

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   PRESET_AVATARS,
+  PRESET_AVATAR_STYLES,
   isPresetAvatarUrl,
   randomPresetAvatar,
 } from "../src/lib/presetAvatars.js";
@@ -32,8 +33,17 @@ describe("preset avatars", () => {
         .sort();
       assert.deepEqual([...PRESET_AVATARS[kind]].sort(), onDisk);
     }
-    assert.equal(PRESET_AVATARS.agents.length, 16);
+    assert.equal(PRESET_AVATARS.agents.length, 64);
     assert.equal(PRESET_AVATARS.teams.length, 12);
+  });
+
+  it("groups agent presets by style in picker order", () => {
+    assert.deepEqual(
+      PRESET_AVATAR_STYLES.agents.map(({ style, urls }) => [style, urls.length]),
+      [["bottts", 16], ["lorelei", 16], ["pixel-art", 16], ["personas", 16]],
+    );
+    assert.deepEqual(PRESET_AVATAR_STYLES.agents.flatMap(({ urls }) => urls), [...PRESET_AVATARS.agents]);
+    assert.equal(isPresetAvatarUrl("agents", "/avatars/agents/personas-16.svg"), true);
   });
 
   it("recognises presets only for their own kind", () => {
