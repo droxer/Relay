@@ -16,7 +16,7 @@ function setup() {
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   return { client, wrapper };
 }
-it("rolls back only the deleted thread, preserving concurrently streamed output", async () => {
+it("keeps a thread visible while deletion is pending and preserves streamed output on failure", async () => {
   const { client, wrapper } = setup();
   let reject!: (error: Error) => void;
   vi.mocked(deleteSession).mockImplementation(() => new Promise((_, fail) => { reject = fail; }));
@@ -25,7 +25,8 @@ it("rolls back only the deleted thread, preserving concurrently streamed output"
   act(() => result.current.deleteSessionMutation.mutate({ sessionId: "deleted" }));
   await waitFor(() => expect(reject).toBeTypeOf("function"));
   const live = session("live", [{ id: "new-output" }]);
-  client.setQueryData(key, [live]);
+  expect(client.getQueryData<any[]>(key)?.some(s => s.id === "deleted")).toBe(true);
+  client.setQueryData(key, [session("deleted"), live]);
   act(() => reject(new Error("offline")));
   await waitFor(() => expect(result.current.deleteSessionMutation.isError).toBe(true));
   expect(client.getQueryData<any[]>(key)?.find(s => s.id === "live")).toEqual(live);
@@ -63,4 +64,18 @@ it("reconciles a selected thread after a summary reports completion", async () =
   await act(() => vi.advanceTimersByTimeAsync(5_000));
   expect(client.getQueryData<any[]>(key)?.[0].events).toEqual(completed.events);
   view.unmount(); client.clear(); vi.useRealTimers();
+});
+
+it("shows pending deletion until the backend confirms completion", async () => {
+  const { client, wrapper } = setup();
+  const pending = { phase: "stopping", canDelete: false, deletionRequested: true } as any;
+  vi.mocked(deleteSession).mockResolvedValue(pending);
+  client.setQueryData(key, [session("deleting"), session("live")]);
+  const { result } = renderHook(() => useRelayMutations(), { wrapper });
+  await act(async () => { await result.current.deleteSessionMutation.mutateAsync({ sessionId: "deleting" }); });
+  expect(client.getQueryData<any[]>(key)?.find(s => s.id === "deleting")?.execution).toEqual(pending);
+  vi.mocked(deleteSession).mockResolvedValue(undefined);
+  await act(async () => { await result.current.deleteSessionMutation.mutateAsync({ sessionId: "deleting" }); });
+  expect(client.getQueryData<any[]>(key)?.map(s => s.id)).toEqual(["live"]);
+  client.clear();
 });

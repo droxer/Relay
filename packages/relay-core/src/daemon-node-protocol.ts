@@ -182,6 +182,7 @@ export interface DaemonNodeHeartbeatSettings {
   timeoutMs: number;
   /** Backend timestamp for the accepted renewal. */
   observedAt?: string;
+  commandLeases?: Array<{ commandId: string; leaseId?: string; leaseExpiresAt: string }>;
 }
 
 export interface DaemonNodeHeartbeat {

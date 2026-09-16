@@ -70,6 +70,8 @@ def session_artifact(
 def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": session["id"],
+        "execution": session.get("execution"),
+        "deletionRequestedAt": session.get("deletionRequestedAt"),
         "title": session.get("title"),
         "taskGoal": session.get("taskGoal"),
         "status": session.get("status"),
@@ -227,6 +229,7 @@ async def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             limit=min(max(1, requested_limit), 200),
         )
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
+        sessions = request.app.state.execution_lifecycle.annotate(sessions)
         return {"sessions": [session_brief_item(session) for session in sessions]}
     visible = [
         session
@@ -234,6 +237,7 @@ async def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         if actor["isAdmin"] or session.get("ownerEmployeeId") == actor["employeeId"]
     ]
     sessions = ensure_sessions_managed_affinity(ctx, visible)
+    sessions = request.app.state.execution_lifecycle.annotate(sessions)
     return {"sessions": sessions}
 
 
@@ -580,9 +584,36 @@ def get_session(
     session_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    return ensure_session_managed_affinity(
+    session = ensure_session_managed_affinity(
         ctx, get_session_for_actor(ctx.session_store, session_id, actor)
     )
+    return {**session, "execution": request.app.state.execution_lifecycle.status(session)}
+
+
+@router.get("/threads/{session_id}/execution")
+def get_execution_status(session_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    session = get_session_for_actor(ctx.session_store, session_id, actor)
+    return request.app.state.execution_lifecycle.status(session)
+
+
+@router.post("/threads/{session_id}/execution/recovery")
+def retry_execution_recovery(session_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    session = get_session_for_actor(ctx.session_store, session_id, actor)
+    from ..persistence.daemon_store import TERMINAL_CLAIM_ID_STATE_KEY, TERMINAL_CLAIM_EXPIRES_STATE_KEY
+    with ctx.registry.dispatch_lock:
+        run = ctx.daemon_store.active_run_request_for_session_any_node(session_id)
+        state = dict((run or {}).get("state") or {})
+        if run and run.get("status") == "finalizing" and state.get("_relay_recovery_required"):
+            claim = state.get(TERMINAL_CLAIM_ID_STATE_KEY)
+            if claim:
+                state.pop("_relay_recovery_required", None)
+                state.pop("_relay_finalization_retry_at", None)
+                state["_relay_finalization_attempts"] = 0
+                state[TERMINAL_CLAIM_EXPIRES_STATE_KEY] = datetime.now(timezone.utc).isoformat()
+                ctx.daemon_store.update_run_request_if_claimed(run["id"], TERMINAL_CLAIM_ID_STATE_KEY, claim, {"state": state})
+    return request.app.state.execution_lifecycle.status(session)
 
 
 @router.patch("/threads/{session_id}")
@@ -690,17 +721,25 @@ async def delete_session(
     session_id: str, request: Request, ctx: AppContextDep
 ) -> Response:
     actor = request_actor(request, ctx.auth_store)
+    get_session_for_actor(ctx.session_store, session_id, actor)
+    stop = request.query_params.get("stop", "false")
+    if stop not in ("true", "false"):
+        raise HTTPException(400, "stop must be true or false.")
+    if stop == "true":
+        from fastapi.responses import JSONResponse
+        status = await run_in_threadpool(
+            request.app.state.execution_lifecycle.request_delete, session_id, actor["employeeId"]
+        )
+        return JSONResponse(status, status_code=202) if status else Response(status_code=204)
     controller = SessionController(
         ctx.session_store,
         task_store=ctx.task_store,
         owner_employee_id=actor["employeeId"],
     )
     try:
-        with ctx.registry.dispatch_lock:
+        with ctx.registry.dispatch_lock, request.app.state.execution_lifecycle.admission_scope():
             snapshot = get_session_for_actor(ctx.session_store, session_id, actor)
-            if ctx.registry.daemon_store.active_run_request_for_session_any_node(
-                session_id
-            ):
+            if not request.app.state.execution_lifecycle.status(snapshot)["canDelete"]:
                 raise SessionRunInFlightError(session_id)
             controller.delete_session(
                 session_id, snapshot=snapshot, deleted_by=actor["employeeId"]

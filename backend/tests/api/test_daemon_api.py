@@ -790,7 +790,10 @@ def test_managed_node_runtime_cannot_be_drained_or_retired_during_active_run(
         app.state.registry.daemon_store.create_run_request(
             {
                 "nodeId": runtime_id,
-                "sessionId": "session_busy_managed",
+                "sessionId": app.state.session_store.create_session({
+                    "workspacePath": "/workspace", "taskGoal": "Keep this runtime busy",
+                    "ownerEmployeeId": "alice",
+                })["id"],
                 "taskGoal": "Keep this runtime busy",
                 "assignments": [],
                 "state": {},

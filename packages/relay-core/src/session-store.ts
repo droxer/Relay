@@ -175,7 +175,20 @@ export interface CollaborationRoundManifest {
   };
 }
 
+export interface ExecutionStatus {
+  phase: "queued" | "running" | "stopping" | "unresponsive" | "finalizing" | "terminal" | "recovery_required";
+  executionConfirmed: boolean;
+  deletionRequested: boolean;
+  canDelete: boolean;
+  blockingReason: string | null;
+  lastConfirmedAt: string | null;
+  nextRecoveryAt: string | null;
+}
+
 export interface RelaySession {
+  execution?: ExecutionStatus;
+  deletionRequestedAt?: string;
+  deletionRequestedBy?: string;
   id: string;
   workspacePath: string;
   /** Missing on historical sessions, which retain the legacy node-root layout. */
@@ -414,6 +427,13 @@ export type RelayEvent =
     }
   | {
       id: string;
+      type: "session.deletion_requested";
+      sessionId: string;
+      timestamp: string;
+      requestedBy: string;
+    }
+  | {
+      id: string;
       type: "session.renamed";
       sessionId: string;
       timestamp: string;
@@ -562,6 +582,9 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.archived = true;
     } else if (event.type === "session.runtime_affinity") {
       if (!session.managedNodeId) session.managedNodeId = event.managedNodeId;
+    } else if (event.type === "session.deletion_requested") {
+      session.deletionRequestedAt ??= event.timestamp;
+      session.deletionRequestedBy ??= event.requestedBy;
     } else if (event.type === "session.renamed") {
       session.title = event.title;
     }

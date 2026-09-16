@@ -558,7 +558,7 @@ class SessionController:
 
     def _validate_assignment(self, session_id: str) -> None:
         snapshot = self.store.get_session(session_id)
-        if snapshot.get("archived"):
+        if snapshot.get("archived") or snapshot.get("deletionRequestedAt"):
             raise SessionArchivedError(session_id)
         if any(run.get("status") == "running" for run in snapshot.get("agentRuns", [])):
             raise SessionRunInFlightError(session_id)

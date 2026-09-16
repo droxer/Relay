@@ -7,7 +7,7 @@ import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import test, { after, type TestContext } from "node:test";
+import test, { after, beforeEach, type TestContext } from "node:test";
 
 import {
   backendReconnectDelayMs,
@@ -28,6 +28,8 @@ import {
 const previousDaemonStateDir = process.env.RELAY_DAEMON_STATE_DIR;
 const testDaemonStateDir = mkdtempSync(join(tmpdir(), "relay-daemon-private-state-"));
 process.env.RELAY_DAEMON_STATE_DIR = testDaemonStateDir;
+// Tests reuse synthetic command IDs; only restart tests share durable evidence.
+beforeEach(() => rmSync(join(testDaemonStateDir, "terminal-events"), { recursive: true, force: true }));
 after(() => {
   if (previousDaemonStateDir === undefined) delete process.env.RELAY_DAEMON_STATE_DIR;
   else process.env.RELAY_DAEMON_STATE_DIR = previousDaemonStateDir;

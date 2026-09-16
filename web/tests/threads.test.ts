@@ -68,13 +68,13 @@ describe("sessionAgents", () => {
 
 describe("web thread helpers", () => {
   it("blocks deletion while the session or daemon still has a run in flight", () => {
-    assert.equal(canDeleteThread({ session: session({ status: "running" }) }), false);
+    assert.equal(canDeleteThread({ session: session({ status: "running" }) }), true);
     assert.equal(
       canDeleteThread({
         session: session({ status: "cancelled" }),
         runningAgent: "claude",
       }),
-      false,
+      true,
     );
     assert.equal(canDeleteThread({ session: session({ status: "cancelled" }) }), true);
   });

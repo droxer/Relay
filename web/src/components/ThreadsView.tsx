@@ -110,6 +110,7 @@ export type ThreadsViewProps = {
   onSend: () => void;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
+  onRetryExecutionRecovery?: () => Promise<void>;
   running: boolean;
 };
 
@@ -188,6 +189,7 @@ export function ThreadsView({
   onSend,
   onCancelRun,
   onRetryAgent,
+  onRetryExecutionRecovery,
   running,
 }: ThreadsViewProps) {
   const { t } = useTranslation();
@@ -330,6 +332,7 @@ export function ThreadsView({
       <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
         <ThreadHeader
           activeSession={activeSession}
+          onRetryExecutionRecovery={onRetryExecutionRecovery}
           participants={threadParticipants}
           artifactCount={artifactCount}
           spaceOpen={spaceOpen}

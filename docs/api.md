@@ -433,3 +433,38 @@ Task detail and summary projections include `startedAt`, `finishedAt`,
 `code=task_wip_limit` with `state=queued`; this is a capacity wait and does not
 consume a failure retry. See [the task lifecycle](task-kanban-lifecycle.md) for
 transition, capacity, history compatibility, and migration policies.
+
+### Thread execution and deferred deletion
+
+`GET /api/v1/threads/{id}/execution` returns the same `execution` object included
+in thread detail and list responses. It reports `phase`, `executionConfirmed`,
+`canDelete`, `blockingReason`, `deletionRequested`, `lastConfirmedAt`, and
+`nextRecoveryAt`. Phases are `queued`, `running`, `stopping`, `unresponsive`,
+`finalizing`, `terminal`, and `recovery_required`. A live command lease confirms
+execution ownership; task/session outcome alone never proves remote termination.
+
+`DELETE /api/v1/threads/{id}?stop=true` records an event-backed deletion request
+and stops outstanding work. It returns `204` when deleted or `202` with the
+execution object while cleanup is pending. Repeating a pending request does not
+create another deletion event. Pending deletion prevents new admission and
+remains visible in thread responses as `deletionRequestedAt`. The backend resumes
+cleanup after restart, without requiring browser polling. It clears conversation
+bindings and unlinks tasks before deleting thread history. Workspace files are
+not removed by this operation.
+
+The existing unqualified DELETE remains synchronous and returns `409` while the
+shared lifecycle says deletion is unsafe. All deletion and explicit recovery
+endpoints require a human actor with access to the thread; daemon tokens cannot
+use them.
+
+`POST /api/v1/threads/{id}/execution/recovery` requests another bounded round of
+finalization retries after a `finalization_failed` blocker. It does not clear a
+live execution reservation or treat an unreachable computer as stopped. Missing
+terminal evidence and unconfirmed execution require restoration of the execution
+host/evidence; retrying finalization cannot manufacture proof of exit.
+
+Stop requests that remain unconfirmed for 60 seconds while the daemon still holds
+its lease surface `recovery_required` / `termination_unconfirmed`. They retain
+execution ownership. A disconnected daemon instead surfaces `unresponsive`.
+The watchdog cannot confirm exit after the daemon itself crashes; neither the
+recovery endpoint nor deletion treats that silence as termination.

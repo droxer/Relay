@@ -93,9 +93,9 @@ export function projectThreadBuckets(
   };
 }
 
-/** Deletion is safe only after both the session snapshot and daemon report no active run. */
+/** Active work uses the confirmed Stop and delete flow; pending deletion is idempotent. */
 export function canDeleteThread(item: ThreadItem): boolean {
-  return item.session.status !== "running" && !item.runningAgent;
+  return !item.session.deletionRequestedAt;
 }
 
 type Labelled = { title?: string; taskGoal: string };

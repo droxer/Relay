@@ -302,10 +302,14 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         today=today,
     )
 
+    from .services.execution_lifecycle import ExecutionLifecycleService
+    execution_lifecycle = ExecutionLifecycleService(registry, chat_store)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if notification_bridge:
             notification_bridge.start()
+        execution_lifecycle.start()
         if scheduler:
             scheduler.start()
         try:
@@ -313,6 +317,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         finally:
             if scheduler:
                 await scheduler.stop()
+            await execution_lifecycle.stop()
             if notification_bridge:
                 await notification_bridge.stop()
             control_plane_notifier.close()
@@ -332,6 +337,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.state.session_store = session_store
     app.state.task_store = task_store
     app.state.daemon_store = daemon_store
+    app.state.execution_lifecycle = execution_lifecycle
     app.state.chat_store = chat_store
     app.state.chat_probe = probe_chat_integration
     app.state.chat_provision = provision_chat_integration

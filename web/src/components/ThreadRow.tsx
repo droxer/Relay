@@ -70,14 +70,17 @@ const PIP: Record<ThreadTone | "err", { tone: StateTone; shape?: StateShape }> =
   idle: { tone: "neutral", shape: "muted" },
 };
 
-export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, layout = "full" }: ThreadRowProps) {
+export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: suppliedTone, layout = "full" }: ThreadRowProps) {
   const { t, i18n } = useTranslation();
   const { session } = item;
+  const executionPhase = session.execution?.phase;
+  const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
+    : executionPhase && ["queued", "stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
   const label = threadLabel(session);
   const stamp = relativeTime(session.updatedAt, i18n.language);
   const offlineLabel = item.nodeOffline ? t("thread.node_offline") : "";
   const stateLabel =
-    tone === "attn"
+    executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`) : tone === "attn"
       ? t("thread.group_needs_you")
       : tone === "run"
         ? t("thread.group_running")
@@ -94,7 +97,9 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
   // them already says "idle", and restating it on every row is noise.
   const runningAgent = item.runningAgent ?? (session.status === "running" ? session.currentAgent : undefined);
   const status: { text: string; tone: "attn" | "run" | "err" } | null =
-    tone === "run"
+    session.execution && session.execution.phase !== "terminal"
+      ? { tone: session.execution.phase === "running" ? "run" : "attn", text: t(`thread.execution_${session.execution.phase}`) }
+      : tone === "run"
       ? {
           tone: "run",
           text: runningAgent

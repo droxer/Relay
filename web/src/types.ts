@@ -63,6 +63,8 @@ export interface SessionsResponse {
 }
 
 export interface SessionSummary {
+  execution?: RelaySession["execution"];
+  deletionRequestedAt?: string;
   id: string;
   title?: string;
   taskGoal: string;

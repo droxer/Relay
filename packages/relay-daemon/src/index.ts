@@ -78,6 +78,8 @@ import {
 import { workspaceCommandEvent } from "./workspace-read.js";
 import { ThreadWorkspaceManager } from "./thread-workspace.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
+import { ExecutionWatchdog } from "./execution-watchdog.js";
+import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { BoundedTextCapture } from "./bounded-text.js";
 import { materializeSkills } from "./agent-skills.js";
@@ -163,7 +165,8 @@ export interface DaemonLogger {
 
 export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promise<void> {
   const backendUrl = normalizeBaseUrl(options.backendUrl ?? process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL ?? "http://127.0.0.1:8790");
-  const fetchFn = options.fetchFn ?? fetch;
+  const rawFetch = options.fetchFn ?? fetch;
+  let fetchFn = rawFetch;
   let sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
   let configuredEmployeeId = options.employeeId ?? process.env.RELAY_EMPLOYEE_ID;
   const employeeId = configuredEmployeeId ?? process.env.USER ?? "local";
@@ -203,6 +206,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
+  const executionWatchdog = new ExecutionWatchdog();
+  const terminalCommands = new Set<string>();
+  const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => { terminalCommands.add(id); executionWatchdog.forget(id); });
+  fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
     credentialDirectory: join(stateDir, "credentials"),
@@ -382,7 +389,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     }
     return;
   }
+  const watchdogTimer = setInterval(() => executionWatchdog.tick(), 1000);
+  watchdogTimer.unref();
   let heartbeatTask: Promise<void> | undefined;
+  let outboxTask: Promise<void> | undefined;
   try {
     const reconnectControl = { signal: runtimeSignal, shouldStop: () => stopping };
     const initialHeartbeatSettings = await withBackendReconnect(
@@ -410,13 +420,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       }
     };
     const sendHeartbeat = async (): Promise<void> => {
+      const sentAt = performance.now();
+      const renewing = [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id));
       const url = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/heartbeat`);
       try {
         const response = await postJsonResponse<DaemonNodeHeartbeatResponse>(
           fetchFn,
           url,
           {
-            activeCommandLeases: [...activeRuns.values()].map(({ command }) => ({
+            activeCommandLeases: renewing.map(({ command }) => ({
               commandId: command.id,
               ...(command.leaseId ? { leaseId: command.leaseId } : {}),
             })),
@@ -425,6 +437,18 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           runtimeSignal,
         );
         updateHeartbeatSettings(validHeartbeatSettings(response.heartbeat));
+        if (response.heartbeat.commandLeases) {
+          const observedAt = Date.parse(response.heartbeat.observedAt ?? "");
+          for (const lease of response.heartbeat.commandLeases) {
+            if (activeRuns.get(lease.commandId)?.command.leaseId !== lease.leaseId) continue;
+            const duration = Date.parse(lease.leaseExpiresAt) - observedAt - (performance.now() - sentAt);
+            if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration);
+          }
+        } else {
+          // Older backends acknowledge the submitted leases implicitly.
+          for (const { command } of renewing) executionWatchdog.renew(command.id,
+            commandLeaseSeconds * 1000 - (performance.now() - sentAt));
+        }
       } catch (error) {
         // Rolling upgrades may briefly put a new daemon behind an older
         // backend. Registration remains the compatibility heartbeat.
@@ -436,6 +460,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         throw error;
       }
     };
+    outboxTask = (async () => {
+      while (!runtimeSignal.aborted) {
+        await terminalOutbox.replay(rawFetch, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), token, runtimeSignal);
+        await delay(5000, runtimeSignal);
+      }
+    })().catch((error: unknown) => {
+      if (!runtimeSignal.aborted) logger.error("terminal replay stopped", { error: String(error) });
+    });
     heartbeatTask = (async () => {
       while (!stopping && !runtimeSignal.aborted) {
         await delay(livenessHeartbeatIntervalMs, runtimeSignal);
@@ -474,7 +506,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           daemonCommandsUrl(backendUrl, sandboxId, {
             waitSeconds: commandPollWaitMs / 1000,
             leaseSeconds: commandLeaseSeconds,
-            activeCommandLeases: [...activeRuns.values()].map(({ command }) => ({
+            activeCommandLeases: [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id)).map(({ command }) => ({
               commandId: command.id,
               leaseId: command.leaseId,
             })),
@@ -555,6 +587,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           logger.info("command received", commandLogFields(sandboxId, command));
           setHealth("busy", commandLogFields(sandboxId, command));
           const controller = new AbortController();
+          if (command.leaseId) executionWatchdog.track(command.id, commandLeaseSeconds * 1000,
+            () => controller.abort("Execution lease expired; stopping until ownership can be confirmed."));
           const promise = Promise.resolve().then(() =>
             workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => executeCommand(
               backendUrl,
@@ -620,6 +654,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             });
           }).finally(() => {
             activeRuns.delete(command.id);
+            terminalCommands.delete(command.id);
+            executionWatchdog.forget(command.id);
             if (!stopping) setHealth("polling");
           });
           activeRuns.set(command.id, { command, controller, promise });
@@ -681,7 +717,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     throw error;
   } finally {
     if (!shutdownController.signal.aborted) shutdownController.abort("Daemon loop ended.");
+    clearInterval(watchdogTimer);
     await heartbeatTask;
+    await outboxTask;
     cleanupShutdownListeners();
   }
 }
@@ -1807,6 +1845,7 @@ async function postJsonWithRetry(
   token: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  persistTerminalEvent(fetchFn, body);
   let attempt = 0;
   while (true) {
     if (signal?.aborted) throw new Error("Aborted before event post.");

@@ -571,6 +571,17 @@ class LocalDaemonStore:
     def list_nodes(self) -> list[dict[str, Any]]:
         return [_read_json(path) for path in self.nodes_dir.glob("*.json")]
 
+    def terminal_events_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        events = []
+        for record in self._list_commands():
+            command = record.get("command") or {}
+            event = command.get("_terminalEvent")
+            if (command.get("sessionId") == session_id
+                and record.get("status") in TERMINAL_DAEMON_STATUSES
+                and isinstance(event, dict)):
+                events.append(event)
+        return events
+
     def get_command(self, command_id: str) -> dict[str, Any] | None:
         with self._lock:
             return self._get_command(command_id)
@@ -914,6 +925,9 @@ class LocalDaemonStore:
             **request,
         }
         with self._lock, self._run_request_claim_lock():
+            session_store = getattr(self, "session_store", None)
+            if session_store and session_store.get_session(record["sessionId"]).get("deletionRequestedAt"):
+                raise ValueError("Thread deletion has been requested.")
             existing = self.get_run_request(record["id"])
             if existing:
                 return existing
@@ -1041,13 +1055,15 @@ class LocalDaemonStore:
         claim_id: str,
         lease_seconds: float,
     ) -> dict[str, Any] | None:
-        with self._lock:
+        with self._lock, self._run_request_claim_lock():
             request = self.run_request_for_command(command_id)
             if not request:
                 return None
             state = dict(request.get("state") or {})
             now = now_iso()
             if request.get("status") == "finalizing":
+                if state.get("_relay_recovery_required"):
+                    return None
                 expires_at = state.get(TERMINAL_CLAIM_EXPIRES_STATE_KEY)
                 if expires_at and _parse_iso(expires_at) > _parse_iso(now):
                     return None
@@ -1145,6 +1161,7 @@ class LocalDaemonStore:
                 return None
             state = dict(current.get("state") or {})
             state.setdefault("_relay_stop_command_id", new_database_id())
+            state.setdefault("_relay_stop_requested_at", now_iso())
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
@@ -2062,6 +2079,17 @@ class DatabaseDaemonStore:
             for row in rows
         ]
 
+    def terminal_events_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        with store_transaction(self.engine) as conn:
+            commands = conn.execute(
+                select(self.commands.c.command)
+                .join(self.runs, self.runs.c.command_id == self.commands.c.id)
+                .where(self.runs.c.session_id == session_id)
+                .where(self.commands.c.status.in_(TERMINAL_DAEMON_STATUSES))
+            ).scalars().all()
+        return [command["_terminalEvent"] for command in commands
+                if isinstance(command.get("_terminalEvent"), dict)]
+
     def get_command(self, command_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
@@ -2598,6 +2626,18 @@ class DatabaseDaemonStore:
         }
         try:
             with store_transaction(self.engine) as conn:
+                session_store = getattr(self, "session_store", None)
+                if session_store and getattr(session_store, "engine", None) is self.engine:
+                    # Same lock as deletion and event append, before node locks.
+                    snapshot = conn.execute(select(session_store.sessions.c.snapshot)
+                        .where(session_store.sessions.c.id == record["sessionId"])
+                        .with_for_update()).scalar_one_or_none()
+                    if snapshot is None:
+                        raise KeyError(record["sessionId"])
+                    if snapshot.get("deletionRequestedAt"):
+                        raise ValueError("Thread deletion has been requested.")
+                elif session_store and session_store.get_session(record["sessionId"]).get("deletionRequestedAt"):
+                    raise ValueError("Thread deletion has been requested.")
                 # The node row is the cross-replica capacity mutex. PostgreSQL
                 # serializes all reservations for one node while unrelated
                 # nodes remain independent.
@@ -2784,6 +2824,8 @@ class DatabaseDaemonStore:
             request = row_to_run_request(row)
             state = dict(request.get("state") or {})
             if request.get("status") == "finalizing":
+                if state.get("_relay_recovery_required"):
+                    return None
                 expires_at = state.get(TERMINAL_CLAIM_EXPIRES_STATE_KEY)
                 if expires_at and _parse_iso(expires_at) > _parse_iso(now):
                     return None
@@ -2991,6 +3033,7 @@ class DatabaseDaemonStore:
                 return None
             state = dict(current.get("state") or {})
             state.setdefault("_relay_stop_command_id", new_database_id())
+            state.setdefault("_relay_stop_requested_at", now_iso())
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(

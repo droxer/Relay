@@ -965,8 +965,12 @@ export function archiveSession(sessionId: string, token?: string): Promise<Relay
   });
 }
 
-export function deleteSession(sessionId: string, token?: string): Promise<void> {
-  return apiJson<void>(`/threads/${encodeURIComponent(sessionId)}`, {
+export function retryExecutionRecovery(sessionId: string, token?: string): Promise<NonNullable<RelaySession["execution"]>> {
+  return apiJson<NonNullable<RelaySession["execution"]>>(`/threads/${encodeURIComponent(sessionId)}/execution/recovery`, { method: "POST", token });
+}
+
+export function deleteSession(sessionId: string, token?: string): Promise<RelaySession["execution"] | undefined> {
+  return apiJson<RelaySession["execution"] | undefined>(`/threads/${encodeURIComponent(sessionId)}?stop=true`, {
     method: "DELETE",
     token,
   });
