@@ -1,4 +1,4 @@
-import type { MutableRefObject } from "react";
+import { useRef, type MutableRefObject } from "react";
 import type { TFunction } from "i18next";
 import type { AgentName, AgentTeam, EmployeeAgent, ProjectRecord, RelaySession } from "../types";
 import type { AppRoute } from "../lib/viewTypes";
@@ -24,10 +24,9 @@ type ThreadTargets = ReturnType<typeof useThreadTargets>;
  *
  * These lived inline in App.tsx, where their dependencies were implicit
  * closure captures — you could not tell what `sendMessage` touched without
- * reading all 130 lines of it. Pulling them out forces the dependency list to
- * be written down, which is the point. The functions themselves are unchanged
- * and, being plain declarations recreated each render exactly as before, carry
- * no memoisation semantics that a move could break.
+ * reading all 130 lines of it. Pulling them out makes the dependency list
+ * explicit. A ref retains pending-send cancellation across renders until
+ * dispatch returns the accepted thread ID.
  *
  * The types below are DERIVED from the hooks and mutations they come from
  * (`ReturnType<typeof …>`) rather than restated. A restated shape is a second
@@ -98,6 +97,7 @@ export interface ThreadDispatchDeps {
 }
 
 export function useThreadDispatch(deps: ThreadDispatchDeps) {
+  const pendingDispatch = useRef<{ sessionId: string | undefined; stopRequested: boolean } | null>(null);
   const {
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
     threadRunning, requiresRuntimeSelection, projectDispatchDisabled, projectRoomTarget,
@@ -196,6 +196,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id);
     setPendingUserMessage({ id: userMessageId, text: goal });
     setIsRunning(true);
+    const dispatch = { sessionId, stopRequested: false };
+    pendingDispatch.current = dispatch;
     composerRef.current?.clear();
     transcript.pinToBottom();
     try {
@@ -230,6 +232,11 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       if (messageOperationKey) {
         messageOperationIdsRef.current.delete(messageOperationKey);
       }
+      if (dispatch.stopRequested) {
+        // Dispatch has accepted the run; cancelling earlier could only cancel
+        // the previous turn (or have no thread ID at all).
+        await cancelSessionRun(done.id, done.projectId);
+      }
     } catch (error) {
       setPendingUserMessage(null);
       // The composer was cleared optimistically; a rejected dispatch (busy
@@ -241,24 +248,36 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         error,
         formatDispatchError(error, t) ?? t("errors.send_message"),
       );
-    } finally { setIsRunning(false); }
+    } finally {
+      if (pendingDispatch.current === dispatch) pendingDispatch.current = null;
+      setIsRunning(false);
+    }
   }
 
   async function cancelActiveRun() {
+    const dispatch = pendingDispatch.current;
+    if (dispatch && dispatch.sessionId === activeSession?.id) {
+      dispatch.stopRequested = true;
+      return;
+    }
     if (!activeSession) return;
     if (!canCancelThreadRun({ activeRun, session: activeSession })) return;
+    await cancelSessionRun(activeRun?.sessionId ?? activeSession.id, activeSession.projectId);
+  }
+
+  async function cancelSessionRun(sessionId: string, projectId?: string | null) {
     const cancelNodeId = threadCancelNodeId({
       node: activeRunOwner?.node ?? activeRuntimeNode ?? undefined,
       sandbox: selectedSandbox,
     });
     try {
       const session = await cancelRunMutation.mutateAsync({
-        sessionId: activeRun?.sessionId ?? activeSession.id,
+        sessionId,
         token: (cancelNodeId ? tokens[cancelNodeId] : undefined) ?? selectedToken,
         reason: t("cancel.reason"),
       });
       setSelectedSessionId(session.id);
-      syncThreadUrl(session.id, true, session.projectId ?? activeSession.projectId);
+      syncThreadUrl(session.id, true, session.projectId ?? projectId);
     } catch {
       // mutation onError surfaces a toast.
     }
@@ -323,6 +342,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       return;
     }
     setIsRunning(true);
+    const dispatch = { sessionId: activeSession.id, stopRequested: false };
+    pendingDispatch.current = dispatch;
     try {
       setActiveAgent(logicalAgent.executorKind);
       setActiveLogicalAgentId(logicalAgent.id);
@@ -353,6 +374,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         setHandoffOpen(false);
       }
       syncThreadUrl(done.id, true, done.projectId ?? activeSession.projectId);
+      if (dispatch.stopRequested) await cancelSessionRun(done.id, done.projectId);
     } catch (error) {
       reportMutationError(
         failureLabel,
@@ -360,6 +382,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         formatDispatchError(error, t) ?? t(failureMessageKey),
       );
     } finally {
+      if (pendingDispatch.current === dispatch) pendingDispatch.current = null;
       setIsRunning(false);
     }
   }

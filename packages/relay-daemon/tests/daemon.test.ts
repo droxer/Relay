@@ -2050,6 +2050,90 @@ test("relay daemon retries normal run.cancel terminal event while running", asyn
   ]);
 });
 
+test("UI cancellation terminates a live local process tree before acknowledgement", { skip: process.platform === "win32", timeout: 15_000 }, async () => {
+  const stop = new AbortController();
+  const command = runCommand("cmd_live_ui_stop");
+  let commandServed = false;
+  let cancelServed = false;
+  let parentPid = 0;
+  let childPid = 0;
+  let cancelled = false;
+  let aliveAtAcknowledgement = true;
+  const alive = (pid: number): boolean => {
+    try { process.kill(pid, 0); return true; } catch { return false; }
+  };
+  const childScript = 'process.on("SIGTERM",()=>{}); process.send("ready"); setInterval(()=>{},1000)';
+  const parentScript = `const {spawn}=require("node:child_process"); process.on("SIGTERM",()=>{}); const child=spawn(process.execPath,["-e",${JSON.stringify(childScript)}],{stdio:["ignore","ignore","ignore","ipc"]}); child.on("message",()=>process.stdout.write(JSON.stringify({parent:process.pid,child:child.pid})+"\\n")); setInterval(()=>{},1000);`;
+  const timeout = setTimeout(() => stop.abort("test timed out"), 10_000);
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", sandbox: "none",
+      workspacePath: process.cwd(), token: "node_token", pollIntervalMs: 5,
+      logger: testLogger(), signal: stop.signal,
+      environment: fakeEnvironment({
+        exec: async (_cmd, args, options) => {
+          if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+          let output = "";
+          return localProcessExecStream(process.execPath, ["-e", parentScript], {
+            ...options,
+            stdoutRenderer: (text) => {
+              output += text;
+              if (output.includes("\n")) {
+                const pids = JSON.parse(output.trim());
+                parentPid = pids.parent;
+                childPid = pids.child;
+              }
+              return options?.stdoutRenderer?.(text) ?? text;
+            },
+          });
+        },
+      }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (!commandServed) {
+            commandServed = true;
+            return jsonResponse({ commands: [command] });
+          }
+          if (parentPid && childPid && !cancelServed) {
+            cancelServed = true;
+            assert.ok(alive(parentPid) && alive(childPid));
+            return jsonResponse({ commands: [{
+              id: "cmd_live_ui_cancel", type: "run.cancel", commandId: command.id,
+              sessionId: command.sessionId, runId: command.runId, agent: command.agent,
+              reason: "Cancelled from Relay Web UI.",
+            }] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          if (event.type === "run.cancelled") {
+            cancelled = event.reason === "Cancelled from Relay Web UI.";
+            aliveAtAcknowledgement = alive(parentPid) || alive(childPid);
+            stop.abort();
+          }
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    assert.equal(cancelServed, true, "cancel must arrive after the processes start");
+    assert.equal(cancelled, true, "daemon must acknowledge the UI stop reason");
+    assert.equal(aliveAtAcknowledgement, false, "both processes must exit before run.cancelled");
+  } finally {
+    clearTimeout(timeout);
+    stop.abort();
+    for (const pid of [parentPid, childPid]) {
+      if (pid > 0 && alive(pid)) {
+        try { process.kill(pid, "SIGKILL"); } catch { /* Already exited. */ }
+      }
+    }
+  }
+});
+
 test("relay daemon rejects a second distinct run while busy", async () => {
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
