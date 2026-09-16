@@ -507,6 +507,15 @@
 
 /* Badges a thread whose computer is unreachable. Sits inside the name line
    so it survives the hover swap that hides the timestamp. */
+/* Backlog / routine origin glyph. Quiet ink: it is provenance, not state, so
+   it must not compete with the offline badge or the state pips. */
+.conversation-origin {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-3);
+}
+
 .conversation-offline {
   flex-shrink: 0;
   display: inline-flex;

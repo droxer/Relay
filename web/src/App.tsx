@@ -415,6 +415,7 @@ export function App() {
     projects,
     routedProjectId,
     threadQuery,
+    tasks,
     visibleNodes,
     runtimeNodes,
     logicalAgents,

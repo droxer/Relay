@@ -9,6 +9,7 @@ import {
   pickActiveThreadSession,
   sessionAgents,
   threadLabel,
+  threadOriginIndex,
   threadRowMeta,
   upsertThreadSession,
 } from "../src/lib/threads.js";
@@ -442,5 +443,52 @@ describe("threadRowMeta", () => {
       threadRowMeta({ layout: "nested", hasStatus: false, agentCount: 3 }),
       { subline: false, inlineAgents: false },
     );
+  });
+});
+
+/* A thread started by a backlog task or a routine run says so on its row.
+   Only the task side records the link (linkedSessionIds), so the rail inverts
+   it once per task-list change rather than scanning tasks per row. */
+describe("threadOriginIndex", () => {
+  type OriginTask = Parameters<typeof threadOriginIndex>[0][number];
+  const task = (partial: Partial<OriginTask> & { id: string }): OriginTask => ({
+    title: partial.id,
+    isRoutine: false,
+    linkedSessionIds: [],
+    ...partial,
+  });
+
+  it("marks a backlog task's threads with the task title", () => {
+    const index = threadOriginIndex([task({ id: "t1", title: "Fix login", linkedSessionIds: ["s1", "s2"] })]);
+    assert.deepEqual(index.get("s1"), { kind: "backlog", taskId: "t1", title: "Fix login" });
+    assert.deepEqual(index.get("s2"), { kind: "backlog", taskId: "t1", title: "Fix login" });
+  });
+
+  it("names a routine occurrence's thread after its parent routine", () => {
+    const index = threadOriginIndex([
+      task({ id: "r1", title: "Weekly KPIs", isRoutine: true }),
+      task({ id: "occ1", title: "Weekly KPIs · 2026-09-14", sourceRoutineId: "r1", linkedSessionIds: ["s1"] }),
+    ]);
+    assert.deepEqual(index.get("s1"), { kind: "routine", taskId: "occ1", title: "Weekly KPIs" });
+  });
+
+  it("falls back to the occurrence title when the parent routine is not listed", () => {
+    const index = threadOriginIndex([
+      task({ id: "occ1", title: "Standup notes", sourceRoutineId: "gone", linkedSessionIds: ["s1"] }),
+    ]);
+    assert.deepEqual(index.get("s1"), { kind: "routine", taskId: "occ1", title: "Standup notes" });
+  });
+
+  it("treats a thread linked to the routine itself as a routine thread", () => {
+    const index = threadOriginIndex([task({ id: "r1", title: "Daily digest", isRoutine: true, linkedSessionIds: ["s1"] })]);
+    assert.equal(index.get("s1")?.kind, "routine");
+  });
+
+  it("ignores deleted tasks and leaves plain chats unmarked", () => {
+    const index = threadOriginIndex([
+      task({ id: "t1", linkedSessionIds: ["s1"], deletedAt: "2026-09-01T00:00:00.000Z" }),
+    ]);
+    assert.equal(index.get("s1"), undefined);
+    assert.equal(index.get("chat"), undefined);
   });
 });

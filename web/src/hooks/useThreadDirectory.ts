@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { ProjectRecord } from "../types";
-import { matchesThreadQuery, threadsForDirectory, type ThreadItem } from "../lib/threads";
+import { matchesThreadQuery, threadOriginIndex, threadsForDirectory, type ThreadItem } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
 
 /**
@@ -35,6 +35,8 @@ export interface ThreadDirectoryInput {
   projects: readonly ProjectRecord[];
   routedProjectId: string | null;
   threadQuery: string;
+  /** Tasks whose linked sessions mark a thread as backlog- or routine-driven. */
+  tasks: Parameters<typeof threadOriginIndex>[0];
   visibleNodes: readonly DirectoryNode[];
   runtimeNodes: Parameters<typeof threadNodeOffline>[2];
   logicalAgents: Parameters<typeof threadNodeOffline>[1];
@@ -46,10 +48,13 @@ export function useThreadDirectory({
   projects,
   routedProjectId,
   threadQuery,
+  tasks,
   visibleNodes,
   runtimeNodes,
   logicalAgents,
 }: ThreadDirectoryInput): ThreadDirectory {
+  const origins = useMemo(() => threadOriginIndex(tasks), [tasks]);
+
   const threadItems = useMemo<ThreadItem[]>(() => {
     const runningBy = new Map(
       visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run.agent] as const)),
@@ -58,8 +63,9 @@ export function useThreadDirectory({
       session,
       runningAgent: runningBy.get(session.id),
       nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
+      origin: origins.get(session.id),
     }));
-  }, [myThreads, visibleNodes, logicalAgents, runtimeNodes]);
+  }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins]);
 
   const filteredThreads = useMemo(
     () => threadItems.filter((item) => matchesThreadQuery(item.session, threadQuery)),

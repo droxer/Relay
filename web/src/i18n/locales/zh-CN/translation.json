@@ -199,6 +199,8 @@
     "group_running": "运行中",
     "group_idle": "空闲",
     "node_offline": "电脑离线",
+    "origin_backlog": "待办任务：{{title}}",
+    "origin_routine": "例行任务：{{title}}",
     "agent_working": "{{agent}} 正在工作",
     "open_workspace": "打开对话工作区",
     "no_agent_yet": "暂无 Agent",

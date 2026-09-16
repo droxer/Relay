@@ -2,6 +2,8 @@ import {
   ActionEdit,
   ActionRemove,
   ICON,
+  NavBacklog,
+  NavRoutine,
   NodeOffline,
 } from "./icons";
 import { useTranslation } from "react-i18next";
@@ -79,7 +81,10 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
       : tone === "run"
         ? t("thread.group_running")
         : t("thread.group_idle");
-  const rowLabel = [label, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
+  const originLabel = item.origin
+    ? t(item.origin.kind === "routine" ? "thread.origin_routine" : "thread.origin_backlog", { title: item.origin.title })
+    : "";
+  const rowLabel = [label, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
 
   // The meta line's status text. A live run names its agent; a thread
@@ -137,6 +142,21 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
     </span>
   ) : null;
 
+  // Which backlog task or routine started the thread. Icon only — the
+  // source's name reads from the tooltip and the row's accessible label.
+  const OriginGlyph = item.origin?.kind === "routine" ? NavRoutine : NavBacklog;
+  const originMark = item.origin ? (
+    <span
+      className="conversation-origin"
+      data-kind={item.origin.kind}
+      role="img"
+      aria-label={originLabel}
+      title={originLabel}
+    >
+      <OriginGlyph size={ICON.xs} />
+    </span>
+  ) : null;
+
   return (
     <li
       className={`conversation-row rail-row list-virtual${layout === "nested" ? " nested" : ""}`}
@@ -159,6 +179,9 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone, l
             ) : null}
             <span className="conversation-name">
               <strong>{label}</strong>
+              {/* Origin rides the title in both layouts, like the offline
+                  badge: it is a fixed property of the thread, not its state. */}
+              {originMark}
               {/* The offline badge rides the title in both layouts: it is a
                   property of the thread itself, and the name line survives
                   the hover swap that hides the timestamp. */}

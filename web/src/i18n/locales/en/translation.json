@@ -199,6 +199,8 @@
     "group_running": "Running",
     "group_idle": "Idle",
     "node_offline": "Computer offline",
+    "origin_backlog": "Backlog task: {{title}}",
+    "origin_routine": "Routine: {{title}}",
     "agent_working": "{{agent}} is working",
     "open_workspace": "Open thread workspaces",
     "no_agent_yet": "No agent yet",
