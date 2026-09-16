@@ -401,8 +401,14 @@
      height comes from the layout and the text clamps inside it; whatever
      does not fit is detail the record's drawer already carries in full.
 
-       --card-h-record  task / routine record: title, description, facts,
-                        action footer.
+       --card-h-record  a backlog task: title, exception line, description,
+                        facts, action footer. The tallest rung because the
+                        exception line (blocked / waiting) is a row the other
+                        cards never have.
+       --card-h-routine a routine: the same card without the exception line,
+                        so it is genuinely shorter. Two rungs rather than one
+                        because each grid is its own scan — a routine grid
+                        padded out to a task's height reads as hollow.
        --card-h-fleet   control-panel computer or employee: identity header,
                         chip body, metric footer.
        --card-h-kpi     dashboard KPI tile: eyebrow, numeral, one hint.
@@ -412,7 +418,8 @@
 
      A card that wants a height off this ladder is telling you it is not a
      card — it is a panel or a row; check which before adding a rung. */
-  --card-h-record: 232px;
+  --card-h-record: 288px;
+  --card-h-routine: 240px;
   --card-h-fleet: 232px;
   --card-h-kpi: 132px;
   --card-h-panel: 288px;
@@ -872,6 +879,12 @@ html:lang(zh-TW) {
   --leading-normal: 1.7;
   --leading-loose: 1.8;
   --leading-prose: 1.9;
+  /* Looser Han leading makes every clamped line taller, so the record card's
+     frame steps up with it — otherwise a two-line Han title plus an exception
+     line clips the facts under it. Same reason the type roles are restated in
+     this scope: the height has to be re-resolved where the leading changed. */
+  --card-h-record: 304px;
+  --card-h-routine: 264px;
 }
 
 /* Density escape hatch — data-dense surfaces (admin tables, backlog). */
@@ -912,7 +925,8 @@ html:lang(zh-TW) {
   /* The card ladder steps down with the type it frames — same clamps, one
      rung less air. Restated here for the same substitution reason as the
      roles above. */
-  --card-h-record: 208px;
+  --card-h-record: 260px;
+  --card-h-routine: 216px;
   --card-h-fleet: 196px;
 }
 

@@ -244,13 +244,18 @@
   overflow: hidden;
   width: 100%;
   min-width: 0;
-  /* Exactly two lines, always — `1lh` is this element's own line box, so the
-     reserved height follows the type scale (the compact density scope drops
-     --fs-4 a rung) instead of pinning a pixel figure that only fits one of
-     them. A one-line title leaves its second line empty rather than pulling
-     the description up, which is what keeps the facts line at the same
-     height across a lane. */
-  height: calc(2 * 1lh);
+  /* At most two lines, and only as many as the title needs — the card aligns
+     its peers at the TOP (this title) and at the BOTTOM (facts + actions),
+     with the slack in the middle.
+
+     `height: auto` is load-bearing: the title is a Button, so it arrives with
+     the primitive's `h-(--control-h)` — a 44px CONTROL height on what is
+     really a heading. Every one-line title was therefore two lines tall, with
+     the empty line pushing the description and the blocked reason down into
+     the middle of the card. `1lh` keeps the two-line cap on the type scale,
+     so the compact density scope's smaller --fs-4 shortens it to match. */
+  height: auto;
+  max-height: calc(2 * 1lh);
   flex: none;
   /* The clamp needs `overflow: hidden`, which clips at the CONTENT edge — and
      with zero padding the first glyph of every line starts exactly there, so
@@ -275,10 +280,10 @@
   text-underline-offset: 2px;
 }
 
-/* Two reserved lines, whether or not the record has a description. The
-   element renders empty rather than absent (see BacklogTaskCard), because a
-   slot that collapses is a slot that moves every fact below it — half a lane
-   of cards stating their priority on one line and half on another. */
+/* Two lines at most, and none when the record has no description — the card
+   does not reserve it, because the alignment that matters is the facts line,
+   and that is held by the frame's bottom edge rather than by counting blank
+   lines above it. */
 .backlog-description {
   margin: var(--sp-2) 0 0;
   color: var(--ink-2);
@@ -288,7 +293,7 @@
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  height: calc(2 * 1lh);
+  max-height: calc(2 * 1lh);
   flex: none;
 }
 
@@ -313,24 +318,41 @@
   font: var(--type-label);
 }
 
-/* On a card the facts line sits directly under the description and never
-   grows: `0 1 auto` lets it CLIP when a record brings more facts than the
-   frame has room for (an unusually chatty record spends its own space, not
-   the grid's) while a one-line card keeps its facts where the eye expects
-   them instead of floating them down the middle of the card. The slack is
-   left below, between the facts and the pinned footer. In the list rows this
-   class is plain content and keeps flowing. */
+/* On a card the facts line rides the BOTTOM of the frame, directly above the
+   action row: `margin-top: auto` puts the card's slack above it, so every
+   card in a lane states its priority, agent and date on the same line no
+   matter how much prose sits over it. `0 1 auto` lets it clip rather than
+   grow, so an unusually chatty record spends its own space and never the
+   grid's. In the list rows this class is plain content and keeps flowing. */
 .backlog-task .backlog-meta {
   flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
+  /* No bottom fade here, deliberately. This region is sized to its content
+     (`0 1 auto`), so its box ends ON the last row and a fade would dim a row
+     that fits — on every card carrying an exception line. The frame is sized
+     to hold the facts instead; the fleet card's body, which does own its
+     slack, is where a fade earns its place. */
 }
 
-/* The flow line (blocked reason, waiting, work age) is an exception state
-   stated above the description, not the card's slack — it takes the height it
-   needs and leaves the remainder to the facts line below. */
+/* The exception line — why this task is not simply moving — is exactly one
+   row on a card: the reason clamps (see .backlog-blocker) and the work age
+   moved down to the facts line, which is where a fact belongs. It used to
+   carry both, wrap to two rows, and get sliced through the middle of the
+   second one. One row cannot be sliced, so it holds its height outright. */
 .backlog-task .backlog-flow {
   flex: none;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* The bottom anchor, and ONLY on the facts line. It must exclude the flow row
+   above — that row carries .backlog-meta too, so it was taking an auto margin
+   of its own, and two auto margins SPLIT the free space instead of pushing
+   one block down: a blocked card with no description stated "Blocked"
+   floating in the middle of its own frame. */
+.backlog-task .backlog-meta:not(.backlog-flow) {
+  margin-top: auto;
 }
 
 .backlog-due {

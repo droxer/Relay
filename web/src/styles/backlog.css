@@ -437,11 +437,10 @@
   align-items: center;
   flex: none;
   height: var(--control-h-xs);
-  /* Pinned to the card's bottom edge rather than trailing the facts: with a
-     fixed frame the footer is a rule of the layout, so the action row lands
-     on the same line in every card whether or not the record above it filled
-     its lines. */
-  margin-top: auto;
+  /* No `margin-top: auto` here: the facts line above already carries it, and
+     two auto margins SPLIT the free space between them — which is why the
+     facts were floating in the middle of short cards instead of sitting on
+     the footer. One auto margin, one bottom edge. */
   padding-top: var(--sp-2);
 }
 
@@ -469,4 +468,16 @@
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--err);
+}
+
+/* ON A CARD ONLY: one line, ellipsised, tooltip for the rest. The reason is
+   free text an operator typed and it ran to three lines on a lane-width card,
+   which in a fixed frame pushed the card's own action row out through the
+   bottom edge. The list row must keep wrapping — it lays the reason out in a
+   flex row BESIDE the task title, so a nowrap reason takes its full intrinsic
+   width and starves the title to nothing. */
+.backlog-task .backlog-blocker {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
