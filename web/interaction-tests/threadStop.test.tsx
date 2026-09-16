@@ -62,7 +62,7 @@ it("does not cancel a send without a stop request", async () => {
 });
 
 it("clears a pending stop when dispatch fails", async () => {
-  const { deps, reject, cancel } = setup();
+  const { deps, reject, cancel, dispatch, session } = setup();
   const { result } = renderHook(() => useThreadDispatch(deps));
   await act(async () => {
     const sending = result.current.sendMessage();
@@ -73,6 +73,9 @@ it("clears a pending stop when dispatch fails", async () => {
   expect(cancel).not.toHaveBeenCalled();
   expect(deps.reportMutationError).toHaveBeenCalled();
   expect(deps.setIsRunning).toHaveBeenLastCalledWith(false);
+  dispatch.mockResolvedValue({ ...session, status: "running" });
+  await act(async () => { await result.current.sendMessage(); });
+  expect(cancel).not.toHaveBeenCalled();
 });
 
 it("cancels an already running thread immediately", async () => {
@@ -81,4 +84,16 @@ it("cancels an already running thread immediately", async () => {
   const { result } = renderHook(() => useThreadDispatch(deps));
   await act(async () => { await result.current.cancelActiveRun(); });
   expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+});
+
+it("does not apply a stop in another thread to the pending send", async () => {
+  const { deps, accept, cancel, session } = setup(true);
+  const { result, rerender } = renderHook((props) => useThreadDispatch(props), { initialProps: deps });
+  let sending!: Promise<void>;
+  act(() => { sending = result.current.sendMessage(); });
+  rerender({ ...deps, activeSession: { ...session, id: "other-thread", status: "running" } });
+  await act(async () => { await result.current.cancelActiveRun(); });
+  await act(async () => { accept({ ...session, status: "running" }); await sending; });
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "other-thread" }));
 });
