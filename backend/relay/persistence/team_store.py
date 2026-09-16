@@ -24,6 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ..core.ids import new_database_id, now_iso
+from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     _append_jsonl,
@@ -548,11 +549,16 @@ def _new_team(
         raise TeamValidationError("team_members_duplicate")
     if not isinstance(lead, str) or lead not in members:
         raise TeamValidationError("team_lead_not_member")
+    team_id = new_database_id()
+    profile_image_url = validate_profile_image_url(
+        "teams", team_id, payload.get("profileImageUrl")
+    )
     timestamp = now_iso()
     return {
-        "id": new_database_id(),
+        "id": team_id,
         "ownerEmployeeId": owner_employee_id,
         "name": name,
+        **({"profileImageUrl": profile_image_url} if profile_image_url else {}),
         "leadAgentId": lead,
         "memberAgentIds": list(members),
         "enabled": payload.get("enabled") is not False,
@@ -590,15 +596,9 @@ def _normalize_team_patch(
     if "name" in patch:
         normalized["name"] = _required_name(patch["name"])
     if "profileImageUrl" in patch:
-        image_url = patch["profileImageUrl"]
-        if image_url is not None and (
-            not isinstance(image_url, str)
-            or not image_url.startswith(
-                f"/profile-images/teams/{current['id']}?v="
-            )
-        ):
-            raise ValueError("profileImageUrl is invalid.")
-        normalized["profileImageUrl"] = image_url
+        normalized["profileImageUrl"] = validate_profile_image_url(
+            "teams", current["id"], patch["profileImageUrl"]
+        )
     if "memberAgentIds" in patch:
         members = patch["memberAgentIds"]
         if not isinstance(members, list) or not members:

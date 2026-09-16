@@ -559,7 +559,10 @@
     "remove": "Remove profile image",
     "unsupported": "Choose a PNG, JPEG, or WebP image.",
     "too_large": "Choose an image smaller than 2 MB.",
-    "failed": "Could not update the profile image."
+    "failed": "Could not update the profile image.",
+    "presets": "Choose an avatar",
+    "preset_option": "Avatar {{index}} of {{total}}",
+    "upload": "Upload image"
   },
   "teams": {
     "title": "Teams",
@@ -605,7 +608,8 @@
     "search_label": "Search teams",
     "search_placeholder": "Search teams…",
     "edit_members": "Edit members",
-    "rename": "Rename team"
+    "rename": "Rename team",
+    "avatar": "Avatar"
   },
   "computer": {
     "title": "My Computer",
@@ -1541,6 +1545,7 @@
     "create_runtime_required": "Choose a runtime.",
     "create_role_placeholder": "Select a role…",
     "create_role_required": "Choose a role.",
+    "create_avatar_label": "Avatar",
     "create_name_label": "Name",
     "create_name_placeholder": "Agent display name…",
     "create_submit": "Create agent",

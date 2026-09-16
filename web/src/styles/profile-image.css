@@ -222,3 +222,76 @@
     position: relative;
   }
 }
+
+/* Preset profile images — one tile per bundled avatar, shared by the create
+   forms and the picker popover. The tile is the image alone; selection is an
+   --action ring drawn as a box-shadow so it never competes with the focus
+   outline that base.css owns. */
+/* Column counts divide each set evenly (16 robots, 12 grids) so no row is
+   left with a stranded tile. */
+.preset-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.preset-avatar-grid[data-kind="teams"] {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.preset-avatar-option {
+  display: grid;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 0.5px var(--line-1);
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.preset-avatar-option > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.preset-avatar-option:hover:not([data-disabled]) {
+  transform: translateY(-1px);
+}
+
+.preset-avatar-option[data-checked] {
+  box-shadow: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--action);
+}
+
+.preset-avatar-option[data-disabled] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+.profile-image-presets {
+  display: grid;
+  gap: var(--sp-3);
+  width: min(320px, calc(100vw - var(--sp-6)));
+  padding: var(--sp-3);
+  border-radius: var(--r-3);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-2);
+  outline: none;
+}
+
+.profile-image-presets-title {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-label);
+}
+
+.profile-image-presets .preset-avatar-grid {
+  gap: var(--sp-1-5);
+}
+
+.profile-image-presets-upload {
+  justify-self: start;
+}

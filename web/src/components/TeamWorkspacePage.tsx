@@ -3,7 +3,7 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { deleteTeamProfileImage, getWorkspaceBrief, updateTeamProfileImage } from "../api";
+import { deleteTeamProfileImage, getWorkspaceBrief, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
@@ -94,6 +94,16 @@ function TeamProfile({
     setImageSaving(true);
     try {
       const result = await updateTeamProfileImage(team.id, dataUrl);
+      applyTeamUpdate(result.team);
+    } finally {
+      setImageSaving(false);
+    }
+  }
+
+  async function selectImagePreset(presetUrl: string) {
+    setImageSaving(true);
+    try {
+      const result = await selectTeamProfilePreset(team.id, presetUrl);
       applyTeamUpdate(result.team);
     } finally {
       setImageSaving(false);
@@ -384,6 +394,7 @@ function TeamProfile({
               disabled={busy}
               onUpload={uploadImage}
               onRemove={removeImage}
+              presets={{ kind: "teams", onSelect: selectImagePreset }}
             />
           </div>
 

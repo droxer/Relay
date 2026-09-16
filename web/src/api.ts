@@ -264,6 +264,16 @@ export function updateAgentProfileImage(
   );
 }
 
+export function selectAgentProfilePreset(
+  agentId: string,
+  presetUrl: string,
+): Promise<{ agent: EmployeeAgent }> {
+  return apiJson<{ agent: EmployeeAgent }>(
+    `/profile-images/agents/${encodeURIComponent(agentId)}`,
+    { method: "PUT", body: { presetUrl }, versioned: false },
+  );
+}
+
 export function deleteAgentProfileImage(
   agentId: string,
 ): Promise<{ agent: EmployeeAgent }> {
@@ -280,6 +290,16 @@ export function updateTeamProfileImage(
   return apiJson<{ team: AgentTeam }>(
     `/profile-images/teams/${encodeURIComponent(teamId)}`,
     { method: "PUT", body: { dataUrl }, versioned: false },
+  );
+}
+
+export function selectTeamProfilePreset(
+  teamId: string,
+  presetUrl: string,
+): Promise<{ team: AgentTeam }> {
+  return apiJson<{ team: AgentTeam }>(
+    `/profile-images/teams/${encodeURIComponent(teamId)}`,
+    { method: "PUT", body: { presetUrl }, versioned: false },
   );
 }
 

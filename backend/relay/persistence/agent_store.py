@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from ..core.agent_names import generate_agent_name
 from ..core.ids import new_database_id, now_iso
 from ..core.models import AGENT_NAMES, AGENT_ROLES
+from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     _append_jsonl,
@@ -748,9 +749,13 @@ def _new_agent(
         raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
     if default_role not in AGENT_ROLES:
         raise ValueError(f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.")
+    agent_id = new_database_id()
+    profile_image_url = validate_profile_image_url(
+        "agents", agent_id, payload.get("profileImageUrl")
+    )
     timestamp = now_iso()
     return {
-        "id": new_database_id(),
+        "id": agent_id,
         "supervisorEmployeeId": supervisor_employee_id,
         "displayName": display_name,
         "executorKind": executor_kind,
@@ -766,6 +771,7 @@ def _new_agent(
             and payload["instructions"].strip()
             else {}
         ),
+        **({"profileImageUrl": profile_image_url} if profile_image_url else {}),
         "skillPolicy": _policy(payload, "skillPolicy"),
         "toolPolicy": _policy(payload, "toolPolicy"),
         "modelPolicy": _policy(payload, "modelPolicy"),
@@ -820,13 +826,9 @@ def _normalize_agent_identity_patch(
         )
         normalized["displayName"] = display_name
     if "profileImageUrl" in patch:
-        image_url = patch["profileImageUrl"]
-        if image_url is not None and (
-            not isinstance(image_url, str)
-            or not image_url.startswith(f"/profile-images/agents/{agent_id}?v=")
-        ):
-            raise ValueError("profileImageUrl is invalid.")
-        normalized["profileImageUrl"] = image_url
+        normalized["profileImageUrl"] = validate_profile_image_url(
+            "agents", agent_id, patch["profileImageUrl"]
+        )
     if "compatibilityKey" in patch:
         normalized["compatibilityKey"] = _required_string(patch, "compatibilityKey")
     return normalized
