@@ -559,8 +559,15 @@
     "too_large": "請選擇小於 2 MB 的圖片。",
     "failed": "無法更新頭像。",
     "presets": "選擇頭像",
-    "preset_option": "頭像 {{index}}/{{total}}",
-    "upload": "上傳圖片"
+    "preset_option": "{{style}}頭像 {{index}}/{{total}}",
+    "upload": "上傳圖片",
+    "style": {
+      "bottts": "機器人",
+      "lorelei": "插畫",
+      "pixel-art": "像素風",
+      "personas": "人物",
+      "shape-grid": "幾何圖形"
+    }
   },
   "teams": {
     "title": "團隊",

@@ -561,8 +561,15 @@
     "too_large": "Choose an image smaller than 2 MB.",
     "failed": "Could not update the profile image.",
     "presets": "Choose an avatar",
-    "preset_option": "Avatar {{index}} of {{total}}",
-    "upload": "Upload image"
+    "preset_option": "{{style}} avatar {{index}} of {{total}}",
+    "upload": "Upload image",
+    "style": {
+      "bottts": "Robots",
+      "lorelei": "Illustrated",
+      "pixel-art": "Pixel art",
+      "personas": "Personas",
+      "shape-grid": "Shapes"
+    }
   },
   "teams": {
     "title": "Teams",

@@ -17,15 +17,48 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Avatar, Style } from "@dicebear/core";
 import bottts from "@dicebear/styles/bottts.json" with { type: "json" };
+import lorelei from "@dicebear/styles/lorelei.json" with { type: "json" };
+import personas from "@dicebear/styles/personas.json" with { type: "json" };
+import pixelArt from "@dicebear/styles/pixel-art.json" with { type: "json" };
 import shapeGrid from "@dicebear/styles/shape-grid.json" with { type: "json" };
 
 const OUTPUT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "avatars");
 
-// Soft backgrounds so a robot still reads as a filled chip at 16px.
+// Soft backgrounds so every agent avatar still reads as a filled chip at 16px.
 const AGENT_BACKGROUNDS = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf", "c7f0d8"];
-const AGENT_SEEDS = [
-  "bolt", "sprocket", "gizmo", "widget", "rivet", "piston", "dynamo", "gadget",
-  "cog", "servo", "diode", "ratchet", "turbo", "pixel", "circuit", "beacon",
+const AGENT_STYLES = [
+  {
+    name: "bottts",
+    definition: bottts,
+    seeds: [
+      "bolt", "sprocket", "gizmo", "widget", "rivet", "piston", "dynamo", "gadget",
+      "cog", "servo", "diode", "ratchet", "turbo", "pixel", "circuit", "beacon",
+    ],
+  },
+  {
+    name: "lorelei",
+    definition: lorelei,
+    seeds: [
+      "aria", "juniper", "sage", "wren", "hazel", "iris", "rowan", "willow",
+      "clover", "ember", "lark", "maple", "robin", "sparrow", "violet", "fern",
+    ],
+  },
+  {
+    name: "pixel-art",
+    definition: pixelArt,
+    seeds: [
+      "arcade", "joystick", "sprite", "bitmap", "chiptune", "cartridge", "quest", "level",
+      "combo", "token", "boss", "portal", "respawn", "glitch", "retro", "byte",
+    ],
+  },
+  {
+    name: "personas",
+    definition: personas,
+    seeds: [
+      "ada", "alan", "grace", "linus", "margaret", "dennis", "barbara", "ken",
+      "radia", "tim", "frances", "guido", "hedy", "bjarne", "katherine", "yukihiro",
+    ],
+  },
 ];
 const TEAM_SEEDS = [
   "atlas", "harbor", "summit", "meadow", "comet", "delta",
@@ -42,7 +75,9 @@ function writeSet(kind, style, seeds, optionsFor) {
   });
 }
 
-writeSet("agents", { name: "bottts", definition: bottts }, AGENT_SEEDS, (index) => ({
-  backgroundColor: [AGENT_BACKGROUNDS[index % AGENT_BACKGROUNDS.length]],
-}));
+for (const { name, definition, seeds } of AGENT_STYLES) {
+  writeSet("agents", { name, definition }, seeds, (index) => ({
+    backgroundColor: [AGENT_BACKGROUNDS[index % AGENT_BACKGROUNDS.length]],
+  }));
+}
 writeSet("teams", { name: "shape-grid", definition: shapeGrid }, TEAM_SEEDS, () => ({}));

@@ -21,8 +21,22 @@ def test_every_preset_has_a_committed_svg_and_every_svg_is_a_preset() -> None:
     }
 
     assert on_disk == {kind: set(urls) for kind, urls in PRESET_AVATAR_URLS.items()}
-    assert len(PRESET_AVATAR_URLS["agents"]) == 16
+    assert len(PRESET_AVATAR_URLS["agents"]) == 64
     assert len(PRESET_AVATAR_URLS["teams"]) == 12
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/avatars/agents/bottts-07.svg",
+        "/avatars/agents/lorelei-16.svg",
+        "/avatars/agents/pixel-art-01.svg",
+        "/avatars/agents/personas-09.svg",
+    ],
+)
+def test_every_agent_style_is_a_preset(url: str) -> None:
+    assert is_preset_avatar_url("agents", url)
+    assert not is_preset_avatar_url("teams", url)
 
 
 def test_presets_are_scoped_to_their_kind() -> None:
@@ -36,6 +50,8 @@ def test_presets_are_scoped_to_their_kind() -> None:
     "url",
     [
         "/avatars/agents/bottts-17.svg",
+        "/avatars/agents/lorelei-00.svg",
+        "/avatars/agents/pixel-art-neutral-01.svg",
         "/avatars/agents/../teams/shape-grid-01.svg",
         "/avatars/agents/bottts-01.svg?x=1",
         "https://api.dicebear.com/10.x/bottts/svg",

@@ -11,16 +11,36 @@
 
 export type PresetAvatarKind = "agents" | "teams";
 
-function presetUrls(kind: PresetAvatarKind, style: string, count: number): readonly string[] {
-  return Array.from(
-    { length: count },
-    (_, index) => `/avatars/${kind}/${style}-${String(index + 1).padStart(2, "0")}.svg`,
-  );
+export interface PresetAvatarStyle {
+  /** DiceBear style id, also the file-name prefix. */
+  style: string;
+  urls: readonly string[];
 }
 
+function presetStyle(kind: PresetAvatarKind, style: string, count: number): PresetAvatarStyle {
+  return {
+    style,
+    urls: Array.from(
+      { length: count },
+      (_, index) => `/avatars/${kind}/${style}-${String(index + 1).padStart(2, "0")}.svg`,
+    ),
+  };
+}
+
+/** Presets grouped by style, in picker order. */
+export const PRESET_AVATAR_STYLES: Readonly<Record<PresetAvatarKind, readonly PresetAvatarStyle[]>> = {
+  agents: [
+    presetStyle("agents", "bottts", 16),
+    presetStyle("agents", "lorelei", 16),
+    presetStyle("agents", "pixel-art", 16),
+    presetStyle("agents", "personas", 16),
+  ],
+  teams: [presetStyle("teams", "shape-grid", 12)],
+};
+
 export const PRESET_AVATARS: Readonly<Record<PresetAvatarKind, readonly string[]>> = {
-  agents: presetUrls("agents", "bottts", 16),
-  teams: presetUrls("teams", "shape-grid", 12),
+  agents: PRESET_AVATAR_STYLES.agents.flatMap(({ urls }) => urls),
+  teams: PRESET_AVATAR_STYLES.teams.flatMap(({ urls }) => urls),
 };
 
 export function isPresetAvatarUrl(kind: PresetAvatarKind, url: string | null | undefined): boolean {

@@ -58,11 +58,18 @@ export function ProfileImagePicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
+  // The tile the arrow keys have highlighted; nothing is saved until commit.
+  const [highlightedPreset, setHighlightedPreset] = useState<string | null>(null);
+
+  function togglePresets(open: boolean) {
+    setHighlightedPreset(null);
+    setPresetsOpen(open);
+  }
 
   async function selectPreset(url: string) {
     if (!presets) return;
     setError(null);
-    setPresetsOpen(false);
+    togglePresets(false);
     try {
       await presets.onSelect(url);
     } catch (selectError) {
@@ -71,7 +78,7 @@ export function ProfileImagePicker({
   }
 
   function chooseUpload() {
-    setPresetsOpen(false);
+    togglePresets(false);
     inputRef.current?.click();
   }
 
@@ -127,7 +134,7 @@ export function ProfileImagePicker({
             onChange={(event) => void selectImage(event.target.files?.[0])}
           />
           {presets ? (
-            <PopoverPrimitive.Root open={presetsOpen} onOpenChange={setPresetsOpen}>
+            <PopoverPrimitive.Root open={presetsOpen} onOpenChange={togglePresets}>
               <PopoverPrimitive.Trigger
                 disabled={disabled}
                 render={
@@ -159,8 +166,9 @@ export function ProfileImagePicker({
                     </PopoverPrimitive.Title>
                     <PresetAvatarGrid
                       kind={presets.kind}
-                      value={isPresetAvatarUrl(presets.kind, imageUrl) ? imageUrl ?? null : null}
-                      onChange={(url) => void selectPreset(url)}
+                      value={highlightedPreset ?? (isPresetAvatarUrl(presets.kind, imageUrl) ? imageUrl ?? null : null)}
+                      onChange={setHighlightedPreset}
+                      onCommit={(url) => void selectPreset(url)}
                       disabled={disabled}
                     />
                     <Button

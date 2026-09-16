@@ -12,13 +12,19 @@ from __future__ import annotations
 
 from typing import Any
 
-PRESET_AVATAR_COUNTS = {"agents": ("bottts", 16), "teams": ("shape-grid", 12)}
+# (style, count) per kind, in picker order.
+PRESET_AVATAR_STYLES: dict[str, tuple[tuple[str, int], ...]] = {
+    "agents": (("bottts", 16), ("lorelei", 16), ("pixel-art", 16), ("personas", 16)),
+    "teams": (("shape-grid", 12),),
+}
 
 PRESET_AVATAR_URLS: dict[str, frozenset[str]] = {
     kind: frozenset(
-        f"/avatars/{kind}/{style}-{index:02d}.svg" for index in range(1, count + 1)
+        f"/avatars/{kind}/{style}-{index:02d}.svg"
+        for style, count in styles
+        for index in range(1, count + 1)
     )
-    for kind, (style, count) in PRESET_AVATAR_COUNTS.items()
+    for kind, styles in PRESET_AVATAR_STYLES.items()
 }
 
 
