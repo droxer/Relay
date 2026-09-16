@@ -190,7 +190,7 @@ export function useRelayMutations() {
       await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY });
       const previous = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY);
       queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-        (current ?? []).map((task) => (task.id === taskId ? { ...task, status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status === "assigned" && task.startedAt ? "running" : status } : task)),
+        (current ?? []).map((task) => (task.id === taskId ? { ...task, status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status } : task)),
       );
       return { previous };
     },

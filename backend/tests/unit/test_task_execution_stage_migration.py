@@ -26,7 +26,7 @@ def test_execution_stage_migration_replays_claimed_tasks_without_changing_histor
     )
     path = (
         Path(__file__).parents[2]
-        / "migrations/versions/20260916_0073_align_task_execution_stage.py"
+        / "migrations/versions/20260916_0074_align_task_execution_stage.py"
     )
     spec = importlib.util.spec_from_file_location("task_execution_stage_migration", path)
     module = importlib.util.module_from_spec(spec)

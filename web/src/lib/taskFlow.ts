@@ -7,7 +7,6 @@ const DAY = 86_400_000;
 export function taskWorkflowStage(task: RelayTaskListItem): TaskWorkflowStage {
   if (task.workflowStage) return task.workflowStage;
   if (task.status === "blocked" || task.status === "waiting_for_human") return "running";
-  if (task.status === "assigned" && task.startedAt) return "running";
   return task.status;
 }
 

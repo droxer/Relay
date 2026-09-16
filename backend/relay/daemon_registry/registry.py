@@ -2310,6 +2310,11 @@ class DaemonNodeRegistry:
                 )
             return
         if event["type"] == "run.executing":
+            run_request = self.daemon_store.get_run_request(
+                command.get("_runRequestId")
+            )
+            if run_request:
+                self._ensure_agent_started_for_command(run_request, command)
             self._record_handoff_delivery(command, "running")
             self._record_skipped_skills(command, event.get("skillsSkipped"))
             self._note_run_progress(command)
@@ -2678,7 +2683,11 @@ class DaemonNodeRegistry:
                             "_relay_dispatch_claim_id"
                         ]
                         self.daemon_store.update_staged_command(command["id"], command)
-                        self._ensure_agent_started_for_command(request, command)
+                        if not (
+                            request.get("taskId")
+                            and command.get("reportExecutionStarted")
+                        ):
+                            self._ensure_agent_started_for_command(request, command)
                     request = self.daemon_store.update_run_request_if_claimed(
                         request["id"],
                         "_relay_dispatch_claim_id",
@@ -3107,7 +3116,11 @@ class DaemonNodeRegistry:
             "state": state,
             "_runRequestId": run_request["id"],
             "reportWorkspaceStatus": True,
-            **({"reportExecutionStarted": True} if context else {}),
+            **(
+                {"reportExecutionStarted": True}
+                if context or run_request.get("taskId")
+                else {}
+            ),
             **(
                 {"handoffValidation": handoff_validation}
                 if handoff_validation is not None
@@ -3202,7 +3215,10 @@ class DaemonNodeRegistry:
         )
         if not staged:
             return self.daemon_store.get_run_request(run_request["id"]) or run_request
-        self._ensure_agent_started_for_command(run_request, command)
+        if not (
+            run_request.get("taskId") and command.get("reportExecutionStarted")
+        ):
+            self._ensure_agent_started_for_command(run_request, command)
         updated = self.daemon_store.update_run_request_if_claimed(
             run_request["id"],
             "_relay_dispatch_claim_id",

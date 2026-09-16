@@ -36,7 +36,7 @@ def test_blocking_preserves_stage_and_age_across_rework(store):
     task = status(store, task, "review")
     assert "blockedAt" not in task
     task = status(store, task, "assigned")
-    assert task["workflowStage"] == "running"
+    assert task["workflowStage"] == "assigned"
     assert task["startedAt"] == started
     task = status(store, task, "done")
     assert task["finishedAt"]

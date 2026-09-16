@@ -4542,7 +4542,24 @@ def _pipeline_registry(root: str) -> tuple[Any, Any, Any]:
     return session_store, daemon_store, registry
 
 
+def _start_run(registry: Any, command: dict[str, Any]) -> None:
+    if command.get("reportExecutionStarted"):
+        registry.handle_event(
+            "sbx_alice",
+            {
+                "type": "run.executing",
+                "commandId": command["id"],
+                **({"leaseId": command["leaseId"]} if command.get("leaseId") else {}),
+                "sessionId": command["sessionId"],
+                "runId": command["runId"],
+                "agent": command["agent"],
+            },
+            "node_token",
+        )
+
+
 def _finish_run(registry: Any, command: dict[str, Any], exit_code: int) -> None:
+    _start_run(registry, command)
     registry.handle_event(
         "sbx_alice",
         {
@@ -4550,7 +4567,8 @@ def _finish_run(registry: Any, command: dict[str, Any], exit_code: int) -> None:
             "commandId": command["id"],
             "sessionId": command["sessionId"],
             "runId": command["runId"],
-            "agent": command["agent"],            "exitCode": exit_code,
+            "agent": command["agent"],
+            "exitCode": exit_code,
             "agentLog": f"{command['agent']} exit {exit_code}",
         },
         "node_token",
@@ -4959,6 +4977,8 @@ def test_only_the_final_assignment_reports_the_round_result() -> None:
             assert first["state"]["assignment_brief"] == "Implement the change."
             assert first["state"]["assignment_id"] == first["assignmentId"]
             assert "round_result_file" not in first["state"]
+            assert sessions.get_session(first["sessionId"])["agentRuns"] == []
+            _start_run(registry, first)
             [first_run] = sessions.get_session(first["sessionId"])["agentRuns"]
             assert first_run["assignmentId"] == first["assignmentId"]
             assert first_run["brief"] == "Implement the change."

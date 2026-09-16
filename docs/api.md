@@ -415,7 +415,9 @@ as `task.workspace_wait` events; an acquire clears the matching run's wait state
 
 Task consumers should use `workflowStage` for the five board stages (Backlog,
 Ready, In progress, Review, Done) while retaining `status` for execution and waiting
-conditions. `GET /tasks` and `GET /tasks?view=summary` also return
+conditions. An execution claim reserves WIP but remains Ready; the task enters In
+progress only when the daemon reports that an agent has started. `GET /tasks` and
+`GET /tasks?view=summary` also return
 `flowPolicy: { wipLimit, scope: "employee" }`.
 
 New tasks accept only Backlog/Ready as initial status. `acceptancePolicy` is

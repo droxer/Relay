@@ -533,18 +533,17 @@ class TaskDispatcher:
             return self._record_dispatch_started(session, node)
 
     def _record_dispatch_started(self, session: dict[str, Any], node: dict[str, Any]) -> DispatchResult:
-        self.ctx.task_store.update_task(self.task["id"], {"status": "running"})
         self.ctx.task_store.clear_dispatch_retry(self.task["id"])
         if self.claim_id:
             self.ctx.task_store.release_dispatch_claim(self.task["id"], self.claim_id)
-        message = f"{self.agent} started the task."
+        message = f"Dispatched to {self.agent}; waiting for agent execution."
         self.ctx.task_store.record_activity(
             self.task["id"],
             message,
             {"agent": self.agent, "sessionId": session["id"]},
         )
         logger.info(
-            "Task started",
+            "Task dispatched",
             task_id=self.task["id"],
             session_id=session["id"],
             agent=self.agent,
@@ -713,7 +712,10 @@ async def start_routine_occurrence_on_ready_node(
         occurrence = _create_manual_occurrence(ctx, routine, agent, today_iso)
         if not occurrence:
             return None
-    if occurrence.get("status") in {"running", "review"}:
+    if occurrence.get("status") in {"running", "review"} or (
+        occurrence.get("status") == "assigned"
+        and occurrence.get("linkedSessionIds")
+    ):
         existing = _existing_occurrence_result(ctx, routine, occurrence)
         if existing:
             return existing
@@ -753,6 +755,11 @@ def _existing_occurrence_result(
         try:
             session = ctx.session_store.get_session(session_id)
         except (KeyError, FileNotFoundError):
+            continue
+        if (
+            occurrence.get("status") == "assigned"
+            and session.get("status") in ("completed", "failed", "cancelled")
+        ):
             continue
         if session_id not in routine.get("linkedSessionIds", []):
             ctx.task_store.link_session(routine["id"], session_id)

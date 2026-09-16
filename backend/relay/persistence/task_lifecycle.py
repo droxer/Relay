@@ -73,7 +73,10 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
         ):
             stage = "running"
     else:
-        stage = "running" if status == "assigned" and task.get("startedAt") else status
+        # `assigned` means the execution is queued. Admission may already have
+        # reserved WIP and set startedAt, but the board must not report an
+        # agent as running until the daemon emits the running status.
+        stage = status
     if status != "blocked":
         for field in (
             "blockedAt",
