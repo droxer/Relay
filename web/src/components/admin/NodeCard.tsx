@@ -114,24 +114,31 @@ export function NodeCard({
         ) : null}
       </header>
 
-      <NodeProfileBadges
-        node={node}
-        storedTokens={storedTokens}
-        colocated={colocated}
-        t={t}
-        card
-        hideThisHost
-        hideSavedHere
-      />
-
-      {employeeName ? (
-        <Badge className="adm-node-card-employee-badge" title={employeeName} translate="no">
-          <AdminEmployees size={ICON.xs} className="adm-node-card-employee-icon" aria-hidden="true" />
-          <span className="adm-node-card-employee-badge-text">{employeeName}</span>
-        </Badge>
-      ) : null}
-
+      {/* Chips live inside the body, not as siblings of it. The card is a
+          fixed frame (identity at the top, actions at the bottom), so
+          everything between them has to share ONE region that clips — as
+          separate rows in the card's own column they each pushed the footer
+          down, and a computer with an owner and four runtimes lost its action
+          row off the bottom edge. Ownership and owner are also one tier of
+          chip, so they belong on one wrapping line rather than two. */}
       <div className="adm-node-card-body">
+        <div className="adm-node-card-chips">
+          <NodeProfileBadges
+            node={node}
+            storedTokens={storedTokens}
+            colocated={colocated}
+            t={t}
+            card
+            hideThisHost
+            hideSavedHere
+          />
+          {employeeName ? (
+            <Badge className="adm-node-card-employee-badge" title={employeeName} translate="no">
+              <AdminEmployees size={ICON.xs} className="adm-node-card-employee-icon" aria-hidden="true" />
+              <span className="adm-node-card-employee-badge-text">{employeeName}</span>
+            </Badge>
+          ) : null}
+        </div>
         <div className="adm-node-runtimes" title={t("admin.v2.node_runtimes")}>
           <NodeRuntimeMarks node={node} t={t} />
         </div>

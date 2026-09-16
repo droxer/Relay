@@ -392,6 +392,31 @@
   --control-h-xs: 32px;
   --control-h-2xs: 24px;
 
+  /* Card heights — a record card is a frame of a known size.
+
+     These surfaces are grids of peers that the reader scans: a backlog lane,
+     a routine grid, the control-panel fleet. A card whose height is set by
+     its own text turns that grid into a ragged wall, and the same record
+     changes shape the moment someone types a description into it. So the
+     height comes from the layout and the text clamps inside it; whatever
+     does not fit is detail the record's drawer already carries in full.
+
+       --card-h-record  task / routine record: title, description, facts,
+                        action footer.
+       --card-h-fleet   control-panel computer or employee: identity header,
+                        chip body, metric footer.
+       --card-h-kpi     dashboard KPI tile: eyebrow, numeral, one hint.
+       --card-h-panel   dashboard instrument panel (fleet health, top
+                        employees) — the list inside scrolls, the panel does
+                        not grow as data arrives.
+
+     A card that wants a height off this ladder is telling you it is not a
+     card — it is a panel or a row; check which before adding a rung. */
+  --card-h-record: 232px;
+  --card-h-fleet: 232px;
+  --card-h-kpi: 132px;
+  --card-h-panel: 288px;
+
   /* Glyph sizes, for CSS-drawn marks. The mirror of the ICON scale in
      components/icons.tsx — a lucide glyph takes its size as a React prop, a
      vendor mark rendered by a stylesheet takes it from here, and the two must
@@ -884,6 +909,11 @@ html:lang(zh-TW) {
   --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-name: 700 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-body-sm: 400 var(--fs-1)/var(--leading-snug) var(--font-sans);
+  /* The card ladder steps down with the type it frames — same clamps, one
+     rung less air. Restated here for the same substitution reason as the
+     roles above. */
+  --card-h-record: 208px;
+  --card-h-fleet: 196px;
 }
 
 /* CJK reading roles are looser; the compact scope must restate them too or a

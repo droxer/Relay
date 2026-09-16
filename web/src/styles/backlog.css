@@ -348,7 +348,20 @@
 .backlog-task {
   position: relative;
   content-visibility: auto;
-  contain-intrinsic-size: auto 240px;
+  contain-intrinsic-size: auto var(--card-h-record);
+  /* One height for every card on the board. A lane is a column of peers and
+     the reader scans down it, so a card that grows a description must not
+     become a different object than the card above it — the title sits on the
+     same line in every card, the facts on the same line, the actions on the
+     same line. Text clamps inside the frame (see .backlog-task-title and
+     .backlog-description); the drawer carries the full record. */
+  height: var(--card-h-record);
+  /* A lane is a flex column, so without this the cards in a full lane shrink
+     to share the lane's height — the frame has to refuse that. */
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
@@ -389,13 +402,20 @@
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
+  /* The head IS the card's interior now that the card is a fixed frame: it
+     takes the full remaining height so the body inside it can pin its footer
+     to the bottom edge. */
+  flex: 1;
+  min-height: 0;
 }
 
 .backlog-card-body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   flex: 1;
+  height: 100%;
 }
 
 /* The checkbox is 16px against a ~20px line; nudge it onto the title's
@@ -415,8 +435,14 @@
   position: relative;
   display: flex;
   align-items: center;
-  min-height: var(--control-h-xs);
-  margin-top: var(--sp-3);
+  flex: none;
+  height: var(--control-h-xs);
+  /* Pinned to the card's bottom edge rather than trailing the facts: with a
+     fixed frame the footer is a rule of the layout, so the action row lands
+     on the same line in every card whether or not the record above it filled
+     its lines. */
+  margin-top: auto;
+  padding-top: var(--sp-2);
 }
 
 /* The card equivalent of the list's REF column. It is an address rather than

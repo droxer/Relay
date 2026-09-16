@@ -45,13 +45,19 @@
   position: relative;
 }
 
+/* The rail is an instrument panel, so its height is a property of the panel
+   and not of the readings inside it: a tile that gains a hint must not make
+   the whole rail taller than it was a second ago, while the numbers beneath
+   it are still loading. */
 .adm-dash-tile {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+  height: var(--card-h-kpi);
   padding: var(--sp-5);
   border-right: 0.5px solid var(--line-1);
   min-width: 0;
+  overflow: hidden;
 }
 
 .adm-dash-tile:last-child { border-right: none; }
@@ -96,10 +102,16 @@
   color: var(--ink-3);
 }
 
+/* One line. The hint is a gloss on the numeral above it, and a two-line
+   gloss in one tile would be the only thing setting the rail's height. */
 .adm-dash-tile-hint {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .adm-dash-delta {
@@ -139,6 +151,32 @@
   flex-direction: column;
   gap: var(--sp-5);
   min-width: 0;
+}
+
+/* ── Instrument panels ────────────────────────────────────────────────
+   Fleet health and top employees are live readouts: their rows arrive, change
+   count, and rank themselves as sessions land. Given a content height the rail
+   would grow and shrink under the reader while they were reading it, so the
+   panel holds a fixed frame and the list inside it scrolls. */
+.adm-dash-panel {
+  height: var(--card-h-panel);
+  overflow: hidden;
+}
+
+.adm-dash-panel .adm-dash-top-list,
+.adm-dash-panel .adm-dash-stat-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* The scroll region carries the card's inline padding as its own, so a
+     scrolled row does not slide under a padding edge. */
+  overscroll-behavior: contain;
+}
+
+/* A stat grid is fixed at four readings; it has nothing to scroll and should
+   sit at the top of its slack rather than stretching its rows apart. */
+.adm-dash-panel .adm-dash-stat-grid {
+  align-content: start;
 }
 
 /* ── Charts ─────────────────────────────────────────────────────────

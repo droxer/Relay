@@ -609,10 +609,10 @@
      stays the same size and the grid packs from the left. */
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 380px));
   align-content: start;
-  /* Cards size to their own content. Grid rows stretch by default, so one
-     routine with a two-line title and a description dragged every card beside
-     it to the same height and left them with a band of empty card under the
-     footer. */
+  /* Every card is --card-h-record tall by its own rule (backlog.css), so the
+     row needs neither stretching nor a per-card height here — `start` simply
+     stops the grid from stretching a short final row. The old note here said
+     cards size to their own content; they deliberately no longer do. */
   align-items: start;
   /* A card grid, not banded rows: the gap separates peers rather than
      sections, so it steps to --sp-4 while the band gap goes to --sp-7. */
@@ -621,9 +621,11 @@
 }
 
 .routine-card {
-  /* Render-skip. Card tier — see the note on .agents-roster-row. */
+  /* Render-skip. Card tier — see the note on .agents-roster-row. The
+     placeholder matches the real frame, so nothing reflows when a skipped
+     card paints. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 240px;
+  contain-intrinsic-size: auto var(--card-h-record);
   min-width: 0;
 }
 

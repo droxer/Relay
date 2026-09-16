@@ -131,8 +131,12 @@ export function DashboardView({
           ) : null}
         </div>
         <div className="adm-dash-col">
-          <NodeStatusCard nodes={nodes} />
+          {/* Both rail panels take the fixed instrument frame: their contents
+              arrive and re-rank live, and a panel that resized with them
+              would move the other one under the reader's eye. */}
+          <NodeStatusCard nodes={nodes} className="adm-dash-panel" />
           <TopEmployees
+            className="adm-dash-panel"
             employees={employees}
             nodes={nodes}
             ranked={sessions.topEmployees}
