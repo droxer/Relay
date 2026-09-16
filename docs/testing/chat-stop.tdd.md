@@ -22,6 +22,10 @@ cancels the accepted thread after dispatch resolves.
   `backend/tests/unit/test_daemon_registry.py`, with `-k cancel -q`).
 - `npm audit --registry=https://registry.npmjs.org --audit-level=high`:
   0 vulnerabilities. The configured mirror does not implement the audit endpoint.
+- `npm test`: passed (production builds, 1,494 package/utility tests,
+  the React suite, and 1,543 Python tests).
+- Final `npm run test:react -w web`: 74 passed across 18 files, including
+  all 6 final Stop tests.
 - `git diff --check`: passed.
 
 ## Guarantees
