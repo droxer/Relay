@@ -128,7 +128,10 @@ export function BacklogTaskCard({
         <div className="backlog-card-body">
           <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
           <TaskFlowDetails task={task} />
-          {task.description ? <p className="backlog-description">{task.description}</p> : null}
+          {/* Always rendered, empty when the task has no description: the two
+              lines are reserved by the card's frame, so a described and an
+              undescribed task are the same shape. */}
+          <p className="backlog-description">{task.description ?? ""}</p>
           {/* One line of facts, and only facts the lane above does not already
               state. What used to be here and is gone: the task's status word
               (the lane IS the status — `taskResultLine.status` is literally
@@ -448,7 +451,11 @@ export function BacklogTaskRow({
 function TaskFlowDetails({ task }: { task: RelayTaskListItem }) {
   const { t } = useTranslation();
   const age = task.startedAt && task.status !== "done" ? Math.max(0, (Date.now() - Date.parse(task.startedAt)) / 86400000) : null;
-  return <div className="backlog-meta">
+  // Nothing to say is nothing to draw. The element used to render empty, and
+  // an empty flex row still carries its own margin — 12px of nowhere on every
+  // card that was neither blocked, waiting, nor in flight.
+  if (task.status !== "blocked" && task.status !== "waiting_for_human" && age === null) return null;
+  return <div className="backlog-meta backlog-flow">
     {task.status === "blocked" ? <span className="backlog-blocker" title={`${task.blockerOwnerEmployeeId ?? ""} · ${task.blockedAt ?? ""}`}>{t("backlog.statuses.blocked")}: {task.blockerReason}</span> : null}
     {task.status === "waiting_for_human" ? <span className="backlog-due warn">{t("backlog.statuses.waiting_for_human")}</span> : null}
     {age !== null ? <span>{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}

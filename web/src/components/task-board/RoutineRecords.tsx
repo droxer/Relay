@@ -131,7 +131,8 @@ export function RoutineCard({
         />
         <div className="backlog-card-body">
           <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
-          {task.description ? <p className="backlog-description">{task.description}</p> : null}
+          {/* Reserved, not conditional — same rule as the backlog card. */}
+          <p className="backlog-description">{task.description ?? ""}</p>
           <div className="backlog-meta">
             <RoutineStateBadge state={state} />
             <PriorityBadge priority={task.priority} />

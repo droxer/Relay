@@ -67,6 +67,17 @@
 
 /* On a dark machine the whole runtime row recedes with the avatar — its
    agents are a memory of what was installed, not an offer of capacity. */
+/* On a fleet card the runtime strip is one line. The card is a fixed frame,
+   so a second wrapped row would be sliced in half at the frame's edge — a row
+   of half-drawn vendor marks reads as a rendering fault, where a strip that
+   simply ends reads as "there are more". The list view and the computer page
+   keep the wrapping version. */
+.adm-node-card .adm-node-runtimes,
+.adm-node-card .adm-node-runtimes-marks {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
 .adm-node-card[data-online="false"] .adm-node-runtimes,
 .adm-node-row[data-online="false"] .adm-node-row-agents {
   opacity: var(--opacity-dormant);

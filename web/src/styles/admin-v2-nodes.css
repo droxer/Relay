@@ -125,8 +125,21 @@
    --surface-2 fill) is the neutral Badge variant — it was restated here
    declaration for declaration. What is left is this badge's fixed 20px height,
    which the card's header row is measured against. */
+/* Ownership chip and owner chip on one wrapping line — same tier, same
+   height, so stacking them was spending two rows of a fixed card on one
+   statement. */
+.adm-node-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
 .adm-node-card-employee-badge {
   height: 20px;
+  flex: none;
+  align-self: flex-start;
 }
 
 .adm-node-card-employee-icon {
@@ -161,11 +174,18 @@
   }
 }
 
+/* One height for every card in the fleet grid. A computer with four runtimes
+   and an owner badge is the same object as a bare one — the grid is a roster
+   the reader scans, and a card that grows with its chips makes the roster
+   read as a ragged wall. The identity header and the metric footer hold the
+   frame's top and bottom; the chip body between them takes the slack and
+   clips. */
 .adm-node-card {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
+  height: var(--card-h-fleet);
   padding: var(--sp-4);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
@@ -173,7 +193,17 @@
   transition: border-color var(--t-fast) var(--ease);
   overflow: hidden;
   content-visibility: auto;
-  contain-intrinsic-size: auto 240px;
+  contain-intrinsic-size: auto var(--card-h-fleet);
+}
+
+/* The one state the frame yields to. A failed delete appends a line below the
+   footer, and a fixed height would clip the only place the failure is
+   reported (`role="alert"` on text nobody can see is worse than an uneven
+   row). Exceptional and short-lived, so the ragged row it causes is the
+   correct trade. */
+.adm-node-card:has(.adm-node-card-error) {
+  height: auto;
+  min-height: var(--card-h-fleet);
 }
 
 /* Hover strengthens the hairline, same as the Card primitive's interactive
@@ -203,7 +233,8 @@
 /* Node cards keep the profile compact and hide locality, so the bordered
    drawer container would leave a large empty box. Drop that wrapper chrome;
    drawer usage keeps the framed treatment and full labels. */
-.adm-node-card > .adm-node-profile {
+.adm-node-card .adm-node-profile {
+  flex: none;
   padding: 0;
   border: none;
   background: transparent;
@@ -292,6 +323,9 @@
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--sp-2) var(--sp-3);
+  /* Identity is never the part that gives: inside a fixed-height card the
+     body absorbs the pressure, the header keeps its full size. */
+  flex: none;
 }
 
 /* Neutral owner monogram — the identity anchor. Node health is carried
@@ -498,10 +532,21 @@
   min-width: 0;
 }
 
+/* The card's slack: whatever height the header and footer leave over is this
+   region's, and its chips clip at that edge rather than pushing the action
+   row off the frame. */
 .adm-node-card-body {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* Fade the last few pixels so a clipped row reads as "there is more" rather
+     than as a half-drawn glyph. The mask sits on the region's box, which is
+     empty whenever the chips fit, so a card with room to spare shows no fade
+     at all — `black` is the mask's alpha carrier, not a palette colour. */
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--sp-3)), transparent 100%);
 }
 
 /* ── Card footer + actions ─────────────────────────────────────────────
@@ -511,6 +556,7 @@
 .adm-node-card-foot {
   display: flex;
   align-items: center;
+  flex: none;
   gap: var(--sp-2);
   /* Pin the action row to the bottom so footers align across a grid row of
      unequal-content cards (stretched to equal height by the grid). */
