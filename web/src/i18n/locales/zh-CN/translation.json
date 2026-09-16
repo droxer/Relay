@@ -557,7 +557,10 @@
     "remove": "移除头像",
     "unsupported": "请选择 PNG、JPEG 或 WebP 图片。",
     "too_large": "请选择小于 2 MB 的图片。",
-    "failed": "无法更新头像。"
+    "failed": "无法更新头像。",
+    "presets": "选择头像",
+    "preset_option": "头像 {{index}}/{{total}}",
+    "upload": "上传图片"
   },
   "teams": {
     "title": "团队",
@@ -603,7 +606,8 @@
     "search_label": "搜索团队",
     "search_placeholder": "搜索团队…",
     "edit_members": "编辑成员",
-    "rename": "重命名团队"
+    "rename": "重命名团队",
+    "avatar": "头像"
   },
   "computer": {
     "title": "我的电脑",
@@ -1536,6 +1540,7 @@
     "create_runtime_required": "请选择运行时。",
     "create_role_placeholder": "选择角色…",
     "create_role_required": "请选择角色。",
+    "create_avatar_label": "头像",
     "create_name_label": "名称",
     "create_name_placeholder": "智能体显示名称…",
     "create_submit": "创建智能体",

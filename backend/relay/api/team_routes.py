@@ -162,6 +162,7 @@ async def create_control_panel_team(
             owner_employee_id,
             {
                 "name": body.get("name"),
+                "profileImageUrl": body.get("profileImageUrl"),
                 "enabled": body.get("enabled", True),
                 "leadAgentId": lead,
                 "memberAgentIds": members,

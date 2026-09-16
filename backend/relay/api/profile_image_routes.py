@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from ..core.preset_avatars import is_preset_avatar_url
 from ..persistence.profile_image_store import ProfileImageError
 from .agent_routes import _agent_with_placements
 from .deps import AppContextDep
@@ -77,20 +78,40 @@ async def update_profile_image(
 ) -> dict[str, Any]:
     _profile_entity(request, ctx, kind, entity_id)
     body = await json_body(request)
+    if "presetUrl" in body:
+        return _apply_preset(ctx, kind, entity_id, body.get("presetUrl"))
     try:
         image_url = ctx.profile_image_store.save(kind, entity_id, body.get("dataUrl"))
-        if kind == "agents":
-            updated = ctx.agent_store.update_agent(
-                entity_id, {"profileImageUrl": image_url}
-            )
-            return {"agent": _agent_with_placements(ctx, updated)}
-        updated = ctx.team_store.update_team(entity_id, {"profileImageUrl": image_url})
-        return {"team": _team_view(ctx, updated)}
+        return _set_profile_image_url(ctx, kind, entity_id, image_url)
     except ProfileImageError as error:
         raise _profile_image_error(error) from error
     except (KeyError, ValueError) as error:
         ctx.profile_image_store.delete(kind, entity_id)
         raise HTTPException(400, str(error)) from error
+
+
+def _apply_preset(
+    ctx: AppContextDep, kind: str, entity_id: str, preset_url: object
+) -> dict[str, Any]:
+    """Point the profile at a bundled preset and drop any uploaded file it replaces."""
+    if not is_preset_avatar_url(kind, preset_url):
+        raise HTTPException(400, "profile_image_preset")
+    try:
+        result = _set_profile_image_url(ctx, kind, entity_id, preset_url)
+    except (KeyError, ValueError) as error:
+        raise HTTPException(400, str(error)) from error
+    ctx.profile_image_store.delete(kind, entity_id)
+    return result
+
+
+def _set_profile_image_url(
+    ctx: AppContextDep, kind: str, entity_id: str, image_url: object
+) -> dict[str, Any]:
+    if kind == "agents":
+        updated = ctx.agent_store.update_agent(entity_id, {"profileImageUrl": image_url})
+        return {"agent": _agent_with_placements(ctx, updated)}
+    updated = ctx.team_store.update_team(entity_id, {"profileImageUrl": image_url})
+    return {"team": _team_view(ctx, updated)}
 
 
 @router.delete("/profile-images/{kind}/{entity_id}")

@@ -673,6 +673,8 @@ export interface CreateAgentInput {
   defaultRole: AgentRole;
   displayName?: string;
   instructions?: string;
+  /** A preset from `lib/presetAvatars.ts`; uploads happen after creation. */
+  profileImageUrl?: string;
 }
 
 export interface CreateAgentResponse {
@@ -716,6 +718,8 @@ export interface TeamMutationInput {
   leadAgentId: string;
   memberAgentIds: string[];
   enabled?: boolean;
+  /** A preset from `lib/presetAvatars.ts`; only sent when creating a team. */
+  profileImageUrl?: string;
 }
 
 export interface AgentRunInput {

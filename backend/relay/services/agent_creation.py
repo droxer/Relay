@@ -87,6 +87,7 @@ def create_agent_for_employee(
                 if key
                 in (
                     "displayName",
+                    "profileImageUrl",
                     "instructions",
                     "toolPolicy",
                     "modelPolicy",

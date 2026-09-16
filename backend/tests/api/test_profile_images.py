@@ -164,3 +164,174 @@ def test_profile_image_endpoint_rejects_unsupported_data(monkeypatch) -> None:
 
         assert response.status_code == 400
         assert response.json()["detail"] == "profile_image_type"
+
+
+def _login_as(client: TestClient, username: str) -> None:
+    assert client.post("/api/v1/auth/logout").status_code == 200
+    assert (
+        client.post(
+            "/api/v1/auth/login", json={"username": username, "password": "userpass"}
+        ).status_code
+        == 200
+    )
+
+
+def _admin_team(client: TestClient, agent: dict, **extra) -> dict:
+    response = client.post(
+        "/api/v1/admin/teams",
+        json={
+            "ownerEmployeeId": agent["supervisorEmployeeId"],
+            "name": "Delivery",
+            "leadAgentId": agent["id"],
+            "memberAgentIds": [agent["id"]],
+            **extra,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["team"]
+
+
+def test_choosing_a_preset_replaces_and_deletes_an_uploaded_image(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        bootstrap(client)
+        employee(client, "alice")
+        agent = _agent(client, "alice")
+        team = _admin_team(client, agent)
+        _login_as(client, "alice")
+        uploaded = client.put(
+            f"/profile-images/agents/{agent['id']}", json={"dataUrl": PNG_DATA_URL}
+        ).json()["agent"]["profileImageUrl"]
+
+        agent_preset = client.put(
+            f"/profile-images/agents/{agent['id']}",
+            json={"presetUrl": "/avatars/agents/bottts-07.svg"},
+        )
+        team_preset = client.put(
+            f"/profile-images/teams/{team['id']}",
+            json={"presetUrl": "/avatars/teams/shape-grid-03.svg"},
+        )
+
+        assert agent_preset.status_code == 200, agent_preset.text
+        assert agent_preset.json()["agent"]["profileImageUrl"] == "/avatars/agents/bottts-07.svg"
+        assert team_preset.status_code == 200, team_preset.text
+        assert team_preset.json()["team"]["profileImageUrl"] == "/avatars/teams/shape-grid-03.svg"
+        assert client.get(uploaded).status_code == 404
+
+
+def test_preset_endpoint_rejects_unknown_and_wrong_kind_presets(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        bootstrap(client)
+        employee(client, "alice")
+        agent = _agent(client, "alice")
+
+        for preset in (
+            "/avatars/teams/shape-grid-01.svg",
+            "/avatars/agents/bottts-99.svg",
+            "/avatars/agents/../../secret.svg",
+        ):
+            response = client.put(
+                f"/profile-images/agents/{agent['id']}", json={"presetUrl": preset}
+            )
+            assert response.status_code == 400, preset
+            assert response.json()["detail"] == "profile_image_preset"
+        assert client.get("/api/v1/admin/agents").json()["agents"][0].get("profileImageUrl") is None
+
+
+def test_agents_and_teams_can_be_created_with_a_preset(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        bootstrap(client)
+        employee(client, "alice")
+        node = client.app.state.registry.register(
+            {
+                "sandboxId": "test_node_alice",
+                "employeeId": "alice",
+                "workspaceId": "machine-alice",
+                "token": "node_token",
+                "workspacePath": "/workspace/alice",
+                "protocolVersion": 1,
+                "supportedAgents": ["codex"],
+                "capabilities": ["thread-workspaces"],
+                "status": "stopped",
+            }
+        )
+        _login_as(client, "alice")
+
+        created = client.post(
+            "/api/v1/agents",
+            json={
+                "displayName": "Builder",
+                "executorKind": "codex",
+                "defaultRole": "implementer",
+                "computerId": computer_id(node),
+                "profileImageUrl": "/avatars/agents/bottts-02.svg",
+            },
+        )
+        assert created.status_code == 201, created.text
+        agent = created.json()["agent"]
+        assert agent["profileImageUrl"] == "/avatars/agents/bottts-02.svg"
+
+        team = client.post(
+            "/api/v1/teams",
+            json={
+                "name": "Delivery",
+                "leadAgentId": agent["id"],
+                "memberAgentIds": [agent["id"]],
+                "profileImageUrl": "/avatars/teams/shape-grid-12.svg",
+            },
+        )
+        assert team.status_code == 201, team.text
+        assert team.json()["team"]["profileImageUrl"] == "/avatars/teams/shape-grid-12.svg"
+
+        rejected = client.post(
+            "/api/v1/teams",
+            json={
+                "name": "Other",
+                "leadAgentId": agent["id"],
+                "memberAgentIds": [agent["id"]],
+                "profileImageUrl": "/profile-images/teams/whatever?v=1",
+            },
+        )
+        assert rejected.status_code == 400
+
+
+def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        bootstrap(client)
+        employee(client, "alice")
+        node = client.app.state.registry.register(
+            {
+                "sandboxId": "test_node_alice",
+                "employeeId": "alice",
+                "workspaceId": "machine-alice",
+                "token": "node_token",
+                "workspacePath": "/workspace/alice",
+                "protocolVersion": 1,
+                "supportedAgents": ["codex"],
+                "capabilities": ["thread-workspaces"],
+                "status": "stopped",
+            }
+        )
+        created = client.post(
+            "/api/v1/admin/agents",
+            json={
+                "supervisorEmployeeId": "alice",
+                "executorKind": "codex",
+                "defaultRole": "implementer",
+                "computerId": computer_id(node),
+                "profileImageUrl": "/avatars/agents/bottts-16.svg",
+            },
+        )
+        assert created.status_code == 201, created.text
+        agent = created.json()["agent"]
+        assert agent["profileImageUrl"] == "/avatars/agents/bottts-16.svg"
+
+        team = _admin_team(client, agent, profileImageUrl="/avatars/teams/shape-grid-01.svg")
+        assert team["profileImageUrl"] == "/avatars/teams/shape-grid-01.svg"

@@ -16,6 +16,8 @@ import { agentLabel } from "../../lib/plan";
 import { AGENT_NAMES, AGENT_ROLE_OPTIONS } from "../../types";
 import type { AgentName, AgentRole, EmployeeAgent, SandboxRecord } from "../../types";
 import { AgentMark } from "../AgentMark";
+import { PresetAvatarGrid } from "../PresetAvatarGrid";
+import { randomPresetAvatar } from "../../lib/presetAvatars";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -98,6 +100,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const computerLabelId = useId();
   const runtimeLabelId = useId();
   const roleLabelId = useId();
+  const avatarLabelId = useId();
   const placementHeadingId = useId();
   const identityHeadingId = useId();
   const computerTriggerRef = useRef<HTMLButtonElement>(null);
@@ -130,6 +133,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const [executorKind, setExecutorKind] = useState<AgentName | "">("");
   const [defaultRole, setDefaultRole] = useState<AgentRole | "">("");
   const [displayName, setDisplayName] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("agents"));
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     computerId?: string;
@@ -168,6 +172,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
       setExecutorKind("");
       setDefaultRole("");
       setDisplayName("");
+      setProfileImageUrl(randomPresetAvatar("agents"));
       setError(null);
       setFieldErrors({});
       setIsBusy(false);
@@ -226,6 +231,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
         executorKind,
         defaultRole,
         displayName: displayName.trim() || undefined,
+        profileImageUrl,
       });
       await queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] });
       onCreated(result.agent);
@@ -398,6 +404,16 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
                 ))}
               </SelectContent>
             </Select>
+          </Field>
+
+          <Field label={t("agents_page.create_avatar_label")} labelId={avatarLabelId} wrapper="div">
+            <PresetAvatarGrid
+              kind="agents"
+              value={profileImageUrl}
+              onChange={setProfileImageUrl}
+              labelledBy={avatarLabelId}
+              disabled={isBusy}
+            />
           </Field>
 
           <Field label={t("agents_page.create_name_label")} optional={t("admin.v2.optional")}>

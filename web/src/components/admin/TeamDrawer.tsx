@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
 import { teamMutationInput } from "../../lib/teamForm";
+import { randomPresetAvatar } from "../../lib/presetAvatars";
+import { PresetAvatarGrid } from "../PresetAvatarGrid";
 import type { AgentTeam } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError } from "@/components/ui/field";
@@ -30,11 +32,13 @@ export function TeamDrawer({
 }) {
   const { t } = useTranslation();
   const leadLabelId = useId();
+  const avatarLabelId = useId();
   const { confirm } = useDialogs();
   const { createTeamMutation, updateTeamMutation, deleteTeamMutation } = useRelayMutations();
   const [name, setName] = useState("");
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [leadId, setLeadId] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("teams"));
   const [validationError, setValidationError] = useState<
     "name" | "members" | "lead" | null
   >(null);
@@ -48,6 +52,7 @@ export function TeamDrawer({
     setName(team?.name ?? "");
     setMemberIds(team?.memberAgentIds ?? []);
     setLeadId(team?.leadAgentId ?? "");
+    setProfileImageUrl(randomPresetAvatar("teams"));
     setValidationError(null);
   }, [open, team?.id]);
 
@@ -120,8 +125,10 @@ export function TeamDrawer({
       enabled: team?.enabled ?? true,
     });
     try {
+      // The image of an existing team is changed from its own page, where an
+      // upload is also possible; this drawer only picks one at creation.
       if (team) await updateTeamMutation.mutateAsync({ teamId: team.id, input });
-      else await createTeamMutation.mutateAsync(input);
+      else await createTeamMutation.mutateAsync({ ...input, profileImageUrl });
       onClose();
     } catch {
       // The shared mutation error handler keeps the drawer open for correction.
@@ -175,6 +182,17 @@ export function TeamDrawer({
             aria-describedby={validationError === "name" ? "team-name-error" : undefined}
           />
         </Field>
+        {team ? null : (
+          <Field label={t("teams.avatar")} labelId={avatarLabelId} wrapper="div">
+            <PresetAvatarGrid
+              kind="teams"
+              value={profileImageUrl}
+              onChange={setProfileImageUrl}
+              labelledBy={avatarLabelId}
+              disabled={busy}
+            />
+          </Field>
+        )}
         <fieldset
           ref={membersRef}
           className="team-member-fieldset"

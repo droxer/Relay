@@ -11,6 +11,7 @@ import {
 import {
   deleteAgentPlacement,
   deleteAgentProfileImage,
+  selectAgentProfilePreset,
   deleteEmployeeAgent,
   getControlPanelAgent,
   updateAgentProfileImage,
@@ -179,6 +180,20 @@ export function AgentProfilePanel({
     }
   }
 
+  async function handleImagePreset(presetUrl: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await selectAgentProfilePreset(agent.id, presetUrl);
+      applyAgentUpdate(result.agent);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleImageRemove() {
     setSaving(true);
     setError(null);
@@ -258,6 +273,7 @@ export function AgentProfilePanel({
           disabled={saving}
           onUpload={handleImageUpload}
           onRemove={handleImageRemove}
+          presets={{ kind: "agents", onSelect: handleImagePreset }}
         />
         <div className="agent-dossier-identity-meta">
           <div className="workspace-dossier-field">
