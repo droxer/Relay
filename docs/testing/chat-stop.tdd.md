@@ -69,3 +69,9 @@ that both processes have exited before the daemon posts `run.cancelled` with the
 UI's cancellation reason. The focused test passed. This exercises the daemon and
 local process executor with a controlled command transport; it does not launch
 an agent CLI or a BoxLite VM.
+
+Second-review final verification: `npm test` passed with production builds,
+1,495 package/utility tests, 76 React tests, and 1,543 Python tests. The local
+process-tree test was also rerun independently after its final configuration
+change and passed. `npm audit` reported 0 vulnerabilities; `git diff --check`
+passed. No live BoxLite VM was exercised.
