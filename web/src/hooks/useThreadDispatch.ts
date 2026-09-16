@@ -342,6 +342,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       return;
     }
     setIsRunning(true);
+    const dispatch = { sessionId: activeSession.id, stopRequested: false };
+    pendingDispatch.current = dispatch;
     try {
       setActiveAgent(logicalAgent.executorKind);
       setActiveLogicalAgentId(logicalAgent.id);
@@ -372,6 +374,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         setHandoffOpen(false);
       }
       syncThreadUrl(done.id, true, done.projectId ?? activeSession.projectId);
+      if (dispatch.stopRequested) await cancelSessionRun(done.id, done.projectId);
     } catch (error) {
       reportMutationError(
         failureLabel,
@@ -379,6 +382,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         formatDispatchError(error, t) ?? t(failureMessageKey),
       );
     } finally {
+      if (pendingDispatch.current === dispatch) pendingDispatch.current = null;
       setIsRunning(false);
     }
   }
