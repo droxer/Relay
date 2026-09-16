@@ -527,7 +527,8 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert started.status_code == 202
         assert started.json()["session"]["id"]
         assert started.json()["task"]["id"] == task["id"]
-        assert started.json()["task"]["status"] == "running"
+        assert started.json()["task"]["status"] == "assigned"
+        assert started.json()["task"]["workflowStage"] == "assigned"
         assert started.json()["task"]["linkedSessionIds"] == [
             started.json()["session"]["id"]
         ]
@@ -543,6 +544,24 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert command["agent"] == "codex"
         assert command["sessionId"] == started.json()["session"]["id"]
         assert command["taskGoal"] == "Run from backlog"
+        assert command["reportExecutionStarted"] is True
+
+        executing = client.post(
+            "/api/v1/daemon-nodes/sbx_alice/events",
+            json={
+                "type": "run.executing",
+                "commandId": command["id"],
+                "leaseId": command["leaseId"],
+                "sessionId": command["sessionId"],
+                "runId": command["runId"],
+                "agent": command["agent"],
+            },
+            headers={"Authorization": "Bearer node_token"},
+        )
+        assert executing.status_code == 200, executing.text
+        active = client.get(f"/api/v1/tasks/{task['id']}").json()
+        assert active["status"] == "running"
+        assert active["workflowStage"] == "running"
 
 
 def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
