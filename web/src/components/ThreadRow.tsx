@@ -94,9 +94,11 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: s
   // The meta line's status text. A live run names its agent; a thread
   // waiting on a decision or one that ended badly says so outright. Settled
   // (completed / merely idle) threads stay silent — the group header above
-  // them already says "idle", and restating it on every row is noise.
+  // them already says "idle", and restating it on every row is noise. A
+  // cancel keeps its words but takes the settled grey pip, not the failure
+  // ring: it was the user's own call, not a fault.
   const runningAgent = item.runningAgent ?? (session.status === "running" ? session.currentAgent : undefined);
-  const status: { text: string; tone: "attn" | "run" | "err" } | null =
+  const status: { text: string; tone: "attn" | "run" | "err" | "idle" } | null =
     session.execution && session.execution.phase !== "terminal"
       ? { tone: session.execution.phase === "running" ? "run" : "attn", text: t(`thread.execution_${session.execution.phase}`) }
       : tone === "run"
@@ -111,7 +113,7 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: s
         : session.status === "failed"
           ? { tone: "err", text: t("thread.statuses.failed") }
           : session.status === "cancelled"
-            ? { tone: "err", text: t("thread.statuses.cancelled") }
+            ? { tone: "idle", text: t("thread.statuses.cancelled") }
             : null;
 
   // Who has worked the thread, as a mark cluster — the row's only identity
