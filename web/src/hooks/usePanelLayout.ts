@@ -3,9 +3,11 @@ import { clampSidenavWidth, SIDENAV_WIDTH_DEFAULT } from "../lib/sidenav";
 import { clampSpaceWidth, SPACE_WIDTH_DEFAULT } from "../lib/threadSpace";
 import { clampThreadListWidth, THREAD_LIST_WIDTH_DEFAULT } from "../lib/threadList";
 import {
+  readSidenavExpanded,
   readSidenavWidth,
   readThreadListWidth,
   readThreadSpaceWidth,
+  writeSidenavExpanded,
   writeSidenavWidth,
   writeThreadListWidth,
   writeThreadSpaceWidth,
@@ -14,6 +16,9 @@ import {
 /**
  * The shell's draggable geometry: how wide the side rail, the thread rail, and
  * the thread space panel are, and whether the rail is expanded.
+ *
+ * Everything here is remembered across reloads — the rail's expanded flag
+ * and all three widths.
  *
  * Three panels, one rule each time — clamp, set, and persist only on commit —
  * which is why they belong together rather than as three near-identical
@@ -41,17 +46,19 @@ export function usePanelLayout(mounted: boolean): PanelLayout {
   useEffect(() => {
     // Read after mount, not in the initializer: the export is prerendered, so
     // touching localStorage during the first render mismatches hydration.
+    // There is no collapsed-then-expanded flash for it: App renders the shell
+    // only once the auth check resolves, which is always after this lands.
     if (!mounted) return;
+    setSidenavExpandedState(readSidenavExpanded());
     setSidenavWidth(clampSidenavWidth(readSidenavWidth() ?? SIDENAV_WIDTH_DEFAULT));
     setThreadListWidth(clampThreadListWidth(readThreadListWidth() ?? THREAD_LIST_WIDTH_DEFAULT));
     setSpaceWidth(clampSpaceWidth(readThreadSpaceWidth() ?? SPACE_WIDTH_DEFAULT));
   }, [mounted]);
 
-  /* Collapse state is per-visit, not persisted: every session opens on the
-     collapsed rail. The WIDTH is still remembered (below) — that is the one
-     thing a drag makes expensive to redo, while expanding is one click. */
+  /* A toggle is a single discrete commit, so it writes straight away. */
   const setSidenavExpanded = useCallback((expanded: boolean) => {
     setSidenavExpandedState(expanded);
+    writeSidenavExpanded(expanded);
   }, []);
 
   const resizeSidenav = useCallback((width: number, commit: boolean) => {

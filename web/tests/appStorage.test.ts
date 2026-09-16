@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach, afterEach } from "node:test";
 
-import { applyTheme, readTheme, SUPPORTED_THEMES } from "../src/lib/appStorage.js";
+import {
+  applyTheme,
+  readFiltersExpanded,
+  readSidenavExpanded,
+  readSidenavWidth,
+  readTheme,
+  readThreadListBesideSpace,
+  readThreadListWidth,
+  readThreadSpaceWidth,
+  SUPPORTED_THEMES,
+  writeFiltersExpanded,
+  writeSidenavExpanded,
+  writeSidenavWidth,
+  writeThreadListBesideSpace,
+} from "../src/lib/appStorage.js";
 
 describe("Relay web theme storage", () => {
   const storage = new Map<string, string>();
@@ -108,5 +122,97 @@ describe("Relay web theme storage", () => {
     window.matchMedia = matchMedia as unknown as Window["matchMedia"];
     applyTheme("system");
     assert.equal(themeAttr, "dark");
+  });
+});
+
+describe("Relay web layout storage", () => {
+  const storage = new Map<string, string>();
+
+  const installStorage = (overrides: Partial<Storage> = {}) => {
+    globalThis.localStorage = {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => { storage.set(key, value); },
+      removeItem: (key) => { storage.delete(key); },
+      clear: () => { storage.clear(); },
+      key: () => null,
+      length: 0,
+      ...overrides,
+    } as Storage;
+    (globalThis as { window?: Window }).window = {} as Window;
+  };
+
+  beforeEach(() => {
+    storage.clear();
+    installStorage();
+  });
+
+  afterEach(() => {
+    delete (globalThis as { localStorage?: Storage }).localStorage;
+    delete (globalThis as { window?: Window }).window;
+  });
+
+  it("defaults the side nav to collapsed when nothing is stored", () => {
+    assert.equal(readSidenavExpanded(), false);
+  });
+
+  it("round-trips the side nav expanded state", () => {
+    writeSidenavExpanded(true);
+    assert.equal(readSidenavExpanded(), true);
+    writeSidenavExpanded(false);
+    assert.equal(readSidenavExpanded(), false);
+  });
+
+  it("ignores unrecognised side nav values", () => {
+    storage.set("relay-web.sidenavExpanded", "yes");
+    assert.equal(readSidenavExpanded(), false);
+  });
+
+  it("defaults the thread list to hidden beside the space panel", () => {
+    assert.equal(readThreadListBesideSpace(), false);
+  });
+
+  it("round-trips the thread list beside the space panel", () => {
+    writeThreadListBesideSpace(true);
+    assert.equal(readThreadListBesideSpace(), true);
+    writeThreadListBesideSpace(false);
+    assert.equal(readThreadListBesideSpace(), false);
+  });
+
+  it("remembers the filters bar per page", () => {
+    assert.equal(readFiltersExpanded("backlog-query"), false);
+    writeFiltersExpanded("backlog-query", true);
+    assert.equal(readFiltersExpanded("backlog-query"), true);
+    assert.equal(readFiltersExpanded("routine-query"), false);
+  });
+
+  it("round-trips panel widths and rejects junk", () => {
+    writeSidenavWidth(260);
+    assert.equal(readSidenavWidth(), 260);
+    storage.set("relay-web.threadListWidth", "wide");
+    assert.equal(readThreadListWidth(), null);
+    storage.set("relay-web.threadSpaceWidth", "-4");
+    assert.equal(readThreadSpaceWidth(), null);
+  });
+
+  it("falls back to defaults when storage throws", () => {
+    installStorage({
+      getItem: () => { throw new Error("SecurityError"); },
+      setItem: () => { throw new Error("QuotaExceededError"); },
+    });
+    assert.equal(readSidenavExpanded(), false);
+    assert.equal(readSidenavWidth(), null);
+    assert.equal(readThreadListBesideSpace(), false);
+    assert.equal(readFiltersExpanded("backlog-query"), false);
+    assert.doesNotThrow(() => writeSidenavExpanded(true));
+    assert.doesNotThrow(() => writeThreadListBesideSpace(true));
+    assert.doesNotThrow(() => writeFiltersExpanded("backlog-query", true));
+    assert.doesNotThrow(() => writeSidenavWidth(200));
+  });
+
+  it("is inert off the DOM", () => {
+    delete (globalThis as { window?: Window }).window;
+    assert.equal(readSidenavExpanded(), false);
+    assert.doesNotThrow(() => writeSidenavExpanded(true));
+    assert.equal(storage.size, 0);
   });
 });

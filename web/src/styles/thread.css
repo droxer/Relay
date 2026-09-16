@@ -552,6 +552,21 @@
    hollow ring on `idle` while the ring meant "failed" everywhere else. The
    tone -> shape table lives in ThreadRow. */
 
+/* The live pip breathes in place instead of wearing the shared halo. That
+   halo rides 5px proud of the dot, and both homes clip it: the meta line is
+   overflow: hidden, which sliced it into a crescent beside "working", and a
+   nested row's title line leaves it no room. Pulsing the dot's own opacity
+   says "working" in its own 8px box. Reduced motion is settled by a11y.css —
+   the one-shot animation ends back at full opacity. */
+.conversation-row .state-mark[data-shape="live"]::after {
+  content: none;
+}
+
+.conversation-row .state-mark[data-shape="live"] {
+  --blink-from: 0.45;
+  animation: blink var(--t-pulse) var(--ease) infinite;
+}
+
 .conversation-row-actions {
   position: absolute;
   /* Full rows: anchored to the title line, exactly where the timestamp they
@@ -667,19 +682,11 @@
   background: var(--line-1);
 }
 
-/* Needs-you earns a leading warning dot — the label stays muted so status
-   hue reads as a pip, not running text (design-system.md status fill rules). */
+/* No pip on the group label: every row beneath it already carries its own,
+   and a second amber dot one line above the first said the same thing twice.
+   The label stays muted so status hue reads only as a row pip. */
 .conversation-group[data-tone="attn"] .conversation-group-label {
   color: var(--ink-3);
-}
-
-.conversation-group[data-tone="attn"] .conversation-group-label::before {
-  content: "";
-  flex: none;
-  width: var(--dot-sm);
-  height: var(--dot-sm);
-  border-radius: var(--r-full);
-  background: var(--warn);
 }
 
 .conversation-group-count {

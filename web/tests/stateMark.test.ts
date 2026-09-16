@@ -136,3 +136,25 @@ describe("status dot primitive", () => {
     assert.match(css, /\.state-mark\[data-tone\]\s*\{[^}]*--mark-accent:\s*var\(--tone\)/s);
   });
 });
+
+describe("thread rail state pips", () => {
+  const row = () => readWeb("src/components/ThreadRow.tsx");
+  const thread = () => readWeb("src/styles/thread.css").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("keeps the live pulse inside the pip so the meta line cannot clip it", () => {
+    // The shared halo rides 5px proud of the dot; the subline is overflow:
+    // hidden, so in the rail it rendered as a sliced crescent beside the text.
+    assert.match(thread(), /\.conversation-row\s+\.state-mark\[data-shape="live"\]::after\s*\{[^}]*content:\s*none/);
+    assert.match(thread(), /\.conversation-row\s+\.state-mark\[data-shape="live"\]\s*\{[^}]*animation:\s*blink/);
+  });
+
+  it("does not repeat the needs-you pip on the group header", () => {
+    assert.doesNotMatch(thread(), /\.conversation-group\[data-tone="attn"\][^{]*::before/);
+  });
+
+  it("reads a cancelled thread as settled, not failed", () => {
+    // Only a failure earns the --err ring; a cancel is the user's own choice.
+    assert.match(row(), /thread\.statuses\.cancelled[^}]*\}/);
+    assert.doesNotMatch(row(), /tone:\s*"err",\s*text:\s*t\("thread\.statuses\.cancelled"\)/);
+  });
+});

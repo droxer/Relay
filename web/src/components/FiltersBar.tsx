@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchInput } from "@/components/ui/search-input";
+import { readFiltersExpanded, writeFiltersExpanded } from "@/lib/appStorage";
 import { ICON } from "./icons";
 
 interface FiltersBarProps {
@@ -44,7 +45,15 @@ export function FiltersBar({
   trailing,
 }: FiltersBarProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  // Remembered per page. Read in the initializer: the bar lives inside the
+  // authenticated shell, which is never prerendered, so there is no hydration
+  // pass to mismatch — and reading late would flash the filters shut.
+  const [expanded, setExpanded] = useState(() => readFiltersExpanded(searchName));
+  const toggleExpanded = useCallback(() => {
+    const next = !expanded;
+    setExpanded(next);
+    writeFiltersExpanded(searchName, next);
+  }, [expanded, searchName]);
 
   return (
     <div className="backlog-filter-bar" role="group" aria-label={ariaLabel}>
@@ -69,7 +78,7 @@ export function FiltersBar({
             data-active={expanded ? "true" : "false"}
             data-applied={activeCount > 0 ? "true" : "false"}
             aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
+            onClick={toggleExpanded}
           >
             {expanded ? t("backlog.hide_filters") : t("backlog.show_filters")}
             {activeCount > 0 ? (
