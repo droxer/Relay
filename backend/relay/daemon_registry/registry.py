@@ -2646,29 +2646,31 @@ class DaemonNodeRegistry:
                     if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
                         self._claim_and_advance_run_request(terminal_event)
                         continue
+                    staged = command_record or self.daemon_store.pending_command_for_run_request(request["id"])
+                    reason = f"Collaboration delivery was suppressed because the session is {session['status']}."
+                    patch = {"status": session["status"], "error": reason}
+                    event = None
+                    if staged:
+                        command = staged["command"]
+                        event = {
+                            "type": "run.cancelled", "commandId": command["id"],
+                            "sessionId": command["sessionId"], "runId": command["runId"],
+                            "agent": command["agent"], "reason": reason,
+                        }
+                        # Fence delivery and retain the evidence before closing the
+                        # projection. A crash can replay normal finalization instead
+                        # of stranding a terminal request with a running agent.
+                        patch.update({
+                            "status": "finalizing", "currentCommandId": command["id"],
+                            "currentRunId": command["runId"], "currentAgent": command["agent"],
+                            "state": {**request.get("state", {}), TERMINAL_EVENT_STATE_KEY: event},
+                        })
                     terminalized = self.daemon_store.update_run_request_if_status(
-                        request["id"],
-                        request["status"],
-                        {
-                            "status": session["status"],
-                            "error": (
-                                "Collaboration delivery was suppressed because "
-                                f"the session is {session['status']}."
-                            ),
-                        },
-                        require_undelivered=True,
+                        request["id"], request["status"], patch, require_undelivered=True,
                     )
-                    if terminalized:
-                        command_id = request.get("currentCommandId")
-                        staged = (
-                            self.daemon_store.get_command(command_id)
-                            if command_id
-                            else self.daemon_store.pending_command_for_run_request(
-                                request["id"]
-                            )
-                        )
-                        if staged and staged.get("status") == "pending":
-                            self.daemon_store.discard_staged_command(staged["id"])
+                    if terminalized and event:
+                        self.daemon_store.mark_command_cancelled(request["nodeId"], event)
+                        self._claim_and_advance_run_request(event)
                     continue
                 if request.get("status") == "dispatching":
                     claim_expires_at = (request.get("state") or {}).get(
@@ -3394,6 +3396,31 @@ class DaemonNodeRegistry:
             raise
         return True
 
+    def _close_terminal_session_agent(self, event: dict[str, Any]) -> None:
+        """Project confirmed exit/suppressed delivery without changing thread outcome.
+
+        Call only while owning the request transition, after terminal command
+        evidence has been persisted. A failed session alone is not exit evidence.
+        """
+        session = self.store.get_session(event["sessionId"])
+        run = next(
+            (run for run in session.get("agentRuns", [])
+             if run["id"] == event["runId"] and run.get("status") == "running"),
+            None,
+        )
+        if not run:
+            return
+        outcome = "cancelled" if event["type"] == "run.cancelled" else (
+            "completed" if event["type"] == "run.completed" and event.get("exitCode") == 0 else "failed")
+        payload = {
+            "runId": run["id"], "agent": run["agent"], "status": outcome,
+            "exitCode": event.get("exitCode", 130 if outcome == "cancelled" else 1),
+            "agentLog": event.get("agentLog", run.get("agentLog", "")),
+        }
+        if event.get("tokenUsage"):
+            payload["tokenUsage"] = event["tokenUsage"]
+        self.store.append_event(session["id"], relay_event("agent.completed", session["id"], payload))
+
     def _advance_run_request(
         self, run_request: dict[str, Any], event: dict[str, Any]
     ) -> None:
@@ -3444,8 +3471,9 @@ class DaemonNodeRegistry:
         if session_before.get("status") in ("completed", "failed", "cancelled") or session_before.get("deletionRequestedAt"):
             # The human/session terminal decision wins over a late daemon
             # result. The command already retains the acknowledged result;
-            # only finish request bookkeeping, never reopen work or dispatch
+            # finish the agent projection and request bookkeeping, never reopen work or dispatch
             # another assignment during crash recovery.
+            self._close_terminal_session_agent(event)
             self.active_commands.pop(event["commandId"], None)
             self.clear_run_output(event["runId"])
             self.daemon_store.mark_cancel_commands_completed(run_request["nodeId"], event["commandId"])
