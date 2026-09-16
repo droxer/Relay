@@ -53,3 +53,19 @@ The full React coverage run had 72 passing tests and one timeout in the existing
 rosterTabs keyboard-navigation test. That file passed all 4 tests when rerun alone.
 No coverage percentage is claimed for the changed hook; the repository coverage
 configuration targets other modules.
+
+## Second review
+
+The second review found that retry/rerun and handoff dispatches also display Stop
+while their HTTP mutation is pending. They did not use the first fix's pending
+cancellation ref. Two regression tests reproduced the missing cancellation calls
+(RED checkpoint `3714e26e`). Recovery dispatch now uses the same ref, applies Stop
+after acceptance, and clears it in `finally` (GREEN checkpoint `7b545229`).
+The focused hook suite passes all 8 tests.
+
+A daemon integration test now starts real local parent and child processes that
+ignore SIGTERM, delivers a `run.cancel` command through daemon polling, and checks
+that both processes have exited before the daemon posts `run.cancelled` with the
+UI's cancellation reason. The focused test passed. This exercises the daemon and
+local process executor with a controlled command transport; it does not launch
+an agent CLI or a BoxLite VM.
