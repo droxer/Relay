@@ -9,6 +9,7 @@ from relay.security.auth import user_session_cookie_attrs, user_session_cookie_s
 @pytest.fixture(autouse=True)
 def clear_deploy_env(monkeypatch) -> None:
     for name in (
+        "RELAY_PUBLIC_BACKEND_URL",
         "RELAY_CORS_ALLOW_ORIGINS",
         "RELAY_CORS_ALLOW_ORIGIN_REGEX",
         "RELAY_SESSION_COOKIE_DOMAIN",
@@ -160,3 +161,37 @@ class TestBindConfig:
         monkeypatch.setenv("RELAY_FORWARDED_ALLOW_IPS", "*")
         with pytest.raises(RuntimeError, match="cannot contain"):
             deploy_config.forwarded_allow_ips()
+
+
+class TestPublicBackendUrl:
+    def test_optional_and_normalizes_trailing_slash(self, monkeypatch) -> None:
+        monkeypatch.delenv("RELAY_PUBLIC_BACKEND_URL", raising=False)
+        assert deploy_config.public_backend_url() is None
+        monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", " https://api.example.com:8443/ ")
+        assert deploy_config.public_backend_url() == "https://api.example.com:8443"
+
+    @pytest.mark.parametrize("url", [
+        "api.example.com", "http://api.example.com", "https://",
+        "https://user:secret@api.example.com", "https://api.example.com/api/v1",
+        "https://api.example.com?token=secret", "https://api.example.com#fragment",
+        "https://api.example.com:bad", "https://api.example.com:99999",
+        "https://api.example.com/\n", "https://api.example.com\\evil",
+    ])
+    def test_rejects_invalid_public_origins(self, monkeypatch, url) -> None:
+        monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", url)
+        with pytest.raises(RuntimeError, match="RELAY_PUBLIC_BACKEND_URL"):
+            deploy_config.public_backend_url()
+
+    @pytest.mark.parametrize("url", ["http://localhost:8790", "http://127.0.0.1:8790", "http://[::1]:8790"])
+    def test_allows_http_loopback_for_development(self, monkeypatch, url) -> None:
+        monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", url)
+        assert deploy_config.public_backend_url() == url
+
+
+def test_invalid_public_backend_url_fails_before_startup(monkeypatch, tmp_path) -> None:
+    from relay.app import create_app
+
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://user:secret@api.example.com")
+    with pytest.raises(RuntimeError, match="RELAY_PUBLIC_BACKEND_URL") as error:
+        create_app(tmp_path)
+    assert "secret" not in str(error.value)

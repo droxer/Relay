@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 from ipaddress import ip_network
+from urllib.parse import urlsplit
 
 SameSite = str
 
@@ -30,6 +31,46 @@ _VALID_SAMESITE = ("lax", "strict", "none")
 
 def _env(name: str) -> str:
     return os.environ.get(name, "").strip()
+
+
+def public_backend_url() -> str | None:
+    """Public API origin for daemon commands, independent of proxy routing.
+
+    A configured origin is authoritative; never infer it from untrusted
+    forwarded headers. Plain HTTP is allowed only for loopback development.
+    """
+    raw = os.environ.get("RELAY_PUBLIC_BACKEND_URL", "")
+    value = raw.strip()
+    if not value:
+        return None
+    message = (
+        "RELAY_PUBLIC_BACKEND_URL must be an HTTPS origin without credentials, "
+        "path, query, or fragment (HTTP is allowed for loopback development)."
+    )
+    try:
+        parsed = urlsplit(value)
+        valid_scheme = parsed.scheme == "https" or (
+            parsed.scheme == "http"
+            and parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        )
+        if (
+            not valid_scheme
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in ("", "/")
+            or "?" in value
+            or "#" in value
+            or "\\" in value
+            or any(character.isspace() for character in value)
+            or any(ord(character) < 32 or ord(character) == 127 for character in raw)
+            or parsed.port == 0
+        ):
+            raise ValueError("Invalid public origin")
+    except ValueError:
+        # Do not echo the value: a mistaken URL may contain credentials.
+        raise RuntimeError(message) from None
+    return value.rstrip("/")
 
 
 def _flag(name: str, *, default: bool = False) -> bool:

@@ -13,6 +13,17 @@ import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { Alert } from "@/components/ui/alert";
 
+// Rebuild links the workspace bin after compilation creates its target.
+const LOCAL_DAEMON_SETUP = [
+  "git clone https://github.com/droxer/Relay.git relay-client",
+  "cd relay-client",
+  "npm ci",
+  "npm run build -w relay-core",
+  "npm run build -w relay-daemon",
+  "npm rebuild -w relay-daemon",
+  'export PATH="$PWD/node_modules/.bin:$PATH"',
+].join(" && ");
+
 interface ConnectComputerDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -121,6 +132,14 @@ export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectCom
           <p className="adm-cred-note">
             {result.reused ? t("computer.connect_success_existing") : t("computer.connect_success")}
           </p>
+          <CredCopyRow
+            label={t("computer.connect_setup_label")}
+            hint={t("computer.connect_setup_hint")}
+            value={LOCAL_DAEMON_SETUP}
+            copyLabel={t("computer.connect_setup_copy")}
+            copied={copiedField === "setup"}
+            onCopy={() => void copy("setup", LOCAL_DAEMON_SETUP)}
+          />
           <CredCopyRow
             label={t("admin.node_id")}
             hint={t("admin.node_id_hint")}

@@ -219,6 +219,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     from .persistence.task_lifecycle import wip_limit
 
     wip_limit()  # Validate the shared admission policy before starting services.
+    deploy_config.public_backend_url()  # Fail before enrollment can emit a bad URL.
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
     configure_admin_token(root_dir)
