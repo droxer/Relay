@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from ..core.ids import new_database_id
 from ..persistence.stores import (
@@ -851,13 +852,8 @@ def assign_task(
     )
 
 
-@router.post("/tasks/{task_id}/runs", status_code=202)
-async def start_task(
-    task_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
+def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
-    body = await json_body(request)
     raw_assignments = body.get("assignments")
     assignments = assignment_list(raw_assignments)
     if body.get("agent") is not None:
@@ -1000,6 +996,20 @@ async def start_task(
                     "message": "A routine requires a named agent before it can start.",
                 },
             }
+    return task, agent, assignments
+
+
+@router.post("/tasks/{task_id}/runs", status_code=202)
+async def start_task(
+    task_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    body = await json_body(request)
+    prepared = await run_in_threadpool(_prepare_task_start, task_id, ctx, actor, body)
+    if isinstance(prepared, dict):
+        return prepared
+    task, agent, assignments = prepared
+    if task.get("isRoutine"):
         result = await start_routine_occurrence_on_ready_node(
             ctx, task, actor, agent=agent, assignments=assignments or None
         )
@@ -1024,12 +1034,7 @@ async def start_task(
     return result
 
 
-@router.post("/tasks/{task_id}/pickups", status_code=202)
-async def pickup_task(
-    task_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    body = await json_body(request)
+def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     if current.get("status") not in ("backlog", "assigned"):
         raise HTTPException(409, "task_not_dispatchable")
@@ -1060,6 +1065,16 @@ async def pickup_task(
             "assignedTeamId": None,
         },
     )
+    return task, agent_id, agent
+
+
+@router.post("/tasks/{task_id}/pickups", status_code=202)
+async def pickup_task(
+    task_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    body = await json_body(request)
+    task, agent_id, agent = await run_in_threadpool(_prepare_task_pickup, task_id, ctx, actor, body)
     result = await start_task_on_ready_node(
         ctx,
         task,
@@ -1218,7 +1233,7 @@ async def _task_directory_listings(
 ) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, Any]]:
     """Read live directories without letting an unavailable computer hide the index."""
     try:
-        node, layout, subpath = _task_workspace_target(ctx, task, actor)
+        node, layout, subpath = await run_in_threadpool(_task_workspace_target, ctx, task, actor)
     except HTTPException as error:
         return {}, {
             "status": live_status(error),
@@ -1274,11 +1289,7 @@ async def _task_directory_listings(
     }
 
 
-@router.get("/tasks/{task_id}/files")
-async def task_files(
-    task_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
-    """Return what the task produced, enriched by live workspace state."""
+def _prepare_task_files(task_id: str, request: Request, ctx: AppContext) -> Any:
     actor = request_actor(request, ctx.auth_store)
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     sources: list[tuple[str, str]] = [
@@ -1297,6 +1308,15 @@ async def task_files(
         reverse=True,
     )
     root = workspace_path(request.query_params.get("path"))
+    return actor, task, produced, root
+
+
+@router.get("/tasks/{task_id}/files")
+async def task_files(
+    task_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    """Return what the task produced, enriched by live workspace state."""
+    actor, task, produced, root = await run_in_threadpool(_prepare_task_files, task_id, request, ctx)
     listings, live = await _task_directory_listings(
         ctx, task, actor, listing_directories(produced, root=root)
     )
@@ -1454,10 +1474,10 @@ async def task_workspace_files(
     Live reads need the computer to be up. The artifact index remains the
     durable record of what a task produced.
     """
-    actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
     path = workspace_path(request.query_params.get("path"))
-    node, workspace_layout, workspace_subpath = _task_workspace_target(ctx, task, actor)
+    node, workspace_layout, workspace_subpath = await run_in_threadpool(_task_workspace_target, ctx, task, actor)
     event = await dispatch_workspace_command(
         ctx,
         node,
@@ -1488,10 +1508,10 @@ async def task_workspace_files(
 async def task_workspace_file(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
     path = workspace_path(request.query_params.get("path"), required=True)
-    node, workspace_layout, workspace_subpath = _task_workspace_target(ctx, task, actor)
+    node, workspace_layout, workspace_subpath = await run_in_threadpool(_task_workspace_target, ctx, task, actor)
     event = await dispatch_workspace_command(
         ctx,
         node,

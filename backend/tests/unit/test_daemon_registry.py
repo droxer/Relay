@@ -6325,10 +6325,10 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
             self.queued_counts_calls = 0
 
         def list_active_runs(
-            self, node_id: str | None = None
+            self, node_id: str | None = None, **kwargs
         ) -> list[dict[str, object]]:
             self.active_run_calls.append(node_id)
-            return super().list_active_runs(node_id)
+            return super().list_active_runs(node_id, **kwargs)
 
         def queued_command_count(self, node_id: str) -> int:
             self.queued_count_calls += 1
@@ -6374,7 +6374,8 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
 
         assert len(registry.monitor_nodes()) == 2
 
-        assert daemon_store.active_run_calls == [None, None]
+        # Read-only monitoring no longer runs background recovery.
+        assert daemon_store.active_run_calls == [None]
         assert daemon_store.queued_count_calls == 0
         assert daemon_store.queued_counts_calls == 1
 
@@ -6394,10 +6395,10 @@ def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
             self.active_run_calls: list[str | None] = []
 
         def list_active_runs(
-            self, node_id: str | None = None
+            self, node_id: str | None = None, **kwargs
         ) -> list[dict[str, object]]:
             self.active_run_calls.append(node_id)
-            return super().list_active_runs(node_id)
+            return super().list_active_runs(node_id, **kwargs)
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:

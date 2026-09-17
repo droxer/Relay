@@ -913,16 +913,22 @@ class LocalDaemonStore:
                 )
 
     def list_active_runs(
-        self, node_id: str | None = None, *, session_ids: set[str] | None = None
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None
     ) -> list[dict[str, Any]]:
         runs = [_read_json(path) for path in self.runs_dir.glob("*.json")]
-        return [
+        records = [
             run
             for run in runs
             if run.get("status") == "running"
             and (node_id is None or run.get("nodeId") == node_id)
             and (session_ids is None or run.get("sessionId") in session_ids)
         ]
+
+        if after_id is not None:
+            records = [record for record in records if record["runId"] > after_id]
+        if limit is not None:
+            records = sorted(records, key=lambda record: record["runId"])[:max(1, limit)]
+        return records
 
     def create_run_request(self, request: dict[str, Any]) -> dict[str, Any]:
         now = now_iso()
@@ -996,16 +1002,22 @@ class LocalDaemonStore:
         return _read_json(path) if path.exists() else None
 
     def list_active_run_requests(
-        self, node_id: str | None = None, *, session_ids: set[str] | None = None
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None
     ) -> list[dict[str, Any]]:
         requests = [_read_json(path) for path in self.run_requests_dir.glob("*.json")]
-        return [
+        records = [
             request
             for request in requests
             if request.get("status") in ACTIVE_RUN_REQUEST_STATUSES
             and (node_id is None or request.get("nodeId") == node_id)
             and (session_ids is None or request.get("sessionId") in session_ids)
         ]
+
+        if after_id is not None:
+            records = [record for record in records if record["id"] > after_id]
+        if limit is not None:
+            records = sorted(records, key=lambda record: record["id"])[:max(1, limit)]
+        return records
 
     def active_run_request_for_session(
         self, node_id: str, session_id: str
@@ -1643,6 +1655,7 @@ class DatabaseDaemonStore:
         Column("error", Text, nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
+        Column("recovery_after", DateTime(timezone=True), nullable=True),
         Column("completed_at", DateTime(timezone=True), nullable=True),
         Index("ix_daemon_run_requests_status", "status"),
         Index("ix_daemon_run_requests_node_status", "node_id", "status"),
@@ -2631,13 +2644,17 @@ class DatabaseDaemonStore:
                 )
 
     def list_active_runs(
-        self, node_id: str | None = None, *, session_ids: set[str] | None = None
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None
     ) -> list[dict[str, Any]]:
         statement = select(self.runs).where(self.runs.c.status == "running")
         if node_id is not None:
             statement = statement.where(self.runs.c.node_id == node_id)
         if session_ids is not None:
             statement = statement.where(self.runs.c.session_id.in_(session_ids))
+        if after_id is not None:
+            statement = statement.where(self.runs.c.id > after_id)
+        if limit is not None:
+            statement = statement.order_by(self.runs.c.id).limit(max(1, limit))
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         return [row_to_run(row) for row in rows]
@@ -2760,8 +2777,21 @@ class DatabaseDaemonStore:
             )
         return row_to_run_request(row) if row else None
 
+    def claim_recovery_requests(self, *, limit: int = 100, lease_seconds: float = 5.0) -> list[dict[str, Any]]:
+        now = _parse_iso(now_iso())
+        with store_transaction(self.engine) as conn:
+            statement = select(self.run_requests).where(
+                self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+                or_(self.run_requests.c.recovery_after.is_(None), self.run_requests.c.recovery_after <= now),
+            ).order_by(self.run_requests.c.recovery_after.asc().nulls_first(), self.run_requests.c.id).limit(max(1, limit)).with_for_update(skip_locked=True)
+            rows = conn.execute(statement).mappings().all()
+            if rows:
+                conn.execute(update(self.run_requests).where(self.run_requests.c.id.in_([row["id"] for row in rows])).values(
+                    recovery_after=now + timedelta(seconds=lease_seconds)))
+            return [row_to_run_request(row) for row in rows]
+
     def list_active_run_requests(
-        self, node_id: str | None = None, *, session_ids: set[str] | None = None
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None
     ) -> list[dict[str, Any]]:
         statement = select(self.run_requests).where(
             self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)
@@ -2770,6 +2800,10 @@ class DatabaseDaemonStore:
             statement = statement.where(self.run_requests.c.node_id == node_id)
         if session_ids is not None:
             statement = statement.where(self.run_requests.c.session_id.in_(session_ids))
+        if after_id is not None:
+            statement = statement.where(self.run_requests.c.id > after_id)
+        if limit is not None:
+            statement = statement.order_by(self.run_requests.c.id).limit(max(1, limit))
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         return [row_to_run_request(row) for row in rows]
@@ -2980,6 +3014,7 @@ class DatabaseDaemonStore:
                 update(self.run_requests)
                 .where(self.run_requests.c.id == request_id)
                 .values(
+                    recovery_after=None,
                     **run_request_to_row(
                         updated, database_id=current["id"], node_pk=node_pk
                     )
@@ -3170,75 +3205,49 @@ class DatabaseDaemonStore:
                 )
                 self._append_daemon_event(conn, completion_event)
 
-    def prune_terminal_records(
-        self, retention_seconds: float, per_node_limit: int
-    ) -> dict[str, int]:
-        cutoff = _format_iso(
-            _parse_iso(now_iso()) - timedelta(seconds=max(0.0, retention_seconds))
-        )
-        per_node_limit = max(0, per_node_limit)
-        deleted_commands = 0
-        deleted_runs = 0
-        deleted_events = 0
+    def prune_terminal_records(self, retention_seconds: float, per_node_limit: int) -> dict[str, int]:
+        """Bound each retention transaction and transfer IDs only.
+
+        Visit at most 100 nodes per pass and remove at most 1000 records from
+        each table. Keyset rotation prevents quiet nodes from starving.
+        """
+        cutoff = _parse_iso(now_iso()) - timedelta(seconds=max(0.0, retention_seconds))
+        counts = {"commands": 0, "runs": 0, "events": 0}
         with store_transaction(self.engine) as conn:
-            command_rows = (
-                conn.execute(
-                    select(self.commands).where(
-                        self.commands.c.status.in_(TERMINAL_DAEMON_STATUSES)
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            command_ids = terminal_database_ids_to_prune(
-                command_rows, cutoff, per_node_limit
-            )
-            if command_ids:
-                deleted_commands = (
-                    conn.execute(
-                        delete(self.commands).where(self.commands.c.id.in_(command_ids))
-                    ).rowcount
-                    or 0
-                )
-
-            run_rows = (
-                conn.execute(
-                    select(self.runs).where(
-                        self.runs.c.status.in_(TERMINAL_DAEMON_STATUSES)
-                    )
-                )
-                .mappings()
-                .all()
-            )
-            run_ids = terminal_database_ids_to_prune(run_rows, cutoff, per_node_limit)
-            if run_ids:
-                deleted_runs = (
-                    conn.execute(
-                        delete(self.runs).where(self.runs.c.id.in_(run_ids))
-                    ).rowcount
-                    or 0
-                )
-
-            deleted_events = (
-                conn.execute(
-                    delete(self.events).where(
-                        or_(
-                            *(
-                                self.events.c.type.startswith(prefix)
-                                for prefix in PRUNABLE_DAEMON_EVENT_PREFIXES
-                            ),
-                            self.events.c.type.in_(PRUNABLE_DAEMON_EVENT_TYPES),
-                        ),
-                        self.events.c.timestamp <= _parse_iso(cutoff),
-                    )
-                ).rowcount
-                or 0
-            )
-        return {
-            "commands": deleted_commands,
-            "runs": deleted_runs,
-            "events": deleted_events,
-        }
+            cursors = getattr(self, "_prune_cursors", {})
+            self._prune_cursors = cursors
+            for name, table in (("commands", self.commands), ("runs", self.runs)):
+                nodes = select(self.nodes.c.id).order_by(self.nodes.c.id).limit(100)
+                if cursors.get(name):
+                    nodes = nodes.where(self.nodes.c.id > cursors[name])
+                node_ids = list(conn.scalars(nodes))
+                if not node_ids and cursors.get(name):
+                    node_ids = list(conn.scalars(select(self.nodes.c.id).order_by(self.nodes.c.id).limit(100)))
+                cursors[name] = None
+                budget = 1000
+                for node_id in node_ids:
+                    cursors[name] = node_id
+                    terminal_time = terminal_time_expression(table)
+                    base = select(table.c.id).where(table.c.node_id == node_id, table.c.status.in_(TERMINAL_DAEMON_STATUSES))
+                    expired = list(conn.scalars(base.where(terminal_time <= cutoff).order_by(terminal_time, table.c.id).limit(budget)))
+                    if expired:
+                        counts[name] += conn.execute(delete(table).where(table.c.id.in_(expired))).rowcount or 0
+                        budget -= len(expired)
+                    if not budget:
+                        break
+                    excess = list(conn.scalars(base.order_by(terminal_time.desc(), table.c.id.desc()).offset(max(0, per_node_limit)).limit(budget)))
+                    if excess:
+                        counts[name] += conn.execute(delete(table).where(table.c.id.in_(excess))).rowcount or 0
+                        budget -= len(excess)
+                    if not budget:
+                        break
+            event_ids = select(self.events.c.id).where(
+                or_(*(self.events.c.type.startswith(prefix) for prefix in PRUNABLE_DAEMON_EVENT_PREFIXES),
+                    self.events.c.type.in_(PRUNABLE_DAEMON_EVENT_TYPES)),
+                self.events.c.timestamp <= cutoff,
+            ).order_by(self.events.c.timestamp, self.events.c.id).limit(1000)
+            counts["events"] = conn.execute(delete(self.events).where(self.events.c.id.in_(event_ids))).rowcount or 0
+        return counts
 
     def append_daemon_event(self, event: dict[str, Any]) -> None:
         with store_transaction(self.engine) as conn:
@@ -3776,3 +3785,19 @@ def daemon_event_to_row(event: dict[str, Any]) -> dict[str, Any]:
         "timestamp": _parse_iso(event["timestamp"]),
         "payload": event,
     }
+
+def terminal_time_expression(table: Any) -> Any:
+    if "updated_at" in table.c:
+        return func.coalesce(table.c.completed_at, table.c.updated_at, table.c.created_at)
+    return func.coalesce(table.c.completed_at, table.c.started_at)
+
+
+Index("ix_daemon_run_requests_recovery", DatabaseDaemonStore.run_requests.c.recovery_after,
+      DatabaseDaemonStore.run_requests.c.id,
+      postgresql_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+      sqlite_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+for _table in (DatabaseDaemonStore.commands, DatabaseDaemonStore.runs):
+    Index(f"ix_{_table.name}_terminal_retention", _table.c.node_id,
+          terminal_time_expression(_table), _table.c.id,
+          postgresql_where=_table.c.status.in_(TERMINAL_DAEMON_STATUSES),
+          sqlite_where=_table.c.status.in_(TERMINAL_DAEMON_STATUSES))

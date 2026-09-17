@@ -19,6 +19,8 @@ from . import session_store as _session_store  # noqa: F401
 from . import skill_store as _skill_store  # noqa: F401
 from . import task_store as _task_store  # noqa: F401
 from . import team_store as _team_store  # noqa: F401
+from . import managed_node_store as _managed_node_store  # noqa: F401
+from . import profile_image_store as _profile_image_store  # noqa: F401
 from .store_common import metadata
 
 __all__ = ["metadata"]

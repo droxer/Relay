@@ -1131,7 +1131,7 @@ class DatabaseSessionStore:
             if not row:
                 raise KeyError(session_id)
             events = self._events_for_session(conn, row["id"])
-        return {**(row["snapshot"] or {}), "events": events}
+        return hydrate_session_logs(row["snapshot"] or {}, events)
 
     def get_session_header(self, session_id: str) -> dict[str, Any]:
         """Read authorization and list fields without loading the event log."""
@@ -1181,7 +1181,7 @@ class DatabaseSessionStore:
                 cursor = conn.scalar(
                     select(self.events.c.sequence).where(
                         self.events.c.session_id == session["id"],
-                        self.events.c.payload["id"].as_string() == after_event_id,
+                        session_event_cursor_expression(self.events) == after_event_id,
                     )
                 )
                 start = int(cursor) + 1 if cursor is not None else 0
@@ -1346,10 +1346,7 @@ class DatabaseSessionStore:
                         event_row["payload"]
                     )
         return [
-            {
-                **(row["snapshot"] or {}),
-                "events": events_by_session[row["id"]],
-            }
+            hydrate_session_logs(row["snapshot"] or {}, events_by_session[row["id"]])
             for row in rows
         ]
 
@@ -1961,7 +1958,7 @@ def session_to_row(
         "pending_decision": session.get("pendingDecision"),
         "current_agent": session.get("currentAgent"),
         "final_outcome": session.get("finalOutcome"),
-        "snapshot": compact_session_snapshot(session, event_count=version),
+        "snapshot": compact_database_session_snapshot(session, event_count=version),
         "version": version,
         "created_at": _parse_iso(session["createdAt"]),
         "updated_at": _parse_iso(session["updatedAt"]),
@@ -2079,3 +2076,31 @@ def session_run_token_usage_rows(session: dict[str, Any]) -> list[dict[str, Any]
             }
         )
     return rows
+
+
+def compact_database_session_snapshot(session: dict[str, Any], *, event_count: int | None = None) -> dict[str, Any]:
+    snapshot = compact_session_snapshot(session, event_count=event_count)
+    snapshot["agentRuns"] = [
+        {key: value for key, value in run.items() if key != "agentLog"}
+        for run in snapshot.get("agentRuns", [])
+    ]
+    return snapshot
+
+
+def hydrate_session_logs(snapshot: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    logs = {event["runId"]: event["agentLog"] for event in events
+            if event.get("type") == "agent.completed" and "agentLog" in event}
+    return {**snapshot, "events": events, "agentRuns": [
+        {**run, **({"agentLog": logs[run["id"]]} if run["id"] in logs else {})}
+        for run in snapshot.get("agentRuns", [])
+    ]}
+
+
+def session_event_cursor_expression(table: Any) -> Any:
+    from sqlalchemy import literal_column
+    # Literal JSON key keeps PostgreSQL and SQLite index/query expressions equal.
+    return table.c.payload.op("->>", return_type=Text)(literal_column("'id'"))
+
+
+Index("ix_session_events_cursor", DatabaseSessionStore.events.c.session_id,
+      session_event_cursor_expression(DatabaseSessionStore.events))

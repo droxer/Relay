@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from starlette.concurrency import run_in_threadpool
+
 from datetime import date
 from typing import Any, Protocol, TypedDict
 
@@ -234,6 +236,17 @@ class TaskDispatcher:
         self.claim_id: str | None = None
 
     async def start(self) -> DispatchResult | None:
+        node, result = await run_in_threadpool(self._prepare)
+        if node is None:
+            return result
+        return await self._dispatch(node)
+
+    def _prepare(self) -> tuple[dict[str, Any] | None, DispatchResult | None]:
+        self._prepared_node = None
+        result = self._prepare_dispatch()
+        return self._prepared_node, result
+
+    def _prepare_dispatch(self) -> DispatchResult | None:
         if not self._dispatchable():
             return _record_result(
                 self.ctx,
@@ -271,7 +284,8 @@ class TaskDispatcher:
         claim_result = self._claim_task()
         if claim_result:
             return claim_result
-        return await self._dispatch(node)
+        self._prepared_node = node
+        return None
 
     def _dispatchable(self) -> bool:
         """Refuse a task that is not waiting to run, before anything mutates it.
@@ -528,21 +542,24 @@ class TaskDispatcher:
         return None
 
     async def _dispatch(self, node: dict[str, Any]) -> DispatchResult:
-        from .dispatch_results import dispatch_result_scope
-
         try:
-            session = await self.ctx.backend.run(node["id"], self._run_request(node))
+            request = await run_in_threadpool(self._run_request, node)
+            session = await self.ctx.backend.run(node["id"], request)
         except Exception as error:
-            with dispatch_result_scope(self.ctx.task_store, self.task, self.claim_id, success=False) as current:
-                if current is None:
-                    return _result(self.ctx.task_store.get_task(self.task["id"]), "queued", code="dispatch_superseded")
-                self.task = current
-                return self._dispatch_error_result(error)
+            return await run_in_threadpool(self._finish_dispatch, node, None, error)
+        return await run_in_threadpool(self._finish_dispatch, node, session, None)
 
-        with dispatch_result_scope(self.ctx.task_store, self.task, self.claim_id, success=True) as current:
+    def _finish_dispatch(self, node: dict[str, Any], session: dict[str, Any] | None,
+                         error: Exception | None) -> DispatchResult:
+        from .dispatch_results import dispatch_result_scope
+        with dispatch_result_scope(self.ctx.task_store, self.task, self.claim_id, success=error is None) as current:
             if current is None:
-                return _result(self.ctx.task_store.get_task(self.task["id"]), "started", session=session)
+                return _result(self.ctx.task_store.get_task(self.task["id"]),
+                               "queued" if error else "started", session=session,
+                               **({"code": "dispatch_superseded"} if error else {}))
             self.task = current
+            if error is not None:
+                return self._dispatch_error_result(error)
             return self._record_dispatch_started(session, node)
 
     def _record_dispatch_started(self, session: dict[str, Any], node: dict[str, Any]) -> DispatchResult:
@@ -696,6 +713,19 @@ async def start_routine_occurrence_on_ready_node(
     run_date: date,
     assignments: list[dict[str, Any]] | None = None,
 ) -> DispatchResult | None:
+    prepared = await run_in_threadpool(_prepare_routine_occurrence, ctx, routine, agent, run_date)
+    if prepared is None or "dispatch" in prepared:
+        return prepared
+    occurrence = prepared
+    # The occurrence is an immutable assignment snapshot. A routine may be
+    # reassigned after promotion, but that must only affect later occurrences.
+    result = await start_task_on_ready_node(ctx, occurrence, actor, assignments=None)
+    if result and result.get("session"):
+        await run_in_threadpool(ctx.task_store.link_session, routine["id"], result["session"]["id"])
+    return result
+
+
+def _prepare_routine_occurrence(ctx: TaskDispatchContext, routine: dict[str, Any], agent: str | None, run_date: date) -> Any:
     if not routine.get("isRoutine") or not routine.get("routineEnabled"):
         return None
     today = run_date
@@ -739,12 +769,7 @@ async def start_routine_occurrence_on_ready_node(
                 code="already_active",
                 message="The current routine occurrence is already active.",
             )
-    # The occurrence is an immutable assignment snapshot. A routine may be
-    # reassigned after promotion, but that must only affect later occurrences.
-    result = await start_task_on_ready_node(ctx, occurrence, actor, assignments=None)
-    if result and result.get("session"):
-        ctx.task_store.link_session(routine["id"], result["session"]["id"])
-    return result
+    return occurrence
 
 
 def _create_manual_occurrence(

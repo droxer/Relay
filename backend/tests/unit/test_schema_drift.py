@@ -290,3 +290,73 @@ def test_postgres_performance_projections_and_queue_pages(migrated_schema):
     third = tasks.list_dispatchable_tasks(limit=2, after=second[-1])
     assert len({t["id"] for t in [*first, *second, *third]}) == 5
     assert len(tasks.list_tasks(employee_id=owner, limit=2)) == 2
+
+
+def test_postgres_managed_nodes_lock_independently_and_enrollment_is_shared(migrated_schema):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from relay.persistence.managed_node_store import DatabaseManagedNodeStore
+    url, _ = migrated_schema
+    a, b = DatabaseManagedNodeStore(url), DatabaseManagedNodeStore(url)
+    one = a.create_node({'employeeId': 'one'})
+    two = a.create_node({'employeeId': 'two'})
+    with ThreadPoolExecutor(2) as pool:
+        with a._mutation_scope(one['id']):
+            assert pool.submit(b.create_attempt, two['id']).result(timeout=3)[0]['managedNodeId'] == two['id']
+        barrier = Barrier(2)
+        def attempt(store):
+            barrier.wait()
+            try:
+                return store.create_attempt(one['id'])
+            except ValueError:
+                return None
+        results = list(pool.map(attempt, [a, b]))
+    winners = [result for result in results if result]
+    assert len(winners) == 1
+    record, credential = winners[0]
+    assert b.consume_enrollment_grant(credential)[1] == record
+    b.complete_enrollment_grant(credential, 'runtime-one')
+    with pytest.raises(PermissionError):
+        a.complete_enrollment_grant(credential, 'runtime-two')
+
+
+def test_postgres_recovery_claims_disjoint_pages_and_expired_claims_recover(migrated_schema):
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import insert, update
+    from relay.persistence.daemon_store import DatabaseDaemonStore, node_to_row, run_request_to_row
+    url, _ = migrated_schema
+    a, b = DatabaseDaemonStore(url), DatabaseDaemonStore(url)
+    node_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    node = {'id': node_id, 'status': 'ready', 'workspacePath': '/work', 'sandboxMode': 'none', 'createdAt': now, 'updatedAt': now}
+    with a.engine.begin() as conn:
+        conn.execute(insert(a.nodes).values(**node_to_row(node)))
+        for _ in range(4):
+            request = {'id': str(uuid.uuid4()), 'sessionId': str(uuid.uuid4()), 'taskGoal': 'test', 'assignments': [], 'status': 'running', 'createdAt': now, 'updatedAt': now}
+            conn.execute(insert(a.run_requests).values(**run_request_to_row(request, node_pk=node_id)))
+    with ThreadPoolExecutor(2) as pool:
+        pages = list(pool.map(lambda store: store.claim_recovery_requests(limit=2), [a, b]))
+    assert [len(page) for page in pages] == [2, 2]
+    assert len({r['id'] for page in pages for r in page}) == 4
+    assert a.claim_recovery_requests(limit=2) == []
+    with a.engine.begin() as conn:
+        conn.execute(update(a.run_requests).values(recovery_after=datetime.now(timezone.utc) - timedelta(seconds=1)))
+    assert len(b.claim_recovery_requests(limit=2)) == 2
+
+
+def test_postgres_stream_cursor_and_scalability_migration_roundtrip(migrated_schema):
+    from sqlalchemy import inspect
+    url, _ = migrated_schema
+    store = DatabaseSessionStore(url)
+    session = store.create_session({'taskGoal': 'cursor', 'workspacePath': '/work'})
+    cursor = session['events'][0]['id']
+    assert store.read_event_page(session['id'], after_event_id=cursor)['events'] == []
+    config = Config(str(REPO_ROOT / 'backend' / 'alembic.ini'))
+    config.set_main_option('script_location', str(BACKEND_ROOT / 'migrations'))
+    command.downgrade(config, '20260917_0075')
+    assert 'managed_node_records' not in inspect(store.engine).get_table_names()
+    assert 'profile_images' not in inspect(store.engine).get_table_names()
+    assert store.get_session(session['id'])['events'][0]['id'] == cursor
+    command.upgrade(config, 'head')
+    assert store.read_event_page(session['id'], after_event_id=cursor)['events'] == []
