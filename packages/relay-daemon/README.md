@@ -167,3 +167,31 @@ the command.
 returning a cancel command in one HTTP response is not treated as proof that it
 was received. Output events are ordered and deduplicated by stream sequence,
 and terminal events are retried across transient backend failures.
+
+## Connect a personal computer
+
+On macOS or Linux, use Bash or zsh with Git, Node.js 22.19 or newer, and npm.
+You need access to the Relay repository. In a directory without an existing
+`relay-client` folder, install and build the client:
+
+```sh
+git clone https://github.com/droxer/Relay.git relay-client &&
+cd relay-client &&
+npm ci &&
+npm run build -w relay-core &&
+npm run build -w relay-daemon &&
+npm rebuild -w relay-daemon &&
+export PATH="$PWD/node_modules/.bin:$PATH"
+```
+
+The rebuild creates the executable link after compilation. This installation
+stays in the checkout and does not require a global npm install or sudo.
+In Relay, open **Computers → Connect this computer**, register the workspace,
+and paste the daemon command into the same terminal. Paste the node token at
+the hidden prompt. Keep the terminal open while connected.
+
+For a later connection, enter the existing `relay-client` directory and run
+`export PATH="$PWD/node_modules/.bin:$PATH"` before the daemon command. The
+command runs its prompt in Bash, so it can also be pasted into zsh. It checks
+that the daemon is installed before asking for the token. Native PowerShell
+and Command Prompt are not supported by these shell instructions.

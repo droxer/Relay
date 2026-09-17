@@ -279,12 +279,22 @@ def daemon_start_command(
     if node.get("workspacePath"):
         parts.extend(["--workspace", node["workspacePath"]])
     command = " ".join(shlex.quote(part) for part in parts)
-    if not prompt_for_token:
-        return command
-    return (
-        "read -rsp 'Relay node token: ' RELAY_DAEMON_NODE_TOKEN && echo && "
-        f"export RELAY_DAEMON_NODE_TOKEN && {command}"
+    # The copied line is commonly pasted into zsh. Keep Bash's silent read
+    # inside an explicit child shell, and keep the token out of the parent
+    # shell's environment after the daemon exits.
+    script = (
+        "command -v relay-daemon >/dev/null 2>&1 || { "
+        "printf '%s\\n' 'relay-daemon is missing. Complete the first-time setup "
+        "in Connect this computer, then run this command in the same terminal.' >&2; "
+        "exit 127; }; "
     )
+    if prompt_for_token:
+        script += (
+            "read -rsp 'Relay node token: ' RELAY_DAEMON_NODE_TOKEN && echo && "
+            "test -n \"$RELAY_DAEMON_NODE_TOKEN\" && "
+            "export RELAY_DAEMON_NODE_TOKEN && "
+        )
+    return "bash -c " + shlex.quote(script + "exec " + command)
 
 
 def get_session_or_404(store: Any, session_id: str) -> dict[str, Any]:

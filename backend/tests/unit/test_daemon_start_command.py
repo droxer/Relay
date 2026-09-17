@@ -59,3 +59,30 @@ def test_reconnect_without_prompt_uses_saved_token(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "started\n"
+
+
+@pytest.mark.parametrize("token_input", ["", "\n"])
+def test_cancelled_or_empty_token_does_not_launch_daemon(tmp_path, token_input):
+    daemon = tmp_path / "relay-daemon"
+    daemon.write_text('#!/bin/bash\nprintf "started\\n"\n')
+    daemon.chmod(0o755)
+    result = subprocess.run(
+        ["bash", "-c", command()], input=token_input, text=True,
+        capture_output=True, env={**os.environ, "PATH": f"{tmp_path}:/usr/bin:/bin"},
+    )
+    assert result.returncode != 0
+    assert "started" not in result.stdout
+
+
+def test_token_does_not_remain_in_calling_shell(tmp_path):
+    daemon = tmp_path / "relay-daemon"
+    daemon.write_text('#!/bin/bash\nexit 0\n')
+    daemon.chmod(0o755)
+    result = subprocess.run(
+        ["bash", "-c", "unset RELAY_DAEMON_NODE_TOKEN; " + command()
+         + '; printf "parent-token:%s" "${RELAY_DAEMON_NODE_TOKEN-unset}"'],
+        input="test-token\n", text=True, capture_output=True,
+        env={**os.environ, "PATH": f"{tmp_path}:/usr/bin:/bin"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.endswith("parent-token:unset")
