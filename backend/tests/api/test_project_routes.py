@@ -969,7 +969,7 @@ def test_scheduler_dispatches_assigned_project_task(monkeypatch) -> None:
 
         assert tick.dispatched == 1
         task = app.state.task_store.get_task(task_response.json()["id"])
-        assert task["status"] == "running"
+        assert task["status"] == "assigned"
         session = app.state.session_store.get_session(task["linkedSessionIds"][0])
         assert session["projectId"] == project["id"]
         [command] = app.state.registry.take_commands(
