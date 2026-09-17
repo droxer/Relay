@@ -8,9 +8,8 @@ from ..core.preset_avatars import is_preset_avatar_url
 from ..persistence.profile_image_store import ProfileImageError
 from .agent_routes import _agent_with_placements
 from .deps import AppContextDep
-from .helpers import json_body, request_actor
+from .helpers import JsonBodyDep, request_actor
 from .team_routes import _team_view
-
 
 router = APIRouter()
 
@@ -42,7 +41,7 @@ def _profile_image_error(error: ProfileImageError) -> HTTPException:
 
 
 @router.get("/profile-images/{kind}/{entity_id}")
-async def get_profile_image(
+def get_profile_image(
     kind: str,
     entity_id: str,
     request: Request,
@@ -70,14 +69,16 @@ async def get_profile_image(
 
 
 @router.put("/profile-images/{kind}/{entity_id}")
-async def update_profile_image(
+def update_profile_image(
     kind: str,
     entity_id: str,
     request: Request,
     ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     _profile_entity(request, ctx, kind, entity_id)
-    body = await json_body(request)
+    body = _request_body
     if "presetUrl" in body:
         return _apply_preset(ctx, kind, entity_id, body.get("presetUrl"))
     try:
@@ -115,7 +116,7 @@ def _set_profile_image_url(
 
 
 @router.delete("/profile-images/{kind}/{entity_id}")
-async def delete_profile_image(
+def delete_profile_image(
     kind: str,
     entity_id: str,
     request: Request,

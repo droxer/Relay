@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
+from collections import defaultdict
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,11 +26,13 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    and_,
     case,
+    cast,
     delete,
+    func,
     insert,
     inspect,
-    func,
     or_,
     select,
     text,
@@ -37,10 +42,9 @@ from sqlalchemy.exc import IntegrityError
 
 from ..core.ids import new_relay_id
 from .protocols import TaskDispatchAssignment
-from .task_execution import prepare_execution_events
-from .task_lifecycle import check_wip_admission, needs_wip_admission, flow_scope
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
+    TASK_EVENT_HANDLERS,
     AgentName,
     _append_jsonl,
     _parse_iso,
@@ -61,6 +65,44 @@ from .store_common import (
 from .store_common import (
     metadata as shared_metadata,
 )
+from .task_execution import prepare_execution_events
+from .task_lifecycle import (
+    check_wip_admission,
+    flow_scope,
+    needs_wip_admission,
+    wip_limit,
+)
+
+_HYDRATE_TASK_WRITES = ContextVar("hydrate_task_writes", default=True)
+
+
+@contextmanager
+def compact_task_writes() -> Iterator[None]:
+    """Opt background bookkeeping out of full mutation response histories."""
+    token = _HYDRATE_TASK_WRITES.set(False)
+    try:
+        yield
+    finally:
+        _HYDRATE_TASK_WRITES.reset(token)
+
+
+def apply_task_events(
+    snapshot: dict[str, Any], events: list[dict[str, Any]], *, version: int
+) -> dict[str, Any]:
+    task = deepcopy(snapshot)
+    task.pop("events", None)
+    task.pop("activity", None)
+    for event in events:
+        task["updatedAt"] = event["timestamp"]
+        if event["type"] == "task.activity":
+            task["activityCount"] = int(task.get("activityCount") or 0) + 1
+            task["lastActivity"] = event["activity"]
+        else:
+            handler = TASK_EVENT_HANDLERS.get(event["type"])
+            if handler:
+                handler(task, event)
+    task["eventCount"] = version + len(events)
+    return task
 
 
 class TaskExecutionActiveError(RuntimeError):
@@ -106,10 +148,12 @@ def compact_task_snapshot(
     events = task.get("events") or []
     activity = task.get("activity") or []
     snapshot["eventCount"] = len(events) if event_count is None else event_count
-    snapshot["activityCount"] = len(activity)
+    snapshot["activityCount"] = (
+        len(activity) if "activity" in task else int(task.get("activityCount") or 0)
+    )
     if activity:
         snapshot["lastActivity"] = activity[-1]
-    else:
+    elif "activity" in task:
         snapshot.pop("lastActivity", None)
     return snapshot
 
@@ -365,7 +409,9 @@ class LocalTaskStore:
                 return _read_json(self._snapshot_path(task_id))
             return materialize_task_events(events)
 
-    def list_tasks(self) -> list[dict[str, Any]]:
+    def list_tasks(
+        self, *, employee_id: str | None = None, limit: int | None = None
+    ) -> list[dict[str, Any]]:
         if not self.tasks_dir.exists():
             return []
         tasks = [
@@ -374,7 +420,16 @@ class LocalTaskStore:
             if path.is_dir()
         ]
         live = [task for task in tasks if not task.get("deletedAt")]
-        return sorted(live, key=lambda item: item["updatedAt"], reverse=True)
+        visible = [
+            t
+            for t in live
+            if employee_id is None
+            or employee_id in (t.get("ownerEmployeeId"), t.get("assigneeEmployeeId"))
+        ]
+        ordered = sorted(
+            visible, key=lambda item: (item["updatedAt"], item["id"]), reverse=True
+        )
+        return ordered[:limit] if limit is not None else ordered
 
     def list_tasks_for_session(self, session_id: str) -> list[dict[str, Any]]:
         return [
@@ -429,7 +484,9 @@ class LocalTaskStore:
         ]
         return sorted(tasks, key=routine_due_sort_key)
 
-    def list_dispatchable_tasks(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def list_dispatchable_tasks(
+        self, limit: int | None = None, *, after: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         tasks = [
             task
             for task in self.list_tasks()
@@ -443,6 +500,12 @@ class LocalTaskStore:
             and dispatch_retry_due(task)
         ]
         ordered = sorted(tasks, key=task_claim_sort_key)
+        if after is not None:
+            ordered = [
+                t
+                for t in ordered
+                if task_claim_sort_key(t) > task_claim_sort_key(after)
+            ]
         return ordered[:limit] if limit is not None else ordered
 
     def update_task(
@@ -802,18 +865,26 @@ class DatabaseTaskStore:
     @contextmanager
     def task_write_scope(self, task_id: str):
         with store_transaction(self.engine) as conn:
-            # Bookkeeping may append a status event. Take admission's lock
-            # before the row lock, matching the event writer's lock order.
-            if self.engine.dialect.name == "postgresql":
-                conn.execute(text("SELECT pg_advisory_xact_lock(7265193401)"))
-            else:
+            if self.engine.dialect.name == "sqlite":
                 conn.execute(
                     update(self.tasks)
                     .where(self.tasks.c.id == task_id)
                     .values(version=self.tasks.c.version)
                 )
             self._task_pk(conn, task_id, lock=True)
-            yield self.get_task(task_id)
+            if _HYDRATE_TASK_WRITES.get():
+                yield self.get_task(task_id)
+            else:
+                row = (
+                    conn.execute(
+                        select(
+                            self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version
+                        ).where(self.tasks.c.id == task_id)
+                    )
+                    .mappings()
+                    .one()
+                )
+                yield self._current_snapshot(conn, row)
 
     metadata = shared_metadata
 
@@ -891,6 +962,7 @@ class DatabaseTaskStore:
         UniqueConstraint("task_id", "sequence", name="uq_task_events_task_sequence"),
         Index("ix_task_events_task_id", "task_id"),
         Index("ix_task_events_timestamp", "timestamp"),
+        Index("ix_task_events_task_type_sequence", "task_id", "type", "sequence"),
     )
     task_sessions = Table(
         "task_sessions",
@@ -984,7 +1056,7 @@ class DatabaseTaskStore:
     ) -> dict[str, Any]:
         for attempt in range(3):
             try:
-                return self._append_events_once(
+                task = self._append_events_once(
                     task_id,
                     events,
                     skip_linked_session_id=skip_linked_session_id,
@@ -992,6 +1064,7 @@ class DatabaseTaskStore:
                     active_linked_session=active_linked_session,
                     execution_owner=execution_owner,
                 )
+                return self._hydrate_task(task) if _HYDRATE_TASK_WRITES.get() else task
             except (IntegrityError, _TaskWriteConflict):
                 if attempt == 2:
                     raise
@@ -1009,22 +1082,14 @@ class DatabaseTaskStore:
         execution_owner: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:
-            admitting = any(
-                event.get("type") in ("task.execution.claimed", "task.status", "task.updated")
-                for event in events
-            )
-            if admitting:
-                # Serialize the count and admission across backend replicas.
-                # PostgreSQL uses a transaction advisory lock; SQLite acquires
-                # its database writer lock before any snapshot is read.
-                if self.engine.dialect.name == "postgresql":
-                    conn.execute(text("SELECT pg_advisory_xact_lock(7265193401)"))
-                else:
-                    conn.execute(
-                        update(self.tasks)
-                        .where(self.tasks.c.id == task_id)
-                        .values(version=self.tasks.c.version)
-                    )
+            # Acquire SQLite's writer lock before reading. PostgreSQL locks
+            # only this row; WIP admission later locks the destination scope.
+            if self.engine.dialect.name == "sqlite":
+                conn.execute(
+                    update(self.tasks)
+                    .where(self.tasks.c.id == task_id)
+                    .values(version=self.tasks.c.version)
+                )
             if skip_linked_session_id:
                 self._lock_session_for_link(conn, skip_linked_session_id)
             row = (
@@ -1041,23 +1106,10 @@ class DatabaseTaskStore:
             task_pk = row["id"]
             sequence = int(row["version"] or 0)
             current = row["snapshot"] or {}
-            existing_events = self._events_for_task(conn, task_pk)
-            if not existing_events:
-                existing_events = list(current.get("events", []))
-            # Ownership is an event fact. An older projection writer may omit
-            # the new field, but must never reset the authoritative generation.
-            if existing_events:
-                current = {**current}
-                current.pop("executionOwner", None)
-                for event in reversed(existing_events):
-                    if event.get("type") == "task.execution.claimed":
-                        current["executionOwner"] = {
-                            "requestId": event["requestId"], "revision": event["revision"],
-                        }
-                        break
+            current = self._current_snapshot(conn, row)
             events = prepare_execution_events(current, events, execution_owner)
             if not events:
-                return self.get_task(task_id)
+                return current
             deleting = any(event.get("type") == "task.deleted" for event in events)
             if deleting and current.get("deletedAt"):
                 return current
@@ -1071,20 +1123,51 @@ class DatabaseTaskStore:
                 "linkedSessionIds", []
             ):
                 return current
-            task = materialize_task_events([*existing_events, *events])
-            if admitting and needs_wip_admission(current, task):
-                snapshots = list(conn.execute(
-                    select(self.tasks.c.snapshot).where(
+            task = apply_task_events(current, events, version=sequence)
+            if needs_wip_admission(current, task):
+                if self.engine.dialect.name == "postgresql":
+                    conn.execute(
+                        text(
+                            "SELECT pg_advisory_xact_lock(hashtextextended(:scope, 7265193401))"
+                        ),
+                        {"scope": flow_scope(task)},
+                    )
+                scope = flow_scope(task)
+                scope_filter = (
+                    and_(
+                        self.tasks.c.assignee_employee_id.is_(None),
+                        self.tasks.c.owner_employee_id.is_(None),
+                    )
+                    if scope == "unowned"
+                    else or_(
+                        self.tasks.c.assignee_employee_id == scope,
+                        and_(
+                            self.tasks.c.assignee_employee_id.is_(None),
+                            self.tasks.c.owner_employee_id == scope,
+                        ),
+                    )
+                )
+                count = conn.scalar(
+                    select(func.count())
+                    .select_from(self.tasks)
+                    .where(
+                        self.tasks.c.id != task_pk,
+                        scope_filter,
                         self.tasks.c.status != "done",
                         self.tasks.c.is_routine.is_(False),
-                        func.coalesce(
-                            self.tasks.c.snapshot["assigneeEmployeeId"].as_string(),
-                            self.tasks.c.snapshot["ownerEmployeeId"].as_string(),
-                            "unowned",
-                        ) == flow_scope(task),
+                        self.tasks.c.snapshot["deletedAt"].as_string().is_(None),
+                        or_(
+                            self.tasks.c.snapshot["startedAt"].as_string().is_not(None),
+                            self.tasks.c.status.in_(
+                                ("running", "review", "waiting_for_human")
+                            ),
+                        ),
                     )
-                ).scalars())
-                check_wip_admission(task, snapshots)
+                )
+                if count >= wip_limit():
+                    raise ValueError(
+                        "task_wip_limit: Finish existing work before starting another task."
+                    )
             claimed = conn.execute(
                 update(self.tasks)
                 .where(
@@ -1124,6 +1207,57 @@ class DatabaseTaskStore:
         )
         return task
 
+    def _current_snapshot(self, conn: Any, row: Any) -> dict[str, Any]:
+        task_pk = row["id"]
+        sequence = int(row["version"] or 0)
+        current = row["snapshot"] or {}
+        if current.get("eventCount") != sequence:
+            current = compact_task_snapshot(
+                materialize_task_events(self._events_for_task(conn, task_pk)),
+                event_count=sequence,
+            )
+        # Execution ownership remains an authoritative event fact even if
+        # an older writer omitted it from the snapshot.
+        owner_event = conn.scalar(
+            select(self.events.c.payload)
+            .where(
+                self.events.c.task_id == task_pk,
+                self.events.c.type == "task.execution.claimed",
+            )
+            .order_by(self.events.c.sequence.desc())
+            .limit(1)
+        )
+        current = dict(current)
+        current.pop("executionOwner", None)
+        if owner_event:
+            current["executionOwner"] = {
+                "requestId": owner_event["requestId"],
+                "revision": owner_event["revision"],
+            }
+        return current
+
+    def _hydrate_task(self, task: dict[str, Any]) -> dict[str, Any]:
+        with store_transaction(self.engine) as conn:
+            events = list(
+                conn.execute(
+                    select(self.events.c.payload)
+                    .where(
+                        self.events.c.task_id == task["id"],
+                        self.events.c.sequence < int(task.get("eventCount") or 0),
+                    )
+                    .order_by(self.events.c.sequence)
+                ).scalars()
+            )
+        return {
+            **{
+                k: v
+                for k, v in task.items()
+                if k not in {"eventCount", "activityCount", "lastActivity"}
+            },
+            "events": events,
+            "activity": [e["activity"] for e in events if e["type"] == "task.activity"],
+        }
+
     def _lock_session_for_link(self, conn: Any, session_id: str) -> None:
         lock_clause = "" if self.engine.dialect.name == "sqlite" else " FOR KEY SHARE"
         session_pk = conn.scalar(
@@ -1151,24 +1285,42 @@ class DatabaseTaskStore:
                 events = list((row["snapshot"] or {}).get("events", []))
             return materialize_task_events(events) if events else row["snapshot"]
 
-    def list_tasks(self) -> list[dict[str, Any]]:
-        with store_transaction(self.engine) as conn:
-            rows = (
-                conn.execute(
-                    select(self.tasks.c.id, self.tasks.c.snapshot).order_by(
-                        self.tasks.c.updated_at.desc()
-                    )
+    def list_tasks(
+        self, *, employee_id: str | None = None, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        statement = (
+            select(self.tasks.c.id, self.tasks.c.snapshot)
+            .where(self.tasks.c.snapshot["deletedAt"].as_string().is_(None))
+            .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
+        )
+        if employee_id is not None:
+            statement = statement.where(
+                or_(
+                    self.tasks.c.owner_employee_id == employee_id,
+                    self.tasks.c.assignee_employee_id == employee_id,
                 )
-                .mappings()
-                .all()
             )
-            tasks = []
-            for row in rows:
-                events = self._events_for_task(conn, row["id"])
-                task = materialize_task_events(events) if events else row["snapshot"]
-                if not task.get("deletedAt"):
-                    tasks.append(task)
-            return tasks
+        if limit is not None:
+            statement = statement.limit(max(1, limit))
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+            histories = defaultdict(list)
+            # Use the IDs actually selected above, so concurrent ordering
+            # changes cannot substitute a different page between queries.
+            ids = [row["id"] for row in rows]
+            for offset in range(0, len(ids), 500):
+                for row in conn.execute(
+                    select(self.events.c.task_id, self.events.c.payload)
+                    .where(self.events.c.task_id.in_(ids[offset : offset + 500]))
+                    .order_by(self.events.c.task_id, self.events.c.sequence)
+                ).mappings():
+                    histories[row["task_id"]].append(row["payload"])
+        return [
+            materialize_task_events(histories[row["id"]])
+            if histories[row["id"]]
+            else row["snapshot"]
+            for row in rows
+        ]
 
     def list_tasks_for_session(self, session_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
@@ -1283,7 +1435,9 @@ class DatabaseTaskStore:
             and routine_due_for_promotion(row["snapshot"], today)
         ]
 
-    def list_dispatchable_tasks(self, limit: int | None = None) -> list[dict[str, Any]]:
+    def list_dispatchable_tasks(
+        self, limit: int | None = None, *, after: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         statement = (
             select(self.tasks.c.snapshot)
             .where(self.tasks.c.status == "assigned")
@@ -1309,10 +1463,44 @@ class DatabaseTaskStore:
                 self.tasks.c.id.asc(),
             )
         )
+        statement = statement.where(
+            self.tasks.c.snapshot["deletedAt"].as_string().is_(None)
+        )
+        if after is not None:
+            # The same total ordering as the candidate query, including NULL due dates.
+            values = task_claim_sort_key(after)
+            columns = [
+                _priority_order_expression(),
+                _due_date_missing_expression(),
+                func.coalesce(self.tasks.c.due_date, _date.max),
+                self.tasks.c.created_at,
+                self.tasks.c.id,
+            ]
+            values = [
+                values[0],
+                1 if not after.get("dueDate") else 0,
+                _date.fromisoformat(after["dueDate"])
+                if after.get("dueDate")
+                else _date.max,
+                _parse_iso(after["createdAt"]),
+                after["id"],
+            ]
+            statement = statement.where(
+                or_(
+                    *[
+                        and_(
+                            *(columns[j] == values[j] for j in range(i)),
+                            columns[i] > values[i],
+                        )
+                        for i in range(len(columns))
+                    ]
+                )
+            )
+        if limit is not None:
+            statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
-        live = [row["snapshot"] for row in rows if not row["snapshot"].get("deletedAt")]
-        return live[:limit] if limit is not None else live
+        return [row["snapshot"] for row in rows]
 
     def update_task(
         self,
@@ -1426,9 +1614,6 @@ class DatabaseTaskStore:
                 ),
             ]
             task_pk = row["id"]
-            snapshot_events = self._events_for_task(conn, task_pk)
-            if not snapshot_events:
-                snapshot_events = list(snapshot.get("events", []))
             sequence = int(row["version"] or 0)
             for offset, event in enumerate(events):
                 conn.execute(
@@ -1436,8 +1621,7 @@ class DatabaseTaskStore:
                         **task_event_to_row(task_pk, sequence + offset, event)
                     )
                 )
-                snapshot_events.append(event)
-            claimed = materialize_task_events(snapshot_events)
+            claimed = apply_task_events(snapshot, events, version=sequence)
             conn.execute(
                 update(self.tasks)
                 .where(self.tasks.c.id == task_pk)
@@ -1450,7 +1634,7 @@ class DatabaseTaskStore:
         logger.debug(
             "Database task claimed for scheduled dispatch", task_id=task_id, agent=agent
         )
-        return claimed
+        return self._hydrate_task(claimed) if _HYDRATE_TASK_WRITES.get() else claimed
 
     def release_dispatch_claim(self, task_id: str, claim_id: str) -> dict[str, Any]:
         return self.append_event(
@@ -1569,9 +1753,6 @@ class DatabaseTaskStore:
                 next_run_date,
             )
             task_pk = row["id"]
-            snapshot_events = self._events_for_task(conn, task_pk)
-            if not snapshot_events:
-                snapshot_events = list(routine.get("events", []))
             sequence = int(row["version"] or 0)
             for offset, event in enumerate(routine_events):
                 conn.execute(
@@ -1579,8 +1760,7 @@ class DatabaseTaskStore:
                         **task_event_to_row(task_pk, sequence + offset, event)
                     )
                 )
-                snapshot_events.append(event)
-            updated = materialize_task_events(snapshot_events)
+            updated = apply_task_events(routine, routine_events, version=sequence)
             conn.execute(
                 update(self.tasks)
                 .where(self.tasks.c.id == task_pk)
@@ -1619,36 +1799,27 @@ class DatabaseTaskStore:
             )
             if not row:
                 raise KeyError(routine_id)
-            compact_routine = row["snapshot"] or {}
-            prior_events = self._events_for_task(conn, row["id"])
-            if not prior_events:
-                prior_events = list(compact_routine.get("events", []))
-            routine = (
-                materialize_task_events(prior_events)
-                if prior_events
-                else compact_routine
-            )
+            routine = self._current_snapshot(conn, row)
             if routine.get("deletedAt"):
                 return None
 
-            def load_occurrence(occurrence_id: str) -> dict[str, Any]:
-                occurrence_row = (
-                    conn.execute(
-                        select(self.tasks.c.snapshot).where(
-                            self.tasks.c.id == occurrence_id
-                        )
-                    )
-                    .mappings()
-                    .first()
+            existing = conn.scalar(
+                select(self.tasks.c.snapshot)
+                .join(
+                    self.events,
+                    self.tasks.c.id
+                    == cast(
+                        self.events.c.payload["occurrenceId"].as_string(),
+                        entity_uuid_type(),
+                    ),
                 )
-                if not occurrence_row:
-                    raise KeyError(occurrence_id)
-                return occurrence_row["snapshot"]
-
-            existing = _open_routine_occurrence(
-                routine,
-                load_occurrence,
-                scheduled_for=scheduled_for,
+                .where(
+                    self.events.c.task_id == routine_id,
+                    self.events.c.type == "task.occurrence_created",
+                    self.events.c.payload["scheduledFor"].as_string() == scheduled_for,
+                )
+                .order_by(self.events.c.sequence.desc())
+                .limit(1)
             )
             if existing:
                 return existing
@@ -1681,7 +1852,7 @@ class DatabaseTaskStore:
                     **task_event_to_row(task_pk, sequence, event)
                 )
             )
-            updated = materialize_task_events([*prior_events, event])
+            updated = apply_task_events(routine, [event], version=sequence)
             conn.execute(
                 update(self.tasks)
                 .where(self.tasks.c.id == task_pk)
@@ -1779,10 +1950,7 @@ class DatabaseTaskStore:
             return current
         events = _task_session_unlink_events(task_id, session_id)
         sequence = int(row["version"] or 0)
-        prior_events = self._events_for_task(conn, row["id"])
-        if not prior_events:
-            prior_events = list(current.get("events", []))
-        task = materialize_task_events([*prior_events, *events])
+        task = apply_task_events(current, events, version=sequence)
         claimed = conn.execute(
             update(self.tasks)
             .where(self.tasks.c.id == row["id"], self.tasks.c.version == sequence)
@@ -1807,7 +1975,7 @@ class DatabaseTaskStore:
             .where(self.task_sessions.c.task_id == row["id"])
             .where(self.task_sessions.c.session_id == session_id)
         )
-        return task
+        return self._hydrate_task(task) if _HYDRATE_TASK_WRITES.get() else task
 
     def record_activity(
         self, task_id: str, message: str, payload: dict[str, Any] | None = None,

@@ -14,7 +14,7 @@ from ..services.node_agents import (
     sync_node_agents,
 )
 from .deps import AppContext, AppContextDep
-from .helpers import employee_record, json_body
+from .helpers import JsonBodyDep, employee_record
 
 router = APIRouter()
 
@@ -42,10 +42,12 @@ def _admin_error(error: Exception) -> HTTPException:
 
 
 @router.post("/admin/managed-nodes", status_code=202)
-async def create_managed_node(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_managed_node(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
-        payload = await json_body(request)
+        payload = _request_body
         if "displayName" in payload:
             payload["displayName"] = normalize_computer_display_name(
                 payload["displayName"]
@@ -59,7 +61,7 @@ async def create_managed_node(request: Request, ctx: AppContextDep) -> dict[str,
 
 
 @router.get("/admin/managed-nodes")
-async def list_managed_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_managed_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     # Deleting resources remain visible to the reconciler until provider
     # cleanup has converged.
@@ -67,7 +69,7 @@ async def list_managed_nodes(request: Request, ctx: AppContextDep) -> dict[str, 
 
 
 @router.get("/admin/managed-nodes/{node_id}")
-async def get_managed_node(
+def get_managed_node(
     node_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -78,12 +80,12 @@ async def get_managed_node(
 
 
 @router.patch("/admin/managed-nodes/{node_id}")
-async def update_managed_node(
-    node_id: str, request: Request, ctx: AppContextDep
+def update_managed_node(
+    node_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
-        patch = await json_body(request)
+        patch = _request_body
         if "displayName" in patch:
             try:
                 display_name = normalize_computer_display_name(patch["displayName"])
@@ -109,9 +111,7 @@ async def update_managed_node(
 
 
 @router.delete("/admin/managed-nodes/{node_id}", status_code=202)
-async def delete_managed_node(
-    node_id: str, request: Request, ctx: AppContextDep
-) -> Any:
+def delete_managed_node(node_id: str, request: Request, ctx: AppContextDep) -> Any:
     require_admin_session(request, ctx.auth_store)
     try:
         with ctx.registry.dispatch_lock:
@@ -171,7 +171,7 @@ async def delete_managed_node(
 
 
 @router.post("/admin/managed-nodes/{node_id}/recover", status_code=202)
-async def recover_managed_node(
+def recover_managed_node(
     node_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -195,7 +195,7 @@ async def recover_managed_node(
 
 
 @router.delete("/admin/managed-nodes/{node_id}/record", status_code=204)
-async def permanently_delete_managed_node(
+def permanently_delete_managed_node(
     node_id: str, request: Request, ctx: AppContextDep
 ) -> Response:
     require_admin_session(request, ctx.auth_store)
@@ -216,7 +216,7 @@ async def permanently_delete_managed_node(
 
 
 @router.get("/admin/managed-nodes/{node_id}/attempts")
-async def list_managed_node_attempts(
+def list_managed_node_attempts(
     node_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -226,12 +226,12 @@ async def list_managed_node_attempts(
 
 
 @router.post("/admin/managed-nodes/{node_id}/attempts", status_code=201)
-async def create_managed_node_attempt(
-    node_id: str, request: Request, ctx: AppContextDep
+def create_managed_node_attempt(
+    node_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
-        body = await json_body(request)
+        body = _request_body
         if body.get("replaceActive") is True:
             active = ctx.managed_node_store.active_attempt(node_id)
             if active:
@@ -246,14 +246,17 @@ async def create_managed_node_attempt(
 
 
 @router.patch("/admin/managed-nodes/{node_id}/attempts/{attempt_id}")
-async def update_managed_node_attempt(
-    node_id: str, attempt_id: str, request: Request, ctx: AppContextDep
+def update_managed_node_attempt(
+    node_id: str,
+    attempt_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
-        attempt = ctx.managed_node_store.update_attempt(
-            attempt_id, await json_body(request)
-        )
+        attempt = ctx.managed_node_store.update_attempt(attempt_id, _request_body)
         if attempt["managedNodeId"] != node_id:
             raise KeyError(attempt_id)
         return {"attempt": attempt}
@@ -262,7 +265,7 @@ async def update_managed_node_attempt(
 
 
 @router.delete("/admin/managed-nodes/{node_id}/runtime", status_code=204)
-async def retire_managed_node_runtime(
+def retire_managed_node_runtime(
     node_id: str, request: Request, ctx: AppContextDep
 ) -> Response:
     require_admin_session(request, ctx.auth_store)
@@ -299,12 +302,14 @@ def _fence_active_runtime(ctx: AppContext, node: dict[str, Any]) -> None:
 
 
 @router.post("/daemon-node-enrollments", status_code=201)
-async def enroll_managed_daemon(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def enroll_managed_daemon(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     authorization = request.headers.get("authorization") or ""
     scheme, _, credential = authorization.partition(" ")
     if scheme.lower() != "enrollment" or not credential:
         raise HTTPException(401, "Enrollment credential is required.")
-    body = await json_body(request)
+    body = _request_body
     managed_node: dict[str, Any] | None = None
     attempt: dict[str, Any] | None = None
     try:

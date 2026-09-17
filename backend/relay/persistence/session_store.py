@@ -27,6 +27,7 @@ from sqlalchemy import (
     func,
     insert,
     inspect,
+    literal_column,
     or_,
     select,
     text,
@@ -1399,9 +1400,57 @@ class DatabaseSessionStore:
     def list_session_summaries(
         self, *, owner_employee_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
-        statement = select(self.sessions.c.snapshot, self.sessions.c.version).order_by(
-            self.sessions.c.updated_at.desc()
+        # Project JSON fields in SQL: completed run logs never cross the wire.
+        fields = (
+            "daemonNodeId",
+            "managedNodeId",
+            "workspacePath",
+            "ownerEmployeeId",
+            "ownerAgentId",
+            "teamId",
+            "projectId",
+            "workspaceLayout",
+            "workspaceSubpath",
+            "computerId",
+            "currentAgent",
+            "pendingDecision",
+            "archived",
+            "deletionRequestedAt",
+            "title",
+            "taskGoal",
+            "status",
+            "phase",
+            "createdAt",
+            "updatedAt",
         )
+        pg = self.engine.dialect.name == "postgresql"
+        runs = (
+            "sessions.snapshot->'agentRuns'"
+            if pg
+            else "json_extract(sessions.snapshot, '$.agentRuns')"
+        )
+        artifacts = (
+            "sessions.snapshot->'artifacts'"
+            if pg
+            else "json_extract(sessions.snapshot, '$.artifacts')"
+        )
+        elements = "jsonb_array_elements" if pg else "json_each"
+        array_length = "jsonb_array_length" if pg else "json_array_length"
+        value = lambda key: (
+            f"a.value->>'{key}'" if pg else f"json_extract(a.value, '$.{key}')"
+        )
+        statement = select(
+            self.sessions.c.id,
+            self.sessions.c.version,
+            *(self.sessions.c.snapshot[field].label(field) for field in fields),
+            literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"),
+            literal_column(
+                f"EXISTS (SELECT 1 FROM {elements}({runs}) a WHERE {value('status')} = 'running')"
+            ).label("hasRunningAgent"),
+            literal_column(
+                f"(SELECT COUNT(DISTINCT COALESCE(NULLIF({value('workspaceRelativePath')}, ''), NULLIF({value('path')}, ''), {value('id')})) FROM {elements}({artifacts}) a WHERE {value('kind')} = 'workspace_file')"
+            ).label("artifactCount"),
+        ).order_by(self.sessions.c.updated_at.desc(), self.sessions.c.id.desc())
         if owner_employee_id is not None:
             statement = statement.where(
                 self.sessions.c.owner_employee_id == owner_employee_id
@@ -1411,11 +1460,79 @@ class DatabaseSessionStore:
             rows = conn.execute(statement).mappings().all()
         return [
             {
-                **(row["snapshot"] or {}),
+                **{k: v for k, v in row.items() if k != "version" and v is not None},
                 "eventCount": int(row["version"] or 0),
             }
             for row in rows
         ]
+
+    def list_artifact_summaries(
+        self, *, owner_employee_id: str | None = None,
+        workspace_path: str | None = None, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        # Read the derived artifact array, including event-only/imported artifacts
+        # that have no content row in session_artifacts. Never load event histories
+        # or run logs. Rank regenerated files before applying the global limit.
+        pg = self.engine.dialect.name == "postgresql"
+        elements = (
+            "jsonb_array_elements(s.snapshot->'artifacts') WITH ORDINALITY AS a(value, ordinal)"
+            if pg
+            else "json_each(json_extract(s.snapshot, '$.artifacts')) AS a"
+        )
+        value = lambda key: (
+            f"a.value->>'{key}'" if pg else f"json_extract(a.value, '$.{key}')"
+        )
+        ordinal = "a.ordinal" if pg else "a.key"
+        filters = [f"{value('kind')} = 'workspace_file'"]
+        params = {"limit": max(1, limit)}
+        if owner_employee_id is not None:
+            filters.append("s.owner_employee_id = :owner")
+            params["owner"] = owner_employee_id
+        if workspace_path is not None:
+            filters.append("s.workspace_path = :workspace")
+            params["workspace"] = workspace_path
+        statement = text(f"""
+            SELECT * FROM (
+                SELECT a.value AS artifact, s.id AS session_id, s.title, s.task_goal,
+                       s.owner_employee_id, s.workspace_path, s.updated_at,
+                       {value("createdAt")} AS artifact_created_at,
+                       {value("id")} AS artifact_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY s.id, COALESCE(NULLIF({value("workspaceRelativePath")}, ''),
+                               NULLIF({value("path")}, ''), {value("id")})
+                           ORDER BY {value("createdAt")} DESC, {ordinal} DESC
+                       ) AS file_rank
+                FROM sessions s CROSS JOIN {elements}
+                WHERE {" AND ".join(filters)}
+            ) ranked WHERE file_rank = 1
+            ORDER BY artifact_created_at DESC, session_id DESC, artifact_id DESC LIMIT :limit
+        """)
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement, params).mappings().all()
+        result = []
+        for row in rows:
+            artifact = (
+                row["artifact"]
+                if isinstance(row["artifact"], dict)
+                else json.loads(row["artifact"])
+            )
+            updated = row["updated_at"]
+            result.append(
+                {
+                    **artifact,
+                    "sessionId": str(row["session_id"]),
+                    "sessionTitle": row["title"],
+                    "taskGoal": row["task_goal"],
+                    "ownerEmployeeId": str(row["owner_employee_id"])
+                    if row["owner_employee_id"]
+                    else None,
+                    "workspacePath": row["workspace_path"],
+                    "sessionUpdatedAt": _format_iso(
+                        _parse_iso(updated) if isinstance(updated, str) else updated
+                    ),
+                }
+            )
+        return result
 
     def list_token_usage(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:

@@ -16,6 +16,7 @@ from ..persistence.agent_placement_store import create_node_placement
 from ..services.computer_names import present_computer
 from .deps import AppContextDep
 from .helpers import (
+    JsonBodyDep,
     actor_can_access_sandbox,
     assignment_list,
     bearer_token,
@@ -73,8 +74,10 @@ def sandboxes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.post("/sandboxes", status_code=201)
-async def provision_sandbox(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    body = await json_body(request)
+def provision_sandbox(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    body = _request_body
     employee_id = string_field(body, "employeeId")
     if not employee_id:
         raise HTTPException(400, "employeeId is required.")
@@ -107,7 +110,7 @@ async def provision_sandbox(request: Request, ctx: AppContextDep) -> dict[str, A
 
 
 @router.get("/sandboxes/{sandbox_id}")
-async def get_sandbox(
+def get_sandbox(
     sandbox_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     sandbox = ctx.backend.get(sandbox_id)

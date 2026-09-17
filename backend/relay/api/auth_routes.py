@@ -15,7 +15,7 @@ from ..security.auth import (
 )
 from ..services.computer_limits import decorate_user_limits
 from .deps import AppContextDep
-from .helpers import json_body, string_field
+from .helpers import JsonBodyDep, string_field
 
 router = APIRouter()
 
@@ -36,12 +36,12 @@ def _consume_auth_attempt(request: Request, key: str) -> None:
 
 
 @router.get("/auth/status")
-async def auth_status(ctx: AppContextDep) -> dict[str, Any]:
+def auth_status(ctx: AppContextDep) -> dict[str, Any]:
     return {"requiresBootstrap": not ctx.auth_store.has_users()}
 
 
 @router.get("/auth/me")
-async def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     user = require_user_session(request, ctx.auth_store)
     return {
         "authenticated": True,
@@ -50,9 +50,11 @@ async def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.patch("/auth/preferences")
-async def update_auth_preferences(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def update_auth_preferences(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     user = require_user_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     theme = string_field(body, "theme") if "theme" in body else None
     language = string_field(body, "language") if "language" in body else None
     if theme is None and language is None:
@@ -72,8 +74,14 @@ async def update_auth_preferences(request: Request, ctx: AppContextDep) -> dict[
 
 
 @router.post("/auth/bootstrap")
-async def auth_bootstrap(request: Request, response: Response, ctx: AppContextDep) -> dict[str, Any]:
-    body = await json_body(request)
+def auth_bootstrap(
+    request: Request,
+    response: Response,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
+) -> dict[str, Any]:
+    body = _request_body
     rate_key = _auth_rate_key(request, "bootstrap")
     _consume_auth_attempt(request, rate_key)
     try:
@@ -94,8 +102,14 @@ async def auth_bootstrap(request: Request, response: Response, ctx: AppContextDe
 
 
 @router.post("/auth/login")
-async def auth_login(request: Request, response: Response, ctx: AppContextDep) -> dict[str, Any]:
-    body = await json_body(request)
+def auth_login(
+    request: Request,
+    response: Response,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
+) -> dict[str, Any]:
+    body = _request_body
     username = string_field(body, "username")
     rate_key = _auth_rate_key(request, "login", username)
     _consume_auth_attempt(request, rate_key)
@@ -112,7 +126,9 @@ async def auth_login(request: Request, response: Response, ctx: AppContextDep) -
 
 
 @router.post("/auth/logout")
-async def auth_logout(request: Request, response: Response, ctx: AppContextDep) -> dict[str, bool]:
+def auth_logout(
+    request: Request, response: Response, ctx: AppContextDep
+) -> dict[str, bool]:
     token = user_session_token_from_request(request)
     if token:
         ctx.auth_store.delete_session(token)
@@ -130,6 +146,6 @@ async def auth_logout(request: Request, response: Response, ctx: AppContextDep) 
 
 
 @router.get("/admin/version")
-async def control_panel_version(request: Request, ctx: AppContextDep) -> dict[str, str]:
+def control_panel_version(request: Request, ctx: AppContextDep) -> dict[str, str]:
     require_admin_session(request, ctx.auth_store)
     return {"version": request.app.state.control_panel_version}

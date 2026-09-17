@@ -16,7 +16,7 @@ from ..services.project_catalog import (
 )
 from ..services.project_runtime import project_runtime_node
 from .deps import AppContextDep
-from .helpers import json_body, request_actor
+from .helpers import JsonBodyDep, request_actor
 from .project_helpers import project_for_owner
 from .workspace_transport import (
     dispatch_workspace_command,
@@ -75,7 +75,7 @@ def _project_workspace_command(
 
 
 @router.get("/projects")
-async def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     return {
         "projects": ctx.project_store.list_projects(
@@ -85,9 +85,11 @@ async def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.post("/projects", status_code=201)
-async def create_project(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_project(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         payload = create_project_payload(
             actor["employeeId"],
@@ -103,7 +105,7 @@ async def create_project(request: Request, ctx: AppContextDep) -> dict[str, Any]
 
 
 @router.get("/projects/{project_id}")
-async def get_project(
+def get_project(
     project_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     return {"project": _readable_project(ctx, request, project_id)}
@@ -168,12 +170,12 @@ async def project_workspace_file(
 
 
 @router.patch("/projects/{project_id}")
-async def update_project(
-    project_id: str, request: Request, ctx: AppContextDep
+def update_project(
+    project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = project_for_owner(ctx, project_id, actor["employeeId"])
-    body = await json_body(request)
+    body = _request_body
     try:
         target_node_id = resolve_target_node_id(
             ctx.registry.monitor_nodes(), current["computerId"]
@@ -197,7 +199,7 @@ async def update_project(
 
 
 @router.delete("/projects/{project_id}")
-async def archive_project(
+def archive_project(
     project_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)

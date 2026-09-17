@@ -93,7 +93,7 @@ def owned_skill(ctx: AppContextDep, skill_id: str, employee_id: str) -> dict[str
 
 
 @router.get("/skills")
-async def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     agents = ctx.agent_store.list_agents(supervisor_employee_id=actor["employeeId"])
     counts: dict[str, int] = {}
@@ -135,7 +135,7 @@ async def create_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.get("/skills/{skill_id}")
-async def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     skill = visible_skill(ctx, skill_id, actor["employeeId"])
     return {
@@ -243,7 +243,7 @@ def revision_for_channel(skill: dict[str, Any], channel: str) -> str:
 
 
 @router.get("/skills/{skill_id}/files")
-async def read_skill_file(
+def read_skill_file(
     skill_id: str,
     request: Request,
     ctx: AppContextDep,
@@ -287,7 +287,7 @@ async def read_skill_file(
 
 
 @router.get("/skills/{skill_id}/export")
-async def export_skill(
+def export_skill(
     skill_id: str,
     request: Request,
     ctx: AppContextDep,
@@ -328,7 +328,7 @@ async def update_skill(skill_id: str, request: Request, ctx: AppContextDep) -> d
 
 
 @router.delete("/skills/{skill_id}", status_code=204)
-async def delete_skill(skill_id: str, request: Request, ctx: AppContextDep) -> Response:
+def delete_skill(skill_id: str, request: Request, ctx: AppContextDep) -> Response:
     actor = request_actor(request, ctx.auth_store)
     owned_skill(ctx, skill_id, actor["employeeId"])
     ctx.skill_store.delete_skill(skill_id)
@@ -379,7 +379,7 @@ async def assign_skill(
 
 
 @router.delete("/skills/{skill_id}/assignments/{assignment_id}", status_code=204)
-async def revoke_assignment(
+def revoke_assignment(
     skill_id: str, assignment_id: str, request: Request, ctx: AppContextDep
 ) -> Response:
     actor = request_actor(request, ctx.auth_store)
@@ -413,7 +413,9 @@ async def grant_skill(skill_id: str, request: Request, ctx: AppContextDep) -> di
 
 
 @router.delete("/skills/{skill_id}/grants/{agent_id}", status_code=204)
-async def revoke_skill(skill_id: str, agent_id: str, request: Request, ctx: AppContextDep) -> Response:
+def revoke_skill(
+    skill_id: str, agent_id: str, request: Request, ctx: AppContextDep
+) -> Response:
     actor = request_actor(request, ctx.auth_store)
     try:
         skill_grants.revoke(ctx, skill_id, agent_id, actor["employeeId"])

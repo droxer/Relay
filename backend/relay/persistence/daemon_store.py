@@ -582,6 +582,13 @@ class LocalDaemonStore:
                 events.append(event)
         return events
 
+    def get_commands(self, command_ids: set[str]) -> dict[str, dict[str, Any]]:
+        return {
+            key: command
+            for key in command_ids
+            if (command := self.get_command(key)) is not None
+        }
+
     def get_command(self, command_id: str) -> dict[str, Any] | None:
         with self._lock:
             return self._get_command(command_id)
@@ -905,13 +912,16 @@ class LocalDaemonStore:
                     )
                 )
 
-    def list_active_runs(self, node_id: str | None = None) -> list[dict[str, Any]]:
+    def list_active_runs(
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None
+    ) -> list[dict[str, Any]]:
         runs = [_read_json(path) for path in self.runs_dir.glob("*.json")]
         return [
             run
             for run in runs
             if run.get("status") == "running"
             and (node_id is None or run.get("nodeId") == node_id)
+            and (session_ids is None or run.get("sessionId") in session_ids)
         ]
 
     def create_run_request(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -986,7 +996,7 @@ class LocalDaemonStore:
         return _read_json(path) if path.exists() else None
 
     def list_active_run_requests(
-        self, node_id: str | None = None
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None
     ) -> list[dict[str, Any]]:
         requests = [_read_json(path) for path in self.run_requests_dir.glob("*.json")]
         return [
@@ -994,6 +1004,7 @@ class LocalDaemonStore:
             for request in requests
             if request.get("status") in ACTIVE_RUN_REQUEST_STATUSES
             and (node_id is None or request.get("nodeId") == node_id)
+            and (session_ids is None or request.get("sessionId") in session_ids)
         ]
 
     def active_run_request_for_session(
@@ -2090,6 +2101,19 @@ class DatabaseDaemonStore:
         return [command["_terminalEvent"] for command in commands
                 if isinstance(command.get("_terminalEvent"), dict)]
 
+    def get_commands(self, command_ids: set[str]) -> dict[str, dict[str, Any]]:
+        if not command_ids:
+            return {}
+        with store_transaction(self.engine) as conn:
+            rows = (
+                conn.execute(
+                    select(self.commands).where(self.commands.c.id.in_(command_ids))
+                )
+                .mappings()
+                .all()
+            )
+        return {str(row["id"]): row_to_command(row) for row in rows}
+
     def get_command(self, command_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
@@ -2606,10 +2630,14 @@ class DatabaseDaemonStore:
                     ),
                 )
 
-    def list_active_runs(self, node_id: str | None = None) -> list[dict[str, Any]]:
+    def list_active_runs(
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None
+    ) -> list[dict[str, Any]]:
         statement = select(self.runs).where(self.runs.c.status == "running")
         if node_id is not None:
             statement = statement.where(self.runs.c.node_id == node_id)
+        if session_ids is not None:
+            statement = statement.where(self.runs.c.session_id.in_(session_ids))
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         return [row_to_run(row) for row in rows]
@@ -2733,13 +2761,15 @@ class DatabaseDaemonStore:
         return row_to_run_request(row) if row else None
 
     def list_active_run_requests(
-        self, node_id: str | None = None
+        self, node_id: str | None = None, *, session_ids: set[str] | None = None
     ) -> list[dict[str, Any]]:
         statement = select(self.run_requests).where(
             self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)
         )
         if node_id is not None:
             statement = statement.where(self.run_requests.c.node_id == node_id)
+        if session_ids is not None:
+            statement = statement.where(self.run_requests.c.session_id.in_(session_ids))
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         return [row_to_run_request(row) for row in rows]
@@ -2750,7 +2780,9 @@ class DatabaseDaemonStore:
         return next(
             (
                 request
-                for request in self.list_active_run_requests(node_id)
+                for request in self.list_active_run_requests(
+                    node_id, session_ids={session_id}
+                )
                 if request["sessionId"] == session_id
             ),
             None,
@@ -2762,7 +2794,7 @@ class DatabaseDaemonStore:
         return next(
             (
                 request
-                for request in self.list_active_run_requests()
+                for request in self.list_active_run_requests(session_ids={session_id})
                 if request["sessionId"] == session_id
             ),
             None,

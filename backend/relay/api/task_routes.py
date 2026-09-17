@@ -17,6 +17,7 @@ from ..persistence.stores import (
 )
 from ..persistence.task_lifecycle import validate_manual_transition, wip_limit
 from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
+from ..services.produced_files import file_currency, listing_directories, live_status
 from ..services.task_deletion import (
     TaskDeletionError,
     task_has_active_linked_session,
@@ -31,10 +32,9 @@ from ..services.task_dispatch import (
 from ..services.task_dispatch import (
     start_routine_occurrence_on_ready_node as dispatch_routine_occurrence,
 )
-from ..services.produced_files import file_currency, listing_directories, live_status
 from ..services.task_workspace import (
-    task_workspace_subpath,
     recorded_task_workspace,
+    task_workspace_subpath,
 )
 from ..services.team_dispatch import (
     TeamDispatchError,
@@ -50,6 +50,7 @@ from ..tasks import (
 )
 from .deps import AppContext, AppContextDep
 from .helpers import (
+    JsonBodyDep,
     actor_can_access_record,
     artifact_index_item,
     assignee_employee_id_for_task,
@@ -362,19 +363,19 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             limit=limit,
         )
     else:
-        accessible = [
-            task
-            for task in ctx.task_store.list_tasks()
-            if actor_can_access_record(actor, task)
-        ]
-        tasks = accessible if limit is None else accessible[:limit]
+        tasks = ctx.task_store.list_tasks(
+            employee_id=None if actor["isAdmin"] else actor["employeeId"],
+            limit=limit,
+        )
     return {"tasks": tasks, "flowPolicy": {"wipLimit": wip_limit(), "scope": "employee"}}
 
 
 @router.post("/tasks", status_code=201)
-async def create_task(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_task(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     title = string_field(body, "title") or string_field(body, "taskGoal")
     if not title:
         raise HTTPException(400, "title is required.")
@@ -519,20 +520,18 @@ async def create_task(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.get("/tasks/{task_id}")
-async def get_task(
-    task_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     return get_task_for_actor(ctx.task_store, task_id, actor)
 
 
 @router.patch("/tasks/{task_id}")
-async def update_task(
-    task_id: str, request: Request, ctx: AppContextDep
+def update_task(
+    task_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
-    body = await json_body(request)
+    body = _request_body
     title = string_field(body, "title") or None
     description = (
         body.get("description") if isinstance(body.get("description"), str) else None
@@ -761,9 +760,7 @@ async def update_task(
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(
-    task_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     try:
         result = delete_task_record(ctx, task_id, actor)
@@ -784,14 +781,14 @@ async def delete_task(
 
 
 @router.put("/tasks/{task_id}/assignment")
-async def assign_task(
-    task_id: str, request: Request, ctx: AppContextDep
+def assign_task(
+    task_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     if task_has_active_linked_session(ctx.session_store, current):
         raise HTTPException(409, "task_execution_active")
-    body = await json_body(request)
+    body = _request_body
     assigned_agent_id = (
         string_field(body, "agentId") or string_field(body, "assignedAgentId") or None
     )
@@ -1116,7 +1113,7 @@ def occurrence_tasks(
 
 
 @router.get("/tasks/{task_id}/events")
-async def task_events(
+def task_events(
     task_id: str,
     request: Request,
     ctx: AppContextDep,
@@ -1182,7 +1179,7 @@ def newest_artifacts_by_file(
 
 
 @router.get("/tasks/{task_id}/artifacts")
-async def task_artifacts(
+def task_artifacts(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     """Generated files (documents, decks, spreadsheets, …) produced while working the task.
@@ -1425,7 +1422,7 @@ def _task_workspace_command(
 
 
 @router.get("/tasks/{task_id}/workspace/status")
-async def task_workspace_status(
+def task_workspace_status(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     """Small polling response; never dispatches a filesystem read just to show a wait."""
@@ -1571,7 +1568,7 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/tasks/{task_id}/runs")
-async def task_runs(
+def task_runs(
     task_id: str,
     request: Request,
     ctx: AppContextDep,
