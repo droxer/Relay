@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from starlette.requests import ClientDisconnect
 
+from ..core.deploy_config import public_backend_url
 from ..core.models import AGENT_NAMES
 from ..daemon_registry import (
     DaemonNodeRegistry,
@@ -191,7 +192,7 @@ def employee_record(auth_store: Any, employee_id: str) -> dict[str, Any] | None:
 
 
 def backend_base_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    return public_backend_url() or str(request.base_url).rstrip("/")
 
 
 def valid_employee_workspace_path(value: str | None) -> bool:
