@@ -437,13 +437,17 @@ function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefine
     if (!node || typeof IntersectionObserver === "undefined") return;
     observer.current = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setPages((current) => current + 1);
+        // A deep-linked selection can extend the mounted window beyond pages.
+        // Grow from that effective limit so every intersection reveals rows.
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setPages((current) => Math.max(current, limit / RAIL_PAGE_SIZE) + 1);
+        }
       },
       // Grow a screen early so scrolling never meets the end of the window.
       { root: node.closest(".conversation-list"), rootMargin: "0px 0px 600px 0px" },
     );
     observer.current.observe(node);
-  }, []);
+  }, [limit]);
   // The sentinel is keyed by the limit, so each growth mounts a fresh node and
   // the observer reports its initial intersection — a sentinel still in range
   // after a page lands grows the window again instead of stalling.
