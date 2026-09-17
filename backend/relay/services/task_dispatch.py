@@ -309,16 +309,17 @@ class TaskDispatcher:
         except ProjectDispatchError as error:
             if not self.record_pending:
                 raise
+            message = f"The project cannot execute this task ({error.code})."
             if error.permanent:
                 self.task = self.ctx.task_store.update_task(
-                    self.task["id"], {"status": "blocked"}
+                    self.task["id"], {"status": "blocked", "blockerReason": message}
                 )
             return _record_result(
                 self.ctx,
                 self.task["id"],
                 "rejected" if error.permanent else "queued",
                 code=error.code,
-                message=f"The project cannot execute this task ({error.code}).",
+                message=message,
             )
         except AgentRoutingError as error:
             if not self.record_pending:
@@ -345,20 +346,21 @@ class TaskDispatcher:
             if not self.record_pending:
                 raise
             self._mark_assigned_if_backlog()
+            message = (
+                f"The assigned team cannot execute this task ({error.code})."
+                if error.permanent
+                else TEAM_UNAVAILABLE_MESSAGE
+            )
             if error.permanent:
                 self.task = self.ctx.task_store.update_task(
-                    self.task["id"], {"status": "blocked"}
+                    self.task["id"], {"status": "blocked", "blockerReason": message}
                 )
             return _record_result(
                 self.ctx,
                 self.task["id"],
                 "rejected" if error.permanent else "queued",
                 code=error.code,
-                message=(
-                    f"The assigned team cannot execute this task ({error.code})."
-                    if error.permanent
-                    else TEAM_UNAVAILABLE_MESSAGE
-                ),
+                message=message,
             )
         except AgentRoutingError as error:
             if not self.record_pending:
@@ -459,7 +461,7 @@ class TaskDispatcher:
         message = str(error)
         if state == "rejected":
             self.task = self.ctx.task_store.update_task(
-                self.task["id"], {"status": "blocked"}
+                self.task["id"], {"status": "blocked", "blockerReason": message}
             )
         if state == "queued":
             capacity = ensure_managed_capacity_for_task(

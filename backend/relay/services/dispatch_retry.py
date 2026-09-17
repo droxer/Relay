@@ -79,14 +79,17 @@ def record_dispatch_retry(
         message=message,
     )
     if failure_count >= max_failures:
+        reason = (
+            f"Dispatch failed {failure_count} times in a row ({code}): {message}. "
+            "The task is blocked until retried manually."
+        )
         task_store.record_dispatch_outcome(
             task["id"],
             "rejected",
             code=DISPATCH_RETRY_EXHAUSTED_CODE,
-            message=(
-                f"Dispatch failed {failure_count} times in a row "
-                f"({code}); the task is blocked until retried manually."
-            ),
+            message=reason,
         )
-        updated = task_store.update_task(task["id"], {"status": "blocked"})
+        updated = task_store.update_task(
+            task["id"], {"status": "blocked", "blockerReason": reason}
+        )
     return updated
