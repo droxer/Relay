@@ -139,6 +139,13 @@
     height: var(--touch-target);
   }
 
+  /* The search box is a fixed-height frame around its input (backlog.css), so
+     the frame has to rise to the floor with it — or the 44px input spills
+     out of a 40px box — and it stays level with the Filters chip beside it. */
+  .backlog-filter-search-wrap {
+    height: var(--touch-target);
+  }
+
   /* Controls whose hit area has to grow sideways rather than square up. */
   .msg-turn-action {
     min-width: var(--touch-target);
@@ -184,6 +191,27 @@
     min-height: var(--control-h-xs);
     width: var(--control-h-xs);
     height: var(--control-h-xs);
+  }
+
+  /* The search field is not the target — its frame is, and the frame holds
+     the 44px floor (above). A 44px field inside that frame's 43px interior
+     spilled out past its hairline border. The selector restates the floor
+     rule's :not() chain only to outrank it; the rule it answers is at the top
+     of this block. */
+  .backlog-filter-search-wrap .backlog-filter-search:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
+    min-height: 0;
+  }
+
+  /* The copy control's fixed square cannot hold its word, and on touch it is
+     pinned visible over the snippet — so the label painted across the first
+     line of code. The glyph alone carries it; aria-label keeps the name. */
+  .md-fence-copy {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .md-fence-copy-label {
+    display: none;
   }
 
   /* The card action grid pins its slots on fine pointers; the boosted 44px

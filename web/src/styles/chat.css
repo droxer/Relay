@@ -130,7 +130,18 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
+  /* The trigger is capped at 40vw, which a phone makes narrower than this
+     sentence; without a shrinkable box the chevron was pushed out past the
+     trigger's border. The words give way, the mark and chevron do not. */
+  min-width: 0;
   font: var(--type-label-strong);
+}
+
+.chat-agent-select-unavailable-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Availability inside the picker list is a read-only fact on an

@@ -52,6 +52,10 @@ export function SortMenu<K extends string>({
   return (
     <FilterSelect
       className="list-sort-menu"
+      /* Always a neighbour of compact controls — the Filters chip, the admin
+         fleet chips, the layout toggle — so it takes their tier, not a form
+         field's. At the default size it stood 4px taller than the row. */
+      size="sm"
       name="list-sort"
       label={label}
       value={serializeSortParam(sort) ?? ""}

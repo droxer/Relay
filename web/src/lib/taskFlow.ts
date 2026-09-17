@@ -32,11 +32,14 @@ export function taskFlowMetrics(tasks: RelayTaskListItem[], now = Date.now()) {
     Math.max(0, (Date.parse(task.finishedAt!) - Date.parse(task.startedAt!)) / DAY),
   ).sort((a, b) => a - b);
   const sleIsEstimate = cycles.length < 20;
+  const startedAges = wip.filter((task) => task.startedAt).map((task) => (now - Date.parse(task.startedAt!)) / DAY);
   return {
     wip: wip.length,
     throughput: finished.length,
     averageCycleDays: cycles.length ? cycles.reduce((a, b) => a + b, 0) / cycles.length : null,
-    oldestAgeDays: Math.max(0, ...wip.filter((task) => task.startedAt).map((task) => (now - Date.parse(task.startedAt!)) / DAY)),
+    // null, not 0: with no started work there is no age to report, and "0.0d"
+    // read as work that had just begun.
+    oldestAgeDays: startedAges.length ? Math.max(0, ...startedAges) : null,
     sleDays: sleIsEstimate ? 8 : cycles[Math.ceil(cycles.length * 0.85) - 1],
     sleIsEstimate,
   };

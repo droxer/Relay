@@ -7,6 +7,7 @@ import {
   employeeEmptyStateTranslationKey,
   employeesByStatus,
   employeeSummaryStatus,
+  formatRelativeTime,
   EMPLOYEE_SUMMARY_STATUS_ORDER,
   nodesByStatus,
   NODE_STATUS_ORDER,
@@ -403,5 +404,25 @@ describe("nodesByStatus", () => {
     for (const status of grouped.map((group) => group.status)) {
       assert.ok(NODE_STATUS_ORDER.includes(status) || status === "quarantined");
     }
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const t = ((key: string) => key) as unknown as Parameters<typeof formatRelativeTime>[1];
+  const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+  const HOUR = 3_600_000;
+  const DAY = 24 * HOUR;
+
+  it("keeps hours for anything under a day", () => {
+    assert.equal(formatRelativeTime(ago(5 * HOUR), t), "5 hours ago");
+  });
+
+  // An agent created three months ago read "Created 2160 hours ago": the
+  // formatter had no unit above the hour.
+  it("rolls up to days, weeks, months and years", () => {
+    assert.equal(formatRelativeTime(ago(3 * DAY), t), "3 days ago");
+    assert.equal(formatRelativeTime(ago(14 * DAY), t), "2 weeks ago");
+    assert.equal(formatRelativeTime(ago(90 * DAY), t), "3 months ago");
+    assert.equal(formatRelativeTime(ago(800 * DAY), t), "2 years ago");
   });
 });

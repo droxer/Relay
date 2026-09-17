@@ -11,6 +11,7 @@ import {
 import { EmployeeAvatar } from "../../EmployeeAvatar";
 import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../../../types";
 import { AVATAR } from "../../icons";
+import { employeeHandleOf } from "../../../lib/employeeHandle";
 
 interface TopEmployeesProps {
   employees: EmployeeRecord[];
@@ -35,7 +36,9 @@ export function TopEmployees({ employees, nodes, ranked, error, className }: Top
       const employee = employeeMap.get(row.employeeId);
       return {
         id: row.employeeId,
-        displayName: employee?.displayName ?? row.employeeId,
+        // A ranked employee can have left the roster; the handle helper keeps
+        // their UUID off the screen either way.
+        displayName: employee?.displayName || employeeHandleOf(employee ?? { id: row.employeeId }),
         sessionCount: row.sessionCount,
         nodeCount: nodeCountByEmployee.get(row.employeeId) ?? 0,
         share: maxCount > 0 ? row.sessionCount / maxCount : 0,
@@ -57,7 +60,7 @@ export function TopEmployees({ employees, nodes, ranked, error, className }: Top
           {rows.map((row, index) => (
             <li key={row.id} className="adm-dash-top-row">
               <span className="adm-dash-top-rank tnum">{index + 1}</span>
-              <EmployeeAvatar employeeId={row.id} running={false} size={AVATAR.md} />
+              <EmployeeAvatar displayName={row.displayName} running={false} size={AVATAR.md} />
               <div className="adm-dash-top-meta">
                 <span className="adm-dash-top-name">{row.displayName}</span>
                 <span className="adm-dash-top-sub tnum">

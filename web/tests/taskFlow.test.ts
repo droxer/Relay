@@ -57,3 +57,9 @@ test("an admitted but not yet running execution stays in Ready", () => {
   assert.ok(admitted.startedAt);
   assert.equal(taskWorkflowStage(admitted), "assigned");
 });
+
+test("oldest WIP age is unknown, not zero, when no work in progress has started", () => {
+  const unstarted = { ...task("review"), id: "unstarted", startedAt: undefined };
+  assert.equal(taskFlowMetrics([], Date.parse("2026-09-12T00:00:00Z")).oldestAgeDays, null);
+  assert.equal(taskFlowMetrics([unstarted], Date.parse("2026-09-12T00:00:00Z")).oldestAgeDays, null);
+});

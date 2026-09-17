@@ -89,7 +89,10 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  min-height: var(--control-h-sm);
+  /* A height, not a floor: it shares a row with the Filters chip and the sort
+     menu, which are exactly --control-h-sm. As a min-height the padded input
+     plus the hairline border pushed the box to 40.5px, off its neighbours. */
+  height: var(--control-h-sm);
   padding: 0 var(--sp-3);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
@@ -106,8 +109,9 @@
   flex: 1;
   min-width: 0;
   border: 0;
+  align-self: stretch;
   background: transparent;
-  padding: var(--sp-2) 0;
+  padding: 0;
   color: var(--ink-1);
   font: var(--type-body);
 }

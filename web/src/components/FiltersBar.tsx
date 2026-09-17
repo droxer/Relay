@@ -115,6 +115,7 @@ export function FilterSelect<T extends string>({
   onValueChange,
   options,
   className,
+  size = "default",
 }: {
   name: string;
   label: string;
@@ -122,6 +123,8 @@ export function FilterSelect<T extends string>({
   onValueChange: (value: T) => void;
   options: readonly { value: T; label: string }[];
   className?: string;
+  /** `sm` when the select shares a row with the compact filter controls. */
+  size?: "sm" | "default";
 }) {
   return (
     <Select
@@ -136,7 +139,7 @@ export function FilterSelect<T extends string>({
         onValueChange(next as T);
       }}
     >
-      <SelectTrigger name={name} aria-label={label} className={className ?? "w-full"}>
+      <SelectTrigger name={name} aria-label={label} size={size} className={className ?? "w-full"}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
