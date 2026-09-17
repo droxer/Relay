@@ -64,7 +64,8 @@ from .persistence.agent_placement_store import (
 )
 from .persistence.agent_store import DatabaseAgentStore, LocalAgentStore
 from .persistence.org_settings_store import DatabaseOrgSettingsStore
-from .persistence.profile_image_store import LocalProfileImageStore
+from .persistence.profile_image_store import DatabaseProfileImageStore
+from .persistence.managed_node_store import DatabaseManagedNodeStore
 from .persistence.project_store import DatabaseProjectStore
 from .persistence.skill_store import DatabaseSkillStore
 from .persistence.skill_object_store import LocalSkillObjectStore
@@ -87,7 +88,6 @@ from .services.event_notifier import (
     session_event_key,
     workspace_response_key,
 )
-from .services.managed_nodes import LocalManagedNodeStore
 from .services.team_membership import reconcile_team_memberships
 from .services.workspace_query import WorkspaceQueryBroker
 from .tasks import TaskScheduler
@@ -229,14 +229,22 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     daemon_store = daemon_store_from_env(root_dir)
     chat_store = chat_store_from_env(root_dir)
     auth_store = auth_store_from_env(root_dir)
-    managed_node_store = LocalManagedNodeStore(root_dir)
+    managed_node_store = DatabaseManagedNodeStore(
+        session_store.engine.url.render_as_string(hide_password=False),
+        create_schema=session_store.engine.dialect.name == "sqlite",
+    )
     agent_store = agent_store_from_env(root_dir)
     team_store = team_store_from_env(root_dir)
     project_store = project_store_from_env(root_dir)
     skill_store = skill_store_from_env(root_dir)
     agent_placement_store = agent_placement_store_from_env(root_dir)
-    profile_image_store = LocalProfileImageStore(root_dir)
+    profile_image_store = DatabaseProfileImageStore(
+        session_store.engine.url.render_as_string(hide_password=False),
+        create_schema=session_store.engine.dialect.name == "sqlite",
+    )
     org_settings_store = org_settings_store_from_env(root_dir)
+    from .persistence.operational_import import require_operational_import
+    require_operational_import(root_dir, managed_node_store)
     control_plane_notifier = KeyedEventNotifier()
     notification_bridge = database_notification_bridge(
         session_store, control_plane_notifier

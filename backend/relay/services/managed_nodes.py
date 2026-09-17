@@ -191,7 +191,7 @@ class LocalManagedNodeStore:
         _validate_provider(payload)
         employee_id = _normalize_employee_id(payload.get("employeeId"))
         slot_lock = nullcontext() if _policy_slot_locked else self._policy_slot_lock()
-        with self._lock, slot_lock:
+        with slot_lock, self._mutation_scope():
             now = now_iso()
             node = {
                 "id": str(uuid4()),
@@ -233,7 +233,7 @@ class LocalManagedNodeStore:
         otherwise retain the oldest desired record and route the extras through
         the normal managed-node deletion lifecycle.
         """
-        with self._lock, self._policy_slot_lock():
+        with self._policy_slot_lock(), self._mutation_scope():
             groups: dict[tuple[str, tuple[Any, ...]], list[dict[str, Any]]] = {}
             for node in self.list_nodes():
                 if node.get("desiredState") != "running":
@@ -300,7 +300,7 @@ class LocalManagedNodeStore:
                 f"Unsupported managed capacity policy field(s): {', '.join(sorted(unknown))}."
             )
         requested_slot = _managed_node_policy_slot(policy)
-        with self._lock, self._policy_slot_lock():
+        with self._policy_slot_lock(), self._mutation_scope():
             candidates = [
                 node
                 for node in self.list_nodes()
@@ -329,17 +329,16 @@ class LocalManagedNodeStore:
             )
 
     def list_nodes(self, *, include_deleted: bool = False) -> list[dict[str, Any]]:
-        nodes = [_read_json(path) for path in self.nodes_dir.glob("*.json")]
+        nodes = self._records("nodes")
         if not include_deleted:
             nodes = [node for node in nodes if node.get("desiredState") != "deleted"]
         return sorted(nodes, key=lambda item: (item.get("createdAt") or "", item["id"]))
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:
-        path = self.nodes_dir / f"{safe_name(node_id)}.json"
-        return _read_json(path) if path.exists() else None
+        return self._read_record("nodes", node_id)
 
     def purge_node(self, node_id: str) -> dict[str, Any]:
-        with self._lock:
+        with self._mutation_scope(node_id):
             node = self.get_node(node_id)
             if not node:
                 raise KeyError(node_id)
@@ -359,12 +358,12 @@ class LocalManagedNodeStore:
                     "Managed node still has an active provisioning attempt."
                 )
             attempt_ids = {attempt["id"] for attempt in attempts}
-            for path in self.grants_dir.glob("*.json"):
-                if _read_json(path).get("attemptId") in attempt_ids:
-                    path.unlink()
+            for grant in self._records("grants", node_id=node_id):
+                if grant.get("attemptId") in attempt_ids:
+                    self._delete_record("grants", grant["id"])
             for attempt in attempts:
-                (self.attempts_dir / f"{safe_name(attempt['id'])}.json").unlink()
-            (self.nodes_dir / f"{safe_name(node_id)}.json").unlink()
+                self._delete_record("attempts", attempt["id"])
+            self._delete_record("nodes", node_id)
             return node
 
     def update_node(
@@ -375,7 +374,7 @@ class LocalManagedNodeStore:
         _policy_slot_locked: bool = False,
     ) -> dict[str, Any]:
         slot_lock = nullcontext() if _policy_slot_locked else self._policy_slot_lock()
-        with self._lock, slot_lock:
+        with slot_lock, self._mutation_scope(node_id):
             node = self.get_node(node_id)
             if not node:
                 raise KeyError(node_id)
@@ -442,7 +441,7 @@ class LocalManagedNodeStore:
             return updated
 
     def create_attempt(self, node_id: str, *, grant_ttl_seconds: int = 900) -> tuple[dict[str, Any], str]:
-        with self._lock:
+        with self._mutation_scope(node_id):
             node = self.get_node(node_id)
             if not node:
                 raise KeyError(node_id)
@@ -473,8 +472,8 @@ class LocalManagedNodeStore:
                 "expiresAt": expires_at,
                 "createdAt": now,
             }
-            _write_json(self.attempts_dir / f"{safe_name(attempt['id'])}.json", attempt)
-            _write_json(self.grants_dir / f"{safe_name(grant_id)}.json", grant)
+            self._write_record("attempts", attempt)
+            self._write_record("grants", grant)
             self._write_node({**node, "activeAttemptId": attempt["id"], "phase": "allocating", "updatedAt": now})
             self._prune_attempt_history(node_id)
             return attempt, f"{grant_id}.{secret}"
@@ -488,9 +487,7 @@ class LocalManagedNodeStore:
         ]
         stale = terminal[: max(len(terminal) - ATTEMPT_HISTORY_LIMIT, 0)]
         for attempt in stale:
-            (self.attempts_dir / f"{safe_name(attempt['id'])}.json").unlink(
-                missing_ok=True
-            )
+            self._delete_record("attempts", attempt["id"])
         self._sweep_grants({attempt["id"] for attempt in stale})
 
     def _sweep_grants(self, discarded_attempt_ids: set[str]) -> None:
@@ -500,18 +497,14 @@ class LocalManagedNodeStore:
         credential still reports why it was refused.
         """
         now = datetime.now(timezone.utc)
-        for path in self.grants_dir.glob("*.json"):
-            try:
-                grant = _read_json(path)
-            except (FileNotFoundError, ValueError):
-                continue
+        for grant in self._records("grants"):
             expires_at = grant.get("expiresAt")
             expired = bool(expires_at) and _parse_timestamp(expires_at) <= now
             if grant.get("attemptId") in discarded_attempt_ids or expired:
-                path.unlink(missing_ok=True)
+                self._delete_record("grants", grant["id"])
 
     def list_attempts(self, node_id: str) -> list[dict[str, Any]]:
-        attempts = [_read_json(path) for path in self.attempts_dir.glob("*.json")]
+        attempts = self._records("attempts", node_id=node_id)
         return sorted(
             (item for item in attempts if item.get("managedNodeId") == node_id),
             key=lambda item: (item.get("startedAt") or "", item["id"]),
@@ -521,7 +514,7 @@ class LocalManagedNodeStore:
         return next((item for item in reversed(self.list_attempts(node_id)) if item.get("status") not in TERMINAL_ATTEMPT_STATUSES), None)
 
     def update_attempt(self, attempt_id: str, patch: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._mutation_scope(attempt_id=attempt_id):
             attempt = self._get_attempt(attempt_id)
             if not attempt:
                 raise KeyError(attempt_id)
@@ -550,7 +543,7 @@ class LocalManagedNodeStore:
             updated = {**attempt, **patch, "updatedAt": now}
             if status in TERMINAL_ATTEMPT_STATUSES:
                 updated["finishedAt"] = attempt.get("finishedAt") or now
-            _write_json(self.attempts_dir / f"{safe_name(attempt_id)}.json", updated)
+            self._write_record("attempts", updated)
             if attempt["status"] in TERMINAL_ATTEMPT_STATUSES:
                 return updated
             node = self.get_node(attempt["managedNodeId"])
@@ -586,11 +579,10 @@ class LocalManagedNodeStore:
         grant_id, separator, secret = credential.partition(".")
         if not separator or not grant_id or not secret:
             raise PermissionError("Invalid enrollment credential.")
-        with self._lock:
-            path = self.grants_dir / f"{safe_name(grant_id)}.json"
-            if not path.exists():
+        with self._mutation_scope(grant_id=grant_id):
+            grant = self._read_record("grants", grant_id)
+            if not grant:
                 raise PermissionError("Invalid enrollment credential.")
-            grant = _read_json(path)
             if grant.get("revokedAt"):
                 raise PermissionError("Enrollment grant has been revoked.")
             if grant.get("consumedAt") and not grant.get("daemonNodeId"):
@@ -618,11 +610,10 @@ class LocalManagedNodeStore:
         grant_id, separator, secret = credential.partition(".")
         if not separator or not grant_id or not secret:
             raise PermissionError("Invalid enrollment credential.")
-        with self._lock:
-            path = self.grants_dir / f"{safe_name(grant_id)}.json"
-            if not path.exists():
+        with self._mutation_scope(grant_id=grant_id):
+            grant = self._read_record("grants", grant_id)
+            if not grant:
                 raise PermissionError("Invalid enrollment credential.")
-            grant = _read_json(path)
             if not hmac.compare_digest(
                 grant["secretHash"], _secret_hash(secret)
             ):
@@ -635,8 +626,8 @@ class LocalManagedNodeStore:
                 raise PermissionError(
                     "Enrollment grant belongs to a different daemon runtime."
                 )
-            _write_json(
-                path,
+            self._write_record(
+                "grants",
                 {
                     **grant,
                     "daemonNodeId": daemon_node_id,
@@ -645,7 +636,7 @@ class LocalManagedNodeStore:
             )
 
     def complete_enrollment(self, node_id: str, attempt_id: str, daemon_node_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
-        with self._lock:
+        with self._mutation_scope(node_id):
             attempt = self.update_attempt(attempt_id, {"status": "succeeded"})
             node = self.get_node(node_id)
             if not node:
@@ -661,9 +652,13 @@ class LocalManagedNodeStore:
             return updated, attempt
 
     def mark_ready(self, daemon_node_id: str) -> dict[str, Any] | None:
-        with self._lock:
-            node = next((item for item in self.list_nodes() if item.get("activeDaemonNodeId") == daemon_node_id), None)
-            if not node or node.get("desiredState") != "running":
+        candidate = next((item for item in self.list_nodes() if item.get("activeDaemonNodeId") == daemon_node_id), None)
+        if not candidate:
+            return None
+        node_id = candidate["id"]
+        with self._mutation_scope(node_id):
+            node = self.get_node(node_id)
+            if not node or node.get("desiredState") != "running" or node.get("activeDaemonNodeId") != daemon_node_id:
                 return None
             current_attempt = next((
                 attempt for attempt in reversed(self.list_attempts(node["id"]))
@@ -677,8 +672,30 @@ class LocalManagedNodeStore:
             return updated
 
     def _get_attempt(self, attempt_id: str) -> dict[str, Any] | None:
-        path = self.attempts_dir / f"{safe_name(attempt_id)}.json"
-        return _read_json(path) if path.exists() else None
+        return self._read_record("attempts", attempt_id)
 
     def _write_node(self, node: dict[str, Any]) -> None:
-        _write_json(self.nodes_dir / f"{safe_name(node['id'])}.json", node)
+        self._write_record("nodes", node)
+
+    @contextmanager
+    def _mutation_scope(self, node_id: str | None = None, *, attempt_id: str | None = None, grant_id: str | None = None) -> Iterator[None]:
+        with self._lock:
+            yield
+
+    def _record_path(self, kind: str, record_id: str) -> Path:
+        directory = {"nodes": self.nodes_dir, "attempts": self.attempts_dir, "grants": self.grants_dir}[kind]
+        return directory / f"{safe_name(record_id)}.json"
+
+    def _read_record(self, kind: str, record_id: str) -> dict[str, Any] | None:
+        path = self._record_path(kind, record_id)
+        return _read_json(path) if path.exists() else None
+
+    def _write_record(self, kind: str, record: dict[str, Any]) -> None:
+        _write_json(self._record_path(kind, record["id"]), record)
+
+    def _delete_record(self, kind: str, record_id: str) -> None:
+        self._record_path(kind, record_id).unlink(missing_ok=True)
+
+    def _records(self, kind: str, *, node_id: str | None = None) -> list[dict[str, Any]]:
+        directory = {"nodes": self.nodes_dir, "attempts": self.attempts_dir, "grants": self.grants_dir}[kind]
+        return [_read_json(path) for path in directory.glob("*.json")]

@@ -58,6 +58,7 @@ def main(argv: list[str] | None = None) -> None:
             "relay",
             "serve",
             "migrate-local-sessions",
+            "migrate-local-operational-state",
             "rehearse-employee-handles",
         ],
     )
@@ -67,6 +68,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     setup_logging()
+    if args.command == "migrate-local-operational-state":
+        from .persistence.operational_import import migrate_local_operational_state
+        if not args.data_dir:
+            parser.error("migrate-local-operational-state requires --data-dir")
+        report = migrate_local_operational_state(args.data_dir,
+            database_url_from_env(setting="migrate-local-operational-state"), dry_run=args.dry_run)
+        print(json.dumps(report, indent=2))
+        return
     if args.command == "migrate-local-sessions":
         if not args.data_dir:
             parser.error("migrate-local-sessions requires --data-dir")

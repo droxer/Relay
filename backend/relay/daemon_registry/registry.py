@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from threading import RLock
+from threading import Lock, RLock
 from typing import Any
 
 from loguru import logger
@@ -443,6 +443,7 @@ class DaemonNodeRegistry:
             ]
             | None
         ) = None
+        self._recovery_lock = Lock()
         self._last_reap_at = 0.0
         self._last_prune_at = 0.0
         self._last_seen_persisted_at: dict[str, float] = {}
@@ -815,7 +816,6 @@ class DaemonNodeRegistry:
 
     def monitor_nodes(self) -> list[dict[str, Any]]:
         self._refresh_persisted_liveness()
-        self.reap_stale_runs(force=False)
         active_runs_by_node = self._active_runs_by_node()
         queued_counts = self.daemon_store.queued_command_counts()
         nodes = []
@@ -2467,8 +2467,14 @@ class DaemonNodeRegistry:
             0.001, self.liveness_timeout_ms / 1000
         ):
             return
-        with self.dispatch_lock:
+        # Recovery never holds the fleet-wide dispatch lock. Individual
+        # transitions retain their own admission locks and durable claims.
+        if not self._recovery_lock.acquire(blocking=False):
+            return
+        try:
             self._reap_stale_runs_unlocked(force=force)
+        finally:
+            self._recovery_lock.release()
 
     def _reap_orphaned_runs_unlocked(self) -> None:
         """Fail individual run records on retired or deleted nodes.
@@ -2480,7 +2486,9 @@ class DaemonNodeRegistry:
         runs as failed so the deletion can proceed.
         """
         orphaned: list[dict[str, Any]] = []
-        for run in self.daemon_store.list_active_runs():
+        runs = self.daemon_store.list_active_runs(limit=100, after_id=getattr(self, "_orphan_after_id", None))
+        self._orphan_after_id = runs[-1]["runId"] if len(runs) == 100 else None
+        for run in runs:
             node = self.sandboxes.get(run["nodeId"])
             if node and not node.get("retiredAt"):
                 continue
@@ -2491,7 +2499,7 @@ class DaemonNodeRegistry:
                 continue
             command = self.daemon_store.get_command(command_id)
             if command and command.get("status") == "dispatched":
-                self._cancel_active_run_unlocked(run["nodeId"], run["sessionId"], "Runtime node retired; waiting for execution to stop.")
+                self.cancel_active_run(run["nodeId"], run["sessionId"], "Runtime node retired; waiting for execution to stop.")
                 continue
             try:
                 self.daemon_store.mark_command_failed(
@@ -2529,10 +2537,11 @@ class DaemonNodeRegistry:
         self._last_reap_at = monotonic_now
         self._maybe_prune_terminal_records(monotonic_now)
         self._reap_orphaned_runs_unlocked()
-        requests = self.daemon_store.list_active_run_requests()
-        offset = getattr(self, "_recovery_offset", 0) % max(1, len(requests))
-        batch = (requests[offset:] + requests[:offset])[:100]
-        self._recovery_offset = offset + len(batch)
+        if hasattr(self.daemon_store, "claim_recovery_requests"):
+            batch = self.daemon_store.claim_recovery_requests(limit=100)
+        else:
+            batch = self.daemon_store.list_active_run_requests(limit=100, after_id=getattr(self, "_recovery_after_id", None))
+            self._recovery_after_id = batch[-1]["id"] if len(batch) == 100 else None
         for request in batch:
             try:
                 if request.get("status") == "prepared":
@@ -2636,7 +2645,7 @@ class DaemonNodeRegistry:
                 if request.get("status") == "running" and (request.get("state") or {}).get("_relay_stop_command_id"):
                     # Replay the durable intent if the coordinator died before
                     # publishing its stable-id cancel command.
-                    self._cancel_active_run_unlocked(
+                    self.cancel_active_run(
                         request["nodeId"], request["sessionId"], request.get("error") or "Run stopped."
                     )
                 session = self.store.get_session(request["sessionId"])
