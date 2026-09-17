@@ -1145,7 +1145,7 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
         assert result.dispatched == 1
         updated = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert updated.status_code == 200
-        assert updated.json()["status"] == "running"
+        assert updated.json()["status"] == "assigned"
         assert updated.json()["linkedSessionIds"]
 
         commands = client.get(

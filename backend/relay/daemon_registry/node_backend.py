@@ -471,6 +471,15 @@ class ServerDaemonNodeBackend:
         binding = recorded_task_workspace(
             task, self.registry.store, self.registry.monitor_nodes()
         )
+        if binding and binding.get("unbound"):
+            binding = {
+                **{key: value for key, value in binding.items() if key != "unbound"},
+                "computerId": computer_id(node),
+                **(
+                    {"workspaceRoot": node["workspacePath"]}
+                    if node.get("workspacePath") else {}
+                ),
+            }
         # Project identity is supplied only by the authorized project dispatch path.
         project = None
         if request.get("projectId") and request.get("workspaceLayout") == "project":

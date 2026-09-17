@@ -49,11 +49,22 @@ def recorded_task_workspace(
             identity = f"managed:{session['managedNodeId']}"
         if not identity and node_id in by_id:
             identity = computer_id(by_id[node_id])
+        # A thread created with the task has not necessarily been admitted yet.
+        # It has no files on a Computer to recover until its first execution.
+        unbound = not (
+            identity
+            or node_id
+            or task.get("startedAt")
+            or task.get("executionOwner")
+            or session.get("agentRuns")
+            or session.get("collaborationRounds")
+        )
         return {
             "computerId": identity or f"node:{node_id}",
             "layout": layout,
             "subpath": session.get("workspaceSubpath"),
             "sessionId": session_id,
+            **({"unbound": True} if unbound else {}),
         }
     return None
 
@@ -62,7 +73,7 @@ def task_workspace_nodes(
     task: dict[str, Any], nodes: list[dict[str, Any]], session_store: Any | None = None
 ) -> list[dict[str, Any]]:
     binding = recorded_task_workspace(task, session_store, nodes)
-    if not binding:
+    if not binding or binding.get("unbound"):
         return nodes
     return [node for node in nodes if computer_id(node) == binding["computerId"]]
 
@@ -77,7 +88,9 @@ def resolve_task_workspace(
     binding = recorded_task_workspace(task, session_store, [node] if node else [])
     capabilities = (node or {}).get("capabilities") or []
     if binding:
-        if not node or computer_id(node) != binding["computerId"]:
+        if not node or (
+            not binding.get("unbound") and computer_id(node) != binding["computerId"]
+        ):
             raise ValueError(
                 "workspace_unavailable: this task's files are on another Computer."
             )

@@ -23,6 +23,7 @@ from ..persistence.protocols import TaskDispatchAssignment
 from ..persistence.stores import valid_agent
 from ..persistence.task_store import (
     compact_task_writes,
+    dispatch_claim_active,
     dispatch_retry_due,
     routine_due_sort_key,
     task_claim_sort_key,
@@ -298,6 +299,16 @@ class TaskScheduler:
         for candidate in self._dispatchable_tasks():
             if attempts >= self.max_dispatches_per_tick:
                 break
+            if not dispatch_retry_due(candidate):
+                skipped += 1
+                continue
+            # Admitted work stays assigned until the daemon starts executing.
+            # Do not re-route it, block it, or enqueue another execution.
+            if dispatch_claim_active(candidate) or (
+                self.registry.daemon_store.active_run_request_for_task(candidate["id"])
+            ):
+                skipped += 1
+                continue
             task = self._materialize_legacy_assignment(candidate) or candidate
             if (
                 valid_agent(task.get("assignedAgent"))
@@ -316,9 +327,6 @@ class TaskScheduler:
                 or task.get("assignedTeamId")
                 or task.get("projectId")
             ):
-                continue
-            if not dispatch_retry_due(task):
-                skipped += 1
                 continue
             if self._continuation_refused(task):
                 skipped += 1
@@ -406,29 +414,35 @@ class TaskScheduler:
                 node = self.registry.get(assignments[0]["daemonNodeId"])
             except ProjectDispatchError as error:
                 state = "rejected" if error.permanent else "queued"
+                message = f"The project cannot execute this task ({error.code})."
                 self._record_dispatch_deferred(
                     task,
                     error.code,
-                    f"The project cannot execute this task ({error.code}).",
+                    message,
                     state=state,
                 )
                 if error.permanent:
-                    self.task_store.update_task(task["id"], {"status": "blocked"})
+                    self.task_store.update_task(
+                        task["id"], {"status": "blocked", "blockerReason": message}
+                    )
                 skipped += 1
                 continue
             except TeamDispatchError as error:
+                message = (
+                    f"The assigned team cannot execute this task ({error.code})."
+                    if error.permanent
+                    else TEAM_UNAVAILABLE_MESSAGE
+                )
                 self._record_dispatch_deferred(
                     task,
                     error.code,
-                    (
-                        f"The assigned team cannot execute this task ({error.code})."
-                        if error.permanent
-                        else TEAM_UNAVAILABLE_MESSAGE
-                    ),
+                    message,
                     state="rejected" if error.permanent else "queued",
                 )
                 if error.permanent:
-                    self.task_store.update_task(task["id"], {"status": "blocked"})
+                    self.task_store.update_task(
+                        task["id"], {"status": "blocked", "blockerReason": message}
+                    )
                 skipped += 1
                 continue
             except AgentRoutingError as error:
@@ -439,7 +453,9 @@ class TaskScheduler:
                     task, dispatch_reason_code(error.code), str(error), state=state
                 )
                 if error.code in PERMANENT_DISPATCH_CODES:
-                    self.task_store.update_task(task["id"], {"status": "blocked"})
+                    self.task_store.update_task(
+                        task["id"], {"status": "blocked", "blockerReason": str(error)}
+                    )
                     skipped += 1
                     continue
                 node = None
@@ -667,14 +683,13 @@ class TaskScheduler:
             if current is None:
                 return True
             task = current
-            self.task_store.update_task(task["id"], {"status": "running"})
             self.task_store.clear_dispatch_retry(task["id"])
             if claim_id:
                 self.task_store.release_dispatch_claim(task["id"], claim_id)
             self.task_store.record_dispatch_outcome(task["id"], "started")
             self.task_store.record_activity(
                 task["id"],
-                f"Scheduled dispatch started by {agent}.",
+                f"Scheduled dispatch to {agent}; waiting for agent execution.",
                 {"agent": agent, "sessionId": session["id"]},
             )
             logger.info(

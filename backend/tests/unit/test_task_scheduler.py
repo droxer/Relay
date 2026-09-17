@@ -112,7 +112,7 @@ def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_retur
 
             assert result.dispatched == 1
             updated = task_store.get_task(task["id"])
-            assert updated["status"] == ("done" if completed_before_return else "running")
+            assert updated["status"] == ("done" if completed_before_return else "assigned")
             assert updated["linkedSessionIds"]
             [command] = registry.take_commands("sbx_alice", "node_token")
             assert command["type"] == "run.start"
@@ -220,7 +220,7 @@ def test_scheduler_dispatches_when_employee_owns_multiple_computers() -> None:
             result = await scheduler.tick()
 
             assert result.dispatched == 1
-            assert task_store.get_task(task["id"])["status"] == "running"
+            assert task_store.get_task(task["id"])["status"] == "assigned"
             commands = [
                 command
                 for suffix in ("one", "two")
@@ -552,7 +552,7 @@ def test_scheduler_promotes_due_routine_and_advances_next_run() -> None:
             assert occurrence["priority"] == "high"
             assert occurrence["dueDate"] == "2026-06-25"
             assert occurrence["isRoutine"] is False
-            assert occurrence["status"] == "running"
+            assert occurrence["status"] == "assigned"
             assert occurrence["linkedSessionIds"]
 
     asyncio.run(run_flow())
@@ -609,7 +609,7 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
             # The node has one exclusive slot, so only the high-priority task
             # runs even though the low-priority one was touched more recently.
             assert result.dispatched == 1
-            assert task_store.get_task(high["id"])["status"] == "running"
+            assert task_store.get_task(high["id"])["status"] == "assigned"
             assert task_store.get_task(low["id"])["status"] == "assigned"
 
     asyncio.run(run_flow())
@@ -1254,7 +1254,7 @@ def test_scheduler_routes_assignment_through_task_assignee() -> None:
             assert result.promoted == 0
             assert result.skipped == 0
             updated = task_store.get_task(delegated["id"])
-            assert updated["status"] == "running"
+            assert updated["status"] == "assigned"
             [command] = registry.take_commands("sbx_alice", "node_token")
             assert command["logicalAgentId"] == agent["id"]
 
@@ -1347,7 +1347,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             [lead_command] = registry.take_commands("sbx_alice", "node_token")
             assert lead_command["logicalAgentId"] == lead["id"]
             assert lead_command["delivery"]["type"] == "assignment-attempt"
-            assert task_store.get_task(first["id"])["status"] == "running"
+            assert task_store.get_task(first["id"])["status"] == "assigned"
             [session_id] = task_store.get_task(first["id"])["linkedSessionIds"]
             [manifest] = registry.store.get_session(session_id)["collaborationRounds"]
             assert manifest["teamSnapshot"]["teamId"] == team["id"]
