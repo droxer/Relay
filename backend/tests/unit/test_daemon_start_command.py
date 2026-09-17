@@ -86,3 +86,16 @@ def test_token_does_not_remain_in_calling_shell(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.endswith("parent-token:unset")
+
+
+def test_public_domain_overrides_internal_request_for_command_and_env(monkeypatch):
+    from relay.api.helpers import daemon_start_env
+
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com:8443/")
+    request = Request({"type": "http", "scheme": "http", "server": ("backend.internal", 8790), "path": "/", "root_path": "", "headers": [(b"x-forwarded-host", b"attacker.example"), (b"x-forwarded-proto", b"http")]})
+    node = {"id": "node-test"}
+    assert daemon_start_env(request, node)["RELAY_BACKEND_URL"] == "https://api.example.com:8443"
+    generated = daemon_start_command(request, node)
+    assert "--backend-url https://api.example.com:8443" in generated
+    assert "backend.internal" not in generated
+    assert "attacker.example" not in generated

@@ -4323,3 +4323,29 @@ def test_deleted_computer_can_be_enrolled_again(monkeypatch) -> None:
 
         assert registered.status_code == 200
         assert [item["id"] for item in client.get("/api/v1/admin/daemon-nodes").json()["nodes"]] == [node["id"]]
+
+
+def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root), base_url="http://backend.internal:8790")
+        _bootstrap_admin(client)
+        _enroll_employee(client, "alice")
+        enrolled = client.post(
+            "/api/v1/daemon-node-enrollments/local",
+            json={"workspacePath": "/Users/alice/project"},
+        )
+        assert enrolled.status_code == 201
+        node_id = enrolled.json()["node"]["id"]
+        responses = [
+            enrolled,
+            client.get(f"/api/v1/daemon-nodes/{node_id}/token"),
+            client.post(f"/api/v1/daemon-nodes/{node_id}/token/reissue"),
+        ]
+        for response in responses:
+            assert response.status_code in (200, 201)
+            body = response.json()
+            assert body["daemonEnv"]["RELAY_BACKEND_URL"] == "https://api.example.com"
+            assert "--backend-url https://api.example.com" in body["daemonCommand"]
+            assert "backend.internal" not in body["daemonCommand"]
