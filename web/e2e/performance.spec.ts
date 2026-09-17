@@ -107,10 +107,14 @@ test("the thread rail mounts a bounded window and grows as it scrolls", async ({
   await expect.poll(() => rows.count()).toBeGreaterThan(initial);
 });
 
-test("a selected thread deep in the rail is mounted", async ({ page }) => {
+test("a selected thread deep in the rail is mounted and can load the remaining threads", async ({ page }) => {
   await mockApi(page);
   await page.goto("/threads/s-350");
   await expect(page.locator('.thread-panel [aria-current="page"]')).toContainText("Thread number 350");
+  await page.locator(".thread-panel .conversation-list").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(page.locator(".thread-panel .conversation-name")).toHaveCount(THREADS.length);
 });
 
 test("a long transcript mounts its newest turns and reveals older ones on scroll", async ({ page }) => {
