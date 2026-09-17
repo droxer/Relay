@@ -21,8 +21,8 @@ import {
   segmentKeys,
   type AgentSegment,
 } from "../lib/agentStream";
-import { highlightToHtml } from "../lib/syntax";
-import { MarkdownContent } from "./Markdown";
+import { useHighlightedHtml } from "../hooks/useHighlightedHtml";
+import { MarkdownContent } from "./LazyMarkdown";
 import { buildCollaborationTree } from "../lib/collaborationTree";
 import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
@@ -238,7 +238,7 @@ function CommandSegment({ command }: { command: string }) {
     () => commandDisplay(command, { expanded }),
     [command, expanded],
   );
-  const html = useMemo(() => highlightToHtml(lines.join("\n"), "bash"), [lines]);
+  const html = useHighlightedHtml(useMemo(() => lines.join("\n"), [lines]), "bash");
 
   return (
     <div className="agent-command code">

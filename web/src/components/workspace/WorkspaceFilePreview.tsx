@@ -14,7 +14,7 @@ import {
   isRenderableFile,
   languageForFile,
 } from "../CodeView";
-import { Markdown } from "../Markdown";
+import { Markdown } from "../LazyMarkdown";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 /** Every workspace-file response (project, node, task, …) shares this shape

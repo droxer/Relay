@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StateMark } from "./StateMark";
 import {
@@ -13,6 +13,8 @@ import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { ThreadRow, type ThreadItem } from "./ThreadRow";
 import { groupThreads } from "../lib/threadGroups";
+import { limitThreadGroups, railLimitFor, RAIL_PAGE_SIZE } from "../lib/threads";
+import { useStableCallback } from "@/hooks/useStableCallback";
 import { projectThreadBuckets } from "../lib/threads";
 import {
   expandProject,
@@ -98,6 +100,11 @@ export function ThreadListPanel({
   onResizeActive: (active: boolean) => void;
 }) {
   const { t } = useTranslation();
+  // Rows are memoized; App rebuilds these handlers on every render.
+  const selectThread = useStableCallback(onSelectThread);
+  const renameThread = useStableCallback(onRenameThread);
+  const closeThread = useStableCallback(onCloseThread);
+  const now = useMinuteClock();
   // Which folders are open, remembered across reloads. Read after mount
   // rather than in the initializer: the export is prerendered, so touching
   // localStorage during the first render mismatches hydration.
@@ -131,36 +138,42 @@ export function ThreadListPanel({
     hasQuery: query.trim().length > 0,
   });
 
-  const renderThreads = (items: ThreadItem[]) => {
-    const groups = groupThreads(items);
+  const railWindow = useRailWindow(hierarchy.unclassified, selectedSessionId, query);
+
+  const renderThreads = () => {
+    const { groups: limited, sentinelRef, limit } = railWindow;
     const sections = [
-      { key: "needsYou", tone: "attn", label: t("thread.group_needs_you"), items: groups.needsYou },
-      { key: "running", tone: "run", label: t("thread.group_running"), items: groups.running },
-      { key: "idle", tone: "idle", label: t("thread.group_idle"), items: groups.idle },
+      { key: "needsYou", tone: "attn", label: t("thread.group_needs_you"), group: limited.needsYou },
+      { key: "running", tone: "run", label: t("thread.group_running"), group: limited.running },
+      { key: "idle", tone: "idle", label: t("thread.group_idle"), group: limited.idle },
     ] as const;
-    return sections.map((section) => section.items.length > 0 ? (
+    return [...sections.map(({ group, ...section }) => group.items.length > 0 ? (
       <div key={section.key} className="conversation-group" data-tone={section.tone}>
         <div className="conversation-group-label">
           <span>{section.label}</span>
-          <span className="conversation-group-count tnum">{section.items.length}</span>
+          {/* The group's full count, not the mounted rows — the rail mounts a
+              window and grows it as the reader scrolls. */}
+          <span className="conversation-group-count tnum">{group.total}</span>
         </div>
         {/* Rows are <li>s, so each group carries its own list. The group label
             names it rather than sitting inside it — a heading is not a row. */}
         <ul className="conversation-rows" aria-label={section.label}>
-          {section.items.map((item) => (
+          {group.items.map((item) => (
             <ThreadRow
               key={item.session.id}
               item={item}
               tone={section.tone}
               selected={selectedSessionId === item.session.id}
-              onSelect={onSelectThread}
-              onRename={onRenameThread}
-              onClose={onCloseThread}
+              onSelect={selectThread}
+              onRename={renameThread}
+              onClose={closeThread}
+              now={now}
             />
           ))}
         </ul>
       </div>
-    ) : null);
+    ) : null),
+    limited.hasMore ? <div key={`more-${limit}`} ref={sentinelRef} className="conversation-rail-sentinel" aria-hidden="true" /> : null];
   };
 
   // Threads inside a project render flat: the group headers that make sense
@@ -183,9 +196,10 @@ export function ThreadListPanel({
             tone={state}
             layout="nested"
             selected={selectedSessionId === item.session.id}
-            onSelect={onSelectThread}
-            onRename={onRenameThread}
-            onClose={onCloseThread}
+            onSelect={selectThread}
+            onRename={renameThread}
+            onClose={closeThread}
+            now={now}
           />
         ))}
       </ul>
@@ -313,7 +327,7 @@ export function ThreadListPanel({
                 {emptyKey ? <p className="project-folder-empty">{t(emptyKey)}</p> : null}
               </div> : null}
           </section>
-        )}) : renderThreads(hierarchy.unclassified)}
+        )}) : renderThreads()}
         {/* The rail is too narrow for a doodle, so the vignette is dropped;
             a filtered-empty list offers no create action, because creating
             would not answer the question the query asked. */}
@@ -382,4 +396,58 @@ export function ThreadListPanel({
       />
     </aside>
   );
+}
+
+const MINUTE_MS = 60_000;
+
+/** Date.now(), refreshed once a minute — the only clock the rail's stamps read. */
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), MINUTE_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
+/**
+ * The rows the threads rail mounts: whole pages, in attention order, grown by
+ * a sentinel as it scrolls into view. 400 threads used to mount 400 rows and
+ * ~20k DOM nodes. The window always reaches the selected thread, so opening
+ * one from a link still shows it highlighted in the rail. It restarts at one
+ * page when the query changes, since a filter is a new list.
+ */
+function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, query: string) {
+  const [pages, setPages] = useState(1);
+  useEffect(() => setPages(1), [query]);
+
+  const groups = useMemo(() => groupThreads(items), [items]);
+  const selectedIndex = useMemo(() => {
+    if (!selectedSessionId) return -1;
+    return [...groups.needsYou, ...groups.running, ...groups.idle]
+      .findIndex((item) => item.session.id === selectedSessionId);
+  }, [groups, selectedSessionId]);
+  const limit = Math.max(pages * RAIL_PAGE_SIZE, railLimitFor(selectedIndex, RAIL_PAGE_SIZE));
+  const limited = useMemo(() => limitThreadGroups(groups, limit), [groups, limit]);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setPages((current) => current + 1);
+      },
+      // Grow a screen early so scrolling never meets the end of the window.
+      { root: node.closest(".conversation-list"), rootMargin: "0px 0px 600px 0px" },
+    );
+    observer.current.observe(node);
+  }, []);
+  // The sentinel is keyed by the limit, so each growth mounts a fresh node and
+  // the observer reports its initial intersection — a sentinel still in range
+  // after a page lands grows the window again instead of stalling.
+  useEffect(() => () => observer.current?.disconnect(), []);
+
+  return { groups: limited, sentinelRef, limit };
 }

@@ -6,37 +6,18 @@ import {
   NavRoutine,
   NodeOffline,
 } from "./icons";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { StateMark, type StateShape, type StateTone } from "./StateMark";
 import type { RelaySession } from "../types";
 import { canDeleteThread, sessionAgents, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
+import { formatThreadStamp } from "../lib/threadStamp";
 import { agentLabel } from "../lib/plan";
 import { AgentMark } from "./AgentMark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export type { ThreadItem };
-
-function relativeTime(iso: string | undefined, locale: string): string {
-  if (!iso) return "";
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return "";
-  const diff = Math.max(0, Date.now() - then);
-  const sec = Math.round(diff / 1000);
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "narrow" });
-  if (sec < 60) return formatter.format(-sec, "second");
-  const min = Math.round(sec / 60);
-  if (min < 60) return formatter.format(-min, "minute");
-  const hr = Math.round(min / 60);
-  if (hr < 24) return formatter.format(-hr, "hour");
-  const day = Math.round(hr / 24);
-  if (day < 7) return formatter.format(-day, "day");
-  const wk = Math.round(day / 7);
-  if (wk < 5) return formatter.format(-wk, "week");
-  const mo = Math.round(day / 30);
-  if (mo < 12) return formatter.format(-mo, "month");
-  return formatter.format(-Math.round(day / 365), "year");
-}
 
 type ThreadTone = "attn" | "run" | "idle";
 
@@ -54,6 +35,10 @@ type ThreadRowProps = {
       agent meta line. "nested" — a project folder's single-line sub-row:
       pip + title + stamp, subordinate to the folder name. */
   layout?: "full" | "nested";
+  /** The rail's minute clock. The stamp reads it instead of Date.now() so the
+      memoized row re-renders once a minute to keep "3m ago" honest, and never
+      merely because its parent did. */
+  now: number;
 };
 
 /**
@@ -70,14 +55,17 @@ const PIP: Record<ThreadTone | "err", { tone: StateTone; shape?: StateShape }> =
   idle: { tone: "neutral", shape: "muted" },
 };
 
-export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: suppliedTone, layout = "full" }: ThreadRowProps) {
+/* Memoized: the rail mounts dozens of rows and its parents re-render for
+   reasons no row cares about. Every prop is stable when unchanged — items are
+   carried forward by reuseThreadItems, handlers by useStableCallback. */
+export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", now }: ThreadRowProps) {
   const { t, i18n } = useTranslation();
   const { session } = item;
   const executionPhase = session.execution?.phase;
   const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
     : executionPhase && ["queued", "stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
   const label = threadLabel(session);
-  const stamp = relativeTime(session.updatedAt, i18n.language);
+  const stamp = formatThreadStamp(session.updatedAt, i18n.language, now);
   const offlineLabel = item.nodeOffline ? t("thread.node_offline") : "";
   const stateLabel =
     executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`) : tone === "attn"
@@ -248,4 +236,4 @@ export function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: s
       </span>
     </li>
   );
-}
+});

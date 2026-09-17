@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActionRoute,
@@ -14,6 +14,8 @@ import {
   buildLogicalAgentNameMap,
   displayNameForExecutor,
 } from "../lib/agentDisplayNames";
+import { preloadMarkdown } from "./LazyMarkdown";
+import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
@@ -195,6 +197,13 @@ export function ThreadsView({
   const { t } = useTranslation();
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectRecord | null>(null);
+  const transcriptWindow = useTranscriptWindow(activeSession?.id, displayMessages.length);
+  // A thread is about to render markdown: start the pipeline download now so
+  // the first turn rarely shows its plain-text fallback.
+  const hasTranscript = Boolean(activeSession);
+  useEffect(() => {
+    if (hasTranscript) preloadMarkdown();
+  }, [hasTranscript]);
   const agentDisplayNames = useMemo(() => buildExecutorDisplayNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentNames = useMemo(() => buildLogicalAgentNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentImages = useMemo(() => buildLogicalAgentImageMap(logicalAgents), [logicalAgents]);
@@ -346,7 +355,16 @@ export function ThreadsView({
           <div className="transcript-inner">
             {activeSession || pendingUserMessage ? (
               <>
-                {displayMessages.map((msg, i) => {
+                {transcriptWindow.start > 0 ? (
+                  // Keyed by the window start so each page mounts a fresh
+                  // sentinel, and the observer reports it again if the new
+                  // page still leaves it in range.
+                  <div key={`older-${transcriptWindow.start}`} ref={transcriptWindow.sentinelRef} className="transcript-older-sentinel" aria-hidden="true" />
+                ) : null}
+                {displayMessages.slice(transcriptWindow.start).map((msg, offset) => {
+                  // Grouping and dividers read neighbours, so they index the
+                  // full transcript, not the mounted slice.
+                  const i = transcriptWindow.start + offset;
                   const phaseLabel = phaseDividerLabel(displayMessages, i, t);
                   const prev = i > 0 ? displayMessages[i - 1] : undefined;
                   const isHandoff =

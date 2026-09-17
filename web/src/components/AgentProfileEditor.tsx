@@ -6,7 +6,7 @@ import {
   ActionEdit,
   ICON,
 } from "./icons";
-import { Markdown } from "./Markdown";
+import { Markdown } from "./LazyMarkdown";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";

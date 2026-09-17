@@ -229,6 +229,16 @@
   gap: var(--sp-7);
 }
 
+/* Marks the oldest mounted turn; nearing the top of the scroller mounts the
+   previous page (useTranscriptWindow). It takes no room of its own: the
+   negative margin cancels the column gap it would otherwise add above the
+   first turn. */
+.transcript-older-sentinel {
+  flex: none;
+  block-size: 1px;
+  margin-block-end: calc(-1 * var(--sp-7));
+}
+
 /* Transcript empty — layout shell; visual language from empty-state.css */
 .transcript-empty {
   margin: auto;

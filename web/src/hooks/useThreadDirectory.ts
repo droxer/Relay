@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { ProjectRecord } from "../types";
-import { matchesThreadQuery, threadOriginIndex, threadsForDirectory, type ThreadItem } from "../lib/threads";
+import { matchesThreadQuery, reuseThreadItems, threadOriginIndex, threadsForDirectory, type ThreadItem } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
 
 /**
@@ -55,16 +55,22 @@ export function useThreadDirectory({
 }: ThreadDirectoryInput): ThreadDirectory {
   const origins = useMemo(() => threadOriginIndex(tasks), [tasks]);
 
+  // Items are rebuilt whenever any input moves — a node or task poll — but a
+  // row is memoized on its item, so each unchanged item keeps its previous
+  // object. Without this every row re-rendered on every poll.
+  const previousItems = useRef<ThreadItem[]>([]);
   const threadItems = useMemo<ThreadItem[]>(() => {
     const runningBy = new Map(
       visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run.agent] as const)),
     );
-    return myThreads.map((session) => ({
+    const next = reuseThreadItems(previousItems.current, myThreads.map((session) => ({
       session,
       runningAgent: runningBy.get(session.id),
       nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
       origin: origins.get(session.id),
-    }));
+    })));
+    previousItems.current = next;
+    return next;
   }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins]);
 
   const filteredThreads = useMemo(

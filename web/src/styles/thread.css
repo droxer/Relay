@@ -67,6 +67,14 @@
   border-top: 0;
 }
 
+/* End-of-window marker: when it nears the rail's viewport the rail mounts its
+   next page of rows (useRailWindow in ThreadListPanel). It needs a box for the
+   observer to intersect, and nothing else. */
+.conversation-rail-sentinel {
+  flex: none;
+  block-size: var(--sp-1);
+}
+
 /* The <ul> that actually holds rows — one per attention group in threads
    mode, one per folder in projects mode. Same rhythm as .agents-roster-list
    and .teams-list: rounded rows separated by a --sp-1 gutter. It was --sp-0-5

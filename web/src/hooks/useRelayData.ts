@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { listDaemonNodes, listProjects, listSandboxes, listSessionSummaries, listTasks } from "../api";
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SandboxRecord } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
@@ -32,6 +32,39 @@ type RelayDataResult = {
   upsertNode: (node: DaemonNodeMonitorRecord) => void;
 };
 
+type RelayCollections = Pick<
+  RelayDataResult,
+  "sandboxes" | "nodes" | "sessions" | "tasks" | "projects" | "projectsStatus" | "projectsError"
+>;
+
+/* The only fields the app reads off the five polls, folded into one value.
+
+   Without `combine`, useQueries hands back the raw result array and notifies on
+   every change to any tracked field of any query — and reading fetchStatus for
+   the projects status tracks it on all five observers. So each poll's fetch
+   start and its fetch end each re-rendered the whole App, ~18 commits per 10s
+   on data that had not changed, and every thread row re-rendered with it.
+   React Query deep-compares a combined value against the last one
+   (replaceEqualDeep), so an identical poll now yields the identical object and
+   no render. Module scope keeps the function's identity stable, which is what
+   lets the observer reuse the last result instead of recombining. */
+function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayCollections {
+  const [sandboxesQuery, nodesQuery, sessionsQuery, tasksQuery, projectsQuery] = results;
+  return {
+    sandboxes: (sandboxesQuery.data as SandboxRecord[] | undefined) ?? [],
+    nodes: (nodesQuery.data as DaemonNodeMonitorRecord[] | undefined) ?? [],
+    sessions: (sessionsQuery.data as RelaySession[] | undefined) ?? [],
+    tasks: (tasksQuery.data as RelayTaskSummary[] | undefined) ?? [],
+    projects: (projectsQuery.data as ProjectRecord[] | undefined) ?? [],
+    projectsStatus: queryCollectionStatus(projectsQuery),
+    projectsError: projectsQuery.error instanceof Error
+      ? projectsQuery.error.message
+      : projectsQuery.error
+        ? String(projectsQuery.error)
+        : "",
+  };
+}
+
 // Server state for the control-plane console, owned by TanStack Query. The
 // Freshness-critical nodes, sessions, and task state poll every 3s; stable
 // sandbox inventory reconciles less often. Dedup and retry/backoff come
@@ -57,7 +90,8 @@ export function useRelayData(
   const overrideRef = useRef<string | undefined>(undefined);
   const fetchToken = () => overrideRef.current ?? tokenRef.current;
 
-  const results = useQueries({
+  const { sandboxes, nodes, sessions, tasks, projects, projectsStatus, projectsError } = useQueries({
+    combine: combineRelayCollections,
     queries: [
       {
         queryKey: SANDBOXES_KEY,
@@ -111,18 +145,6 @@ export function useRelayData(
     ],
   });
 
-  const [sandboxesQuery, nodesQuery, sessionsQuery, tasksQuery, projectsQuery] = results;
-  const sandboxes = sandboxesQuery.data ?? [];
-  const nodes = nodesQuery.data ?? [];
-  const sessions = sessionsQuery.data ?? [];
-  const tasks = tasksQuery.data ?? [];
-  const projects = projectsQuery.data ?? [];
-  const projectsStatus: ProjectCollectionStatus = queryCollectionStatus(projectsQuery);
-  const projectsError = projectsQuery.error instanceof Error
-    ? projectsQuery.error.message
-    : projectsQuery.error
-      ? String(projectsQuery.error)
-      : "";
 
   // When disabled (e.g. logged out) drop cached rows so the UI clears at once.
   // resetQueries, NOT setQueryData: seeding [] counts as data written after

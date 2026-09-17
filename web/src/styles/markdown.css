@@ -15,6 +15,15 @@
   overflow-wrap: anywhere;
 }
 
+/* The words of a message before the markdown pipeline has loaded
+   (LazyMarkdown). Line breaks as the agent wrote them, the paragraph type it
+   will keep, and no margins of its own — it is replaced in place. */
+.md-plain {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 /* Block rhythm. A paragraph gap has to read as bigger than the leading inside
    the paragraph or the blocks fuse into one grey slab — at 14px/1.75 the line
    box is ~24.5px, so a 12px gap is under half a line and reads as no gap at
