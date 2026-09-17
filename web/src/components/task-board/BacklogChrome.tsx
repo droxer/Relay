@@ -65,7 +65,7 @@ export function BacklogStats({ tasks }: { tasks: RelayTaskListItem[] }) {
           {stats.overdue}
         </span>
       </span>
-      <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.oldest_age")}</span><span className="backlog-stat-value">{flow.oldestAgeDays.toFixed(1)}d</span></span>
+      <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.oldest_age")}</span><span className="backlog-stat-value">{flow.oldestAgeDays === null ? "—" : `${flow.oldestAgeDays.toFixed(1)}d`}</span></span>
       <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.throughput")}</span><span className="backlog-stat-value">{flow.throughput}</span></span>
       <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t("backlog.cycle_time")}</span><span className="backlog-stat-value">{flow.averageCycleDays === null ? "—" : `${flow.averageCycleDays.toFixed(1)}d`}</span></span>
       <span className="backlog-stat"><span className="backlog-stat-eyebrow">{t(flow.sleIsEstimate ? "backlog.sle_estimate" : "backlog.sle")}</span><span className="backlog-stat-value">{flow.sleDays.toFixed(1)}d</span></span>

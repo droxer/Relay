@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AgentMark } from "./AgentMark";
 import { AgentStream } from "./AgentStream";
-import { MarkdownContent } from "./Markdown";
+import { MarkdownContent } from "./LazyMarkdown";
 import { MessageTurnActions } from "./MessageTurnActions";
 import type { AgentName } from "../types";
 import { AGENT_NAMES } from "../types";

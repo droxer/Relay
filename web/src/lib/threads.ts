@@ -1,4 +1,5 @@
 import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary } from "../types.js";
+import type { ThreadGroups } from "./threadGroups.js";
 
 // A thread is one owner-scoped session. The row binds to the session
 // itself (not an employee), so the logged-in employee can hold several in
@@ -207,4 +208,64 @@ export function threadRowMeta(
   if (hasOrigin) return { subline: true, inlineAgents: agentCount > 0 };
   if (hasStatus) return { subline: true, inlineAgents: false };
   return { subline: false, inlineAgents: agentCount > 0 };
+}
+
+/* ── Render budget ─────────────────────────────────────────────────────────
+   The rail used to mount one row per thread and rebuild every row object on
+   every poll. Both helpers below exist to keep the rail's cost proportional to
+   what is on screen and what actually changed. */
+
+function sameOrigin(a: ThreadOrigin | undefined, b: ThreadOrigin | undefined): boolean {
+  if (a === b) return true;
+  return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.title === b.title);
+}
+
+/** Carry each unchanged item's previous object forward, so a memoized row
+ *  keyed on it skips rendering. Returns `previous` itself when nothing moved. */
+export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadItem[]): ThreadItem[] {
+  const byId = new Map(previous.map((item) => [item.session.id, item]));
+  let changed = previous.length !== next.length;
+  const reused = next.map((item, index) => {
+    const prior = byId.get(item.session.id);
+    const keep = prior
+      && prior.session === item.session
+      && prior.runningAgent === item.runningAgent
+      && prior.nodeOffline === item.nodeOffline
+      && sameOrigin(prior.origin, item.origin);
+    const result = keep ? prior : item;
+    if (result !== previous[index]) changed = true;
+    return result;
+  });
+  return changed ? reused : (previous as ThreadItem[]);
+}
+
+/** Rows the rail mounts per page. A page comfortably overfills a tall rail. */
+export const RAIL_PAGE_SIZE = 60;
+
+export type LimitedThreadGroup = { items: ThreadItem[]; total: number };
+
+/** The first `limit` rows across the attention groups, in display order —
+ *  needs you, running, idle — with each group's full count kept for its label. */
+export function limitThreadGroups(groups: ThreadGroups, limit: number): {
+  needsYou: LimitedThreadGroup;
+  running: LimitedThreadGroup;
+  idle: LimitedThreadGroup;
+  hasMore: boolean;
+} {
+  let remaining = limit;
+  const take = (items: ThreadItem[]): LimitedThreadGroup => {
+    const kept = items.slice(0, Math.max(0, remaining));
+    remaining -= kept.length;
+    return { items: kept, total: items.length };
+  };
+  const needsYou = take(groups.needsYou);
+  const running = take(groups.running);
+  const idle = take(groups.idle);
+  const total = groups.needsYou.length + groups.running.length + groups.idle.length;
+  return { needsYou, running, idle, hasMore: total > limit };
+}
+
+/** The smallest whole number of pages that mounts the row at `selectedIndex`. */
+export function railLimitFor(selectedIndex: number, pageSize: number): number {
+  return Math.max(1, Math.ceil((selectedIndex + 1) / pageSize)) * pageSize;
 }

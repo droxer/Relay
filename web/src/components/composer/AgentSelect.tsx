@@ -164,7 +164,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
         ) : (
           <span className="chat-agent-select-unavailable">
             <StateMark tone="bad" />
-            {t("thread.no_available_agent")}
+            <span className="chat-agent-select-unavailable-text">{t("thread.no_available_agent")}</span>
           </span>
         )}
       </SelectTrigger>

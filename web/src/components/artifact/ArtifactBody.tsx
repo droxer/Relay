@@ -10,7 +10,7 @@ import {
 } from "../../lib/artifactPreview";
 import { useArtifactBody } from "../../lib/useArtifactBody";
 import { CodeView, languageForFile } from "../CodeView";
-import { Markdown } from "../Markdown";
+import { Markdown } from "../LazyMarkdown";
 import type { ArtifactView } from "./ArtifactViewToggle";
 
 type DiffLineKind = "add" | "del" | "meta" | "hunk" | "context";

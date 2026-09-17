@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { highlightToHtml } from "../lib/syntax";
+import { useHighlightedHtml } from "../hooks/useHighlightedHtml";
 
 // The filename → kind classification lives in lib/fileKinds so non-component
 // modules (artifactPreview) and the NodeNext test build can share it.
@@ -17,7 +17,7 @@ export {
 /** Syntax-highlighted code block with a line-number gutter. */
 export function CodeView({ code, language }: { code: string; language?: string | null }) {
   const source = code.replace(/\n$/, "");
-  const html = useMemo(() => highlightToHtml(source, language), [source, language]);
+  const html = useHighlightedHtml(source, language);
   const gutter = useMemo(
     () =>
       Array.from({ length: source.split("\n").length }, (_, index) => index + 1).join("\n"),

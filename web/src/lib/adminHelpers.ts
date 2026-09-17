@@ -173,12 +173,18 @@ export function formatRelativeTime(value: string | undefined, t: TFunction): str
   const seconds = Math.floor(deltaMs / 1_000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
 
   const locale = typeof document !== "undefined" ? document.documentElement.lang || undefined : undefined;
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   if (seconds < 60) return rtf.format(-seconds, "second");
   if (minutes < 60) return rtf.format(-minutes, "minute");
-  return rtf.format(-hours, "hour");
+  if (hours < 24) return rtf.format(-hours, "hour");
+  // Without these a three-month-old agent read "Created 2160 hours ago".
+  if (days < 7) return rtf.format(-days, "day");
+  if (days < 30) return rtf.format(-Math.floor(days / 7), "week");
+  if (days < 365) return rtf.format(-Math.floor(days / 30), "month");
+  return rtf.format(-Math.floor(days / 365), "year");
 }
 
 export interface EmployeeNodeSummary {

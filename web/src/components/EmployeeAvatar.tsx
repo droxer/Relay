@@ -1,8 +1,12 @@
 import { useTranslation } from "react-i18next";
 import type { Tone } from "../types";
+import { identityMonogram } from "../lib/identity";
 
 type EmployeeAvatarProps = {
-  employeeId: string;
+  /** The employee's display name — the initials come from it. Never pass the
+      id: under the database auth store it is a UUID, and its "initials" are
+      two hex digits. */
+  displayName: string;
   running: boolean;
   tone?: Tone;
   size?: number;
@@ -13,15 +17,9 @@ type EmployeeAvatarProps = {
   name?: string;
 };
 
-export function EmployeeAvatar({ employeeId, running, tone, size, name }: EmployeeAvatarProps) {
+export function EmployeeAvatar({ displayName, running, tone, size, name }: EmployeeAvatarProps) {
   const { t } = useTranslation();
-  const initials =
-    employeeId
-      .split(/[._\-\s]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part.charAt(0).toUpperCase())
-      .join("") || "?";
+  const initials = identityMonogram(displayName);
   const style = size
     ? ({ "--avatar-size": `${size}px` } as React.CSSProperties)
     : undefined;
