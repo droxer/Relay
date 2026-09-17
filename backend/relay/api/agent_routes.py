@@ -18,6 +18,7 @@ from ..services.project_catalog import agent_has_active_project
 from ..services.team_membership import remove_agent_from_teams
 from .deps import AppContextDep
 from .helpers import (
+    JsonBodyDep,
     json_body,
     request_actor,
     string_field,
@@ -34,7 +35,7 @@ AGENT_META_FIELDS = frozenset({"displayName", "instructions"})
 
 
 @router.get("/agents")
-async def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     agents = ctx.agent_store.list_agents(supervisor_employee_id=actor["employeeId"])
     nodes = ctx.registry.monitor_nodes()
@@ -54,9 +55,11 @@ async def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.post("/agents", status_code=201)
-async def create_agent(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_agent(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         agent = create_agent_for_employee(ctx, actor["employeeId"], body)
     except AgentCreationError as error:
@@ -69,8 +72,8 @@ async def create_agent(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.patch("/agents/{agent_id}")
-async def update_agent(
-    agent_id: str, request: Request, ctx: AppContextDep
+def update_agent(
+    agent_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     agent = ctx.agent_store.get_agent(agent_id)
@@ -78,7 +81,7 @@ async def update_agent(
         raise HTTPException(404, "Agent not found.")
     if agent.get("supervisorEmployeeId") != actor["employeeId"]:
         raise HTTPException(403, "Cannot update another employee's agent.")
-    body = await json_body(request)
+    body = _request_body
     unknown = set(body) - AGENT_META_FIELDS
     if unknown:
         raise HTTPException(
@@ -95,9 +98,7 @@ async def update_agent(
 
 
 @router.get("/admin/agents")
-async def list_control_panel_agents(
-    request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+def list_control_panel_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     employee_id = (
         request.query_params.get("employeeId")
@@ -115,11 +116,11 @@ async def list_control_panel_agents(
 
 
 @router.post("/admin/agents", status_code=201)
-async def create_control_panel_agent(
-    request: Request, ctx: AppContextDep
+def create_control_panel_agent(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     employee_id = string_field(body, "supervisorEmployeeId")
     if not _employee_exists(ctx.auth_store, employee_id):
         raise HTTPException(404, "Employee not found.")
@@ -135,7 +136,7 @@ async def create_control_panel_agent(
 
 
 @router.get("/admin/agents/{agent_id}")
-async def get_control_panel_agent(
+def get_control_panel_agent(
     agent_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -151,15 +152,13 @@ async def get_control_panel_agent(
 
 
 @router.patch("/admin/agents/{agent_id}")
-async def update_control_panel_agent(
-    agent_id: str, request: Request, ctx: AppContextDep
+def update_control_panel_agent(
+    agent_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
         return {
-            "agent": _update_agent_and_realize_placements(
-                ctx, agent_id, await json_body(request)
-            )
+            "agent": _update_agent_and_realize_placements(ctx, agent_id, _request_body)
         }
     except KeyError as error:
         raise HTTPException(404, "Agent not found.") from error
@@ -170,7 +169,7 @@ async def update_control_panel_agent(
 
 
 @router.delete("/admin/agents/{agent_id}", status_code=200)
-async def delete_control_panel_agent(
+def delete_control_panel_agent(
     agent_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -198,7 +197,7 @@ async def delete_control_panel_agent(
 
 
 @router.get("/admin/agent-placements")
-async def list_agent_placements(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_agent_placements(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     agent_id = request.query_params.get("agentId") or None
     daemon_node_id = request.query_params.get("nodeId") or None
@@ -211,14 +210,14 @@ async def list_agent_placements(request: Request, ctx: AppContextDep) -> dict[st
 
 
 @router.post("/admin/agents/{agent_id}/placements", status_code=201)
-async def create_agent_placement(
-    agent_id: str, request: Request, ctx: AppContextDep
+def create_agent_placement(
+    agent_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     agent = ctx.agent_store.get_agent(agent_id)
     if not agent or agent.get("deletedAt"):
         raise HTTPException(404, "Agent not found.")
-    body = await json_body(request)
+    body = _request_body
     daemon_node_id = body.get("daemonNodeId")
     if not isinstance(daemon_node_id, str) or not daemon_node_id.strip():
         raise HTTPException(400, "daemonNodeId is required.")
@@ -235,11 +234,15 @@ async def create_agent_placement(
 
 
 @router.patch("/admin/agent-placements/{placement_id}")
-async def update_agent_placement(
-    placement_id: str, request: Request, ctx: AppContextDep
+def update_agent_placement(
+    placement_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         placement = ctx.agent_placement_store.update_placement(placement_id, body)
     except KeyError as error:
@@ -250,7 +253,7 @@ async def update_agent_placement(
 
 
 @router.delete("/admin/agent-placements/{placement_id}", status_code=200)
-async def delete_agent_placement(
+def delete_agent_placement(
     placement_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)

@@ -9,7 +9,7 @@ from ..security.auth import require_admin_session
 from .agent_routes import _agent_with_placements, _employee_exists
 from .deps import AppContextDep
 from .helpers import (
-    json_body,
+    JsonBodyDep,
     request_actor,
     string_field,
 )
@@ -62,7 +62,7 @@ def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/teams")
-async def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     return {
         "teams": [
@@ -73,9 +73,11 @@ async def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.post("/teams", status_code=201)
-async def create_team(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_team(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         lead, members = validate_team_payload(
             actor["employeeId"],
@@ -92,12 +94,12 @@ async def create_team(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.patch("/teams/{team_id}")
-async def update_team(
-    team_id: str, request: Request, ctx: AppContextDep
+def update_team(
+    team_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = _owned_team(ctx, team_id, actor["employeeId"])
-    body = await json_body(request)
+    body = _request_body
     try:
         lead, members = validate_team_payload(
             actor["employeeId"],
@@ -117,9 +119,7 @@ async def update_team(
 
 
 @router.delete("/teams/{team_id}", status_code=200)
-async def delete_team(
-    team_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+def delete_team(team_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     _owned_team(ctx, team_id, actor["employeeId"])
     deleted = ctx.team_store.delete_team(team_id)
@@ -128,9 +128,7 @@ async def delete_team(
 
 
 @router.get("/admin/teams")
-async def list_control_panel_teams(
-    request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+def list_control_panel_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     owner_employee_id = request.query_params.get("ownerEmployeeId") or None
     return {
@@ -142,11 +140,11 @@ async def list_control_panel_teams(
 
 
 @router.post("/admin/teams", status_code=201)
-async def create_control_panel_team(
-    request: Request, ctx: AppContextDep
+def create_control_panel_team(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     owner_employee_id = string_field(body, "ownerEmployeeId")
     if not owner_employee_id:
         raise HTTPException(400, "ownerEmployeeId is required.")
@@ -174,7 +172,7 @@ async def create_control_panel_team(
 
 
 @router.get("/admin/teams/{team_id}")
-async def get_control_panel_team(
+def get_control_panel_team(
     team_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
@@ -182,12 +180,12 @@ async def get_control_panel_team(
 
 
 @router.patch("/admin/teams/{team_id}")
-async def update_control_panel_team(
-    team_id: str, request: Request, ctx: AppContextDep
+def update_control_panel_team(
+    team_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     current = _active_team(ctx, team_id)
-    body = await json_body(request)
+    body = _request_body
     try:
         lead, members = validate_team_payload(
             current["ownerEmployeeId"],
@@ -207,7 +205,7 @@ async def update_control_panel_team(
 
 
 @router.delete("/admin/teams/{team_id}", status_code=200)
-async def delete_control_panel_team(
+def delete_control_panel_team(
     team_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)

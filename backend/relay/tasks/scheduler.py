@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
@@ -22,6 +22,7 @@ from ..persistence.agent_placement_store import create_node_placement
 from ..persistence.protocols import TaskDispatchAssignment
 from ..persistence.stores import valid_agent
 from ..persistence.task_store import (
+    compact_task_writes,
     dispatch_retry_due,
     routine_due_sort_key,
     task_claim_sort_key,
@@ -216,9 +217,23 @@ class TaskScheduler:
 
     async def tick(self) -> SchedulerTickResult:
         async with self._tick_lock:
+            # All store transactions stay on one worker thread. Only the
+            # asynchronous daemon backend call returns to the application loop.
+            work = asyncio.create_task(
+                asyncio.to_thread(self._tick_sync, asyncio.get_running_loop())
+            )
+            try:
+                return await asyncio.shield(work)
+            except asyncio.CancelledError:
+                # Shutdown must not abandon a worker still mutating stores.
+                await work
+                raise
+
+    def _tick_sync(self, loop: asyncio.AbstractEventLoop) -> SchedulerTickResult:
+        with compact_task_writes():
             today = self._today()
             promoted, promote_skipped = self._promote_due_routines(today)
-            dispatched, dispatch_skipped = await self._dispatch_assigned_tasks()
+            dispatched, dispatch_skipped = self._dispatch_assigned_tasks(loop)
             return SchedulerTickResult(
                 promoted=promoted,
                 dispatched=dispatched,
@@ -267,7 +282,9 @@ class TaskScheduler:
         return promoted, skipped
 
     def _record_routine_skip(self, routine: dict[str, Any]) -> None:
-        activities = routine.get("activity") or []
+        activities = routine.get("activity") or (
+            [routine["lastActivity"]] if routine.get("lastActivity") else []
+        )
         if (
             activities
             and activities[-1].get("message") == ROUTINE_SKIP_NO_AGENT_MESSAGE
@@ -276,37 +293,30 @@ class TaskScheduler:
         self.task_store.record_activity(routine["id"], ROUTINE_SKIP_NO_AGENT_MESSAGE)
         logger.warning("Due routine skipped: no assigned agent", task_id=routine["id"])
 
-    async def _dispatch_assigned_tasks(self) -> tuple[int, int]:
-        dispatched = 0
-        dispatchable = [
-            self._materialize_legacy_assignment(task) or task
-            for task in self._dispatchable_tasks()
-        ]
-        legacy = [
-            task
-            for task in dispatchable
-            if valid_agent(task.get("assignedAgent"))
-            and not task.get("assignedAgentId")
-            and not task.get("assignedTeamId")
-        ]
-        for task in legacy:
-            self._record_dispatch_deferred(
-                task,
-                "agent_not_found",
-                "Select a named agent before this task can be dispatched.",
-            )
-        skipped = len(legacy)
-        attempts = 0
-        candidates = [
-            task
-            for task in dispatchable
-            if (valid_agent(task.get("assignedAgent")) and task.get("assignedAgentId"))
-            or bool(task.get("assignedTeamId"))
-            or bool(task.get("projectId"))
-        ]
-        for task in candidates:
+    def _dispatch_assigned_tasks(self, loop: asyncio.AbstractEventLoop) -> tuple[int, int]:
+        dispatched = skipped = attempts = 0
+        for candidate in self._dispatchable_tasks():
             if attempts >= self.max_dispatches_per_tick:
                 break
+            task = self._materialize_legacy_assignment(candidate) or candidate
+            if (
+                valid_agent(task.get("assignedAgent"))
+                and not task.get("assignedAgentId")
+                and not task.get("assignedTeamId")
+            ):
+                self._record_dispatch_deferred(
+                    task,
+                    "agent_not_found",
+                    "Select a named agent before this task can be dispatched.",
+                )
+                skipped += 1
+                continue
+            if not (
+                (valid_agent(task.get("assignedAgent")) and task.get("assignedAgentId"))
+                or task.get("assignedTeamId")
+                or task.get("projectId")
+            ):
+                continue
             if not dispatch_retry_due(task):
                 skipped += 1
                 continue
@@ -446,7 +456,8 @@ class TaskScheduler:
                 skipped += 1
                 continue
             attempts += 1
-            if await self._dispatch_claimed_task(
+            if self._dispatch_claimed_task(
+                loop,
                 claimed,
                 agent,
                 node["id"],
@@ -542,8 +553,9 @@ class TaskScheduler:
                 ),
             )
 
-    async def _dispatch_claimed_task(
+    def _dispatch_claimed_task(
         self,
+        loop: asyncio.AbstractEventLoop,
         task: dict[str, Any],
         agent: AgentName,
         node_id: str,
@@ -595,23 +607,28 @@ class TaskScheduler:
                 workspace_fields["workspaceSubpath"] = subpath
             if project_snapshot:
                 workspace_fields["projectId"] = project_snapshot["projectId"]
-            session = await self.backend.run(
-                node_id,
-                {
-                    "taskGoal": task_goal_text(task),
-                    "assignments": assignments,
-                    "taskId": task["id"],
-                    "actorIsAdmin": True,
-                    "agentFirst": True,
-                    **({"teamId": team_id} if team_id else {}),
-                    **workspace_fields,
-                    "collaboration": collaboration,
-                    **({"sessionId": session_id} if session_id else {}),
-                    **({"idempotencyKey": claim_id} if claim_id else {}),
-                },
-            )
+            session = asyncio.run_coroutine_threadsafe(
+                self.backend.run(
+                    node_id,
+                    {
+                        "taskGoal": task_goal_text(task),
+                        "assignments": assignments,
+                        "taskId": task["id"],
+                        "actorIsAdmin": True,
+                        "agentFirst": True,
+                        **({"teamId": team_id} if team_id else {}),
+                        **workspace_fields,
+                        "collaboration": collaboration,
+                        **({"sessionId": session_id} if session_id else {}),
+                        **({"idempotencyKey": claim_id} if claim_id else {}),
+                    },
+                ),
+                loop,
+            ).result()
         except Exception as error:
-            with dispatch_result_scope(self.task_store, task, claim_id, success=False) as current:
+            with dispatch_result_scope(
+                self.task_store, task, claim_id, success=False
+            ) as current:
                 if current is None:
                     return False
                 task = current
@@ -692,21 +709,34 @@ class TaskScheduler:
         ]
         return sorted(routines, key=routine_due_sort_key)
 
-    def _dispatchable_tasks(self) -> list[dict[str, Any]]:
+    def _dispatchable_tasks(self) -> Iterator[dict[str, Any]]:
         if hasattr(self.task_store, "list_dispatchable_tasks"):
-            return list(self.task_store.list_dispatchable_tasks())
-        tasks = [
-            task
-            for task in self.task_store.list_tasks()
-            if task.get("status") == "assigned"
-            and not task.get("isRoutine")
-            and (
-                task.get("assignedAgent")
-                or task.get("assignedTeamId")
-                or task.get("projectId")
-            )
-        ]
-        return sorted(tasks, key=task_claim_sort_key)
+            after = None
+            page_size = max(25, min(200, self.max_dispatches_per_tick))
+            while True:
+                page = self.task_store.list_dispatchable_tasks(
+                    limit=page_size, after=after
+                )
+                if not page:
+                    return
+                # Capture cursor before routing mutates any task in this page.
+                after = dict(page[-1])
+                yield from page
+                if len(page) < page_size:
+                    return
+        else:
+            tasks = [
+                task
+                for task in self.task_store.list_tasks()
+                if task.get("status") == "assigned"
+                and not task.get("isRoutine")
+                and (
+                    task.get("assignedAgent")
+                    or task.get("assignedTeamId")
+                    or task.get("projectId")
+                )
+            ]
+            yield from sorted(tasks, key=task_claim_sort_key)
 
 
 def ready_node_for_task(

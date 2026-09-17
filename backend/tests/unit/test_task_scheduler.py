@@ -4,8 +4,8 @@ import asyncio
 from datetime import UTC, date, datetime
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-import pytest
 
+import pytest
 from relay.core.computer_identity import computer_id
 from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
 from relay.persistence.agent_placement_store import LocalAgentPlacementStore
@@ -964,7 +964,7 @@ def test_scheduler_uses_targeted_task_queue_queries() -> None:
             self.due_queries += 1
             return []
 
-        def list_dispatchable_tasks(self) -> list[dict]:
+        def list_dispatchable_tasks(self, limit=None, *, after=None) -> list[dict]:
             self.dispatch_queries += 1
             return []
 
@@ -996,7 +996,7 @@ def test_scheduler_honors_a_persisted_retry_deadline_after_restart() -> None:
         def list_due_routines(self, today: str) -> list[dict]:
             return []
 
-        def list_dispatchable_tasks(self) -> list[dict]:
+        def list_dispatchable_tasks(self, limit=None, *, after=None) -> list[dict]:
             return [
                 {
                     "id": "task_waiting",

@@ -36,14 +36,13 @@ from ..services.node_agents import (
     remove_node_agents,
     sync_node_agents,
 )
-from ..services.team_membership import remove_agent_from_teams
 from .deps import AppContextDep
 from .helpers import (
+    JsonBodyDep,
     assert_employee_device_runtime,
     daemon_start_command,
     daemon_start_env,
     employee_record,
-    json_body,
     normalize_employee_handle,
     resolve_employee_id,
     string_field,
@@ -54,9 +53,7 @@ router = APIRouter()
 
 
 @router.get("/admin/control-plane/metrics")
-async def control_plane_metrics(
-    request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+def control_plane_metrics(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     bridge = getattr(request.app.state, "notification_bridge", None)
     return {
@@ -112,9 +109,11 @@ def reissue_admin_token_route(request: Request, ctx: AppContextDep) -> dict[str,
 
 
 @router.put("/admin/settings")
-async def update_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def update_org_settings(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     if not {"maxLocalComputersPerEmployee", "maxTaskRounds", "skillImportAllowedHosts"}.intersection(body):
         raise HTTPException(
             400, "maxLocalComputersPerEmployee, maxTaskRounds or skillImportAllowedHosts is required."
@@ -142,15 +141,17 @@ async def update_org_settings(request: Request, ctx: AppContextDep) -> dict[str,
 
 
 @router.get("/admin/users")
-async def list_users(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_users(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     return {"users": ctx.auth_store.list_users()}
 
 
 @router.post("/admin/users", status_code=201)
-async def create_user(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_user(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         user = ctx.auth_store.create_user(
             string_field(body, "username"),
@@ -168,7 +169,7 @@ async def create_user(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.get("/admin/departments")
-async def list_departments(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_departments(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     if hasattr(ctx.auth_store, "list_departments"):
         return {"departments": ctx.auth_store.list_departments()}
@@ -176,11 +177,13 @@ async def list_departments(request: Request, ctx: AppContextDep) -> dict[str, An
 
 
 @router.post("/admin/departments", status_code=201)
-async def create_department(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_department(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     if not hasattr(ctx.auth_store, "ensure_department"):
         raise HTTPException(400, "Department storage is only available with database auth storage.")
-    body = await json_body(request)
+    body = _request_body
     department_id = string_field(body, "id") or string_field(body, "departmentId")
     name = string_field(body, "name") or department_id
     if not department_id:
@@ -222,7 +225,9 @@ def list_employees(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.delete("/admin/employees/{employee_id}", status_code=200)
-async def soft_delete_employee(employee_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def soft_delete_employee(
+    employee_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     if not hasattr(ctx.auth_store, "soft_delete_employee"):
         raise HTTPException(400, "Employee soft-delete is not supported by this auth store.")
@@ -235,15 +240,19 @@ async def soft_delete_employee(employee_id: str, request: Request, ctx: AppConte
 
 
 @router.patch("/admin/employees/{employee_id}")
-async def update_employee(
-    employee_id: str, request: Request, ctx: AppContextDep
+def update_employee(
+    employee_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     if not hasattr(ctx.auth_store, "update_employee"):
         raise HTTPException(
             400, "Editing an employee requires the database auth store."
         )
-    body = await json_body(request)
+    body = _request_body
     patch: dict[str, Any] = {}
     if "displayName" in body:
         patch["display_name"] = string_field(body, "displayName")
@@ -271,9 +280,11 @@ async def update_employee(
 
 
 @router.post("/admin/employees", status_code=201)
-async def create_employee(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_employee(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     employee_id = normalize_employee_handle(string_field(body, "employeeId"))
     username = string_field(body, "username")
     password = string_field(body, "password")
@@ -386,9 +397,11 @@ async def create_employee(request: Request, ctx: AppContextDep) -> dict[str, Any
 
 
 @router.put("/admin/daemon-nodes/{node_id}/assignment")
-async def assign_control_panel_daemon_node(node_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def assign_control_panel_daemon_node(
+    node_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     employee_id = string_field(body, "employeeId")
     if not employee_id:
         raise HTTPException(400, "employeeId is required.")
@@ -412,7 +425,9 @@ async def assign_control_panel_daemon_node(node_id: str, request: Request, ctx: 
 
 
 @router.delete("/admin/daemon-nodes/{node_id}/assignment")
-async def unassign_control_panel_daemon_node(node_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def unassign_control_panel_daemon_node(
+    node_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     existing_node = ctx.registry.get(node_id)
     if not existing_node:
@@ -433,9 +448,11 @@ async def unassign_control_panel_daemon_node(node_id: str, request: Request, ctx
 
 
 @router.patch("/admin/daemon-nodes/{node_id}/disabled-agents")
-async def update_control_panel_daemon_node_disabled_agents(node_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def update_control_panel_daemon_node_disabled_agents(
+    node_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     raw = body.get("disabledAgents")
     if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):
         raise HTTPException(400, "disabledAgents must be an array of agent names.")
@@ -452,9 +469,11 @@ async def update_control_panel_daemon_node_disabled_agents(node_id: str, request
 
 
 @router.patch("/admin/daemon-nodes/{node_id}/agent-role-defaults")
-async def update_control_panel_daemon_node_agent_role_defaults(node_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def update_control_panel_daemon_node_agent_role_defaults(
+    node_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     raw = body.get("agentRoleDefaults")
     if not isinstance(raw, dict):
         raise HTTPException(400, "agentRoleDefaults must be an object keyed by agent name.")
@@ -471,7 +490,9 @@ async def update_control_panel_daemon_node_agent_role_defaults(node_id: str, req
 
 
 @router.delete("/admin/daemon-nodes/{node_id}", status_code=204)
-async def delete_control_panel_daemon_node(node_id: str, request: Request, ctx: AppContextDep) -> Response:
+def delete_control_panel_daemon_node(
+    node_id: str, request: Request, ctx: AppContextDep
+) -> Response:
     require_admin_session(request, ctx.auth_store)
     try:
         with ctx.registry.dispatch_lock:
@@ -522,9 +543,11 @@ def control_panel_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.post("/admin/daemon-nodes", status_code=201)
-async def create_control_panel_daemon_node(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_control_panel_daemon_node(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     employee_id = string_field(body, "employeeId") or None
     sandbox_mode = string_field(body, "sandboxMode") or "boxlite"
     requested_location = string_field(body, "nodeLocation") or None
@@ -593,15 +616,17 @@ def _chat_error(error: Exception) -> HTTPException:
 
 
 @router.get("/admin/chat-integrations")
-async def list_chat_integrations(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_chat_integrations(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     return {"integrations": ctx.chat_store.list_integrations()}
 
 
 @router.post("/admin/chat-integrations", status_code=201)
-async def create_chat_integration(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def create_chat_integration(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     user = require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         integration = ctx.chat_store.create_integration(body, actor=_actor_name(user))
     except (KeyError, ValueError) as error:
@@ -610,7 +635,9 @@ async def create_chat_integration(request: Request, ctx: AppContextDep) -> dict[
 
 
 @router.get("/admin/chat-integrations/{integration_id}")
-async def get_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def get_chat_integration(
+    integration_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
         integration = ctx.chat_store.get_integration(integration_id)
@@ -620,9 +647,15 @@ async def get_chat_integration(integration_id: str, request: Request, ctx: AppCo
 
 
 @router.patch("/admin/chat-integrations/{integration_id}")
-async def update_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def update_chat_integration(
+    integration_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
+) -> dict[str, Any]:
     user = require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         integration = ctx.chat_store.update_integration(integration_id, body, actor=_actor_name(user))
     except (KeyError, ValueError) as error:
@@ -712,9 +745,15 @@ async def _rotate_telegram_webhook_secret(
 
 
 @router.post("/admin/chat-integrations/{integration_id}/identity-links", status_code=201)
-async def add_chat_identity_link(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def add_chat_identity_link(
+    integration_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
+) -> dict[str, Any]:
     user = require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     employee_id = string_field(body, "employeeId")
     default_agent_id = string_field(body, "defaultAgentId")
     if not employee_record(ctx.auth_store, employee_id):
@@ -738,7 +777,9 @@ async def add_chat_identity_link(integration_id: str, request: Request, ctx: App
 
 
 @router.delete("/admin/chat-integrations/{integration_id}/identity-links/{link_id}")
-async def delete_chat_identity_link(integration_id: str, link_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def delete_chat_identity_link(
+    integration_id: str, link_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
     user = require_admin_session(request, ctx.auth_store)
     try:
         integration = ctx.chat_store.delete_identity_link(integration_id, link_id, actor=_actor_name(user))
@@ -748,9 +789,15 @@ async def delete_chat_identity_link(integration_id: str, link_id: str, request: 
 
 
 @router.post("/admin/chat-integrations/{integration_id}/allowed-conversations", status_code=201)
-async def add_chat_allowed_conversation(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def add_chat_allowed_conversation(
+    integration_id: str,
+    request: Request,
+    ctx: AppContextDep,
+    *,
+    _request_body: JsonBodyDep,
+) -> dict[str, Any]:
     user = require_admin_session(request, ctx.auth_store)
-    body = await json_body(request)
+    body = _request_body
     try:
         integration = ctx.chat_store.add_allowed_conversation(integration_id, body, actor=_actor_name(user))
     except (KeyError, ValueError) as error:
@@ -759,7 +806,7 @@ async def add_chat_allowed_conversation(integration_id: str, request: Request, c
 
 
 @router.delete("/admin/chat-integrations/{integration_id}/allowed-conversations/{conversation_record_id}")
-async def delete_chat_allowed_conversation(
+def delete_chat_allowed_conversation(
     integration_id: str,
     conversation_record_id: str,
     request: Request,
@@ -774,7 +821,9 @@ async def delete_chat_allowed_conversation(
 
 
 @router.get("/admin/chat-integrations/{integration_id}/audit")
-async def list_chat_integration_audit(integration_id: str, request: Request, ctx: AppContextDep, limit: int = 50) -> dict[str, Any]:
+def list_chat_integration_audit(
+    integration_id: str, request: Request, ctx: AppContextDep, limit: int = 50
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     try:
         ctx.chat_store.get_integration(integration_id)

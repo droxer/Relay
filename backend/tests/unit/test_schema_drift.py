@@ -172,8 +172,9 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
 @pytest.mark.parametrize("scoped", [False, True])
 def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema, monkeypatch, scoped):
     from concurrent.futures import ThreadPoolExecutor
-    from relay.persistence.task_store import DatabaseTaskStore
+
     from relay.persistence.store_common import relay_task_event
+    from relay.persistence.task_store import DatabaseTaskStore
     from relay.security.auth import DatabaseUserAuthStore
 
     monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
@@ -200,3 +201,92 @@ def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema
     with ThreadPoolExecutor(max_workers=4) as pool:
         assert sum(pool.map(attempt, tasks)) == 1
     assert sum(bool(task.get('startedAt')) for task in store.list_tasks()) == 1
+
+
+def test_postgres_task_admission_does_not_lock_other_employees(migrated_schema):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from relay.persistence.store_common import relay_task_event
+    from relay.persistence.task_store import DatabaseTaskStore
+
+    url, _ = migrated_schema
+    store = DatabaseTaskStore(url)
+    first = store.create_task({"title": "First", "ownerEmployeeId": str(uuid.uuid4())})
+    second = store.create_task(
+        {"title": "Second", "ownerEmployeeId": str(uuid.uuid4())}
+    )
+    acquired, release = Event(), Event()
+
+    def hold_first():
+        with store.task_write_scope(first["id"]):
+            store.append_event(
+                first["id"],
+                relay_task_event("task.status", first["id"], {"status": "running"}),
+            )
+            acquired.set()
+            assert release.wait(10)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        held = pool.submit(hold_first)
+        try:
+            assert acquired.wait(5)
+            other = pool.submit(
+                store.append_event,
+                second["id"],
+                relay_task_event("task.status", second["id"], {"status": "running"}),
+            )
+            assert other.result(timeout=3)["status"] == "running"
+        finally:
+            release.set()
+        held.result()
+
+
+def test_postgres_performance_projections_and_queue_pages(migrated_schema):
+    from relay.persistence.session_store import DatabaseSessionStore
+    from relay.persistence.store_common import relay_event
+    from relay.persistence.task_store import DatabaseTaskStore
+
+    url, _ = migrated_schema
+    owner = str(uuid.uuid4())
+    sessions = DatabaseSessionStore(url)
+    session = sessions.create_session(
+        {"taskGoal": "Projection", "workspacePath": "/work", "ownerEmployeeId": owner}
+    )
+    sessions.append_event(
+        session["id"],
+        relay_event("agent.started", session["id"], {"runId": "run", "agent": "codex"}),
+    )
+    for i in range(3):
+        sessions.append_event(
+            session["id"],
+            relay_event(
+                "artifact.created",
+                session["id"],
+                {
+                    "artifact": {
+                        "id": str(uuid.uuid4()),
+                        "kind": "workspace_file",
+                        "title": "file.txt",
+                        "path": "/work/file.txt",
+                        "createdAt": f"2026-09-17T00:00:0{i}.000Z",
+                    }
+                },
+            ),
+        )
+    summary = sessions.list_session_summaries(owner_employee_id=owner)[0]
+    assert summary["runCount"] == 1 and summary["hasRunningAgent"]
+    assert summary["artifactCount"] == 1
+    artifacts = sessions.list_artifact_summaries(
+        owner_employee_id=owner, workspace_path="/work", limit=2
+    )
+    assert len(artifacts) == 1 and artifacts[0]["createdAt"].endswith("02.000Z")
+    tasks = DatabaseTaskStore(url)
+    for i in range(5):
+        task = tasks.create_task({"title": str(i), "ownerEmployeeId": owner})
+        tasks.assign_task(task["id"], "codex")
+    first = tasks.list_dispatchable_tasks(limit=2)
+    second = tasks.list_dispatchable_tasks(limit=2, after=first[-1])
+    third = tasks.list_dispatchable_tasks(limit=2, after=second[-1])
+    assert len({t["id"] for t in [*first, *second, *third]}) == 5
+    assert len(tasks.list_tasks(employee_id=owner, limit=2)) == 2

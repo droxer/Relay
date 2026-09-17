@@ -13,8 +13,8 @@ from typing import Any
 from loguru import logger
 
 from ..persistence.store_common import relay_event
-from ..sessions.controller import SessionController
 from ..persistence.task_execution import request_execution_owner
+from ..sessions.controller import SessionController
 
 TERMINAL = {"completed", "failed", "cancelled"}
 
@@ -47,7 +47,9 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                 phase, reason = "running", "execution_active"
         else:
             phase, reason = "queued", "awaiting_dispatch"
-    elif any(run.get("status") == "running" for run in session.get("agentRuns", [])):
+    elif session.get("hasRunningAgent") or any(
+        run.get("status") == "running" for run in session.get("agentRuns", [])
+    ):
         # Legacy records without durable ownership need reconciliation, not a
         # guess based on a completed/failed session label.
         if session.get("status") != "cancelled":
@@ -91,13 +93,30 @@ class ExecutionLifecycleService:
 
     def annotate(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         store = self.registry.daemon_store
-        requests = {r["sessionId"]: r for r in store.list_active_run_requests()}
-        legacy = {r["sessionId"]: r for r in store.list_active_runs()}
+        if not sessions:
+            return []
+        session_ids = {s["id"] for s in sessions}
+        requests = {
+            r["sessionId"]: r
+            for r in store.list_active_run_requests(session_ids=session_ids)
+        }
+        legacy = {
+            r["sessionId"]: r for r in store.list_active_runs(session_ids=session_ids)
+        }
+        command_ids = {
+            r["currentCommandId"]
+            for r in requests.values()
+            if r.get("currentCommandId")
+        }
+        command_ids.update(
+            r["commandId"] for r in legacy.values() if r.get("commandId")
+        )
+        commands = store.get_commands(command_ids)
         result = []
         for session in sessions:
             request = requests.get(session["id"])
             command_id = (request or {}).get("currentCommandId") or (legacy.get(session["id"]) or {}).get("commandId")
-            command = store.get_command(command_id) if command_id else None
+            command = commands.get(command_id) if command_id else None
             if not request and command and command.get("status") not in TERMINAL:
                 request = {"status": "running", "state": {}}
             result.append({**session, "execution": execution_status(session, request, command)})

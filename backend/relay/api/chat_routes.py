@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from .deps import AppContextDep
-from .helpers import json_body, require_chat_service_request, string_field
+from .helpers import JsonBodyDep, require_chat_service_request, string_field
 
 router = APIRouter()
 
@@ -26,24 +26,28 @@ def _owned_by(session: dict[str, Any], employee_id: str) -> bool:
 
 
 @router.post("/internal/chat/identity/resolve")
-async def resolve_chat_identity(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def resolve_chat_identity(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     require_chat_service_request(request)
-    body = await json_body(request)
+    body = _request_body
     return {"identity": _resolve_owner(ctx, body)}
 
 
 @router.get("/internal/chat/integrations/runtime")
-async def runtime_chat_integrations(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def runtime_chat_integrations(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     """Active provider settings for the separately deployed chat webhook service."""
     require_chat_service_request(request)
     return {"integrations": ctx.chat_store.runtime_integrations()}
 
 
 @router.post("/internal/chat/conversation/session")
-async def chat_conversation_session(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def chat_conversation_session(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     """Resolve the live session a chat thread is currently bound to, if any."""
     require_chat_service_request(request)
-    body = await json_body(request)
+    body = _request_body
     identity = _resolve_owner(ctx, body)
     record = ctx.chat_store.get_conversation_session(body)
     if not record or not record.get("sessionId"):
@@ -59,10 +63,12 @@ async def chat_conversation_session(request: Request, ctx: AppContextDep) -> dic
 
 
 @router.post("/internal/chat/conversation/sessions")
-async def chat_conversation_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def chat_conversation_sessions(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     """List the owning employee's open conversations for switch/list commands."""
     require_chat_service_request(request)
-    body = await json_body(request)
+    body = _request_body
     identity = _resolve_owner(ctx, body)
     sessions = [
         session
@@ -73,10 +79,12 @@ async def chat_conversation_sessions(request: Request, ctx: AppContextDep) -> di
 
 
 @router.post("/internal/chat/conversation/mapping")
-async def chat_conversation_mapping(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def chat_conversation_mapping(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
     """Bind a chat thread to a session the resolved employee owns."""
     require_chat_service_request(request)
-    body = await json_body(request)
+    body = _request_body
     identity = _resolve_owner(ctx, body)
     session_id = string_field(body, "sessionId")
     if not session_id:

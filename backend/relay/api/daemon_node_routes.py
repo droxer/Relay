@@ -27,6 +27,7 @@ from ..services.node_agents import (
 from .deps import AppContextDep
 from .helpers import (
     EMPLOYEE_DEVICE_SANDBOX_MODE,
+    JsonBodyDep,
     actor_can_access_sandbox,
     assert_employee_device_runtime,
     authorized_sandbox_for_token,
@@ -208,13 +209,13 @@ def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.patch("/daemon-nodes/{sandbox_id}")
-async def update_daemon_node(
-    sandbox_id: str, request: Request, ctx: AppContextDep
+def update_daemon_node(
+    sandbox_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     if not actor.get("user"):
         raise HTTPException(401, "Authentication required.")
-    body = await json_body(request)
+    body = _request_body
     if set(body) != {"displayName"}:
         raise HTTPException(400, "Only displayName can be updated.")
     try:
@@ -235,8 +236,8 @@ async def update_daemon_node(
 
 
 @router.patch("/daemon-nodes/{sandbox_id}/disabled-agents")
-async def update_daemon_node_disabled_agents(
-    sandbox_id: str, request: Request, ctx: AppContextDep
+def update_daemon_node_disabled_agents(
+    sandbox_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     node = ctx.registry.get(sandbox_id)
@@ -244,7 +245,7 @@ async def update_daemon_node_disabled_agents(
         raise HTTPException(404, "Daemon node not found.")
     if not actor_can_access_sandbox(actor, node):
         raise HTTPException(403, "Daemon node access denied.")
-    body = await json_body(request)
+    body = _request_body
     raw = body.get("disabledAgents")
     if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):
         raise HTTPException(400, "disabledAgents must be an array of agent names.")
@@ -262,15 +263,15 @@ async def update_daemon_node_disabled_agents(
 
 
 @router.post("/daemon-node-enrollments/local", status_code=201)
-async def create_local_device_enrollment(
-    request: Request, ctx: AppContextDep
+def create_local_device_enrollment(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     # Enrolling a machine is a signed-in human action; a chat-service actor
     # carries no device to connect. Matches the rename route's gate.
     if not actor.get("user"):
         raise HTTPException(401, "Authentication required.")
-    body = await json_body(request)
+    body = _request_body
     workspace_path = string_field(body, "workspacePath")
     # An employee's own machine runs its agents directly, against the agent
     # installs already on it. BoxLite isolation belongs to hardware an admin
@@ -446,8 +447,8 @@ def disconnect_daemon_node(
 
 
 @router.patch("/daemon-nodes/{sandbox_id}/agent-role-overrides")
-async def update_daemon_node_agent_role_overrides(
-    sandbox_id: str, request: Request, ctx: AppContextDep
+def update_daemon_node_agent_role_overrides(
+    sandbox_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     sandbox = ctx.registry.get(sandbox_id)
     if not sandbox:
@@ -465,7 +466,7 @@ async def update_daemon_node_agent_role_overrides(
             raise HTTPException(403, "Daemon node access denied.")
     else:
         raise HTTPException(401, "Authentication required.")
-    body = await json_body(request)
+    body = _request_body
     raw = body.get("agentRoleOverrides")
     if not isinstance(raw, dict):
         raise HTTPException(
@@ -486,8 +487,10 @@ async def update_daemon_node_agent_role_overrides(
 
 
 @router.post("/daemon-node-registrations")
-async def register_daemon_node(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    body = await json_body(request)
+def register_daemon_node(
+    request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    body = _request_body
     if "token" not in body and bearer_token(request):
         body["token"] = bearer_token(request)
     try:
@@ -567,7 +570,8 @@ async def daemon_heartbeat(
     body = await json_body(request)
     try:
         return {
-            "heartbeat": ctx.registry.heartbeat(
+            "heartbeat": await run_in_threadpool(
+                ctx.registry.heartbeat,
                 sandbox_id,
                 bearer_token(request),
                 heartbeat_command_leases(body),
@@ -671,7 +675,7 @@ async def daemon_commands(
 
 
 @router.get("/daemon-nodes/{sandbox_id}/skill-blobs/{sha256}")
-async def daemon_skill_blob(
+def daemon_skill_blob(
     sandbox_id: str, sha256: str, request: Request, ctx: AppContextDep
 ) -> Response:
     """Serve only content named by this node's active issuing run command."""

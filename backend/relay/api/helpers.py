@@ -8,9 +8,9 @@ import re
 import secrets
 import shlex
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import HTTPException, Request, Response
+from fastapi import Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from starlette.requests import ClientDisconnect
@@ -85,6 +85,11 @@ async def json_body(request: Request) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return value if isinstance(value, dict) else {}
+
+
+# Parse the bounded request stream asynchronously, then let FastAPI run the
+# synchronous handler (including auth and database transactions) in its pool.
+JsonBodyDep = Annotated[dict[str, Any], Depends(json_body)]
 
 
 def bearer_token(request: Request) -> str | None:
