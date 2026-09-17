@@ -42,7 +42,6 @@ from .dispatch_retry import (
     safe_dispatch_error_message,
 )
 from .project_runtime import ProjectDispatchError, resolve_project_task_assignments
-from .task_deletion import task_has_active_linked_session
 from .task_workspace import (
     recorded_task_workspace,
     resolve_task_workspace,
@@ -244,8 +243,14 @@ class TaskDispatcher:
             )
         # Queued executions remain assigned until the daemon starts. Do not
         # re-resolve (and potentially block) work that already has an owner.
-        if dispatch_claim_active(self.task) or task_has_active_linked_session(
-            self.ctx.session_store, self.task
+        daemon_store = self.ctx.registry.daemon_store
+        if (
+            dispatch_claim_active(self.task)
+            or daemon_store.active_run_request_for_task(self.task["id"])
+            or any(
+                daemon_store.active_run_request_for_session_any_node(session_id)
+                for session_id in self.task.get("linkedSessionIds", [])
+            )
         ):
             return _result(
                 self.task,
@@ -314,6 +319,8 @@ class TaskDispatcher:
                 self.task = self.ctx.task_store.update_task(
                     self.task["id"], {"status": "blocked", "blockerReason": message}
                 )
+            else:
+                self._mark_assigned_if_backlog()
             return _record_result(
                 self.ctx,
                 self.task["id"],
@@ -324,6 +331,8 @@ class TaskDispatcher:
         except AgentRoutingError as error:
             if not self.record_pending:
                 raise
+            if error.code not in PERMANENT_DISPATCH_CODES:
+                self._mark_assigned_if_backlog()
             return self._routing_error_result(error)
 
     def _resolve_team_assignments(self) -> DispatchResult | None:

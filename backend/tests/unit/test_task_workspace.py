@@ -106,3 +106,20 @@ def test_unrecoverable_history_or_changed_root_does_not_create_a_new_workspace()
             resolve_task_workspace(task, node={"id": "one", "workspacePath": "/replacement", **TASK_CAPABLE_NODE})
     with pytest.raises(ValueError, match="workspace_unavailable"):
         resolve_task_workspace({"id": "new"}, node=None)
+
+
+def test_unstarted_thread_can_choose_its_first_computer_but_executed_history_cannot():
+    from types import SimpleNamespace
+    import pytest
+    from relay.services.task_workspace import task_workspace_nodes
+
+    node = {"id": "first", **OLD_NODE}
+    session = {"id": "pending", "status": "running", "agentRuns": []}
+    store = SimpleNamespace(get_session=lambda _: session)
+    task = {"id": "task", "linkedSessionIds": ["pending"]}
+    assert task_workspace_nodes(task, [node], store) == [node]
+    assert resolve_task_workspace(task, node=node, session_store=store) == ("node-root", None)
+    session["agentRuns"] = [{"id": "old-run", "status": "completed"}]
+    assert task_workspace_nodes(task, [node], store) == []
+    with pytest.raises(ValueError, match="workspace_unavailable"):
+        resolve_task_workspace(task, node=node, session_store=store)
