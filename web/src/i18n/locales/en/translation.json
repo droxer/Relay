@@ -1412,8 +1412,9 @@
     },
     "stderr_omitted_one": "… {{count}} earlier stderr line",
     "stderr_omitted_other": "… {{count}} earlier stderr lines",
-    "reasoning_expand": "Show reasoning",
-    "reasoning_collapse": "Hide reasoning",
+    "reasoning_label": "Reasoning",
+    "reasoning_steps_one": "{{count}} step",
+    "reasoning_steps_other": "{{count}} steps",
     "command_expand_one": "Show {{count}} more line",
     "command_expand_other": "Show {{count}} more lines",
     "command_collapse": "Show less"

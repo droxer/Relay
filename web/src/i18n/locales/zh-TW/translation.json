@@ -1400,8 +1400,8 @@
       "notFound": "找不到"
     },
     "stderr_omitted_other": "… 已省略前面 {{count}} 行 stderr",
-    "reasoning_expand": "顯示推理過程",
-    "reasoning_collapse": "隱藏推理過程",
+    "reasoning_label": "推理過程",
+    "reasoning_steps_other": "{{count}} 步",
     "command_expand_other": "顯示其餘 {{count}} 行",
     "command_collapse": "收起"
   },

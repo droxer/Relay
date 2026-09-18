@@ -569,6 +569,37 @@ Existing 32px button consumers use `dense` explicitly. Touch controls may
 increase to the shared target floor; compact visual controls use separate hit
 areas. Do not change row density as a side effect of aligning API names.
 
+### Agent turn
+
+The transcript renders one agent turn as a stack of tiers, each identified by a
+marker rather than by a frame. Raw JSONL never reaches the reader.
+
+| Tier | Marker | Type | Ink |
+| --- | --- | --- | --- |
+| Answer (prose) | `●` per turn | `--fs-4`, prose leading | `--ink-1` |
+| Reasoning | disclosure chevron | `--fs-2` header, `--fs-3` body | `--ink-3` |
+| Tool / command | `⏺` | `--fs-2`, mono for the command | `--ink-2` |
+
+- Reasoning is a **disclosure**, not a body of text with a toggle under it: a
+  header row names the step, and the open body lists the steps under a hairline
+  rule hung from the chevron's centre. A reasoning summary arrives as titled
+  steps (Codex writes each as a bold title with an optional body), so the titles
+  render as titles — never as `**` in the transcript.
+- How many blocks a CLI emits is its own chunking, not the agent's train of
+  thought, so adjacent reasoning merges into one disclosure. Only reasoning
+  separated by real work — a tool call, a command, prose — starts a new one.
+- The collapsed header names the step the thinking **started** with and counts
+  the rest; a live one names the step the agent is on **now** and breathes on
+  the shared `blink` keyframe. Live reasoning opens itself, because it is often
+  the turn's only visible progress; a reader who opens or closes a block owns it
+  from then on.
+- Body lines stay verbatim: one line per paragraph, `pre-wrap`, never reflowed
+  as Markdown — the model's own line breaks carry the structure.
+- Disclosure headers and expanders are inline **text** affordances, not
+  controls: bare `<button>`s that sit in their tier's ink and take the focus
+  ring from base.css. A control-height `Button` in this position puts half a row
+  of dead space under every collapsed block.
+
 ## Reviewing changes
 
 Run `npm run dev -w web` and open `/dev/design-system` for a specimen composed
