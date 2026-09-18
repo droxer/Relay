@@ -6,6 +6,7 @@ import {
   NavThreads,
 } from "./icons";
 import { ArtifactNavButton } from "./ArtifactNavButton";
+import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,9 @@ export function ThreadHeader({ activeSession, onRetryExecutionRecovery, particip
   activeSession: RelaySession | undefined;
   onRetryExecutionRecovery?: () => Promise<void>;
   /** Agents in the room, in join order. Shown only once a thread has more
-   *  than one — a solo thread already names its agent in the composer. */
+   *  than one — a solo thread already names its agent in the composer. Drawn
+   *  as a face stack: the header is a row the title has first claim on, so
+   *  the roster costs a fixed width and keeps its names in tooltips. */
   participants?: EmployeeAgent[];
   artifactCount: number;
   spaceOpen: boolean;
@@ -35,24 +38,26 @@ export function ThreadHeader({ activeSession, onRetryExecutionRecovery, particip
         <div className="chat-title-text">
           <h2 title={activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : undefined}>{activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : t("thread.new_thread")}</h2>
         {activeSession?.execution && activeSession.execution.phase !== "terminal" ? (
-          <span className="text-xs text-muted-foreground truncate" role="status">{t(`thread.execution_${activeSession.execution.phase}`)}{activeSession.deletionRequestedAt ? ` · ${t("thread.deletion_pending")}` : ""}</span>
+          <span className="chat-title-status" role="status">{t(`thread.execution_${activeSession.execution.phase}`)}{activeSession.deletionRequestedAt ? ` · ${t("thread.deletion_pending")}` : ""}</span>
         ) : null}
         </div>
       </div>
       {participants && participants.length > 1 ? (
-        <div className="chat-participants" aria-label={t("thread.participants")}>
-          {participants.map((participant) => (
-            <span key={participant.id} className="chat-participant" title={participant.displayName}>
+        <AvatarStack
+          className="chat-participants"
+          label={t("thread.participants")}
+          items={participants.map((participant) => ({
+            id: participant.id,
+            name: participant.displayName,
+            mark: (
               <ProfileImage
                 src={participant.profileImageUrl}
                 alt=""
                 fallback={<IdentityMark kind="agent" />}
-                className="chat-participant-mark"
               />
-              <span translate="no">{participant.displayName}</span>
-            </span>
-          ))}
-        </div>
+            ),
+          }))}
+        />
       ) : null}
       <div className="chat-tools">
         {activeSession?.execution?.blockingReason === "finalization_failed" && onRetryExecutionRecovery ? (

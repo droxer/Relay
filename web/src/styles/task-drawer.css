@@ -156,42 +156,11 @@
   color: var(--warn);
 }
 
+/* The team's faces, drawn with the shared stack (avatar-stack.css) — the same
+   shape the thread header uses for its participants, because it is the same
+   fact. Only the drawer's own context lives here. */
 .task-assignment-roster {
-  display: flex;
-  align-items: center;
   margin-top: var(--sp-1);
-  /* 3px: offsets the first avatar's -3px overlap so the stack's leading edge
-     still aligns with the text above it. */
-  padding-left: 3px;
-}
-
-.task-assignment-member,
-.task-assignment-member-more {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--avatar-sm);
-  height: var(--avatar-sm);
-  /* -3px: overlaps the avatar stack so the faces cluster into one group
-     instead of reading as separate chips. */
-  margin-left: -3px;
-  border: 2px solid var(--surface-1);
-  border-radius: var(--r-full);
-  background: var(--surface-3);
-  color: var(--ink-2);
-}
-
-/* A real override of the group rule above, not a second copy of the selector:
-   the "+N" chip shares the faces' circle and border but grows with its label
-   instead of staying square, and recedes an ink step because it is a count,
-   not a person. */
-.task-assignment-member-more {
-  width: auto;
-  min-width: var(--avatar-sm);
-  padding-inline: var(--sp-1);
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
 }
 
 /* Drawer input elevation moved to .adm-drawer in admin-v2-drawers.css so every

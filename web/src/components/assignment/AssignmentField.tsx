@@ -14,6 +14,7 @@ import { teamAvailability } from "../../lib/taskAssignment";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
 import { navigateToAppPath } from "../../lib/appRoute";
 import { AgentMark } from "../AgentMark";
+import { AvatarStack } from "../AvatarStack";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import { ICON, NavAgents, NavTeams } from "../icons";
@@ -107,14 +108,16 @@ function AssignmentSummary({
               })}
         </span>
         {team && team.members.length > 0 ? (
-          <span className="task-assignment-roster" aria-label={t("backlog.team_roster")}>
-            {team.members.slice(0, 5).map((member) => (
-              <span key={member.id} className="task-assignment-member" title={member.displayName}>
-                <AgentMark agent={member.executorKind} size={ICON.xs} />
-              </span>
-            ))}
-            {team.members.length > 5 ? <span className="task-assignment-member-more">+{team.members.length - 5}</span> : null}
-          </span>
+          <AvatarStack
+            className="task-assignment-roster"
+            label={t("backlog.team_roster")}
+            max={5}
+            items={team.members.map((member) => ({
+              id: member.id,
+              name: member.displayName,
+              mark: <AgentMark agent={member.executorKind} size={ICON.xs} />,
+            }))}
+          />
         ) : null}
         {availability && !ready ? (
           <span className="task-assignment-summary-hint">{t("backlog.assignment_waiting_hint")}</span>
