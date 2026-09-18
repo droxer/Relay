@@ -2,6 +2,15 @@ import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { createElement } from "react";
 
+// jsdom ships no PointerEvent, but base-ui controls construct one from the
+// owner window on click, so any test that clicks a <Checkbox>/<Switch> throws
+// an unhandled "PointerEvent is not a constructor" without this shim.
+if (!("PointerEvent" in globalThis)) {
+  class PointerEventShim extends MouseEvent {}
+  Object.assign(globalThis, { PointerEvent: PointerEventShim });
+  if (typeof window !== "undefined") Object.assign(window, { PointerEvent: PointerEventShim });
+}
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));

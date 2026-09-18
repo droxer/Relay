@@ -19,7 +19,7 @@ test("team responsibilities can be edited and persist after reload", async ({ pa
   await page.goto("/teams/delivery");
   await page.getByRole("button", { name: "Edit members" }).click();
   await page.getByLabel("Responsibility", { exact: true }).nth(1).fill("Own the API and regression tests");
-  await page.getByLabel("Acceptance criteria (one per line)").fill("Existing clients remain compatible");
+  await page.getByLabel("Acceptance criteria").fill("Existing clients remain compatible");
   await page.getByRole("button", { name: "Save team", exact: true }).click();
   await expect.poll(() => saved?.memberConfigs).toEqual({ builder: { responsibility: "Own the API and regression tests" } });
   await page.reload();

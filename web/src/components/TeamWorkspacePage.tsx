@@ -13,7 +13,7 @@ import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { teamAvailability } from "../lib/taskAssignment";
-import { teamMutationInput } from "../lib/teamForm";
+import { teamContractChanged, teamMutationInput } from "../lib/teamForm";
 import type { AgentTeam } from "../types";
 import {
   ActionEdit,
@@ -81,8 +81,11 @@ function TeamProfile({
   const leadRef = useRef<HTMLButtonElement>(null);
   const busy = updateTeamMutation.isPending || deleteTeamMutation.isPending
     || imageSaving;
-  const draftDirty = JSON.stringify(memberConfigs) !== JSON.stringify(team.memberConfigs ?? {})
-    || JSON.stringify(acceptanceCriteria) !== JSON.stringify(team.acceptanceCriteria ?? [])
+  const draftDirty = teamContractChanged(
+    { memberConfigs, acceptanceCriteria },
+    team,
+    memberIds,
+  )
     || leadId !== (team.leadAgentId ?? "")
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
@@ -326,8 +329,21 @@ function TeamProfile({
                               <span className="team-profile-member-lead">{t("teams.lead_badge")}</span>
                             ) : null}
                           </span>
-                          {(team.memberConfigs?.[member.id]?.role ?? member.defaultRole) ? <span>{t(`team_work.role_${team.memberConfigs?.[member.id]?.role ?? member.defaultRole}`)}</span> : null}
-                          {team.memberConfigs?.[member.id]?.responsibility ? <span>{team.memberConfigs[member.id].responsibility}</span> : null}
+                          {/* Role and scope ride the copy stack's supporting
+                              rung (<small> is what this stack clamps and
+                              quiets); a bare <span> read louder than the name's
+                              own meta line and never truncated, so a long
+                              responsibility blew the row open. */}
+                          {(team.memberConfigs?.[member.id]?.role ?? member.defaultRole) ? (
+                            <small>
+                              {t(`team_work.role_${team.memberConfigs?.[member.id]?.role ?? member.defaultRole}`)}
+                            </small>
+                          ) : null}
+                          {team.memberConfigs?.[member.id]?.responsibility ? (
+                            <small title={team.memberConfigs[member.id].responsibility}>
+                              {team.memberConfigs[member.id].responsibility}
+                            </small>
+                          ) : null}
                           <AgentMetaLine
                             executorKind={member.executorKind}
                             placements={placements}

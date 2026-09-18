@@ -18,9 +18,13 @@ it("edits responsibilities and makes on-request participation optional in the sa
   }
   render(<Editor />);
   fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Own the reset API" } });
-  fireEvent.change(screen.getByLabelText("team_work.criteria"), { target: { value: "No reusable reset token\n" } });
-  fireEvent.click(screen.getByLabelText("team_work.on_request"));
-  expect((screen.getByLabelText("team_work.required") as HTMLInputElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText(/team_work\.criteria/), { target: { value: "No reusable reset token\n" } });
+  // <Checkbox> is the base-ui primitive: a role=checkbox element plus a
+  // visually hidden native input, so the control is addressed by role, and
+  // disablement reads off the primitive's own state attribute.
+  fireEvent.click(screen.getByRole("checkbox", { name: "team_work.on_request" }));
+  expect(screen.getByRole("checkbox", { name: "team_work.required" })
+    .hasAttribute("data-disabled")).toBe(true);
   const payload = JSON.parse(screen.getByTestId("payload").textContent!);
   expect(payload.memberConfigs.builder).toEqual({ responsibility: "Own the reset API", participation: "on_request", required: false });
   expect(payload.acceptanceCriteria).toEqual(["No reusable reset token"]);
@@ -34,6 +38,9 @@ it("shows acceptance evidence and attributed review findings without claiming ac
   render(<CollaborationWork session={session} agents={[]} />);
   expect(screen.getByText("team_work.status_needs_changes")).toBeTruthy();
   expect(screen.getByText("Reused token returned 200")).toBeTruthy();
-  expect(screen.getByText("api: Reject used tokens")).toBeTruthy();
+  // A finding renders with the message grammar: bold kind, the work item it
+  // targets, then the note.
+  expect(screen.getByText(/→ api: Reject used tokens/)).toBeTruthy();
+  expect(screen.getByText("team_work.finding")).toBeTruthy();
   expect(screen.queryByText("team_work.status_accepted")).toBeNull();
 });

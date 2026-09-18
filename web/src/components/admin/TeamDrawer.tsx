@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "rea
 import { useTranslation } from "react-i18next";
 import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
-import { teamMutationInput } from "../../lib/teamForm";
+import { teamContractChanged, teamMutationInput } from "../../lib/teamForm";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
 import { PresetAvatarGrid } from "../PresetAvatarGrid";
 import { TeamResponsibilities } from "../TeamResponsibilities";
@@ -79,8 +79,7 @@ export function TeamDrawer({
   const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
   const saving = createTeamMutation.isPending || updateTeamMutation.isPending;
   const hasUnsavedChanges = open && (
-    JSON.stringify(memberConfigs) !== JSON.stringify(team?.memberConfigs ?? {})
-    || JSON.stringify(acceptanceCriteria) !== JSON.stringify(team?.acceptanceCriteria ?? [])
+    teamContractChanged({ memberConfigs, acceptanceCriteria }, team ?? {}, memberIds)
     || name.trim() !== (team?.name ?? "").trim()
     || leadId !== (team?.leadAgentId ?? "")
     || memberIds.length !== (team?.memberAgentIds ?? []).length

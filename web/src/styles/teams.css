@@ -434,3 +434,84 @@
   }
 
 }
+
+/* Team work contracts — the per-member responsibility editor shared by the
+   admin TeamDrawer and the team workspace profile. It sits between the member
+   picker and the lead select in both forms, so it borrows `.team-member-*`
+   anatomy: hairline-separated rows in one bordered well, not `py-3` air. */
+.team-work-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1-5);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.team-work-fieldset legend {
+  margin-bottom: var(--sp-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-2);
+}
+
+.team-work-help {
+  margin: 0 0 var(--sp-2);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.team-work-members {
+  display: grid;
+  gap: var(--sp-hairline);
+  margin-bottom: var(--sp-4);
+  overflow: hidden;
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--line-1);
+}
+
+.team-work-member {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface-0);
+}
+
+.team-work-member-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.team-work-member-lead {
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.team-work-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+}
+
+/* Same flag row as .project-member-flag — a checkbox and its copy on the
+   supporting rung, never the label rung. */
+.team-work-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  cursor: pointer;
+}
+
+.team-work-fieldset:disabled .team-work-flag { cursor: default; }
