@@ -1,5 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+
+const confirmDialog = vi.fn();
+vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: confirmDialog, announce: vi.fn() }) }));
 import { ExecutionRecoveryPanel, TaskRecoveryPanel } from "../src/components/ExecutionRecoveryPanel";
 import { executionRecoveryGuide, taskRecoveryGuide } from "../src/lib/executionRecovery";
 import type { RelaySession, RelayTaskListItem } from "../src/types";
@@ -162,4 +165,48 @@ it("lets one drawer surface a thread once, without hiding a different blocker", 
   const blocked = { ...task("task_execution_active"), workspaceWaiting: { runId: "run", sessionId: "thread-1", blockingSessionId: "blocking-thread" } };
   view.rerender(<TaskRecoveryPanel task={blocked} excludeSessionId="thread-1" />);
   expect(screen.getByRole("link", { name: "recovery.thread" }).getAttribute("href")).toBe("/threads/blocking-thread");
+});
+
+/* Reporting an agent gone is the only way out of a thread whose computer never
+   came back: nothing else releases the execution, so the thread can never be
+   deleted and the node cannot be deleted either. It is also an assertion, not
+   an observation — it must be deliberate and it must not be offered where
+   Relay can still expect real evidence. */
+it.each([
+  ["termination_unconfirmed", true], ["orphaned_run", true],
+  ["execution_unconfirmed", true], ["future_reason", true],
+  ["finalization_failed", false], ["awaiting_dispatch", false],
+  ["awaiting_termination", false], ["saving_results", false],
+])("offers the gone report only where evidence can no longer arrive: %s", (reason, offered) => {
+  confirmDialog.mockResolvedValue(true);
+  render(<ExecutionRecoveryPanel session={session(reason)} onReportGone={vi.fn()} onRetry={vi.fn()} />);
+  expect(Boolean(screen.queryByRole("button", { name: "recovery.report_gone" }))).toBe(offered);
+});
+it("asks before asserting an agent is gone, and does nothing when the answer is no", async () => {
+  const report = vi.fn().mockResolvedValue(undefined);
+  confirmDialog.mockResolvedValue(false);
+  render(<ExecutionRecoveryPanel session={session("orphaned_run")} onReportGone={report} />);
+  fireEvent.click(screen.getByRole("button", { name: "recovery.report_gone" }));
+  await waitFor(() => expect(confirmDialog).toHaveBeenCalled());
+  expect(confirmDialog.mock.calls[0][0].tone).toBe("danger");
+  expect(report).not.toHaveBeenCalled();
+});
+it("reports the agent gone once confirmed, and surfaces a failure", async () => {
+  const report = vi.fn().mockResolvedValue(undefined);
+  confirmDialog.mockResolvedValue(true);
+  const view = render(<ExecutionRecoveryPanel session={session("execution_unconfirmed")} onReportGone={report} />);
+  fireEvent.click(screen.getByRole("button", { name: "recovery.report_gone" }));
+  await waitFor(() => expect(report).toHaveBeenCalledOnce());
+  await waitFor(() => expect(view.container.querySelector("[role='status']")?.textContent).toBe("recovery.gone_reported"));
+  const failing = vi.fn().mockRejectedValue(new Error("offline"));
+  view.rerender(<ExecutionRecoveryPanel session={{ ...session("orphaned_run"), id: "thread-9" }} onReportGone={failing} />);
+  fireEvent.click(screen.getByRole("button", { name: "recovery.report_gone" }));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("recovery.action_failed"));
+});
+it("does not offer the gone report on a healthy thread or without a handler", () => {
+  confirmDialog.mockResolvedValue(true);
+  const view = render(<ExecutionRecoveryPanel session={session("orphaned_run")} />);
+  expect(screen.queryByRole("button", { name: "recovery.report_gone" })).toBeNull();
+  view.rerender(<ExecutionRecoveryPanel session={{ ...session(""), execution: execution("execution_active", "running") }} onReportGone={vi.fn()} />);
+  expect(view.container.textContent).toBe("");
 });

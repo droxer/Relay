@@ -12,11 +12,18 @@ from typing import Any
 
 from loguru import logger
 
+from ..persistence.daemon_store import (
+    TERMINAL_CLAIM_EXPIRES_STATE_KEY,
+    TERMINAL_CLAIM_ID_STATE_KEY,
+)
 from ..persistence.store_common import relay_event
 from ..persistence.task_execution import request_execution_owner
 from ..sessions.controller import SessionController
 
 TERMINAL = {"completed", "failed", "cancelled"}
+RECONCILED_ERROR = (
+    "Execution reported gone by an operator; the computer never sent exit evidence."
+)
 
 
 def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
@@ -126,6 +133,74 @@ class ExecutionLifecycleService:
         # File-backed command admission uses the same interprocess lock. The
         # database store instead locks the session row during admission/delete.
         return getattr(self.registry.daemon_store, "_run_request_claim_lock", nullcontext)()
+
+    def reconcile(self, session_id: str, employee_id: str) -> dict[str, Any] | None:
+        """Record a person's assertion that a blocked execution is really gone.
+
+        Exit evidence only ever arrives from the daemon, so a computer that
+        never comes back holds its reservation forever: the thread cannot be
+        deleted, and the node cannot be deleted either because the stuck
+        request still counts as active work. This is the one path that releases
+        a reservation without that evidence. It is therefore confined to an
+        execution Relay has already given up on, and the assertion is written
+        to the log with its actor so the record never reads as observed exit.
+
+        Returns None when the execution does not qualify; the caller refuses.
+        """
+        with self.registry.dispatch_lock, self.admission_scope():
+            session = self.registry.store.get_session(session_id)
+            status = self.status(session)
+            if status["phase"] != "recovery_required":
+                return None
+            request = self.registry.daemon_store.active_run_request_for_session_any_node(session_id)
+            session = self.registry.store.append_event(session_id, relay_event(
+                "session.execution_reconciled", session_id,
+                {"actorEmployeeId": employee_id, "blockingReason": status["blockingReason"]},
+            ))
+            # The delivered command keeps its own liveness, so closing only the
+            # request would leave the legacy active-run fallback reporting the
+            # execution as live. Record the same terminal transition the
+            # daemon's own run.cancelled would have produced.
+            for active in self.registry.daemon_store.list_active_runs(session_ids={session_id}):
+                self.registry.daemon_store.mark_command_cancelled(active["nodeId"], {
+                    "commandId": active["commandId"], "sessionId": session_id,
+                    "runId": active["runId"], "agent": active.get("agent"),
+                    "reason": RECONCILED_ERROR,
+                })
+                self.registry.clear_run_output(active["runId"])
+                self.registry.active_commands.pop(active["commandId"], None)
+            if request:
+                state = dict(request.get("state") or {})
+                # Drop the retry/claim bookkeeping too, or finalization keeps
+                # waking up for a run nobody is going to report on.
+                for key in (TERMINAL_CLAIM_ID_STATE_KEY, TERMINAL_CLAIM_EXPIRES_STATE_KEY,
+                            "_relay_recovery_required", "_relay_finalization_retry_at"):
+                    state.pop(key, None)
+                self.registry.daemon_store.update_run_request(request["id"], {
+                    "status": "cancelled", "state": state,
+                    "error": RECONCILED_ERROR,
+                })
+            for run in session.get("agentRuns", []):
+                if run.get("status") != "running":
+                    continue
+                session = self.registry.store.append_event(session_id, relay_event(
+                    "agent.completed", session_id, {
+                        "runId": run["id"], "agent": run["agent"], "status": "cancelled",
+                        "exitCode": 130, "agentLog": run.get("agentLog", ""),
+                    },
+                ))
+            if session.get("status") not in TERMINAL:
+                # Same seam deletion uses, so task execution bookkeeping is
+                # released exactly once and in one place.
+                controller = SessionController(
+                    self.registry.store, task_store=self.registry.task_store,
+                    task_id=(request or {}).get("taskId") or session.get("taskId"),
+                    task_execution_owner=request_execution_owner(request) if request else None,
+                )
+                session = controller.cancel_session(session_id, RECONCILED_ERROR)
+            logger.info("Execution reconciled by assertion", session_id=session_id,
+                        employee_id=employee_id, blocking_reason=status["blockingReason"])
+            return self.status(session)
 
     def request_delete(self, session_id: str, employee_id: str) -> dict[str, Any] | None:
         with self.registry.dispatch_lock, self.admission_scope():

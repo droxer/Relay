@@ -632,6 +632,26 @@ def retry_execution_recovery(session_id: str, request: Request, ctx: AppContextD
     return request.app.state.execution_lifecycle.status(session)
 
 
+@router.post("/threads/{session_id}/execution/reconcile")
+def reconcile_execution(session_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    """Release a blocked execution on a person's word that the agent is gone.
+
+    The retry above repairs a save that failed after the daemon reported exit.
+    This one covers the case where the report is never coming: without it a
+    thread whose computer died can never be deleted, and the node cannot be
+    deleted either while its stuck request counts as active work.
+    """
+    actor = request_actor(request, ctx.auth_store)
+    get_session_for_actor(ctx.session_store, session_id, actor)
+    status = request.app.state.execution_lifecycle.reconcile(session_id, actor["employeeId"])
+    if status is None:
+        raise HTTPException(
+            409,
+            "Only an execution Relay has given up on can be reported gone.",
+        )
+    return status
+
+
 @router.patch("/threads/{session_id}")
 def update_session(
     session_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep

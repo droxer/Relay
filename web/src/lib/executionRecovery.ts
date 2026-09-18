@@ -7,12 +7,17 @@ export type RecoveryGuide = {
   key: string;
   destination?: "computer" | "agents" | "teams" | "projects" | "backlog";
   tone?: "info";
+  /** Whether a person may assert the agent is gone. True only where the exit
+   *  evidence Relay is waiting for can no longer arrive on its own: a retry
+   *  repairs a failed save, but nothing repairs a computer that is never
+   *  coming back, and without this the thread can never be deleted. */
+  reportGone?: true;
 };
 const executionGuides: Record<string, RecoveryGuide> = {
-  finalization_failed: { key: "finalization_failed" },
-  termination_unconfirmed: { key: "termination_unconfirmed", destination: "computer" },
-  orphaned_run: { key: "orphaned_run", destination: "computer" },
-  execution_unconfirmed: { key: "execution_unconfirmed", destination: "computer" },
+  finalization_failed: { key: "finalization_failed" },  // the result is retained; retry saves it
+  termination_unconfirmed: { key: "termination_unconfirmed", destination: "computer", reportGone: true },
+  orphaned_run: { key: "orphaned_run", destination: "computer", reportGone: true },
+  execution_unconfirmed: { key: "execution_unconfirmed", destination: "computer", reportGone: true },
   awaiting_dispatch: { key: "awaiting_dispatch", destination: "computer" },
   awaiting_termination: { key: "awaiting_termination", destination: "computer" },
   saving_results: { key: "saving_results" },
@@ -21,7 +26,7 @@ const executionGuides: Record<string, RecoveryGuide> = {
 export function executionRecoveryGuide(execution?: RelaySession["execution"]): RecoveryGuide | null {
   if (!execution || execution.phase === "terminal" || execution.phase === "running") return null;
   const reason = execution.blockingReason ?? "";
-  return Object.hasOwn(executionGuides, reason) ? executionGuides[reason] : { key: "unknown", destination: "computer" };
+  return Object.hasOwn(executionGuides, reason) ? executionGuides[reason] : { key: "unknown", destination: "computer", reportGone: true };
 }
 
 // Use structured dispatch codes, never guess the cause from free-form error text.

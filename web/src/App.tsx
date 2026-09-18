@@ -1,6 +1,6 @@
 "use client";
 
-import { retryExecutionRecovery } from "./api";
+import { reconcileExecution, retryExecutionRecovery } from "./api";
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -812,6 +812,11 @@ export function App() {
             onRetryExecutionRecovery={async () => {
               if (!activeSession) return;
               await retryExecutionRecovery(activeSession.id, selectedToken);
+              await refresh();
+            }}
+            onReportExecutionGone={async () => {
+              if (!activeSession) return;
+              await reconcileExecution(activeSession.id, selectedToken);
               await refresh();
             }}
             running={threadRunning}
