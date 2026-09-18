@@ -73,33 +73,29 @@
   white-space: nowrap;
 }
 
-/* Room roster: who is in this thread, shown only once it has more than one
-   agent. Sits between the title and the tools so a thread that grew reads
-   differently at a glance from one that never did. */
-.chat-participants {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-  margin-inline-start: auto;
-  overflow: hidden;
-}
-
-.chat-participant {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  min-width: 0;
+/* The thread's status while it runs. A short fixed phrase, so it never
+   shrinks: the title beside it is the long, variable string, and it is the
+   one that should give up width. */
+.chat-title-status {
+  flex: none;
   color: var(--ink-3);
-  font: var(--type-label);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   white-space: nowrap;
 }
 
-.chat-participant-mark {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  flex: none;
-  border-radius: var(--r-full);
+/* Room roster: who is in this thread, shown only once it has more than one
+   agent. Sits between the title and the tools so a thread that grew reads
+   differently at a glance from one that never did.
+
+   The stack itself (.avatar-stack) owns the geometry; the header only says
+   where it sits and what it sits on. It used to render each name inline,
+   which put a variable-width list in the middle of the row: the title
+   ellipsed early to pay for it, and the last name still clipped mid-word
+   against the tools. Faces are fixed width and the names moved to tooltips. */
+.chat-participants {
+  --stack-ground: var(--surface-0);
+  margin-inline-start: auto;
 }
 
 .chat-tools {

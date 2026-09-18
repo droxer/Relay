@@ -1,0 +1,58 @@
+/* ============================ avatar stack ============================ */
+
+/* Who is on this — a team's roster, a thread's participants — drawn as one
+   group instead of a list of chips. The faces overlap so the eye reads a
+   group, and the names live in each face's tooltip so the group costs a fixed
+   width no matter how long the names are. That fixed width is the point: this
+   sits in rows (a header, a summary line) where a name list would eat the
+   title beside it and then clip mid-word.
+
+   --stack-ground is the surface the stack sits on; the face borders punch the
+   overlap back out of it, so a call site on anything but --surface-1 sets it. */
+.avatar-stack {
+  --stack-ground: var(--surface-1);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  /* 3px: offsets the first face's -3px overlap so the stack's leading edge
+     still aligns with whatever sits above or before it. */
+  padding-left: 3px;
+}
+
+.avatar-stack-face,
+.avatar-stack-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  /* -3px: overlaps the faces so they cluster into one group instead of
+     reading as separate chips. */
+  margin-left: -3px;
+  border: 2px solid var(--stack-ground);
+  /* Control radius, not --r-full: an agent's mark stays square-ish here for
+     the same reason it does in .profile-image — agents are machines, and the
+     round human-avatar language belongs to people. */
+  border-radius: var(--r-2);
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+
+/* A real override of the group rule above, not a second copy of the selector:
+   the "+N" chip shares the faces' box and border but grows with its label
+   instead of staying square, and recedes an ink step because it is a count,
+   not a person. */
+.avatar-stack-more {
+  width: auto;
+  min-width: var(--avatar-sm);
+  padding-inline: var(--sp-1);
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.avatar-stack-face > .profile-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}

@@ -72,6 +72,7 @@
 @import "./styles/teams.css" layer(relay);
 @import "./styles/computer.css" layer(relay);
 @import "./styles/profile-image.css" layer(relay);
+@import "./styles/avatar-stack.css" layer(relay);
 @import "./styles/overlay.css" layer(relay);
 @import "./styles/command.css" layer(relay);
 @import "./styles/preferences.css" layer(relay);
