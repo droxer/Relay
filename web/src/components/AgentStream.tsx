@@ -1,4 +1,5 @@
 import {
+  DisclosureChevron,
   ICON,
   StatusError,
   StatusInfo,
@@ -17,7 +18,8 @@ import {
   emptyAgentStreamSegments,
   hasTerminalOutcome,
   parseAgentStderr,
-  reasoningDisplay,
+  reasoningOutline,
+  reasoningSummary,
   segmentKeys,
   type AgentSegment,
 } from "../lib/agentStream";
@@ -26,7 +28,6 @@ import { MarkdownContent } from "./LazyMarkdown";
 import { buildCollaborationTree } from "../lib/collaborationTree";
 import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
-import { Button } from "@/components/ui/button";
 
 function StreamActivity({ label }: { label: string }) {
   return (
@@ -172,41 +173,62 @@ function SegmentView({
   return <RawSegment text={segment.text} />;
 }
 
-// Reasoning is a `○` marker plus dim italic body (design-system.md agent-turn).
-// It is verbatim model output rather than prose to reflow — its own line breaks
-// carry the structure (enumerations, steps) — so every line becomes a paragraph
-// instead of collapsing into one run-on block. That also keeps the live caret,
-// which the stylesheet hangs off the body's last `p`, tracking the end of the
-// reasoning.
+// Reasoning renders as one disclosure per block: a header row naming the step,
+// and — open — the steps themselves under a hairline rule (design-system.md
+// agent-turn). This is the shape every current agent surface converged on, and
+// it is the one the content asks for: a reasoning summary is a list of titled
+// steps, not a paragraph.
 //
-// A settled block is collapsed to its toggle alone so a long deliberation
-// cannot bury the answer; the reader opens it deliberately. A live block stays
-// open — it is where the turn's only visible progress is happening.
+// The body is verbatim model output rather than prose to reflow — its own line
+// breaks carry the structure — so each line becomes a paragraph instead of
+// collapsing into one run-on block. That also keeps the live caret, which the
+// stylesheet hangs off the body's last `p`, tracking the end of the reasoning.
+//
+// A settled block is collapsed so a long deliberation cannot bury the answer.
+// A live one opens itself: it is where the turn's only visible progress is
+// happening. `open` is a null-until-touched override rather than a boolean, so
+// a reader who opens a settled block keeps it open, one who closes a live block
+// keeps it closed, and one who has touched neither still gets the automatic
+// close when the run settles.
 function ThinkingSegment({ text, live }: { text: string; live: boolean }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
-  const lines = useMemo(() => text.split(/\n+/).filter((line) => line.trim()), [text]);
-  const { lines: shown, toggle } = reasoningDisplay(lines, { live, expanded });
+  const [override, setOverride] = useState<boolean | null>(null);
+  const sections = useMemo(() => reasoningOutline(text), [text]);
+  const { label, steps } = useMemo(() => reasoningSummary(sections, { live }), [sections, live]);
+  const open = override ?? live;
+
+  if (sections.length === 0) return null;
 
   return (
-    <div className={`agent-thinking ${shown.length === 0 ? "is-collapsed" : ""}`}>
-      <span className="agent-thinking-marker code" aria-hidden="true">○</span>
-      <div className="agent-thinking-body">
-        {shown.map((line, index) => (
-          <p key={`thinking-${index}`}>{line}</p>
-        ))}
-        {toggle ? (
-          <Button
-            variant="ghost"
-            type="button"
-            className="agent-thinking-toggle"
-            aria-expanded={toggle === "collapse"}
-            onClick={() => setExpanded((open) => !open)}
-          >
-            {t(toggle === "collapse" ? "agent_stream.reasoning_collapse" : "agent_stream.reasoning_expand")}
-          </Button>
+    <div className={`agent-thinking ${open ? "is-open" : ""} ${live ? "is-live" : ""}`}>
+      <button
+        type="button"
+        className="agent-thinking-header"
+        aria-expanded={open}
+        onClick={() => setOverride(!open)}
+      >
+        <DisclosureChevron size={ICON.xs} className="agent-thinking-chevron" aria-hidden="true" />
+        {/* The visible label is the step name, which does not say which tier it
+            belongs to; the marker that carries that is a glyph a screen reader
+            never reads out. */}
+        <span className="sr-only">{t("agent_stream.reasoning_label")}</span>
+        <span className="agent-thinking-headline">{label}</span>
+        {steps > 1 ? (
+          <span className="agent-thinking-steps">{t("agent_stream.reasoning_steps", { count: steps })}</span>
         ) : null}
-      </div>
+      </button>
+      {open ? (
+        <div className="agent-thinking-body">
+          {sections.map((section, sectionIndex) => (
+            <div className="agent-thinking-step" key={`step-${sectionIndex}`}>
+              {section.title ? <p className="agent-thinking-title">{section.title}</p> : null}
+              {section.lines.map((line, lineIndex) => (
+                <p key={`line-${lineIndex}`}>{line}</p>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -246,8 +268,7 @@ function CommandSegment({ command }: { command: string }) {
       <div className="agent-command-body">
         <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
         {toggle ? (
-          <Button
-            variant="ghost"
+          <button
             type="button"
             className="agent-command-toggle"
             aria-expanded={toggle === "collapse"}
@@ -256,7 +277,7 @@ function CommandSegment({ command }: { command: string }) {
             {toggle === "collapse"
               ? t("agent_stream.command_collapse")
               : t("agent_stream.command_expand", { count: hidden })}
-          </Button>
+          </button>
         ) : null}
       </div>
     </div>

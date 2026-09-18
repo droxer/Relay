@@ -146,6 +146,13 @@
     height: var(--touch-target);
   }
 
+  /* The reasoning disclosure is a full-width row, so it reaches the floor by
+     growing taller — never by taking inline padding, which would pull the
+     header out of the column its own body hangs in. */
+  .agent-thinking-header {
+    min-height: var(--touch-target);
+  }
+
   /* Controls whose hit area has to grow sideways rather than square up. */
   .msg-turn-action {
     min-width: var(--touch-target);
@@ -180,17 +187,22 @@
 
      These are inline glyph buttons that share a line with running text. A
      44px box around a control that sits inside a sentence does not enlarge a
-     target so much as bend the text it lives in — the reasoning expander
-     would push the thinking block off its baseline rhythm, and the row
-     actions would set the conversation row's height from a decoration. */
+     target so much as bend the text it lives in — the row actions would set
+     the conversation row's height from a decoration. */
   .conversation-rename-btn,
   .conversation-remove-btn,
-  .agent-thinking-toggle,
   .md-fence-copy {
     min-width: var(--control-h-xs);
     min-height: var(--control-h-xs);
     width: var(--control-h-xs);
     height: var(--control-h-xs);
+  }
+
+  /* The command expander is a text label, not a glyph: it takes the same 32px
+     height as the glyph buttons above but keeps its own width, because a
+     square box would crop "Show 12 more lines" to two characters. */
+  .agent-command-toggle {
+    min-height: var(--control-h-xs);
   }
 
   /* The search field is not the target — its frame is, and the frame holds

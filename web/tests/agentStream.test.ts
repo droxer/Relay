@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TFunction } from "i18next";
 
-import { AgentStreamAccumulator, commandDisplay, displayAgentSegments, reasoningDisplay, displayAgentStreamSegments, emptyAgentStreamSegments, hasStreamingTextCaret, hasTerminalOutcome, parseAgentStderr, parseAgentStream, segmentKeys, userVisibleAgentSegments, agentMessagePlainText, type AgentSegment } from "../src/lib/agentStream.js";
+import { AgentStreamAccumulator, commandDisplay, displayAgentSegments, reasoningOutline, reasoningSummary, displayAgentStreamSegments, emptyAgentStreamSegments, hasStreamingTextCaret, hasTerminalOutcome, parseAgentStderr, parseAgentStream, segmentKeys, userVisibleAgentSegments, agentMessagePlainText, type AgentSegment } from "../src/lib/agentStream.js";
 
 describe("agent stream parsing", () => {
   it("filters Codex stdin notice from stderr", () => {
@@ -527,32 +527,89 @@ describe("agent stream parsing", () => {
     ]);
   });
 
-  it("collapses settled reasoning to its expand toggle", () => {
-    const lines = ["Checking the config.", "It looks fine."];
+  it("splits a reasoning summary into its titled steps", () => {
+    // Codex writes each reasoning summary as a bold step title followed by an
+    // optional body — verified against a recorded run. Rendering that verbatim
+    // left literal asterisks in the transcript; the title is structure, so the
+    // outline lifts it out.
+    const text = [
+      "**Installing curated skill**",
+      "",
+      "Preparing to run the installer with escalated permissions.",
+      "It needs the repo path first.",
+      "",
+      "**Switching to python3**",
+    ].join("\n");
 
-    assert.deepEqual(reasoningDisplay(lines, { live: false, expanded: false }), {
-      lines: [],
-      toggle: "expand",
+    assert.deepEqual(reasoningOutline(text), [
+      {
+        title: "Installing curated skill",
+        lines: [
+          "Preparing to run the installer with escalated permissions.",
+          "It needs the repo path first.",
+        ],
+      },
+      { title: "Switching to python3", lines: [] },
+    ]);
+  });
+
+  it("reads a markdown heading as a step title too", () => {
+    assert.deepEqual(reasoningOutline("## Checking the config\nIt looks fine."), [
+      { title: "Checking the config", lines: ["It looks fine."] },
+    ]);
+  });
+
+  it("keeps untitled reasoning as one step", () => {
+    // Claude's thinking arrives as raw prose with no step titles at all.
+    const text = "Weighing the options.\nThe retry budget is the one that matters.";
+
+    assert.deepEqual(reasoningOutline(text), [
+      {
+        title: null,
+        lines: ["Weighing the options.", "The retry budget is the one that matters."],
+      },
+    ]);
+  });
+
+  it("keeps a body that arrives before the first title", () => {
+    assert.deepEqual(reasoningOutline("Starting out.\n**Then this**"), [
+      { title: null, lines: ["Starting out."] },
+      { title: "Then this", lines: [] },
+    ]);
+  });
+
+  it("summarises settled reasoning as its first step and a step count", () => {
+    // The collapsed row names what the agent did and how much of it there was —
+    // the one line a reader decides on. A bare "Show reasoning" said neither.
+    const sections = reasoningOutline(
+      ["**Installing curated skill**", "**Switching to python3**", "**Requesting the list**"].join("\n"),
+    );
+
+    assert.deepEqual(reasoningSummary(sections, { live: false }), {
+      label: "Installing curated skill",
+      steps: 3,
     });
   });
 
-  it("shows every reasoning line once the reader expands it", () => {
-    const lines = Array.from({ length: 12 }, (_, index) => `step ${index}`);
+  it("summarises live reasoning as the step it is on now", () => {
+    const sections = reasoningOutline(["**First**", "**Second**"].join("\n"));
 
-    assert.deepEqual(reasoningDisplay(lines, { live: false, expanded: true }), {
-      lines,
-      toggle: "collapse",
+    assert.deepEqual(reasoningSummary(sections, { live: true }), {
+      label: "Second",
+      steps: 2,
     });
   });
 
-  it("keeps live reasoning open and untoggleable", () => {
-    // A run can spend minutes reasoning before it writes a word — collapsing
-    // the block still being written would leave the turn visibly blank.
-    const lines = ["Weighing the options."];
+  it("falls back to the reasoning text when it carries no step titles", () => {
+    const sections = reasoningOutline("Weighing the options.\nPicking the retry budget.");
 
-    assert.deepEqual(reasoningDisplay(lines, { live: true, expanded: false }), {
-      lines,
-      toggle: null,
+    assert.deepEqual(reasoningSummary(sections, { live: false }), {
+      label: "Weighing the options.",
+      steps: 0,
+    });
+    assert.deepEqual(reasoningSummary(sections, { live: true }), {
+      label: "Picking the retry budget.",
+      steps: 0,
     });
   });
 

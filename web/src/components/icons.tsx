@@ -415,6 +415,11 @@ export const SortAscending = withStandardStroke(LucideChevronUp, "SortAscending"
 export const SortDescending = withStandardStroke(LucideChevronDown, "SortDescending");
 export const SortInactive = withStandardStroke(ChevronsUpDown, "SortInactive");
 
+// Disclosure affordance for a collapsible block (the transcript's reasoning
+// header). It points at the closed state and the component rotates it open, so
+// one glyph covers both states and the rotation carries the transition.
+export const DisclosureChevron = withStandardStroke(LucideChevronRight, "DisclosureChevron");
+
 // Pager steps. Same chevron family as the sort carets, one axis over.
 export const PagePrevious = withStandardStroke(LucideChevronLeft, "PagePrevious");
 export const PageNext = withStandardStroke(LucideChevronRight, "PageNext");

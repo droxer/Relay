@@ -118,32 +118,116 @@
   font-weight: 500;
 }
 
-/* Reasoning tier — `○` marker plus a dim italic body, one step quieter than
-   the answer so it reads as context rather than the reply. */
+/* Reasoning tier — a disclosure, one step quieter than the answer so it reads
+   as context rather than the reply (design-system.md agent-turn). The header
+   names the step and the open body lists the steps under a hairline rule.
+   A `○` marker and an always-visible body sat here before: the marker labelled
+   a tier whose content was hidden anyway, and the body had no structure of its
+   own even though every reasoning summary arrives as titled steps. */
 .agent-thinking {
   display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
   max-width: 100%;
   color: var(--ink-3);
 }
 
-.agent-thinking-marker {
+/* The whole header row is the control — a row, not a word, so the pointer has
+   something to hit and the label can ellipsize instead of wrapping the
+   affordance onto a second line. */
+.agent-thinking-header {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  /* The focus ring comes from base.css's `button:focus-visible` contract; the
+     radius is permanent so the ring has a shape to follow. */
+  border-radius: var(--r-1);
+  background: none;
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2);
+  line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-thinking-header:hover {
+  color: var(--ink-2);
+}
+
+.agent-thinking-chevron {
   flex: none;
-  font-size: var(--fs-3);
-  line-height: var(--leading-loose);
+  color: var(--ink-4);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.agent-thinking.is-open .agent-thinking-chevron {
+  transform: rotate(90deg);
+}
+
+/* One line, always: a step title is a phrase, but a fallback label is the
+   model's own first sentence and would otherwise set the header's height. */
+.agent-thinking-headline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The count trails its label on the tighter --sp-1 rhythm, not the header's
+   --sp-2 gap: the separator and the number belong to the label, not to the
+   next slot in the row. */
+.agent-thinking-steps {
+  flex: none;
+  margin-left: calc(var(--sp-1) - var(--sp-2));
   color: var(--ink-4);
 }
 
-/* No italic: synthesized CJK oblique reads as a rendering bug (markdown.css
-   normalizes zh blockquotes for the same reason); the marker + --ink-3 already
+.agent-thinking-steps::before {
+  content: "·";
+  margin-right: var(--sp-1);
+}
+
+/* Live reasoning breathes on the shared `blink` keyframe rather than a local
+   shimmer — the header is reporting the step the agent is on right now. */
+.agent-thinking.is-live .agent-thinking-headline {
+  --blink-from: 0.55;
+
+  animation: blink var(--t-pulse) var(--ease) infinite;
+}
+
+/* Off-scale optical values, both derived from the header above it: 6px is the
+   12px chevron's centre, so the rule hangs under the affordance, and
+   6 + 0.5 hairline + 13.5 lands the body text in the label's own 20px column
+   (12px chevron + --sp-2 gap).
+   No italic: synthesized CJK oblique reads as a rendering bug (markdown.css
+   normalizes zh blockquotes for the same reason); the rule and --ink-3 already
    separate the reasoning tier. */
 .agent-thinking-body {
   min-width: 0;
+  margin-left: 6px;
+  padding-left: 13.5px;
+  border-left: 0.5px solid var(--line-2);
   font-family: var(--font-sans);
   font-size: var(--fs-3);
   line-height: var(--leading-loose);
   color: var(--ink-3);
+}
+
+.agent-thinking-step + .agent-thinking-step {
+  margin-top: var(--sp-2);
+}
+
+/* A step title is the one thing in the block that carries weight — it is what
+   the reader scans when the block is open, and what the header shows when it
+   is closed. */
+.agent-thinking-title {
+  margin: 0 0 var(--sp-1);
+  color: var(--ink-2);
+  font-weight: 500;
 }
 
 /* Reasoning is verbatim model output, one line per paragraph. `pre-wrap` keeps
@@ -157,37 +241,6 @@
 
 .agent-thinking-body p:last-child {
   margin-bottom: 0;
-}
-
-/* Collapsed reasoning is the toggle alone on the marker's baseline — no body
-   text above it to offset. */
-.agent-thinking.is-collapsed .agent-thinking-toggle {
-  margin-top: 0;
-}
-
-/* Reveals a collapsed reasoning block. Sits inside the reasoning
-   tier's own colour so it reads as part of the aside, not as an action on the
-   answer. */
-.agent-thinking-toggle {
-  margin-top: var(--sp-1);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink-4);
-  font-family: var(--font-sans);
-  font-size: var(--fs-2);
-  font-style: normal;
-  cursor: pointer;
-}
-
-.agent-thinking-toggle:hover {
-  color: var(--ink-2);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.agent-thinking-toggle:focus-visible {
-  border-radius: var(--r-2);
 }
 
 /* Tool / command lines — inline `⏺` mono lines, not bordered chips. A run of
@@ -261,14 +314,29 @@
 /* Reveals the rest of a collapsed command. Same affordance as the reasoning
    toggle — muted sans text inside the log tier, not a control competing with
    the answer. */
+/* Opens a collapsed command body. An inline TEXT affordance inside the command
+   tier's own colour, so it reads as part of the log rather than as an action on
+   the answer; a bare <button> for that reason, and this is its whole
+   appearance. A control-height Button (44px) used to sit here instead, its
+   every visible property overridden by this same block while its height stayed.
+   The focus ring comes from base.css's `button:focus-visible` contract; the
+   radius is permanent so the ring has a shape to follow. */
 .agent-command-toggle {
+  /* inline-block, not inline: a margin-top has no effect on an inline box, and
+     this one is what separates the toggle from the preview above it. */
+  display: inline-block;
   margin-top: var(--sp-1);
   padding: 0;
   border: 0;
+  border-radius: var(--r-1);
   background: none;
   color: var(--ink-4);
   font-family: var(--font-sans);
   font-size: var(--fs-2);
+  font-style: normal;
+  font-weight: 400;
+  line-height: var(--leading-normal);
+  text-align: left;
   cursor: pointer;
 }
 
@@ -276,10 +344,6 @@
   color: var(--ink-2);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.agent-command-toggle:focus-visible {
-  border-radius: var(--r-2);
 }
 
 /* Reads the tone driver. This was a FOURTH spelling of the tone vocabulary,
