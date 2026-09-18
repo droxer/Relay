@@ -24,11 +24,9 @@ test("a delayed poll observation cannot replace a newer heartbeat grant", () => 
   let stopped = false;
   const watchdog = new ExecutionWatchdog(() => now);
   watchdog.track("run", 100, () => { stopped = true; });
-  // Apply wire observations dynamically so the regression also runs against
-  // the old two-argument implementation, which ignored observation ordering.
-  Reflect.apply(watchdog.renew, watchdog, ["run", 300, 2000]);
+  watchdog.renew("run", 300, 2000);
   now = 50;
-  Reflect.apply(watchdog.renew, watchdog, ["run", 10, 1000]);
+  watchdog.renew("run", 10, 1000);
   now = 100;
   watchdog.tick();
   assert.equal(stopped, false);

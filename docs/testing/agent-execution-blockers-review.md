@@ -1,10 +1,14 @@
 # Agent execution blockers review
 
-Reviewed 2026-09-18. Scope: task dispatch and retry policy, placement and
+Reviewed 2026-09-18. The findings below describe the pre-fix state retained in
+checkpoint `d4943030`. Fixes are recorded in `07731a8e`; see
+[implementation evidence](agent-execution-blockers.tdd.md).
+
+Scope: task dispatch and retry policy, placement and
 capacity validation, daemon admission, lease renewal, terminal delivery,
 session-to-task projections, and unblock/recovery routes. This is a source
 review with isolated reproductions; no live task records were inspected or
-changed. Runtime code is unchanged.
+changed during the review.
 
 ## Findings
 

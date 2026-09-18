@@ -427,7 +427,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       for (const lease of settings.commandLeases) {
         if (activeRuns.get(lease.commandId)?.command.leaseId !== lease.leaseId) continue;
         const duration = Date.parse(lease.leaseExpiresAt) - observedAt - (performance.now() - sentAt);
-        if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration);
+        if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration, observedAt);
       }
     };
     const sendHeartbeat = async (): Promise<void> => {
