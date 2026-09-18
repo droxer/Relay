@@ -38,8 +38,9 @@ register(["dispatch_failed"], "failure", "computer");
 export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null {
   if (task.status === "waiting_for_human") return { key: "human" };
   if (task.status === "review") return { key: "review" };
-  if (task.status === "done" || task.status === "running") return null;
+  if (task.status === "done") return null;
   if (task.workspaceWaiting) return { key: "ownership" };
+  if (task.status === "running") return null;
   if (task.status !== "blocked" && (!task.dispatchOutcome || task.dispatchOutcome.state === "started")) return null;
   const code = task.dispatchOutcome?.state !== "started" ? task.dispatchOutcome?.code ?? "" : "";
   return Object.hasOwn(taskGuides, code) ? taskGuides[code] : { key: "failure" };
