@@ -1268,14 +1268,11 @@
     "phase_handoff": "交接"
   },
   "login": {
-    "lede": "管理电脑、守护进程与智能体运行。",
+    "lede": "与你并肩工作的 AI 伙伴，让时间回到真正重要的事。",
     "lede_bootstrap": "粘贴后端启动日志中的 RELAY_ADMIN_TOKEN，然后创建管理员账户。",
     "kicker_setup": "首次配置",
     "kicker_attach": "登录",
-    "cover_headline": "让智能体在你自己的电脑上运行。",
-    "point_computers": "接入一台电脑，智能体就在工作所在之处运行。",
-    "point_control": "会话、任务与定期例程，统一在一个控制平面。",
-    "point_log": "每次运行都写入可回放的追加式事件日志。",
+    "cover_headline": "每一位员工，都被放大。",
     "username": "用户名",
     "password": "密码",
     "sign_in": "登录",
@@ -1287,7 +1284,10 @@
     "no_bootstrap": "无需引导。请直接登录。",
     "go_bootstrap": "创建首个管理员",
     "go_login": "返回登录",
-    "error_generic": "出现问题，请重试。"
+    "error_generic": "出现问题，请重试。",
+    "do_ask": "问任何公司知道的事，答案附带来源。",
+    "do_handoff": "把事务性工作交出去：纪要、跟进、更新。",
+    "do_control": "有风险的操作，都要你批准才会发生。"
   },
   "status": {
     "ready": "就绪",
