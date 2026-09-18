@@ -9,6 +9,17 @@
   background: transparent;
 }
 
+/* The panel is min-width:0; its ROWS need the same. Each row is a grid item in
+   its own right and so defaults to min-width:auto, which makes its min-content
+   width a floor the column cannot go under — a long thread title plus a status
+   pill plus participants, and the header stops fitting. The shell clips rather
+   than scrolls (.messenger-shell is overflow:hidden), so that overflow reaches
+   the user as text cut off mid-word at the window edge, with no scrollbar and
+   nothing that reads as a layout error. */
+.chat-panel > * {
+  min-width: 0;
+}
+
 .chat-header {
   display: flex;
   align-items: center;

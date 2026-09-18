@@ -94,7 +94,7 @@ describe("shell grid tracks", () => {
     };
     assert.equal(
       track("--shell-rail-track", /\.messenger-shell\s*\{[^}]*--shell-rail-track:\s*([^;]+);/),
-      "minmax(var(--thread-w-min), var(--thread-w-fit))",
+      "minmax(var(--thread-w-min), min(var(--thread-w), var(--thread-w-cap)))",
     );
     assert.equal(
       track("--shell-chat-track", /\.messenger-shell\s*\{[^}]*--shell-chat-track:\s*([^;]+);/),
@@ -102,11 +102,11 @@ describe("shell grid tracks", () => {
     );
     assert.equal(
       track("--shell-nav-track", /\[data-sidenav="open"\]\s*\{\s*--shell-nav-track:\s*([^;]+);/),
-      "minmax(var(--sidenav-w-min), var(--sidenav-w-fit))",
+      "minmax(var(--sidenav-w-min), min(var(--sidenav-w-open), var(--sidenav-w-cap)))",
     );
     assert.equal(
       track("--shell-space-track", /\[data-space="open"\]\s*\{[^}]*--shell-space-track:\s*([^;]+);/),
-      "minmax(var(--space-w-min), var(--space-w-fit))",
+      "minmax(var(--space-w-min), min(var(--space-w), var(--space-w-cap)))",
     );
   });
 
@@ -192,7 +192,7 @@ describe("shell column tiers", () => {
     // shell is back to its default two-rail arrangement.
     assert.match(
       tier,
-      /--shell-rail-track:\s*minmax\(var\(--thread-w-min\), var\(--thread-w-fit\)\);/,
+      /--shell-rail-track:\s*minmax\(var\(--thread-w-min\), min\(var\(--thread-w\), var\(--thread-w-cap\)\)\);/,
       "re-open the thread rail once the panel no longer occupies a track",
     );
   });
@@ -213,8 +213,24 @@ describe("adaptive preferred widths", () => {
      the dragged px value, and min() re-reads it against every viewport. */
   const fit = (name: string, pair: string): number => {
     const value = token(name);
-    const shape = value.match(new RegExp(`^min\\(\\s*var\\(${pair}\\)\\s*,\\s*(\\d+(?:\\.\\d+)?)vw\\s*\\)$`));
-    assert.ok(shape, `${name} must be min(var(${pair}), Nvw), got "${value}"`);
+    const shape = value.match(/^(\d+(?:\.\d+)?)vw$/);
+    assert.ok(shape, `${name} must be a bare viewport share, got "${value}"`);
+    /* And the min() that applies it must be written on .messenger-shell, never
+       folded into this token. A custom property is substituted where it is
+       DECLARED: a `min(var(--thread-w), 26vw)` token on :root reads :root's
+       318px default and inherits the computed result downward, past the width
+       AppShell writes inline on .messenger-shell — every rail rendered at its
+       default and dragging did nothing, with the CSS still reading correctly.
+       surfaceLayout.spec.ts measures the rendered result; this only keeps the
+       shape from drifting back. */
+    assert.ok(
+      !/min\s*\(/.test(value),
+      `${name} must not compose the min() itself — shell.css owns it (see palette.css)`,
+    );
+    assert.ok(
+      shell.includes(`min(var(${pair}), var(${name}))`),
+      `shell.css must apply ${name} to ${pair} on .messenger-shell, where the inline drag width lives`,
+    );
     return Number(shape[1]) / 100;
   };
 
@@ -226,9 +242,9 @@ describe("adaptive preferred widths", () => {
 
   it("caps every rail's preferred width against the viewport", () => {
     const rails: [fitToken: string, pairToken: string, preferred: string][] = [
-      ["--sidenav-w-fit", "--sidenav-w-open", "--sidenav-w-open"],
-      ["--thread-w-fit", "--thread-w", "--thread-w"],
-      ["--space-w-fit", "--space-w", "--space-w"],
+      ["--sidenav-w-cap", "--sidenav-w-open", "--sidenav-w-open"],
+      ["--thread-w-cap", "--thread-w", "--thread-w"],
+      ["--space-w-cap", "--space-w", "--space-w"],
     ];
     for (const [fitToken, pairToken, preferred] of rails) {
       const share = fit(fitToken, pairToken);
@@ -245,9 +261,9 @@ describe("adaptive preferred widths", () => {
     // The same pairing the floors have: CSS renders min(px, Nvw) and the drag
     // handle must stop at the same place, or the stored width climbs past a
     // rail that cannot follow it and the handle detaches from the pointer.
-    assert.equal(fit("--sidenav-w-fit", "--sidenav-w-open"), SIDENAV_VIEWPORT_SHARE);
-    assert.equal(fit("--thread-w-fit", "--thread-w"), THREAD_LIST_VIEWPORT_SHARE);
-    assert.equal(fit("--space-w-fit", "--space-w"), SPACE_VIEWPORT_SHARE);
+    assert.equal(fit("--sidenav-w-cap", "--sidenav-w-open"), SIDENAV_VIEWPORT_SHARE);
+    assert.equal(fit("--thread-w-cap", "--thread-w"), THREAD_LIST_VIEWPORT_SHARE);
+    assert.equal(fit("--space-w-cap", "--space-w"), SPACE_VIEWPORT_SHARE);
   });
 
   it("never caps a rail below the floor the grid already guarantees", () => {
@@ -255,9 +271,9 @@ describe("adaptive preferred widths", () => {
     // wins there, so that is harmless. What must NOT happen is a cap that bites
     // before the floor does on the widest viewport of the rail's own tier —
     // that would be a rail narrower than its own minimum with room to spare.
-    assert.ok(fit("--thread-w-fit", "--thread-w") * CROSSOVER_CEILING >= pxToken("--thread-w-min"));
-    assert.ok(fit("--sidenav-w-fit", "--sidenav-w-open") * CROSSOVER_CEILING >= pxToken("--sidenav-w-min"));
-    assert.ok(fit("--space-w-fit", "--space-w") * CROSSOVER_CEILING >= pxToken("--space-w-min"));
+    assert.ok(fit("--thread-w-cap", "--thread-w") * CROSSOVER_CEILING >= pxToken("--thread-w-min"));
+    assert.ok(fit("--sidenav-w-cap", "--sidenav-w-open") * CROSSOVER_CEILING >= pxToken("--sidenav-w-min"));
+    assert.ok(fit("--space-w-cap", "--space-w") * CROSSOVER_CEILING >= pxToken("--space-w-min"));
   });
 });
 

@@ -11,12 +11,17 @@
      take. Grid pays the floors first, then grows the rails toward their
      preferred widths, and only then hands the rest to the chat column — so a
      narrow viewport shrinks the rails and a wide one feeds the conversation.
-     That order is also why the preferred width is the `-fit` token rather than
-     the raw pair: grid tops the rails up BEFORE the chat column grows past its
+     That order is also why each preferred width is wrapped in a min() against
+     the viewport: grid tops the rails up BEFORE the chat column grows past its
      floor, so an uncapped px preference is a rail holding 318px on a 1024px
-     screen while the conversation sits at its minimum. The `-fit` tokens cap
-     each preference against the viewport (palette.css says why); px still wins
-     above the crossover, so nothing about a wide screen changes.
+     screen while the conversation sits at its minimum. Above the crossover the
+     px value wins, so nothing about a wide screen changes.
+
+     The min() is written HERE, not folded into a token in palette.css, because
+     a custom property is substituted where it is declared: AppShell sets the
+     dragged widths inline on this element, and only a min() declared on this
+     element sees them. As a :root token it read the defaults and dragging
+     silently stopped working (palette.css tells that story in full).
 
      The closed tracks are minmax(0px, 0px) rather than a bare 0 so the
      track-list transition below still interpolates (a track list only
@@ -25,7 +30,7 @@
      The space panel's track is always present, closed, for that same reason:
      opening it animates instead of jumping between track counts. */
   --shell-nav-track: minmax(var(--sidenav-w), var(--sidenav-w));
-  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w-fit));
+  --shell-rail-track: minmax(var(--thread-w-min), min(var(--thread-w), var(--thread-w-cap)));
   --shell-chat-track: minmax(var(--chat-w-min), 1fr);
   --shell-space-track: minmax(0px, 0px);
   grid-template-columns:
@@ -51,7 +56,7 @@
 /* The collapsed rail is a fixed icon column; only the expanded one is
    resizable, and only it can give width back. */
 .messenger-shell[data-sidenav="open"] {
-  --shell-nav-track: minmax(var(--sidenav-w-min), var(--sidenav-w-fit));
+  --shell-nav-track: minmax(var(--sidenav-w-min), min(var(--sidenav-w-open), var(--sidenav-w-cap)));
 }
 
 /* Space panel open: the thread rail collapses to zero by default; the user
@@ -60,11 +65,11 @@
    1200px tier, where four floors no longer fit. */
 .messenger-shell[data-space="open"] {
   --shell-rail-track: minmax(0px, 0px);
-  --shell-space-track: minmax(var(--space-w-min), var(--space-w-fit));
+  --shell-space-track: minmax(var(--space-w-min), min(var(--space-w), var(--space-w-cap)));
 }
 
 .messenger-shell[data-space="open"][data-threadlist="open"] {
-  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w-fit));
+  --shell-rail-track: minmax(var(--thread-w-min), min(var(--thread-w), var(--thread-w-cap)));
 }
 
 /* During a drag the pointer owns the width; the track transition would
