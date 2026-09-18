@@ -221,6 +221,20 @@
   mask-image: linear-gradient(to right, black calc(100% - var(--sp-7)), transparent 100%);
 }
 
+/* Coarse pointers get 44px action icons (a11y.css) and card actions that are
+   always visible rather than hover-revealed (task-drawer.css). Both are right;
+   neither is free. The card's footer row was sized for the smaller desktop
+   icons, so the enlarged row ran ~37px past a card that is overflow:hidden and
+   the trailing action — "Done", on every card — was sliced. The lane is what
+   pays for it: the rule that enlarges a target cannot be the rule that puts it
+   out of reach. Density is the intended trade here, and on a phone the board
+   shows one lane at a time either way. */
+@media (hover: none), (pointer: coarse) {
+  .backlog-board {
+    --backlog-lane-w: 320px;
+  }
+}
+
 .backlog-lane {
   /* Positioned so the [data-drop="blocked"] overlay ring below can anchor to
      the lane without taking layout space. */

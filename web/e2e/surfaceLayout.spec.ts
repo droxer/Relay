@@ -24,6 +24,22 @@ const session = {
   ],
 };
 
+/* A rail row with every segment its subline can carry: a status line, an origin
+   badge, and an origin name. That is the row the 240px floor has to survive. */
+const waiting = {
+  id: "waiting-thread", title: "Approve the pricing copy", taskGoal: "Approve the pricing copy",
+  workspacePath: "/workspace", ownerEmployeeId: "review-user", participants: ["human"],
+  status: "waiting_for_human", phase: "created", createdAt: stamp, updatedAt: stamp,
+  agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [],
+  eventCount: 1, artifactCount: 0, runCount: 0, events: [],
+};
+
+const task = {
+  id: "task-1", title: "Reconcile September invoices against the ledger export", description: "",
+  priority: "high", status: "backlog", ownerEmployeeId: "review-user", isRoutine: false,
+  linkedSessionIds: ["review-thread", "waiting-thread"], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
+};
+
 const routine = {
   id: "routine-1", title: "Weekly ledger reconciliation", description: "", priority: "normal", status: "backlog",
   ownerEmployeeId: "review-user", isRoutine: true, routineType: "task", routineCadence: "weekly", routineEnabled: true,
@@ -45,7 +61,7 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [routine], nodes: [], projects: [], sandboxes: [], skills: [] };
+    let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [], projects: [], sandboxes: [], skills: [] };
     if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     if (pathname.endsWith("/threads/review-thread")) body = { ...session, ...thread };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -205,6 +221,41 @@ test("a long thread title cannot push the chat column past its track", async ({ 
   await page.setViewportSize({ width: 1400, height: 900 });
   await expect(page.locator(".chat-header")).toBeVisible();
   expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
+  await page.context().close();
+});
+
+/* Controls that the layout cuts in half are controls the user cannot use. Both
+   of these are clipping, not overflow: the ancestor is overflow:hidden, so
+   nothing scrolls and nothing reports a scrollWidth — the only evidence is a
+   child box reaching past its parent's. */
+
+/** Every child of `selector` that paints outside it, worst first. */
+function clippedChildren(page: Page, selector: string) {
+  return page.locator(selector).first().evaluate((box) => {
+    const bb = box.getBoundingClientRect();
+    return [...box.querySelectorAll("*")]
+      .map((el) => ({ el, r: el.getBoundingClientRect(), cs: getComputedStyle(el) }))
+      .filter(({ r, cs }) => r.width > 0 && cs.display !== "none" && cs.position !== "fixed")
+      .map(({ el, r }) => ({
+        what: (el.getAttribute("aria-label") || el.tagName).trim(),
+        over: Math.round(Math.max(r.right - bb.right, bb.left - r.left)),
+      }))
+      .filter((x) => x.over > 1)
+      .sort((a, b) => b.over - a.over);
+  });
+}
+
+test("a backlog card keeps its action buttons inside the card on touch", async ({ browser }) => {
+  /* The coarse-pointer block in a11y.css raises every action icon to the 44px
+     touch target. That is the right call on its own, but the card's foot row
+     was sized for the smaller desktop icons, so the enlarged row ran past a
+     card that is overflow:hidden and the trailing button was sliced. The rule
+     that exists to make targets reachable was making the last one unreachable,
+     on every card, in the only layout where it applies. */
+  const page = await openPage(browser, "/backlog", true);
+  await expect(page.locator(".backlog-task").first()).toBeVisible();
+  const clipped = await clippedChildren(page, ".backlog-task");
+  expect(clipped, JSON.stringify(clipped)).toEqual([]);
   await page.context().close();
 });
 
