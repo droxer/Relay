@@ -131,9 +131,17 @@ def team_member_assignments(
     *,
     mode: str = "action",
     team: dict[str, Any] | None = None,
+    include_on_request: bool = False,
 ) -> list[dict[str, Any]]:
     lead_agent_id = team.get("leadAgentId") if team else None
     snapshot = team_runtime_snapshot(team, agents) if team else None
+    configs = (team or {}).get("memberConfigs", {})
+    agents = [
+        {**agent, "defaultRole": configs.get(agent["id"], {}).get("role", agent.get("defaultRole"))}
+        for agent in agents
+        if include_on_request or agent["id"] == lead_agent_id
+        or configs.get(agent["id"], {}).get("participation") != "on_request"
+    ]
     synthesis_round = mode in ("ask", "review")
     ordered_agents = (
         [
@@ -143,7 +151,7 @@ def team_member_assignments(
         if synthesis_round and lead_agent_id
         else _ordered_accomplish_agents(agents, lead_agent_id)
     )
-    return [
+    assignments = [
         _team_member_assignment(
             agent,
             mode=mode,
@@ -155,6 +163,25 @@ def team_member_assignments(
         )
         for index, agent in enumerate(ordered_agents)
     ]
+    for assignment in assignments:
+        config = configs.get(assignment["agentId"], {})
+        if team:
+            assignment["required"] = config.get("required", True)
+            assignment["acceptanceCriteria"] = list(team.get("acceptanceCriteria", []))
+            assignment["expectedOutputs"] = list(config.get("expectedOutputs", []))
+        if config.get("responsibility"):
+            assignment["brief"] += " Responsibility: " + config["responsibility"]
+    if team and not synthesis_round and len(assignments) > 1:
+        lead = next((agent for agent in agents if agent["id"] == lead_agent_id), None)
+        if lead:
+            assignments.append({
+                **_team_member_assignment(lead, mode=mode, synthesizer=True, team_snapshot=snapshot),
+                "required": True,
+                "acceptanceCriteria": list(team.get("acceptanceCriteria", [])),
+            })
+    elif team and len(assignments) == 1:
+        assignments[0]["synthesizer"] = True
+    return assignments
 
 
 def _ordered_accomplish_agents(

@@ -351,9 +351,10 @@ class CollaborationConductor:
             # and roles without turning an addressed lead into a room synthesizer.
             member_defaults = {
                 item["agentId"]: {
-                    key: item[key] for key in ("role", "brief") if key in item
+                    key: item[key] for key in ("role", "brief", "required", "acceptanceCriteria", "expectedOutputs") if key in item
                 }
-                for item in team_member_assignments(members, team=team)
+                for item in team_member_assignments(members, team=team, include_on_request=True)
+                if not item.get("synthesizer") or item.get("coordinator")
             }
             raw_assignments = [
                 {**member_defaults.get(item.get("agentId"), {}), **item}
@@ -722,7 +723,7 @@ class CollaborationConductor:
             mode = _mode(item.get("mode"))
             role = _role(item.get("role"))
             coordinator = item.get("coordinator") is True or bool(
-                team_snapshot and item["agentId"] == team_snapshot.get("leadAgentId")
+                team_snapshot and item["agentId"] == team_snapshot.get("leadAgentId") and not item.get("synthesizer")
             )
             # Always derived, never trusted from the caller: only this seam
             # knows who the team lead is, and a lead never leaves a writable
@@ -740,6 +741,7 @@ class CollaborationConductor:
                     ),
                     "mode": mode,
                     "phase": phase,
+                    **{key: item[key] for key in ("required", "acceptanceCriteria", "expectedOutputs") if key in item},
                     **({"role": role} if role else {}),
                     **(
                         {"brief": item["brief"].strip()[:ASSIGNMENT_BRIEF_MAX_CHARS]}
@@ -863,7 +865,8 @@ def create_round_manifest(
             "kind": assignment["workKind"],
             "objective": assignment["workObjective"],
             "dependsOnWorkItemIds": assignment["dependsOnWorkItemIds"],
-            "required": True,
+            "required": assignment.get("required", True),
+            **{key: assignment[key] for key in ("acceptanceCriteria", "expectedOutputs") if key in assignment},
         }
         for assignment in compiled_assignments
     ]

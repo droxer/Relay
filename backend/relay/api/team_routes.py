@@ -162,6 +162,8 @@ def create_control_panel_team(
                 "name": body.get("name"),
                 "profileImageUrl": body.get("profileImageUrl"),
                 "enabled": body.get("enabled", True),
+                "memberConfigs": body.get("memberConfigs", {}),
+                "acceptanceCriteria": body.get("acceptanceCriteria", []),
                 "leadAgentId": lead,
                 "memberAgentIds": members,
             },

@@ -155,7 +155,7 @@ def test_team_member_assignments_freezes_the_roster_for_the_round() -> None:
         "memberAgentIds": ["lead", "support"],
         "leadAgentId": "lead",
     }
-    assert [item["teamSnapshot"] for item in assignments] == [expected, expected]
+    assert [item["teamSnapshot"] for item in assignments] == [expected, expected, expected]
 
 
 def test_discussion_runs_the_facilitator_last_without_changing_the_snapshot() -> None:
@@ -207,6 +207,7 @@ def test_accomplish_orders_delegated_execution_before_test_and_review() -> None:
         "builder",
         "tester",
         "reviewer",
+        "lead",
     ]
 
 
@@ -230,4 +231,4 @@ def test_team_member_assignments_carry_the_round_mode() -> None:
 
     for mode in ("action", "ask", "review"):
         assignments = team_member_assignments(agents, mode=mode, team=team)
-        assert [item["mode"] for item in assignments] == [mode, mode], mode
+        assert all(item["mode"] == mode for item in assignments), mode

@@ -23,6 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from ..collaboration.contracts import member_configs, text_list
 from ..core.ids import new_database_id, now_iso
 from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
@@ -175,6 +176,7 @@ class LocalTeamStore:
             updated = {
                 **current,
                 "memberAgentIds": members,
+                "memberConfigs": {key: value for key, value in current.get("memberConfigs", {}).items() if key in members},
                 "leadAgentId": lead,
                 "updatedAt": now_iso(),
             }
@@ -403,6 +405,7 @@ class DatabaseTeamStore:
             updated = {
                 **current,
                 "memberAgentIds": members,
+                "memberConfigs": {key: value for key, value in current.get("memberConfigs", {}).items() if key in members},
                 "leadAgentId": lead,
                 "updatedAt": now_iso(),
             }
@@ -561,6 +564,8 @@ def _new_team(
         **({"profileImageUrl": profile_image_url} if profile_image_url else {}),
         "leadAgentId": lead,
         "memberAgentIds": list(members),
+        "memberConfigs": member_configs(payload.get("memberConfigs", {}), members),
+        "acceptanceCriteria": text_list(payload.get("acceptanceCriteria", []), "acceptanceCriteria"),
         "enabled": payload.get("enabled") is not False,
         "createdAt": timestamp,
         "updatedAt": timestamp,
@@ -588,7 +593,7 @@ def _normalized_team_snapshot(
 def _normalize_team_patch(
     patch: dict[str, Any], *, current: dict[str, Any]
 ) -> dict[str, Any]:
-    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "enabled"}
+    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "enabled", "memberConfigs", "acceptanceCriteria"}
     unknown = set(patch) - allowed
     if unknown:
         raise ValueError(f"Unsupported team field(s): {', '.join(sorted(unknown))}.")
@@ -616,6 +621,11 @@ def _normalize_team_patch(
         normalized["leadAgentId"] = lead.strip()
     members = normalized.get("memberAgentIds", current.get("memberAgentIds", []))
     lead = normalized.get("leadAgentId", current.get("leadAgentId"))
+    if "memberConfigs" in patch or "memberAgentIds" in patch:
+        configs = patch.get("memberConfigs", {key: value for key, value in current.get("memberConfigs", {}).items() if key in members})
+        normalized["memberConfigs"] = member_configs(configs, members)
+    if "acceptanceCriteria" in patch:
+        normalized["acceptanceCriteria"] = text_list(patch["acceptanceCriteria"], "acceptanceCriteria")
     if lead not in members:
         raise TeamValidationError("team_lead_not_member")
     if "enabled" in patch:
