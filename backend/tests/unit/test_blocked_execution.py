@@ -203,3 +203,14 @@ def test_scheduler_waits_for_daemon_execution_and_does_not_redispatch(execution)
     )
     running = ctx.task_store.get_task(task["id"])
     assert running["status"] == running["workflowStage"] == "running"
+
+
+def test_disabled_executor_does_not_retain_dispatch_claim(execution):
+    ctx, task, _ = execution
+    ctx.registry.set_disabled_agents("node", ["codex"])
+    assert asyncio.run(scheduler(ctx).tick()).dispatched == 0
+    current = ctx.task_store.get_task(task["id"])
+    assert not current.get("dispatchClaim")
+    assert current["dispatchOutcome"]["code"] == "agent_offline"
+    ctx.registry.set_disabled_agents("node", [])
+    assert asyncio.run(scheduler(ctx).tick()).dispatched == 1
