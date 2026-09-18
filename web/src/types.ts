@@ -686,12 +686,21 @@ export interface EmployeeAgentsResponse {
 }
 
 export interface TeamMemberSummary {
+  defaultRole?: AgentRole;
   id: string;
   displayName: string;
   profileImageUrl?: string | null;
   executorKind: AgentName;
   enabled: boolean;
   availability: LogicalAgentAvailability;
+}
+
+export interface TeamMemberConfig {
+  role?: "planner" | "implementer" | "tester" | "reviewer" | "fixer";
+  responsibility?: string;
+  required?: boolean;
+  participation?: "always" | "on_request";
+  expectedOutputs?: string[];
 }
 
 export interface AgentTeam {
@@ -701,6 +710,8 @@ export interface AgentTeam {
   profileImageUrl?: string | null;
   leadAgentId?: string | null;
   memberAgentIds: string[];
+  memberConfigs?: Record<string, TeamMemberConfig>;
+  acceptanceCriteria?: string[];
   enabled: boolean;
   members: TeamMemberSummary[];
   lead?: TeamMemberSummary | null;
@@ -714,6 +725,8 @@ export interface AgentTeamsResponse {
 }
 
 export interface TeamMutationInput {
+  memberConfigs?: Record<string, TeamMemberConfig>;
+  acceptanceCriteria?: string[];
   name: string;
   leadAgentId: string;
   memberAgentIds: string[];

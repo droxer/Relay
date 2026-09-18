@@ -468,3 +468,68 @@ its lease surface `recovery_required` / `termination_unconfirmed`. They retain
 execution ownership. A disconnected daemon instead surfaces `unresponsive`.
 The watchdog cannot confirm exit after the daemon itself crashes; neither the
 recovery endpoint nor deletion treats that silence as termination.
+
+## Team responsibilities and work acceptance
+
+Team create/update requests accept these optional fields in addition to the
+existing name, lead, roster, and enabled fields:
+
+```json
+{
+  "memberConfigs": {
+    "agent-id": {
+      "role": "implementer",
+      "responsibility": "Own the reset API and its regression tests",
+      "participation": "always",
+      "required": false,
+      "expectedOutputs": ["Endpoint implementation", "Regression tests"]
+    }
+  },
+  "acceptanceCriteria": ["Existing clients remain compatible"]
+}
+```
+
+Configuration keys must name roster members. Roles use the existing agent-role
+vocabulary; `tester` is presented as Verifier in the UI. An omitted role inherits
+the agent default. Participation is `always` (eligible for automatic work) or
+`on_request` (only when addressed). Verification and review are required by
+default; other specialists are optional for plan selection. The lead always
+coordinates and owns final synthesis. An on-request membership cannot also be
+required. Once a proposed plan selects work, that work is required to finish.
+
+Responsibilities are limited to 4000 characters. Criteria and output lists allow
+at most 20 nonempty strings of at most 2000 characters. Updates replace the
+supplied configuration map; omitted maps remain unchanged. Removing a member
+prunes its configuration. The API rejects capability/tool-policy fields in these
+configs; roles and work scopes never grant permissions.
+
+Configured teams require a daemon advertising `work-results`. Its run-bound
+`.relay/round-result.json` may contain a `work` object alongside the existing
+aggregate `status` and `runId`:
+
+```json
+{
+  "runId": "current-run-id",
+  "status": "continue",
+  "work": {
+    "status": "continue",
+    "evidence": ["Empty input returns 500; expected 400"],
+    "findings": [{"workItemId": "implementation-assignment-id", "note": "Validate empty input"}],
+    "messages": [{"kind": "handoff", "text": "Reproduction is in the test output"}]
+  }
+}
+```
+
+`work.status` is `done`, `continue`, or `blocked`. `done` requires evidence and
+cannot contain unresolved findings. Reports are attributed agent claims. The
+backend validates them and records `agent.completed.workResult`; an exit code
+alone does not establish work acceptance. Required failures and missing evidence
+prevent task completion. Final human acceptance remains independent.
+
+A coordinator can include `work.plan`, a list of up to 16 items containing only
+`agentId`, `objective`, `acceptanceCriteria`, and `expectedOutputs`. The backend
+validates the plan against admitted participants and required contributions and
+persists an immutable child round before delivery. Clients still submit semantic
+messages, not daemon assignments. Two repair cycles and two earlier-teammate
+consultations are permitted per request. See
+[ADR-019](adr/019-team-work-acceptance.md) for ordering, replay, and compatibility.

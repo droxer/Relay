@@ -18,28 +18,29 @@ export function assignmentOptionVisible(
   return ownerEmployeeId === assigneeEmployeeId;
 }
 
-export function teamReady(team: Pick<AgentTeam, "enabled" | "members">): boolean {
+export function teamReady(team: Pick<AgentTeam, "enabled" | "members" | "memberConfigs" | "leadAgentId">): boolean {
   return teamAvailability(team) === "ready";
 }
 
-/** Team dispatch is a lead-first pipeline across the full roster, so every
- *  member must be enabled and ready before the team is dispatchable. */
+/** Only automatic participants constrain normal dispatch; addressed specialists
+ * are checked independently when a user selects them. */
 export function teamAvailability(
-  team: Pick<AgentTeam, "enabled" | "members">,
+  team: Pick<AgentTeam, "enabled" | "members" | "memberConfigs" | "leadAgentId">,
 ): LogicalAgentAvailability {
-  if (!team.enabled || team.members.length === 0) return "offline";
-  if (team.members.some((member) => !member.enabled || member.availability === "offline")) {
+  const members = team.members.filter(member => member.id === team.leadAgentId || team.memberConfigs?.[member.id]?.participation !== "on_request");
+  if (!team.enabled || members.length === 0) return "offline";
+  if (members.some((member) => !member.enabled || member.availability === "offline")) {
     return "offline";
   }
-  if (team.members.some((member) => member.availability === "pending")) return "pending";
-  if (team.members.some((member) => member.availability === "busy")) return "busy";
+  if (members.some((member) => member.availability === "pending")) return "pending";
+  if (members.some((member) => member.availability === "busy")) return "busy";
   return "ready";
 }
 
 /** A team must be active and fully backed by routable members, mirroring
  *  the single-agent rule: ready and busy can take work. */
 export function isTeamRoutable(
-  team: Pick<AgentTeam, "enabled" | "deletedAt" | "members">,
+  team: Pick<AgentTeam, "enabled" | "deletedAt" | "members" | "memberConfigs" | "leadAgentId">,
 ): boolean {
   return team.enabled && !team.deletedAt && isLogicalAgentRoutable(teamAvailability(team));
 }

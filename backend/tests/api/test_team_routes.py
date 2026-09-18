@@ -88,6 +88,7 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
         assert response.status_code == 201
         team = response.json()["team"]
         assert team["memberConfigs"][builder["id"]]["responsibility"] == "API"
+        _login(client, "alice")
         started = client.post("/api/v1/agent-runs", json={"taskGoal": "Add reset API", "teamId": team["id"]})
         assert started.status_code == 202, started.text
         [command] = app.state.registry.take_commands("test_node_alice", "node_token")

@@ -608,6 +608,7 @@ class SessionController:
                 session_id,
                 {
                     "runId": step["runId"],
+                    **({"consultation": True} if step.get("consultation") else {}),
                     **(
                         {"assignmentId": step["assignmentId"]}
                         if step.get("assignmentId")
@@ -736,6 +737,8 @@ class SessionController:
             "exitCode": step_result["exitCode"],
             "agentLog": step_result.get("agentLog", ""),
         }
+        if step_result.get("workResult"):
+            completed_payload["workResult"] = step_result["workResult"]
         if step_result.get("tokenUsage"):
             completed_payload["tokenUsage"] = step_result["tokenUsage"]
         self._append(

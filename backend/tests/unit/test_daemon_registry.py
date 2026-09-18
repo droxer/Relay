@@ -4618,6 +4618,9 @@ def test_team_work_evidence_repairs_owner_and_revalidates_before_completion(cons
             for expected in ("build", "review", "final"):
                 [command] = registry.take_commands("sbx_alice", "node_token")
                 assert command["assignmentId"] == expected
+                if not consultation and expected == "review":
+                    assert "repair_note" not in command["state"]
+                    assert "revalidate" in command["state"]["work_revalidation_note"]
                 if consultation and expected == "build":
                     assert "What is the empty input contract?" in command["state"]["work_question"]
                     finish(command, {**good, "messages": [{"kind": "answer", "toWorkItemId": "review", "text": "Empty input returns 400"}]})
@@ -4626,6 +4629,8 @@ def test_team_work_evidence_repairs_owner_and_revalidates_before_completion(cons
                         assert command["state"]["work_messages"][0]["kind"] == "answer"
                     finish(command, good)
             assert registry.task_store.get_task(task["id"])["status"] == "done"
+            if consultation:
+                assert sessions.get_session(session["id"])["agentRuns"][3]["consultation"] is True
             assert len(sessions.get_session(session["id"])["agentRuns"]) == 6
             assert sessions.get_session(session["id"])["agentRuns"][-1]["workResult"]["evidence"] == good["evidence"]
     asyncio.run(flow())

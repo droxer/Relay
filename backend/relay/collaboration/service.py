@@ -918,7 +918,7 @@ def create_round_manifest(
             },
             "delegationPolicy": {
                 "authority": "conductor",
-                "policy": "sequential-role-delegation-v1",
+                "policy": "lead-plan-v1" if source == "lead_plan" else "sequential-role-delegation-v1",
             },
         },
     }

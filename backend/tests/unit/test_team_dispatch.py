@@ -71,6 +71,13 @@ def test_on_request_specialist_is_not_automatically_activated() -> None:
     assert [item["agentId"] for item in assignments] == ["lead"]
 
 
+def test_disabled_on_request_specialist_does_not_block_the_active_team():
+    team, agents = team_agents("team_1", "alice",
+        team_store=FakeTeamStore(_team(memberConfigs={"support": {"participation": "on_request", "required": False}})),
+        agent_store=FakeAgentStore([_agent("lead", "codex"), _agent("support", "claude", enabled=False)]))
+    assert [item["agentId"] for item in team_member_assignments(agents, team=team)] == ["lead"]
+
+
 def test_team_agents_returns_the_lead_first() -> None:
     team, agents = team_agents(
         "team_1",

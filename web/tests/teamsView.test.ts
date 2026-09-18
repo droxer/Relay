@@ -8,6 +8,12 @@ import { teamMutationInput } from "../src/lib/teamForm.js";
 import { selectedTeamForWorkspace } from "../src/lib/teamWorkspace.js";
 
 describe("Agent team management", () => {
+  it("keeps a team routable when only an on-request specialist is offline", () => {
+    assert.equal(teamReady({ enabled: true, leadAgentId: "lead", memberConfigs: { optional: { participation: "on_request", required: false } }, members: [
+      { id: "lead", displayName: "Lead", executorKind: "codex", enabled: true, availability: "ready" },
+      { id: "optional", displayName: "Specialist", executorKind: "codex", enabled: false, availability: "offline" },
+    ] }), true);
+  });
   it("preserves team responsibilities while pruning removed memberships", () => {
     const input = teamMutationInput({
       name: "Delivery", leadAgentId: "lead", memberAgentIds: ["lead"], enabled: true,

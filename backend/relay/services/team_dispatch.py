@@ -121,7 +121,11 @@ def team_agents(
     agents = [agent_store.get_agent(member) for member in ordered_member_ids]
     if any(not agent or agent.get("deletedAt") for agent in agents):
         raise TeamDispatchError("team_invalid", permanent=True)
-    if any(not agent.get("enabled", True) for agent in agents):
+    if any(
+        not agent.get("enabled", True)
+        and (agent["id"] == lead or (team.get("memberConfigs", {}).get(agent["id"], {}).get("participation") != "on_request"))
+        for agent in agents
+    ):
         raise TeamDispatchError("team_disabled", permanent=True)
     return team, agents
 
@@ -166,7 +170,7 @@ def team_member_assignments(
     for assignment in assignments:
         config = configs.get(assignment["agentId"], {})
         if team:
-            assignment["required"] = config.get("required", True)
+            assignment["required"] = True if assignment.get("coordinator") else config.get("required", assignment.get("role") in ("tester", "reviewer"))
             assignment["acceptanceCriteria"] = list(team.get("acceptanceCriteria", []))
             assignment["expectedOutputs"] = list(config.get("expectedOutputs", []))
         if config.get("responsibility"):
@@ -217,6 +221,7 @@ def team_runtime_snapshot(
     """Capture the roster and revision that a round actually used."""
     return {
         "teamId": team["id"],
+        **({"workContractVersion": 1} if team.get("memberConfigs") or team.get("acceptanceCriteria") else {}),
         "teamRevision": team.get("updatedAt") or team.get("createdAt"),
         "memberAgentIds": [member["id"] for member in members],
         "leadAgentId": team.get("leadAgentId"),

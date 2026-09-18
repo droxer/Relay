@@ -681,6 +681,8 @@ class ServerDaemonNodeBackend:
             node_id = assignment.get("daemonNodeId") or sandbox_id
             node = self.registry.get(node_id)
             assert node is not None
+            if (assignment.get("teamSnapshot") or {}).get("workContractVersion") == 1 and "work-results" not in (node.get("capabilities") or []):
+                raise ValueError("This team requires a daemon with work-results support. Upgrade the daemon before dispatch.")
             if assignment.get("agentId"):
                 self._validate_logical_assignment(assignment)
             if not self.registry.is_live(node_id):

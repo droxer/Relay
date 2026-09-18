@@ -50,6 +50,7 @@ def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
                     "displayName": view["displayName"],
                     "profileImageUrl": view.get("profileImageUrl"),
                     "executorKind": view["executorKind"],
+                    "defaultRole": agent.get("defaultRole"),
                     "enabled": view.get("enabled", True),
                     "availability": view.get("availability", "offline"),
                 }

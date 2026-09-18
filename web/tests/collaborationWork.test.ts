@@ -18,4 +18,8 @@ test("successful execution without evidence is unverified; repair invalidates ol
   assert.deepEqual(deriveCollaborationWork(session).map(item => item.status), ["running", "stale"]);
   session.agentRuns.pop();
   assert.equal(deriveCollaborationWork(session)[0].status, "unverified");
+  session.agentRuns.push({ id: "answer", assignmentId: "build", consultation: true, status: "completed",
+    workResult: { status: "done", evidence: ["Answered the reviewer's question"], messages: [{ kind: "answer", toWorkItemId: "review", text: "Empty input returns 400" }] } } as unknown as RelaySession["agentRuns"][number]);
+  assert.equal(deriveCollaborationWork(session)[1].status, "accepted");
+  assert.equal(deriveCollaborationWork(session)[0].messages[0].text, "Empty input returns 400");
 });

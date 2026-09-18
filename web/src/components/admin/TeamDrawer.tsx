@@ -7,7 +7,8 @@ import { useRelayMutations } from "../../hooks/useRelayMutations";
 import { teamMutationInput } from "../../lib/teamForm";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
 import { PresetAvatarGrid } from "../PresetAvatarGrid";
-import type { AgentTeam } from "../../types";
+import { TeamResponsibilities } from "../TeamResponsibilities";
+import type { AgentTeam, TeamMemberConfig } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ export function TeamDrawer({
   const { createTeamMutation, updateTeamMutation, deleteTeamMutation } = useRelayMutations();
   const [name, setName] = useState("");
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>({});
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>([]);
   const [leadId, setLeadId] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("teams"));
   const [validationError, setValidationError] = useState<
@@ -52,6 +55,8 @@ export function TeamDrawer({
     setName(team?.name ?? "");
     setMemberIds(team?.memberAgentIds ?? []);
     setLeadId(team?.leadAgentId ?? "");
+    setMemberConfigs(team?.memberConfigs ?? {});
+    setAcceptanceCriteria(team?.acceptanceCriteria ?? []);
     setProfileImageUrl(randomPresetAvatar("teams"));
     setValidationError(null);
   }, [open, team?.id]);
@@ -74,7 +79,9 @@ export function TeamDrawer({
   const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
   const saving = createTeamMutation.isPending || updateTeamMutation.isPending;
   const hasUnsavedChanges = open && (
-    name.trim() !== (team?.name ?? "").trim()
+    JSON.stringify(memberConfigs) !== JSON.stringify(team?.memberConfigs ?? {})
+    || JSON.stringify(acceptanceCriteria) !== JSON.stringify(team?.acceptanceCriteria ?? [])
+    || name.trim() !== (team?.name ?? "").trim()
     || leadId !== (team?.leadAgentId ?? "")
     || memberIds.length !== (team?.memberAgentIds ?? []).length
     || memberIds.some((id) => !(team?.memberAgentIds ?? []).includes(id))
@@ -122,6 +129,7 @@ export function TeamDrawer({
       name,
       leadAgentId: leadId,
       memberAgentIds: memberIds,
+      memberConfigs, acceptanceCriteria,
       enabled: team?.enabled ?? true,
     });
     try {
@@ -222,6 +230,7 @@ export function TeamDrawer({
             <FieldError id="team-members-error">{t("teams.members_required")}</FieldError>
           ) : null}
         </fieldset>
+        <TeamResponsibilities members={leadCandidates} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
         <Field
           label={t("teams.lead")}
           labelId={leadLabelId}
