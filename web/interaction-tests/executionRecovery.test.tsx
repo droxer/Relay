@@ -118,3 +118,6 @@ it("ignores dispatch errors from a previously started run and safely handles unk
   expect(taskRecoveryGuide(task("constructor"))?.key).toBe("failure");
   expect(executionRecoveryGuide(execution("constructor"))?.key).toBe("unknown");
 });
+it("explains workspace contention even after a task enters In progress", () => {
+  expect(taskRecoveryGuide({ ...task(undefined, "running"), workspaceWaiting: { runId: "r", sessionId: "s", blockingSessionId: "other" } })?.key).toBe("ownership");
+});
