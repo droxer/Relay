@@ -1,5 +1,7 @@
 "use client";
 
+import { TaskRecoveryPanel } from "./ExecutionRecoveryPanel";
+
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
@@ -482,12 +484,15 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           title={form.id ? t("routine.edit") : t("routine.new")}
           subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
           meta={editingTask ? (
-            <RoutineDrawerMeta
-              task={editingTask}
-              state={routineState(editingTask, runningIds)}
-              session={editingSession}
-              onOpenThread={onOpenThread}
-            />
+            <>
+              <TaskRecoveryPanel task={editingTask} onOpenThread={onOpenThread} />
+              <RoutineDrawerMeta
+                task={editingTask}
+                state={routineState(editingTask, runningIds)}
+                session={editingSession}
+                onOpenThread={onOpenThread}
+              />
+            </>
           ) : undefined}
           onClose={() => { void closeRoutineForm(); }}
           onClosed={releaseRoutineForm}

@@ -1,5 +1,7 @@
 "use client";
 
+import { TaskRecoveryPanel } from "./ExecutionRecoveryPanel";
+
 import { TASK_FLOW_STAGES } from "../lib/taskFlow";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from "react";
@@ -137,6 +139,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
     },
     onCancel: endTaskDrag,
   });
+  const editingTask = tasks.find(task => task.id === form?.id);
   const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
   const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
@@ -752,6 +755,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
           onChange={(next) => {
             if (next.variant === "backlog") setForm(next);
           }}
+          meta={editingTask ? <TaskRecoveryPanel task={editingTask} onOpenThread={onOpenThread} /> : undefined}
           onOpenThread={onOpenThread}
           onSubmit={(event) => void submitTask(event)}
           onDelete={form.id ? () => { void deleteBacklog(); } : undefined}

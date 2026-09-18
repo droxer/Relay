@@ -19,6 +19,7 @@ import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
+import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { ThreadHeader } from "./ThreadHeader";
 import { TranscriptEmpty } from "./TranscriptEmpty";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
@@ -342,7 +343,6 @@ export function ThreadsView({
       <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
         <ThreadHeader
           activeSession={activeSession}
-          onRetryExecutionRecovery={onRetryExecutionRecovery}
           participants={threadParticipants}
           artifactCount={artifactCount}
           spaceOpen={spaceOpen}
@@ -351,6 +351,8 @@ export function ThreadsView({
           onToggleThreadList={onToggleThreadList}
           onBackToThreads={onBackToThreads}
         />
+
+        {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} /> : null}
 
         <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="polite" aria-atomic="false">
           <div className="transcript-inner">

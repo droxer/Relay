@@ -59,3 +59,62 @@ it("preserves the actual task reason, links the transcript, and explains unblock
   expect(screen.getByText("recovery.unblock_help")).toBeTruthy();
   expect(screen.getByRole("link", { name: "recovery.thread" }).getAttribute("href")).toBe("/threads/thread-1");
 });
+it("shows pending deletion and resets feedback on thread changes", async () => {
+  const first = session("finalization_failed");
+  first.execution!.deletionRequested = true;
+  const retry = vi.fn().mockRejectedValue(new Error("offline"));
+  const view = render(<ExecutionRecoveryPanel session={first} onRetry={retry} />);
+  expect(screen.getByText("recovery.deletion_pending")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "recovery.retry" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+  view.rerender(<ExecutionRecoveryPanel session={{ ...session("finalization_failed"), id: "thread-2" }} onRetry={retry} />);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+it("preserves modified link clicks and opens the actual blocking thread", () => {
+  const open = vi.fn();
+  const blocked = { ...task("task_execution_active"), workspaceWaiting: { runId: "run", sessionId: "thread-1", blockingSessionId: "blocking-thread" } };
+  render(<TaskRecoveryPanel task={blocked} onOpenThread={open} />);
+  const link = screen.getByRole("link", { name: "recovery.thread" });
+  expect(link.getAttribute("href")).toBe("/threads/blocking-thread");
+  link.addEventListener("click", event => event.preventDefault(), { once: true });
+  fireEvent.click(link, { ctrlKey: true });
+  expect(open).not.toHaveBeenCalled();
+  fireEvent.click(link);
+  expect(open).toHaveBeenCalledWith("blocking-thread");
+});
+it("omits resolved task notices and explains workspace contention without dispatch errors", () => {
+  expect(taskRecoveryGuide(task(undefined, "backlog"))).toBeNull();
+  expect(taskRecoveryGuide({ ...task(undefined, "assigned"), dispatchOutcome: { state: "started" } })).toBeNull();
+  expect(taskRecoveryGuide({ ...task(undefined, "assigned"), workspaceWaiting: { runId: "r", sessionId: "s" } })?.key).toBe("ownership");
+  const view = render(<TaskRecoveryPanel task={task(undefined, "running")} />);
+  expect(view.container.textContent).toBe("");
+  view.rerender(<ExecutionRecoveryPanel session={{ ...session(""), execution: undefined }} />);
+  expect(view.container.textContent).toBe("");
+});
+it("honors the unsaved-change guard when opening computer recovery", async () => {
+  const { registerNavigationGuard } = await import("../src/lib/navigationGuard");
+  const guard = vi.fn().mockResolvedValue(false);
+  const unregister = registerNavigationGuard(guard);
+  render(<ExecutionRecoveryPanel session={session("execution_unconfirmed")} />);
+  fireEvent.click(screen.getByRole("link", { name: "recovery.computer" }));
+  await waitFor(() => expect(guard).toHaveBeenCalledOnce());
+  unregister();
+});
+it("supports legacy or missing computer identity and absent thread links", () => {
+  const legacy = { ...session("orphaned_run"), computerId: undefined, managedNodeId: "managed", daemonNodeId: "daemon" };
+  const view = render(<ExecutionRecoveryPanel session={legacy} />);
+  expect(screen.getByText("recovery.host")).toBeTruthy();
+  view.rerender(<ExecutionRecoveryPanel session={{ ...legacy, managedNodeId: undefined }} />);
+  expect(screen.getByText("recovery.host")).toBeTruthy();
+  view.rerender(<ExecutionRecoveryPanel session={{ ...legacy, managedNodeId: undefined, daemonNodeId: undefined }} />);
+  expect(screen.queryByText("recovery.host")).toBeNull();
+  view.rerender(<TaskRecoveryPanel task={{ ...task("agent_offline", "assigned"), linkedSessionIds: [], dispatchOutcome: { state: "queued", code: "agent_offline", message: "Offline computer" } }} />);
+  expect(screen.getByText("Offline computer")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "recovery.thread" })).toBeNull();
+  expect(executionRecoveryGuide({ ...execution(""), blockingReason: null })?.key).toBe("unknown");
+});
+it("ignores dispatch errors from a previously started run and safely handles unknown codes", () => {
+  expect(taskRecoveryGuide({ ...task("agent_offline"), dispatchOutcome: { state: "started", code: "agent_offline" } })?.key).toBe("failure");
+  expect(taskRecoveryGuide(task("constructor"))?.key).toBe("failure");
+  expect(executionRecoveryGuide(execution("constructor"))?.key).toBe("unknown");
+});

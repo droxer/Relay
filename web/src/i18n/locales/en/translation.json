@@ -1862,5 +1862,101 @@
     "message_blocker": "Blocker",
     "message_handoff": "Handoff",
     "message_decision": "Decision"
+  },
+  "recovery": {
+    "title": "Next steps",
+    "retry": "Retry saving results",
+    "retrying": "Requesting recovery…",
+    "computer": "Open Computers",
+    "agents": "View agents",
+    "teams": "View teams",
+    "projects": "View projects",
+    "backlog": "View task board",
+    "thread": "Open linked thread",
+    "host": "Computer: {{computer}}",
+    "deletion_pending": "Deletion is pending. Relay will finish it after exit is confirmed and results are saved.",
+    "action_failed": "The recovery request failed. Try again; if it continues, contact an administrator with this thread’s address.",
+    "retry_requested": "Recovery requested. Wait for the execution status to update.",
+    "unblock_help": "After correcting the cause, save any changes and use Unblock on the task board. Unblock restores the previous stage; it does not itself run the agent. Previously running work returns to Waiting for human, where you can choose to resume.",
+    "finalization_failed": {
+      "title": "Results could not be saved",
+      "body": "Relay retained the result, but saving it failed repeatedly. Retry saving results. If this fails again, ask an administrator to check backend storage. This does not rerun the agent."
+    },
+    "termination_unconfirmed": {
+      "title": "Stopping needs attention",
+      "body": "The stop request has not been confirmed. Open Computers and ask the computer operator to check the process and restore its exit report. Do not start replacement work until execution is settled."
+    },
+    "orphaned_run": {
+      "title": "Execution needs reconciliation",
+      "body": "This thread still records a running agent without a matching execution record. Ask an administrator to reconcile the retained run and exit evidence. Retrying result saving cannot repair missing evidence."
+    },
+    "execution_unconfirmed": {
+      "title": "Computer is not responding",
+      "body": "Check the assigned computer and restore its daemon connection. The agent may still be running. Relay must receive exit evidence before releasing the execution or completing deletion."
+    },
+    "awaiting_dispatch": {
+      "title": "Waiting to start",
+      "body": "The request is queued. Check computer availability and execution capacity if the wait continues. Avoid submitting the same work again."
+    },
+    "awaiting_termination": {
+      "title": "Waiting for the agent to stop",
+      "body": "Relay has requested a stop and is waiting for confirmation from the computer. Keep this thread available; if stopping stalls, check the computer connection."
+    },
+    "saving_results": {
+      "title": "Saving the execution result",
+      "body": "Relay is finishing result storage and cleanup. Wait for completion; a new run is not needed. If saving repeatedly fails, a retry action will appear."
+    },
+    "unknown": {
+      "title": "Execution needs attention",
+      "body": "Relay cannot confirm a safe next step for this execution. Check the computer and ask an administrator to inspect this thread before retrying or deleting it."
+    },
+    "assignment": {
+      "title": "Check the task assignment",
+      "body": "Review the assigned agent, team, and project. Restore missing or disabled configuration, correct incompatible executors or policies, or choose an available assignment in this task and save it."
+    },
+    "access": {
+      "title": "Access needs to be restored",
+      "body": "Ask the resource owner or administrator to restore access to the assigned agent, team, or project, or choose an assignment you can access. Then save the task."
+    },
+    "offline": {
+      "title": "Execution computer is unavailable",
+      "body": "Open Computers and restore the assigned computer connection and executor readiness. Queued tasks can be retried by the scheduler when the runtime is available."
+    },
+    "provisioning": {
+      "title": "Waiting for computer setup",
+      "body": "Check setup progress in Computers. Wait for provisioning and agent configuration to finish; ask an administrator to investigate any setup error."
+    },
+    "workspace": {
+      "title": "Workspace is unavailable",
+      "body": "Restore the computer and workspace bound to this task. Check its directory, permissions, and mount. Moving the task to another computer may lose access to existing work."
+    },
+    "capacity": {
+      "title": "Waiting for execution capacity",
+      "body": "Wait for an active run to finish, or ask an administrator to make capacity available on the assigned computer. Queued work can be retried when capacity returns."
+    },
+    "wip": {
+      "title": "Work in progress limit reached",
+      "body": "Finish or review and accept existing work in the task board to free a slot. The limit also counts work awaiting human acceptance."
+    },
+    "ownership": {
+      "title": "Another execution owns this work",
+      "body": "Open the linked thread and let its execution finish, or request a stop there. If recovery is required, resolve it before starting another run. Do not submit duplicate work."
+    },
+    "retry_exhausted": {
+      "title": "Automatic retries have stopped",
+      "body": "Inspect the recorded error and linked thread. Correct the underlying runtime, access, or configuration problem before unblocking this task."
+    },
+    "failure": {
+      "title": "Inspect the execution failure",
+      "body": "Read the recorded reason, task history, and linked transcript. Check workspace access, required capabilities, agent authentication, skill setup, and output as indicated by the error. Preserve generated work. If this was a human stop, confirm that work should resume."
+    },
+    "human": {
+      "title": "Your input is needed",
+      "body": "Open the linked thread, read the requested input or missing evidence, and reply or use the available decision controls to continue."
+    },
+    "review": {
+      "title": "Review the result",
+      "body": "Open the linked thread and inspect the output and artifacts. Accept the work if it meets the requirements, or request changes with clear feedback."
+    }
   }
 }

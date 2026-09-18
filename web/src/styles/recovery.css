@@ -1,0 +1,28 @@
+/* Recovery stays adjacent to the affected work and uses the shell's tokens. */
+.recovery-panel {
+  flex: 0 0 auto;
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line-2);
+  border-inline-start: 3px solid var(--warn);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font: var(--type-body);
+  overflow-wrap: anywhere;
+}
+
+.chat-panel > .recovery-panel {
+  margin: var(--sp-3) var(--sp-4) 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.recovery-panel strong { color: var(--ink-1); }
+.recovery-panel p { margin: 0; }
+.recovery-context { font: var(--type-body-sm); }
+.recovery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.recovery-actions:empty { display: none; }
+.recovery-actions a { color: var(--ink-1); text-decoration: underline; text-underline-offset: 3px; }
