@@ -421,6 +421,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         livenessHeartbeatIntervalMs = settings.intervalMs;
       }
     };
+    const renewExecutionLeases = (settings: DaemonNodeHeartbeatSettings | undefined, sentAt: number): void => {
+      if (!settings?.commandLeases) return;
+      const observedAt = Date.parse(settings.observedAt ?? "");
+      for (const lease of settings.commandLeases) {
+        if (activeRuns.get(lease.commandId)?.command.leaseId !== lease.leaseId) continue;
+        const duration = Date.parse(lease.leaseExpiresAt) - observedAt - (performance.now() - sentAt);
+        if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration, observedAt);
+      }
+    };
     const sendHeartbeat = async (): Promise<void> => {
       const sentAt = performance.now();
       const renewing = [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id));
@@ -440,12 +449,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         );
         updateHeartbeatSettings(validHeartbeatSettings(response.heartbeat));
         if (response.heartbeat.commandLeases) {
-          const observedAt = Date.parse(response.heartbeat.observedAt ?? "");
-          for (const lease of response.heartbeat.commandLeases) {
-            if (activeRuns.get(lease.commandId)?.command.leaseId !== lease.leaseId) continue;
-            const duration = Date.parse(lease.leaseExpiresAt) - observedAt - (performance.now() - sentAt);
-            if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration);
-          }
+          renewExecutionLeases(response.heartbeat, sentAt);
         } else {
           // Older backends acknowledge the submitted leases implicitly.
           for (const { command } of renewing) executionWatchdog.renew(command.id,
@@ -472,7 +476,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     });
     heartbeatTask = (async () => {
       while (!stopping && !runtimeSignal.aborted) {
-        await delay(livenessHeartbeatIntervalMs, runtimeSignal);
+        await delay(Math.min(livenessHeartbeatIntervalMs, commandLeaseSeconds * 1000 / 3), runtimeSignal);
         if (stopping || runtimeSignal.aborted) return;
         await withBackendReconnect(
           sendHeartbeat,
@@ -492,6 +496,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       stopping ? AbortSignal.timeout(SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS) : undefined;
     while (!stopping) {
       let completedEmptyLongPoll = false;
+      let commandPollStartedAt = performance.now();
+      let leaseObservationStartedAt = commandPollStartedAt;
+      let pollHeartbeat: DaemonNodeHeartbeatSettings | undefined;
       const body = await withBackendReconnect(async () => {
         if (stopping) return { commands: [] };
         // Capability re-registration refreshes agent inventory independently
@@ -502,7 +509,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           updateHeartbeatSettings(await register());
           lastRegisteredAt = Date.now();
         }
-        const commandPollStartedAt = performance.now();
+        commandPollStartedAt = performance.now();
         const response = await getJson(
           fetchFn,
           daemonCommandsUrl(backendUrl, sandboxId, {
@@ -526,7 +533,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           logger.info("daemon re-registered", { sandboxId });
           return { commands: [] };
         }
-        const parsed = await response.json() as { commands?: DaemonNodeCommand[] };
+        const parsed = await response.json() as { commands?: DaemonNodeCommand[]; heartbeat?: DaemonNodeHeartbeatSettings; processingMs?: number };
+        // Exclude the backend's long-poll wait from transport latency. Otherwise
+        // a new one-second lease returned after a 25-second poll looks expired.
+        const elapsed = performance.now() - commandPollStartedAt;
+        const processingMs = typeof parsed.processingMs === "number" && Number.isFinite(parsed.processingMs)
+          ? Math.max(0, Math.min(parsed.processingMs, elapsed)) : 0;
+        leaseObservationStartedAt = commandPollStartedAt + processingMs;
+        pollHeartbeat = parsed.heartbeat;
+        renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         completedEmptyLongPoll = commandPollWaitMs > 0
           && (parsed.commands?.length ?? 0) === 0
           && performance.now() - commandPollStartedAt >= commandPollWaitMs;
@@ -545,7 +560,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             });
             continue;
           }
-          if (!canStartCommand(activeRuns, maxConcurrentRuns)) {
+          if (!canStartCommand(activeRuns, maxConcurrentRuns, terminalCommands)) {
             const detail = "Daemon node has no available execution slot for this run.";
             logger.warn("command rejected while daemon busy", { ...commandLogFields(sandboxId, command), error: detail });
             await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
@@ -603,7 +618,6 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               threadWorkspaces,
               environment,
               controller.signal,
-              cancellationTerminalEventSignal,
             ), command.reportWorkspaceStatus ? {
               sessionId: command.sessionId,
               onWaiting: async (blockingSessionId) => {
@@ -619,7 +633,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
                 } satisfies DaemonNodeEvent, token, controller.signal);
               },
             } : undefined),
-          ).catch(async (error: unknown) => {
+          ).then(async (event) => {
+            // The workspace gate has released and the process has exited. The
+            // outbox marks this command terminal before HTTP delivery begins,
+            // so pending acknowledgements consume neither execution nor workspace slots.
+            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+              event, token, controller.signal.aborted ? cancellationTerminalEventSignal() : controller.signal);
+          }).catch(async (error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             logger.error("command failed before completion", { ...commandLogFields(sandboxId, command), error: message });
             const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
@@ -661,6 +681,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             if (!stopping) setHealth("polling");
           });
           activeRuns.set(command.id, { command, controller, promise });
+          renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         } else if (command.type === "run.cancel") {
           logger.info("cancel command received", {
             sandboxId,
@@ -922,8 +943,7 @@ async function executeCommand(
   threadWorkspaces: ThreadWorkspaceManager,
   environment: DaemonExecutionEnvironment,
   signal?: AbortSignal,
-  cancellationTerminalEventSignal?: () => AbortSignal | undefined,
-): Promise<void> {
+): Promise<DaemonNodeEvent> {
   const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
   const state = { ...(command.state ?? initialAgentState(command.taskGoal)), round_result_run_id: command.runId };
   logger.info("run starting", commandLogFields(sandboxId, command));
@@ -945,13 +965,7 @@ async function executeCommand(
   consumeRoundResult(threadWorkspace.hostPath);
   await environment.ensureAgentReady(command.agent, signal, threadWorkspace.hostPath);
   if (signal?.aborted) {
-    await postRunCancelled(fetchFn, eventUrl, command, token, signal.reason, cancellationTerminalEventSignal?.()).catch((error: unknown) => {
-      logger.error("terminal event post failed", {
-        ...commandLogFields(sandboxId, command),
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-    return;
+    return runCancelledEvent(command, signal.reason);
   }
   logger.info("agent ready", commandLogFields(sandboxId, command));
   const executionAgentHome = environment.sandboxMode === "boxlite" ? "/home/agent" : agentHomePath();
@@ -1139,13 +1153,7 @@ async function executeCommand(
       ...commandLogFields(sandboxId, command),
       exitCode: next.last_exit_code,
     });
-    await postRunCancelled(fetchFn, eventUrl, command, token, signal.reason, cancellationTerminalEventSignal?.(), agentLog).catch((error: unknown) => {
-      logger.error("terminal event post failed", {
-        ...commandLogFields(sandboxId, command),
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-    return;
+    return runCancelledEvent(command, signal.reason, agentLog);
   }
   // Output delivery can fail after the agent process has successfully written
   // its deliverables. Preserve those files on the terminal failure event so
@@ -1154,7 +1162,7 @@ async function executeCommand(
     ? diffGeneratedFiles(threadWorkspace.hostPath, workspaceSnapshot, scanOptions)
     : [];
   if (outputPostFailure) {
-    await postJsonWithRetry(fetchFn, eventUrl, {
+    return {
       type: "run.failed",
       commandId: command.id,
       ...commandLeaseEventFields(command),
@@ -1165,8 +1173,7 @@ async function executeCommand(
       agentLog,
       exitCode: next.last_exit_code || 1,
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
-    } satisfies DaemonNodeEvent, token, signal);
-    return;
+    } satisfies DaemonNodeEvent;
   }
   logger.info("run completed", {
     ...commandLogFields(sandboxId, command),
@@ -1174,7 +1181,7 @@ async function executeCommand(
     agentLogBytes: agentLog.length,
     generatedFileCount: generatedFiles.length,
   });
-  await postJsonWithRetry(fetchFn, eventUrl, {
+  return {
     type: "run.completed",
     commandId: command.id,
     ...commandLeaseEventFields(command),
@@ -1186,19 +1193,15 @@ async function executeCommand(
     tokenUsage: next.token_usage,
     ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
     ...(roundResult ? { roundResult } : {}),
-  } satisfies DaemonNodeEvent, token, signal);
+  } satisfies DaemonNodeEvent;
 }
 
-async function postRunCancelled(
-  fetchFn: typeof fetch,
-  eventUrl: string,
+function runCancelledEvent(
   command: DaemonNodeRunCommand,
-  token: string,
   reason: unknown,
-  signal?: AbortSignal,
   agentLog?: string,
-): Promise<void> {
-  await postJsonWithRetry(fetchFn, eventUrl, {
+): DaemonNodeEvent {
+  return {
     type: "run.cancelled",
     commandId: command.id,
     ...commandLeaseEventFields(command),
@@ -1207,7 +1210,7 @@ async function postRunCancelled(
     agent: command.agent,
     reason: typeof reason === "string" && reason ? reason : "Cancelled by human.",
     ...(agentLog ? { agentLog } : {}),
-  } satisfies DaemonNodeEvent, token, signal);
+  };
 }
 
 function commandLeaseEventFields(command: DaemonNodeRunCommand): { leaseId?: string } {
@@ -1580,8 +1583,9 @@ function formatQueryNumber(value: number): string {
 function canStartCommand(
   activeRuns: Map<string, { command: DaemonNodeRunCommand }>,
   maxConcurrentRuns: number,
+  terminalCommands: Set<string>,
 ): boolean {
-  return activeRuns.size < maxConcurrentRuns;
+  return [...activeRuns.keys()].filter((id) => !terminalCommands.has(id)).length < maxConcurrentRuns;
 }
 
 export function createDaemonLogger(input: {

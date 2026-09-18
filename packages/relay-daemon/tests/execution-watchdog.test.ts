@@ -18,3 +18,19 @@ test("only renewed runs retain permission; expired execution stops once", () => 
   watchdog.tick();
   assert.deepEqual(stopped, ["b"]);
 });
+
+test("a delayed poll observation cannot replace a newer heartbeat grant", () => {
+  let now = 0;
+  let stopped = false;
+  const watchdog = new ExecutionWatchdog(() => now);
+  watchdog.track("run", 100, () => { stopped = true; });
+  watchdog.renew("run", 300, 2000);
+  now = 50;
+  watchdog.renew("run", 10, 1000);
+  now = 100;
+  watchdog.tick();
+  assert.equal(stopped, false);
+  now = 301;
+  watchdog.tick();
+  assert.equal(stopped, true);
+});

@@ -1016,7 +1016,13 @@ def placement_status(
     else:
         executor_kind = placement.get("executorKind")
         executor_status = (daemon_node.get("agents") or {}).get(executor_kind)
-        if executor_kind not in AGENT_NAMES or executor_status != "ready":
+        if executor_kind in set(daemon_node.get("disabledAgents") or []):
+            status = "incompatible"
+            conditions.append({
+                "reason": "executor_not_ready",
+                "message": f"{executor_kind} is disabled on this runtime node.",
+            })
+        elif executor_kind not in AGENT_NAMES or executor_status != "ready":
             status = "incompatible"
             conditions.append(
                 {

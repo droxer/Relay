@@ -258,3 +258,46 @@ test("a backlog card keeps its action buttons inside the card on touch", async (
   expect(clipped, JSON.stringify(clipped)).toEqual([]);
   await page.context().close();
 });
+
+test("dragging the thread rail moves the rail, and stops where CSS stops it", async ({ browser }) => {
+  /* The one interaction none of the tests above performs. Every other check
+     seeds a width into localStorage and reloads, which is the shape of test
+     that let a dead drag ship: the stored number was right, the CSS text was
+     right, and the rail did not move, because the min() capping it was
+     declared on :root and never saw the width AppShell writes inline.
+
+     Two things have to hold at once. The rail must land on its ceiling — at
+     1300px that is the 26vw cap (338), not the 480px absolute maximum — and
+     the stored width must not exceed what CSS will render, or the handle
+     climbs away from the edge it is dragging and the gesture feels broken
+     while every number still reads correctly. */
+  const page = await openPage(browser, "/threads/review-thread", false, { "relay-web.sidenavExpanded": "true" });
+  await page.setViewportSize({ width: 1300, height: 900 });
+  const handle = page.locator(".thread-panel-resize").first();
+  await expect(handle).toBeVisible();
+
+  const railWidth = () => page.locator(".thread-panel").first().evaluate((el) => Math.round(el.getBoundingClientRect().width));
+  const before = await railWidth();
+  const box = (await handle.boundingBox())!;
+  const y = box.y + box.height / 2;
+  const startX = box.x + box.width / 2;
+  await page.mouse.move(startX, y);
+  await page.mouse.down();
+  for (let dx = 20; dx <= 400; dx += 20) await page.mouse.move(startX + dx, y);
+  await page.mouse.up();
+
+  const after = await railWidth();
+  expect(after).toBeGreaterThan(before);           // it moved at all
+  expect(after).toBe(Math.round(0.26 * 1300));     // and stopped at the viewport cap
+
+  // The handle rides the rail's edge, not the pointer: past the ceiling the
+  // pointer keeps going and the handle must not.
+  const edge = await page.locator(".thread-panel").first().evaluate((el) => Math.round(el.getBoundingClientRect().right));
+  const rested = (await handle.boundingBox())!;
+  expect(Math.abs(rested.x + rested.width / 2 - edge)).toBeLessThanOrEqual(8);
+
+  // What was stored is what CSS renders — never a number the rail cannot reach.
+  const stored = await page.evaluate(() => Number(localStorage.getItem("relay-web.threadListWidth")));
+  expect(stored).toBeLessThanOrEqual(after);
+  await page.context().close();
+});
