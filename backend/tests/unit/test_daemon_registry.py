@@ -4542,6 +4542,30 @@ def _pipeline_registry(root: str) -> tuple[Any, Any, Any]:
     return session_store, daemon_store, registry
 
 
+def test_required_review_failure_cannot_be_closed_by_later_success() -> None:
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, _, registry = _pipeline_registry(root)
+            task = registry.task_store.create_task({"title": "Required review"})
+            await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Review and synthesize", "taskId": task["id"],
+                "assignments": [
+                    {"agent": "claude", "mode": "review", "required": True},
+                    {"agent": "codex", "mode": "review", "synthesizer": True},
+                ],
+            })
+            [review] = registry.take_commands("sbx_alice", "node_token")
+            _finish_run(registry, review, 1)
+            [final] = registry.take_commands("sbx_alice", "node_token")
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": final["id"], "sessionId": final["sessionId"],
+                "runId": final["runId"], "agent": final["agent"], "exitCode": 0,
+                "roundResult": {"status": "done"},
+            }, "node_token")
+            assert registry.task_store.get_task(task["id"])["status"] == "waiting_for_human"
+    asyncio.run(flow())
+
+
 def _start_run(registry: Any, command: dict[str, Any]) -> None:
     if command.get("reportExecutionStarted"):
         registry.handle_event(
