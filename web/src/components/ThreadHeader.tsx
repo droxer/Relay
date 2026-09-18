@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { EmployeeAgent, RelaySession } from "../types";
 import {
@@ -11,9 +10,8 @@ import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 import { Button } from "@/components/ui/button";
 
-export function ThreadHeader({ activeSession, onRetryExecutionRecovery, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
+export function ThreadHeader({ activeSession, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
   activeSession: RelaySession | undefined;
-  onRetryExecutionRecovery?: () => Promise<void>;
   /** Agents in the room, in join order. Shown only once a thread has more
    *  than one — a solo thread already names its agent in the composer. Drawn
    *  as a face stack: the header is a row the title has first claim on, so
@@ -27,8 +25,6 @@ export function ThreadHeader({ activeSession, onRetryExecutionRecovery, particip
   onBackToThreads: () => void;
 }) {
   const { t } = useTranslation();
-  const [retrying, setRetrying] = useState(false);
-  const [retryFailed, setRetryFailed] = useState(false);
   return (
     <header className="chat-header">
       <div className="chat-title">
@@ -60,14 +56,6 @@ export function ThreadHeader({ activeSession, onRetryExecutionRecovery, particip
         />
       ) : null}
       <div className="chat-tools">
-        {activeSession?.execution?.blockingReason === "finalization_failed" && onRetryExecutionRecovery ? (
-          <Button variant="ghost" disabled={retrying} onClick={async () => {
-            setRetrying(true); setRetryFailed(false);
-            try { await onRetryExecutionRecovery(); } catch { setRetryFailed(true); }
-            finally { setRetrying(false); }
-          }}>{t("thread.retry_recovery")}</Button>
-        ) : null}
-        {retryFailed ? <span role="alert">{t("thread.recovery_failed")}</span> : null}
         {spaceOpen ? (
           <Button
             variant="icon"

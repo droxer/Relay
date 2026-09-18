@@ -1,0 +1,46 @@
+/* Recovery stays adjacent to the affected work and uses the shell's tokens. */
+.recovery-panel {
+  flex: 0 0 auto;
+  display: grid;
+  align-content: start;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line-2);
+  /* The rail carries the tone: a blocked or failed execution warns, work that
+     is simply waiting on a person reads as information, not a fault. */
+  border-inline-start: 3px solid var(--recovery-rail, var(--warn));
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font: var(--type-body);
+  overflow-wrap: anywhere;
+}
+
+/* Reserve a row for the notice; the transcript must keep the flexible row. */
+.chat-panel:has(> .recovery-panel) {
+  grid-template-rows: var(--header-h) auto minmax(0, 1fr) auto;
+}
+
+@media (max-width: 820px) {
+  .messenger-shell[data-mobile-view="chat"] .chat-panel:has(> .recovery-panel) {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+}
+
+.chat-panel > .recovery-panel {
+  margin: var(--sp-3) var(--sp-4) 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.recovery-panel[data-tone="info"] { --recovery-rail: var(--info); }
+.recovery-panel strong { color: var(--ink-1); }
+.recovery-panel p { margin: 0; }
+.recovery-context { font: var(--type-body-sm); }
+.recovery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.recovery-actions:empty { display: none; }
+/* Actions are shared controls (Button / link-button); the panel only lays
+   them out. The empty live region below must keep its box — a display:none
+   region is not announced when it fills. */
+.recovery-feedback:empty { margin-block-start: calc(var(--sp-2) * -1); }

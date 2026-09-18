@@ -24,6 +24,11 @@ vi.mock("@/components/ui/dialog", () => {
   };
 });
 vi.mock("@/components/ui/toast", () => ({ Toaster: () => null, toast: { add: vi.fn() } }));
-vi.mock("@/components/ui/button", () => ({ Button: ({ children, tooltip: _tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, ...props }: any) => createElement("button", props, children) }));
+vi.mock("@/components/ui/button", () => ({
+  Button: ({ children, tooltip: _tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, ...props }: any) => createElement("button", props, children),
+  // Real variants are class strings; tests only need a stable stand-in so
+  // link-buttons stay distinguishable from bare anchors.
+  buttonVariants: ({ variant = "default", size = "default" }: any = {}) => `btn-${variant} btn-${size}`,
+}));
 vi.mock("@/components/ui/input", () => ({ Input: (props: any) => createElement("input", props) }));
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });

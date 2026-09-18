@@ -14,7 +14,7 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
-    let body: any = { sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], tasks, flowPolicy: { wipLimit: 5, scope: "employee" } };
+    let body: any = { sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], artifacts: [], events: [], runs: [], files: [], entries: [], tasks, flowPolicy: { wipLimit: 5, scope: "employee" } };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
     if (method === "PATCH" && path.includes("/tasks/")) {
       const input = route.request().postDataJSON();
@@ -32,6 +32,11 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   const card = review.locator("article").filter({ hasText: "Blocked review" });
   await expect(card).toContainText("Need approval");
   await expect(card.getByRole("button", { name: "Done", exact: true })).toBeDisabled();
+  await card.getByRole("button", { name: "Blocked review", exact: true }).click();
+  const guidance = page.getByRole("region", { name: "Next steps" });
+  await expect(guidance).toContainText("Need approval");
+  await expect(guidance).toContainText("Unblock restores the previous stage");
+  await page.getByRole("button", { name: "Close drawer", exact: true }).click();
   await card.hover();
   await card.getByRole("button", { name: "Unblock", exact: true }).click();
   await expect(card.getByRole("button", { name: "Done", exact: true })).toBeEnabled();

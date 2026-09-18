@@ -28,7 +28,7 @@ import { taskWorkspaceState } from "./taskWorkspaceState";
  *  The artifact list above stays the durable record either way.
  *
  *  A routine lists its occurrence directories; the routine itself never runs. */
-export function TaskDrawerWorkspace({ taskId, onOpenThread }: { taskId: string; onOpenThread?: (sessionId: string) => void }) {
+export function TaskDrawerWorkspace({ taskId }: { taskId: string }) {
   const { t } = useTranslation();
   const [path, setPath] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
@@ -75,17 +75,13 @@ export function TaskDrawerWorkspace({ taskId, onOpenThread }: { taskId: string; 
         void fileQuery.refetch();
         if (selectedPath) void contentQuery.refetch();
       }}>{t("backlog.workspace_refresh")}</Button>
+      {/* Why this listing is stale, named but not linked: the recovery panel at
+          the top of the drawer owns navigation to the blocking thread, and one
+          drawer should not offer the same thread twice. */}
       {statusQuery.data?.waiting ? (
         <p className="task-drawer-artifacts-empty" role="status">
-          {t("backlog.workspace_waiting")}{" "}
-          {statusQuery.data.blockingSessionId ? (
-            <a href={`/threads/${encodeURIComponent(statusQuery.data.blockingSessionId)}`} onClick={event => {
-              if (onOpenThread && statusQuery.data?.blockingSessionId) {
-                event.preventDefault();
-                onOpenThread(statusQuery.data.blockingSessionId);
-              }
-            }}>{statusQuery.data.blockingTitle || t("backlog.workspace_open_active")}</a>
-          ) : null}
+          {t("backlog.workspace_waiting")}
+          {statusQuery.data.blockingTitle ? ` ${statusQuery.data.blockingTitle}` : ""}
         </p>
       ) : null}
       {fileQuery.data?.sharedWithProject ? (
