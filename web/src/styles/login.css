@@ -1,9 +1,9 @@
 /* =====================================================================
    Login screen
 
-   A split canvas: the left half is the COVER (what Relay is — mark,
-   headline, three proof lines, no controls) and the right half is the
-   GATE (one column, one action). The two halves separate by fill step
+   A split canvas: the left half is the COVER (what Relay does for you —
+   mark, headline, one lede, three things you can do; no controls) and the
+   right half is the GATE (one column, one action). The two halves separate by fill step
    and a single hairline, not by shadow; the system stays flat.
 
    The pre-auth screen stays in the pinned dark register (no theme
@@ -141,15 +141,22 @@
 
 .login-lede {
   margin: 0;
-  max-width: 42ch;
+  /* Measured against the tier bodies under it (44ch): a narrower lede left
+     the headline's rule running far past the prose it introduces. */
+  max-width: 46ch;
+  /* The cover's prose is short enough that the last line can strand a single
+     word; pretty rebreaks it. Headings get balance from a11y.css. */
+  text-wrap: pretty;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   line-height: var(--leading-loose);
   color: var(--lg-muted);
 }
 
-/* Three proof lines. Not a bulleted list skin: the marker IS the product
-   mark at 14px, so the cover is signed by one shape at two sizes. */
+/* Three things you can do, one line each. Not a bulleted list skin: the
+   marker IS the product mark at 14px, so the cover is signed by one shape at
+   two sizes. One line per point is the whole constraint — a claim that needs
+   a second line is a claim this screen should not be making. */
 .login-points {
   display: flex;
   flex-direction: column;
@@ -165,6 +172,10 @@
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
+  /* Sized to hold each point on one line at the cover's measure. If a new
+     point needs more room than this, shorten the point. */
+  max-width: 54ch;
+  text-wrap: pretty;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   line-height: var(--leading-normal);
@@ -429,7 +440,23 @@
   }
 
   .login-cover > .login-brand { animation-delay: calc(var(--t-stagger) * 1); }
-  .login-cover > .login-intro { animation-delay: calc(var(--t-stagger) * 2); }
+  .login-cover > /* The category line — "AI Workforce Intelligence Platform". Mono caps is the
+   cover's sanctioned skin (field labels, footer meta), and the leading
+   hairline rule reads as an appositive to the wordmark rather than a second
+   name. Muted ink: the wordmark stays the only full-strength mark in the
+   row. */
+.login-tagline {
+  padding-left: var(--sp-2);
+  border-left: 0.5px solid var(--lg-hairline);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  line-height: var(--leading-normal);
+  color: var(--lg-muted);
+}
+
+.login-intro { animation-delay: calc(var(--t-stagger) * 2); }
   .login-cover > .login-points { animation-delay: calc(var(--t-stagger) * 3); }
   .login-panel-inner { animation-delay: calc(var(--t-stagger) * 3); }
   .login-foot { animation-delay: calc(var(--t-stagger) * 4); }
@@ -442,9 +469,8 @@
 
 /* ---------- Responsive ----------------------------------------------- */
 
-/* The app-wide phone tier. Below the split the canvas stacks: cover, gate, foot. The cover keeps its
-   identity and headline but drops the proof lines — three lines of product
-   prose above a sign-in form is a wall, not a cover. */
+/* The app-wide phone tier. Below the split the canvas stacks: cover, gate,
+   foot. */
 @media (max-width: 820px) {
   .login-screen {
     grid-template-columns: minmax(0, 1fr);
@@ -465,8 +491,12 @@
     padding: var(--sp-7) var(--sp-6) var(--sp-6);
   }
 
+  /* The points survive the stack. They were hidden when each was a
+     paragraph; at one short line each, three of them are what a phone
+     visitor actually needs — the form alone never says what this is for. */
   .login-points {
-    display: none;
+    gap: var(--sp-2);
+    padding-top: var(--sp-4);
   }
 
   .login-panel {

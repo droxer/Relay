@@ -1277,14 +1277,11 @@
     "phase_handoff": "Handoff"
   },
   "login": {
-    "lede": "Manage computers, daemons, and agent runs.",
+    "lede": "An AI partner that works alongside you, so your time goes to the work that matters.",
     "lede_bootstrap": "Paste the RELAY_ADMIN_TOKEN from the backend startup log, then create an admin account.",
     "kicker_setup": "First-run setup",
     "kicker_attach": "Sign in",
-    "cover_headline": "Your agents run on your machines.",
-    "point_computers": "Enroll a computer and agents run where the work already lives.",
-    "point_control": "Sessions, tasks, and recurring routines in one control plane.",
-    "point_log": "Every run lands on an append-only event log you can replay.",
+    "cover_headline": "Every Employee. Amplified.",
     "username": "Username",
     "password": "Password",
     "sign_in": "Sign in",
@@ -1296,7 +1293,10 @@
     "no_bootstrap": "Bootstrap is not required. Sign in.",
     "go_bootstrap": "Create first admin",
     "go_login": "Back to sign in",
-    "error_generic": "Something went wrong. Try again."
+    "error_generic": "Something went wrong. Try again.",
+    "do_ask": "Ask anything your company knows, with sources.",
+    "do_handoff": "Hand off the busywork — notes, follow-ups, updates.",
+    "do_control": "Nothing risky happens without your approval."
   },
   "status": {
     "ready": "Ready",

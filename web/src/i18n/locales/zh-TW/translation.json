@@ -1279,15 +1279,15 @@
     "no_bootstrap": "無需引導。請直接登入。",
     "go_bootstrap": "建立首位管理員",
     "go_login": "返回登入",
-    "lede": "管理電腦、守護程式與智能體執行。",
+    "lede": "與你並肩工作的 AI 夥伴，讓時間回到真正重要的事。",
     "lede_bootstrap": "貼上後端啟動日誌中的 RELAY_ADMIN_TOKEN，然後建立管理員帳戶。",
     "kicker_setup": "首次設定",
     "kicker_attach": "登入",
-    "cover_headline": "讓智能體在你自己的電腦上執行。",
-    "point_computers": "接入一台電腦，智能體就在工作所在之處執行。",
-    "point_control": "工作階段、任務與定期例程，統一在一個控制平面。",
-    "point_log": "每次執行都寫入可重播的追加式事件日誌。",
-    "error_generic": "出現問題，請重試。"
+    "cover_headline": "每一位員工，都被放大。",
+    "error_generic": "出現問題，請重試。",
+    "do_ask": "問任何公司知道的事，答案附帶來源。",
+    "do_handoff": "把事務性工作交出去：紀要、跟進、更新。",
+    "do_control": "有風險的操作，都要你批准才會發生。"
   },
   "status": {
     "ready": "就緒",

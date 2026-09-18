@@ -39,7 +39,11 @@ function Chevrons({ size, className }: { size?: number; className?: string }) {
   );
 }
 
-const COVER_POINTS = ["login.point_computers", "login.point_control", "login.point_log"] as const;
+/* Three things you can do with Relay, in the order you meet them: ask, hand
+   off, stay in control. Verbs, not product tiers — a person at a sign-in
+   screen is deciding whether to bother, and the answer to that is what the
+   thing lets them do. */
+const COVER_POINTS = ["login.do_ask", "login.do_handoff", "login.do_control"] as const;
 
 export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const { t } = useTranslation();
