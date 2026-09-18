@@ -13,6 +13,35 @@ from relay.persistence import team_store as team_store_module
 from relay.persistence.team_store import DatabaseTeamStore, LocalTeamStore
 
 
+def test_membership_contract_survives_updates_and_removal(team_store) -> None:
+    team = team_store.create_team("alice", {
+        "name": "Delivery", "leadAgentId": "lead", "memberAgentIds": ["lead", "builder"],
+        "memberConfigs": {"builder": {"role": "implementer", "responsibility": "API and API tests", "required": True}},
+        "acceptanceCriteria": ["Existing clients remain compatible"],
+    })
+    assert team["memberConfigs"]["builder"]["responsibility"] == "API and API tests"
+    updated = team_store.update_team(team["id"], {"name": "API delivery"})
+    assert updated["memberConfigs"] == team["memberConfigs"]
+    assert updated["acceptanceCriteria"] == team["acceptanceCriteria"]
+    removed = team_store.remove_member(team["id"], "builder")
+    assert "builder" not in removed["memberConfigs"]
+
+
+@pytest.mark.parametrize("config", [
+    {"stranger": {"role": "reviewer"}},
+    {"lead": {"role": "root"}},
+    {"lead": {"required": "false"}},
+    {"lead": {"responsibility": "x" * 4001}},
+    {"lead": {"toolPolicy": {"allowAll": True}}},
+])
+def test_membership_contract_rejects_invalid_configuration(team_store, config) -> None:
+    with pytest.raises(ValueError):
+        team_store.create_team("alice", {
+            "name": "Delivery", "leadAgentId": "lead", "memberAgentIds": ["lead"],
+            "memberConfigs": config,
+        })
+
+
 @pytest.fixture(params=["local", "database"])
 def team_store(request: pytest.FixtureRequest, tmp_path: Path):
     if request.param == "database":

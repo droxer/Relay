@@ -51,6 +51,26 @@ def _team(**overrides: Any) -> dict[str, Any]:
     }
 
 
+def test_team_role_overrides_global_default_and_scopes_work() -> None:
+    team = _team(memberConfigs={"support": {
+        "role": "implementer", "responsibility": "Own the API and its tests", "required": True,
+    }}, acceptanceCriteria=["API compatibility"])
+    agents = [_agent("lead", "codex"), _agent("support", "claude", defaultRole="reviewer")]
+    assignments = team_member_assignments(agents, team=team)
+    support = next(item for item in assignments if item["agentId"] == "support")
+    assert support["role"] == "implementer"
+    assert "Own the API and its tests" in support["brief"]
+    assert support["acceptanceCriteria"] == ["API compatibility"]
+    assert assignments[-1]["agentId"] == "lead"
+    assert assignments[-1]["synthesizer"] is True
+
+
+def test_on_request_specialist_is_not_automatically_activated() -> None:
+    team = _team(memberConfigs={"support": {"participation": "on_request", "required": False}})
+    assignments = team_member_assignments([_agent("lead", "codex"), _agent("support", "claude")], team=team)
+    assert [item["agentId"] for item in assignments] == ["lead"]
+
+
 def test_team_agents_returns_the_lead_first() -> None:
     team, agents = team_agents(
         "team_1",
