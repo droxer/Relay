@@ -229,8 +229,6 @@
     "execution_finalizing": "正在儲存結果",
     "execution_recovery_required": "需要復原",
     "deletion_pending": "等待刪除",
-    "retry_recovery": "重試復原",
-    "recovery_failed": "復原請求失敗，請重試。",
     "statuses": {
       "running": "執行中",
       "waiting_for_human": "等待人工",

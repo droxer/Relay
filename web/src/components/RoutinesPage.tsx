@@ -485,7 +485,8 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
           meta={editingTask ? (
             <>
-              <TaskRecoveryPanel task={editingTask} onOpenThread={onOpenThread} />
+              {/* The meta row below already links this occurrence's thread. */}
+              <TaskRecoveryPanel task={editingTask} excludeSessionId={editingSession?.id} onOpenThread={onOpenThread} />
               <RoutineDrawerMeta
                 task={editingTask}
                 state={routineState(editingTask, runningIds)}

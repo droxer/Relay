@@ -231,8 +231,6 @@
     "execution_finalizing": "Saving results",
     "execution_recovery_required": "Recovery required",
     "deletion_pending": "Deletion pending",
-    "retry_recovery": "Retry recovery",
-    "recovery_failed": "Recovery request failed. Please try again.",
     "statuses": {
       "running": "Running",
       "waiting_for_human": "Needs human",

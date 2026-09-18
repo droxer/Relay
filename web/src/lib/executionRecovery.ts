@@ -1,6 +1,13 @@
 import type { RelaySession, RelayTaskListItem } from "../types";
 
-export type RecoveryGuide = { key: string; destination?: "computer" | "agents" | "teams" | "projects" | "backlog" };
+/** `tone` drives the panel rail: attention is the default, `info` is for the
+ *  states that are the normal course of work (a result awaiting review, a
+ *  question waiting on a human) — those need next steps, not a warning. */
+export type RecoveryGuide = {
+  key: string;
+  destination?: "computer" | "agents" | "teams" | "projects" | "backlog";
+  tone?: "info";
+};
 const executionGuides: Record<string, RecoveryGuide> = {
   finalization_failed: { key: "finalization_failed" },
   termination_unconfirmed: { key: "termination_unconfirmed", destination: "computer" },
@@ -36,8 +43,8 @@ register(["dispatch_retry_exhausted"], "retry_exhausted");
 register(["dispatch_failed"], "failure", "computer");
 
 export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null {
-  if (task.status === "waiting_for_human") return { key: "human" };
-  if (task.status === "review") return { key: "review" };
+  if (task.status === "waiting_for_human") return { key: "human", tone: "info" };
+  if (task.status === "review") return { key: "review", tone: "info" };
   if (task.status === "done") return null;
   if (task.workspaceWaiting) return { key: "ownership" };
   if (task.status === "running") return null;

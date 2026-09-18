@@ -121,3 +121,45 @@ it("ignores dispatch errors from a previously started run and safely handles unk
 it("explains workspace contention even after a task enters In progress", () => {
   expect(taskRecoveryGuide({ ...task(undefined, "running"), workspaceWaiting: { runId: "r", sessionId: "s", blockingSessionId: "other" } })?.key).toBe("ownership");
 });
+it("draws every wayfinding action as a shared link-button, not a bare anchor", () => {
+  render(<TaskRecoveryPanel task={task("agent_offline")} onOpenThread={vi.fn()} />);
+  for (const name of ["recovery.computer", "recovery.thread"]) {
+    const link = screen.getByRole("link", { name });
+    expect(link.getAttribute("data-slot")).toBe("link-button");
+    expect(link.className).toContain("btn-ghost");
+  }
+});
+it("keeps the panel navigable when the surface has no in-app thread handler", () => {
+  const view = render(<TaskRecoveryPanel task={task("dispatch_retry_exhausted")} />);
+  const link = screen.getByRole("link", { name: "recovery.thread" });
+  // Listen above React's root so the check sees the handler's decision, and
+  // stop jsdom from attempting the real navigation afterwards.
+  let prevented = true;
+  document.addEventListener("click", event => { prevented = event.defaultPrevented; event.preventDefault(); }, { once: true });
+  fireEvent.click(link);
+  expect(prevented).toBe(false);
+  view.unmount();
+});
+it("warns only about faults — work waiting on a person reads as information", () => {
+  const view = render(<TaskRecoveryPanel task={task(undefined, "review")} />);
+  const tone = () => view.container.querySelector(".recovery-panel")?.getAttribute("data-tone");
+  expect(tone()).toBe("info");
+  view.rerender(<TaskRecoveryPanel task={task(undefined, "waiting_for_human")} />);
+  expect(tone()).toBe("info");
+  view.rerender(<TaskRecoveryPanel task={task("agent_offline")} />);
+  expect(tone()).toBe("attention");
+});
+it("announces a requested retry through a live region that predates the request", async () => {
+  const view = render(<ExecutionRecoveryPanel session={session("finalization_failed")} onRetry={vi.fn().mockResolvedValue(undefined)} />);
+  const region = view.container.querySelector("[role='status']");
+  expect(region?.textContent).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "recovery.retry" }));
+  await waitFor(() => expect(region?.textContent).toBe("recovery.retry_requested"));
+});
+it("lets one drawer surface a thread once, without hiding a different blocker", () => {
+  const view = render(<TaskRecoveryPanel task={task("dispatch_retry_exhausted")} excludeSessionId="thread-1" />);
+  expect(screen.queryByRole("link", { name: "recovery.thread" })).toBeNull();
+  const blocked = { ...task("task_execution_active"), workspaceWaiting: { runId: "run", sessionId: "thread-1", blockingSessionId: "blocking-thread" } };
+  view.rerender(<TaskRecoveryPanel task={blocked} excludeSessionId="thread-1" />);
+  expect(screen.getByRole("link", { name: "recovery.thread" }).getAttribute("href")).toBe("/threads/blocking-thread");
+});

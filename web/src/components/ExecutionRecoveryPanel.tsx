@@ -1,16 +1,38 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelaySession, RelayTaskListItem } from "../types";
 import { hrefForRoute, navigateToAppPath } from "../lib/appRoute";
 import { executionRecoveryGuide, taskRecoveryGuide, type RecoveryGuide } from "../lib/executionRecovery";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+
+/** Navigation out of the panel is a link, drawn with the shared link-button
+ *  grammar: `data-slot="link-button"` is what a11y.css grows to the touch
+ *  target on coarse pointers, and the variant keeps it the same control as
+ *  every other wayfinding anchor (see RoutineDrawerMeta). */
+function RecoveryLink({ href, onNavigate, children }: { href: string; onNavigate?: () => void; children: ReactNode }) {
+  return (
+    <a
+      data-slot="link-button"
+      className={buttonVariants({ variant: "ghost", size: "dense" })}
+      href={href}
+      onClick={event => {
+        // No in-app handler means the href is the navigation: leave it alone,
+        // as with a modified click the browser owns.
+        if (!onNavigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onNavigate();
+      }}
+    >
+      {children}
+    </a>
+  );
+}
 
 function RecoveryDestination({ guide }: { guide: RecoveryGuide }) {
   const { t } = useTranslation();
-  return guide.destination ? <a href={hrefForRoute(guide.destination)} onClick={event => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault(); void navigateToAppPath(hrefForRoute(guide.destination!));
-  }}>{t(`recovery.${guide.destination}`)}</a> : null;
+  if (!guide.destination) return null;
+  const href = hrefForRoute(guide.destination);
+  return <RecoveryLink href={href} onNavigate={() => { void navigateToAppPath(href); }}>{t(`recovery.${guide.destination}`)}</RecoveryLink>;
 }
 
 export function ExecutionRecoveryPanel({ session, onRetry }: { session: RelaySession; onRetry?: () => Promise<void> }) {
@@ -24,7 +46,7 @@ function ExecutionRecoveryContent({ session, guide, onRetry }: { session: RelayS
   const [feedback, setFeedback] = useState<"idle" | "pending" | "failed" | "requested">("idle");
   const execution = session.execution!;
   const computer = session.computerId || session.managedNodeId || session.daemonNodeId;
-  return <section className="recovery-panel" aria-label={t("recovery.title")}>
+  return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} aria-label={t("recovery.title")}>
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     <p>{t(`recovery.${guide.key}.body`)}</p>
     {computer ? <p className="recovery-context">{t("recovery.host", { computer })}</p> : null}
@@ -38,27 +60,39 @@ function ExecutionRecoveryContent({ session, guide, onRetry }: { session: RelayS
       <RecoveryDestination guide={guide} />
     </div>
     {feedback === "failed" ? <p role="alert">{t("recovery.action_failed")}</p> : null}
-    {feedback === "requested" ? <p role="status">{t("recovery.retry_requested")}</p> : null}
+    {/* Mounted before it has anything to say: a polite live region inserted at
+        the same moment as its text is not reliably announced. */}
+    <p role="status" className="recovery-feedback">{feedback === "requested" ? t("recovery.retry_requested") : ""}</p>
   </section>;
 }
 
-export function TaskRecoveryPanel({ task, onOpenThread }: { task: RelayTaskListItem; onOpenThread?: (sessionId: string) => void }) {
+export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
+  task: RelayTaskListItem;
+  /** A thread the surrounding surface already links (the routine drawer's own
+   *  meta row). Suppressed here so one drawer never offers the same thread
+   *  twice; a different blocking thread still gets its link. */
+  excludeSessionId?: string;
+  onOpenThread?: (sessionId: string) => void;
+}) {
   const { t } = useTranslation();
   const guide = taskRecoveryGuide(task);
   if (!guide) return null;
-  const sessionId = task.workspaceWaiting?.blockingSessionId || task.linkedSessionIds.at(-1);
+  const linked = task.workspaceWaiting?.blockingSessionId || task.linkedSessionIds.at(-1);
+  const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
   const reason = task.status === "blocked" ? task.blockerReason : task.status === "assigned" && task.dispatchOutcome?.state !== "started" ? task.dispatchOutcome?.message : undefined;
-  return <section className="recovery-panel" aria-label={t("recovery.title")}>
+  return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} aria-label={t("recovery.title")}>
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     {reason ? <p className="recovery-context">{reason}</p> : null}
     <p>{t(`recovery.${guide.key}.body`)}</p>
     {task.status === "blocked" ? <p>{t("recovery.unblock_help")}</p> : null}
     <div className="recovery-actions">
       <RecoveryDestination guide={guide} />
-      {sessionId ? <a href={hrefForRoute("main", sessionId)} onClick={event => {
-        if (!onOpenThread || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-        event.preventDefault(); onOpenThread(sessionId);
-      }}>{t("recovery.thread")}</a> : null}
+      {sessionId ? (
+        <RecoveryLink
+          href={hrefForRoute("main", sessionId)}
+          onNavigate={onOpenThread ? () => onOpenThread(sessionId) : undefined}
+        >{t("recovery.thread")}</RecoveryLink>
+      ) : null}
     </div>
   </section>;
 }
