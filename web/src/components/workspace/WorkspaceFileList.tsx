@@ -155,11 +155,15 @@ export function WorkspaceFileRow({
       </span>
       <span className="workspace-pick-title">{entry.name}</span>
       <span className="workspace-pick-meta tnum">
-        {isDirectory
-          ? t("workspace.kind_directory")
-          : formatBytes(entry.bytes, i18n.language) || t("workspace.kind_file")}
-        {" · "}
-        {compactDate(entry.updatedAt, i18n.language)}
+        {/* Two spans, not one string: the row is as narrow as 288px in the
+            thread space panel, where the date drops out (workspace-files.css)
+            and takes its separator with it. */}
+        <span className="workspace-pick-size">
+          {isDirectory
+            ? t("workspace.kind_directory")
+            : formatBytes(entry.bytes, i18n.language) || t("workspace.kind_file")}
+        </span>
+        <span className="workspace-pick-date">{compactDate(entry.updatedAt, i18n.language)}</span>
       </span>
     </Button>
   );

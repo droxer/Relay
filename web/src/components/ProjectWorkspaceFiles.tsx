@@ -18,13 +18,16 @@ import {
   ICON,
 } from "./icons";
 import { Button } from "@/components/ui/button";
-import { languageForFile } from "./CodeView";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import {
   WorkspaceFileList,
   WorkspacePathBreadcrumb,
 } from "./workspace/WorkspaceFileList";
-import { WorkspaceFilePreview } from "./workspace/WorkspaceFilePreview";
+import {
+  WorkspaceFilePreview,
+  useWorkspaceFileView,
+} from "./workspace/WorkspaceFilePreview";
+import { WorkspaceFileActions } from "./workspace/WorkspaceFileActions";
 
 type FileSelection = { path: string; name: string };
 
@@ -93,6 +96,7 @@ function WorkspaceFileBrowser({
       readProjectWorkspaceFile({ projectId, path: selectedPath }, signal),
   });
   const homeStatus = workspaceHomeStatus(fileQuery.data);
+  const { view, setView } = useWorkspaceFileView(selected?.name ?? "");
 
   function openDirectory(path: string): void {
     setFilePath(path);
@@ -130,11 +134,19 @@ function WorkspaceFileBrowser({
 
       {selected ? (
         <section className="workspace-pane workspace-pane-preview" aria-label={t("workspace.preview")}>
+          {/* The name is the subject and the actions act on it, so they share
+              one row — the language chip that used to sit here only restated
+              the extension already in the name. */}
           <PaneHeader
             title={selected.name}
             actions={(
               <>
-                <span className="workspace-preview-file-type code">{languageForFile(selected.name)}</span>
+                <WorkspaceFileActions
+                  name={selected.name}
+                  data={contentQuery.data}
+                  view={view}
+                  onViewChange={setView}
+                />
                 <Button
                   variant="ghost"
                   type="button"
@@ -154,6 +166,7 @@ function WorkspaceFileBrowser({
               data={contentQuery.data}
               isLoading={contentQuery.isLoading}
               error={contentQuery.isError ? contentQuery.error : null}
+              view={view}
             />
           </div>
         </section>

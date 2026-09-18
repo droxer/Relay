@@ -154,4 +154,77 @@ describe("reviewed design regressions", () => {
     const markdownStyles = readWeb("src/styles/markdown.css");
     assert.match(markdownStyles, /\.md-body img\s*\{[^}]*aspect-ratio:\s*auto 16 \/ 9/s);
   });
+
+  it("insets a rendered file body, and never via the transcript's prose class", () => {
+    /* Every surface that shows a whole file renders <Markdown variant="document">,
+       which emits .doc-prose — .agent-prose is the TRANSCRIPT's class and cannot
+       appear inside an artifact body. Two sheets in a row insets their document
+       by naming .agent-prose there, so the rule matched nothing and the file sat
+       flush against the panel edge with its text clipped at the border. Both the
+       gutter and the class it hangs on are asserted, because the gutter passing
+       through a dead selector is exactly what this looked like. */
+    const artifact = readWeb("src/styles/artifact.css");
+    const workspace = readWeb("src/styles/workspace-files.css");
+    // Selectors only: both sheets NAME .agent-prose in the comment explaining
+    // why it must not be used here, and a comment is not a rule.
+    const rules = (sheet: string) => sheet.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const [name, sheet] of [["artifact.css", artifact], ["workspace-files.css", workspace]] as const) {
+      assert.ok(
+        !/\.(?:artifact-viewer-body|workspace-preview-viewport)[^{;]*\.agent-prose[^{;]*\{/.test(rules(sheet)),
+        `${name} insets a file body through .agent-prose, which never renders there`,
+      );
+    }
+    assert.match(artifact, /\.artifact-viewer-body > \.doc-prose\s*\{[^}]*padding:\s*var\(--doc-inset-block\) var\(--doc-inset-inline\)/s);
+    // Prose and source share the inset: differing values jolt the text sideways
+    // on every Preview/Source toggle of one file.
+    assert.match(artifact, /\.artifact-viewer-body > \.code-view\s*\{[^}]*margin:\s*var\(--doc-inset-block\) var\(--doc-inset-inline\)/s);
+    // A panel a few hundred pixels wide cannot spend the page's 32px a side.
+    assert.match(readWeb("src/styles/thread-space.css"), /\.thread-space-panel\s*\{[^}]*--doc-inset-inline:/s);
+  });
+
+  it("keeps one dismissal in the panel header and backs out from the file's row", () => {
+    /* The panel header used to swap its title for a `← Files` button whenever a
+       file was open, seating a back control and the close control side by side
+       in one row — two controls that both read as "get me out of here", and a
+       panel whose identity row disappeared the moment you used it. The header
+       now always states the panel's name and carries only the close; going back
+       is the file header's job, one row down, where the project Files tab had
+       been putting it all along. */
+    const panel = readWeb("src/components/space/ThreadSpacePanel.tsx");
+    assert.match(panel, /<h2 className="thread-space-title">\{panelName\}<\/h2>/);
+    assert.ok(
+      !/thread-space-header[\s\S]{0,400}onSelectArtifact\(null\)/.test(panel),
+      "the panel header backs out of a file again, beside its close button",
+    );
+    assert.match(panel, /<ArtifactPreviewHeader[\s\S]{0,300}onBack=\{\(\) => onSelectArtifact\(null\)\}/);
+
+    // One back control, one spelling of it, on every surface a file opens on.
+    for (const surface of [
+      "src/components/space/ThreadSpaceFiles.tsx",
+      "src/components/task-board/TaskDrawerWorkspace.tsx",
+      "src/components/artifact/ArtifactPreviewHeader.tsx",
+    ]) {
+      assert.match(readWeb(surface), /<FilePaneBack/, `${surface} rolls its own back control`);
+    }
+  });
+
+  it("gives a workspace file one set of controls, wherever it opens", () => {
+    /* The switch used to sit in the panel header on one surface and in the body
+       on another, spelled "Preview/Source" here and "Rendered/Source" there,
+       with a download on only one of the three. All three now mount the same
+       component in the file's own header row. */
+    const surfaces = [
+      "src/components/ProjectWorkspaceFiles.tsx",
+      "src/components/space/ThreadSpaceFiles.tsx",
+      "src/components/task-board/TaskDrawerWorkspace.tsx",
+    ];
+    for (const surface of surfaces) {
+      assert.match(readWeb(surface), /<WorkspaceFileActions/, `${surface} builds its own file controls`);
+    }
+    // The preview is controlled: a header cannot read state its sibling holds.
+    assert.ok(
+      !/ToggleGroup/.test(readWeb("src/components/workspace/WorkspaceFilePreview.tsx")),
+      "the preview body renders its own view switch again",
+    );
+  });
 });

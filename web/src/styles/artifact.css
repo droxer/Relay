@@ -446,6 +446,17 @@
   overflow: hidden;
 }
 
+/* Leading slot of the file's header row, matching the thread space files bar
+   and the workspace pane head: back, name, actions. */
+.file-pane-back {
+  flex: 0 0 auto;
+  color: var(--ink-2);
+}
+
+.file-pane-back:hover {
+  color: var(--ink-1);
+}
+
 .artifact-preview-header-title {
   flex: 1 1 0;
   min-width: 0;
@@ -464,13 +475,18 @@
   flex: 0 0 auto;
 }
 
+/* Ghost weight, not bordered. These sit on the raised header bar beside the
+   Preview/Source switch, which IS bordered because a segmented control needs
+   its segments framed — a bordered Download next to it made the secondary
+   action the loudest thing in the panel, louder than the switch the reader
+   actually reaches for. Hover carries the affordance instead. */
 .artifact-preview-action-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   height: var(--control-h-xs);
   padding: 0 var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: 0.5px solid transparent;
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-2);
@@ -520,14 +536,31 @@
 
 /* The rendered readings (Markdown prose, highlighted source) carry no padding
    of their own, unlike the .artifact-plain / .artifact-terminal blocks they
-   stand in for — inset them here so every artifact body shares one gutter. */
-.artifact-viewer-body > .agent-prose {
-  padding: var(--sp-4);
+   stand in for — inset them here so every artifact body shares one gutter.
+
+   `.artifact-viewer-body` is the ONE seam: every surface that shows a whole
+   file funnels through it (the artifact drawer, the thread space panel, and
+   the workspace preview pane), so the gutter is stated once and each surface
+   only re-points --doc-inset-* if it is too narrow for the page value.
+
+   Targets .doc-prose, the class these bodies actually render: they all pass
+   variant="document" to <Markdown>, so this rule read .agent-prose and matched
+   nothing — the document lost its gutter entirely and sat flush against both
+   edges of the panel, its text clipped at the panel's own border. The same
+   typo had already been found and fixed one surface over
+   (workspace-files.css); .agent-prose belongs to a transcript turn and never
+   appears inside an artifact body.
+
+   Prose and source share the inset deliberately. They used to differ by 16px,
+   which is a sideways jolt of the text every time the reader toggles between
+   two readings of one file. */
+.artifact-viewer-body > .doc-prose {
+  padding: var(--doc-inset-block) var(--doc-inset-inline);
   max-width: var(--measure-wide);
 }
 
 .artifact-viewer-body > .code-view {
-  margin: var(--sp-4);
+  margin: var(--doc-inset-block) var(--doc-inset-inline);
 }
 
 @media (max-width: 820px) {

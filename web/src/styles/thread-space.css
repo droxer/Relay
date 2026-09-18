@@ -4,6 +4,12 @@
    it out of the grid and makes it a full-screen overlay. */
 
 .thread-space-panel {
+  /* A few hundred pixels wide, so the page's document gutter (32px a side, a
+     fifth of this column) does not fit — step the pair down here rather than
+     teaching each preview which surface it is on. Everything that renders a
+     whole file inside the panel inherits it. */
+  --doc-inset-block: var(--sp-4);
+  --doc-inset-inline: var(--sp-4);
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -50,6 +56,14 @@
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
+/* With a file open the panel header stands down and the file's own header —
+   which lives inside the body — becomes the only chrome row. The body is then
+   the sole child, and the default `auto` first row would size it to its
+   content and take its scrolling away. */
+.thread-space-inner:not(:has(.thread-space-header)) {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .thread-space-body {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -72,19 +86,6 @@
   color: var(--ink-1);
   font: var(--type-heading);
   letter-spacing: var(--type-heading-track);
-}
-
-.thread-space-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
-  color: var(--ink-2);
-  font: var(--type-label-strong);
-}
-
-.thread-space-back:hover {
-  color: var(--ink-1);
 }
 
 .thread-space-list {
@@ -220,19 +221,64 @@
   min-height: 0;
 }
 
+/* Back, name, actions — the file's own header row, and the same three slots
+   in the same order as the full-page pane's .workspace-pane-head. The name
+   takes the slack (it is the 1fr), so `space-between` has nothing left to do. */
 .thread-space-files-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--sp-2);
   min-width: 0;
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 0.5px solid var(--line-1);
 }
 
+/* A file's header IS the panel's header row, so it stands at the shared header
+   height — the same 64px as the chat header beside it, so the file's first line
+   and the transcript's first line start level. The panel used to spend a full
+   --header-h on a row naming itself and then open the file under a second bar,
+   which is what put its content a whole header out of line with the
+   conversation. */
+.thread-space-panel .thread-space-files-bar,
+.thread-space-panel .artifact-preview-header {
+  /* `height: auto` first: .artifact-preview-header states a fixed --control-h
+     for the artifact drawer, where it is one bar under the drawer's own
+     header, and a fixed height ignores a min-height raised under it. */
+  height: auto;
+  min-height: var(--header-h);
+  padding-inline: var(--sp-4);
+}
+
+/* The name yields, the controls do not: at panel width the filename is the
+   only elastic thing in the row. */
+.thread-space-files-name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-space-files-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+/* Bounds its child; does NOT scroll. Both things that render here own a
+   scroller already (the file list's .workspace-pane-body, the preview's
+   .artifact-viewer-body), and a scrolling parent wrapped around a scrolling
+   child means the wheel lands in whichever box happened to get a definite
+   height — on the page it was the inner one, here the outer. One row of
+   minmax(0, 1fr) hands the constraint down and leaves exactly one scroller. */
 .thread-space-files-body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-  overflow-y: auto;
 }
 
 /* ---- empty output --------------------------------------------------- */
@@ -273,11 +319,6 @@
   line-height: var(--leading-normal);
 }
 
-/* The header is space-between (title ↔ close); the view switch joins the
-   close button on the trailing edge rather than floating in the middle. */
-.thread-space-view-toggle {
-  margin-inline-start: auto;
-}
 
 .thread-space-preview {
   display: grid;

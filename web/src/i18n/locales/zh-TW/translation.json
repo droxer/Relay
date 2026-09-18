@@ -513,10 +513,7 @@
     "close_preview": "關閉預覽",
     "binary_file": "二進位檔案。無法預覽。",
     "empty_file": "此檔案為空。",
-    "view_mode": "預覽模式",
-    "view_rendered": "渲染檢視",
-    "view_source": "原始碼",
-    "file_truncated": "預覽已截斷至 {{limit}}。",
+    "file_truncated": "預覽已截斷至 {{limit}}。被截斷的檔案無法下載。",
     "no_files": "此目錄中沒有檔案。",
     "loading_files": "載入檔案中…",
     "files_unavailable": "尚未選擇對話工作區。",
@@ -548,7 +545,9 @@
     "band_team_id": "團隊 ID",
     "identity_label": "身分",
     "band_created": "建立時間",
-    "band_updated": "更新時間"
+    "band_updated": "更新時間",
+    "download_failed": "無法儲存檔案。請重試，或從磁碟上的工作區開啟。",
+    "back_to_files": "返回檔案列表"
   },
   "profile_image": {
     "alt": "{{name}}的頭像",

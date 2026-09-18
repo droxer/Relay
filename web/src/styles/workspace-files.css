@@ -124,7 +124,13 @@
 
 /* ---- selectable rows ------------------------------------------------ */
 
+/* Query container for the rows. The same list renders on the full-page browse
+   pane and inside the resizable thread space panel, where it can be as narrow
+   as --space-w-min (288px) — a viewport media query cannot tell those apart,
+   because the panel is narrow on the widest screen in the building. */
 .workspace-pick-list {
+  container-type: inline-size;
+  container-name: workspace-list;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -180,10 +186,28 @@
 }
 
 .workspace-pick-meta {
+  display: inline-flex;
+  align-items: baseline;
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   white-space: nowrap;
+}
+
+/* The separator belongs to the date, so it leaves with it. */
+.workspace-pick-date::before {
+  content: " · ";
+}
+
+/* A nowrap meta column is a hard floor on the row: size plus date runs ~110px,
+   and in a 288px panel that left the filename — the only thing the reader is
+   scanning for — about 120px, ellipsized after a dozen characters. The date is
+   the cheaper of the two here; the size stays because it is what tells a
+   500-byte stub from a real document. */
+@container workspace-list (max-width: 480px) {
+  .workspace-pick-date {
+    display: none;
+  }
 }
 
 .workspace-file-icon {
@@ -196,12 +220,22 @@
 /* Kind is carried by the glyph (folder vs file), never by a hue — both stay
    ink-3 like artifact chips. */
 
+/* Sticky, because it lives INSIDE the scroller: it used to scroll away a
+   few rows down, leaving the breadcrumb in the bar above as the only way up
+   from deep in a long directory — the one affordance that stays put being the
+   smaller of the two. Pinned to the top of the list it keeps the big target
+   without the list needing to own a second header row. Opaque, not the
+   translucent wash it wore in flow: rows scrolling under a 55% background
+   read straight through it. */
 .workspace-file-up {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   width: 100%;
   min-height: var(--control-h-xs);
   border: 0;
   border-bottom: 0.5px solid var(--line-2);
-  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  background: color-mix(in srgb, var(--surface-1) 55%, var(--surface-0));
   padding: 0 var(--sp-4);
   color: var(--ink-3);
   cursor: pointer;
@@ -212,7 +246,7 @@
 
 .workspace-file-up:hover {
   color: var(--ink-1);
-  background: color-mix(in srgb, var(--surface-1) 80%, transparent);
+  background: color-mix(in srgb, var(--surface-1) 80%, var(--surface-0));
 }
 
 /* ---- preview pane --------------------------------------------------- */
@@ -233,15 +267,23 @@
   flex-direction: column;
 }
 
+/* The viewport holds the body and nothing else. It used to also hold the
+   Rendered/Source switch, which — being an inline-flex box inside a COLUMN
+   flex container, and so stretched across the inline axis — spanned the whole
+   pane as a full-bleed bordered strip with dead space running to its right
+   edge. The switch now lives in the file's header beside its name, the same
+   place the thread space panel puts it (WorkspaceFileActions).
+
+   The scroller, and the only one in the pane. Padding belongs to the bodies
+   inside it (artifact.css's --doc-inset-* rules), not to the scroll box: this
+   rule used to inset the source reading by 16px while the rendered reading
+   got 32px from its own rule below, so the text jumped sideways on every
+   Preview/Source toggle of the same file. */
 .workspace-preview-viewport .artifact-viewer-body {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--sp-4);
-}
-
-.workspace-preview-viewport.is-bleed .artifact-viewer-body {
   padding: 0;
   overflow: auto;
 }
@@ -283,7 +325,7 @@
    column inside a 1400px pane. */
 .workspace-preview-viewport.is-bleed .doc-prose {
   width: 100%;
-  padding: var(--sp-6) var(--sp-7);
+  padding: var(--doc-inset-block) var(--doc-inset-inline);
   max-width: min(100%, 80rem);
   margin: 0 auto;
 }
@@ -296,7 +338,7 @@
 }
 
 .workspace-preview-truncated {
-  margin: var(--sp-3) var(--sp-4) 0;
+  margin: var(--sp-3) var(--doc-inset-inline) 0;
   color: var(--ink-3);
   font: var(--type-body-sm);
 }

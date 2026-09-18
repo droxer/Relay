@@ -513,10 +513,7 @@
     "close_preview": "关闭预览",
     "binary_file": "二进制文件。无法预览。",
     "empty_file": "此文件为空。",
-    "view_mode": "预览模式",
-    "view_rendered": "渲染视图",
-    "view_source": "源代码",
-    "file_truncated": "预览已截断至 {{limit}}。",
+    "file_truncated": "预览已截断至 {{limit}}。被截断的文件无法下载。",
     "no_files": "此目录中没有文件。",
     "loading_files": "加载文件中…",
     "files_unavailable": "尚未选择对话工作区。",
@@ -548,7 +545,9 @@
     "band_team_id": "团队 ID",
     "identity_label": "身份",
     "band_created": "创建时间",
-    "band_updated": "更新时间"
+    "band_updated": "更新时间",
+    "download_failed": "无法保存文件。请重试，或从磁盘上的工作区打开。",
+    "back_to_files": "返回文件列表"
   },
   "profile_image": {
     "alt": "{{name}}的头像",

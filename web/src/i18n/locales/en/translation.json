@@ -517,10 +517,7 @@
     "close_preview": "Close preview",
     "binary_file": "Binary file. No preview.",
     "empty_file": "This file is empty.",
-    "view_mode": "Preview mode",
-    "view_rendered": "Rendered",
-    "view_source": "Source",
-    "file_truncated": "Preview truncated to {{limit}}.",
+    "file_truncated": "Preview truncated to {{limit}}. Download unavailable for a truncated file.",
     "no_files": "No files in this directory.",
     "loading_files": "Loading files…",
     "files_unavailable": "No thread workspace is selected.",
@@ -553,7 +550,9 @@
     "band_team_id": "Team ID",
     "identity_label": "Identity",
     "band_created": "Created",
-    "band_updated": "Updated"
+    "band_updated": "Updated",
+    "download_failed": "Couldn't save the file. Try again, or open it from the workspace on disk.",
+    "back_to_files": "Back to files"
   },
   "profile_image": {
     "alt": "{{name}} profile image",
