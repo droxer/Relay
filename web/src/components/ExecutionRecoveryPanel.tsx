@@ -4,6 +4,7 @@ import type { RelaySession, RelayTaskListItem } from "../types";
 import { hrefForRoute, navigateToAppPath } from "../lib/appRoute";
 import { executionRecoveryGuide, taskRecoveryGuide, type RecoveryGuide } from "../lib/executionRecovery";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useDialogs } from "@/components/ui/DialogProvider";
 
 /** Navigation out of the panel is a link, drawn with the shared link-button
  *  grammar: `data-slot="link-button"` is what a11y.css grows to the touch
@@ -35,15 +36,25 @@ function RecoveryDestination({ guide }: { guide: RecoveryGuide }) {
   return <RecoveryLink href={href} onNavigate={() => { void navigateToAppPath(href); }}>{t(`recovery.${guide.destination}`)}</RecoveryLink>;
 }
 
-export function ExecutionRecoveryPanel({ session, onRetry }: { session: RelaySession; onRetry?: () => Promise<void> }) {
+export function ExecutionRecoveryPanel({ session, onRetry, onReportGone }: {
+  session: RelaySession;
+  onRetry?: () => Promise<void>;
+  /** Assert the agent is gone, releasing an execution whose exit evidence is
+   *  never going to arrive. Irreversible, so it confirms first. */
+  onReportGone?: () => Promise<void>;
+}) {
   const guide = executionRecoveryGuide(session.execution);
   // Remount feedback when switching threads or when reconciliation changes the reason.
-  return guide ? <ExecutionRecoveryContent key={`${session.id}:${guide.key}`} session={session} guide={guide} onRetry={onRetry} /> : null;
+  return guide ? <ExecutionRecoveryContent key={`${session.id}:${guide.key}`} session={session} guide={guide} onRetry={onRetry} onReportGone={onReportGone} /> : null;
 }
 
-function ExecutionRecoveryContent({ session, guide, onRetry }: { session: RelaySession; guide: RecoveryGuide; onRetry?: () => Promise<void> }) {
+function ExecutionRecoveryContent({ session, guide, onRetry, onReportGone }: {
+  session: RelaySession; guide: RecoveryGuide;
+  onRetry?: () => Promise<void>; onReportGone?: () => Promise<void>;
+}) {
   const { t } = useTranslation();
-  const [feedback, setFeedback] = useState<"idle" | "pending" | "failed" | "requested">("idle");
+  const { confirm } = useDialogs();
+  const [feedback, setFeedback] = useState<"idle" | "pending" | "failed" | "requested" | "gone">("idle");
   const execution = session.execution!;
   const computer = session.computerId || session.managedNodeId || session.daemonNodeId;
   return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} aria-label={t("recovery.title")}>
@@ -58,11 +69,26 @@ function ExecutionRecoveryContent({ session, guide, onRetry }: { session: RelayS
         catch { setFeedback("failed"); }
       }}>{t(feedback === "pending" ? "recovery.retrying" : "recovery.retry")}</Button> : null}
       <RecoveryDestination guide={guide} />
+      {guide.reportGone && onReportGone ? <Button type="button" variant="ghost" size="dense" disabled={feedback === "pending"} onClick={async () => {
+        // An assertion, not an observation: it releases the execution without
+        // the evidence Relay normally requires, and it cannot be taken back.
+        const confirmed = await confirm({
+          title: t("recovery.report_gone_title"),
+          message: t("recovery.report_gone_body"),
+          confirmLabel: t("recovery.report_gone"),
+          cancelLabel: t("dialog.cancel"),
+          tone: "danger",
+        });
+        if (!confirmed) return;
+        setFeedback("pending");
+        try { await onReportGone(); setFeedback("gone"); }
+        catch { setFeedback("failed"); }
+      }}>{t("recovery.report_gone")}</Button> : null}
     </div>
     {feedback === "failed" ? <p role="alert">{t("recovery.action_failed")}</p> : null}
     {/* Mounted before it has anything to say: a polite live region inserted at
         the same moment as its text is not reliably announced. */}
-    <p role="status" className="recovery-feedback">{feedback === "requested" ? t("recovery.retry_requested") : ""}</p>
+    <p role="status" className="recovery-feedback">{feedback === "requested" ? t("recovery.retry_requested") : feedback === "gone" ? t("recovery.gone_reported") : ""}</p>
   </section>;
 }
 

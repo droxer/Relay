@@ -1866,6 +1866,9 @@
     "title": "Next steps",
     "retry": "Retry saving results",
     "retrying": "Requesting recovery…",
+    "report_gone": "Report the agent as gone",
+    "report_gone_title": "Report this agent as gone?",
+    "report_gone_body": "Only do this once you have checked the computer and know the agent is no longer running. Relay will record that you reported it, release the execution, and mark the run cancelled so the thread can be deleted. This does not stop a process that is still running, and it cannot be undone.",
     "computer": "Open Computers",
     "agents": "View agents",
     "teams": "View teams",
@@ -1876,6 +1879,7 @@
     "deletion_pending": "Deletion is pending. Relay will finish it after exit is confirmed and results are saved.",
     "action_failed": "The recovery request failed. Try again; if it continues, contact an administrator with this thread’s address.",
     "retry_requested": "Recovery requested. Wait for the execution status to update.",
+    "gone_reported": "Reported. The execution is released; you can delete the thread now.",
     "unblock_help": "After correcting the cause, save any changes and use Unblock on the task board. Unblock restores the previous stage; it does not itself run the agent. Previously running work returns to Waiting for human, where you can choose to resume.",
     "finalization_failed": {
       "title": "Results could not be saved",
@@ -1883,15 +1887,15 @@
     },
     "termination_unconfirmed": {
       "title": "Stopping needs attention",
-      "body": "The stop request has not been confirmed. Open Computers and ask the computer operator to check the process and restore its exit report. Do not start replacement work until execution is settled."
+      "body": "The stop request has not been confirmed. Open Computers and ask the computer operator to check the process and restore its exit report. If the computer is gone for good, report the agent as gone to release this execution — otherwise the thread cannot be deleted. Do not start replacement work until execution is settled."
     },
     "orphaned_run": {
       "title": "Execution needs reconciliation",
-      "body": "This thread still records a running agent without a matching execution record. Ask an administrator to reconcile the retained run and exit evidence. Retrying result saving cannot repair missing evidence."
+      "body": "This thread still records a running agent without a matching execution record. Ask an administrator to reconcile the retained run and exit evidence. Retrying result saving cannot repair missing evidence; if the run is definitely over, report the agent as gone to release it."
     },
     "execution_unconfirmed": {
       "title": "Computer is not responding",
-      "body": "Check the assigned computer and restore its daemon connection. The agent may still be running. Relay must receive exit evidence before releasing the execution or completing deletion."
+      "body": "Check the assigned computer and restore its daemon connection. The agent may still be running. Relay must receive exit evidence before releasing the execution or completing deletion — if the computer is never coming back, report the agent as gone."
     },
     "awaiting_dispatch": {
       "title": "Waiting to start",
@@ -1907,7 +1911,7 @@
     },
     "unknown": {
       "title": "Execution needs attention",
-      "body": "Relay cannot confirm a safe next step for this execution. Check the computer and ask an administrator to inspect this thread before retrying or deleting it."
+      "body": "Relay cannot confirm a safe next step for this execution. Check the computer and ask an administrator to inspect the retained run. If the agent is definitely no longer running, report it as gone to release the execution."
     },
     "assignment": {
       "title": "Check the task assignment",

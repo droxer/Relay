@@ -989,6 +989,12 @@ export function retryExecutionRecovery(sessionId: string, token?: string): Promi
   return apiJson<NonNullable<RelaySession["execution"]>>(`/threads/${encodeURIComponent(sessionId)}/execution/recovery`, { method: "POST", token });
 }
 
+/** Assert the agent is gone so Relay releases an execution whose computer will
+ *  never report exit. Refused (409) unless recovery is already required. */
+export function reconcileExecution(sessionId: string, token?: string): Promise<NonNullable<RelaySession["execution"]>> {
+  return apiJson<NonNullable<RelaySession["execution"]>>(`/threads/${encodeURIComponent(sessionId)}/execution/reconcile`, { method: "POST", token });
+}
+
 export function deleteSession(sessionId: string, token?: string): Promise<RelaySession["execution"] | undefined> {
   return apiJson<RelaySession["execution"] | undefined>(`/threads/${encodeURIComponent(sessionId)}?stop=true`, {
     method: "DELETE",

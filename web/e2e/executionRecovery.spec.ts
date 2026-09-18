@@ -79,3 +79,24 @@ for (const reason of ["finalization_failed", "termination_unconfirmed"]) {
     }
   });
 }
+
+/* The dead end this closes: a computer that never reports exit holds the
+   execution forever, so the thread cannot be deleted and the node cannot be
+   deleted either. The assertion is destructive, so it must pass a confirm. */
+test("reporting an agent gone asks first, then calls reconcile", async ({ page }) => {
+  const writes = await serveRecoveryThread(page, "orphaned_run");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/threads/recovery-thread");
+  const panel = page.getByRole("region", { name: "Next steps" });
+  await panel.getByRole("button", { name: "Report the agent as gone" }).click();
+
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("cannot be undone");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  expect(writes).toEqual([]);
+
+  await panel.getByRole("button", { name: "Report the agent as gone" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Report the agent as gone" }).click();
+  await expect(panel).toContainText("The execution is released");
+  expect(writes).toEqual(["/api/v1/threads/recovery-thread/execution/reconcile"]);
+});

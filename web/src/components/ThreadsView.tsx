@@ -115,6 +115,7 @@ export type ThreadsViewProps = {
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
   onRetryExecutionRecovery?: () => Promise<void>;
+  onReportExecutionGone?: () => Promise<void>;
   running: boolean;
 };
 
@@ -194,6 +195,7 @@ export function ThreadsView({
   onCancelRun,
   onRetryAgent,
   onRetryExecutionRecovery,
+  onReportExecutionGone,
   running,
 }: ThreadsViewProps) {
   const { t } = useTranslation();
@@ -352,7 +354,7 @@ export function ThreadsView({
           onBackToThreads={onBackToThreads}
         />
 
-        {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} /> : null}
+        {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
 
         <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="polite" aria-atomic="false">
           <div className="transcript-inner">
