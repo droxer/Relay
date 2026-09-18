@@ -197,15 +197,19 @@ describe("design grid", () => {
     // The split view trades the thread rail for the panel by default. Each
     // state re-points a track variable; the template itself is written once
     // (the track shapes and the tier ladder are shellColumns.test.ts).
+    // Which track each state re-points, NOT what the tracks are made of: the
+    // preferred widths moved once already (px → the viewport-capped `-fit`
+    // tokens) and this test failed for a change it does not describe. The
+    // shapes are pinned in one place, and that place is shellColumns.test.ts.
     const shell = readStyle("shell.css");
     assert.match(
       shell,
-      /\.messenger-shell\[data-space="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(0px, 0px\);\s*--shell-space-track:\s*minmax\(var\(--space-w-min\), var\(--space-w\)\);/,
+      /\.messenger-shell\[data-space="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(0px, 0px\);\s*--shell-space-track:\s*minmax\(var\(--space-w-min\), [^;]+\);/,
       "opening the space panel must close the rail track and open the space track",
     );
     assert.match(
       shell,
-      /\.messenger-shell\[data-space="open"\]\[data-threadlist="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(var\(--thread-w-min\), var\(--thread-w\)\);/,
+      /\.messenger-shell\[data-space="open"\]\[data-threadlist="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(var\(--thread-w-min\), [^;]+\);/,
       "re-opening the thread list on top of the panel must restore the rail track",
     );
   });

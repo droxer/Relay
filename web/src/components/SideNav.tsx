@@ -35,6 +35,7 @@ import type { AppRoute } from "../lib/viewTypes";
 import {
   clampSidenavWidth, maxSidenavWidth, SIDENAV_WIDTH_DEFAULT, SIDENAV_WIDTH_MAX, SIDENAV_WIDTH_MIN,
 } from "../lib/sidenav";
+import { chatColumnWidth, viewportWidth } from "../lib/shellMetrics";
 
 /** Mobile-only More overflow: the destinations that do not fit the bottom tab
  *  bar. A table rather than five repeated <a> blocks — the blocks differed
@@ -54,15 +55,6 @@ const MORE_ROUTES: readonly {
   { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
-
-/** The chat column, measured to work out how much width the rail may still
- *  take. Read straight from the DOM rather than threaded down as a prop: the
- *  grid — not React — owns the column's real width. */
-function chatWidth(): number | null {
-  if (typeof document === "undefined") return null;
-  const chat = document.getElementById("chat-panel");
-  return chat ? chat.getBoundingClientRect().width : null;
-}
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
@@ -148,7 +140,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
 
   /* Ceiling measured against the live chat column — read once per gesture and
      once per key press, never per pointer move. */
-  const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatWidth()), [width]);
+  const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
   const moreActive = ["routine", "teams", "skills", "computer", "admin"].includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;

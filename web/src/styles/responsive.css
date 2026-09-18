@@ -8,8 +8,20 @@
 
      > 1200px   sidenav + thread rail + chat + space panel   (1128px of floor)
      > 900px    sidenav + chat + space panel                 ( 888px of floor)
-     > 820px    sidenav + thread rail + chat                 ( 840px of floor)
+     > 820px    sidenav + thread rail + chat                 ( 814px of floor)
      <= 820px   one pane at a time (the phone tier, below)
+
+   The third row's floor is 814, not the 840 this list used to claim: below
+   875px --chat-w-min is 48vw rather than 420px, so at 821px the transcript
+   floor is 394 and the three columns need 180 + 240 + 394. The old figure
+   exceeded its own tier, which read as an arrangement that does not fit — the
+   arithmetic was right and only the annotation was wrong, but a ladder whose
+   numbers refute it is worse than no ladder. shellColumns.test.ts computes
+   every row of this table from the tokens rather than trusting it.
+
+   Each tier is stated once. The four-column one is SHELL_FOUR_COLUMN_QUERY in
+   lib/breakpoints.ts and the overlay one is SPACE_OVERLAY_QUERY, because JS
+   reads both; the test asserts this file uses exactly those strings.
 
    Nothing is lost at either step: the panel the tier drops is the one the
    user can still reach — the thread rail through its toggle, the space panel
@@ -28,7 +40,7 @@
      it just starts earlier now, because 900px is where the split stopped
      being a split. */
   .messenger-shell[data-space="open"] {
-    --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w));
+    --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w-fit));
     --shell-space-track: minmax(0px, 0px);
   }
 

@@ -38,17 +38,9 @@ import {
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession } from "../types";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
+import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
-
-/** The chat column, measured to work out how much width the list may still
- *  take. Read straight from the DOM rather than threaded down as a prop: the
- *  grid — not React — owns the column's real width. */
-function chatWidth(): number | null {
-  if (typeof document === "undefined") return null;
-  const chat = document.getElementById("chat-panel");
-  return chat ? chat.getBoundingClientRect().width : null;
-}
 
 // The logged-in employee's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current employee's
@@ -118,7 +110,7 @@ export function ThreadListPanel({
 
   /* Ceiling measured against the live chat column — read once per gesture and
      once per key press, never per pointer move. */
-  const listCeiling = useCallback(() => maxThreadListWidth(width, chatWidth()), [width]);
+  const listCeiling = useCallback(() => maxThreadListWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
   // Anything that narrows the chat column while the list is at a custom width
   // can push it under its floor — a narrowed window, but equally an expanding
@@ -127,7 +119,7 @@ export function ThreadListPanel({
   // target — and never commits, so a transient squeeze doesn't overwrite the
   // width the user actually chose.
   useChatColumnResize(useCallback(() => {
-    const max = maxThreadListWidth(width, chatWidth());
+    const max = maxThreadListWidth(width, chatColumnWidth(), viewportWidth());
     if (width > max) onResize(max, false);
   }, [onResize, width]));
 

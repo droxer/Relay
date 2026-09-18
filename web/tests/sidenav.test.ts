@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
   clampSidenavWidth,
   maxSidenavWidth,
+  SIDENAV_VIEWPORT_SHARE,
   SIDENAV_WIDTH_DEFAULT,
   SIDENAV_WIDTH_MAX,
   SIDENAV_WIDTH_MIN,
@@ -57,6 +58,26 @@ describe("maxSidenavWidth", () => {
 
   it("never reports a ceiling below the rail minimum", () => {
     assert.equal(maxSidenavWidth(SIDENAV_WIDTH_MIN, 0), SIDENAV_WIDTH_MIN);
+  });
+
+  it("never lets a drag outrun the viewport cap the grid applies", () => {
+    /* The shell track's preferred width is min(--sidenav-w-open, Nvw), so below
+       the crossover CSS renders the rail narrower than the dragged number. A
+       ceiling that ignored that would let the handle detach from the pointer:
+       the stored width climbs, the rendered rail does not move. The share here
+       and the vw in palette.css are one number (shellColumns.test.ts pins the
+       pair together). */
+    const viewport = 1024;
+    const share = Math.round(SIDENAV_VIEWPORT_SHARE * viewport);
+    assert.equal(maxSidenavWidth(SIDENAV_WIDTH_DEFAULT, 4000, viewport), share);
+    // A viewport wide enough that px wins is the old behaviour, unchanged.
+    assert.equal(maxSidenavWidth(SIDENAV_WIDTH_DEFAULT, 4000, 2560), SIDENAV_WIDTH_MAX);
+    // Nothing measurable: fall back to the room calculation, as before.
+    assert.equal(maxSidenavWidth(SIDENAV_WIDTH_DEFAULT, 4000, null), SIDENAV_WIDTH_MAX);
+  });
+
+  it("keeps the viewport cap from ever reporting below the rail minimum", () => {
+    assert.equal(maxSidenavWidth(SIDENAV_WIDTH_DEFAULT, 4000, 320), SIDENAV_WIDTH_MIN);
   });
 
   it("shares the transcript floor with the other panes", () => {
