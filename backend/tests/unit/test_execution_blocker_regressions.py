@@ -85,6 +85,7 @@ def test_capacity_loss_queues_only_the_undelivered_assignment(runtime):
         a = next(c for c in commands if c["sessionId"] == first["id"])
         b = next(c for c in commands if c["sessionId"] == second["id"])
         registry.register({**payload, "maxConcurrentRuns": 1}, "ui")
+        registry.handle_event("node", {**terminal(a), "type": "run.executing"}, "token")
         registry.handle_event("node", terminal(a), "token")
         request = registry.daemon_store.active_run_request_for_task(task["id"])
         assert request is not None
@@ -97,6 +98,7 @@ def test_capacity_loss_queues_only_the_undelivered_assignment(runtime):
         [next_command] = registry.take_commands("node", "token")
         assert next_command["sessionId"] == first["id"]
         assert next_command["runId"] != a["runId"]
+        registry.handle_event("node", {**terminal(next_command), "type": "run.executing"}, "token")
         registry.handle_event("node", terminal(next_command), "token")
         assert sessions.get_session(first["id"])["status"] == "completed"
         assert len(sessions.get_session(first["id"])["agentRuns"]) == 2

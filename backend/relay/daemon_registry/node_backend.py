@@ -689,7 +689,10 @@ class ServerDaemonNodeBackend:
                 raise ValueError(f"Sandbox {node_id} daemon node heartbeat expired.")
             executor_kind = assignment["executorKind"]
             if executor_kind in set(node.get("disabledAgents") or []):
-                raise ValueError(
+                from ..services.agent_routing import AgentRoutingError
+
+                raise AgentRoutingError(
+                    "executor_not_ready",
                     f"Sandbox {node_id} daemon node has disabled agent(s): {executor_kind}. "
                     "Re-enable them from the admin console to dispatch work."
                 )

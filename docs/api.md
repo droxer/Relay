@@ -320,6 +320,16 @@ POST /api/v1/daemon-nodes/{id}/heartbeat
 The request is authenticated with the daemon node token and may include
 `activeCommandLeases` so liveness and delivery ownership renew together.
 
+`GET /api/v1/daemon-nodes/{id}/commands` returns `commands` plus a `heartbeat`
+observation containing `observedAt` and matching `commandLeases`, and
+`processingMs` measuring server-side poll processing (including long-poll
+waiting). Daemons subtract transport time from each observed remaining lease,
+excluding `processingMs` from that transport estimate. An empty successful poll
+without matching lease evidence does not confirm execution ownership.
+Delivered `run.start` commands are never redelivered solely because their lease
+expired. Their original terminal evidence remains valid until settled; cancels
+and workspace reads continue to use retryable delivery leases.
+
 Managed-node retry creates an attempt with `replaceActive: true`; draining
 patches `desiredState` to `stopped`. `tasks/claim-next` is retired and has no v1
 operation.

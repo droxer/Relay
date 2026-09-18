@@ -1587,19 +1587,23 @@ class DaemonNodeRegistry:
                     command_leases,
                     lease_seconds=lease_seconds,
                 )
-            observed = self.sandboxes[sandbox_id]
-            accepted = []
-            for command_id, lease_id in command_leases or []:
-                record = self.daemon_store.get_command(command_id)
-                if (record and record.get("nodeId") == sandbox_id
-                    and record.get("status") == "dispatched"
-                    and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
-                    accepted.append({"commandId": command_id, "leaseId": lease_id, "leaseExpiresAt": record["leaseExpiresAt"]})
             return {
-                "commandLeases": accepted,
-                "observedAt": observed["lastSeenAt"],
+                **self.command_lease_observations(sandbox_id, command_leases or []),
                 **self.heartbeat_settings(),
             }
+
+    def command_lease_observations(
+        self, sandbox_id: str, command_leases: list[tuple[str, str | None]]
+    ) -> dict[str, Any]:
+        """Read matching ownership evidence after an authenticated renewal/poll."""
+        accepted = []
+        for command_id, lease_id in command_leases:
+            record = self.daemon_store.get_command(command_id)
+            if (record and record.get("nodeId") == sandbox_id
+                and record.get("status") == "dispatched"
+                and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
+                accepted.append({"commandId": command_id, "leaseId": lease_id, "leaseExpiresAt": record["leaseExpiresAt"]})
+        return {"commandLeases": accepted, "observedAt": now_iso()}
 
     def _take_commands_unlocked(
         self,
@@ -2664,6 +2668,11 @@ class DaemonNodeRegistry:
                     )
                 session = self.store.get_session(request["sessionId"])
                 if session.get("status") in ("completed", "failed", "cancelled"):
+                    if session["status"] == "failed":
+                        SessionController(
+                            self.store, task_store=self.task_store, task_id=request.get("taskId"),
+                            task_execution_owner=request_execution_owner(request),
+                        ).fail_session(session["id"], session.get("finalOutcome") or "Execution failed.")
                     command_record = self.daemon_store.get_command(request.get("currentCommandId")) if request.get("currentCommandId") else None
                     terminal_event = ((command_record or {}).get("command") or {}).get("_terminalEvent")
                     if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
@@ -2952,7 +2961,9 @@ class DaemonNodeRegistry:
                 ),
                 session_id=run_request["sessionId"],
             ):
-                raise ValueError("Runtime node capacity is exhausted.")
+                # Preserve the admitted request and assignment index. Recovery
+                # retries this undelivered assignment when a slot is available.
+                return run_request
         except (KeyError, ValueError) as error:
             self._fail_run_request(
                 run_request, f"Agent placement is no longer eligible: {error}"
@@ -3524,6 +3535,8 @@ class DaemonNodeRegistry:
             # result. The command already retains the acknowledged result;
             # finish the agent projection and request bookkeeping, never reopen work or dispatch
             # another assignment during crash recovery.
+            if session_before.get("status") == "failed":
+                controller.fail_session(session_before["id"], session_before.get("finalOutcome") or "Execution failed.")
             self._close_terminal_session_agent(event)
             self.active_commands.pop(event["commandId"], None)
             self.clear_run_output(event["runId"])

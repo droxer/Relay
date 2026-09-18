@@ -3393,8 +3393,9 @@ test("blocker: terminal delivery does not occupy a process or workspace slot", a
   } finally { clearTimeout(timeout); release(); stop.abort(); rmSync(root, { recursive: true, force: true }); }
 });
 
-for (const pollAcknowledgements of [false, true]) {
-  test(`blocker: short execution leases renew through ${pollAcknowledgements ? "poll acknowledgements" : "heartbeats"}`, async () => {
+for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wrong leases"]) {
+  const pollAcknowledgements = source !== "heartbeats";
+  test(`blocker: short execution leases validate ${source}`, async () => {
     const root = mkdtempSync(join(tmpdir(), "relay-lease-regression-"));
     const stop = new AbortController();
     const command = { ...runCommand("short_lease"), workspacePath: root, leaseId: "lease", leaseExpiresAt: new Date(Date.now() + 1000).toISOString() };
@@ -3402,7 +3403,7 @@ for (const pollAcknowledgements of [false, true]) {
     const events: DaemonNodeEvent[] = [];
     const heartbeat = () => ({ intervalMs: 5000, timeoutMs: 15000, observedAt: new Date().toISOString(),
       commandLeases: [{ commandId: command.id, leaseId: "lease", leaseExpiresAt: new Date(Date.now() + 1000).toISOString() }] });
-    const timeout = setTimeout(() => stop.abort(), 4000);
+    const timeout = setTimeout(() => stop.abort(), 6000);
     try {
       await runRelayDaemon({
         backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
@@ -3421,7 +3422,12 @@ for (const pollAcknowledgements of [false, true]) {
           if (path.endsWith("/heartbeat")) return pollAcknowledgements ? jsonResponse({ error: "unavailable" }, 500) : jsonResponse({ heartbeat: heartbeat() });
           if (path.endsWith("/commands")) {
             const commands = served ? [] : [command]; served = true;
-            return jsonResponse({ commands, ...(pollAcknowledgements ? { heartbeat: heartbeat() } : {}) });
+            const processingStartedAt = performance.now();
+            if (source === "long polls" && commands.length) await new Promise((resolve) => setTimeout(resolve, 1300));
+            const evidence = heartbeat();
+            if (source === "wrong leases") evidence.commandLeases[0]!.leaseId = "another-owner";
+            return jsonResponse({ commands, processingMs: performance.now() - processingStartedAt,
+              ...(pollAcknowledgements ? { heartbeat: evidence } : {}) });
           }
           if (path.endsWith("/events")) {
             const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
@@ -3431,8 +3437,15 @@ for (const pollAcknowledgements of [false, true]) {
           throw new Error(`unexpected URL ${url}`);
         },
       });
-      assert.equal(events.some((event) => event.type === "run.cancelled"), false);
-      assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+      if (source === "wrong leases") {
+        const cancelled = events.find((event) => event.type === "run.cancelled");
+        assert.ok(cancelled?.type === "run.cancelled");
+        assert.match(cancelled.reason, /lease expired/);
+        assert.equal(events.some((event) => event.type === "run.completed"), false);
+      } else {
+        assert.equal(events.some((event) => event.type === "run.cancelled"), false);
+        assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+      }
     } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
   });
 }

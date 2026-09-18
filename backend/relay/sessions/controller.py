@@ -222,12 +222,22 @@ class SessionController:
         return session
 
     def fail_session(self, session_id: str, outcome: str) -> dict[str, Any]:
-        session = self._append(
-            session_id, relay_event("session.failed", session_id, {"outcome": outcome})
-        )
-        self._update_task_status("blocked", outcome, {"sessionId": session_id})
-        logger.info("Session failed", session_id=session_id, outcome=outcome)
-        return session
+        # A failed task write must not commit just the session transition when
+        # both stores share a database. Replay also repairs file-backed partial
+        # writes, fenced by the original task execution owner.
+        with self._transaction():
+            session = self.store.get_session(session_id)
+            if session.get("status") != "failed":
+                session = self._append(
+                    session_id, relay_event("session.failed", session_id, {"outcome": outcome})
+                )
+            outcome = session.get("finalOutcome") or outcome
+            if self.task_store and self.task_id:
+                task = self.task_store.get_task(self.task_id)
+                if task.get("status") != "blocked" or task.get("blockerReason") != outcome:
+                    self._update_task_status("blocked", outcome, {"sessionId": session_id})
+            logger.info("Session failed", session_id=session_id, outcome=outcome)
+            return session
 
     def reopen_expired_admission(self, session_id: str) -> dict[str, Any]:
         """Authoritatively reopen only a session failed by admission expiry."""

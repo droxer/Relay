@@ -2717,19 +2717,21 @@ def test_daemon_events_are_accepted_by_a_replica_that_did_not_dispatch_the_comma
                 "node_token",
             )
             time.sleep(0.08)
-            [redelivered] = first.take_commands(
+            redelivery = first.take_commands(
                 "sbx_alice",
                 "node_token",
                 lease_seconds=10,
                 renew_known_active=False,
             )
+            assert redelivery == []
+            redelivered = command  # Ownership survives expiry until confirmed exit.
             with pytest.raises(PermissionError, match="lease does not match"):
                 second.handle_event(
                     "sbx_alice",
                     {
                         "type": "run.output",
                         "commandId": command["id"],
-                        "leaseId": command["leaseId"],
+                        "leaseId": "lease_not_the_owner",
                         "sessionId": command["sessionId"],
                         "runId": command["runId"],
                         "agent": "codex",
@@ -6560,7 +6562,8 @@ def test_daemon_store_reclaims_expired_command_leases(store_factory) -> None:
             "sbx_alice",
             {
                 "id": "00000000-0000-4000-8000-000000000040",
-                "type": "run.start",
+                "type": "workspace.list",
+                "path": ".",
                 "sessionId": "ses_1",
                 "runId": "00000000-0000-4000-8000-000000000041",
                 "agent": "codex",
@@ -6717,7 +6720,8 @@ def test_daemon_store_does_not_renew_a_superseded_delivery(store_factory) -> Non
             "sbx_alice",
             {
                 "id": "00000000-0000-4000-8000-000000000070",
-                "type": "run.start",
+                "type": "workspace.list",
+                "path": ".",
                 "sessionId": "ses_1",
                 "runId": "00000000-0000-4000-8000-000000000071",
                 "agent": "codex",
@@ -7602,7 +7606,7 @@ def test_terminal_projection_recovery_survives_event_write_failure(store_factory
 
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
-def test_capacity_rejection_of_next_assignment_does_not_create_orphan(store_factory, monkeypatch):
+def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, monkeypatch):
     from relay.services.execution_lifecycle import ExecutionLifecycleService
 
     async def run_flow():
@@ -7620,11 +7624,11 @@ def test_capacity_rejection_of_next_assignment_does_not_create_orphan(store_fact
                 "agentLog": "first assignment finished", "leaseId": command["leaseId"],
             }, "node_token")
             snapshot = sessions.get_session(session["id"])
-            assert snapshot["status"] == "failed"
-            assert "capacity is exhausted" in snapshot["finalOutcome"]
+            assert snapshot["status"] == "running"
+            assert not snapshot.get("finalOutcome")
             assert len(snapshot["agentRuns"]) == 1
             assert snapshot["agentRuns"][0]["status"] == "completed"
-            assert ExecutionLifecycleService(registry, None).status(snapshot)["phase"] == "terminal"
+            assert ExecutionLifecycleService(registry, None).status(snapshot)["phase"] == "queued"
             assert registry.take_commands("sbx_alice", "node_token") == []
 
     asyncio.run(run_flow())
