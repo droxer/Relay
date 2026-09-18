@@ -5,6 +5,7 @@ import pytest
 from relay.collaboration.work import (
     WORK_RESULTS, completion_blockers, record_work_result, repair_transition,
     validate_work_result, compile_proposed_plan,
+    question_transition,
 )
 
 
@@ -79,3 +80,20 @@ def test_lead_plan_is_bounded_and_preserves_required_review():
     for invalid in (plan[:1], [{**plan[0], "agentId": "outsider"}], plan * 9):
         with pytest.raises(ValueError):
             compile_proposed_plan(items, invalid, "round_1")
+
+
+def test_teammate_question_returns_an_answer_then_resumes_requester():
+    items = assignments()
+    state = record_work_result({}, items[2], result("blocked", messages=[
+        {"kind": "question", "toWorkItemId": "build", "text": "Which input contract did you implement?"},
+    ]))
+    index, waiting = question_transition(items, 2, state)
+    assert index == 1
+    assert waiting["_relay_question_resume"] == 2
+    answered = record_work_result(waiting, items[1], result(messages=[
+        {"kind": "answer", "toWorkItemId": "verify", "text": "Empty input is rejected with 400."},
+    ]))
+    index, resumed = question_transition(items, 1, answered)
+    assert index == 2
+    assert "_relay_question_resume" not in resumed
+    assert question_transition(items, 2, {**state, "_relay_question_count": 2}) is None
