@@ -4520,7 +4520,7 @@ def test_daemon_run_timeout_waits_for_stop_acknowledgement(monkeypatch) -> None:
     asyncio.run(run_flow())
 
 
-def _pipeline_registry(root: str) -> tuple[Any, Any, Any]:
+def _pipeline_registry(root: str, *, work_results: bool = False) -> tuple[Any, Any, Any]:
     session_store = LocalSessionStore(root)
     daemon_store = LocalDaemonStore(root)
     registry = DaemonNodeRegistry(
@@ -4534,7 +4534,7 @@ def _pipeline_registry(root: str) -> tuple[Any, Any, Any]:
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": ["task-workspaces", "thread-workspaces", "round-result"],
+            "capabilities": ["task-workspaces", "thread-workspaces", "round-result", *(["work-results"] if work_results else [])],
             "status": "ready",
         },
         "ui_token",
@@ -4563,6 +4563,71 @@ def test_required_review_failure_cannot_be_closed_by_later_success() -> None:
                 "roundResult": {"status": "done"},
             }, "node_token")
             assert registry.task_store.get_task(task["id"])["status"] == "waiting_for_human"
+    asyncio.run(flow())
+
+
+def test_configured_work_contract_refuses_a_daemon_without_evidence_support():
+    async def flow():
+        with TemporaryDirectory() as root:
+            _, _, registry = _pipeline_registry(root)
+            with pytest.raises(ValueError, match="work-results"):
+                await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                    "taskGoal": "Deliver with required evidence",
+                    "assignments": [{"agent": "codex", "teamSnapshot": {"teamId": "team", "workContractVersion": 1}}],
+                })
+    asyncio.run(flow())
+
+
+@pytest.mark.parametrize("consultation", [False, True])
+def test_team_work_evidence_repairs_owner_and_revalidates_before_completion(consultation) -> None:
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, _, registry = _pipeline_registry(root, work_results=True)
+            snapshot = {"teamId": "team", "leadAgentId": "lead", "memberAgentIds": ["lead", "builder", "reviewer"]}
+            task = registry.task_store.create_task({"title": "Deliver with review", "acceptancePolicy": "automatic"})
+            assignments = [
+                {"assignmentId": "lead", "agentId": "lead", "agent": "codex", "coordinator": True, "workKind": "coordination"},
+                {"assignmentId": "build", "agentId": "builder", "agent": "codex", "role": "implementer", "workKind": "implementation"},
+                {"assignmentId": "review", "agentId": "reviewer", "agent": "claude", "role": "reviewer", "mode": "review", "workKind": "review"},
+                {"assignmentId": "final", "agentId": "lead", "agent": "codex", "synthesizer": True, "workKind": "synthesis"},
+            ]
+            for item in assignments:
+                item.pop("agentId")  # Execution-plane fixture; logical authorization is covered by API tests.
+                item.update(teamSnapshot=snapshot, required=True)
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Deliver", "taskId": task["id"], "assignments": assignments,
+            })
+
+            def finish(command, work):
+                _start_run(registry, command)
+                registry.handle_event("sbx_alice", {
+                    "type": "run.completed", "commandId": command["id"], "sessionId": command["sessionId"],
+                    "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+                    "roundResult": {"status": "done", "work": work},
+                }, "node_token")
+
+            good = {"status": "done", "evidence": ["Acceptance checks passed"]}
+            for expected in ("lead", "build"):
+                [command] = registry.take_commands("sbx_alice", "node_token")
+                assert command["assignmentId"] == expected
+                assert command["state"]["work_result_required"] is True
+                finish(command, good)
+            [review] = registry.take_commands("sbx_alice", "node_token")
+            finish(review, {"status": "blocked", "messages": [{"kind": "question", "toWorkItemId": "build", "text": "What is the empty input contract?"}]} if consultation else
+                   {"status": "continue", "evidence": ["Empty input crashes"], "findings": [{"workItemId": "build", "note": "Handle empty input"}]})
+            for expected in ("build", "review", "final"):
+                [command] = registry.take_commands("sbx_alice", "node_token")
+                assert command["assignmentId"] == expected
+                if consultation and expected == "build":
+                    assert "What is the empty input contract?" in command["state"]["work_question"]
+                    finish(command, {**good, "messages": [{"kind": "answer", "toWorkItemId": "review", "text": "Empty input returns 400"}]})
+                else:
+                    if consultation and expected == "review":
+                        assert command["state"]["work_messages"][0]["kind"] == "answer"
+                    finish(command, good)
+            assert registry.task_store.get_task(task["id"])["status"] == "done"
+            assert len(sessions.get_session(session["id"])["agentRuns"]) == 6
+            assert sessions.get_session(session["id"])["agentRuns"][-1]["workResult"]["evidence"] == good["evidence"]
     asyncio.run(flow())
 
 

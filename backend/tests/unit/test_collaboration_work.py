@@ -6,6 +6,7 @@ from relay.collaboration.work import (
     WORK_RESULTS, completion_blockers, record_work_result, repair_transition,
     validate_work_result, compile_proposed_plan,
     question_transition,
+    predecessor_context,
 )
 
 
@@ -97,3 +98,20 @@ def test_teammate_question_returns_an_answer_then_resumes_requester():
     assert index == 2
     assert "_relay_question_resume" not in resumed
     assert question_transition(items, 2, {**state, "_relay_question_count": 2}) is None
+
+
+def test_small_request_can_select_no_optional_specialists():
+    items = assignments()
+    items[1]["required"] = False
+    items[2]["required"] = False
+    compiled = compile_proposed_plan(items, [], "simple")
+    assert [item["assignmentId"] for item in compiled] == ["lead", "final"]
+
+
+def test_predecessor_context_is_bounded_and_marks_truncated_evidence():
+    import json
+    state = {WORK_RESULTS: {str(i): result(evidence=["x" * 2000] * 20) for i in range(18)}}
+    context = predecessor_context(state, list(state[WORK_RESULTS]))
+    assert len(json.dumps(context)) < 24000
+    assert all(item["evidenceTruncated"] for item in context.values())
+    assert set(context) == set(state[WORK_RESULTS])
