@@ -11,8 +11,8 @@ export const SPACE_WIDTH_DEFAULT = 384;
 export const SPACE_WIDTH_MIN = 288;
 export const SPACE_WIDTH_MAX = 720;
 /** The share of the viewport this column's preferred width is capped to —
- *  the `Nvw` half of `--space-w-fit` in tokens/palette.css, which is what the
- *  shell grid actually asks for. CSS caps the RENDERED width; this constant is
+ *  `--space-w-cap` in tokens/palette.css, which shell.css applies to the
+ *  preferred width the grid asks for. CSS caps the RENDERED width; this constant is
  *  how the drag ceiling agrees with it, so the handle cannot run past a rail
  *  that is not following. shellColumns.test.ts fails if either side moves
  *  alone, exactly as it does for the floors. */

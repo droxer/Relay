@@ -40,7 +40,7 @@
      it just starts earlier now, because 900px is where the split stopped
      being a split. */
   .messenger-shell[data-space="open"] {
-    --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w-fit));
+    --shell-rail-track: minmax(var(--thread-w-min), min(var(--thread-w), var(--thread-w-cap)));
     --shell-space-track: minmax(0px, 0px);
   }
 

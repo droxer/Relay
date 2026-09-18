@@ -30,10 +30,18 @@ const routine = {
   linkedSessionIds: [], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
 
-async function openPage(browser: Browser, path: string, touch: boolean): Promise<Page> {
+async function openPage(browser: Browser, path: string, touch: boolean, layout?: Record<string, string>): Promise<Page> {
   const context = await browser.newContext(touch
     ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }
     : { viewport: { width: 1440, height: 900 } });
+  // Seeded before the first script runs: the shell reads its dragged widths
+  // out of localStorage on mount, so setting them afterwards would measure a
+  // re-render rather than the load the user actually gets.
+  if (layout) {
+    await context.addInitScript((entries: [string, string][]) => {
+      for (const [key, value] of entries) localStorage.setItem(key, value);
+    }, Object.entries(layout));
+  }
   const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
@@ -54,6 +62,25 @@ function overhang(page: Page, selector: string) {
     for (const child of element.querySelectorAll("*")) {
       const rect = child.getBoundingClientRect();
       if (rect.width === 0 || getComputedStyle(child).display === "none") continue;
+      worst = Math.max(worst, rect.right - box.right, box.left - rect.left);
+    }
+    return Math.round(worst);
+  });
+}
+
+/** How far the chat column's own rows paint outside it, in px. Narrower than
+ *  overhang(): out-of-flow descendants are skipped, because the shell's hidden
+ *  resize inputs are fixed at x=0 and would report ~800px of "bleed" on every
+ *  wide window. */
+function columnOverhang(page: Page) {
+  return page.locator("#chat-panel").evaluate((panel) => {
+    const box = panel.getBoundingClientRect();
+    let worst = 0;
+    for (const child of panel.querySelectorAll("*")) {
+      const style = getComputedStyle(child);
+      if (style.display === "none" || style.position === "fixed" || style.position === "absolute") continue;
+      const rect = child.getBoundingClientRect();
+      if (rect.width === 0) continue;
       worst = Math.max(worst, rect.right - box.right, box.left - rect.left);
     }
     return Math.round(worst);
@@ -95,3 +122,66 @@ for (const touch of [false, true]) {
     await page.context().close();
   });
 }
+
+/* The shell's rail widths are a two-part contract that no static CSS test can
+   check: AppShell writes the DRAGGED width inline on .messenger-shell, and the
+   grid track caps it against the viewport. Both halves have to meet on the
+   same element.
+
+   They did not. The cap was written as a :root token — `min(var(--thread-w),
+   26vw)` — and a custom property is substituted where it is DECLARED, so that
+   min() read :root's 318px default and the computed result inherited down past
+   the inline override entirely. Every rail rendered at its default width and
+   dragging did nothing, while the CSS text still said exactly what it was
+   supposed to say. Only a rendered measurement can tell those apart. */
+const RAIL_WIDTHS = { sidenav: ".sidenav-panel", rail: ".thread-panel" } as const;
+
+function renderedWidth(page: Page, selector: string) {
+  return page.locator(selector).first().evaluate((el) => Math.round(el.getBoundingClientRect().width));
+}
+
+test("a dragged rail width reaches the rendered grid track", async ({ browser }) => {
+  // Both widths sit above the defaults (228 / 318) and below the viewport caps
+  // at 1440 (18vw = 259, 26vw = 374), so this isolates the override reaching
+  // the track from the capping behaviour tested below.
+  const page = await openPage(browser, "/threads/review-thread", false, {
+    "relay-web.sidenavExpanded": "true",
+    "relay-web.sidenavWidth": "250",
+    "relay-web.threadListWidth": "360",
+  });
+  await expect(page.locator(RAIL_WIDTHS.rail).first()).toBeVisible();
+  expect(await renderedWidth(page, RAIL_WIDTHS.sidenav)).toBe(250);
+  expect(await renderedWidth(page, RAIL_WIDTHS.rail)).toBe(360);
+  await page.context().close();
+});
+
+test("the viewport cap overrides a dragged width that no longer fits", async ({ browser }) => {
+  // Dragged wide on a big monitor, then opened at 1440: the rails yield to the
+  // transcript instead of holding a width the window can no longer afford.
+  const page = await openPage(browser, "/threads/review-thread", false, {
+    "relay-web.sidenavExpanded": "true",
+    "relay-web.sidenavWidth": "320",
+    "relay-web.threadListWidth": "480",
+  });
+  await expect(page.locator(RAIL_WIDTHS.rail).first()).toBeVisible();
+  expect(await renderedWidth(page, RAIL_WIDTHS.sidenav)).toBe(Math.round(0.18 * 1440));
+  expect(await renderedWidth(page, RAIL_WIDTHS.rail)).toBe(Math.round(0.26 * 1440));
+  await page.context().close();
+});
+
+test("the chat column never paints outside itself, however wide the window", async ({ browser }) => {
+  // --thread-measure caps the transcript and the composer. It is stated in vw,
+  // which measures the WINDOW, while the column it caps is the window minus
+  // the rails — so a wide rail is exactly when the cap can exceed its column.
+  const page = await openPage(browser, "/threads/review-thread", false, {
+    "relay-web.sidenavExpanded": "true",
+    "relay-web.sidenavWidth": "320",
+    "relay-web.threadListWidth": "480",
+  });
+  await page.setViewportSize({ width: 2000, height: 1000 });
+  await expect(page.locator("#chat-panel")).toBeVisible();
+  expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
+  const scroll = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(scroll).toBeLessThanOrEqual(0);
+  await page.context().close();
+});
