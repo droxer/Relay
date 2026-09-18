@@ -2,7 +2,10 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelayArtifact } from "relay-core";
 import { artifactRawHref } from "../../lib/artifactPreview";
+import { ArtifactViewToggle, type ArtifactView } from "./ArtifactViewToggle";
+import { FilePaneBack } from "../workspace/FilePaneBack";
 import { Button } from "@/components/ui/button";
+import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { useDialogs } from "@/components/ui/DialogProvider";
 
 function sanitizeFilename(title: string): string {
@@ -23,14 +26,35 @@ const TEXT_KINDS: ReadonlySet<RelayArtifact["kind"]> = new Set([
 export function ArtifactPreviewHeader({
   artifact,
   sessionId,
+  view,
+  onViewChange,
+  onBack,
+  onClose,
 }: {
   artifact: RelayArtifact;
   sessionId: string;
+  /** The reading on screen, when the caller offers a switch. Passed together
+   *  with `onViewChange` or not at all — a header with no switch is a header
+   *  for a body that has only one reading. */
+  view?: ArtifactView;
+  onViewChange?: (view: ArtifactView) => void;
+  /** Returns to the list this artifact was picked from. Omitted where the list
+   *  is still on screen beside the preview (the artifact drawer's index strip),
+   *  which has nothing to go back to. */
+  onBack?: () => void;
+  /** Dismisses the surface this header sits in. Passed where this row IS that
+   *  surface's only chrome (the thread space panel); omitted where the
+   *  container has a header of its own (the artifact drawer). */
+  onClose?: () => void;
 }) {
   const { t } = useTranslation();
   const { announce } = useDialogs();
   const [copied, setCopied] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* A workspace file's kind tag reads "File" next to a name ending in `.md` —
+   * the chip earns its place for a plan, a diff or a review, which the name
+   * alone does not tell you, and is pure noise for a file. */
+  const showKind = artifact.kind !== "workspace_file";
   const kindLabel = t(`artifact.kind.${artifact.kind}`, { defaultValue: artifact.kind });
   const rawHref = artifactRawHref(sessionId, artifact.id);
   const canCopy = TEXT_KINDS.has(artifact.kind);
@@ -60,9 +84,15 @@ export function ArtifactPreviewHeader({
 
   return (
     <header className="artifact-preview-header">
-      <span className={`artifact-kind-tag is-${artifact.kind}`}>{kindLabel}</span>
+      {onBack ? <FilePaneBack onClick={onBack} /> : null}
+      {showKind ? <span className={`artifact-kind-tag is-${artifact.kind}`}>{kindLabel}</span> : null}
       <span className="artifact-preview-header-title">{artifact.title}</span>
+      {/* The switch belongs to the FILE, not to the panel around it: it used to
+          sit in the panel header a row above, so the same control lived in two
+          different places depending on which tab you reached the file
+          through. Same row, same order as the workspace pane. */}
       <div className="artifact-preview-actions">
+        {view && onViewChange ? <ArtifactViewToggle view={view} onChange={onViewChange} /> : null}
         {canCopy ? (
           <Button variant="ghost"
             type="button"
@@ -81,6 +111,7 @@ export function ArtifactPreviewHeader({
         >
           {t("artifact.action_download")}
         </a>
+        {onClose ? <OverlayCloseButton label={t("sheet.close")} onClick={onClose} /> : null}
       </div>
     </header>
   );

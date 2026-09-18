@@ -12,9 +12,12 @@ import {
   WorkspaceFileList,
   WorkspacePathBreadcrumb,
 } from "../workspace/WorkspaceFileList";
-import { WorkspaceFilePreview } from "../workspace/WorkspaceFilePreview";
-import { languageForFile } from "../CodeView";
-import { ICON, NavBack } from "../icons";
+import {
+  WorkspaceFilePreview,
+  useWorkspaceFileView,
+} from "../workspace/WorkspaceFilePreview";
+import { WorkspaceFileActions } from "../workspace/WorkspaceFileActions";
+import { FilePaneBack } from "../workspace/FilePaneBack";
 import { Button } from "@/components/ui/button";
 import { taskWorkspaceState } from "./taskWorkspaceState";
 
@@ -44,6 +47,7 @@ export function TaskDrawerWorkspace({ taskId, onOpenThread }: { taskId: string; 
     queryFn: ({ signal }): Promise<TaskWorkspaceFileResponse> =>
       readTaskWorkspaceFile({ taskId, path: selectedPath }, signal),
   });
+  const { view, setView } = useWorkspaceFileView(selectedName);
 
   const statusQuery = useQuery({
     queryKey: ["task-workspace-status", taskId],
@@ -106,16 +110,18 @@ export function TaskDrawerWorkspace({ taskId, onOpenThread }: { taskId: string; 
       ) : selectedPath ? (
         <div className="thread-space-files">
           <div className="thread-space-files-bar">
-            <Button
-              variant="ghost"
-              type="button"
-              className="thread-space-back"
-              onClick={() => setSelectedPath("")}
-            >
-              <NavBack size={ICON.sm} />
-              <span>{selectedName}</span>
-            </Button>
-            <span className="workspace-preview-file-type code">{languageForFile(selectedName)}</span>
+            <FilePaneBack onClick={() => setSelectedPath("")} />
+            <span className="thread-space-files-name">{selectedName}</span>
+            {/* Same row, same controls as the workspace pane and the thread
+                space panel — the third surface a file opens on. */}
+            <div className="thread-space-files-actions">
+              <WorkspaceFileActions
+                name={selectedName}
+                data={contentQuery.data}
+                view={view}
+                onViewChange={setView}
+              />
+            </div>
           </div>
           <div className="thread-space-files-body">
             <WorkspaceFilePreview
@@ -123,6 +129,7 @@ export function TaskDrawerWorkspace({ taskId, onOpenThread }: { taskId: string; 
               data={contentQuery.data}
               isLoading={contentQuery.isLoading}
               error={contentQuery.isError ? contentQuery.error : null}
+              view={view}
             />
           </div>
         </div>

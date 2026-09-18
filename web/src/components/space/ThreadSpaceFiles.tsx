@@ -12,10 +12,13 @@ import {
   WorkspaceFileList,
   WorkspacePathBreadcrumb,
 } from "../workspace/WorkspaceFileList";
-import { WorkspaceFilePreview } from "../workspace/WorkspaceFilePreview";
-import { languageForFile } from "../CodeView";
-import { ICON, NavBack } from "../icons";
-import { Button } from "@/components/ui/button";
+import {
+  WorkspaceFilePreview,
+  useWorkspaceFileView,
+} from "../workspace/WorkspaceFilePreview";
+import { WorkspaceFileActions } from "../workspace/WorkspaceFileActions";
+import { FilePaneBack } from "../workspace/FilePaneBack";
+import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 
 /** The project workspace, browsed inside the thread output panel.
  *
@@ -26,10 +29,23 @@ import { Button } from "@/components/ui/button";
  *  Selection is local state rather than `?path`/`?item` search params: those
  *  belong to the full project workspace page, and sharing them would make a
  *  file opened in the panel reopen there (and vice versa) on the next visit. */
-export function ThreadSpaceFiles({ projectId }: { projectId: string }) {
+export function ThreadSpaceFiles({
+  projectId,
+  selectedPath,
+  onSelectPath,
+  onClose,
+}: {
+  projectId: string;
+  /** Owned by the panel: with a file open, the panel header stands down and
+   *  this bar becomes the panel's only chrome row, which the panel cannot
+   *  decide from state held down here. */
+  selectedPath: string;
+  onSelectPath: (path: string) => void;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const [path, setPath] = useState("");
-  const [selectedPath, setSelectedPath] = useState("");
+  const setSelectedPath = onSelectPath;
   const selectedName = selectedPath ? selectedPath.split("/").at(-1) || selectedPath : "";
 
   const fileQuery = useQuery({
@@ -43,6 +59,7 @@ export function ThreadSpaceFiles({ projectId }: { projectId: string }) {
     queryFn: ({ signal }): Promise<ProjectWorkspaceFileResponse> =>
       readProjectWorkspaceFile({ projectId, path: selectedPath }, signal),
   });
+  const { view, setView } = useWorkspaceFileView(selectedName);
 
   function openDirectory(next: string): void {
     setPath(next);
@@ -53,16 +70,21 @@ export function ThreadSpaceFiles({ projectId }: { projectId: string }) {
     return (
       <div className="thread-space-files">
         <div className="thread-space-files-bar">
-          <Button
-            variant="ghost"
-            type="button"
-            className="thread-space-back"
-            onClick={() => setSelectedPath("")}
-          >
-            <NavBack size={ICON.sm} />
-            <span>{selectedName}</span>
-          </Button>
-          <span className="workspace-preview-file-type code">{languageForFile(selectedName)}</span>
+          <FilePaneBack onClick={() => setSelectedPath("")} />
+          <span className="thread-space-files-name">{selectedName}</span>
+          {/* Same row, same controls, same order as the full-page pane
+              (ProjectWorkspaceFiles) — a file behaves identically wherever it
+              is opened. The language chip that used to sit here only restated
+              the extension already in the name beside it. */}
+          <div className="thread-space-files-actions">
+            <WorkspaceFileActions
+              name={selectedName}
+              data={contentQuery.data}
+              view={view}
+              onViewChange={setView}
+            />
+            <OverlayCloseButton label={t("sheet.close")} onClick={onClose} />
+          </div>
         </div>
         <div className="thread-space-files-body">
           <WorkspaceFilePreview
@@ -70,6 +92,7 @@ export function ThreadSpaceFiles({ projectId }: { projectId: string }) {
             data={contentQuery.data}
             isLoading={contentQuery.isLoading}
             error={contentQuery.isError ? contentQuery.error : null}
+            view={view}
           />
         </div>
       </div>

@@ -20,7 +20,10 @@
    Breakpoints (reference — custom properties can't drive @media, so this
    list is the only registry there is; keep it honest when you add a query).
 
-     480px   narrow phone — backlog card grid, login stack
+     480px   narrow phone — backlog card grid, login stack; also a CONTAINER
+             tier, where the `workspace-list` file rows drop their date
+             (the thread space panel is this narrow on the widest screen
+             in the building, which is why it cannot be a viewport query)
      640px   compact — dashboard, admin shell, composer, workspace panes
      768px   CONTAINER tier, not a viewport one — the `computer` and `record`
              containers widen here. Container queries are breakpoints too and
@@ -510,6 +513,21 @@
   --measure-tight: 34ch;
   --measure: 48ch;
   --measure-wide: 72ch;
+
+  /* Document inset — the gutter around a whole rendered FILE (Markdown prose,
+     highlighted source, an HTML frame), as opposed to the --page-gutter that
+     insets page chrome.
+
+     One pair of tokens because a file opens on three surfaces — the project
+     workspace pane, the thread space panel, the artifact drawer — and used to
+     arrive with a different gutter on each: 32px on the page, 16px for the
+     source reading of the same file, and none at all through the artifact
+     path, so toggling Preview/Source visibly shifted the text sideways. Every
+     rendered body now reads `--doc-inset-*` (artifact.css), and a surface too
+     narrow for the page value steps the pair down in one place instead of
+     restating which children get padding. */
+  --doc-inset-block: var(--sp-6);
+  --doc-inset-inline: var(--sp-7);
 
   /* Shell
 

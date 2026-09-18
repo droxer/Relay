@@ -46,6 +46,20 @@ const routine = {
   linkedSessionIds: [], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
 
+/* Enough turns, each long enough, that the transcript scrolls and the rows
+   above the fold are render-skipped. */
+const longThreadEvents = Array.from({ length: 12 }, (_, turn) => {
+  const paragraph = `Lehane says **no antitrust waiver is needed** (airline analogy) — that's a different ask from Amodei's essay, which floated a "narrow governance waiver." The digest had blurred them. Turn ${turn}.`;
+  const text = [
+    { type: "assistant", message: { content: [{ type: "text", text: [paragraph, paragraph, paragraph].join("\n\n") }] } },
+  ].map((line) => JSON.stringify(line)).join("\n") + "\n";
+  return [
+    { id: `l${turn}-a`, type: "agent.started", sessionId: "review-thread", timestamp: stamp, runId: `run-l${turn}`, agent: "claude", mode: "action" },
+    { id: `l${turn}-b`, type: "agent.output", sessionId: "review-thread", timestamp: stamp, runId: `run-l${turn}`, agent: "claude", stream: "stdout", text },
+    { id: `l${turn}-c`, type: "agent.completed", sessionId: "review-thread", timestamp: stamp, runId: `run-l${turn}`, agent: "claude", status: "completed" },
+  ];
+}).flat();
+
 async function openPage(browser: Browser, path: string, touch: boolean, layout?: Record<string, string>, thread?: Record<string, unknown>): Promise<Page> {
   const context = await browser.newContext(touch
     ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }
@@ -221,6 +235,73 @@ test("a long thread title cannot push the chat column past its track", async ({ 
   await page.setViewportSize({ width: 1400, height: 900 });
   await expect(page.locator(".chat-header")).toBeVisible();
   expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
+  await page.context().close();
+});
+
+test("opening the files panel narrows the conversation instead of cutting it", async ({ browser }) => {
+  /* The panel takes its width from the chat column, so every row in the
+     transcript has to reflow into what is left. When one does not, the shell
+     (overflow:hidden) cuts it mid-word at the panel's edge: no scrollbar, no
+     error, just sentences that stop.
+
+     The sibling test above proves the column holds with the panel CLOSED, which
+     is the state every other layout test runs in — the panel is the thing that
+     moves the column's right edge while its content is already laid out. */
+  const page = await openPage(browser, "/threads/review-thread", false, { "relay-web.sidenavExpanded": "true" }, {
+    title: "Lastest AI News Search and summarize the latest news about AI / LLM / Agents",
+    taskGoal: "Lastest AI News Search and summarize the latest news about AI / LLM / Agents",
+    participants: ["human", "Franker", "James", "Jeff Dean"],
+    events: longThreadEvents,
+  });
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await expect(page.locator("#chat-panel")).toBeVisible();
+  /* Scrolled, and long enough that turns above the fold are render-skipped
+     (.msg carries content-visibility:auto). A skipped turn holds the size it
+     last rendered at, so the reflow the panel forces has to reach them too —
+     measuring only what is on screen at the moment of the click would miss
+     exactly the rows the user scrolls back up to. */
+  await page.locator(".transcript").evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  await page.getByRole("button", { name: "Toggle the files panel" }).click();
+  await expect(page.locator(".thread-space-panel")).toBeVisible();
+  expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
+  await page.locator(".transcript").evaluate((el) => { el.scrollTop = 0; });
+  expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
+  await page.context().close();
+});
+
+test("an open file gets one chrome row, level with the conversation beside it", async ({ browser }) => {
+  /* The panel used to spend a full header naming itself and then open the file
+     under a second bar — two rows of chrome in a column that can be 288px wide,
+     with the panel's content sitting a whole header below the transcript's. The
+     file's own header is now the panel's only chrome row: back and close at the
+     two ends, the filename and its actions in between. */
+  const page = await openPage(browser, "/threads/review-thread", false, { "relay-web.sidenavExpanded": "true" }, {
+    artifacts: [{
+      id: "art-1", sessionId: "review-thread", kind: "plan", title: "AI-NEWS-2026-09-19.md",
+      path: "AI-NEWS-2026-09-19.md", createdAt: stamp, runId: "run-1", contentType: "text/markdown",
+    }],
+  });
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.getByRole("button", { name: "Toggle the files panel" }).click();
+  await page.locator(".thread-space-row").first().click();
+
+  const header = page.locator(".thread-space-panel .artifact-preview-header");
+  await expect(header).toBeVisible();
+  // The panel's identity row is gone, not merely emptied.
+  await expect(page.locator(".thread-space-header")).toHaveCount(0);
+  // Back and close both present, at opposite ends of one row.
+  const back = page.locator(".thread-space-panel .file-pane-back");
+  const close = page.locator(".thread-space-panel .artifact-preview-header button").last();
+  await expect(back).toBeVisible();
+  const [backBox, closeBox, headerBox, chatHeaderBox] = await Promise.all([
+    back.boundingBox(), close.boundingBox(),
+    header.boundingBox(), page.locator(".chat-header").boundingBox(),
+  ]);
+  expect(backBox!.x).toBeLessThan(closeBox!.x);
+  // One row, and the file's first line starts level with the transcript's.
+  expect(Math.round(headerBox!.height)).toBe(Math.round(chatHeaderBox!.height));
+  expect(Math.round(headerBox!.y + headerBox!.height))
+    .toBe(Math.round(chatHeaderBox!.y + chatHeaderBox!.height));
   await page.context().close();
 });
 

@@ -15,7 +15,7 @@ import {
   languageForFile,
 } from "../CodeView";
 import { Markdown } from "../LazyMarkdown";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { ArtifactView } from "../artifact/ArtifactViewToggle";
 
 /** Every workspace-file response (project, node, task, …) shares this shape
  *  apart from which id field names the owner — the preview never reads that
@@ -26,23 +26,41 @@ type WorkspaceFileResponseLike = Omit<ProjectWorkspaceFileResponse, "projectId">
    source otherwise. Shared by the full-page workspace tab and the thread
    output panel so a file reads the same wherever it is opened. */
 
+/** Which reading a file opens on, and the reset when another file is picked.
+ *
+ *  Lives here, next to the preview it drives, but is owned by the PARENT: the
+ *  switch sits in the file's header beside its name on both surfaces, and a
+ *  header cannot read state held by its sibling body. */
+export function useWorkspaceFileView(name: string): {
+  view: ArtifactView;
+  setView: (view: ArtifactView) => void;
+} {
+  const renderable = isRenderableFile(name);
+  const [view, setView] = useState<ArtifactView>(renderable ? "preview" : "source");
+  // Each file opens on its own default rather than carrying the last file's
+  // source view onto one the reader has not looked at yet.
+  useEffect(() => {
+    setView(renderable ? "preview" : "source");
+  }, [name, renderable]);
+  return { view, setView };
+}
+
 export function WorkspaceFilePreview({
   name,
   data,
   isLoading,
   error,
+  view,
 }: {
   name: string;
   data?: WorkspaceFileResponseLike;
   isLoading: boolean;
   error: unknown;
+  view: ArtifactView;
 }) {
   const { t, i18n } = useTranslation();
   const renderable = isRenderableFile(name);
-  const [rendered, setRendered] = useState(renderable);
-  useEffect(() => {
-    setRendered(renderable);
-  }, [name, renderable]);
+  const rendered = renderable && view === "preview";
 
   if (isLoading) {
     return <WorkspaceLoading label={t("workspace.loading_preview")} />;
@@ -82,37 +100,10 @@ export function WorkspaceFilePreview({
   if (!data.content || !data.content.trim()) {
     return <p className="artifact-viewer-status">{t("workspace.empty_file")}</p>;
   }
-  const showRendered = renderable && rendered;
+  const showRendered = rendered;
   const bleed = showRendered && (isMarkdownFile(name) || isHtmlFile(name));
   return (
     <div className={`workspace-preview-viewport${bleed ? " is-bleed" : ""}`}>
-      {renderable ? (
-        // Always in-flow, never floating: a floating variant made the toggle
-        // overlay the content in Rendered mode but sit in normal flow in
-        // Source mode, so the control visibly jumped position on toggle.
-        <ToggleGroup
-          className="code-view-toolbar"
-          aria-label={t("workspace.view_mode")}
-          value={[rendered ? "rendered" : "source"]}
-          onValueChange={(next) => {
-            const picked = next[0];
-            if (picked) setRendered(picked === "rendered");
-          }}
-        >
-          <ToggleGroupItem
-            value="rendered"
-            className={`code-view-toggle${rendered ? " is-active" : ""}`}
-          >
-            {t("workspace.view_rendered")}
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="source"
-            className={`code-view-toggle${rendered ? "" : " is-active"}`}
-          >
-            {t("workspace.view_source")}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      ) : null}
       <div className={`artifact-viewer-body${bleed ? " is-bleed" : ""}`}>
         {showRendered && isMarkdownFile(name) ? (
           <Markdown text={data.content} variant="document" />
