@@ -1092,7 +1092,7 @@ def test_fastapi_daemon_routes_register_and_poll(monkeypatch) -> None:
             headers={"Authorization": "Bearer node_token"},
         )
         assert response.status_code == 200
-        assert response.json() == {"commands": []}
+        assert response.json()["commands"] == []
 
         run = client.post(
             "/api/v1/sandboxes/sbx_alice/runs",
@@ -1129,7 +1129,7 @@ def test_fastapi_daemon_routes_register_and_poll(monkeypatch) -> None:
         assert response.json()["nodes"][0].get("nodeToken") == "node_token"
 
 
-def test_explicit_command_leases_redeliver_work_missing_from_daemon_heartbeat(
+def test_explicit_run_lease_expiry_retains_ownership_until_exit(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -1171,6 +1171,18 @@ def test_explicit_command_leases_redeliver_work_missing_from_daemon_heartbeat(
         assert first.status_code == 200
         [first_command] = first.json()["commands"]
         assert first_command["attempt"] == 1
+        assert first.json()["processingMs"] >= 0
+        assert first.json()["heartbeat"]["commandLeases"] == [{
+            "commandId": first_command["id"], "leaseId": first_command["leaseId"],
+            "leaseExpiresAt": first_command["leaseExpiresAt"],
+        }]
+        renewed = client.get(
+            "/api/v1/daemon-nodes/sbx_alice/commands?leaseMode=explicit&leaseSeconds=1"
+            f"&activeCommandLease={first_command['id']}:{first_command['leaseId']}",
+            headers={"Authorization": "Bearer node_token"},
+        )
+        assert renewed.json()["commands"] == []
+        assert renewed.json()["heartbeat"]["commandLeases"][0]["leaseId"] == first_command["leaseId"]
 
         time.sleep(1.05)
 
@@ -1179,17 +1191,16 @@ def test_explicit_command_leases_redeliver_work_missing_from_daemon_heartbeat(
             headers={"Authorization": "Bearer node_token"},
         )
         assert second.status_code == 200
-        [second_command] = second.json()["commands"]
-        assert second_command["id"] == first_command["id"]
-        assert second_command["attempt"] == 2
-        assert second_command["leaseId"] != first_command["leaseId"]
+        assert second.json()["commands"] == []
+        assert second.json()["heartbeat"]["commandLeases"] == []
+        second_command = first_command
 
         stale_output = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
             json={
                 "type": "run.output",
                 "commandId": first_command["id"],
-                "leaseId": first_command["leaseId"],
+                "leaseId": "lease_wrong_owner",
                 "sessionId": first_command["sessionId"],
                 "runId": first_command["runId"],
                 "agent": first_command["agent"],
@@ -1275,12 +1286,13 @@ def test_output_event_does_not_replace_explicit_lease_heartbeat(monkeypatch) -> 
 
         time.sleep(1.05)
 
-        [redelivered] = client.get(
+        poll = client.get(
             "/api/v1/daemon-nodes/sbx_alice/commands?leaseMode=explicit&leaseSeconds=1",
             headers={"Authorization": "Bearer node_token"},
         ).json()["commands"]
-        assert redelivered["id"] == first["id"]
-        assert redelivered["attempt"] == 2
+        assert poll == []
+        record = app.state.registry.daemon_store.get_command(first["id"])
+        assert record["leaseExpiresAt"] == first["leaseExpiresAt"]
 
 
 def test_run_completed_finalizes_even_when_token_usage_is_unusable(monkeypatch) -> None:
@@ -1554,7 +1566,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
             headers={"Authorization": "Bearer node_token"},
         )
         assert after_terminal.status_code == 200
-        assert after_terminal.json() == {"commands": []}
+        assert after_terminal.json()["commands"] == []
 
 
 def test_session_cancel_uses_durable_run_when_node_monitor_is_stale(
@@ -1825,7 +1837,7 @@ def test_admin_creates_employee_login_and_assigns_unassigned_node(monkeypatch) -
             headers={"Authorization": "Bearer node_token"},
         )
         assert poll.status_code == 200
-        assert poll.json() == {"commands": []}
+        assert poll.json()["commands"] == []
 
         alice_client = TestClient(app)
         login = alice_client.post(
@@ -2144,7 +2156,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
             headers={"Authorization": f"Bearer {body['nodeToken']}"},
         )
         assert poll.status_code == 200
-        assert poll.json() == {"commands": []}
+        assert poll.json()["commands"] == []
 
         duplicate = client.post(
             "/api/v1/admin/daemon-nodes",

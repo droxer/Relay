@@ -594,6 +594,7 @@ async def daemon_heartbeat(
 async def daemon_commands(
     sandbox_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
+    poll_started_at = time.monotonic()
     wait_seconds = bounded_float(
         request.query_params.get("waitSeconds"),
         default=0.0,
@@ -662,7 +663,20 @@ async def daemon_commands(
             sandbox_id=sandbox_id,
             command_count=len(commands),
         )
-        return {"commands": commands}
+        # Return explicit lease evidence from this poll as well as heartbeats.
+        # A successful empty poll alone is not proof of command ownership.
+        acknowledged = await run_in_threadpool(
+            ctx.registry.command_lease_observations, sandbox_id,
+            list(dict(active_leases + [
+                (command["id"], command.get("leaseId"))
+                for command in commands if command.get("type") == "run.start"
+            ]).items()),
+        )
+        return {
+            "commands": commands,
+            "heartbeat": {**ctx.registry.heartbeat_settings(), **acknowledged},
+            "processingMs": (time.monotonic() - poll_started_at) * 1000,
+        }
     except DeletedDaemonNodeError as error:
         raise HTTPException(410, str(error))
     except PermissionError as error:

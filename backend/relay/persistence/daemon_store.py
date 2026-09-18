@@ -2426,6 +2426,7 @@ class DatabaseDaemonStore:
             node_pk = self._node_pk(conn, node_id)
             available_condition = (self.commands.c.status == "queued") | (
                 (self.commands.c.status == "dispatched")
+                & (self.commands.c.type != "run.start")
                 & (self.commands.c.lease_expires_at <= now_dt)
             )
             rows = (
@@ -2562,6 +2563,7 @@ class DatabaseDaemonStore:
                         (self.commands.c.status == "queued")
                         | (
                             (self.commands.c.status == "dispatched")
+                            & (self.commands.c.type != "run.start")
                             & (self.commands.c.lease_expires_at <= now_dt)
                         )
                     )
@@ -2579,6 +2581,7 @@ class DatabaseDaemonStore:
                     (self.commands.c.status == "queued")
                     | (
                         (self.commands.c.status == "dispatched")
+                        & (self.commands.c.type != "run.start")
                         & (self.commands.c.lease_expires_at <= now_dt)
                     )
                 )
@@ -3646,7 +3649,9 @@ def command_is_available(record: dict[str, Any], now: str) -> bool:
     status = record.get("status")
     if status == "queued":
         return True
-    if status != "dispatched":
+    # A delivered start may already have launched a process. Lease expiry is
+    # not exit evidence; only non-executing delivery commands may be retried.
+    if status != "dispatched" or record.get("command", {}).get("type") == "run.start":
         return False
     lease_expires_at_value = record.get("leaseExpiresAt")
     return bool(

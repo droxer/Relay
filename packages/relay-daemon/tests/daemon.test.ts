@@ -3339,3 +3339,113 @@ test("consumes the round result a run leaves behind and refuses malformed ones",
 
   rmSync(workspace, { recursive: true, force: true });
 });
+
+// Regressions for the execution-blocker review: exercise the full daemon loop.
+test("blocker: terminal delivery does not occupy a process or workspace slot", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-slot-regression-"));
+  const stop = new AbortController();
+  const first = { ...runCommand("slot_first"), workspacePath: root };
+  const second = { ...first, id: "slot_second", runId: "run_second" };
+  let served = 0;
+  let completedFirst = false;
+  let executed = 0;
+  let release!: () => void;
+  const responseGate = new Promise<void>((resolve) => { release = resolve; });
+  const events: DaemonNodeEvent[] = [];
+  const timeout = setTimeout(() => { release(); stop.abort(); }, 3000);
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+      workspacePath: root, maxConcurrentRuns: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
+      signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
+      environment: fakeEnvironment({ exec: async (_cmd, args) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        executed += 1;
+        return { exit_code: 0, stdout: "done", stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (served === 0) { served++; return jsonResponse({ commands: [first] }); }
+          if (served === 1 && completedFirst) { served++; return jsonResponse({ commands: [second] }); }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (event.type === "run.completed" && event.commandId === first.id) {
+            completedFirst = true;
+            await responseGate;
+          }
+          if (event.commandId === second.id && ["run.completed", "run.failed"].includes(event.type)) {
+            release(); setTimeout(() => stop.abort(), 10);
+          }
+          return jsonResponse({ ok: true });
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    assert.equal(executed, 2);
+    assert.equal(events.some((event) => event.type === "run.failed"), false);
+    assert.equal(events.filter((event) => event.type === "run.completed").length, 2);
+  } finally { clearTimeout(timeout); release(); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wrong leases"]) {
+  const pollAcknowledgements = source !== "heartbeats";
+  test(`blocker: short execution leases validate ${source}`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "relay-lease-regression-"));
+    const stop = new AbortController();
+    const command = { ...runCommand("short_lease"), workspacePath: root, leaseId: "lease", leaseExpiresAt: new Date(Date.now() + 1000).toISOString() };
+    let served = false;
+    const events: DaemonNodeEvent[] = [];
+    const heartbeat = () => ({ intervalMs: 5000, timeoutMs: 15000, observedAt: new Date().toISOString(),
+      commandLeases: [{ commandId: command.id, leaseId: "lease", leaseExpiresAt: new Date(Date.now() + 1000).toISOString() }] });
+    const timeout = setTimeout(() => stop.abort(), 6000);
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+        workspacePath: root, commandLeaseSeconds: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
+        signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
+        environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
+          if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+          const end = Date.now() + 2200;
+          while (Date.now() < end && !options?.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
+          return { exit_code: 0, stdout: "done", stderr: "" };
+        } }),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api") return jsonResponse({ name: "Relay backend" });
+          if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ ok: true, heartbeat: heartbeat() });
+          if (path.endsWith("/heartbeat")) return pollAcknowledgements ? jsonResponse({ error: "unavailable" }, 500) : jsonResponse({ heartbeat: heartbeat() });
+          if (path.endsWith("/commands")) {
+            const commands = served ? [] : [command]; served = true;
+            const processingStartedAt = performance.now();
+            if (source === "long polls" && commands.length) await new Promise((resolve) => setTimeout(resolve, 1300));
+            const evidence = heartbeat();
+            if (source === "wrong leases") evidence.commandLeases[0]!.leaseId = "another-owner";
+            return jsonResponse({ commands, processingMs: performance.now() - processingStartedAt,
+              ...(pollAcknowledgements ? { heartbeat: evidence } : {}) });
+          }
+          if (path.endsWith("/events")) {
+            const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
+            if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) setTimeout(() => stop.abort(), 10);
+            return jsonResponse({ ok: true });
+          }
+          throw new Error(`unexpected URL ${url}`);
+        },
+      });
+      if (source === "wrong leases") {
+        const cancelled = events.find((event) => event.type === "run.cancelled");
+        assert.ok(cancelled?.type === "run.cancelled");
+        assert.match(cancelled.reason, /lease expired/);
+        assert.equal(events.some((event) => event.type === "run.completed"), false);
+      } else {
+        assert.equal(events.some((event) => event.type === "run.cancelled"), false);
+        assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+      }
+    } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+  });
+}
