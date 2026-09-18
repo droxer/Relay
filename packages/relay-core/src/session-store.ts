@@ -8,7 +8,17 @@ export type RelayArtifactKind = "plan" | "diff" | "review" | "test_output" | "co
 export type HumanDecisionKind = "approve" | "reject" | "cancel" | "rerun" | "handoff" | "mark_done";
 export type WorkspaceLayout = "node-root" | "thread" | "project" | "task";
 
+export interface CollaborationWorkResult {
+  status: "done" | "continue" | "blocked";
+  note?: string;
+  evidence: string[];
+  findings?: Array<{ workItemId: string; note: string }>;
+  messages?: Array<{ kind: "question" | "answer" | "blocker" | "handoff" | "decision"; toWorkItemId?: string; text: string }>;
+}
+
 export interface AgentRun {
+  consultation?: boolean;
+  workResult?: CollaborationWorkResult;
   id: string;
   assignmentId?: string;
   workItemId?: string;
@@ -30,6 +40,7 @@ export interface AgentRun {
   synthesizer?: boolean;
   teamSnapshot?: {
     teamId: string;
+    workContractVersion?: 1;
     teamRevision?: string;
     memberAgentIds: string[];
     leadAgentId?: string;
@@ -83,9 +94,12 @@ export interface CollaborationWorkItem {
   objective: string;
   dependsOnWorkItemIds: string[];
   required: boolean;
+  acceptanceCriteria?: string[];
+  expectedOutputs?: string[];
 }
 
 export interface CollaborationRoundManifest {
+  parentRoundId?: string;
   /** Absent on legacy rounds; task links do not imply execution ownership. */
   workScope?: { kind: "thread" } | { kind: "task"; taskId: string };
   /** Absent only on rounds persisted before the conductor contract shipped. */
@@ -170,7 +184,7 @@ export interface CollaborationRoundManifest {
     };
     delegationPolicy: {
       authority: "conductor";
-      policy: "sequential-role-delegation-v1";
+      policy: "sequential-role-delegation-v1" | "lead-plan-v1";
     };
   };
 }
@@ -310,6 +324,7 @@ export type RelayEvent =
   | {
       id: string;
       type: "agent.started";
+      consultation?: boolean;
       sessionId: string;
       timestamp: string;
       runId: string;
@@ -388,6 +403,7 @@ export type RelayEvent =
   | {
       id: string;
       type: "agent.completed";
+      workResult?: CollaborationWorkResult;
       sessionId: string;
       timestamp: string;
       runId: string;
@@ -515,6 +531,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.currentAgent = event.agent;
       session.agentRuns.push({
         id: event.runId,
+        ...(event.consultation ? { consultation: true } : {}),
         ...(event.assignmentId ? { assignmentId: event.assignmentId } : {}),
         ...(event.workItemId ? { workItemId: event.workItemId } : {}),
         ...(event.delegationAuthority ? { delegationAuthority: event.delegationAuthority } : {}),
@@ -542,6 +559,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
         run.status = event.status;
         run.completedAt = event.timestamp;
         run.exitCode = event.exitCode;
+        if (event.workResult) run.workResult = event.workResult;
         if (event.agentLog !== undefined) run.agentLog = event.agentLog;
         if (event.tokenUsage) run.tokenUsage = event.tokenUsage;
       }

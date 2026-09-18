@@ -1351,7 +1351,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             [session_id] = task_store.get_task(first["id"])["linkedSessionIds"]
             [manifest] = registry.store.get_session(session_id)["collaborationRounds"]
             assert manifest["teamSnapshot"]["teamId"] == team["id"]
-            assert len(manifest["workGraph"]["items"]) == 2
+            assert len(manifest["workGraph"]["items"]) == 3
             assert manifest["workGraph"]["items"][1]["dependsOnWorkItemIds"] == [
                 manifest["workGraph"]["items"][0]["workItemId"]
             ]
@@ -1385,6 +1385,12 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                 "node_token",
             )
 
+            [synthesis] = registry.take_commands("sbx_alice", "node_token")
+            assert synthesis["logicalAgentId"] == lead["id"]
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": synthesis["id"], "sessionId": synthesis["sessionId"],
+                "runId": synthesis["runId"], "agent": synthesis["agent"], "exitCode": 0, "agentLog": "Final synthesis",
+            }, "node_token")
             agent_store.update_agent(lead["id"], {"enabled": False})
             second = task_store.create_task(
                 {

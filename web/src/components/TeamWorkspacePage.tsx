@@ -1,5 +1,8 @@
 "use client";
 
+import { TeamResponsibilities } from "./TeamResponsibilities";
+import type { TeamMemberConfig } from "../types";
+
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -10,7 +13,7 @@ import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { teamAvailability } from "../lib/taskAssignment";
-import { teamMutationInput } from "../lib/teamForm";
+import { teamContractChanged, teamMutationInput } from "../lib/teamForm";
 import type { AgentTeam } from "../types";
 import {
   ActionEdit,
@@ -67,6 +70,8 @@ function TeamProfile({
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(team.name);
   const [memberIds, setMemberIds] = useState<string[]>(team.memberAgentIds);
+  const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
   const [imageSaving, setImageSaving] = useState(false);
   const [validationError, setValidationError] = useState<
@@ -76,7 +81,12 @@ function TeamProfile({
   const leadRef = useRef<HTMLButtonElement>(null);
   const busy = updateTeamMutation.isPending || deleteTeamMutation.isPending
     || imageSaving;
-  const draftDirty = leadId !== (team.leadAgentId ?? "")
+  const draftDirty = teamContractChanged(
+    { memberConfigs, acceptanceCriteria },
+    team,
+    memberIds,
+  )
+    || leadId !== (team.leadAgentId ?? "")
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
   const confirmDiscardChanges = useUnsavedChangesGuard(editing && draftDirty && !busy);
@@ -123,6 +133,8 @@ function TeamProfile({
   function resetDraft() {
     setMemberIds(team.memberAgentIds);
     setLeadId(team.leadAgentId ?? "");
+    setMemberConfigs(team.memberConfigs ?? {});
+    setAcceptanceCriteria(team.acceptanceCriteria ?? []);
     setValidationError(null);
   }
 
@@ -198,6 +210,7 @@ function TeamProfile({
         input: teamMutationInput({
           name: team.name,
           memberAgentIds: memberIds,
+          memberConfigs, acceptanceCriteria,
           leadAgentId: leadId,
           enabled: team.enabled,
         }),
@@ -316,6 +329,21 @@ function TeamProfile({
                               <span className="team-profile-member-lead">{t("teams.lead_badge")}</span>
                             ) : null}
                           </span>
+                          {/* Role and scope ride the copy stack's supporting
+                              rung (<small> is what this stack clamps and
+                              quiets); a bare <span> read louder than the name's
+                              own meta line and never truncated, so a long
+                              responsibility blew the row open. */}
+                          {(team.memberConfigs?.[member.id]?.role ?? member.defaultRole) ? (
+                            <small>
+                              {t(`team_work.role_${team.memberConfigs?.[member.id]?.role ?? member.defaultRole}`)}
+                            </small>
+                          ) : null}
+                          {team.memberConfigs?.[member.id]?.responsibility ? (
+                            <small title={team.memberConfigs[member.id].responsibility}>
+                              {team.memberConfigs[member.id].responsibility}
+                            </small>
+                          ) : null}
                           <AgentMetaLine
                             executorKind={member.executorKind}
                             placements={placements}
@@ -340,6 +368,7 @@ function TeamProfile({
 
             {editing ? (
               <>
+                <TeamResponsibilities members={agents.filter(agent => memberIds.includes(agent.id))} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
                 <Field
                   label={t("teams.lead")}
                   labelId={leadLabelId}

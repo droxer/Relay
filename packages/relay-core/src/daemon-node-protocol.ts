@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "produced-files" | "handoff-validation" | "agent-skills";
+export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -86,6 +86,7 @@ export const DAEMON_CAPABILITY_TASK_WORKSPACES: DaemonNodeCapability = "task-wor
  * and reports it as `roundResult`, so the control plane learns whether the work
  * is finished without parsing the agent's prose.
  */
+export const DAEMON_CAPABILITY_WORK_RESULTS: DaemonNodeCapability = "work-results";
 export const DAEMON_CAPABILITY_ROUND_RESULT: DaemonNodeCapability = "round-result";
 /**
  * "produced-files" means the daemon reports every file a run changed, not only
@@ -101,6 +102,8 @@ export const DAEMON_CAPABILITY_PRODUCED_FILES: DaemonNodeCapability = "produced-
  * the work and needs a human; "done" is the finished case.
  */
 export interface DaemonRoundResult {
+  /** Untrusted, bounded agent report; the conductor validates its semantics. */
+  work?: Record<string, unknown>;
   status: "done" | "continue" | "blocked";
   note?: string;
 }

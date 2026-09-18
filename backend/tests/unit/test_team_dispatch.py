@@ -51,6 +51,33 @@ def _team(**overrides: Any) -> dict[str, Any]:
     }
 
 
+def test_team_role_overrides_global_default_and_scopes_work() -> None:
+    team = _team(memberConfigs={"support": {
+        "role": "implementer", "responsibility": "Own the API and its tests", "required": True,
+    }}, acceptanceCriteria=["API compatibility"])
+    agents = [_agent("lead", "codex"), _agent("support", "claude", defaultRole="reviewer")]
+    assignments = team_member_assignments(agents, team=team)
+    support = next(item for item in assignments if item["agentId"] == "support")
+    assert support["role"] == "implementer"
+    assert "Own the API and its tests" in support["brief"]
+    assert support["acceptanceCriteria"] == ["API compatibility"]
+    assert assignments[-1]["agentId"] == "lead"
+    assert assignments[-1]["synthesizer"] is True
+
+
+def test_on_request_specialist_is_not_automatically_activated() -> None:
+    team = _team(memberConfigs={"support": {"participation": "on_request", "required": False}})
+    assignments = team_member_assignments([_agent("lead", "codex"), _agent("support", "claude")], team=team)
+    assert [item["agentId"] for item in assignments] == ["lead"]
+
+
+def test_disabled_on_request_specialist_does_not_block_the_active_team():
+    team, agents = team_agents("team_1", "alice",
+        team_store=FakeTeamStore(_team(memberConfigs={"support": {"participation": "on_request", "required": False}})),
+        agent_store=FakeAgentStore([_agent("lead", "codex"), _agent("support", "claude", enabled=False)]))
+    assert [item["agentId"] for item in team_member_assignments(agents, team=team)] == ["lead"]
+
+
 def test_team_agents_returns_the_lead_first() -> None:
     team, agents = team_agents(
         "team_1",
@@ -135,7 +162,7 @@ def test_team_member_assignments_freezes_the_roster_for_the_round() -> None:
         "memberAgentIds": ["lead", "support"],
         "leadAgentId": "lead",
     }
-    assert [item["teamSnapshot"] for item in assignments] == [expected, expected]
+    assert [item["teamSnapshot"] for item in assignments] == [expected, expected, expected]
 
 
 def test_discussion_runs_the_facilitator_last_without_changing_the_snapshot() -> None:
@@ -187,6 +214,7 @@ def test_accomplish_orders_delegated_execution_before_test_and_review() -> None:
         "builder",
         "tester",
         "reviewer",
+        "lead",
     ]
 
 
@@ -210,4 +238,4 @@ def test_team_member_assignments_carry_the_round_mode() -> None:
 
     for mode in ("action", "ask", "review"):
         assignments = team_member_assignments(agents, mode=mode, team=team)
-        assert [item["mode"] for item in assignments] == [mode, mode], mode
+        assert all(item["mode"] == mode for item in assignments), mode

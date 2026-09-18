@@ -398,6 +398,7 @@ def _apply_agent_started(session: dict[str, Any], event: dict[str, Any]) -> None
         "brief",
         "coordinator",
         "synthesizer",
+        "consultation",
         "teamSnapshot",
         "assignmentId",
         "workItemId",
@@ -423,6 +424,8 @@ def _apply_agent_completed(session: dict[str, Any], event: dict[str, Any]) -> No
         run["exitCode"] = event["exitCode"]
         if "agentLog" in event:
             run["agentLog"] = event["agentLog"]
+        if event.get("workResult"):
+            run["workResult"] = event["workResult"]
         if event.get("tokenUsage"):
             run["tokenUsage"] = event["tokenUsage"]
     token_usage = merge_token_usage(

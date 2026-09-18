@@ -54,6 +54,74 @@ def _mark_executing(app, node_id: str, command: dict) -> None:
     )
 
 
+def _finish_synthesis(app, node_id="node_alice") -> None:
+    [command] = app.state.registry.take_commands(node_id, "node_token")
+    _mark_executing(app, node_id, command)
+    app.state.registry.handle_event(node_id, {
+        "type": "run.completed", "commandId": command["id"], "sessionId": command["sessionId"],
+        "runId": command["runId"], "agent": command["agent"], "exitCode": 0, "agentLog": "Team synthesis",
+    }, "node_token")
+
+
+@pytest.mark.parametrize("outside_owner", [False, True])
+def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_owner):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex")
+        builder = _agent(client, "alice", "Builder", "claude")
+        app.state.registry.register({
+            "sandboxId": "test_node_alice", "employeeId": "alice", "workspaceId": "machine-alice",
+            "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"],
+            "capabilities": ["thread-workspaces", "round-result", "work-results"], "status": "ready",
+        })
+        response = client.post("/api/v1/admin/teams", json={
+            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], builder["id"]],
+            "memberConfigs": {builder["id"]: {"role": "implementer", "responsibility": "API", "required": True}},
+            "acceptanceCriteria": ["Existing clients remain compatible"],
+        })
+        assert response.status_code == 201
+        team = response.json()["team"]
+        assert team["memberConfigs"][builder["id"]]["responsibility"] == "API"
+        _login(client, "alice")
+        started = client.post("/api/v1/agent-runs", json={"taskGoal": "Add reset API", "teamId": team["id"]})
+        assert started.status_code == 202, started.text
+        [command] = app.state.registry.take_commands("test_node_alice", "node_token")
+        _mark_executing(app, "test_node_alice", command)
+        assert command["state"]["team_plan_candidates"][0]["agentId"] == builder["id"]
+        event = {
+            "type": "run.completed", "commandId": command["id"], "sessionId": command["sessionId"],
+            "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+            "roundResult": {"status": "continue", "work": {
+                "status": "done", "evidence": ["Plan covers API and compatibility"],
+                "plan": [{"agentId": "outside" if outside_owner else builder["id"],
+                          "objective": "Implement POST /reset and tests", "acceptanceCriteria": ["Expired tokens rejected"],
+                          "expectedOutputs": ["Endpoint and regression tests"]}],
+            }},
+        }
+        app.state.registry.handle_event("test_node_alice", event, "node_token")
+        app.state.registry.handle_event("test_node_alice", event, "node_token")
+        session = app.state.session_store.get_session(command["sessionId"])
+        plans = [e for e in session["events"] if e["type"] == "collaboration.round.started" and e["manifest"]["source"] == "lead_plan"]
+        commands = app.state.registry.take_commands("test_node_alice", "node_token")
+        if outside_owner:
+            assert not plans
+            assert not commands
+            assert "authorized specialist" in session["finalOutcome"]
+        else:
+            assert len(plans) == 1
+            assert len(commands) == 1
+            assert commands[0]["logicalAgentId"] == builder["id"]
+            assert "POST /reset" in commands[0]["state"]["assignment_brief"]
+            assert commands[0]["state"]["work_acceptance_criteria"] == ["Existing clients remain compatible", "Expired tokens rejected"]
+            assert commands[0]["delivery"]["roundId"] == plans[0]["manifest"]["roundId"]
+
+
 def _agent(
     client: TestClient,
     employee_id: str,
@@ -1053,6 +1121,8 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
             "node_token",
         )
 
+        _finish_synthesis(app)
+
         # The reviewer role contributes to the same adaptive round; the role
         # does not force a separate task mode or terminal status.
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "review"
@@ -1060,6 +1130,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
         assert [run["role"] for run in session["agentRuns"]] == [
             "implementer",
             "reviewer",
+            "implementer",
         ]
 
 
@@ -1590,6 +1661,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
             "node_token",
         )
 
+        _finish_synthesis(app)
         answered = client.post(
             f"/api/v1/threads/{session_id}/messages",
             json={
@@ -1610,6 +1682,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
         assert [item["agentId"] for item in request["assignments"]] == [
             lead["id"],
             support["id"],
+            lead["id"],
         ]
         assert request["assignments"][0]["coordinator"] is True
         assert request["assignments"][0]["mode"] == "action"
@@ -1654,6 +1727,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
         assert [item["ownerAgentId"] for item in work_graph["items"]] == [
             lead["id"],
             support["id"],
+            lead["id"],
         ]
         assert work_graph["items"][1]["delegationAuthority"] == "conductor"
         assert work_graph["items"][1]["dependsOnWorkItemIds"] == [
@@ -1922,6 +1996,7 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
         assert [item["agentId"] for item in request["assignments"]] == [
             lead["id"],
             support["id"],
+            lead["id"],
         ]
         assert request["assignments"][0]["coordinator"] is True
         assert request["assignments"][0]["teamSnapshot"]["teamId"] == team["id"]
@@ -2115,7 +2190,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
         ).json()
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
-        for executor in ("codex", "claude"):
+        for executor in ("codex", "claude", "codex"):
             command = app.state.registry.take_commands("node_alice", "node_token")[0]
             app.state.registry.handle_event(
                 "node_alice",
@@ -2252,6 +2327,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
             "node_token",
         )
 
+        _finish_synthesis(app)
         _login(client, "alice")
         answered = client.post(
             "/api/v1/agent-runs",
@@ -2269,6 +2345,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
         assert [item["agentId"] for item in request["assignments"]] == [
             lead["id"],
             support["id"],
+            lead["id"],
         ]
 
 
@@ -2327,7 +2404,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
         ).json()
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         session_id = started.json()["session"]["id"]
-        for executor in ("codex", "claude"):
+        for executor in ("codex", "claude", "codex"):
             command = app.state.registry.take_commands("node_alice", "node_token")[0]
             app.state.registry.handle_event(
                 "node_alice",

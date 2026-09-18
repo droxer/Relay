@@ -486,3 +486,114 @@
 .msg-system-artifact .msg-system-body {
   align-items: flex-start;
 }
+
+/* Team work graph — the collaboration disclosure for a team session's work
+   items. It sits in the transcript next to <HandoffStatus>, which owns
+   `.handoff-panel`; this block exists so the two stop sharing one shape while
+   meaning different things. The branch glyph and marker suppression are the
+   same grammar `.collaboration-node` uses above, so every disclosure in the
+   stream opens the same way. */
+.team-work-panel {
+  min-width: 0;
+  margin-top: var(--sp-3);
+}
+
+.team-work-panel > summary {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  align-items: center;
+  min-height: 28px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.team-work-panel > summary::-webkit-details-marker { display: none; }
+
+.team-work-panel[open] > summary .collaboration-branch { transform: rotate(45deg); }
+
+.team-work-panel-title {
+  overflow: hidden;
+  color: var(--ink-2);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-work-panel-count {
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  font-variant-numeric: tabular-nums;
+}
+
+/* <ol> because a work graph is dependency-ordered, not a bag of items. The
+   marker is suppressed rather than shown: a native counter would sit outside
+   the hairline-separated rows and misalign with the summary's branch column,
+   and the order is already carried by the reading order plus each row's
+   "Depends on" line. */
+.team-work-items {
+  display: grid;
+  gap: var(--sp-hairline);
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--line-1);
+  list-style: none;
+}
+
+.team-work-entry {
+  display: grid;
+  gap: var(--sp-1-5);
+  padding: var(--sp-3);
+  background: var(--surface-0);
+}
+
+.team-work-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.team-work-entry-owner {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The item's title rung — one step above the supporting detail under it, so an
+   objective is not the same voice as its evidence. */
+.team-work-entry-objective {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+}
+
+.team-work-detail {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+}
+
+.team-work-detail--quiet { color: var(--ink-3); }
+
+/* The label half of a detail row. --type-label-strong rather than a raw
+   weight: it is the same --fs-2 as the body-sm around it, so only the weight
+   changes, and it stays on the 400/500/700 ladder by construction. */
+.team-work-detail-kind {
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}

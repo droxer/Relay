@@ -23,6 +23,11 @@ from ..collaboration.models import (
     COLLABORATION_MANIFEST_STATE_KEY,
     COLLABORATION_NEW_SESSION_STATE_KEY,
 )
+from ..collaboration.work import (
+    WORK_PROTOCOL, WORK_RESULTS, WORK_STATE_KEYS, WORK_REPAIR_NOTE, WORK_REPAIR_TARGET, WORK_PLAN_ERROR,
+    completion_blockers, record_work_result, repair_transition, validate_work_result, compile_proposed_plan,
+    question_transition, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
+)
 from ..collaboration.policy import (
     PARTICIPANT_FAILURES_STATE_KEY,
     REPAIR_COUNT_STATE_KEY,
@@ -152,6 +157,7 @@ ARTIFACT_SNAPSHOT_STATE_KEY = "_relay_artifact_snapshot"
 # the moment the next command is staged.
 CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
     {
+        *WORK_STATE_KEYS,
         "_relay_task_source_revision",
         "_relay_task_source_status",
         "_relay_task_execution_revision",
@@ -198,6 +204,7 @@ DAEMON_CAPABILITY_PRODUCED_FILES = "produced-files"
 DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
+        "work-results",
         "agent-skills",
         DAEMON_CAPABILITY_GENERATED_FILES,
         DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
@@ -1861,6 +1868,13 @@ class DaemonNodeRegistry:
         request_id: str | None,
     ) -> dict[str, Any]:
         existing = self.daemon_store.get_run_request(request_id) if request_id else None
+        if existing:
+            state = {**state, WORK_PROTOCOL: bool((existing.get("state") or {}).get(WORK_PROTOCOL))}
+        else:
+            state = {**state, WORK_PROTOCOL: bool(
+                any(item.get("teamSnapshot") for item in assignments)
+                and "work-results" in ((self.sandboxes.get(sandbox_id) or {}).get("capabilities") or [])
+            )}
         if task_id and self.task_store:
             task = self.task_store.get_task(task_id)
             manifest = state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
@@ -3103,6 +3117,33 @@ class DaemonNodeRegistry:
             state["work_kind"] = assignment["workKind"]
         state["team_phase"] = assignment.get("phase") or "execution"
         request_state = run_request["state"] or {}
+        if request_state.get(WORK_PROTOCOL):
+            if "work-results" not in (sandbox.get("capabilities") or []):
+                self._fail_run_request(run_request, "This team round requires a daemon with work-results support.")
+                return run_request
+            state["work_result_required"] = True
+            state["round_result_file"] = ROUND_RESULT_RELATIVE_PATH
+            state["work_acceptance_criteria"] = assignment.get("acceptanceCriteria", [])
+            state["work_expected_outputs"] = assignment.get("expectedOutputs", [])
+            state["work_predecessor_results"] = predecessor_context(request_state, assignment.get("dependsOnWorkItemIds", []))
+            if index == 0 and assignment.get("coordinator") and len(assignments) > 1 and not request_state.get(REPAIR_NOTE_STATE_KEY) and QUESTION_RESUME not in request_state:
+                state["team_plan_candidates"] = [
+                    {"agentId": item.get("agentId"), "role": item.get("role"), "responsibility": item.get("brief"), "required": item.get("required", True)}
+                    for item in assignments[1:] if not item.get("synthesizer")
+                ]
+            state["work_messages"] = [
+                {"fromWorkItemId": key, **message, "text": message["text"][:700], "truncated": len(message["text"]) > 700}
+                for key, result in (request_state.get(WORK_RESULTS) or {}).items()
+                for message in result.get("messages", [])
+                if message.get("toWorkItemId") == state["work_item_id"] or not message.get("toWorkItemId")
+            ][-20:]
+            if request_state.get(QUESTION_NOTE):
+                state["work_question"] = request_state[QUESTION_NOTE]
+            if request_state.get(WORK_REPAIR_NOTE):
+                if assignment["assignmentId"] == request_state.get(WORK_REPAIR_TARGET):
+                    state["repair_note"] = request_state[WORK_REPAIR_NOTE]
+                else:
+                    state["work_revalidation_note"] = "Earlier evidence is stale; revalidate the updated work within your own role. " + request_state[WORK_REPAIR_NOTE]
         if request_state.get(REPAIR_NOTE_STATE_KEY) and index == 0:
             state["repair_note"] = request_state[REPAIR_NOTE_STATE_KEY]
         # Only ask for the verdict where something reads it back: on a daemon
@@ -3299,6 +3340,7 @@ class DaemonNodeRegistry:
             run_request["sessionId"],
             {
                 "runId": command["runId"],
+                **({"consultation": True} if (command.get("state") or {}).get("work_question") else {}),
                 "assignmentId": assignment["assignmentId"],
                 "workItemId": assignment.get("workItemId")
                 or assignment["assignmentId"],
@@ -3602,6 +3644,10 @@ class DaemonNodeRegistry:
                 run_request["nodeId"], {"status": "ready", "lastError": event["reason"]}
             )
             return
+        work_result = None
+        if (run_request.get("state") or {}).get(WORK_PROTOCOL) and event.get("exitCode") == 0:
+            envelope = event.get("roundResult")
+            work_result = validate_work_result(envelope.get("work") if isinstance(envelope, dict) else None)
         agent_log = event.get("agentLog") or self.output_for_run(event["runId"])
         self.clear_run_output(event["runId"])
         has_next = event["exitCode"] == 0 and run_request.get(
@@ -3624,6 +3670,7 @@ class DaemonNodeRegistry:
                     "status": "completed" if event["exitCode"] == 0 else "failed",
                     "exitCode": event["exitCode"],
                     "agentLog": agent_log,
+                    **({"workResult": work_result} if work_result else {}),
                     "tokenUsage": event.get("tokenUsage"),
                     "assignmentId": assignment.get("assignmentId"),
                     **({"pipelineHasNext": True} if has_next else {}),
@@ -3646,6 +3693,8 @@ class DaemonNodeRegistry:
         )
         if round_result:
             next_state[ROUND_RESULT_STATE_KEY] = round_result
+        if (run_request.get("state") or {}).get(WORK_PROTOCOL):
+            next_state = record_work_result(next_state, assignment, work_result)
         if event["exitCode"] != 0:
             # Agent-first assignments carry agentId/executorKind and no "agent"
             # key, so indexing it here raised before the request could be marked
@@ -3688,6 +3737,44 @@ class DaemonNodeRegistry:
             )
             return
         next_index, next_state = self._next_index_after_success(run_request, next_state)
+        if (run_request.get("state") or {}).get(WORK_PROTOCOL):
+            question = question_transition(assignments, run_request.get("currentIndex", 0), next_state)
+            repair = repair_transition(assignments, run_request.get("currentIndex", 0), next_state, max_repairs=MAX_REPAIRS)
+            if question:
+                next_index, next_state = question
+            elif QUESTION_RESUME in next_state:
+                next_state[WORK_PLAN_ERROR] = "The requested teammate answer was not provided."
+                next_index = len(assignments)
+            elif repair:
+                next_index, next_state = repair
+            elif work_result and "plan" in work_result and run_request.get("currentIndex", 0) == 0 and assignment.get("coordinator") and not (run_request.get("state") or {}).get(REPAIR_NOTE_STATE_KEY):
+                from ..collaboration.service import create_round_manifest, compile_assignment_work_graph
+                parent = next_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+                try:
+                    planned = compile_proposed_plan(assignments, work_result["plan"], parent.get("roundId") or run_request["id"])
+                    assignments = compile_assignment_work_graph(planned, purpose="accomplish", team_snapshot=parent.get("teamSnapshot"))
+                    manifest = create_round_manifest(
+                        source="lead_plan", purpose="accomplish", address=parent.get("address") or {"kind": "room"},
+                        assignments=assignments, team_snapshot=parent.get("teamSnapshot"),
+                        collaboration_id=parent.get("collaborationId"), round_id=f"{parent.get('roundId') or run_request['id']}_plan",
+                    )
+                    manifest["parentRoundId"] = parent.get("roundId")
+                    manifest["workScope"] = parent.get("workScope", {"kind": "thread"})
+                    controller.record_collaboration_round_started(run_request["sessionId"], manifest)
+                    next_state[COLLABORATION_MANIFEST_STATE_KEY] = manifest
+                except ValueError as error:
+                    next_state[WORK_PLAN_ERROR] = str(error)
+                    next_index = len(assignments)
+            if not question and not repair:
+                if work_result is None or work_result.get("status") != "done":
+                    if assignment.get("required", True):
+                        next_index = len(assignments)
+                elif (run_request.get("currentIndex", 0) == 0 and assignment.get("coordinator")
+                      and len(assignments) > 1 and next_state.get(COLLABORATION_MANIFEST_STATE_KEY)
+                      and "plan" not in work_result and not (run_request.get("state") or {}).get(REPAIR_NOTE_STATE_KEY)
+                      and QUESTION_RESUME not in (run_request.get("state") or {})):
+                    next_state[WORK_PLAN_ERROR] = "The coordinator did not provide a bounded work plan."
+                    next_index = len(assignments)
         updated = self.daemon_store.update_run_request_if_claimed(
             run_request["id"],
             TERMINAL_CLAIM_ID_STATE_KEY,
@@ -3695,6 +3782,7 @@ class DaemonNodeRegistry:
             {
                 "status": "running",
                 "currentIndex": next_index,
+                "assignments": assignments,
                 "state": next_state,
                 "currentCommandId": None,
                 "currentRunId": None,
@@ -3948,7 +4036,6 @@ class DaemonNodeRegistry:
             task_status, outcome = self._round_outcome(
                 round_result, task_status, outcome
             )
-            self._record_round_result(run_request, round_result, task_status)
         else:
             self._note_missing_round_result(run_request, task_status)
             if self._round_result_was_required(run_request):
@@ -3957,6 +4044,15 @@ class DaemonNodeRegistry:
                     "The round ended without its required aggregate verdict. "
                     "Review the work before continuing or closing the task."
                 )
+        blockers = completion_blockers(
+            run_request["assignments"], run_request.get("state") or {},
+            require_evidence=bool((run_request.get("state") or {}).get(WORK_PROTOCOL)),
+        )
+        if blockers:
+            task_status = "waiting_for_human"
+            outcome = "Work needs attention. " + " ".join(blockers)
+        if isinstance(round_result, dict):
+            self._record_round_result(run_request, {"status": "blocked", "note": outcome} if blockers else round_result, task_status)
         if task_status == "done" and self.task_store and run_request.get("taskId"):
             task = self.task_store.get_task(run_request["taskId"])
             if task.get("acceptancePolicy", "automatic") == "human":

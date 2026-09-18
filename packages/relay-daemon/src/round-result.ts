@@ -9,6 +9,7 @@ import { join } from "node:path";
  * answer, so the control plane never has to guess from output text.
  */
 export interface RoundResult {
+  work?: Record<string, unknown>;
   status: "done" | "continue" | "blocked";
   note?: string;
 }
@@ -56,13 +57,14 @@ export function parseRoundResult(raw: string, expectedRunId?: string): RoundResu
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
-  const { status, note, runId } = parsed as { status?: unknown; note?: unknown; runId?: unknown };
+  const { status, note, runId, work } = parsed as { status?: unknown; note?: unknown; runId?: unknown; work?: unknown };
   if (expectedRunId !== undefined && runId !== expectedRunId) return undefined;
   if (typeof status !== "string" || !ROUND_RESULT_STATUSES.has(status)) {
     return undefined;
   }
   return {
     status: status as RoundResult["status"],
+    ...(work && typeof work === "object" && !Array.isArray(work) ? { work: work as Record<string, unknown> } : {}),
     ...(typeof note === "string" && note.trim()
       ? { note: note.trim().slice(0, NOTE_MAX_CHARS) }
       : {}),

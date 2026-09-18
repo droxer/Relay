@@ -46,6 +46,14 @@ export interface AgentState {
    * finished, e.g. ".relay/round-result.json". Only set when the daemon can
    * read it back; absent means nothing will consume what the agent writes.
    */
+  work_result_required?: boolean;
+  work_messages?: Array<Record<string, unknown>>;
+  work_question?: string;
+  work_revalidation_note?: string;
+  work_acceptance_criteria?: string[];
+  work_expected_outputs?: string[];
+  work_predecessor_results?: Record<string, unknown>;
+  team_plan_candidates?: Array<{ agentId: string; role?: string; responsibility?: string; required: boolean }>;
   round_result_file?: string;
   /** Set by the daemon to reject a verdict belonging to another run. */
   round_result_run_id?: string;

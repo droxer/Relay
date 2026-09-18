@@ -50,6 +50,7 @@ def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
                     "displayName": view["displayName"],
                     "profileImageUrl": view.get("profileImageUrl"),
                     "executorKind": view["executorKind"],
+                    "defaultRole": agent.get("defaultRole"),
                     "enabled": view.get("enabled", True),
                     "availability": view.get("availability", "offline"),
                 }
@@ -162,6 +163,8 @@ def create_control_panel_team(
                 "name": body.get("name"),
                 "profileImageUrl": body.get("profileImageUrl"),
                 "enabled": body.get("enabled", True),
+                "memberConfigs": body.get("memberConfigs", {}),
+                "acceptanceCriteria": body.get("acceptanceCriteria", []),
                 "leadAgentId": lead,
                 "memberAgentIds": members,
             },

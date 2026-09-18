@@ -347,12 +347,15 @@ export function ProjectMemberEditor({
               />
             </Field>
 
+            {/* The wrapping <label> is the whole accessible name: base-ui
+                already points the control's aria-labelledby at it, so an
+                aria-label repeating the same copy is concatenated onto it and
+                the flag announces twice ("Make lead Make lead"). */}
             <div className="project-member-flags">
               <label className="project-member-flag">
                 <Checkbox
                   checked={draft.lead}
                   onCheckedChange={(value) => patch({ lead: value === true })}
-                  aria-label={t("project.member_make_lead")}
                 />
                 <span>{t("project.member_make_lead")}</span>
               </label>
@@ -360,7 +363,6 @@ export function ProjectMemberEditor({
                 <Checkbox
                   checked={draft.enabled}
                   onCheckedChange={(value) => patch({ enabled: value === true })}
-                  aria-label={t("project.member_enabled")}
                 />
                 <span>{t("project.member_enabled")}</span>
               </label>

@@ -20,3 +20,4 @@ sync with [`docs/implementation-plan.md`](../implementation-plan.md).
 | [ADR-016](016-collaboration-conductor.md) | Event-sourced collaboration conductor as workflow authority |
 | [ADR-017](017-computer-bound-project-workspaces.md) | Computer-bound project workspaces |
 | [ADR-018](018-durable-task-workspace-bindings.md) | Durable task workspace bindings, visible waits, and retained artifact versions |
+| [ADR-019](019-team-work-acceptance.md) | Team responsibilities, bounded delegation, and evidence-based work acceptance |

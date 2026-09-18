@@ -93,6 +93,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
           ...next.agentRuns,
           {
             id: event.runId,
+            ...(event.consultation ? { consultation: true } : {}),
             ...(event.assignmentId ? { assignmentId: event.assignmentId } : {}),
             ...(event.workItemId ? { workItemId: event.workItemId } : {}),
             ...(event.delegationAuthority ? { delegationAuthority: event.delegationAuthority } : {}),
@@ -124,6 +125,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
             status: event.status,
             completedAt: event.timestamp,
             exitCode: event.exitCode,
+            ...(event.workResult ? { workResult: event.workResult } : {}),
             ...(event.agentLog !== undefined ? { agentLog: event.agentLog } : {}),
             ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
           }

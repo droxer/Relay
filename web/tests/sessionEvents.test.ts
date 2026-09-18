@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { applySessionEvent } from "../src/lib/sessionEvents.js";
 import type { RelaySession } from "../src/types.js";
+import { materializeEvents, relayEvent } from "../../packages/relay-core/src/index.js";
 
 function session(partial: Partial<RelaySession> = {}): RelaySession {
   return {
@@ -23,6 +24,16 @@ function session(partial: Partial<RelaySession> = {}): RelaySession {
 }
 
 describe("applySessionEvent", () => {
+  it("keeps work acceptance evidence identical in full replay and SSE", () => {
+    const created = relayEvent("session.created", "work", { workspacePath: "/workspace", taskGoal: "Deliver", participants: ["human", "codex"] });
+    const started = relayEvent("agent.started", "work", { runId: "run", agent: "codex", assignmentId: "assignment" });
+    const completed = relayEvent("agent.completed", "work", { runId: "run", agent: "codex", status: "completed", exitCode: 0,
+      workResult: { status: "continue", evidence: ["Empty input returns 500"], findings: [{ workItemId: "build", note: "Reject empty input" }] } });
+    const replay = materializeEvents([created, started, completed]);
+    const incremental = applySessionEvent(materializeEvents([created, started]), completed);
+    assert.deepEqual(incremental.agentRuns[0].workResult, replay.agentRuns[0].workResult);
+    assert.equal(incremental.agentRuns[0].workResult?.status, "continue");
+  });
   it("materializes collaboration round identity and strategy from SSE", () => {
     const updated = applySessionEvent(session(), {
       id: "evt_round",
