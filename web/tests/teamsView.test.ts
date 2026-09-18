@@ -8,6 +8,15 @@ import { teamMutationInput } from "../src/lib/teamForm.js";
 import { selectedTeamForWorkspace } from "../src/lib/teamWorkspace.js";
 
 describe("Agent team management", () => {
+  it("preserves team responsibilities while pruning removed memberships", () => {
+    const input = teamMutationInput({
+      name: "Delivery", leadAgentId: "lead", memberAgentIds: ["lead"], enabled: true,
+      memberConfigs: { lead: { responsibility: "Integration" }, removed: { responsibility: "API" } },
+      acceptanceCriteria: ["All acceptance checks pass"],
+    });
+    assert.deepEqual(input.memberConfigs, { lead: { responsibility: "Integration" } });
+    assert.deepEqual(input.acceptanceCriteria, ["All acceptance checks pass"]);
+  });
   it("keeps teams in employee agent management instead of standalone admin navigation", async () => {
     const adminPageSource = await readFile(resolve("web/src/components/AdminPage.tsx"), "utf8");
     const appSource = await readFile(resolve("web/src/App.tsx"), "utf8");
