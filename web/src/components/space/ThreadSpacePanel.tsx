@@ -34,16 +34,8 @@ import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
+import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
-
-/** The chat column, measured to work out how much width the panel may still
- *  take. Read straight from the DOM rather than threaded down as a prop: the
- *  grid — not React — owns the column's real width. */
-function transcriptWidth(): number | null {
-  if (typeof document === "undefined") return null;
-  const chat = document.getElementById("chat-panel");
-  return chat ? chat.getBoundingClientRect().width : null;
-}
 
 const SPACE_TABS: readonly SpaceTab[] = ["project", "thread"];
 
@@ -103,14 +95,14 @@ export function ThreadSpacePanel({
 
   /* Ceiling measured against the live transcript — read once per gesture and
      once per key press, never per pointer move. */
-  const spaceCeiling = useCallback(() => maxSpaceWidth(width, transcriptWidth()), [width]);
+  const spaceCeiling = useCallback(() => maxSpaceWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
   // Anything that narrows the transcript while the panel is open can push it
   // under its floor — a narrowed window, but equally an expanding side rail;
   // give the room back rather than leaving the conversation squeezed. Only
   // ever shrinks — maxSpaceWidth is a ceiling, not a target.
   useChatColumnResize(useCallback(() => {
-    const max = maxSpaceWidth(width, transcriptWidth());
+    const max = maxSpaceWidth(width, chatColumnWidth(), viewportWidth());
     // Not committed: a temporary squeeze shouldn't overwrite the width the
     // user actually chose.
     if (width > max) onResize(max, false);

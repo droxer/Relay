@@ -4,10 +4,10 @@ import { describe, it } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SPACE_OVERLAY_QUERY } from "../src/lib/breakpoints.js";
-import { SIDENAV_WIDTH_MIN } from "../src/lib/sidenav.js";
-import { THREAD_LIST_WIDTH_MIN } from "../src/lib/threadList.js";
-import { SPACE_WIDTH_MIN, TRANSCRIPT_MIN_WIDTH } from "../src/lib/threadSpace.js";
+import { SHELL_FOUR_COLUMN_QUERY, SPACE_OVERLAY_QUERY } from "../src/lib/breakpoints.js";
+import { SIDENAV_VIEWPORT_SHARE, SIDENAV_WIDTH_MIN } from "../src/lib/sidenav.js";
+import { THREAD_LIST_VIEWPORT_SHARE, THREAD_LIST_WIDTH_MIN } from "../src/lib/threadList.js";
+import { SPACE_VIEWPORT_SHARE, SPACE_WIDTH_MIN, TRANSCRIPT_MIN_WIDTH } from "../src/lib/threadSpace.js";
 
 /* The shell's four columns used to be four fixed pixel widths with a single
    phone breakpoint under them. Between 821px and ~1400px that arithmetic does
@@ -94,7 +94,7 @@ describe("shell grid tracks", () => {
     };
     assert.equal(
       track("--shell-rail-track", /\.messenger-shell\s*\{[^}]*--shell-rail-track:\s*([^;]+);/),
-      "minmax(var(--thread-w-min), var(--thread-w))",
+      "minmax(var(--thread-w-min), var(--thread-w-fit))",
     );
     assert.equal(
       track("--shell-chat-track", /\.messenger-shell\s*\{[^}]*--shell-chat-track:\s*([^;]+);/),
@@ -102,11 +102,11 @@ describe("shell grid tracks", () => {
     );
     assert.equal(
       track("--shell-nav-track", /\[data-sidenav="open"\]\s*\{\s*--shell-nav-track:\s*([^;]+);/),
-      "minmax(var(--sidenav-w-min), var(--sidenav-w-open))",
+      "minmax(var(--sidenav-w-min), var(--sidenav-w-fit))",
     );
     assert.equal(
       track("--shell-space-track", /\[data-space="open"\]\s*\{[^}]*--shell-space-track:\s*([^;]+);/),
-      "minmax(var(--space-w-min), var(--space-w))",
+      "minmax(var(--space-w-min), var(--space-w-fit))",
     );
   });
 
@@ -149,8 +149,11 @@ describe("shell column tiers", () => {
     }
   });
 
-  it("refuses the three-panel split below the 1200px tier", () => {
-    const tier = responsive.slice(responsive.indexOf("@media (max-width: 1200px)"));
+  it("refuses the three-panel split below the four-column tier", () => {
+    assert.equal(SHELL_FOUR_COLUMN_QUERY, "(max-width: 1200px)");
+    const start = responsive.indexOf(`@media ${SHELL_FOUR_COLUMN_QUERY}`);
+    assert.ok(start >= 0, "responsive.css must own the shell's four-column tier on exactly the query JS reads");
+    const tier = responsive.slice(start);
     assert.match(
       tier,
       /\.messenger-shell\[data-space="open"\]\[data-threadlist="open"\]\s*\{\s*--shell-rail-track:\s*minmax\(0px, 0px\);/,
@@ -189,8 +192,90 @@ describe("shell column tiers", () => {
     // shell is back to its default two-rail arrangement.
     assert.match(
       tier,
-      /--shell-rail-track:\s*minmax\(var\(--thread-w-min\), var\(--thread-w\)\);/,
+      /--shell-rail-track:\s*minmax\(var\(--thread-w-min\), var\(--thread-w-fit\)\);/,
       "re-open the thread rail once the panel no longer occupies a track",
+    );
+  });
+});
+
+describe("adaptive preferred widths", () => {
+  /* A `minmax(floor, preferred)` track reaches its PREFERRED width before the
+     `1fr` chat track grows past its floor — that is grid's sizing order, not a
+     bug we can dodge. So a preferred width stated as a bare px number is a
+     promise the rails keep at the transcript's expense: at 1024px the rails
+     took 228 + 318 and the conversation sat on its 420px floor, and a rail
+     dragged to 480px on a wide monitor stayed 480px after the window shrank.
+
+     Each preferred width is therefore viewport-capped — `min(px, Nvw)`. Above
+     the crossover the px value wins and nothing about wide screens changes;
+     below it the rails yield to the transcript first and still stop at their
+     own floors. The dragged width needs no resize listener: `--thread-w` is
+     the dragged px value, and min() re-reads it against every viewport. */
+  const fit = (name: string, pair: string): number => {
+    const value = token(name);
+    const shape = value.match(new RegExp(`^min\\(\\s*var\\(${pair}\\)\\s*,\\s*(\\d+(?:\\.\\d+)?)vw\\s*\\)$`));
+    assert.ok(shape, `${name} must be min(var(${pair}), Nvw), got "${value}"`);
+    return Number(shape[1]) / 100;
+  };
+
+  const FOUR_COLUMN_TIER = Number(SHELL_FOUR_COLUMN_QUERY.match(/(\d+)px/)![1]);
+  /** Beyond this a viewport is wide enough that pinning a rail to px costs the
+   *  transcript nothing, so a cap that had not yet crossed over by here would
+   *  be shrinking rails on screens that have room to spare. */
+  const CROSSOVER_CEILING = 1440;
+
+  it("caps every rail's preferred width against the viewport", () => {
+    const rails: [fitToken: string, pairToken: string, preferred: string][] = [
+      ["--sidenav-w-fit", "--sidenav-w-open", "--sidenav-w-open"],
+      ["--thread-w-fit", "--thread-w", "--thread-w"],
+      ["--space-w-fit", "--space-w", "--space-w"],
+    ];
+    for (const [fitToken, pairToken, preferred] of rails) {
+      const share = fit(fitToken, pairToken);
+      const px = pxToken(preferred);
+      const crossover = px / share;
+      assert.ok(
+        crossover > FOUR_COLUMN_TIER && crossover <= CROSSOVER_CEILING,
+        `${fitToken} crosses over at ${Math.round(crossover)}px — it must reach its full ${px}px only above the ${FOUR_COLUMN_TIER}px tier and by ${CROSSOVER_CEILING}px`,
+      );
+    }
+  });
+
+  it("mirrors each viewport share in the drag ceiling JS enforces", () => {
+    // The same pairing the floors have: CSS renders min(px, Nvw) and the drag
+    // handle must stop at the same place, or the stored width climbs past a
+    // rail that cannot follow it and the handle detaches from the pointer.
+    assert.equal(fit("--sidenav-w-fit", "--sidenav-w-open"), SIDENAV_VIEWPORT_SHARE);
+    assert.equal(fit("--thread-w-fit", "--thread-w"), THREAD_LIST_VIEWPORT_SHARE);
+    assert.equal(fit("--space-w-fit", "--space-w"), SPACE_VIEWPORT_SHARE);
+  });
+
+  it("never caps a rail below the floor the grid already guarantees", () => {
+    // min() may resolve under the floor on a narrow viewport; minmax's floor
+    // wins there, so that is harmless. What must NOT happen is a cap that bites
+    // before the floor does on the widest viewport of the rail's own tier —
+    // that would be a rail narrower than its own minimum with room to spare.
+    assert.ok(fit("--thread-w-fit", "--thread-w") * CROSSOVER_CEILING >= pxToken("--thread-w-min"));
+    assert.ok(fit("--sidenav-w-fit", "--sidenav-w-open") * CROSSOVER_CEILING >= pxToken("--sidenav-w-min"));
+    assert.ok(fit("--space-w-fit", "--space-w") * CROSSOVER_CEILING >= pxToken("--space-w-min"));
+  });
+});
+
+describe("transcript measure", () => {
+  const fourColumnTier = Number(SHELL_FOUR_COLUMN_QUERY.match(/(\d+)px/)![1]);
+
+  it("grows with a wide chat column instead of leaving dead margins", () => {
+    // A hard 1200px cap spent ~290px per side as margin on a 2560px monitor.
+    // The floor of the clamp keeps every narrower screen exactly as it was.
+    const value = token("--thread-measure");
+    const shape = value.match(/^clamp\(\s*(\d+)px\s*,\s*(\d+(?:\.\d+)?)vw\s*,\s*(\d+)px\s*\)$/);
+    assert.ok(shape, `--thread-measure must be clamp(px, vw, px), got "${value}"`);
+    const [floor, share, ceiling] = [Number(shape[1]), Number(shape[2]) / 100, Number(shape[3])];
+    assert.equal(floor, 1200, "the clamp's floor is the width the cap used to be — nothing narrower may change");
+    assert.ok(ceiling > floor, "a ceiling at or below the floor is the old fixed cap with extra syntax");
+    assert.ok(
+      floor / share > fourColumnTier,
+      "the measure must not start growing until the shell has all four columns",
     );
   });
 });

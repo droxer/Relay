@@ -10,6 +10,22 @@ export type SpaceItem = {
 export const SPACE_WIDTH_DEFAULT = 384;
 export const SPACE_WIDTH_MIN = 288;
 export const SPACE_WIDTH_MAX = 720;
+/** The share of the viewport this column's preferred width is capped to —
+ *  the `Nvw` half of `--space-w-fit` in tokens/palette.css, which is what the
+ *  shell grid actually asks for. CSS caps the RENDERED width; this constant is
+ *  how the drag ceiling agrees with it, so the handle cannot run past a rail
+ *  that is not following. shellColumns.test.ts fails if either side moves
+ *  alone, exactly as it does for the floors. */
+export const SPACE_VIEWPORT_SHARE = 0.30;
+
+/** The drag ceiling's viewport half, shared by all three resizable columns:
+ *  `absoluteMax` until the viewport is narrow enough that the shell grid caps
+ *  the column at `share` of it instead. Null/unmeasurable viewport keeps the
+ *  absolute maximum, which is what every caller did before the caps existed. */
+export function viewportCeiling(absoluteMax: number, share: number, viewportWidth: number | null): number {
+  if (viewportWidth === null || !Number.isFinite(viewportWidth)) return absoluteMax;
+  return Math.min(absoluteMax, Math.round(share * viewportWidth));
+}
 
 /** The transcript column never yields below this. The shell grid gives the
  *  chat column `minmax(0, 1fr)`, so without this floor a wide panel plus a
@@ -21,11 +37,17 @@ export const TRANSCRIPT_MIN_WIDTH = 420;
  *  is the chat column's measured width at the same moment `currentWidth` was
  *  the panel's — measure both once at the start of a gesture so the ceiling
  *  doesn't drift as the grid re-lays out mid-drag. Null (nothing measurable,
- *  e.g. off-DOM) falls back to the absolute maximum. */
-export function maxSpaceWidth(currentWidth: number, transcriptWidth: number | null): number {
-  if (transcriptWidth === null || !Number.isFinite(transcriptWidth)) return SPACE_WIDTH_MAX;
+ *  e.g. off-DOM) falls back to the absolute maximum. `viewportWidth` caps the
+ *  result at the share the shell grid will render (see viewportCeiling). */
+export function maxSpaceWidth(
+  currentWidth: number,
+  transcriptWidth: number | null,
+  viewportWidth: number | null = null,
+): number {
+  const ceiling = viewportCeiling(SPACE_WIDTH_MAX, SPACE_VIEWPORT_SHARE, viewportWidth);
+  if (transcriptWidth === null || !Number.isFinite(transcriptWidth)) return Math.max(SPACE_WIDTH_MIN, ceiling);
   const room = currentWidth + (transcriptWidth - TRANSCRIPT_MIN_WIDTH);
-  return Math.min(SPACE_WIDTH_MAX, Math.max(SPACE_WIDTH_MIN, Math.round(room)));
+  return Math.max(SPACE_WIDTH_MIN, Math.min(ceiling, Math.round(room)));
 }
 
 export function clampSpaceWidth(width: number, max: number = SPACE_WIDTH_MAX): number {

@@ -11,6 +11,13 @@
      take. Grid pays the floors first, then grows the rails toward their
      preferred widths, and only then hands the rest to the chat column — so a
      narrow viewport shrinks the rails and a wide one feeds the conversation.
+     That order is also why the preferred width is the `-fit` token rather than
+     the raw pair: grid tops the rails up BEFORE the chat column grows past its
+     floor, so an uncapped px preference is a rail holding 318px on a 1024px
+     screen while the conversation sits at its minimum. The `-fit` tokens cap
+     each preference against the viewport (palette.css says why); px still wins
+     above the crossover, so nothing about a wide screen changes.
+
      The closed tracks are minmax(0px, 0px) rather than a bare 0 so the
      track-list transition below still interpolates (a track list only
      animates when both endpoints use the same sizing function per track).
@@ -18,7 +25,7 @@
      The space panel's track is always present, closed, for that same reason:
      opening it animates instead of jumping between track counts. */
   --shell-nav-track: minmax(var(--sidenav-w), var(--sidenav-w));
-  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w));
+  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w-fit));
   --shell-chat-track: minmax(var(--chat-w-min), 1fr);
   --shell-space-track: minmax(0px, 0px);
   grid-template-columns:
@@ -44,7 +51,7 @@
 /* The collapsed rail is a fixed icon column; only the expanded one is
    resizable, and only it can give width back. */
 .messenger-shell[data-sidenav="open"] {
-  --shell-nav-track: minmax(var(--sidenav-w-min), var(--sidenav-w-open));
+  --shell-nav-track: minmax(var(--sidenav-w-min), var(--sidenav-w-fit));
 }
 
 /* Space panel open: the thread rail collapses to zero by default; the user
@@ -53,11 +60,11 @@
    1200px tier, where four floors no longer fit. */
 .messenger-shell[data-space="open"] {
   --shell-rail-track: minmax(0px, 0px);
-  --shell-space-track: minmax(var(--space-w-min), var(--space-w));
+  --shell-space-track: minmax(var(--space-w-min), var(--space-w-fit));
 }
 
 .messenger-shell[data-space="open"][data-threadlist="open"] {
-  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w));
+  --shell-rail-track: minmax(var(--thread-w-min), var(--thread-w-fit));
 }
 
 /* During a drag the pointer owns the width; the track transition would

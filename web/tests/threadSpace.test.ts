@@ -12,6 +12,7 @@ import {
   defaultSpaceTab,
   isThreadSpaceEmpty,
   maxSpaceWidth,
+  SPACE_VIEWPORT_SHARE,
   resolveSelectedSpaceItem,
   resolveSpaceTab,
   SPACE_WIDTH_DEFAULT,
@@ -216,6 +217,17 @@ describe("maxSpaceWidth", () => {
   it("falls back to the absolute maximum with nothing to measure", () => {
     assert.equal(maxSpaceWidth(384, null), SPACE_WIDTH_MAX);
     assert.equal(maxSpaceWidth(384, Number.NaN), SPACE_WIDTH_MAX);
+  });
+
+  it("never lets a drag outrun the viewport cap the grid applies", () => {
+    // Same contract as the sidenav and the thread list: the shell track asks
+    // for min(--space-w, Nvw), so a drag past that cap would move a number the
+    // rendered panel does not follow.
+    const viewport = 1024;
+    assert.equal(maxSpaceWidth(SPACE_WIDTH_DEFAULT, 4000, viewport), Math.round(SPACE_VIEWPORT_SHARE * viewport));
+    assert.equal(maxSpaceWidth(SPACE_WIDTH_DEFAULT, 4000, 2560), SPACE_WIDTH_MAX);
+    assert.equal(maxSpaceWidth(SPACE_WIDTH_DEFAULT, 4000, null), SPACE_WIDTH_MAX);
+    assert.equal(maxSpaceWidth(SPACE_WIDTH_DEFAULT, 4000, 320), SPACE_WIDTH_MIN);
   });
 
   it("never reports a ceiling below the panel minimum", () => {

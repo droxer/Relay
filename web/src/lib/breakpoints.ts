@@ -35,3 +35,22 @@ export const OVERLAY_TAKEOVER_QUERY = "(max-width: 820px)";
  * an Escape key that did nothing.
  */
 export const SPACE_OVERLAY_QUERY = "(max-width: 900px)";
+
+/**
+ * Where the shell stops being able to seat all four columns.
+ *
+ * The sidenav, thread rail, transcript, and space panel need 1128px of FLOOR
+ * between them (180 + 240 + 420 + 288). Below the tier the shell drops the
+ * thread rail rather than overflow — the rail is the panel the user can put
+ * back with a toggle, so nothing becomes unreachable.
+ *
+ * 1200 rather than the bare 1128: the floor sum is the width at which every
+ * column sits at its minimum simultaneously, which is a layout that fits but
+ * does not work. The slack is also why this tier cannot move down to the 1100
+ * registry row — 1100 < 1128, and the arithmetic simply does not close there.
+ *
+ * Here for the same reason SPACE_OVERLAY_QUERY is: responsive.css and
+ * shellColumns.test.ts both read it, so the tier cannot drift away from the
+ * floors it was derived from.
+ */
+export const SHELL_FOUR_COLUMN_QUERY = "(max-width: 1200px)";
