@@ -19,8 +19,15 @@ test('services preserve argv boundaries and never contain node credentials', () 
   const linux = serviceDefinition('linux', 'node-1', command, '/tmp/log', '/usr/bin');
   assert.match(linux.content, /%%/);
   assert.match(linux.content, /\$\$\(touch x\)/);
-  assert.match(linux.content, /Restart=always/);
   assert.doesNotMatch(mac.content + linux.content, /TOKEN/);
+});
+
+test('installed services restart failures but leave deleted-node clean exits stopped', () => {
+  const command = ['/usr/bin/node', '/relay/cli.js'];
+  const mac = serviceDefinition('darwin', 'node-1', command, '/tmp/log', '/usr/bin');
+  assert.match(mac.content, /<key>KeepAlive<\/key><dict><key>SuccessfulExit<\/key><false\/><\/dict>/);
+  const linux = serviceDefinition('linux', 'node-1', command, '/tmp/log', '/usr/bin');
+  assert.match(linux.content, /^Restart=on-failure$/m);
 });
 
 import { execFile } from 'node:child_process';
@@ -44,13 +51,15 @@ test('installer verifies registration and writes a service using the real packag
     chmodSync(file, 0o755);
   }
   const registrations: Record<string, unknown>[] = [];
+  let deleted = false;
   const server = createServer((request, response) => {
     let body = '';
     request.on('data', data => { body += data; });
     request.on('end', () => {
       if (request.url === '/api/v1/daemon-node-registrations') registrations.push(JSON.parse(body));
       response.setHeader('Content-Type', 'application/json');
-      response.end('{}');
+      response.statusCode = deleted ? 410 : 200;
+      response.end(deleted ? JSON.stringify({ detail: 'Daemon node was deleted in the control panel.' }) : '{}');
     });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -81,6 +90,25 @@ test('installer verifies registration and writes a service using the real packag
     assert.doesNotMatch(content, /unrelated-state/);
     assert.match(content, /RELAY_DAEMON_STATE_DIR/);
     assert.match(readFileSync(calls, 'utf8'), /bootstrap|restart/);
+    // Reconnecting the same computer replaces its service instead of creating another.
+    await exec(process.execPath, command, {
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SERVICE_CALLS: calls, RELAY_DAEMON_NODE_TOKEN: 'fixture-token' },
+      timeout: 30_000,
+    });
+    assert.equal(readFileSync(service, 'utf8'), content);
+    assert.equal(registrations.length, 2);
+
+    // Exercise the actual CLI: 410 is an intentional shutdown (exit 0), not a crash.
+    deleted = true;
+    const stopped = await exec(process.execPath, [resolve('packages/relay-daemon/dist/cli.js'),
+      ...command.slice(1), '--sandbox', 'none', '--allow-host-agent-execution'], {
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, RELAY_DAEMON_STATE_DIR: join(home, '.relay/daemon-nodes/node-install-test') },
+      timeout: 30_000,
+    });
+    assert.match(stopped.stdout, /was deleted in the control panel/);
+    assert.doesNotMatch(stopped.stdout + stopped.stderr, /fixture-token/);
+    assert.equal(registrations.length, 3);
+
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
     rmSync(root, { recursive: true, force: true });
