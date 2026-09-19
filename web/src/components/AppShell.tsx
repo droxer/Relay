@@ -102,6 +102,7 @@ function SettingsButton({ route, href, onNavigate }: { route: AppRoute; href: st
     <Button
       variant="ghost"
       render={<a href={href} />}
+      nativeButton={false}
       className={`mobile-settings ${active ? "active" : ""}`}
       aria-label={t("nav.settings")}
       aria-current={active ? "page" : undefined}

@@ -145,7 +145,7 @@ async function install(): Promise<void> {
     console.log(`Stop: systemctl --user disable --now ${service.name}`);
   }
   console.log('Relay will start when you log in. Check the computer status in Relay.');
-  console.log(`CLI installed at ${wrapper}. Add ${binDir} to PATH for manual commands.`);
+  console.log(`CLI installed at ${wrapper}. Commands copied from Relay work without changing PATH.`);
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

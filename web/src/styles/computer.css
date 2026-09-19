@@ -498,6 +498,29 @@ button.computer-run-open:hover {
   list-style: decimal;
 }
 
+.computer-platform-support {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  font: var(--type-body);
+}
+
+.computer-platform-support > div {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+
+.computer-platform-support dt {
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.computer-platform-support dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
 .computer-install-steps li::marker {
   color: var(--ink-3);
   font-weight: 700;

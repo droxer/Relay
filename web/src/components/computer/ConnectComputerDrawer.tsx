@@ -13,6 +13,7 @@ import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { isNodeOnline } from "../../lib/adminHelpers";
 import { Alert } from "@/components/ui/alert";
+import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
 
 interface ConnectComputerDrawerProps {
   open: boolean;
@@ -114,6 +115,7 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
     >
+      <ComputerPlatformSupport />
       {result ? (
         <div className="adm-form" ref={resultRef} tabIndex={-1}>
           <p className="adm-cred-note">

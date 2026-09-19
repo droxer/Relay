@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
 import { RelayApiError, reissueComputerToken, revealComputerToken } from "../../api";
 import type { ComputerTokenResponse, ControlPanelDaemonNodeRecord } from "../../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -115,14 +116,17 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
               <p className="adm-cred-note">{t("computer.token_reissued_note")}</p>
             ) : null}
             {credentials.installCommand || credentials.daemonCommand ? (
-              <CredCopyRow
-                label={t(credentials.installCommand ? "computer.connect_setup_label" : "admin.daemon_command")}
-                hint={t(credentials.installCommand ? "computer.connect_setup_hint" : "admin.daemon_command_hint")}
-                value={credentials.installCommand ?? credentials.daemonCommand!}
-                copyLabel={t(credentials.installCommand ? "computer.connect_setup_copy" : "admin.copy_daemon_command")}
-                copied={copiedField === "command"}
-                onCopy={() => void copy("command", credentials.installCommand ?? credentials.daemonCommand!)}
-              />
+              <>
+                <ComputerPlatformSupport />
+                <CredCopyRow
+                  label={t(credentials.installCommand ? "computer.connect_setup_label" : "admin.daemon_command")}
+                  hint={t(credentials.installCommand ? "computer.connect_setup_hint" : "admin.daemon_command_hint")}
+                  value={credentials.installCommand ?? credentials.daemonCommand!}
+                  copyLabel={t(credentials.installCommand ? "computer.connect_setup_copy" : "admin.copy_daemon_command")}
+                  copied={copiedField === "command"}
+                  onCopy={() => void copy("command", credentials.installCommand ?? credentials.daemonCommand!)}
+                />
+              </>
             ) : null}
             <CredCopyRow
               label={t("admin.node_token")}

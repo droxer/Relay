@@ -42,7 +42,7 @@ def test_missing_daemon_reports_setup_before_reading_token(tmp_path):
     (tmp_path / "bash").symlink_to(shutil.which("bash"))
     result = subprocess.run(
         [shutil.which("bash"), "-c", command()], input="", text=True,
-        capture_output=True, env={**os.environ, "PATH": str(tmp_path)},
+        capture_output=True, env={**os.environ, "HOME": str(tmp_path), "PATH": str(tmp_path)},
     )
     assert result.returncode == 127
     assert "setup" in result.stderr.lower()
@@ -99,3 +99,29 @@ def test_public_domain_overrides_internal_request_for_command_and_env(monkeypatc
     assert "--backend-url https://api.example.com:8443" in generated
     assert "backend.internal" not in generated
     assert "attacker.example" not in generated
+
+
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+@pytest.mark.parametrize("prompt", [True, False])
+def test_default_install_runs_without_changing_path(tmp_path, shell, prompt):
+    executable = shutil.which(shell)
+    if not executable:
+        pytest.skip(f"{shell} is not installed")
+    home = tmp_path / "home with spaces and 'quote"
+    daemon = home / ".local" / "bin" / "relay-daemon"
+    daemon.parent.mkdir(parents=True)
+    daemon.write_text('#!/bin/bash\nprintf "%s\\n" "$PATH" "${RELAY_DAEMON_NODE_TOKEN-unset}" "$@"\n')
+    daemon.chmod(0o755)
+    result = subprocess.run(
+        [executable, "-c", command(prompt=prompt)],
+        input="test-token\n" if prompt else "", text=True,
+        capture_output=True,
+        env={**os.environ, "HOME": str(home), "PATH": "/usr/bin:/bin",
+             "RELAY_DAEMON_NODE_TOKEN": "saved-token"},
+    )
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert "/usr/bin:/bin" in lines
+    assert ("test-token" if prompt else "saved-token") in lines
+    assert "/tmp/alice's project; $(false)" in lines
+    assert "--allow-host-agent-execution" in lines

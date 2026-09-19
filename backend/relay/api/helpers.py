@@ -270,7 +270,6 @@ def daemon_start_command(
     secret the reader was shown once and no longer has would strand them.
     """
     parts = [
-        "relay-daemon",
         "--backend-url",
         backend_base_url(request),
         "--sandbox-id",
@@ -289,9 +288,11 @@ def daemon_start_command(
     # inside an explicit child shell, and keep the token out of the parent
     # shell's environment after the daemon exits.
     script = (
-        "command -v relay-daemon >/dev/null 2>&1 || { "
+        "relay_daemon=$(command -v relay-daemon) || "
+        "relay_daemon=\"$HOME/.local/bin/relay-daemon\"; "
+        "test -x \"$relay_daemon\" || { "
         "printf '%s\\n' 'relay-daemon is missing. Complete the first-time setup "
-        "in Connect this computer, then run this command in the same terminal.' >&2; "
+        "in Connect this computer, then run this command again.' >&2; "
         "exit 127; }; "
     )
     if prompt_for_token:
@@ -300,7 +301,7 @@ def daemon_start_command(
             "test -n \"$RELAY_DAEMON_NODE_TOKEN\" && "
             "export RELAY_DAEMON_NODE_TOKEN && "
         )
-    return "bash -c " + shlex.quote(script + "exec " + command)
+    return "bash -c " + shlex.quote(script + 'exec "$relay_daemon" ' + command)
 
 
 def get_session_or_404(store: Any, session_id: str) -> dict[str, Any]:
