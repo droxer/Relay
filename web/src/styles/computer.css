@@ -461,3 +461,59 @@ button.computer-run-open:hover {
     column-gap: var(--sp-3);
   }
 }
+
+/* The connection drawer follows the installation order shown in the terminal. */
+.computer-install-intro,
+.computer-install-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--surface-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+}
+
+.computer-install-intro h3,
+.computer-install-steps h3 {
+  margin: 0;
+  font: var(--type-body);
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.computer-install-intro p,
+.computer-install-status p {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body);
+}
+
+.computer-install-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  margin: 0;
+  padding-left: var(--sp-6);
+  list-style: decimal;
+}
+
+.computer-install-steps li::marker {
+  color: var(--ink-3);
+  font-weight: 700;
+}
+
+.computer-install-steps section {
+  min-width: 0;
+}
+
+.computer-install-status strong {
+  font: var(--type-body);
+  font-weight: 700;
+}
+
+.computer-install-details summary {
+  cursor: pointer;
+  color: var(--ink-3);
+  font: var(--type-body);
+}

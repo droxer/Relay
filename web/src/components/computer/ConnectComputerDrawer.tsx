@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { createLocalDeviceEnrollment } from "../../api";
-import type { CreateLocalDeviceEnrollmentResponse } from "../../types";
+import type { ControlPanelDaemonNodeRecord, CreateLocalDeviceEnrollmentResponse } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,12 @@ import { Drawer } from "@/components/ui/Drawer";
 import { CredCopyRow } from "../admin/CredCopyRow";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { isNodeOnline } from "../../lib/adminHelpers";
 import { Alert } from "@/components/ui/alert";
 
 interface ConnectComputerDrawerProps {
   open: boolean;
+  nodes?: readonly ControlPanelDaemonNodeRecord[];
   onClose: () => void;
   /** Fires once the node exists on the backend, so the caller can merge it into the roster right away. */
   onConnected: (result: CreateLocalDeviceEnrollmentResponse) => void;
@@ -31,7 +33,7 @@ interface ConnectComputerDrawerProps {
  * offering it as a choice to the person at the keyboard only invited them to
  * ask their own laptop for a sandbox it was never set up to boot.
  */
-export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectComputerDrawerProps) {
+export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }: ConnectComputerDrawerProps) {
   const { t } = useTranslation();
   const [workspacePath, setWorkspacePath] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -98,6 +100,8 @@ export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectCom
   }
 
   const token = result?.nodeToken ?? result?.sandboxToken;
+  const liveNode = result ? nodes.find((node) => node.id === result.node.id) : undefined;
+  const connected = Boolean(liveNode && isNodeOnline(liveNode));
 
   return (
     <Drawer
@@ -112,59 +116,57 @@ export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectCom
     >
       {result ? (
         <div className="adm-form" ref={resultRef} tabIndex={-1}>
-          {/* Two different questions, two different answers. Whether this was a
-              new computer or an adopted one is `reused` — token presence does
-              not answer it, because adopting a computer whose enrollment never
-              finished reissues a token. Whether there is a secret to show is
-              `token`. Reading the first off the second told someone re-running
-              a half-finished connect that they had just connected. */}
           <p className="adm-cred-note">
             {result.reused ? t("computer.connect_success_existing") : t("computer.connect_success")}
           </p>
-          {result.installCommand ? (
+          <ol className="computer-install-steps">
+            <li>
+              <section aria-labelledby="computer-install-command-title">
+                <h3 id="computer-install-command-title">{t(result.installCommand ? "computer.connect_command_step" : "admin.daemon_command")}</h3>
+                <CredCopyRow
+                  label={t(result.installCommand ? "computer.connect_setup_label" : "admin.daemon_command")}
+                  hint={t("computer.connect_setup_hint")}
+                  value={result.installCommand ?? result.daemonCommand ?? ""}
+                  copyLabel={t("computer.connect_setup_copy")}
+                  copied={copiedField === "setup"}
+                  onCopy={() => void copy("setup", result.installCommand ?? result.daemonCommand ?? "")}
+                />
+                {!result.installCommand ? <Alert>{t("computer.connect_legacy_hint")}</Alert> : null}
+              </section>
+            </li>
+            <li>
+              <section aria-labelledby="computer-install-token-title">
+                <h3 id="computer-install-token-title">{t("computer.connect_token_step")}</h3>
+                {token ? (
+                  <CredCopyRow
+                    label={t("admin.node_token")}
+                    hint={t("computer.connect_token_prompt")}
+                    value={token}
+                    copyLabel={t("admin.copy_node_token")}
+                    copied={copiedField === "node-token"}
+                    onCopy={() => void copy("node-token", token)}
+                  />
+                ) : null}
+                <p className="adm-cred-note">
+                  {token ? t("computer.connect_token_once") : t("computer.connect_token_on_device")}
+                </p>
+              </section>
+            </li>
+          </ol>
+          <div className="computer-install-status" role="status" data-connected={connected}>
+            <strong>{t(connected ? "computer.connect_online" : "computer.connect_waiting")}</strong>
+            <p>{t(connected ? "computer.connect_online_hint" : "computer.connect_waiting_hint")}</p>
+          </div>
+          <details className="computer-install-details">
+            <summary>{t("computer.connect_details")}</summary>
             <CredCopyRow
-              label={t("computer.connect_setup_label")}
-              hint={t("computer.connect_setup_hint")}
-              value={result.installCommand}
-              copyLabel={t("computer.connect_setup_copy")}
-              copied={copiedField === "setup"}
-              onCopy={() => void copy("setup", result.installCommand!)}
+              label={t("admin.node_id")}
+              value={result.node.id}
+              copyLabel={t("admin.copy_node_id")}
+              copied={copiedField === "node-id"}
+              onCopy={() => void copy("node-id", result.node.id)}
             />
-          ) : null}
-          <CredCopyRow
-            label={t("admin.node_id")}
-            hint={t("admin.node_id_hint")}
-            value={result.node.id}
-            copyLabel={t("admin.copy_node_id")}
-            copied={copiedField === "node-id"}
-            onCopy={() => void copy("node-id", result.node.id)}
-          />
-          {token ? (
-            <CredCopyRow
-              label={t("admin.node_token")}
-              value={token}
-              copyLabel={t("admin.copy_node_token")}
-              copied={copiedField === "node-token"}
-              onCopy={() => void copy("node-token", token)}
-            />
-          ) : null}
-          {!result.installCommand && result.daemonCommand ? (
-            <CredCopyRow
-              label={t("admin.daemon_command")}
-              hint={t("admin.daemon_command_hint")}
-              value={result.daemonCommand}
-              copyLabel={t("admin.copy_daemon_command")}
-              copied={copiedField === "command"}
-              onCopy={() => void copy("command", result.daemonCommand!)}
-            />
-          ) : null}
-          {/* The note is about the secret itself, so it stays keyed on
-              `token`: present means readable now and again later from the
-              computer's Token drawer; absent means the computer predates
-              token persistence and needs a reissue there. */}
-          <p className="adm-cred-note">
-            {token ? t("computer.connect_token_once") : t("computer.connect_token_on_device")}
-          </p>
+          </details>
           <div className="adm-form-actions">
             <Button size="cta" type="button" onClick={onClose}>
               {t("admin.v2.close_drawer")}
@@ -173,6 +175,11 @@ export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectCom
         </div>
       ) : (
         <form className="adm-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
+          <div className="computer-install-intro">
+            <h3>{t("computer.connect_intro_title")}</h3>
+            <p>{t("computer.connect_intro_body")}</p>
+            <p className="adm-form-hint">{t("computer.connect_requirements")}</p>
+          </div>
           <fieldset className="adm-form-section">
             <Field label={t("computer.connect_name_label")} optional={t("admin.v2.optional")}>
               <Input
@@ -187,7 +194,7 @@ export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectCom
             </Field>
             <Field
               label={t("nav.workspace_label")}
-              hint={t("admin.v2.workspace_path_hint_self")}
+              hint={t("computer.connect_workspace_hint")}
               error={fieldError ?? undefined}
               errorId="connect-computer-workspace-path-error"
             >
@@ -230,12 +237,12 @@ export function ConnectComputerDrawer({ open, onClose, onConnected }: ConnectCom
 }
 
 function isAbsolutePath(value: string): boolean {
-  return value.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(value);
+  return value.startsWith("/");
 }
 
 function workspacePathPlaceholder(): string {
-  if (typeof navigator !== "undefined" && /Win/i.test(navigator.platform)) {
-    return "C:\\Users\\alice\\project";
+  if (typeof navigator !== "undefined" && /Linux/i.test(navigator.platform)) {
+    return "/home/alice/project";
   }
   return "/Users/alice/project";
 }
