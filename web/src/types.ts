@@ -539,6 +539,8 @@ export interface CreateLocalDeviceEnrollmentResponse extends CreateControlPanelD
 /** Owner-scoped answer to a reveal or reissue: the plaintext launch token plus
     the env and command that start the daemon with it. */
 export interface ComputerTokenResponse {
+  /** Install or reconnect a personal computer without an existing daemon executable. */
+  installCommand?: string;
   nodeToken: string;
   daemonEnv: Record<string, string>;
   daemonCommand?: string;

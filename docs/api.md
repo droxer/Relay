@@ -560,3 +560,9 @@ Public non-JSON download routes at the backend origin:
 
 These routes serve build artifacts only. All enrollment and execution still
 flow through authenticated registry routes and the user's daemon.
+
+For existing personal computers, `GET /api/v1/daemon-nodes/{id}/token` and
+`POST /api/v1/daemon-nodes/{id}/token/reissue` also return `installCommand`.
+The Token drawer prefers it for installation/reconnection. BoxLite computers
+and records lacking the owner/workspace needed by the installer retain
+`daemonCommand`; neither response embeds the token in a command.

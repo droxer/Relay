@@ -4362,6 +4362,8 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
         for response in responses:
             assert response.status_code in (200, 201)
             body = response.json()
+            assert body["installCommand"] == install
+            assert body["nodeToken"] not in body["installCommand"]
             assert body["daemonEnv"]["RELAY_BACKEND_URL"] == "https://api.example.com"
             assert "--backend-url https://api.example.com" in body["daemonCommand"]
             assert "backend.internal" not in body["daemonCommand"]

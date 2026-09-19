@@ -114,23 +114,24 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
             {reissued ? (
               <p className="adm-cred-note">{t("computer.token_reissued_note")}</p>
             ) : null}
+            {credentials.installCommand || credentials.daemonCommand ? (
+              <CredCopyRow
+                label={t(credentials.installCommand ? "computer.connect_setup_label" : "admin.daemon_command")}
+                hint={t(credentials.installCommand ? "computer.connect_setup_hint" : "admin.daemon_command_hint")}
+                value={credentials.installCommand ?? credentials.daemonCommand!}
+                copyLabel={t(credentials.installCommand ? "computer.connect_setup_copy" : "admin.copy_daemon_command")}
+                copied={copiedField === "command"}
+                onCopy={() => void copy("command", credentials.installCommand ?? credentials.daemonCommand!)}
+              />
+            ) : null}
             <CredCopyRow
               label={t("admin.node_token")}
+              hint={credentials.installCommand ? t("computer.connect_token_prompt") : undefined}
               value={credentials.nodeToken}
               copyLabel={t("admin.copy_node_token")}
               copied={copiedField === "node-token"}
               onCopy={() => void copy("node-token", credentials.nodeToken)}
             />
-            {credentials.daemonCommand ? (
-              <CredCopyRow
-                label={t("admin.daemon_command")}
-                hint={t("admin.daemon_command_hint")}
-                value={credentials.daemonCommand}
-                copyLabel={t("admin.copy_daemon_command")}
-                copied={copiedField === "command"}
-                onCopy={() => void copy("command", credentials.daemonCommand!)}
-              />
-            ) : null}
           </>
         ) : (
           <p className="adm-cred-note">
