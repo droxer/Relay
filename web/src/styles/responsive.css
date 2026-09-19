@@ -263,7 +263,12 @@
      section name the topbar already carries.) */
   .messenger-shell[data-route="agents"] .page-header,
   .messenger-shell[data-route="teams"] .page-header,
-  .messenger-shell[data-route="projects"] .page-header {
+  .messenger-shell[data-route="projects"] .page-header,
+  /* /routines is a record route too now — but only in its detail pane. The
+     board's header beside it names the state section, which the topbar's
+     "Routines" plus the state select already cover, so that one stays
+     hidden. */
+  .routine-detail .page-header {
     min-height: 0;
     justify-content: space-between;
     align-items: flex-start;
@@ -272,7 +277,8 @@
 
   .messenger-shell[data-route="agents"] .page-header-lead,
   .messenger-shell[data-route="teams"] .page-header-lead,
-  .messenger-shell[data-route="projects"] .page-header-lead {
+  .messenger-shell[data-route="projects"] .page-header-lead,
+  .routine-detail .page-header-lead {
     position: static;
     width: auto;
     height: auto;

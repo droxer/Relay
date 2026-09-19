@@ -49,8 +49,10 @@ describe("Task assignment discoverability", () => {
     assert.match(rosterStyles, /\.roster-tab\[aria-selected="true"\]/);
   });
 
-  it("lets the drawer open focused on the assignment picker", async () => {
-    const drawerSource = await readFile(resolve("web/src/components/task-board/TaskDrawer.tsx"), "utf8");
+  it("lets a record surface open focused on the assignment picker", async () => {
+    // The fields, and the focus intent they honour, live in the shared form
+    // both the drawer and the routine detail pane mount.
+    const drawerSource = await readFile(resolve("web/src/components/task-board/TaskBoardForm.tsx"), "utf8");
 
     assert.match(drawerSource, /initialFocus\?: "title" \| "assignment"/);
     assert.match(drawerSource, /data-modal-initial-focus=\{initialFocus === "title" \? "" : undefined\}/);
@@ -71,8 +73,11 @@ describe("Task assignment discoverability", () => {
       readFile(resolve("web/src/components/task-board/RoutineRecords.tsx"), "utf8"),
     ]);
 
+    assert.match(backlogSource, /onAssign: \(\) => assignTask\(task\)/);
+    /* The routine board has no drawer to open: quick-assign selects the
+       record and the pane mounts with the picker focused. */
+    assert.match(routinesSource, /onAssign: \(\) => \{\s*setAssignmentFocus\(true\);\s*onSelectRoutine\(task\.id\);/);
     for (const source of [backlogSource, routinesSource]) {
-      assert.match(source, /onAssign: \(\) => assignTask\(task\)/);
       assert.match(source, /setAssignmentFocus\(true\)/);
       assert.match(source, /initialFocus=\{assignmentFocus \? "assignment" : "title"\}/);
     }

@@ -118,6 +118,13 @@ export function useAppRouter({
     void syncAppStateToUrl(state, replace, () => setLocationState(state));
   }, []);
 
+  /* The routine detail pane is addressed like every other record surface:
+     the id is in the path, so back/forward and a pasted link land on the same
+     routine. Null closes the pane and returns to the bare list. */
+  const navigateToRoutine = useCallback((routineId: string | null) => {
+    navigateToAppState({ route: "routine", mobileView: "chat", sessionId: null, routineId });
+  }, [navigateToAppState]);
+
   const navigateToAgent = useCallback((agentId: string | null) => {
     navigateToAppState({ route: "agents", mobileView: "chat", sessionId: null, agentId });
   }, [navigateToAppState]);
@@ -153,6 +160,7 @@ export function useAppRouter({
     routedSessionId: locationState.sessionId,
     projectId: locationState.projectId ?? null,
     agentId: locationState.agentId ?? null,
+    routineId: locationState.routineId ?? null,
     teamWorkspaceId: locationState.teamWorkspaceId ?? null,
     settingsSection: locationState.settingsSection ?? DEFAULT_SETTINGS_SECTION,
     adminSection: locationState.adminSection ?? DEFAULT_ADMIN_SECTION,
@@ -163,6 +171,7 @@ export function useAppRouter({
     navigateToMobileView,
     hrefForSideNavRoute,
     syncThreadUrl,
+    navigateToRoutine,
     navigateToAgent,
     navigateToSettings,
     navigateToAdminSection,

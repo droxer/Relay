@@ -12,6 +12,7 @@ const routineChrome = source("components/task-board/RoutineChrome.tsx");
 const backlogRecords = source("components/task-board/BacklogRecords.tsx");
 const routineRecords = source("components/task-board/RoutineRecords.tsx");
 const taskDrawer = source("components/task-board/TaskDrawer.tsx");
+const routineDetail = source("components/task-board/RoutineDetail.tsx");
 const taskDrawerStyles = source("styles/task-drawer.css");
 const listSortStyles = source("styles/list-sort.css");
 
@@ -31,8 +32,12 @@ describe("task board review regressions", () => {
   });
 
   it("offers the same exact routine states that records display", () => {
-    assert.match(routineChrome, /ROUTINE_STATE_ORDER\.map\(\(state\) =>/);
-    assert.doesNotMatch(routineChrome, /value: "enabled"|value: "disabled"/);
+    // The state control moved to the roster rail with the rest of the rail's
+    // vocabulary; it still enumerates the derived states, never the raw
+    // enabled/disabled flag the records stopped showing.
+    const routineRail = source("components/task-board/RoutineRosterRail.tsx");
+    assert.match(routineRail, /ROUTINE_STATE_ORDER\.map\(\(value\) =>/);
+    assert.doesNotMatch(routineRail, /value: "enabled"|value: "disabled"/);
   });
 
   it("gives the routine board one view and one sort grammar", () => {
@@ -57,9 +62,12 @@ describe("task board review regressions", () => {
     assert.match(routineRecords, /loading=\{starting\}/);
   });
 
-  it("uses the compact reference as drawer identity on both boards", () => {
+  it("uses the compact reference as record identity on both boards", () => {
+    // The backlog names its record in the drawer's own subtitle; the routine
+    // board prints the same ref as the first fact of its RecordBand.
     assert.match(backlogPage, /taskRef\(form\.id\)/);
-    assert.match(routinesPage, /taskRef\(form\.id\)/);
     assert.match(taskDrawer, /subtitleMono=\{Boolean\(form\.id\)\}/);
+    assert.match(routineDetail, /taskRef\(task\.id\)/);
+    assert.match(routineDetail, /technical: true/);
   });
 });

@@ -33,12 +33,25 @@ const WORK_ROUTES = new Map(Object.entries(WORK_PATHS).map(([route, path]) => [p
 
 export const APP_NAVIGATION_EVENT = "relay:navigation";
 
+/**
+ * The routine path segment that means "a routine being drafted" rather than
+ * one that exists — `/routines/new`, the same spelling `/threads/new` uses.
+ *
+ * A draft needs an address because the detail pane is where a routine is
+ * created now: without one, a reload mid-draft would land on the list and the
+ * form would be a modal in everything but name. Task ids are prefixed
+ * (`task_…`), so this can never collide with a real one.
+ */
+export const NEW_ROUTINE_ID = "new";
+
 export type AppLocationState = {
   route: AppRoute;
   mobileView: MobileView;
   sessionId: string | null;
   projectId?: string | null;
   agentId?: string | null;
+  /** The routine open in the detail pane, or NEW_ROUTINE_ID for a draft. */
+  routineId?: string | null;
   teamWorkspaceId?: string | null;
   settingsSection?: SettingsSection | null;
   adminSection?: AdminSection | null;
@@ -85,6 +98,9 @@ export function parseAppPath(pathname: string, _search = ""): AppLocationState {
   if (head === "projects" && second && rest[0] === "threads" && rest[1] && rest.length === 2) {
     return { route: "projects", ...base, projectId: decodeSegment(second), sessionId: decodeSegment(rest[1]) };
   }
+  if (head === "routines" && second && rest.length === 0) {
+    return { route: "routine", ...base, routineId: decodeSegment(second) };
+  }
   if (head === "agents" && second && rest.length === 0) {
     return { route: "agents", ...base, agentId: decodeSegment(second) };
   }
@@ -114,6 +130,7 @@ export function pathForAppState({
   sessionId,
   projectId,
   agentId,
+  routineId,
   teamWorkspaceId,
   composingNew,
   login,
@@ -123,6 +140,7 @@ export function pathForAppState({
 }: AppLocationState): string {
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
+  if (route === "routine" && routineId) return `/routines/${encodeURIComponent(routineId)}`;
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
   if (route === "teams" && teamWorkspaceId) return `/teams/${encodeURIComponent(teamWorkspaceId)}`;
   if (route === "settings") {
@@ -326,6 +344,15 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
       copyParam(source, target, "path");
       copyParam(source, target, "item");
     }
+  } else if (head === "routines" && entityId && rest.length === 0) {
+    /* The roster rail renders BESIDE the detail pane, so the filters it
+       writes have to survive on a record's own path — otherwise selecting a
+       routine would clear the search that found it. The table's sort and page
+       ride along for the same reason: closing the record returns to the list
+       the reader left, not to page 1 unsorted. */
+    copySortParams("routines", source, target);
+    copyPageParams("routines", source, target);
+    copyFilterParams("routines", source, target);
   } else if (head === "agents" && !entityId) {
     copyParam(source, target, "q");
     const availability = source.get("availability");

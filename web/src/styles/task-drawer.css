@@ -492,21 +492,23 @@
      toolbar spanning the row: a compact segmented view-toggle sits on the left,
      refresh + create stay clustered at the right, with breathing room between. */
   .messenger-shell[data-route="backlog"] .page-header-actions,
-  .messenger-shell[data-route="routine"] .page-header-actions {
+  /* The BOARD's header only. /routines also renders a record header in its
+     detail pane, and stretching its actions there squeezed the routine's own
+     title to one pixel — a title pushed off screen by its two icon buttons. */
+  .routine-board > .page-header .page-header-actions {
     flex: 1 1 auto;
     flex-wrap: nowrap;
   }
 
   /* Toggle keeps its natural width; the auto margin pushes refresh + create
-     to the right edge. */
-  .messenger-shell[data-route="backlog"] .backlog-view-toggle,
-  .messenger-shell[data-route="routine"] .backlog-view-toggle {
+     to the right edge. The backlog is the only board with a view toggle —
+     the routine board is a list beside a record now. */
+  .messenger-shell[data-route="backlog"] .backlog-view-toggle {
     margin-right: auto;
   }
 
   /* Slightly larger tap targets than the desktop 30×28. */
-  .messenger-shell[data-route="backlog"] .backlog-view-btn,
-  .messenger-shell[data-route="routine"] .backlog-view-btn {
+  .messenger-shell[data-route="backlog"] .backlog-view-btn {
     width: 40px;
     height: var(--control-h-xs);
   }

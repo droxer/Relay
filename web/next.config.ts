@@ -13,6 +13,7 @@ const CLIENT_ROUTES = [
   "/threads/:path*",
   "/backlog",
   "/routines",
+  "/routines/:path*",
   "/agents",
   "/agents/:path*",
   "/teams",

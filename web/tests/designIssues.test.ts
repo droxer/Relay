@@ -141,7 +141,7 @@ describe("reviewed design regressions", () => {
   });
 
   it("associates reviewed select triggers with their visible labels", () => {
-    const taskDrawer = readWeb("src/components/task-board/TaskDrawer.tsx");
+    const taskDrawer = readWeb("src/components/task-board/TaskBoardForm.tsx");
     const teamDrawer = readWeb("src/components/admin/TeamDrawer.tsx");
     const employeeDrawer = readWeb("src/components/admin/AddEmployeeDrawer.tsx");
 

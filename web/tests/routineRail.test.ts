@@ -6,59 +6,65 @@ import { describe, it } from "node:test";
 const read = (path: string) => readFile(resolve("web", path), "utf8");
 
 /**
- * The routine board's section rail.
+ * The routine board's rail.
  *
- * Schedule health used to do three jobs on this page at once — a select in
- * the filter bar, the bands the list grouped on, and a sort column — so the
- * same dimension was answered in three different grammars. The rail is now
- * the one control for it: `sec-shell` beside the board, the same
- * rail-and-content shape the control panel and personal settings use.
+ * It listed schedule states as sections once — because schedule health used
+ * to be answered three ways on this page at once, and a rail of states
+ * collapsed two of them. But a section is the wrong noun here: a routine IS
+ * the thing being read. So the rail lists the routines themselves, each
+ * carrying its state as a mark, and selecting one opens it in the pane
+ * beside the rail.
  */
-describe("routine section rail", () => {
-  it("is the shared rail-and-content shell, not a private layout", async () => {
-    const source = await read("src/components/RoutinesPage.tsx");
+describe("routine roster rail", () => {
+  it("is a roster of records, not a nav of sections", async () => {
+    const page = await read("src/components/RoutinesPage.tsx");
+    const rail = await read("src/components/task-board/RoutineRosterRail.tsx");
 
-    assert.match(source, /className="routine-page sec-shell"/);
-    assert.match(source, /className="sec-rail"/);
-    assert.match(source, /className="sec-main"/);
-    assert.match(source, /<RoutineStateNav\b/);
+    assert.match(page, /<RoutineRosterRail\b/);
+    assert.doesNotMatch(page, /RoutineStateNav|sec-shell|sec-rail|sec-main/);
+    // One row per routine, in the row contract every other rail uses.
+    assert.match(rail, /className="routine-roster-row rail-row"/);
+    assert.match(rail, /routines\.map\(\(routine\) =>/);
+    // …and the nav it replaced is gone from the board's chrome entirely.
+    const chrome = await read("src/components/task-board/RoutineChrome.tsx");
+    assert.doesNotMatch(chrome, /SectionNav|RoutineStateNav/);
   });
 
-  it("drives the rail off the URL's own state filter", async () => {
+  it("states each routine's schedule health on its own row", async () => {
+    const rail = await read("src/components/task-board/RoutineRosterRail.tsx");
+
+    // A mark plus a word — the shape alone reaches nobody using a reader.
+    assert.match(rail, /ROUTINE_STATE_SHAPE\[state\]/);
+    assert.match(rail, /className="sr-only">\{t\(`routine\.states\.\$\{state\}`\)\}/);
+    // Derived once for the whole board and handed down, never per row.
+    assert.match(rail, /stateOf: \(routine: RelayTaskListItem\) => RoutineState/);
+  });
+
+  it("drives the rail off the URL's own filters", async () => {
     const page = await read("src/components/RoutinesPage.tsx");
     const chrome = await read("src/components/task-board/RoutineChrome.tsx");
 
-    // No second source of truth: the rail writes `filters.state`, the param
-    // `?state=` already registered in LIST_FILTER_PARAMS.routines.
-    assert.match(page, /value=\{filters\.state\}/);
+    // No second source of truth: the rail writes `filters.state` and
+    // `filters.query`, the `?state=`/`?q=` params already registered in
+    // LIST_FILTER_PARAMS.routines.
+    assert.match(page, /state=\{filters\.state\}/);
+    assert.match(page, /query=\{filters\.query\}/);
     assert.match(page, /setFilters\(\{ \.\.\.filters, state \}\)/);
     assert.doesNotMatch(page, /useState<RoutineState/);
-    // …and the select that used to own it is gone from the filter bar.
+    // One search box and one state control on the surface: the table's bar
+    // below carries neither.
     assert.doesNotMatch(chrome, /routine-state-filter/);
-    assert.doesNotMatch(chrome, /filters\.state !== "all"/);
+    assert.doesNotMatch(chrome, /onQueryChange/);
   });
 
-  it("names every section, including the ones holding nothing", async () => {
-    const chrome = await read("src/components/task-board/RoutineChrome.tsx");
+  it("offers every state to narrow by, including the empty ones", async () => {
+    const rail = await read("src/components/task-board/RoutineRosterRail.tsx");
 
-    assert.match(chrome, /ROUTINE_STATE_ORDER\.map/);
-    // An "all" section, and counts that survive a zero — a rail that drops
-    // its empty sections reshuffles under the pointer as you type.
-    assert.match(chrome, /id: "all"/);
-    assert.match(chrome, /counts\[state\] \?\? 0/);
-    assert.doesNotMatch(chrome, /counts\[state\] > 0/);
+    assert.match(rail, /ROUTINE_STATE_ORDER\.map/);
+    assert.match(rail, /value: "all" as const/);
   });
 
-  it("counts against every filter except the one the rail owns", async () => {
-    const page = await read("src/components/RoutinesPage.tsx");
-
-    // Otherwise "Overdue 3" would be computed from a list already narrowed to
-    // overdue, and every other section would read 0.
-    assert.match(page, /filterRoutineTasks\(tasks, \{ \.\.\.filters, state: "all" \}\)/);
-    assert.match(page, /routineStateCounts\(/);
-  });
-
-  it("leaves the board flat — the rail is the grouping now", async () => {
+  it("leaves the table flat — the rail is the index now", async () => {
     const page = await read("src/components/RoutinesPage.tsx");
 
     assert.doesNotMatch(page, /ListGroup/);
@@ -68,16 +74,17 @@ describe("routine section rail", () => {
     assert.match(page, /const \{ page, setPage \} = usePagination\(\)/);
   });
 
-  it("never repeats the selected section on the records under it", async () => {
+  it("selects into the path, so a routine is a link", async () => {
     const page = await read("src/components/RoutinesPage.tsx");
-    const records = await read("src/components/task-board/RoutineRecords.tsx");
+    const route = await read("src/lib/appRoute.ts");
 
-    // Same rule the rows follow under a band: the thing above has said it, so
-    // the record does not say it again. A row states schedule health as the
-    // dot in its state cell — a mark, not a second copy of the section word.
-    assert.doesNotMatch(page, /showState/);
-    assert.doesNotMatch(records, /<RoutineStateBadge state=\{state\} \/>/);
-    assert.match(records, /backlog-row-dot-cell[\s\S]{0,160}ROUTINE_STATE_SHAPE\[state\]/);
+    assert.match(page, /onSelect=\{openRoutine\}/);
+    assert.match(page, /onSelectRoutine\(NEW_ROUTINE_ID\)/);
+    assert.match(route, /head === "routines" && second && rest\.length === 0/);
+    assert.match(route, /route === "routine" && routineId/);
+    // The rail stays beside the record, so its filters survive the record's
+    // own path — otherwise selecting would clear the search that found it.
+    assert.match(route, /head === "routines" && entityId && rest\.length === 0/);
   });
 
   it("keeps the rail out of the shell's own grid", async () => {

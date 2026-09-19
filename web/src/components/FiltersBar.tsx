@@ -16,10 +16,15 @@ import { ICON } from "./icons";
 
 interface FiltersBarProps {
   ariaLabel: string;
+  /** Also the storage key for the bar's expanded state, so it is required
+   *  even on a bar that has no search box of its own. */
   searchName: string;
   searchLabel: string;
-  query: string;
-  onQueryChange: (value: string) => void;
+  /** Omit BOTH to drop the search box: the routine board's bar sits under a
+   *  rail that already owns search, and two search boxes on one surface are
+   *  two controls for one question. */
+  query?: string;
+  onQueryChange?: (value: string) => void;
   activeCount: number;
   onClear: () => void;
   /** Page-specific filter controls, revealed when the bar is expanded. */
@@ -58,16 +63,18 @@ export function FiltersBar({
   return (
     <div className="backlog-filter-bar" role="group" aria-label={ariaLabel}>
       <div className="backlog-filter-primary">
-        <SearchInput
-          className="backlog-filter-search-wrap"
-          inputClassName="backlog-filter-search"
-          iconSize={ICON.sm}
-          label={searchLabel}
-          name={searchName}
-          value={query}
-          placeholder={searchLabel}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
+        {onQueryChange ? (
+          <SearchInput
+            className="backlog-filter-search-wrap"
+            inputClassName="backlog-filter-search"
+            iconSize={ICON.sm}
+            label={searchLabel}
+            name={searchName}
+            value={query ?? ""}
+            placeholder={searchLabel}
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+        ) : null}
         <div className="backlog-filter-actions">
           {trailing}
           <Button

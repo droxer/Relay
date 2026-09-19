@@ -1,16 +1,15 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { ActionStart, ICON, NavAgents } from "../icons";
 import { PriorityBadge } from "../PriorityBadge";
 import { StateMark } from "../StateMark";
-import { ROUTINE_STATE_SHAPE, RoutineStateBadge } from "../RoutineStateBadge";
+import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { formatNextRunDate } from "./RoutineChrome";
 import { routineDueTone, type RoutineState } from "../../lib/routine";
-import { hrefForRoute } from "../../lib/appRoute";
 import { taskRef } from "../../lib/taskRef";
 import { TaskDueCell } from "./TaskDueCell";
 import { SortableColumnHeader } from "@/components/ui/SortableColumnHeader";
@@ -19,16 +18,12 @@ import type { ReactNode } from "react";
 
 /** The columns the routine list can order by. Mirrors `routineSortColumns`. */
 export type RoutineSortKey = "title" | "priority" | "assignee" | "nextRun";
-import type { RelaySession, RelayTaskListItem } from "../../types";
+import type { RelayTaskListItem } from "../../types";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 
-/* One routine, drawn two ways: the list row and the meta header inside its
-   drawer. The row is the same record grammar the backlog row is — keep their
-   badge order and action group in step.
-
-   The drawer is the exception on default values: it passes `always` to both
-   badges, because a record being inspected has to show the value it holds
-   even when that value is the default one a scanning surface omits. */
+/* One routine as a list row, plus the two dispatch buttons the row and the
+   detail pane share. The row is the same record grammar the backlog row is —
+   keep their badge order and action group in step. */
 
 export function RoutineStartButton({
   disabled,
@@ -205,45 +200,5 @@ export function RoutineRow({
         </div>
       </TableCell>
     </TableRow>
-  );
-}
-
-export function RoutineDrawerMeta({
-  task,
-  state,
-  session,
-  onOpenThread,
-}: {
-  task: RelayTaskListItem;
-  state: RoutineState;
-  session?: RelaySession;
-  onOpenThread: (sessionId: string) => void;
-}) {
-  const { t } = useTranslation();
-  const lastActivity = task.lastActivity;
-
-  return (
-    <section className="task-drawer-meta" aria-label={t("routine.meta")}>
-      <div className="task-drawer-meta-row">
-        <RoutineStateBadge state={state} always />
-        {session ? (
-          <a
-            data-slot="link-button"
-            href={hrefForRoute("main", session.id)}
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
-            onClick={(event) => {
-              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-              event.preventDefault();
-              onOpenThread(session.id);
-            }}
-          >
-            {t("backlog.open_thread")}
-          </a>
-        ) : null}
-      </div>
-      <p className="task-drawer-meta-activity">
-        {lastActivity ? lastActivity.message : t("routine.no_activity")}
-      </p>
-    </section>
   );
 }

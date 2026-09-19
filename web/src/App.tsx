@@ -253,6 +253,7 @@ export function App() {
     routedSessionId,
     projectId: routedProjectId,
     agentId,
+    routineId,
     teamWorkspaceId,
     settingsSection,
     adminSection,
@@ -262,6 +263,7 @@ export function App() {
     navigateToMobileView,
     hrefForSideNavRoute,
     syncThreadUrl,
+    navigateToRoutine,
     navigateToAgent,
     navigateToSettings,
     navigateToAdminSection,
@@ -401,8 +403,9 @@ export function App() {
     if (route === "projects" && showProjectOverview) return "#project-detail-panel";
     if (route === "main" || route === "projects") return mobileView === "threads" ? "#thread-panel" : "#chat-panel";
     if (route === "agents" && agentId) return "#agent-detail-panel";
+    if (route === "routine" && routineId) return "#routine-detail-panel";
     return `#${WORK_ROUTE_SKIP_IDS[route]}`;
-  }, [agentId, route, mobileView, showProjectOverview]);
+  }, [agentId, routineId, route, mobileView, showProjectOverview]);
 
   const awaitingDecision = useMemo(() => isAwaitingFeedbackDecision(activeSession), [activeSession]);
 
@@ -681,7 +684,7 @@ export function App() {
       theme={preferences.theme}
       onThemeChange={preferences.setTheme}
     >
-      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${teamWorkspaceId}`}>
+      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${routineId}:${teamWorkspaceId}`}>
       <Suspense fallback={<RouteFallback />}>
         {notFound ? (
           <section className="route-loading" role="status">
@@ -711,6 +714,8 @@ export function App() {
             nodes={visibleNodes}
             currentUser={user}
             isRefreshing={isRefreshing}
+            routineId={routineId}
+            onSelectRoutine={navigateToRoutine}
             onRefresh={() => refresh()}
             onOpenThread={openThread}
           />

@@ -23,6 +23,9 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/projects/prj%2F123/new"), { route: "projects", mobileView: "chat", sessionId: null, projectId: "prj/123", composingNew: true });
     assert.deepEqual(parseAppPath("/projects/prj%2F123/threads/ses%2F123"), { route: "projects", mobileView: "chat", sessionId: "ses/123", projectId: "prj/123" });
     assert.deepEqual(parseAppPath("/agents/agent%201"), { route: "agents", mobileView: "chat", sessionId: null, agentId: "agent 1" });
+    assert.deepEqual(parseAppPath("/routines/task_r1"), { route: "routine", mobileView: "chat", sessionId: null, routineId: "task_r1" });
+    // A routine being drafted has an address too, so a reload keeps the form.
+    assert.deepEqual(parseAppPath("/routines/new"), { route: "routine", mobileView: "chat", sessionId: null, routineId: "new" });
     assert.deepEqual(parseAppPath("/teams/team%201"), { route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: "team 1" });
 
     const routes = {
@@ -121,6 +124,8 @@ describe("app pathname routes", () => {
     assert.equal(pathForAppState({ route: "projects", mobileView: "chat", sessionId: null, projectId: "prj/123", composingNew: true }), "/projects/prj%2F123/new");
     assert.equal(pathForAppState({ route: "projects", mobileView: "chat", sessionId: "ses/123", projectId: "prj/123" }), "/projects/prj%2F123/threads/ses%2F123");
     assert.equal(pathForAppState({ route: "agents", mobileView: "chat", sessionId: null, agentId: "agent 1" }), "/agents/agent%201");
+    assert.equal(pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, routineId: "task_r1" }), "/routines/task_r1");
+    assert.equal(pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, routineId: null }), "/routines");
     assert.equal(pathForAppState({ route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: "team 1" }), "/teams/team%201");
     assert.equal(hrefForRoute("main", "ses_123"), "/threads/ses_123");
     assert.equal(hrefForRoute("projects"), "/projects");
@@ -158,6 +163,14 @@ describe("app pathname routes", () => {
     assert.equal(
       canonicalBrowserUrl("/teams/team-1", "?tab=profile&artifact=art-1&dialog=create"),
       "/teams/team-1?dialog=create",
+    );
+    /* The roster rail renders beside an open routine, so the filters it owns
+       survive on the record's own path — selecting a routine must not clear
+       the search that found it — and so do the table's sort and page, so
+       closing the record returns to the list the reader left. */
+    assert.equal(
+      canonicalBrowserUrl("/routines/task_r1", "?q=digest&state=overdue&sort=title&page=2&tab=workspace"),
+      "/routines/task_r1?sort=title&page=2&q=digest&state=overdue",
     );
     assert.equal(
       canonicalBrowserUrl("/teams/team-1", "?tab=workspace&scope=shared&path=src&item=file%3Aa.ts"),

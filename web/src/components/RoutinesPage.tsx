@@ -1,8 +1,6 @@
 "use client";
 
-import { TaskRecoveryPanel } from "./ExecutionRecoveryPanel";
-
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
@@ -14,7 +12,7 @@ import { type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type
 import { agentReadyForTask } from "../lib/backlog";
 import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
 import { useEmployeeNames } from "../hooks/useEmployeeNames";
-import { filterRoutineTasks, latestRoutineSession, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
+import { filterRoutineTasks, latestRoutineSession, routineSortColumns, routineState, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
 import { usePagination } from "../hooks/usePagination";
@@ -22,19 +20,15 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyRoutineForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
-import { TaskDrawer } from "./task-board/TaskDrawer";
 import {
   activeRoutineFilterCount,
   initialRoutineFilters,
   ROUTINE_FILTER_SPEC,
   RoutineFiltersBar,
-  RoutineStateNav,
 } from "./task-board/RoutineChrome";
-import {
-  RoutineDrawerMeta,
-  RoutineRow,
-  RoutineRowsHead,
-} from "./task-board/RoutineRecords";
+import { RoutineRosterRail } from "./task-board/RoutineRosterRail";
+import { RoutineDetail } from "./task-board/RoutineDetail";
+import { RoutineRow, RoutineRowsHead } from "./task-board/RoutineRecords";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
 import {
   EMPTY_TASK_SELECTION,
@@ -49,7 +43,7 @@ import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { Table } from "@/components/ui/table";
-import { taskRef } from "../lib/taskRef";
+import { NEW_ROUTINE_ID } from "../lib/appRoute";
 
 interface RoutinesPageProps {
   tasks: RelayTaskListItem[];
@@ -57,11 +51,25 @@ interface RoutinesPageProps {
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
   isRefreshing: boolean;
+  /** The routine open in the detail pane, from the path. NEW_ROUTINE_ID drafts one. */
+  routineId: string | null;
+  onSelectRoutine: (routineId: string | null) => void;
   onRefresh: () => Promise<void>;
   onOpenThread: (sessionId: string) => void;
 }
 
-export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+/**
+ * The routine board: a roster rail of routines beside the record that is open.
+ *
+ * The rail used to be a SectionNav of schedule states, with every routine in a
+ * table and a drawer over it for editing — three surfaces for one record. Now
+ * the rail lists the routines themselves (state riding on each row as its
+ * mark), the pane holds whichever one is selected, and the table is what the
+ * pane shows when nothing is: the place to sort, batch, and dispatch across
+ * the whole set. Selection lives in the path (`/routines/<id>`), like every
+ * other record surface in the app.
+ */
+export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing, routineId, onSelectRoutine, onRefresh, onOpenThread }: RoutinesPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -78,7 +86,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   const [filters, setFilters] = useUrlFilters(initialRoutineFilters, ROUTINE_FILTER_SPEC);
   const [form, setForm] = useState<RoutineTaskFormState | null>(null);
   const [formBaseline, setFormBaseline] = useState<RoutineTaskFormState | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [assignmentFocus, setAssignmentFocus] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -86,11 +93,19 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   const [deletingSelection, setDeletingSelection] = useState(false);
   const startInFlight = useRef<string | null>(null);
   const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
-  const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
+  /* Registers a navigation guard, so leaving a dirty record — a rail row, the
+     side nav, the back button — asks first. The pane has no close button to
+     hang that question off, which is exactly why the guard is global. */
+  useUnsavedChangesGuard(formDirty && !saving && !deleting);
+  const drafting = routineId === NEW_ROUTINE_ID;
   const routineTasks = useMemo(() => tasks.filter((task) => task.isRoutine), [tasks]);
   // Derived once for the whole board: `routineState` then costs a Set lookup
   // per row instead of a full task scan.
   const runningIds = useMemo(() => runningRoutineIds(tasks), [tasks]);
+  const stateOf = useMemo(
+    () => (task: RelayTaskListItem) => routineState(task, runningIds),
+    [runningIds],
+  );
   /* Unsorted, `applySort` is the identity and `filterRoutineTasks`' own order
      (enabled first, then next run) stands — schedule health is the rail's
      dimension, not a column, so no comparator reads it. */
@@ -104,21 +119,10 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     () => applySort(filterRoutineTasks(tasks, filters), sortColumns, sort),
     [filters, sort, sortColumns, tasks],
   );
-  /* The rail's numbers answer "how many of what I am looking at are
-     overdue", so they are counted against every filter EXCEPT the one the
-     rail itself owns. Counting the already-narrowed list would put the whole
-     board in the selected section and a 0 beside every other one. */
-  const sectionCounts = useMemo(
-    () => routineStateCounts(filterRoutineTasks(tasks, { ...filters, state: "all" }), runningIds),
-    [filters, runningIds, tasks],
-  );
-  const sectionTotal = useMemo(
-    () => Object.values(sectionCounts).reduce((sum, count) => sum + count, 0),
-    [sectionCounts],
-  );
-  /* One flat collection on one cursor. Schedule health used to band this
-     list — and page each band off its own cursor — but the rail beside it
-     names the section now, so a band would only repeat it. */
+  /* The rail and the table read the same filtered set: the rail's search and
+     state select ARE this board's filters, so a routine the table cannot show
+     is not reachable from the rail either. The rail is unpaged — a rail row is
+     cheap, and a cursor there would hide records the table counts. */
   const pagedTasks = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
   // Selection follows what is on screen, so "select all" then Delete cannot
   // reach a routine on a page the reader never saw.
@@ -131,32 +135,18 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   // a record the board is no longer showing.
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
 
-  function openRoutineForm(next: RoutineTaskFormState) {
+  const selectedRoutine = useMemo(
+    () => (routineId && !drafting ? routineTasks.find((task) => task.id === routineId) : undefined),
+    [drafting, routineId, routineTasks],
+  );
+
+  function loadRoutineForm(next: RoutineTaskFormState) {
     setForm(next);
     setFormBaseline(next);
-    setDrawerOpen(true);
   }
 
-  // The drawer calls this after its exit animation completes — only then is
-  // the form released, so every exit (save, delete, discard) animates out.
-  function releaseRoutineForm() {
-    setForm(null);
-    setFormBaseline(null);
-    setAssignmentFocus(false);
-  }
-
-  function dismissRoutineForm() {
-    setDrawerOpen(false);
-  }
-
-  async function closeRoutineForm() {
-    if (!drawerOpen || saving || deleting) return;
-    if (!(await confirmDiscardChanges())) return;
-    dismissRoutineForm();
-  }
-
-  function editTask(task: RelayTaskListItem) {
-    openRoutineForm({
+  function routineFormFor(task: RelayTaskListItem): RoutineTaskFormState {
+    return {
       variant: "routine",
       id: task.id,
       title: task.title,
@@ -171,7 +161,40 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
       routineCadence: task.routineCadence ?? "weekly",
       routineNextRunDate: task.routineNextRunDate ?? "",
       routineEnabled: task.routineEnabled,
-    });
+    };
+  }
+
+  /* The form is loaded from the path, ONCE per record. `selectedRoutine` is in
+     the dependency list because a deep link can arrive before the board has
+     loaded; the ref is what stops the next poll from overwriting a half-typed
+     edit with the server's copy of the same routine. */
+  const loadedRoutineId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!routineId) {
+      loadedRoutineId.current = null;
+      setForm(null);
+      setFormBaseline(null);
+      setAssignmentFocus(false);
+      return;
+    }
+    if (loadedRoutineId.current === routineId) return;
+    if (drafting) {
+      loadedRoutineId.current = routineId;
+      loadRoutineForm(emptyRoutineForm(currentUser));
+      return;
+    }
+    if (!selectedRoutine) return;
+    loadedRoutineId.current = routineId;
+    loadRoutineForm(routineFormFor(selectedRoutine));
+  }, [drafting, routineId, selectedRoutine]);
+
+  function openRoutine(taskId: string) {
+    setAssignmentFocus(false);
+    onSelectRoutine(taskId);
+  }
+
+  function closeRoutine() {
+    onSelectRoutine(null);
   }
 
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
@@ -193,11 +216,23 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           : {}),
         ...taskAssignmentMutationFields(form),
       };
-      if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else await createTaskMutation.mutateAsync(payload);
-      dismissRoutineForm();
+      if (form.id) {
+        await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
+        /* Saved IS the new baseline: the record stays open, so the form has to
+           stop reading as dirty the moment the write lands — otherwise the
+           navigation guard would challenge the next click. */
+        setFormBaseline(form);
+      } else {
+        const created = await createTaskMutation.mutateAsync(payload);
+        // The draft became a record, so the address becomes the record's.
+        const saved = { ...form, id: created.id };
+        loadedRoutineId.current = created.id;
+        setForm(saved);
+        setFormBaseline(saved);
+        onSelectRoutine(created.id);
+      }
     } catch {
-      // mutation onError surfaces a toast; keep the drawer open for retry.
+      // mutation onError surfaces a toast; keep the record open for retry.
     } finally {
       setSaving(false);
     }
@@ -216,10 +251,13 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     setDeleting(true);
     try {
       await deleteTaskMutation.mutateAsync({ taskId: form.id });
-      dismissRoutineForm();
+      // Nothing left to show in the pane, so the board comes back. The
+      // baseline is squared first, or leaving would ask about a deleted record.
+      setFormBaseline(form);
+      closeRoutine();
       announce({ message: t("routine.toast_deleted"), tone: "success" });
     } catch {
-      // mutation onError surfaces a toast; keep the drawer open for retry.
+      // mutation onError surfaces a toast; keep the record open for retry.
     } finally {
       setDeleting(false);
     }
@@ -274,200 +312,192 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     };
   }
 
-  /* The content column's header names the section the rail has selected —
-     the rail names the surface. */
-  const sectionLabel = filters.state === "all"
-    ? t("routine.all_states")
-    : t(`routine.states.${filters.state}`);
+  function startRoutine(task: RelayTaskListItem) {
+    if (startInFlight.current) return;
+    startInFlight.current = task.id;
+    startTaskMutation.mutate(taskStartMutationInput(task), {
+      onSettled: () => { startInFlight.current = null; },
+    });
+  }
 
-  /* The rail already carries the selected section's count, so the board's own
-     header restates it whenever the bar is clear. It earns the number only
-     once a filter or the search box has narrowed the section below what the
-     rail says. */
-  const sectionNarrowed = activeRoutineFilterCount(filters) > 0 || filters.query.trim().length > 0;
+  function startingRoutine(taskId: string): boolean {
+    return startTaskMutation.isPending && startTaskMutation.variables?.taskId === taskId;
+  }
 
-  const editingTask = form?.id ? tasks.find((task) => task.id === form.id) : undefined;
-  const editingSession = editingTask ? linkedSession(editingTask) : undefined;
-
-  // Quick-assign entry from a card/row: same drawer, focus on the picker.
-  function assignTask(task: RelayTaskListItem) {
-    setAssignmentFocus(true);
-    editTask(task);
+  function startDisabledFor(task: RelayTaskListItem): boolean {
+    return (!task.assignedAgentId && !task.assignedTeamId) || !task.routineEnabled;
   }
 
   function routineHandlers(task: RelayTaskListItem) {
     return {
-      starting: startTaskMutation.isPending && startTaskMutation.variables?.taskId === task.id,
-      onEdit: () => editTask(task),
-      onAssign: () => assignTask(task),
-      onStart: () => {
-        if (startInFlight.current) return;
-        startInFlight.current = task.id;
-        startTaskMutation.mutate(taskStartMutationInput(task), {
-          onSettled: () => { startInFlight.current = null; },
-        });
+      starting: startingRoutine(task.id),
+      onEdit: () => openRoutine(task.id),
+      // Quick-assign from a row: the same record, opened on its picker.
+      onAssign: () => {
+        setAssignmentFocus(true);
+        onSelectRoutine(task.id);
       },
+      onStart: () => startRoutine(task),
     };
   }
 
+  const openSession = selectedRoutine ? linkedSession(selectedRoutine) : undefined;
+  /* The table's header names what the rail's state select has narrowed to —
+     the rail names the surface. */
+  /* The rail already carries the board's count, and the table's own header
+     would restate it whenever the filter bar is clear. It earns a number only
+     once the bar has narrowed the set below what the rail shows. */
+  const tableNarrowed = activeRoutineFilterCount(filters) > 0;
+  const tableLabel = filters.state === "all"
+    ? t("routine.all_states")
+    : t(`routine.states.${filters.state}`);
+
   return (
-    <section id="routine-panel" className="routine-page sec-shell" aria-label={t("routine.title")} tabIndex={-1}>
-      {/* The rail names the surface and lists its sections; the board's own
-          header names the section being read. Same rail-and-content shape as
-          the control panel and personal settings — see section-rail.css. */}
-      <div className="sec-rail">
-        {/* Kicker + title + count, like every other rail in the app. The count
-            rides beside the title rather than under it: a third line is the
-            one shape that cannot sit on the surface's shared header step
-            (--sec-header-h in section-rail.css). */}
-        <PageHeader
-          kicker={t("nav.workspace")}
-          title={t("routine.title")}
-          count={t("routine.sub", { count: routineTasks.length })}
-          titleVariant="display"
-          layout="stacked"
-        />
-        <RoutineStateNav
-          value={filters.state}
-          counts={sectionCounts}
-          total={sectionTotal}
-          onChange={(state) => setFilters({ ...filters, state })}
-        />
-      </div>
-
-      <div className="sec-main">
-        <PageHeader
-          title={sectionLabel}
-          titleAs="h2"
-          titleVariant="display"
-          count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
-          actions={
-            <TaskBoardHeaderActions
-              refreshLabel={t("nav.refresh")}
-              createLabel={t("routine.new")}
-              isRefreshing={isRefreshing}
-              onRefresh={() => void onRefresh()}
-              onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
-            />
-          }
-        />
-
-        <RoutineFiltersBar
-          filters={filters}
-          agents={logicalAgents}
-          onChange={setFilters}
-          sortMenu={
-            <SortMenu
-              options={[
-                { key: "title", label: t("backlog.col_task") },
-                { key: "priority", label: t("backlog.priority") },
-                { key: "assignee", label: t("backlog.assignee") },
-                { key: "nextRun", label: t("routine.next_run") },
-              ]}
-              sort={sort}
-              onSortChange={setSort}
-              label={t("routine.sort_label")}
-            />
-          }
-        />
-
-        {filteredTasks.length === 0 ? (
-          <BoardEmpty
-            title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
-            body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
-            createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
-            onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
-          />
-        ) : (
-          /* One table, one header, no bands: the rail beside this list has
-             already said which schedule state is on screen.
-
-             `data-density="compact"` is the same scope the backlog list opts
-             into. The two lists are one record grammar (see RoutineRecords),
-             and this one was running at the root rhythm while the backlog ran
-             compact — a 77px routine row against a 52px task row for the same
-             kind of record. */
-          <>
-            <div className="backlog-rows routine-rows" data-density="compact">
-              <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
-                <RoutineRowsHead
-                  sort={sort}
-                  onSort={toggleSort}
-                  selectAll={
-                    <TaskSelectAllCheckbox
-                      state={selectionCheckState(visibleSelection, visibleIds)}
-                      label={t("routine.select_all_routines")}
-                      onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                    />
-                  }
-                />
-              </Table>
-              <Table className="routine-rows-body" aria-label={sectionLabel}>
-                {pagedTasks.items.map((task) => {
-                  const assignment = taskAssignmentDisplay(task);
-                  return (
-                    <RoutineRow
-                      key={task.id}
-                      task={task}
-                      selected={visibleSelection.has(task.id)}
-                      onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                      state={routineState(task, runningIds)}
-                      assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                      assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
-                      agentDisplayName={assignment.name}
-                      ready={assignment.ready}
-                      {...routineHandlers(task)}
-                    />
-                  );
-                })}
-              </Table>
-            </div>
-            <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
-          </>
-        )}
-      </div>
-
-      <TaskSelectionBar
-        count={visibleSelection.size}
-        deleting={deletingSelection}
-        deleteLabel={t("routine.delete_selected")}
-        onDelete={() => { void deleteSelectedRoutines(); }}
-        onClear={() => setSelection(EMPTY_TASK_SELECTION)}
+    <section
+      id="routine-panel"
+      className="routine-page"
+      data-view={routineId ? "detail" : "list"}
+      aria-label={t("routine.title")}
+      tabIndex={-1}
+    >
+      <RoutineRosterRail
+        routines={filteredTasks}
+        stateOf={stateOf}
+        totalCount={routineTasks.length}
+        selectedId={drafting ? null : routineId}
+        query={filters.query}
+        state={filters.state}
+        onQueryChange={(query) => setFilters({ ...filters, query })}
+        onStateChange={(state) => setFilters({ ...filters, state })}
+        onSelect={openRoutine}
+        onCreate={() => onSelectRoutine(NEW_ROUTINE_ID)}
       />
 
-      {form ? (
-        <TaskDrawer
-          open={drawerOpen}
-          form={form}
-          logicalAgents={logicalAgents}
-          teams={teams}
-          saving={saving}
-          deleting={deleting}
-          initialFocus={assignmentFocus ? "assignment" : "title"}
-          title={form.id ? t("routine.edit") : t("routine.new")}
-          subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
-          meta={editingTask ? (
-            <>
-              {/* The meta row below already links this occurrence's thread. */}
-              <TaskRecoveryPanel task={editingTask} excludeSessionId={editingSession?.id} onOpenThread={onOpenThread} />
-              <RoutineDrawerMeta
-                task={editingTask}
-                state={routineState(editingTask, runningIds)}
-                session={editingSession}
-                onOpenThread={onOpenThread}
+      <div className="routine-main">
+        {routineId && form ? (
+          <RoutineDetail
+            key={routineId}
+            form={form}
+            task={selectedRoutine}
+            state={selectedRoutine ? stateOf(selectedRoutine) : undefined}
+            session={openSession}
+            agentDisplayName={selectedRoutine ? taskAssignmentDisplay(selectedRoutine).name : undefined}
+            logicalAgents={logicalAgents}
+            teams={teams}
+            saving={saving}
+            deleting={deleting}
+            starting={selectedRoutine ? startingRoutine(selectedRoutine.id) : false}
+            startDisabled={selectedRoutine ? startDisabledFor(selectedRoutine) : true}
+            initialFocus={assignmentFocus ? "assignment" : "title"}
+            onChange={(next) => {
+              if (next.variant === "routine") setForm(next);
+            }}
+            onSubmit={(event) => void submitRoutine(event)}
+            onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
+            onStart={() => { if (selectedRoutine) startRoutine(selectedRoutine); }}
+            onAssign={() => setAssignmentFocus(true)}
+            onBack={closeRoutine}
+            onOpenThread={onOpenThread}
+          />
+        ) : (
+          <div className="routine-board">
+            <PageHeader
+              title={tableLabel}
+              titleAs="h2"
+              titleVariant="display"
+              count={tableNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
+              actions={
+                <TaskBoardHeaderActions
+                  refreshLabel={t("nav.refresh")}
+                  createLabel={t("routine.new")}
+                  isRefreshing={isRefreshing}
+                  onRefresh={() => void onRefresh()}
+                  onCreate={() => onSelectRoutine(NEW_ROUTINE_ID)}
+                />
+              }
+            />
+
+            <RoutineFiltersBar
+              filters={filters}
+              agents={logicalAgents}
+              onChange={setFilters}
+              sortMenu={
+                <SortMenu
+                  options={[
+                    { key: "title", label: t("backlog.col_task") },
+                    { key: "priority", label: t("backlog.priority") },
+                    { key: "assignee", label: t("backlog.assignee") },
+                    { key: "nextRun", label: t("routine.next_run") },
+                  ]}
+                  sort={sort}
+                  onSortChange={setSort}
+                  label={t("routine.sort_label")}
+                />
+              }
+            />
+
+            {filteredTasks.length === 0 ? (
+              <BoardEmpty
+                title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
+                body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
+                createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
+                onCreate={routineTasks.length === 0 ? () => onSelectRoutine(NEW_ROUTINE_ID) : undefined}
               />
-            </>
-          ) : undefined}
-          onClose={() => { void closeRoutineForm(); }}
-          onClosed={releaseRoutineForm}
-          onChange={(next) => {
-            if (next.variant === "routine") setForm(next);
-          }}
-          onOpenThread={onOpenThread}
-          onSubmit={(event) => void submitRoutine(event)}
-          onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
-        />
-      ) : null}
+            ) : (
+              <>
+                {/* One table, one header, no bands: the rail beside it has
+                    already said which schedule state is on screen.
+
+                    `data-density="compact"` is the same scope the backlog list
+                    opts into — the two lists are one record grammar. */}
+                <div className="backlog-rows routine-rows" data-density="compact">
+                  <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
+                    <RoutineRowsHead
+                      sort={sort}
+                      onSort={toggleSort}
+                      selectAll={
+                        <TaskSelectAllCheckbox
+                          state={selectionCheckState(visibleSelection, visibleIds)}
+                          label={t("routine.select_all_routines")}
+                          onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                        />
+                      }
+                    />
+                  </Table>
+                  <Table className="routine-rows-body" aria-label={tableLabel}>
+                    {pagedTasks.items.map((task) => {
+                      const assignment = taskAssignmentDisplay(task);
+                      return (
+                        <RoutineRow
+                          key={task.id}
+                          task={task}
+                          selected={visibleSelection.has(task.id)}
+                          onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
+                          state={stateOf(task)}
+                          assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
+                          assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
+                          agentDisplayName={assignment.name}
+                          ready={assignment.ready}
+                          {...routineHandlers(task)}
+                        />
+                      );
+                    })}
+                  </Table>
+                </div>
+                <Pagination page={pagedTasks} onPageChange={setPage} label={tableLabel} />
+              </>
+            )}
+
+            <TaskSelectionBar
+              count={visibleSelection.size}
+              deleting={deletingSelection}
+              deleteLabel={t("routine.delete_selected")}
+              onDelete={() => { void deleteSelectedRoutines(); }}
+              onClear={() => setSelection(EMPTY_TASK_SELECTION)}
+            />
+          </div>
+        )}
+      </div>
     </section>
   );
 }

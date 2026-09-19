@@ -37,10 +37,12 @@ describe("task deletion", () => {
     }
   });
 
-  it("keeps deletion behind each edit drawer and a danger confirmation", async () => {
+  it("keeps deletion behind each record surface and a danger confirmation", async () => {
     const backlogSource = await readFile(resolve("web/src/components/BacklogPage.tsx"), "utf8");
     const routineSource = await readFile(resolve("web/src/components/RoutinesPage.tsx"), "utf8");
-    const drawerSource = await readFile(resolve("web/src/components/task-board/TaskDrawer.tsx"), "utf8");
+    // The delete button lives with the fields, which both the backlog's
+    // drawer and the routine detail pane mount from TaskBoardForm.
+    const drawerSource = await readFile(resolve("web/src/components/task-board/TaskBoardForm.tsx"), "utf8");
 
     for (const source of [backlogSource, routineSource]) {
       assert.match(source, /tone: "danger"/);

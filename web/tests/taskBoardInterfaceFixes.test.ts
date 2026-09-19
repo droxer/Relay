@@ -12,24 +12,26 @@ const backlogChrome = source("components/task-board/BacklogChrome.tsx");
 const routineChrome = source("components/task-board/RoutineChrome.tsx");
 const backlogRecords = source("components/task-board/BacklogRecords.tsx");
 const routineRecords = source("components/task-board/RoutineRecords.tsx");
-const taskDrawer = source("components/task-board/TaskDrawer.tsx");
+/* The fields moved to TaskBoardForm when the routine board grew a detail
+   pane: the drawer is chrome now, the form is what both surfaces mount. */
+const taskForm = source("components/task-board/TaskBoardForm.tsx");
 
 describe("task board interface review fixes", () => {
-  it("opts the drawer form's free-text fields out of autofill", () => {
-    assert.match(taskDrawer, /name=\{`\$\{fieldPrefix\}-title`\}[\s\S]{0,200}?autoComplete="off"/);
-    assert.match(taskDrawer, /name=\{`\$\{fieldPrefix\}-description`\}[\s\S]{0,200}?autoComplete="off"/);
+  it("opts the task form's free-text fields out of autofill", () => {
+    assert.match(taskForm, /name=\{`\$\{fieldPrefix\}-title`\}[\s\S]{0,200}?autoComplete="off"/);
+    assert.match(taskForm, /name=\{`\$\{fieldPrefix\}-description`\}[\s\S]{0,200}?autoComplete="off"/);
   });
 
   it("moves focus to the title field when submit validation fails", () => {
-    assert.match(taskDrawer, /setTitleError\([\s\S]{0,480}?\.focus\(\)/);
+    assert.match(taskForm, /setTitleError\([\s\S]{0,480}?\.focus\(\)/);
   });
 
   it("names the submit button after the action it performs", () => {
-    assert.doesNotMatch(taskDrawer, /t\("dialog\.confirm"\)/);
-    assert.match(taskDrawer, /"backlog\.save_task"/);
-    assert.match(taskDrawer, /"backlog\.create_task"/);
-    assert.match(taskDrawer, /"routine\.save"/);
-    assert.match(taskDrawer, /"routine\.create"/);
+    assert.doesNotMatch(taskForm, /t\("dialog\.confirm"\)/);
+    assert.match(taskForm, /"backlog\.save_task"/);
+    assert.match(taskForm, /"backlog\.create_task"/);
+    assert.match(taskForm, /"routine\.save"/);
+    assert.match(taskForm, /"routine\.create"/);
   });
 
   it("exposes the action-group labels through a group role", () => {
