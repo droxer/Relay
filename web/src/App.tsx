@@ -255,6 +255,7 @@ export function App() {
     agentId,
     teamWorkspaceId,
     settingsSection,
+    adminSection,
     notFound,
     isLoginPath,
     navigateToRoute,
@@ -263,6 +264,7 @@ export function App() {
     syncThreadUrl,
     navigateToAgent,
     navigateToSettings,
+    navigateToAdminSection,
     navigateToTeamWorkspace,
     navigateToProject,
     navigateToLogin,
@@ -644,6 +646,7 @@ export function App() {
   return (
     <AppShell
       route={route}
+      settingsSection={settingsSection}
       onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
       mobileView={mobileView}
@@ -685,7 +688,13 @@ export function App() {
             <h1>Page not found</h1>
             <p>The requested Relay page does not exist.</p>
           </section>
-        ) : route === "admin" ? <AdminPage currentUser={user} /> : route === "channels" ? <ChannelsPage /> : route === "backlog" ? (
+        ) : route === "admin" ? (
+          <AdminPage
+            currentUser={user}
+            section={adminSection}
+            onSelectSection={navigateToAdminSection}
+          />
+        ) : route === "channels" ? <ChannelsPage /> : route === "backlog" ? (
           <BacklogPage
             tasks={tasks}
             sessions={sessions}

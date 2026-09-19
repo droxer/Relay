@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { installNavigationHistory } from "../lib/navigationGuard";
 import type { RelaySession } from "../types";
-import { DEFAULT_SETTINGS_SECTION, type AppRoute, type MobileView, type SettingsSection } from "../lib/viewTypes";
+import {
+  DEFAULT_ADMIN_SECTION,
+  DEFAULT_SETTINGS_SECTION,
+  type AdminSection,
+  type AppRoute,
+  type MobileView,
+  type SettingsSection,
+} from "../lib/viewTypes";
 import {
   APP_NAVIGATION_EVENT,
   canonicalBrowserUrl,
@@ -119,6 +126,10 @@ export function useAppRouter({
     navigateToAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: section });
   }, [navigateToAppState]);
 
+  const navigateToAdminSection = useCallback((section: AdminSection) => {
+    navigateToAppState({ route: "admin", mobileView: "chat", sessionId: null, adminSection: section });
+  }, [navigateToAppState]);
+
   const navigateToTeamWorkspace = useCallback((teamId: string | null) => {
     navigateToAppState({ route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: teamId });
   }, [navigateToAppState]);
@@ -144,6 +155,7 @@ export function useAppRouter({
     agentId: locationState.agentId ?? null,
     teamWorkspaceId: locationState.teamWorkspaceId ?? null,
     settingsSection: locationState.settingsSection ?? DEFAULT_SETTINGS_SECTION,
+    adminSection: locationState.adminSection ?? DEFAULT_ADMIN_SECTION,
     notFound: Boolean(locationState.notFound),
     isLoginPath: Boolean(locationState.login),
     navigateToAppState,
@@ -153,6 +165,7 @@ export function useAppRouter({
     syncThreadUrl,
     navigateToAgent,
     navigateToSettings,
+    navigateToAdminSection,
     navigateToTeamWorkspace,
     navigateToProject,
     navigateToLogin,

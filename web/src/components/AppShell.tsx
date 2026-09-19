@@ -17,7 +17,7 @@ import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { buildCommands, type CommandId } from "@/lib/commandMenu";
 import { taskCreateIntent } from "@/lib/taskCreateIntent";
 import type { ShortcutAction } from "@/lib/shortcuts";
-import type { AppRoute, MobileView } from "@/lib/viewTypes";
+import type { AppRoute, MobileView, SettingsSection } from "@/lib/viewTypes";
 import type { CurrentUser } from "@/types";
 import { useRelayStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,21 @@ const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, stri
   admin: "nav.admin",
 };
 
+/** The section a settings path is showing, for the mobile topbar's title. */
+const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsSection, string> = {
+  computers: "computer.title",
+  skills: "skills.title",
+  appearance: "pref.appearance",
+  language: "pref.language",
+};
+
+/** Routes that name themselves in the topbar's eyebrow rather than taking the
+ *  generic product word — the two surfaces whose title line is a section. */
+const MOBILE_EYEBROW_KEYS: Partial<Record<AppRoute, string>> = {
+  admin: "nav.admin",
+  settings: "nav.settings",
+};
+
 export type MobileChatChrome = {
   artifactCount: number;
   /** Whether the open thread sits in a project — the panel leads with the
@@ -43,6 +58,9 @@ export type MobileChatChrome = {
 };
 
 type AppShellProps = {
+  /** The open settings section, so the mobile topbar can name it the way it
+   *  names the control panel's — both are rail-and-content surfaces. */
+  settingsSection: SettingsSection;
   route: AppRoute;
   onNavigateRoute: (route: AppRoute) => void;
   hrefForRoute: (route: AppRoute) => string;
@@ -100,6 +118,7 @@ function SettingsButton({ route, href, onNavigate }: { route: AppRoute; href: st
 
 export function AppShell({
   route,
+  settingsSection,
   onNavigateRoute,
   hrefForRoute,
   mobileView,
@@ -199,11 +218,16 @@ export function AppShell({
 
   const isThreadRoute = route === "main" || route === "projects";
   const directoryLabel = route === "projects" ? t("project.projects") : t("nav.threads");
+  /* A rail-and-content surface names its SECTION here — the strip under the
+     topbar is the only other place the section appears, and the route name is
+     already the eyebrow. Both consumers of the rail read the same way. */
   const mobileRouteTitle = route === "admin"
     ? t(`admin.v2.title_${adminView}`)
-    : isThreadRoute
-      ? directoryLabel
-      : t(WORK_ROUTE_LABEL_KEYS[route]);
+    : route === "settings"
+      ? t(SETTINGS_SECTION_LABEL_KEYS[settingsSection])
+      : isThreadRoute
+        ? directoryLabel
+        : t(WORK_ROUTE_LABEL_KEYS[route]);
   const isMobileChat = isThreadRoute && mobileView === "chat";
 
   return (
@@ -281,7 +305,7 @@ export function AppShell({
         ) : (
           <>
             <div className="mobile-topbar-route">
-              <span className="mobile-topbar-eyebrow">{route === "admin" ? t("nav.admin") : t("nav.mobile_section")}</span>
+              <span className="mobile-topbar-eyebrow">{t(MOBILE_EYEBROW_KEYS[route] ?? "nav.mobile_section")}</span>
               <span className="mobile-topbar-title">{mobileRouteTitle}</span>
             </div>
             <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />

@@ -334,10 +334,14 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           header names the section being read. Same rail-and-content shape as
           the control panel and personal settings — see section-rail.css. */}
       <div className="sec-rail">
+        {/* Kicker + title + count, like every other rail in the app. The count
+            rides beside the title rather than under it: a third line is the
+            one shape that cannot sit on the surface's shared header step
+            (--sec-header-h in section-rail.css). */}
         <PageHeader
           kicker={t("nav.workspace")}
           title={t("routine.title")}
-          subtitle={t("routine.sub", { count: routineTasks.length })}
+          count={t("routine.sub", { count: routineTasks.length })}
           titleVariant="display"
           layout="stacked"
         />

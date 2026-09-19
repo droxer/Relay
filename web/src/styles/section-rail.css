@@ -4,7 +4,7 @@
    The shape a surface takes when it is one destination holding several
    sections: a rail naming the surface and listing its sections, beside a
    content column that renders the selected one. The control panel
-   (Dashboard / Employees / Computers / Settings), personal settings
+   (Dashboard / Employees / Computers / Organization), personal settings
    (Computers / Skills / Appearance / Language), and the routine board
    (schedule health) are the consumers — one grammar, so a section list reads
    the same on all three.
@@ -14,6 +14,14 @@
    ===================================================================== */
 
 .sec-shell {
+  /* One header line across every column of the surface. --header-h is the
+     app's one-line header; a rail or a record header carries an eyebrow above
+     its title, so this surface runs one step taller and every column — the
+     rail's identity block, the section's own header, and any list/detail pair
+     a section brings with it — shares the step. They were 64px, 76px, 89px
+     and 97px, which drew three or four unaligned rules across the top. */
+  --sec-header-h: calc(var(--header-h) + var(--sp-3));
+
   display: grid;
   grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -39,9 +47,9 @@
 
 /* The rail's own header names the surface; the content column's header names
    the section. The rail is 240px at its widest, so it takes a tighter inset
-   than --page-gutter. */
+   than --page-gutter; its height comes from the shared step above. */
 .sec-rail > .page-header {
-  padding: var(--sp-5) var(--sp-4);
+  padding-inline: var(--sp-4);
   background: transparent;
 }
 
@@ -83,10 +91,16 @@
 }
 
 /* Selection is carried by the fill and the ink, not by a heavier face: the
-   row keeps --type-label, the one weight that role owns. */
-.sec-nav-btn[data-active="true"] {
+   row keeps --type-label, the one weight that role owns.
+
+   The fill is --action-soft, the same "you are here" the app rail one hairline
+   to the left uses. It was --surface-2 — byte-identical to the hover fill
+   above, so pointing at any row made it look exactly like the selected one and
+   the rail lost its selection while the pointer was in it. */
+.sec-nav-btn[data-active="true"],
+.sec-nav-btn[data-active="true"]:hover {
   color: var(--ink-1);
-  background: var(--surface-2);
+  background: var(--action-soft);
 }
 
 .sec-nav-label { min-width: 0; flex: 1; }
@@ -117,6 +131,14 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Every header in the surface takes the shared step, so the canvas no longer
+   jumps as the reader moves down the rail and the columns' rules line up. */
+.sec-shell .page-header {
+  min-height: var(--sec-header-h);
+  padding-block: 0;
+  align-items: center;
 }
 
 .sec-section-body {
@@ -160,6 +182,16 @@
   .sec-nav-list:has(> :nth-child(5)) .sec-nav-item { flex: 0 0 auto; }
   .sec-nav-list:has(> :nth-child(5)) .sec-nav-btn { padding: 0 var(--sp-3); }
   .sec-nav-list:has(> :nth-child(5)) .sec-nav-label { white-space: nowrap; }
+
+  /* The mobile topbar names the route and the strip above names the section,
+     so a header left holding nothing but a title is a dead band here. One
+     rule for every consumer: personal settings used to hide it and the
+     control panel kept an empty 25px strip. A header that still carries an
+     action stays — that is the only thing in it the reader cannot get from
+     the two rows above. */
+  .sec-main > .page-header:not(:has(.page-header-actions)) {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {

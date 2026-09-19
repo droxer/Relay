@@ -232,7 +232,7 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
         ]}
           sort={sort}
           onSortChange={setSort}
-          label={t("admin.v2.nav_nodes")}
+          label={t("admin.v2.nav_computers")}
         />
         <AdminLayoutToggle layout={layout} onChange={onLayoutChange} />
       </div>
@@ -336,7 +336,7 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
       {/* The CARD layout is a flat grid and pages off one cursor; the list
           groups, so it pages per band. Same split as the employee list. */}
       {layout === "card" ? (
-        <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_nodes")} />
+        <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_computers")} />
       ) : null}
     </div>
   );

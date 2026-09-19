@@ -189,6 +189,9 @@ export function formatRelativeTime(value: string | undefined, t: TFunction): str
 
 export interface EmployeeNodeSummary {
   id: string;
+  /** The employee's `@handle`. Optional for the same reason it is on
+      EmployeeRecord: a row from a backend that predates the column. */
+  handle?: string;
   displayName: string;
   email?: string;
   departmentId?: string;
@@ -370,6 +373,11 @@ export function buildEmployeeSummaries(
     ).length;
     return {
       id,
+      // The @handle, carried through so the cards and rows can render the
+      // employee's real one. Dropping it here sent `employeeHandleOf` to its
+      // fallback on every summary — a slugified display name under the
+      // database auth store, which is a second spelling of one identity.
+      handle: employee?.handle,
       displayName: employee?.displayName || id,
       email: employee?.email,
       departmentId: employee?.departmentId,

@@ -23,11 +23,3 @@
 .settings-page .sec-section-body > * {
   max-width: 44rem;
 }
-
-@media (max-width: 640px) {
-  /* The mobile topbar names the route and the section strip names the
-     section, so a header with nothing but a title is a dead band here. */
-  .settings-page .sec-main > .page-header:not(:has(.page-header-actions)) {
-    display: none;
-  }
-}

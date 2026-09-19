@@ -56,7 +56,17 @@ import {
 import { Alert } from "@/components/ui/alert";
 
 type AuthScreen = "login" | "bootstrap";
-export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null }) {
+
+export type AdminPageProps = {
+  currentUser?: CurrentUser | null;
+  /** The open section, read from the path (`/admin/<section>`). The control
+      panel's sections are destinations, so the address bar owns which one is
+      open — a reload or a shared link lands on the same one. */
+  section: AdminView;
+  onSelectSection: (section: AdminView) => void;
+};
+
+export function AdminPage({ currentUser, section, onSelectSection }: AdminPageProps) {
   const { t } = useTranslation();
   const { prompt } = useDialogs();
   const { reportMutationError } = useMutationError();
@@ -73,7 +83,8 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
   const [authScreen, setAuthScreen] = useState<AuthScreen>("login");
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [view, setView] = useState<AdminView>("dashboard");
+  const view = section;
+  const setView = onSelectSection;
   const [layout, setLayout] = useState<AdminLayout>("card");
   const { nodes, employees, pollError, mergeNodes, refetch } = useAdminNodes(
     Boolean(admin),
@@ -82,7 +93,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
   const managedNodesQuery = useQuery({
     queryKey: ["admin", "managed-nodes"],
     queryFn: ({ signal }) => listManagedNodes(signal),
-    enabled: Boolean(admin) && view === "nodes",
+    enabled: Boolean(admin) && view === "computers",
     refetchInterval: CONTROL_PANEL_POLL_MS,
   });
   const managedNodes = managedNodesQuery.data?.nodes ?? [];
@@ -373,7 +384,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
     pulseNode(node.id);
     setAddNodeOpen(false);
     setAssignTarget(null);
-    setView("nodes");
+    setView("computers");
     // Managed provisioning is asynchronous. The supervisor enrolls the daemon,
     // and the existing node poll displays it once registration succeeds.
     void refetch();
@@ -405,7 +416,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
     pulseNode(node.id);
     setAddNodeOpen(false);
     setAssignTarget(null);
-    setView("nodes");
+    setView("computers");
     setCredentialsNodeId(node.id);
   }
 
@@ -441,16 +452,21 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
     );
   }
 
-  const managedNodesError = view === "nodes" && managedNodesQuery.error instanceof Error
+  const managedNodesError = view === "computers" && managedNodesQuery.error instanceof Error
     ? managedNodesQuery.error.message
-    : view === "nodes" && managedNodesQuery.error
+    : view === "computers" && managedNodesQuery.error
       ? String(managedNodesQuery.error)
       : null;
   const headerError = authError ?? pollError ?? managedNodesError;
   const viewTitle = t(`admin.v2.title_${view}`);
+  /* Organization has no header action, and an EMPTY actions container is not
+     the same as none: the narrow layout hides a header that holds nothing but
+     a title (section-rail.css), and an empty container kept it on screen as a
+     1px rule. */
+  const hasHeaderActions = Boolean(headerError) || view !== "organization";
   const headerCount = view === "employees"
     ? t("admin.employee_count", { count: employees.length })
-    : view === "nodes"
+    : view === "computers"
       ? t("admin.node_count", { count: nodes.length })
       : undefined;
 
@@ -463,10 +479,13 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
       tabIndex={-1}
     >
       <div className="sec-rail">
+        {/* Kicker + title, like every other list rail in the app (agents,
+            teams, projects). The rail used to carry a subtitle sentence as
+            well — three lines of identity above a four-row list, and the one
+            rail in the app that had one. */}
         <PageHeader
           kicker={t("admin.control_panel.eyebrow")}
           title={t("admin.control_panel.title")}
-          subtitle={t("admin.control_panel.subtitle")}
           titleVariant="display"
           layout="stacked"
         />
@@ -479,7 +498,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
           titleAs="h2"
           titleVariant="display"
           count={headerCount}
-          actions={
+          actions={hasHeaderActions ? (
             <>
               {headerError ? (
                 <span
@@ -532,7 +551,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
                   {t("admin.v2.add_employee_cta")}
                 </Button>
               ) : null}
-              {view === "nodes" ? (
+              {view === "computers" ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -545,7 +564,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
                 </Button>
               ) : null}
             </>
-          }
+          ) : undefined}
         />
 
         <div className="adm-content">
@@ -567,7 +586,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
               {view === "dashboard" ? (
                 <DashboardView
                   nodes={nodes} employees={employees} metrics={metrics}
-                  onManageNodes={() => setView("nodes")}
+                  onManageNodes={() => setView("computers")}
                 />
               ) : view === "employees" ? (
                 <EmployeesView
@@ -580,7 +599,7 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
                   onEditEmployee={canEditEmployees ? (employee) => setEditEmployeeId(employee.id) : undefined}
                   highlightedEmployeeId={highlightedEmployeeId}
                 />
-              ) : view === "settings" ? (
+              ) : view === "organization" ? (
                 <SettingsView />
               ) : (
                 <>

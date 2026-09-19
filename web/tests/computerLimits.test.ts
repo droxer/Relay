@@ -98,8 +98,8 @@ describe("settings copy", () => {
     );
     const v2 = locale.admin.v2;
     for (const key of [
-      "nav_settings",
-      "title_settings",
+      "nav_organization",
+      "title_organization",
       "settings_computers_title",
       "settings_limit_label",
       "settings_limit_hint",
