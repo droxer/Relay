@@ -63,18 +63,16 @@ const ChannelsPage = lazy(() => import("./components/ChannelsPage").then((m) => 
 const RoutinesPage = lazy(() => import("./components/RoutinesPage").then((m) => ({ default: m.RoutinesPage })));
 const AgentsPage = lazy(() => import("./components/AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const TeamsPage = lazy(() => import("./components/TeamsPage").then((m) => ({ default: m.TeamsPage })));
-const ComputerPage = lazy(() => import("./components/ComputerPage").then((m) => ({ default: m.ComputerPage })));
-const SkillsPage = lazy(() => import("./components/SkillsPage").then((m) => ({ default: m.SkillsPage })));
+const SettingsPage = lazy(() => import("./components/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 
 const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "backlog-panel",
   routine: "routine-panel",
   agents: "agents-panel",
   teams: "teams-panel",
-  skills: "skills-panel",
+  settings: "settings-panel",
   channels: "channels-panel",
   admin: "admin-panel",
-  computer: "computer-panel",
 };
 
 function useStableEvent<TArgs extends unknown[], TResult>(handler: (...args: TArgs) => TResult): (...args: TArgs) => TResult {
@@ -116,7 +114,6 @@ export function App() {
   // in the composer narrows the round to them until the roster is picked again.
   const [projectRoomTarget, setProjectRoomTarget] = useState(true);
   const [threadQuery, setThreadQuery] = useState("");
-  const [prefsOpen, setPrefsOpen] = useState(false);
   const [sidenavResizing, setSidenavResizing] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [spaceResizing, setSpaceResizing] = useState(false);
@@ -257,6 +254,7 @@ export function App() {
     projectId: routedProjectId,
     agentId,
     teamWorkspaceId,
+    settingsSection,
     notFound,
     isLoginPath,
     navigateToRoute,
@@ -264,6 +262,7 @@ export function App() {
     hrefForSideNavRoute,
     syncThreadUrl,
     navigateToAgent,
+    navigateToSettings,
     navigateToTeamWorkspace,
     navigateToProject,
     navigateToLogin,
@@ -658,8 +657,6 @@ export function App() {
       sidenavResizing={sidenavResizing}
       onSidenavResize={panels.resizeSidenav}
       onSidenavResizeActive={setSidenavResizing}
-      prefsOpen={prefsOpen}
-      setPrefsOpen={setPrefsOpen}
       skipLinkHref={skipLinkHref}
       activeThreadLabel={activeThreadLabel}
       threadSpaceOpen={spaceVisible}
@@ -680,8 +677,6 @@ export function App() {
       onNewThread={startNewThread}
       theme={preferences.theme}
       onThemeChange={preferences.setTheme}
-      language={preferences.language}
-      onLanguageChange={preferences.setLanguage}
     >
       <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${teamWorkspaceId}`}>
       <Suspense fallback={<RouteFallback />}>
@@ -725,13 +720,17 @@ export function App() {
             onBackToAgents={() => navigateToAgent(null)}
             onOpenThread={openThread}
           />
-        ) : route === "skills" ? (
-          <SkillsPage currentUser={user} />
-        ) : route === "computer" ? (
-          <ComputerPage
-            nodes={runtimeNodes}
+        ) : route === "settings" ? (
+          <SettingsPage
+            section={settingsSection}
+            onSelectSection={navigateToSettings}
             currentUser={user}
+            nodes={runtimeNodes}
             onOpenThread={openThread}
+            theme={preferences.theme}
+            onThemeChange={preferences.setTheme}
+            language={preferences.language}
+            onLanguageChange={preferences.setLanguage}
           />
         ) : (
           <ThreadsView

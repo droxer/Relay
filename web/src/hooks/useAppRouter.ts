@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { installNavigationHistory } from "../lib/navigationGuard";
 import type { RelaySession } from "../types";
-import type { AppRoute, MobileView } from "../lib/viewTypes";
+import { DEFAULT_SETTINGS_SECTION, type AppRoute, type MobileView, type SettingsSection } from "../lib/viewTypes";
 import {
   APP_NAVIGATION_EVENT,
   canonicalBrowserUrl,
@@ -115,6 +115,10 @@ export function useAppRouter({
     navigateToAppState({ route: "agents", mobileView: "chat", sessionId: null, agentId });
   }, [navigateToAppState]);
 
+  const navigateToSettings = useCallback((section: SettingsSection) => {
+    navigateToAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: section });
+  }, [navigateToAppState]);
+
   const navigateToTeamWorkspace = useCallback((teamId: string | null) => {
     navigateToAppState({ route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: teamId });
   }, [navigateToAppState]);
@@ -139,6 +143,7 @@ export function useAppRouter({
     projectId: locationState.projectId ?? null,
     agentId: locationState.agentId ?? null,
     teamWorkspaceId: locationState.teamWorkspaceId ?? null,
+    settingsSection: locationState.settingsSection ?? DEFAULT_SETTINGS_SECTION,
     notFound: Boolean(locationState.notFound),
     isLoginPath: Boolean(locationState.login),
     navigateToAppState,
@@ -147,6 +152,7 @@ export function useAppRouter({
     hrefForSideNavRoute,
     syncThreadUrl,
     navigateToAgent,
+    navigateToSettings,
     navigateToTeamWorkspace,
     navigateToProject,
     navigateToLogin,

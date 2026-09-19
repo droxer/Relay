@@ -56,7 +56,6 @@
   "skip_to_content": "跳至内容",
   "nav": {
     "threads": "对话",
-    "computer": "我的电脑",
     "workspace": "工作区",
     "workspace_label": "工作区",
     "manage": "管理",
@@ -65,13 +64,13 @@
     "routine": "例行任务",
     "agents": "智能体",
     "teams": "团队",
-    "skills": "技能",
     "admin": "控制面板",
     "channels": "频道",
     "coming_soon": "即将推出",
     "coming_soon_short": "即将",
     "refresh": "刷新",
-    "preferences": "偏好设置",
+    "settings": "设置",
+    "account": "账户",
     "logout": "退出登录",
     "collapse": "收起",
     "expand": "展开",
@@ -1232,9 +1231,6 @@
     "signing_in": "登录中…"
   },
   "pref": {
-    "title": "偏好设置",
-    "sub": "主题与语言",
-    "close": "关闭偏好设置",
     "appearance": "外观",
     "language": "语言",
     "save": "保存",
@@ -1944,5 +1940,9 @@
       "title": "审核结果",
       "body": "请打开关联会话，检查输出与产物。满足要求后验收工作，或提供明确反馈并请求修改。"
     }
+  },
+  "settings": {
+    "eyebrow": "个人 / 偏好",
+    "sub": "你的电脑、技能，以及 Relay 的外观。"
   }
 }

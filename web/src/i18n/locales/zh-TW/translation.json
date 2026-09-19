@@ -56,7 +56,6 @@
   "skip_to_content": "跳至內容",
   "nav": {
     "threads": "對話",
-    "computer": "我的電腦",
     "workspace": "工作區",
     "workspace_label": "工作區",
     "manage": "管理",
@@ -65,13 +64,13 @@
     "routine": "例行任務",
     "agents": "智能體",
     "teams": "團隊",
-    "skills": "技能",
     "admin": "控制面板",
     "channels": "頻道",
     "coming_soon": "即將推出",
     "coming_soon_short": "即將",
     "refresh": "重新整理",
-    "preferences": "偏好設定",
+    "settings": "設定",
+    "account": "帳戶",
     "logout": "登出",
     "collapse": "收合",
     "expand": "展開",
@@ -1232,9 +1231,6 @@
     "signing_in": "登入中…"
   },
   "pref": {
-    "title": "偏好設定",
-    "sub": "主題與語言",
-    "close": "關閉偏好設定",
     "appearance": "外觀",
     "language": "語言",
     "save": "儲存",
@@ -1944,5 +1940,9 @@
       "title": "審核結果",
       "body": "請開啟關聯對話，檢查輸出與產物。符合要求後驗收工作，或提供明確回饋並請求修改。"
     }
+  },
+  "settings": {
+    "eyebrow": "個人 / 偏好",
+    "sub": "你的電腦、技能，以及 Relay 的外觀。"
   }
 }

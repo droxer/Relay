@@ -32,7 +32,7 @@ it("only retries finalization, prevents duplicate requests and reports failure",
   expect(screen.getByRole("alert").textContent).toContain("recovery.action_failed");
   view.rerender(<ExecutionRecoveryPanel session={session("termination_unconfirmed")} onRetry={retry} />);
   expect(screen.queryByRole("button", { name: "recovery.retry" })).toBeNull();
-  expect(screen.getByRole("link", { name: "recovery.computer" }).getAttribute("href")).toBe("/computer");
+  expect(screen.getByRole("link", { name: "recovery.computer" }).getAttribute("href")).toBe("/settings/computers");
 });
 it("confirms a requested retry without claiming recovery completed", async () => {
   render(<ExecutionRecoveryPanel session={session("finalization_failed")} onRetry={vi.fn().mockResolvedValue(undefined)} />);

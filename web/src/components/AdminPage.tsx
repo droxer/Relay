@@ -457,45 +457,70 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
   return (
     <section
       id="admin-panel"
-      className="admin-console adm-shell"
+      className="admin-console sec-shell"
       data-admin-view={view}
       aria-label={viewTitle}
       tabIndex={-1}
     >
-      <PageHeader
-        kicker={t("admin.control_panel.eyebrow")}
-        title={t("admin.control_panel.title")}
-        subtitle={t("admin.control_panel.subtitle")}
-        count={headerCount}
-        actions={
-          <>
-            {headerError ? (
-              <span
-                className="adm-command-status"
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                <StateMark tone="bad" />
-                <span className="adm-command-status-text text-danger">
-                  {t("admin.fetch_error", { message: headerError })}
-                </span>
-              </span>
-            ) : null}
-            {/* No manual refresh: the view polls on its own (useAdminNodes),
-                so the button was chrome for a job already done. */}
-            {view === "dashboard" ? (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="adm-create-action"
-                  onClick={() => setAddNodeOpen(true)}
-                  tooltip={t("admin.v2.add_node_cta")}
+      <div className="sec-rail">
+        <PageHeader
+          kicker={t("admin.control_panel.eyebrow")}
+          title={t("admin.control_panel.title")}
+          subtitle={t("admin.control_panel.subtitle")}
+          titleVariant="display"
+          layout="stacked"
+        />
+        <AdminViewToggle view={view} onChange={setView} />
+      </div>
+
+      <div className="sec-main">
+        <PageHeader
+          title={viewTitle}
+          titleAs="h2"
+          titleVariant="display"
+          count={headerCount}
+          actions={
+            <>
+              {headerError ? (
+                <span
+                  className="adm-command-status"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
                 >
-                  <ActionAdd size={ICON.md} aria-hidden="true" />
-                  {t("admin.v2.add_node_cta")}
-                </Button>
+                  <StateMark tone="bad" />
+                  <span className="adm-command-status-text text-danger">
+                    {t("admin.fetch_error", { message: headerError })}
+                  </span>
+                </span>
+              ) : null}
+              {/* No manual refresh: the view polls on its own (useAdminNodes),
+                  so the button was chrome for a job already done. */}
+              {view === "dashboard" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="adm-create-action"
+                    onClick={() => setAddNodeOpen(true)}
+                    tooltip={t("admin.v2.add_node_cta")}
+                  >
+                    <ActionAdd size={ICON.md} aria-hidden="true" />
+                    {t("admin.v2.add_node_cta")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="adm-create-action"
+                    onClick={() => setAddEmployeeOpen(true)}
+                    tooltip={t("admin.v2.add_employee_cta")}
+                  >
+                    <ActionAdd size={ICON.md} aria-hidden="true" />
+                    {t("admin.v2.add_employee_cta")}
+                  </Button>
+                </>
+              ) : null}
+              {view === "employees" ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -506,42 +531,23 @@ export function AdminPage({ currentUser }: { currentUser?: CurrentUser | null })
                   <ActionAdd size={ICON.md} aria-hidden="true" />
                   {t("admin.v2.add_employee_cta")}
                 </Button>
-              </>
-            ) : null}
-            {view === "employees" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="adm-create-action"
-                onClick={() => setAddEmployeeOpen(true)}
-                tooltip={t("admin.v2.add_employee_cta")}
-              >
-                <ActionAdd size={ICON.md} aria-hidden="true" />
-                {t("admin.v2.add_employee_cta")}
-              </Button>
-            ) : null}
-            {view === "nodes" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="adm-create-action"
-                onClick={() => setAddNodeOpen(true)}
-                tooltip={t("admin.v2.add_node_cta")}
-              >
-                <ActionAdd size={ICON.md} aria-hidden="true" />
-                {t("admin.v2.add_node_cta")}
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+              ) : null}
+              {view === "nodes" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="adm-create-action"
+                  onClick={() => setAddNodeOpen(true)}
+                  tooltip={t("admin.v2.add_node_cta")}
+                >
+                  <ActionAdd size={ICON.md} aria-hidden="true" />
+                  {t("admin.v2.add_node_cta")}
+                </Button>
+              ) : null}
+            </>
+          }
+        />
 
-      <div className="adm-section-nav">
-        <AdminViewToggle view={view} onChange={setView} />
-        <span className="adm-section-context">{t("admin.control_panel.workspace")}</span>
-      </div>
-
-      <div className="adm-main">
         <div className="adm-content">
           <div className="adm-content-main">
             <div key={view} className="adm-view-stage">

@@ -21,9 +21,11 @@ describe("Next development API proxy", () => {
     // Every WORK_PATHS entry in web/src/lib/appRoute.ts needs a fallback here
     // or a direct load / refresh of that URL 404s in dev — which is how
     // /computer shipped: client-side nav worked, F5 did not.
-    for (const route of ["login", "threads", "projects", "backlog", "computer", "routines", "agents", "teams", "channels", "admin"]) {
+    for (const route of ["login", "threads", "projects", "backlog", "settings", "routines", "agents", "teams", "channels", "admin"]) {
       assert.match(source, new RegExp(`"\\/${route}"`));
     }
+    // Sections are path segments, so /settings/skills has to fall back too.
+    assert.match(source, /"\/settings\/:path\*"/);
     assert.match(source, /"\/projects\/:path\*"/);
   });
 

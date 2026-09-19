@@ -1,15 +1,29 @@
 import { requestNavigation } from "./navigationGuard.ts";
-import type { AppRoute, MobileView } from "./viewTypes.js";
+import {
+  DEFAULT_SETTINGS_SECTION,
+  isSettingsSection,
+  type AppRoute,
+  type MobileView,
+  type SettingsSection,
+} from "./viewTypes.ts";
 
 const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "/backlog",
   routine: "/routines",
   agents: "/agents",
   teams: "/teams",
-  skills: "/skills",
+  settings: "/settings",
   channels: "/channels",
   admin: "/admin",
-  computer: "/computer",
+};
+
+/* Where Computers and Skills lived before they became settings sections. Old
+   links, bookmarks, and anything that shipped with those hrefs still resolve;
+   `pathForAppState` only ever writes the /settings form, so the address bar
+   canonicalizes itself on arrival. */
+const LEGACY_SECTION_PATHS: Record<string, SettingsSection> = {
+  "/computer": "computers",
+  "/skills": "skills",
 };
 
 const WORK_ROUTES = new Map(Object.entries(WORK_PATHS).map(([route, path]) => [path, route as AppRoute]));
@@ -23,6 +37,7 @@ export type AppLocationState = {
   projectId?: string | null;
   agentId?: string | null;
   teamWorkspaceId?: string | null;
+  settingsSection?: SettingsSection | null;
   composingNew?: boolean;
   login?: boolean;
   notFound?: boolean;
@@ -72,6 +87,13 @@ export function parseAppPath(pathname: string, _search = ""): AppLocationState {
   if (head === "teams" && second && rest.length === 0) {
     return { route: "teams", ...base, teamWorkspaceId: decodeSegment(second) };
   }
+  if (head === "settings" && rest.length === 0) {
+    if (!second) return { route: "settings", ...base, settingsSection: DEFAULT_SETTINGS_SECTION };
+    if (isSettingsSection(second)) return { route: "settings", ...base, settingsSection: second };
+    return { route: "main", ...base, notFound: true };
+  }
+  const legacySection = LEGACY_SECTION_PATHS[normalized];
+  if (legacySection) return { route: "settings", ...base, settingsSection: legacySection };
   const workRoute = WORK_ROUTES.get(normalized);
   if (workRoute) return { route: workRoute, ...base };
   return { route: "main", ...base, notFound: true };
@@ -87,11 +109,16 @@ export function pathForAppState({
   composingNew,
   login,
   notFound,
+  settingsSection,
 }: AppLocationState): string {
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
   if (route === "teams" && teamWorkspaceId) return `/teams/${encodeURIComponent(teamWorkspaceId)}`;
+  if (route === "settings") {
+    const section = settingsSection ?? DEFAULT_SETTINGS_SECTION;
+    return `/settings/${section}`;
+  }
   if (route === "projects") {
     if (!projectId) return "/projects";
     const projectPath = `/projects/${encodeURIComponent(projectId)}`;
@@ -103,6 +130,13 @@ export function pathForAppState({
   if (mobileView === "threads") return "/threads";
   if (composingNew) return "/threads/new";
   return sessionId ? `/threads/${encodeURIComponent(sessionId)}` : "/threads";
+}
+
+/** The href of one settings section — for links that point at a section
+ *  rather than at the settings route as a whole (the recovery panel sends a
+ *  reader to their computers). */
+export function hrefForSettingsSection(section: SettingsSection): string {
+  return pathForAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: section });
 }
 
 export function hrefForRoute(route: AppRoute, sessionId?: string | null): string {
@@ -149,7 +183,7 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
   // writes it now that the list groups.
   backlog: ["page"],
   routines: ["page"],
-  computer: ["page"],
+  settings: ["page"],
   // Two paged collections on one path, so each owns its own key.
   admin: ["employeePage", "nodePage"],
 };
@@ -293,6 +327,10 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     // The add-team drawer can open over a selected team's profile. Retain its
     // URL-backed state instead of immediately canonicalizing the click away.
     if (source.get("dialog") === "create") target.set("dialog", "create");
+  } else if (head === "settings") {
+    // The section is a path segment, so this branch runs with one — the
+    // computers roster still pages.
+    copyPageParams(head, source, target);
   } else if (!entityId) {
     copySortParams(head, source, target);
     copyPageParams(head, source, target);

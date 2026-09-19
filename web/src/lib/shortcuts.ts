@@ -23,7 +23,8 @@ export type ShortcutEventShape = {
 
 /* Go-to chords. The letter mnemonic bends where a route's initial is taken:
    threads owns T, projects owns P, so teams takes E; channels takes H; admin takes D
-   (dashboard). computer keeps C — the bare `c` chord is "create task". */
+   (dashboard). Settings takes S — its computers and skills sections are the
+   chords `s` and `c` used to reach, and both are one click away inside it. */
 export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
   t: "main",
   p: "projects",
@@ -31,9 +32,8 @@ export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
   r: "routine",
   a: "agents",
   e: "teams",
-  s: "skills",
+  s: "settings",
   h: "channels",
-  c: "computer",
   d: "admin",
 };
 

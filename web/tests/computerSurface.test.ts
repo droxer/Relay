@@ -29,16 +29,19 @@ describe("My Computer route shell", () => {
   });
 
   it("is registered in the shared mobile row map", async () => {
-    // Every work route needs `grid-row: 2` under the mobile topbar; this one
-    // was missing from the list.
+    // Every work route needs `grid-row: 2` under the mobile topbar. The
+    // roster is a settings section now, so the settings page is what claims
+    // the row and the roster fills its content column.
     const responsive = await read("web/src/styles/responsive.css");
     const block = responsive.match(/([^}]*)\{\s*grid-row: 2;/)?.[1] ?? "";
-    assert.match(block, /\.computer-page/);
+    assert.match(block, /\.settings-page/);
+    const settings = await read("web/src/styles/settings-page.css");
+    assert.match(settings, /\.settings-page \.sec-main > \.computer-page/);
   });
 
   it("has a client-route rewrite so a direct load does not 404", async () => {
     const config = await read("web/next.config.ts");
-    assert.match(config, /"\/computer"/);
+    assert.match(config, /"\/settings\/:path\*"/);
   });
 
   it("keeps the connect action reachable on mobile", async () => {

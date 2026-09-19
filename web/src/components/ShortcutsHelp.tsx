@@ -34,7 +34,7 @@ const NAVIGATE_ROWS: ShortcutRow[] = [
   { keys: "G A", labelKey: "nav.agents" },
   { keys: "G E", labelKey: "nav.teams" },
   { keys: "G H", labelKey: "nav.channels" },
-  { keys: "G C", labelKey: "nav.computer" },
+  { keys: "G S", labelKey: "nav.settings" },
   { keys: "G D", labelKey: "nav.admin", adminOnly: true },
 ];
 

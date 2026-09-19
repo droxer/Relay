@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -8,8 +8,7 @@ import {
   NavPreferences,
   NavThreads,
 } from "./icons";
-import { PreferencesDialog } from "./PreferencesDialog";
-import type { Theme, Language } from "./PreferencesPanel";
+import type { Theme } from "@/lib/appStorage";
 import { SideNav } from "./SideNav";
 import { ArtifactNavButton } from "./ArtifactNavButton";
 import { CommandMenu } from "./CommandMenu";
@@ -28,10 +27,9 @@ const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, stri
   routine: "nav.routine",
   agents: "nav.agents",
   teams: "nav.teams",
-  skills: "nav.skills",
+  settings: "nav.settings",
   channels: "nav.channels",
   admin: "nav.admin",
-  computer: "nav.computer",
 };
 
 export type MobileChatChrome = {
@@ -56,8 +54,6 @@ type AppShellProps = {
   sidenavResizing: boolean;
   onSidenavResize: (width: number, commit: boolean) => void;
   onSidenavResizeActive: (active: boolean) => void;
-  prefsOpen: boolean;
-  setPrefsOpen: Dispatch<SetStateAction<boolean>>;
   skipLinkHref: string;
   activeThreadLabel: string;
   threadSpaceOpen: boolean;
@@ -72,23 +68,30 @@ type AppShellProps = {
   /** Starts a fresh thread in the composer (the `n` chord / palette command). */
   onNewThread: () => void;
   children: ReactNode;
+  /** The theme lives here for the `toggle-theme` command only; the settings
+   *  route owns the full appearance and language controls. */
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
-  language: Language;
-  onLanguageChange: (language: Language) => void;
 };
 
-function PreferencesButton({ prefsOpen, setPrefsOpen }: { prefsOpen: boolean; setPrefsOpen: Dispatch<SetStateAction<boolean>> }) {
+/** The mobile topbar's settings affordance. Settings is a route now — the
+ *  same one the rail's gear opens — so this navigates rather than toggling a
+ *  modal. */
+function SettingsButton({ route, href, onNavigate }: { route: AppRoute; href: string; onNavigate: () => void }) {
   const { t } = useTranslation();
+  const active = route === "settings";
   return (
     <Button
       variant="ghost"
-      type="button"
-      className={`mobile-settings ${prefsOpen ? "active" : ""}`}
-      aria-label={t("nav.preferences")}
-      aria-haspopup="dialog"
-      aria-expanded={prefsOpen}
-      onClick={() => setPrefsOpen((v) => !v)}
+      render={<a href={href} />}
+      className={`mobile-settings ${active ? "active" : ""}`}
+      aria-label={t("nav.settings")}
+      aria-current={active ? "page" : undefined}
+      onClick={(event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        event.preventDefault();
+        onNavigate();
+      }}
     >
       <NavPreferences size={ICON.md} />
     </Button>
@@ -107,8 +110,6 @@ export function AppShell({
   sidenavResizing,
   onSidenavResize,
   onSidenavResizeActive,
-  prefsOpen,
-  setPrefsOpen,
   skipLinkHref,
   activeThreadLabel,
   threadSpaceOpen,
@@ -124,8 +125,6 @@ export function AppShell({
   children,
   theme,
   onThemeChange,
-  language,
-  onLanguageChange,
 }: AppShellProps) {
   const { t } = useTranslation();
   const adminView = useRelayStore((state) => state.adminView);
@@ -159,13 +158,13 @@ export function AppShell({
         onThemeChange(theme === "light" ? "dark" : "light");
         break;
       case "open-preferences":
-        setPrefsOpen(true);
+        onNavigateRoute("settings");
         break;
       case "shortcuts-help":
         setShortcutsOpen(true);
         break;
     }
-  }, [onNavigateRoute, onNewThread, onThemeChange, queueNewTask, setPrefsOpen, setSidenavExpanded, sidenavExpanded, theme]);
+  }, [onNavigateRoute, onNewThread, onThemeChange, queueNewTask, setSidenavExpanded, sidenavExpanded, theme]);
 
   const handleShortcut = useCallback((action: ShortcutAction) => {
     switch (action.kind) {
@@ -254,7 +253,7 @@ export function AppShell({
                     disabled={mobileChatChrome.spaceDisabled}
                   />
                 ) : null}
-                <PreferencesButton prefsOpen={prefsOpen} setPrefsOpen={setPrefsOpen} />
+                <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
               </div>
             </>
           ) : (
@@ -276,7 +275,7 @@ export function AppShell({
               >
                 <span>{activeThreadLabel}</span>
               </Button>
-              <PreferencesButton prefsOpen={prefsOpen} setPrefsOpen={setPrefsOpen} />
+              <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
             </>
           )
         ) : (
@@ -285,7 +284,7 @@ export function AppShell({
               <span className="mobile-topbar-eyebrow">{route === "admin" ? t("nav.admin") : t("nav.mobile_section")}</span>
               <span className="mobile-topbar-title">{mobileRouteTitle}</span>
             </div>
-            <PreferencesButton prefsOpen={prefsOpen} setPrefsOpen={setPrefsOpen} />
+            <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
           </>
         )}
       </div>
@@ -300,8 +299,6 @@ export function AppShell({
         onNavigateRoute={onNavigateRoute}
         hrefForRoute={hrefForRoute}
         isAdmin={isAdmin}
-        prefsOpen={prefsOpen}
-        setPrefsOpen={setPrefsOpen}
         onLogout={onLogout}
         onOpenCommandMenu={() => setCommandOpen(true)}
       />
@@ -312,17 +309,6 @@ export function AppShell({
       <main>
         {children}
       </main>
-
-      <PreferencesDialog
-        open={prefsOpen}
-        onClose={() => setPrefsOpen(false)}
-        preferences={{
-          theme,
-          onThemeChange,
-          language,
-          onLanguageChange,
-        }}
-      />
 
       <CommandMenu
         open={commandOpen}

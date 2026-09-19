@@ -97,7 +97,7 @@ describe("reviewed design regressions", () => {
     // check reads the table rather than the markup it expands to.
     const table = nav.match(/const MORE_ROUTES[\s\S]*?\n\];/)?.[0];
     assert.ok(table, "SideNav must declare a MORE_ROUTES table");
-    for (const route of ["routine", "teams", "computer", "admin"]) {
+    for (const route of ["routine", "teams", "settings", "admin"]) {
       assert.match(table, new RegExp(`route: "${route}"`));
     }
     assert.doesNotMatch(nav, /data-nav="channels"|route: "channels"/);

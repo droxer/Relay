@@ -16,8 +16,7 @@
 .messenger-shell[data-route="routine"],
 .messenger-shell[data-route="agents"],
 .messenger-shell[data-route="teams"],
-.messenger-shell[data-route="computer"],
-.messenger-shell[data-route="skills"] {
+.messenger-shell[data-route="settings"] {
   grid-template-columns: var(--shell-nav-track) minmax(0, 1fr);
 }
 
@@ -29,8 +28,7 @@
   .messenger-shell[data-route="routine"],
   .messenger-shell[data-route="agents"],
   .messenger-shell[data-route="teams"],
-  .messenger-shell[data-route="computer"],
-  .messenger-shell[data-route="skills"],
+  .messenger-shell[data-route="settings"],
   .messenger-shell[data-route="channels"][data-sidenav="open"],
   .messenger-shell[data-route="workspace"][data-sidenav="open"],
   .messenger-shell[data-route="mcp"][data-sidenav="open"],
@@ -38,8 +36,7 @@
   .messenger-shell[data-route="routine"][data-sidenav="open"],
   .messenger-shell[data-route="agents"][data-sidenav="open"],
   .messenger-shell[data-route="teams"][data-sidenav="open"],
-  .messenger-shell[data-route="computer"][data-sidenav="open"],
-  .messenger-shell[data-route="skills"][data-sidenav="open"] {
+  .messenger-shell[data-route="settings"][data-sidenav="open"] {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
   }
