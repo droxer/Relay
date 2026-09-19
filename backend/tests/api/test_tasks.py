@@ -1872,3 +1872,46 @@ def test_blocked_dispatch_reports_the_recorded_failure_not_progress(
 
     backlog = {"status": "backlog", "isRoutine": False}
     assert _unclaimable_dispatch(backlog, "claude")["code"] == "task_not_assigned"
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> None:
+    from relay.persistence.store_common import relay_event
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        routine = client.post("/api/v1/tasks", json={
+            "title": "Routine cleanup", "isRoutine": True,
+            "routineType": "task", "routineCadence": "daily",
+            "routineEnabled": False,
+        }).json()
+        tasks = client.app.state.task_store
+        sessions = client.app.state.session_store
+        occurrences = [tasks.create_routine_occurrence(routine["id"], day)
+                       for day in ["2026-09-18", "2026-09-19"]]
+        linked = []
+        for index, task in enumerate([routine, *occurrences]):
+            session = sessions.create_session({
+                "workspacePath": root, "taskGoal": "Routine run",
+                "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+            })
+            if not active or index != 2:
+                sessions.append_event(session["id"], relay_event(
+                    "session.completed", session["id"], {"outcome": "Done"}))
+            tasks.link_session(task["id"], session["id"])
+            linked.append(session["id"])
+        unrelated = sessions.create_session({
+            "workspacePath": root, "taskGoal": "Keep me",
+            "participants": ["human"], "ownerEmployeeId": "admin",
+        })
+        response = client.delete(f"/api/v1/tasks/{routine['id']}")
+        assert response.status_code == (409 if active else 200)
+        for session_id in linked:
+            assert client.get(f"/api/v1/threads/{session_id}").status_code == (200 if active else 404)
+        assert client.get(f"/api/v1/threads/{unrelated['id']}").status_code == 200
+        for task in [routine, *occurrences]:
+            assert client.get(f"/api/v1/tasks/{task['id']}").status_code == (200 if active else 404)
+        if not active:
+            assert client.delete(f"/api/v1/tasks/{routine['id']}").json()["outcome"] == "already_deleted"
