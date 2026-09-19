@@ -51,3 +51,11 @@ Broader checks:
   permission failure.
 - `npm audit` was attempted, but the configured npmmirror registry does not
   implement the advisory endpoint.
+
+Final backend suite: 1,705 passed, 10 skipped, and one installer test failed
+because the sandbox denied `/dev/tty`. That test passed when retried outside the
+sandbox (`pytest backend/tests/api/test_computer_installer.py -q -k token_prompt`).
+The installer/supervisor Node failures also passed outside the sandbox: all 43
+tests in `install.test.js` and `managed-reconcile.test.js` passed. The unrelated
+CSS assertion, test compilation error, and production-build limitation remain.
+All 38 task API tests passed in the full backend run.
