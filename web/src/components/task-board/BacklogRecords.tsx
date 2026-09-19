@@ -264,7 +264,11 @@ export function BacklogRowsHead({
   return (
     <TableRow className="backlog-rows-head">
       <TableHead className="backlog-rows-head-cell backlog-rows-head-select">{selectAll}</TableHead>
-      <TableHead className="backlog-rows-head-cell backlog-rows-head-dot" />
+      {/* Named, not blank: a columnheader with no accessible name leaves the
+          cells under it reading as a column of nothing. */}
+      <TableHead className="backlog-rows-head-cell backlog-rows-head-dot">
+        <span className="sr-only">{t("backlog.status")}</span>
+      </TableHead>
       <TableHead className="backlog-rows-head-cell backlog-rows-head-ref">{t("backlog.col_ref")}</TableHead>
       <SortableColumnHeader
         className="backlog-rows-head-cell backlog-rows-head-lead"
@@ -359,9 +363,13 @@ export function BacklogTaskRow({
           onCheckedChange={onToggleSelect}
         />
       </TableCell>
-      <span className="backlog-row-dot-cell" aria-hidden="true">
+      {/* A cell, so the row has exactly as many cells as the header has
+          columns, and the shape carries a word for anyone who cannot see it —
+          the same dot-plus-sr-only grammar AgentStateBadge uses. */}
+      <TableCell className="backlog-row-dot-cell">
         <StateMark shape={TASK_STATUS_SHAPE[task.status]} />
-      </span>
+        <span className="sr-only">{t(`backlog.statuses.${task.status}`)}</span>
+      </TableCell>
       <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell>
       <TableCell render={<div />} className="backlog-row-lead">
         <Button variant="ghost" type="button" className="backlog-row-title" onClick={onEdit}>{task.title}</Button>

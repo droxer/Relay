@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { filterRoutineTasks, latestRoutineSession, routineDueTone, routineState, routineStateCounts, ROUTINE_STATE_ORDER, runningRoutineCount, runningRoutineIds, type RoutineFilters } from "../src/lib/routine.js";
+import { filterRoutineTasks, latestRoutineSession, routineDueTone, routineState, routineStateCounts, ROUTINE_STATE_ORDER, runningRoutineIds, type RoutineFilters } from "../src/lib/routine.js";
 import type { RelaySession, RelayTask } from "../src/types.js";
 
 const baseFilters: RoutineFilters = {
@@ -148,22 +148,6 @@ describe("runningRoutineIds", () => {
     ];
 
     assert.deepEqual([...runningRoutineIds(tasks)].sort(), ["routine-a", "routine-b"]);
-  });
-});
-
-describe("runningRoutineCount", () => {
-  it("derives running definitions from their active occurrence tasks", () => {
-    const routines = [
-      task({ id: "routine-a", title: "A", isRoutine: true }),
-      task({ id: "routine-b", title: "B", isRoutine: true }),
-    ];
-    const tasks = [
-      ...routines,
-      task({ id: "occ-a", title: "A run", sourceRoutineId: "routine-a", status: "running" }),
-      task({ id: "occ-b", title: "B run", sourceRoutineId: "routine-b", status: "done" }),
-    ];
-
-    assert.equal(runningRoutineCount(routines, tasks), 1);
   });
 });
 

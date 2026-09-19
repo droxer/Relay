@@ -593,8 +593,7 @@
 /* ── Routine page variant ──────────────────────────────────────────── */
 
 .routine-page {
-  --backlog-lane-w: 300px;
-  /* Flat canvas — no top wash; the board reads as a single plane. */
+  /* Flat canvas — no top wash; the list reads as a single plane. */
   background: var(--surface-0);
 }
 
@@ -605,71 +604,6 @@
 .routine-rows-body {
   display: flex;
   flex-direction: column;
-}
-
-.routine-list {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  display: grid;
-  /* Capped, not stretched. `minmax(320px, 1fr)` gave three 600px cards on a
-     desktop — a card-shaped frame around two lines of text and a lot of
-     nothing. A routine card holds the same record a backlog card does, so it
-     stays the same size and the grid packs from the left. */
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 380px));
-  align-content: start;
-  /* Every card is --card-h-record tall by its own rule (backlog.css), so the
-     row needs neither stretching nor a per-card height here — `start` simply
-     stops the grid from stretching a short final row. The old note here said
-     cards size to their own content; they deliberately no longer do. */
-  align-items: start;
-  /* A card grid, not banded rows: the gap separates peers rather than
-     sections, so it steps to --sp-4 while the band gap goes to --sp-7. */
-  gap: var(--sp-4);
-  padding: var(--sp-6) var(--page-gutter) var(--sp-8);
-}
-
-.routine-card {
-  /* Its own rung on the card ladder: a routine has no exception line, so the
-     task card's frame would leave a band of empty card under every routine in
-     the grid. */
-  height: var(--card-h-routine);
-  /* Render-skip. Card tier — see the note on .agents-roster-row. The
-     placeholder matches the real frame, so nothing reflows when a skipped
-     card paints. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--card-h-routine);
-  min-width: 0;
-}
-
-/* Card-level state tints the hairline. Running is the one place a routine
-   card earns --live: an occurrence is executing right now, which is exactly
-   the --t-pulse condition. Idle boards stay fully grey, so colour density
-   across the grid reads as utilisation — the tint is a peripheral signal for
-   a whole grid at once, which is a different job from the badge's word. */
-.routine-card[data-routine-state="running"] {
-  --tone: var(--live);
-  border-color: var(--tone-line);
-}
-
-.routine-card[data-routine-state="overdue"] {
-  --tone: var(--err);
-  border-color: var(--tone-line);
-}
-
-/* Paused routines dispatch nothing, so they recede: dimmer title and
-   description, hairline held at the soft step. The dashed pill border carries
-   the actual statement — this is only the supporting weight. */
-.routine-card[data-routine-state="paused"] {
-  border-color: var(--line-2);
-}
-
-.routine-card[data-routine-state="paused"] .backlog-task-title {
-  color: var(--ink-2);
-}
-
-.routine-card[data-routine-state="paused"] .backlog-description {
-  color: var(--ink-3);
 }
 
 /* The enabled switch is its own full-width row beneath the field grid — a
@@ -693,25 +627,6 @@
   flex-direction: column;
   gap: var(--sp-0-5);
   min-width: 0;
-}
-
-@media (max-width: 820px) {
-  /* The cap holds here too — `1fr` handed a tablet one 788px-wide card for a
-     record that fills 380. `min(300px, 100%)` in the base rule is what lets
-     the single column shrink below the minimum on a phone instead of
-     overflowing it. */
-  /* The routine list is one flat table now: the section rail beside it names
-   the schedule state, so the bands that used to divide these rows would only
-   repeat what the rail has already said. Same box the group tables were —
-   see .list-group-rows. */
-.routine-rows-body {
-  display: flex;
-  flex-direction: column;
-}
-
-.routine-list {
-    padding-inline: var(--sp-4);
-  }
 }
 
 /* ── Inline creation ───────────────────────────────────────────────────

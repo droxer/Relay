@@ -64,7 +64,7 @@ describe("routine section rail", () => {
     assert.doesNotMatch(page, /ListGroup/);
     assert.doesNotMatch(page, /routinesByState/);
     assert.doesNotMatch(page, /useLanePagination/);
-    // One cursor for one collection, in either view.
+    // One cursor for one collection.
     assert.match(page, /const \{ page, setPage \} = usePagination\(\)/);
   });
 
@@ -72,10 +72,12 @@ describe("routine section rail", () => {
     const page = await read("src/components/RoutinesPage.tsx");
     const records = await read("src/components/task-board/RoutineRecords.tsx");
 
-    // Same rule the list rows follow under a band: the thing above has said
-    // it, so the record does not say it again.
-    assert.match(page, /showState=\{filters\.state === "all"\}/);
-    assert.match(records, /\{showState \? <RoutineStateBadge state=\{state\} \/> : null\}/);
+    // Same rule the rows follow under a band: the thing above has said it, so
+    // the record does not say it again. A row states schedule health as the
+    // dot in its state cell — a mark, not a second copy of the section word.
+    assert.doesNotMatch(page, /showState/);
+    assert.doesNotMatch(records, /<RoutineStateBadge state=\{state\} \/>/);
+    assert.match(records, /backlog-row-dot-cell[\s\S]{0,160}ROUTINE_STATE_SHAPE\[state\]/);
   });
 
   it("keeps the rail out of the shell's own grid", async () => {

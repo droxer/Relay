@@ -4,23 +4,23 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 describe("routine start button", () => {
-  it("uses the shared compact icon treatment in both routine views", async () => {
-    // The card and row renderers moved to task-board/RoutineRecords.tsx when
+  it("uses the shared compact icon treatment on the routine row", async () => {
+    // The row renderer moved to task-board/RoutineRecords.tsx when
     // RoutinesPage.tsx was split, mirroring the BacklogPage split; the page
-    // still owns the handler they call.
+    // still owns the handler it calls.
     const source = await readFile(
       resolve("web/src/components/task-board/RoutineRecords.tsx"),
       "utf8",
     );
-    // The board and the list own their own action clusters, and the split of
-    // backlog.css put them in different sheets — both still have to agree.
+    // The backlog board and the lists own their own action clusters, and the
+    // split of backlog.css put them in different sheets — both still agree.
     const [boardStyles, listStyles] = await Promise.all([
       readFile(resolve("web/src/styles/task-status.css"), "utf8"),
       readFile(resolve("web/src/styles/backlog-list.css"), "utf8"),
     ]);
     const usages = source.match(/<RoutineStartButton\b/g) ?? [];
 
-    assert.equal(usages.length, 2);
+    assert.equal(usages.length, 1);
     assert.match(source, /variant="icon"/);
     assert.match(source, /size="icon-dense"/);
     assert.match(source, /tinted/);
