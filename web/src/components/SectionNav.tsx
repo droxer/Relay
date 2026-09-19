@@ -8,6 +8,10 @@ export type SectionNavItem<Id extends string> = {
   id: Id;
   label: string;
   Icon: ComponentType<GlyphProps>;
+  /** The section's own address. Every section is a destination with a URL, so
+      the row is a link — openable in a new tab and copyable — exactly like the
+      app rail's rows one hairline to the left. */
+  href: string;
 };
 
 /**
@@ -27,6 +31,18 @@ export function SectionNav<Id extends string>({
   onChange: (next: Id) => void;
   label: string;
 }) {
+  /* The Button primitive types its handler against a <button>, and `render`
+     does not re-type it — the fields read here (the modifier keys and the
+     mouse button) are on the base MouseEvent either way. */
+  function handleClick(event: { defaultPrevented: boolean; button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; preventDefault: () => void }, id: Id) {
+    // Let the browser have the gestures that mean "somewhere else": a modified
+    // click or a middle click opens the section in its own tab.
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onChange(id);
+  }
+
   return (
     <nav className="sec-nav" aria-label={label}>
       <ul className="sec-nav-list">
@@ -37,11 +53,11 @@ export function SectionNav<Id extends string>({
             <li key={item.id} className="sec-nav-item">
               <Button
                 variant="ghost"
-                type="button"
+                render={<a href={item.href} />}
                 className="sec-nav-btn"
                 data-active={active ? "true" : "false"}
                 aria-current={active ? "page" : undefined}
-                onClick={() => onChange(item.id)}
+                onClick={(event) => handleClick(event, item.id)}
               >
                 <Icon size={ICON.sm} aria-hidden="true" />
                 <span className="sec-nav-label">{item.label}</span>

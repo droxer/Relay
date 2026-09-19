@@ -5,6 +5,7 @@ import { ComputerPage } from "./ComputerPage";
 import { SkillsPage } from "./SkillsPage";
 import { PageHeader } from "./PageHeader";
 import { SectionNav, type SectionNavItem } from "./SectionNav";
+import { hrefForSettingsSection } from "../lib/appRoute";
 import { AppearanceSection, LanguageSection } from "./settings/PreferenceSections";
 import {
   NavComputer,
@@ -54,10 +55,10 @@ export function SettingsPage({
   const { t } = useTranslation();
 
   const items: SectionNavItem<SettingsSection>[] = [
-    { id: "computers", label: t("computer.title"), Icon: NavComputer },
-    { id: "skills", label: t("skills.title"), Icon: NavSkills },
-    { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance },
-    { id: "language", label: t("pref.language"), Icon: PrefLanguage },
+    { id: "computers", label: t("computer.title"), Icon: NavComputer, href: hrefForSettingsSection("computers") },
+    { id: "skills", label: t("skills.title"), Icon: NavSkills, href: hrefForSettingsSection("skills") },
+    { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance, href: hrefForSettingsSection("appearance") },
+    { id: "language", label: t("pref.language"), Icon: PrefLanguage, href: hrefForSettingsSection("language") },
   ];
   const sectionLabel = items.find((item) => item.id === section)?.label ?? t("nav.settings");
 
@@ -70,10 +71,11 @@ export function SettingsPage({
       tabIndex={-1}
     >
       <div className="sec-rail">
+        {/* Kicker + title, like every other list rail in the app — see the
+            note on the control panel's rail. */}
         <PageHeader
           kicker={t("settings.eyebrow")}
           title={t("nav.settings")}
-          subtitle={t("settings.sub")}
           titleVariant="display"
           layout="stacked"
         />

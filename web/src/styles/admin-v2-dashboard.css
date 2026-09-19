@@ -48,12 +48,18 @@
 /* The rail is an instrument panel, so its height is a property of the panel
    and not of the readings inside it: a tile that gains a hint must not make
    the whole rail taller than it was a second ago, while the numbers beneath
-   it are still loading. */
+   it are still loading.
+
+   A MINIMUM, not a fixed height. As a fixed one it clipped: the hero tile ran
+   139px against the 132px box at every width, and under ~1200px of canvas —
+   the control panel's normal width now that it has a section rail beside it —
+   its foot wrapped to 159px and the delta line was sliced through the middle.
+   The row still settles to one height because the tiles are grid siblings. */
 .adm-dash-tile {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  height: var(--card-h-kpi);
+  min-height: var(--card-h-kpi);
   padding: var(--sp-5);
   border-right: 0.5px solid var(--line-1);
   min-width: 0;

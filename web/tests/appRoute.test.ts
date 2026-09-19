@@ -5,6 +5,7 @@ import {
   browserUrlForAppState,
   canonicalBrowserUrl,
   hrefForRoute,
+  hrefForAdminSection,
   hrefForSettingsSection,
   parseAppPath,
   pathForAppState,
@@ -58,6 +59,50 @@ describe("app pathname routes", () => {
     });
     // An unknown section is a bad link, not the default section.
     assert.equal(parseAppPath("/settings/nope").notFound, true);
+  });
+
+  it("parses a control-panel section", () => {
+    // The control panel's sections are destinations, so each has an address:
+    // a reload or a shared link opens the section it names, not Dashboard.
+    assert.deepEqual(parseAppPath("/admin"), {
+      route: "admin", mobileView: "chat", sessionId: null, adminSection: "dashboard",
+    });
+    assert.deepEqual(parseAppPath("/admin/employees"), {
+      route: "admin", mobileView: "chat", sessionId: null, adminSection: "employees",
+    });
+    assert.deepEqual(parseAppPath("/admin/computers"), {
+      route: "admin", mobileView: "chat", sessionId: null, adminSection: "computers",
+    });
+    assert.deepEqual(parseAppPath("/admin/organization"), {
+      route: "admin", mobileView: "chat", sessionId: null, adminSection: "organization",
+    });
+    // An unknown section is a bad link, not the default section — same rule
+    // the settings sections follow.
+    assert.equal(parseAppPath("/admin/nope").notFound, true);
+  });
+
+  it("writes only the canonical control-panel path", () => {
+    assert.equal(hrefForRoute("admin"), "/admin/dashboard");
+    assert.equal(hrefForAdminSection("computers"), "/admin/computers");
+    assert.equal(
+      pathForAppState({ route: "admin", mobileView: "chat", sessionId: null, adminSection: "organization" }),
+      "/admin/organization",
+    );
+  });
+
+  it("keeps the admin tables' params now that the section is a path segment", () => {
+    // The section segment made /admin look like an entity path, which would
+    // have dropped every sort, page, and filter the two tables write.
+    assert.equal(
+      canonicalBrowserUrl("/admin/employees", "?employeeSort=-running&employeePage=2"),
+      "/admin/employees?employeeSort=-running&employeePage=2",
+    );
+    assert.equal(
+      canonicalBrowserUrl("/admin/computers", "?nodeSort=node&nodeLanes=ready%3A2"),
+      "/admin/computers?nodeSort=node&nodeLanes=ready%3A2",
+    );
+    // A param the path does not own still goes.
+    assert.equal(canonicalBrowserUrl("/admin/employees", "?sort=-due"), "/admin/employees");
   });
 
   it("writes only the canonical settings path", () => {

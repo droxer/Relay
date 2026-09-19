@@ -108,10 +108,12 @@ export function ComputerPage({
     ? t("computer.limit_reached", { used: computersUsed, limit: computerLimit })
     : null;
 
-  const connectCta = (size: "default" | "sm", variant: "default" | "outline" = "default") => (
+  const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (
     <div className="computer-connect-cta">
-      {/* The header CTA takes the quiet outline tier — the cobalt fill is
-          reserved for the empty state, where connecting is the page's one
+      {/* The header CTA takes the ghost tier — the same one the control
+          panel's header actions take, because this header is the other half
+          of one rail-and-content grammar (section-rail.css). The cobalt fill
+          is reserved for the empty state, where connecting is the page's one
           move. The usage readout (2/3) and limit reason stay attached to the
           action either way. */}
       <Button
@@ -198,8 +200,7 @@ export function ComputerPage({
         title={t("computer.title")}
         count={t("computer.count", { count: myNodes.length })}
         titleVariant="display"
-        layout="stacked"
-        actions={connectCta("sm", "outline")}
+        actions={connectCta("sm", "ghost")}
       />
       {/* The shell clips its children, so the roster needs its own scroll
           container — see computer.css. */}

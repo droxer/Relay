@@ -1,7 +1,10 @@
 import { requestNavigation } from "./navigationGuard.ts";
 import {
+  DEFAULT_ADMIN_SECTION,
   DEFAULT_SETTINGS_SECTION,
+  isAdminSection,
   isSettingsSection,
+  type AdminSection,
   type AppRoute,
   type MobileView,
   type SettingsSection,
@@ -38,6 +41,7 @@ export type AppLocationState = {
   agentId?: string | null;
   teamWorkspaceId?: string | null;
   settingsSection?: SettingsSection | null;
+  adminSection?: AdminSection | null;
   composingNew?: boolean;
   login?: boolean;
   notFound?: boolean;
@@ -92,6 +96,11 @@ export function parseAppPath(pathname: string, _search = ""): AppLocationState {
     if (isSettingsSection(second)) return { route: "settings", ...base, settingsSection: second };
     return { route: "main", ...base, notFound: true };
   }
+  if (head === "admin" && rest.length === 0) {
+    if (!second) return { route: "admin", ...base, adminSection: DEFAULT_ADMIN_SECTION };
+    if (isAdminSection(second)) return { route: "admin", ...base, adminSection: second };
+    return { route: "main", ...base, notFound: true };
+  }
   const legacySection = LEGACY_SECTION_PATHS[normalized];
   if (legacySection) return { route: "settings", ...base, settingsSection: legacySection };
   const workRoute = WORK_ROUTES.get(normalized);
@@ -110,6 +119,7 @@ export function pathForAppState({
   login,
   notFound,
   settingsSection,
+  adminSection,
 }: AppLocationState): string {
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
@@ -118,6 +128,9 @@ export function pathForAppState({
   if (route === "settings") {
     const section = settingsSection ?? DEFAULT_SETTINGS_SECTION;
     return `/settings/${section}`;
+  }
+  if (route === "admin") {
+    return `/admin/${adminSection ?? DEFAULT_ADMIN_SECTION}`;
   }
   if (route === "projects") {
     if (!projectId) return "/projects";
@@ -137,6 +150,12 @@ export function pathForAppState({
  *  reader to their computers). */
 export function hrefForSettingsSection(section: SettingsSection): string {
   return pathForAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: section });
+}
+
+/** The href of one control-panel section — the section rail's rows are links,
+ *  and so is anything that sends a reader straight to Computers. */
+export function hrefForAdminSection(section: AdminSection): string {
+  return pathForAppState({ route: "admin", mobileView: "chat", sessionId: null, adminSection: section });
 }
 
 export function hrefForRoute(route: AppRoute, sessionId?: string | null): string {
@@ -331,6 +350,15 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     // The section is a path segment, so this branch runs with one — the
     // computers roster still pages.
     copyPageParams(head, source, target);
+  } else if (head === "admin") {
+    // Same shape as settings: the section is a path segment, so the sort,
+    // page, and filter params of the employee and computer tables have to be
+    // copied HERE rather than falling through to the no-entity branch below —
+    // otherwise every admin table control would write a param that
+    // canonicalization strips straight back out.
+    copySortParams(head, source, target);
+    copyPageParams(head, source, target);
+    copyFilterParams(head, source, target);
   } else if (!entityId) {
     copySortParams(head, source, target);
     copyPageParams(head, source, target);

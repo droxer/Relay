@@ -242,8 +242,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   return (
     <main className="skills-page" id="skills-panel" data-view={skills.length ? "list" : "empty"}>
       <nav className="skills-list" aria-label={t("skills.library_label")}>
+        {/* No kicker: the library is a section of personal settings, and the
+            section rail one column to the left already names it. The skill
+            detail's eyebrow below is record metadata (source · visibility),
+            not surface identity, so it stays. */}
         <PageHeader
-          kicker={t("skills.eyebrow")}
           title={t("skills.title")}
           count={t("skills.count", { count: skills.length })}
           titleVariant="display"
@@ -352,7 +355,10 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             <PageHeader
               kicker={`${t(`skills.source.${skill.source}`)} · ${t(`skills.visibility.${skill.visibility}`)}`}
               title={skill.displayName}
-              subtitle={<span className="skill-code">{skill.slug}</span>}
+              /* The slug rides beside the name rather than under it: a third
+                 line made this the one header in the surface that could not
+                 sit on the shared header step (section-rail.css). */
+              count={<span className="skill-code">{skill.slug}</span>}
               titleVariant="record"
               titleAs="h2"
               layout="stacked"

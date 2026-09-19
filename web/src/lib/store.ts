@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { writeTokens, type TokenMap } from "./appStorage";
+import { DEFAULT_ADMIN_SECTION, type AdminSection } from "./viewTypes";
 
-export type AdminPageView = "dashboard" | "employees" | "nodes" | "settings";
+/** The control panel's section ids live with the other route vocabularies in
+    viewTypes; the store only mirrors which one is open so the mobile topbar
+    can name it. */
+export type AdminPageView = AdminSection;
 
 // Cross-cutting client state for the main app shell: which employee/session is
 // open and the per-employee/sandbox auth tokens. Server state stays in TanStack
@@ -24,7 +28,7 @@ export const useRelayStore = create<RelayClientStore>((set) => ({
   selectedEmployee: "",
   selectedSessionId: undefined,
   tokens: {},
-  adminView: "dashboard",
+  adminView: DEFAULT_ADMIN_SECTION,
 
   setSelectedEmployee: (selectedEmployee) => set({ selectedEmployee }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
