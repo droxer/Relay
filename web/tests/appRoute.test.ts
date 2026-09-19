@@ -213,7 +213,10 @@ describe("app pathname routes", () => {
     // /backlog groups by task status (board lanes and list bands alike);
     // /routines groups by schedule health. Every other path drops the param.
     assert.equal(canonicalBrowserUrl("/backlog", "?lanes=running:2"), "/backlog?lanes=running%3A2");
-    assert.equal(canonicalBrowserUrl("/routines", "?lanes=running:2"), "/routines?lanes=running%3A2");
+    // /routines does NOT group: its section rail carries schedule health, so
+    // the board is one flat collection on one cursor and a lane cursor is a
+    // param no control on the page can honour.
+    assert.equal(canonicalBrowserUrl("/routines", "?lanes=running:2"), "/routines");
     assert.equal(canonicalBrowserUrl("/threads", "?lanes=running:2"), "/threads");
   });
 

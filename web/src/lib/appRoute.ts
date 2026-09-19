@@ -201,7 +201,6 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
  */
 const LANE_PAGE_PARAMS: Record<string, readonly string[]> = {
   backlog: ["lanes"],
-  routines: ["lanes"],
   admin: ["employeeLanes", "nodeLanes"],
 };
 

@@ -83,21 +83,27 @@ export const ROUTINE_STATE_ORDER: readonly RoutineState[] = [
 ];
 
 /**
- * Routines partitioned by schedule health, in `ROUTINE_STATE_ORDER` — the
- * grouping the list view bands on. Mirrors `tasksByStatus` for the backlog;
- * the state is DERIVED, so the running set has to come from the same place
- * the rows read it from or a routine lands in a band its own row denies.
+ * How many routines sit in each schedule state, in `ROUTINE_STATE_ORDER` —
+ * the numbers the board's section rail carries beside each section name.
+ *
+ * Every state is present even at zero: the rail names its sections whether or
+ * not anything is in them, and a rail that dropped its empty rows would
+ * reshuffle under the pointer as the search box narrowed the board.
+ *
+ * The state is DERIVED, so the running set has to come from the same place
+ * the rows read it from or a routine is counted under a state its own row
+ * denies.
  */
-export function routinesByState(
+export function routineStateCounts(
   routines: RelayTaskListItem[],
   running: ReadonlySet<string>,
   today = isoToday(),
-): Record<RoutineState, RelayTaskListItem[]> {
-  const grouped = Object.fromEntries(
-    ROUTINE_STATE_ORDER.map((state) => [state, [] as RelayTaskListItem[]]),
-  ) as Record<RoutineState, RelayTaskListItem[]>;
-  for (const routine of routines) grouped[routineState(routine, running, today)].push(routine);
-  return grouped;
+): Record<RoutineState, number> {
+  const counts = Object.fromEntries(
+    ROUTINE_STATE_ORDER.map((state) => [state, 0]),
+  ) as Record<RoutineState, number>;
+  for (const routine of routines) counts[routineState(routine, running, today)] += 1;
+  return counts;
 }
 
 /** The keys the routine list's sortable column headers speak. */

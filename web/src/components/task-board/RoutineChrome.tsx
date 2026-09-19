@@ -6,12 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ICON, ViewGrid, ViewList } from "../icons";
 import { StateMark } from "../StateMark";
+import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
+import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, FilterSelect } from "../FiltersBar";
 import { readViewPreference } from "../../lib/viewPreference";
 import {
   routineDueTone,
   ROUTINE_STATE_ORDER,
   runningRoutineCount,
+  type RoutineState,
   TASK_ROUTINE_CADENCES,
   TASK_ROUTINE_TYPES,
   type RoutineFilters,
@@ -61,7 +64,6 @@ export function activeRoutineFilterCount(filters: RoutineFilters): number {
   if (filters.cadence !== "all") count += 1;
   if (filters.agent !== "all") count += 1;
   if (filters.assignee.trim()) count += 1;
-  if (filters.state !== "all") count += 1;
   return count;
 }
 
@@ -121,7 +123,9 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
       query={filters.query}
       onQueryChange={(query) => onChange({ ...filters, query })}
       activeCount={activeRoutineFilterCount(filters)}
-      onClear={() => onChange(initialRoutineFilters)}
+      /* The rail owns `state`, so clearing the BAR must not move the reader
+         to another section — that control is not in this bar to be cleared. */
+      onClear={() => onChange({ ...initialRoutineFilters, state: filters.state })}
       trailing={sortMenu}
     >
       <FilterSelect
@@ -158,20 +162,52 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
         ]}
       />
       <Input name="routine-assignee-filter" autoComplete="off" spellCheck={false} value={filters.assignee} placeholder={t("backlog.assignee_filter")} aria-label={t("backlog.assignee_filter")} onChange={(event) => onChange({ ...filters, assignee: event.target.value })} />
-      <FilterSelect
-        name="routine-state-filter"
-        label={t("routine.state")}
-        value={filters.state}
-        onValueChange={(state) => onChange({ ...filters, state })}
-        options={[
-          { value: "all", label: t("routine.all_states") },
-          ...ROUTINE_STATE_ORDER.map((state) => ({
-            value: state,
-            label: t(`routine.states.${state}`),
-          })),
-        ]}
-      />
     </FiltersBar>
+  );
+}
+
+/** The rail's own vocabulary: every schedule state, under an "all" section. */
+export type RoutineSection = "all" | RoutineState;
+
+/**
+ * The routine board's section rail — schedule health as a list of
+ * destinations beside the board, in the shared `SectionNav` grammar.
+ *
+ * It is the ONE control for this dimension now. Schedule health used to be a
+ * select in the filter bar AND the bands the list grouped on AND a sort
+ * column, three grammars for one question; the rail replaced the first two.
+ * It writes `filters.state`, so the section is `?state=` in the URL and a
+ * link still lands where it says.
+ */
+export function RoutineStateNav({
+  value,
+  counts,
+  total,
+  onChange,
+}: {
+  value: RoutineSection;
+  counts: Record<RoutineState, number>;
+  total: number;
+  onChange: (next: RoutineSection) => void;
+}) {
+  const { t } = useTranslation();
+  const items: SectionNavItem<RoutineSection>[] = [
+    { id: "all", label: t("routine.all_states"), count: total },
+    ...ROUTINE_STATE_ORDER.map((state) => ({
+      id: state,
+      label: t(`routine.states.${state}`),
+      mark: <StateMark shape={ROUTINE_STATE_SHAPE[state]} />,
+      count: counts[state] ?? 0,
+    })),
+  ];
+
+  return (
+    <SectionNav
+      items={items}
+      value={value}
+      onChange={onChange}
+      label={t("routine.state")}
+    />
   );
 }
 

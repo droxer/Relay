@@ -598,6 +598,15 @@
   background: var(--surface-0);
 }
 
+/* The routine list is one flat table now: the section rail beside it names
+   the schedule state, so the bands that used to divide these rows would only
+   repeat what the rail has already said. Same box the group tables were —
+   see .list-group-rows. */
+.routine-rows-body {
+  display: flex;
+  flex-direction: column;
+}
+
 .routine-list {
   min-height: 0;
   flex: 1;
@@ -691,7 +700,16 @@
      record that fills 380. `min(300px, 100%)` in the base rule is what lets
      the single column shrink below the minimum on a phone instead of
      overflowing it. */
-  .routine-list {
+  /* The routine list is one flat table now: the section rail beside it names
+   the schedule state, so the bands that used to divide these rows would only
+   repeat what the rail has already said. Same box the group tables were —
+   see .list-group-rows. */
+.routine-rows-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.routine-list {
     padding-inline: var(--sp-4);
   }
 }
