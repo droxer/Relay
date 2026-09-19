@@ -82,6 +82,7 @@ export function RoutineAssignButton({ onAssign }: { onAssign: () => void }) {
 export function RoutineCard({
   task,
   state,
+  showState = true,
   ready,
   assigneeDisplayName,
   assigneeIsSelf,
@@ -95,6 +96,12 @@ export function RoutineCard({
 }: {
   task: RelayTaskListItem;
   state: RoutineState;
+  /**
+   * False on a board narrowed to ONE schedule state: the section rail beside
+   * it has already said which, so the pill would repeat it on every card —
+   * the same reason the list rows dropped their state word under a band.
+   */
+  showState?: boolean;
   ready: boolean;
   assigneeDisplayName?: string;
   assigneeIsSelf?: boolean;
@@ -133,7 +140,7 @@ export function RoutineCard({
           <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
           {task.description ? <p className="backlog-description">{task.description}</p> : null}
           <div className="backlog-meta">
-            <RoutineStateBadge state={state} />
+            {showState ? <RoutineStateBadge state={state} /> : null}
             <PriorityBadge priority={task.priority} />
             {assigned ? (
               <span className="backlog-agent">
