@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import random
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -24,7 +23,6 @@ from ..persistence.stores import valid_agent
 from ..persistence.task_store import (
     compact_task_writes,
     dispatch_claim_active,
-    dispatch_retry_due,
     routine_due_sort_key,
     task_claim_sort_key,
 )
@@ -35,9 +33,8 @@ from ..services.agent_routing import (
     persist_legacy_session_computer_id,
     resolve_agent_assignments,
 )
-from ..services.dispatch_retry import (
-    DEFAULT_MAX_CONSECUTIVE_DISPATCH_FAILURES,
-    record_dispatch_retry,
+from ..services.dispatch_failure import (
+    record_dispatch_failure,
     safe_dispatch_error_message,
 )
 from ..services.project_runtime import (
@@ -178,8 +175,6 @@ class TaskScheduler:
         org_settings_store: Any | None = None,
         interval_seconds: float = 10.0,
         max_dispatches_per_tick: int = 5,
-        max_dispatch_failures: int = DEFAULT_MAX_CONSECUTIVE_DISPATCH_FAILURES,
-        jitter: Callable[[], float] = random.random,
         today: Callable[[], date] = date.today,
     ) -> None:
         self.task_store = task_store
@@ -191,8 +186,6 @@ class TaskScheduler:
         self.org_settings_store = org_settings_store
         self.interval_seconds = interval_seconds
         self.max_dispatches_per_tick = max_dispatches_per_tick
-        self.max_dispatch_failures = max_dispatch_failures
-        self._jitter = jitter
         self._today = today
         self._loop_task: asyncio.Task[None] | None = None
         self._tick_lock = asyncio.Lock()
@@ -299,14 +292,34 @@ class TaskScheduler:
         for candidate in self._dispatchable_tasks():
             if attempts >= self.max_dispatches_per_tick:
                 break
-            if not dispatch_retry_due(candidate):
-                skipped += 1
-                continue
             # Admitted work stays assigned until the daemon starts executing.
             # Do not re-route it, block it, or enqueue another execution.
             if dispatch_claim_active(candidate) or (
                 self.registry.daemon_store.active_run_request_for_task(candidate["id"])
             ):
+                skipped += 1
+                continue
+            outcome = candidate.get("dispatchOutcome") or {}
+            retry = candidate.get("dispatchRetry") or {}
+            if retry or (
+                outcome.get("state") == "queued"
+                and outcome.get("code") in ("task_wip_limit", "dispatch_failed")
+            ):
+                # Older versions left failed dispatches in the queue. Do not
+                # revive them when their deadline or claim lease expires.
+                with self.task_store.task_write_scope(candidate["id"]) as current:
+                    if (
+                        current.get("status") == "assigned"
+                        and not dispatch_claim_active(current)
+                        and current.get("executionOwner") == candidate.get("executionOwner")
+                        and current.get("dispatchOutcome") == candidate.get("dispatchOutcome")
+                        and current.get("dispatchRetry") == candidate.get("dispatchRetry")
+                    ):
+                        record_dispatch_failure(
+                            self.task_store, current,
+                            code=outcome.get("code") or retry.get("code") or "dispatch_failed",
+                            message=outcome.get("message") or retry.get("message") or "Previous dispatch failed.",
+                        )
                 skipped += 1
                 continue
             task = self._materialize_legacy_assignment(candidate) or candidate
@@ -651,27 +664,10 @@ class TaskScheduler:
                 code = dispatch_failure_code(error)
                 if claim_id and code != "dispatch_failed":
                     self.task_store.release_dispatch_claim(task["id"], claim_id)
-                self.task_store.record_dispatch_outcome(
-                    task["id"],
-                    "queued",
-                    code=code,
-                    message=str(error),
+                record_dispatch_failure(
+                    self.task_store, task, code=code,
+                    message=safe_dispatch_error_message(error),
                 )
-                if code not in ("dispatch_failed", "task_wip_limit"):
-                    # A classified failure means the run was not accepted, so the
-                    # retry budget applies. An unclassified ("dispatch_failed")
-                    # failure keeps its claim because the run may have been
-                    # accepted; that ambiguity must be reconciled by the claim
-                    # lease, not by consuming retry budget.
-                    record_dispatch_retry(
-                        self.task_store,
-                        task,
-                        code=code,
-                        message=safe_dispatch_error_message(error),
-                        base_seconds=self.interval_seconds,
-                        max_failures=self.max_dispatch_failures,
-                        sample=self._jitter,
-                    )
                 logger.warning(
                     "Scheduled task dispatch failed",
                     task_id=task["id"],

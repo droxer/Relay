@@ -38,9 +38,8 @@ from .agent_routing import (
     dispatch_reason_code,
     resolve_agent_assignments,
 )
-from .dispatch_retry import (
-    DISPATCH_RETRY_EXHAUSTED_CODE,
-    record_dispatch_retry,
+from .dispatch_failure import (
+    record_dispatch_failure,
     safe_dispatch_error_message,
 )
 from .project_runtime import ProjectDispatchError, resolve_project_task_assignments
@@ -664,31 +663,13 @@ class TaskDispatcher:
             self.ctx.task_store.update_task(self.task["id"], {"status": "backlog"})
         if not self.record_pending:
             raise
-        if code not in ("dispatch_failed", "task_wip_limit"):
-            # A classified failure means the run was not accepted; record the
-            # retry under the same rules the scheduler uses. An unclassified
-            # failure keeps its claim because acceptance is ambiguous, and an
-            # ambiguous acceptance must not consume retry budget.
-            updated = record_dispatch_retry(
-                self.ctx.task_store,
-                self.task,
-                code=code,
-                message=safe_dispatch_error_message(error),
-            )
-            if updated.get("status") == "blocked":
-                return _result(
-                    updated,
-                    "rejected",
-                    code=DISPATCH_RETRY_EXHAUSTED_CODE,
-                    message=(updated.get("dispatchOutcome") or {}).get("message"),
-                )
-        state = "rejected" if code == "agent_forbidden" else "queued"
-        return _record_result(
-            self.ctx,
-            self.task["id"],
-            state,
-            code=code,
-            message=str(error),
+        updated = record_dispatch_failure(
+            self.ctx.task_store, self.task, code=code,
+            message=safe_dispatch_error_message(error),
+        )
+        return _result(
+            updated, "rejected", code=code,
+            message=updated["dispatchOutcome"]["message"],
         )
 
     def _mark_assigned_if_backlog(self) -> None:

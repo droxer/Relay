@@ -13,7 +13,7 @@ from relay.persistence.daemon_store import LocalDaemonStore
 from relay.persistence.project_store import DatabaseProjectStore
 from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
 from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
-from relay.services.dispatch_retry import record_dispatch_retry
+from relay.services.dispatch_failure import record_dispatch_failure
 from relay.services.task_dispatch import start_task_on_ready_node
 from relay.tasks import TaskScheduler
 
@@ -145,18 +145,16 @@ def test_disabled_agent_records_actionable_blocker(execution, source):
     assert blocked["blockerReason"] == blocked["dispatchOutcome"]["message"]
 
 
-def test_retry_exhaustion_records_actionable_blocker(execution):
+def test_first_dispatch_failure_records_actionable_blocker(execution):
     ctx, task, _ = execution
-    blocked = record_dispatch_retry(
+    blocked = record_dispatch_failure(
         ctx.task_store,
         task,
         code="capacity_exhausted",
         message="Node is full",
-        max_failures=1,
-        sample=lambda: 0.5,
     )
     assert blocked["status"] == "blocked"
-    assert "capacity_exhausted" in blocked["blockerReason"]
+    assert blocked["dispatchOutcome"]["code"] == "capacity_exhausted"
     assert "Node is full" in blocked["blockerReason"]
 
 
@@ -260,8 +258,53 @@ def test_failed_dispatch_requires_manual_retry(execution, monkeypatch, source, c
     assert len(calls) == 1
     monkeypatch.setattr(ctx.backend, "run", original)
     if code != "dispatch_failed":
+        ctx.task_store.update_task(task["id"], {"status": "assigned"})
         result = asyncio.run(start_task_on_ready_node(
             ctx, ctx.task_store.get_task(task["id"]),
             {"employeeId": "alice", "isAdmin": False}
         ))
         assert result["dispatch"]["state"] == "started"
+
+
+@pytest.mark.parametrize("legacy", ["deadline", "wip", "ambiguous"])
+def test_scheduler_does_not_revive_old_failed_attempts(execution, monkeypatch, legacy):
+    ctx, task, _ = execution
+    if legacy == "deadline":
+        ctx.task_store.record_dispatch_retry(
+            task["id"], failure_count=1, next_attempt_at="2000-01-01T00:00:00Z",
+            code="capacity_exhausted", message="Node is full",
+        )
+    else:
+        ctx.task_store.record_dispatch_outcome(
+            task["id"], "queued",
+            code="task_wip_limit" if legacy == "wip" else "dispatch_failed",
+            message="Previous attempt failed",
+        )
+
+    async def unexpected_run(*args, **kwargs):
+        pytest.fail("a historical failure must not be dispatched automatically")
+
+    monkeypatch.setattr(ctx.backend, "run", unexpected_run)
+    asyncio.run(scheduler(ctx).tick())
+    blocked = ctx.task_store.get_task(task["id"])
+    assert blocked["status"] == "blocked"
+    assert "dispatchRetry" not in blocked
+    asyncio.run(scheduler(ctx).tick())
+
+
+def test_wip_rejection_does_not_fill_conversation_list(execution, monkeypatch):
+    ctx, task, _ = execution
+    monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
+    ctx.task_store.create_task({
+        "title": "Already in progress", "status": "running",
+        "assigneeEmployeeId": "alice",
+    })
+    asyncio.run(scheduler(ctx).tick())
+    failed = ctx.task_store.get_task(task["id"])
+    assert failed["status"] == "blocked"
+    assert failed["dispatchOutcome"]["code"] == "task_wip_limit"
+    sessions = failed.get("linkedSessionIds", [])
+    assert len(sessions) == 1
+    for _ in range(3):
+        asyncio.run(scheduler(ctx).tick())
+    assert ctx.task_store.get_task(task["id"])["linkedSessionIds"] == sessions

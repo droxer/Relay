@@ -213,6 +213,11 @@ and `RELAY_TASK_SCHEDULER_MAX_DISPATCHES`. Override the port with:
 make backend BACKEND_PORT=9000
 ```
 
+Failed task dispatches block immediately and require an explicit manual retry.
+There is no automatic retry count, backoff, or retry timer. The failure reason
+remains on the task. The scheduler still promotes future routine occurrences
+and starts newly assigned work when a daemon becomes available.
+
 Start a daemon connected to the backend:
 
 ```bash

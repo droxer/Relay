@@ -182,7 +182,7 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
 
-        assert started.json()["dispatch"]["state"] == "queued"
+        assert started.json()["dispatch"]["state"] == "rejected"
         assert started.json()["dispatch"]["code"] == "workspace_unavailable"
         assert started.json()["session"] is None
 
@@ -333,9 +333,8 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
         )
 
 
-def test_manual_dispatch_failure_records_retry_state(monkeypatch) -> None:
-    """A failed manual dispatch persists retry state under the same rules as
-    the scheduled path: count, deadline, real error code, and a safe message."""
+def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
+    """Manual failures block under the same policy as scheduled failures."""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -368,16 +367,14 @@ def test_manual_dispatch_failure_records_retry_state(monkeypatch) -> None:
         )
 
         assert result is not None
-        assert result["dispatch"]["state"] == "queued"
+        assert result["dispatch"]["state"] == "rejected"
         assert result["dispatch"]["code"] == "capacity_exhausted"
         failed = app.state.task_store.get_task(task["id"])
-        retry = failed["dispatchRetry"]
-        assert retry["failureCount"] == 1
-        assert retry["code"] == "capacity_exhausted"
-        assert "capacity_exhausted: node is full" in retry["message"]
-        assert retry["nextAttemptAt"]
-        # A classified failure means the run was not accepted, so the claim
-        # is released and the task is eligible again after the deadline.
+        assert failed["status"] == "blocked"
+        assert "dispatchRetry" not in failed
+        assert "capacity_exhausted: node is full" in failed["blockerReason"]
+        assert "manually" in failed["blockerReason"]
+        # Known rejection releases the claim so an explicit retry can proceed.
         assert "dispatchClaim" not in failed
 
 
@@ -418,7 +415,7 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
         )
 
         assert result is not None
-        assert result["dispatch"]["state"] == "queued"
+        assert result["dispatch"]["state"] == "rejected"
         assert result["dispatch"]["code"] == "dispatch_failed"
         failed = app.state.task_store.get_task(task["id"])
         assert failed["dispatchClaim"]["id"]
