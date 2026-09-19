@@ -358,13 +358,22 @@ def _owned_live_node(actor: dict[str, Any], ctx: AppContextDep, sandbox_id: str)
 
 def _token_response(request: Request, node: dict[str, Any], token: str) -> dict[str, Any]:
     sandbox_mode = node.get("sandboxMode") or LOCAL_ENROLLMENT_SANDBOX_MODE
-    return {
+    response = {
         "nodeToken": token,
         "daemonEnv": daemon_start_env(request, {**node, "nodeToken": token}, sandbox_mode),
         "daemonCommand": daemon_start_command(
             request, node, sandbox_mode, prompt_for_token=True
         ),
     }
+
+    if (
+        sandbox_mode == "none"
+        and node.get("nodeLocation") == "employee-device"
+        and node.get("employeeId")
+        and node.get("workspacePath")
+    ):
+        response["installCommand"] = computer_install_command(request, node)
+    return response
 
 
 @router.get("/daemon-nodes/{sandbox_id}/token")

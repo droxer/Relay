@@ -191,3 +191,23 @@ cp "$fixture" "$2"
     assert "Installing a private Node.js" in result.stdout
     assert "INSTALL_STARTED" in result.stdout
     assert (Path(env["HOME"]) / ".local/share/relay/runtimes/node-v24.1.0-darwin-arm64/bin/node").is_file()
+
+
+def test_token_response_only_offers_installer_for_complete_personal_computers(monkeypatch):
+    from starlette.requests import Request
+    from relay.api.daemon_node_routes import _token_response
+
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
+    request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
+    node = {"id": "node-1", "employeeId": "alice", "workspacePath": "/home/alice/project",
+            "nodeLocation": "employee-device", "sandboxMode": "none"}
+    response = _token_response(request, node, "fixture-token")
+    assert "curl -fsSL" in response["installCommand"]
+    assert "fixture-token" not in response["installCommand"]
+    for overrides in [
+        {"sandboxMode": "boxlite"}, {"nodeLocation": "cloud"},
+        {"workspacePath": None}, {"employeeId": None},
+    ]:
+        response = _token_response(request, {**node, **overrides}, "fixture-token")
+        assert "installCommand" not in response
+        assert "daemonCommand" in response
