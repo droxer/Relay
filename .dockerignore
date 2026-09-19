@@ -44,3 +44,7 @@ daemon.log
 # Docs and assets the backend image does not serve.
 docs/
 assets/
+
+# Rebuilt in the computer-client build stage.
+backend/relay/computer/daemon.tar.gz*
+packages/*/dist/

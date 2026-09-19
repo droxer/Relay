@@ -159,6 +159,13 @@ describe("My Computer record card", () => {
     assert.match(enrollment, /sandboxMode: "none"/);
   });
 
+  it("offers the server-generated install-and-connect command without a repository checkout", async () => {
+    const drawer = await read("web/src/components/computer/ConnectComputerDrawer.tsx");
+    assert.match(drawer, /value=\{result\.installCommand\}/);
+    assert.match(drawer, /!result\.installCommand && result\.daemonCommand/);
+    assert.doesNotMatch(drawer, /git clone|npm ci|LOCAL_DAEMON_SETUP/);
+  });
+
   it("reports adoption from `reused`, not from whether a token came back", async () => {
     // Adopting a computer whose enrollment never finished reissues its token,
     // so token presence answers "is there a secret to show", never "was this

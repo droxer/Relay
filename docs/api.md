@@ -543,3 +543,20 @@ persists an immutable child round before delivery. Clients still submit semantic
 messages, not daemon assignments. Two repair cycles and two earlier-teammate
 consultations are permitted per request. See
 [ADR-019](adr/019-team-work-acceptance.md) for ordering, replay, and compatibility.
+
+## Personal-computer installation
+
+`POST /api/v1/daemon-node-enrollments/local` additionally returns `installCommand`,
+a shell-quoted `curl … | sh -s -- …` command scoped to the enrolled computer. It
+contains no token; the installer reads the existing node token from `/dev/tty`.
+`daemonCommand` and `daemonEnv` remain available for compatibility.
+
+Public non-JSON download routes at the backend origin:
+
+- `GET /computer/install.sh`: POSIX shell installer pinned to the current client
+  archive checksum, `Cache-Control: no-store`; 503 if the client was not built.
+- `GET /computer/daemon-{sha256}.tar.gz`: compiled client archive, immutable
+  caching; 404 if the requested digest is not the deployed release.
+
+These routes serve build artifacts only. All enrollment and execution still
+flow through authenticated registry routes and the user's daemon.

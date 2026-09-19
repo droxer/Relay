@@ -22,6 +22,7 @@ from .api import (
     auth_routes,
     chat_routes,
     collaboration_routes,
+    computer_installer_routes,
     daemon_node_routes,
     managed_node_routes,
     node_workspace_routes,
@@ -420,6 +421,9 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     # Stable persisted media locators intentionally remain outside the JSON API
     # namespace because their URLs are persisted data.
     app.include_router(profile_image_routes.router, tags=["profile-images"])
+
+    # Public downloads are served at the API origin, ahead of the SPA fallback.
+    app.include_router(computer_installer_routes.router)
 
     # Registered last: its root catch-all serves the exported web UI and must not
     # shadow the explicit API routes above.

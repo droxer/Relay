@@ -50,3 +50,6 @@ docs/superpowers/
 # Browser test artifacts
 web/test-results/
 web/playwright-report/
+
+# Generated downloadable computer client
+backend/relay/computer/daemon.tar.gz*

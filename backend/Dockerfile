@@ -1,8 +1,18 @@
 # Relay control plane image (Railway, or any container host).
 #
-# This builds the backend only. It deliberately contains no agent CLIs and no
-# BoxLite: the backend never executes agents — it queues work for daemons, which
+# The runtime image contains the backend and a downloadable client archive, with no agent CLIs or
+# BoxLite runtime: the backend never executes agents — it queues work for daemons, which
 # run on machines that own a sandbox. See docs/deployment.md.
+# Compile the downloadable personal-computer client; it is data in the final image.
+FROM node:24-bookworm-slim AS computer-client
+WORKDIR /build
+COPY package.json package-lock.json tsconfig.options.json ./
+COPY packages/relay-core/ ./packages/relay-core/
+COPY packages/relay-daemon/ ./packages/relay-daemon/
+COPY tools/build-computer.mjs ./tools/build-computer.mjs
+RUN npm ci --ignore-scripts --include=dev --workspace relay-core --workspace relay-daemon --include-workspace-root \
+    && npm run build:computer
+
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -22,6 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --extra migration --frozen --no-install-project
 
 COPY backend/ ./backend/
+COPY --from=computer-client /build/backend/relay/computer/daemon.tar.gz ./backend/relay/computer/daemon.tar.gz
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --extra migration --frozen
 

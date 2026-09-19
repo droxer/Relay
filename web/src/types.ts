@@ -530,6 +530,8 @@ export interface CreateLocalDeviceEnrollmentInput {
 }
 
 export interface CreateLocalDeviceEnrollmentResponse extends CreateControlPanelDaemonNodeResponse {
+  /** Downloads the client and starts a per-user service; contains no credential. */
+  installCommand?: string;
   /** True when an existing computer was adopted instead of a new one created. */
   reused?: boolean;
 }
