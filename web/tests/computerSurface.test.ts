@@ -161,8 +161,8 @@ describe("My Computer record card", () => {
 
   it("offers the server-generated install-and-connect command without a repository checkout", async () => {
     const drawer = await read("web/src/components/computer/ConnectComputerDrawer.tsx");
-    assert.match(drawer, /value=\{result\.installCommand\}/);
-    assert.match(drawer, /!result\.installCommand && result\.daemonCommand/);
+    assert.match(drawer, /value=\{result\.installCommand \?\? result\.daemonCommand/);
+    assert.match(drawer, /!result\.installCommand \? <Alert>/);
     assert.doesNotMatch(drawer, /git clone|npm ci|LOCAL_DAEMON_SETUP/);
   });
 

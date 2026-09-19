@@ -242,6 +242,7 @@ export function ComputerPage({
         onSave={updateDaemonNodeDisabledAgents}
       />
       <ConnectComputerDrawer
+        nodes={myNodes}
         open={connectDrawerOpen}
         onClose={() => setConnectDrawerOpen(false)}
         onConnected={handleConnected}
