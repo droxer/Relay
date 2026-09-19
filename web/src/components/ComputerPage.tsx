@@ -195,7 +195,6 @@ export function ComputerPage({
   return (
     <section id="computer-panel" className="computer-page" aria-label={t("computer.title")} tabIndex={-1}>
       <PageHeader
-        kicker={t("nav.manage")}
         title={t("computer.title")}
         count={t("computer.count", { count: myNodes.length })}
         titleVariant="display"

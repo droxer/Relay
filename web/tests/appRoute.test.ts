@@ -5,6 +5,7 @@ import {
   browserUrlForAppState,
   canonicalBrowserUrl,
   hrefForRoute,
+  hrefForSettingsSection,
   parseAppPath,
   pathForAppState,
   pathKeepsThreadSpaceParams,
@@ -30,11 +31,42 @@ describe("app pathname routes", () => {
       "/teams": "teams",
       "/channels": "channels",
       "/admin": "admin",
-      "/computer": "computer",
+      "/settings": "settings",
     } as const;
     for (const [path, route] of Object.entries(routes)) {
       assert.equal(parseAppPath(path).route, route);
     }
+  });
+
+  it("parses a settings section, and keeps the paths its sections came from", () => {
+    assert.deepEqual(parseAppPath("/settings"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers",
+    });
+    assert.deepEqual(parseAppPath("/settings/skills"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
+    });
+    assert.deepEqual(parseAppPath("/settings/appearance"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "appearance",
+    });
+    // Computers and Skills were routes of their own before they became
+    // settings sections; their links still resolve.
+    assert.deepEqual(parseAppPath("/computer"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers",
+    });
+    assert.deepEqual(parseAppPath("/skills"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
+    });
+    // An unknown section is a bad link, not the default section.
+    assert.equal(parseAppPath("/settings/nope").notFound, true);
+  });
+
+  it("writes only the canonical settings path", () => {
+    assert.equal(hrefForRoute("settings"), "/settings/computers");
+    assert.equal(hrefForSettingsSection("skills"), "/settings/skills");
+    assert.equal(
+      pathForAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: "language" }),
+      "/settings/language",
+    );
   });
 
   it("formats clean paths with encoded entity ids", () => {
@@ -49,7 +81,7 @@ describe("app pathname routes", () => {
     assert.equal(hrefForRoute("projects"), "/projects");
     assert.equal(hrefForRoute("backlog"), "/backlog");
     assert.equal(hrefForRoute("routine"), "/routines");
-    assert.equal(hrefForRoute("computer"), "/computer");
+    assert.equal(hrefForRoute("settings"), "/settings/computers");
   });
 
   it("marks unknown paths as not found instead of opening chat", () => {
@@ -155,7 +187,7 @@ describe("app pathname routes", () => {
     // back out, so the pager would advance its own highlight and show page 1.
     assert.equal(canonicalBrowserUrl("/backlog", "?page=3"), "/backlog?page=3");
     assert.equal(canonicalBrowserUrl("/routines", "?page=2"), "/routines?page=2");
-    assert.equal(canonicalBrowserUrl("/computer", "?page=2"), "/computer?page=2");
+    assert.equal(canonicalBrowserUrl("/settings/computers", "?page=2"), "/settings/computers?page=2");
     assert.equal(
       canonicalBrowserUrl("/admin", "?employeePage=2&nodePage=4"),
       "/admin?employeePage=2&nodePage=4",

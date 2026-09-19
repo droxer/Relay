@@ -94,42 +94,7 @@
     height: var(--touch-target);
   }
 
-  /* ── Preferences modal ─────────────────────────────────────────── */
-  .pref-viewport {
-    align-items: flex-end;
-    padding:
-      max(env(safe-area-inset-top), var(--sp-3))
-      var(--sp-3)
-      0;
-  }
-
-  .pref-modal {
-    width: 100%;
-    max-height: min(92dvh, 100%);
-    border-radius: var(--r-3) var(--r-3) 0 0;
-    /* Shared rise: accepts the full 0→1 fade (sheet-in's .72 opacity floor dropped). */
-    animation: rise var(--t-fast) var(--ease) both;
-  }
-
-  .pref-modal[data-ending-style] {
-    animation: overlay-sheet-out var(--t-fast) var(--ease) forwards;
-  }
-
-  .pref-header {
-    padding: var(--sp-4);
-  }
-
-  .pref-header-text h2 {
-    font: var(--type-title);
-    letter-spacing: var(--type-title-track);
-  }
-
-  .pref-content {
-    padding: var(--sp-4);
-    padding-bottom: max(env(safe-area-inset-bottom), var(--sp-4));
-  }
-
-  /* ── Confirm / prompt dialogs (bottom sheet, matches preferences) ── */
+  /* ── Confirm / prompt dialogs (bottom sheet) ── */
   .dialog-viewport {
     align-items: flex-end;
     padding:

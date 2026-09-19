@@ -10,9 +10,8 @@ const LABELS: Record<string, string> = {
   "nav.routine": "Routines",
   "nav.agents": "Agents",
   "nav.teams": "Teams",
-  "nav.skills": "Skills",
+  "nav.settings": "Settings",
   "nav.channels": "Channels",
-  "nav.computer": "My Computer",
   "nav.admin": "Admin",
   "thread.new_thread": "New thread",
   "backlog.new_task": "New task",
@@ -42,7 +41,7 @@ describe("buildCommands", () => {
     const navigate = userCommands.filter((command) => command.group === "navigate");
     assert.deepEqual(
       navigate.map((command) => command.id),
-      ["go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:skills", "go:channels", "go:computer"],
+      ["go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:channels", "go:settings"],
     );
     for (const command of navigate) {
       assert.match(command.hint ?? "", /^G [A-Z]$/, `${command.id} lost its go-to hint`);

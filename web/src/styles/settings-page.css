@@ -1,0 +1,33 @@
+/* =====================================================================
+   Personal settings  (settings-page)
+
+   The shell is the shared rail-and-content grammar (section-rail.css); this
+   file only says how each section fills the content column. Computers and
+   Skills bring their own page frame — a roster with its own header, a library
+   with its own rail — so they take the column whole rather than sitting
+   inside the column's own header + body.
+   ===================================================================== */
+
+.settings-page {
+  color: var(--ink-2);
+}
+
+.settings-page .sec-main > .computer-page,
+.settings-page .sec-main > .skills-page {
+  flex: 1;
+  min-height: 0;
+}
+
+/* An option list is a form, not a table: it keeps a readable measure instead
+   of stretching to a 1200px canvas. */
+.settings-page .sec-section-body > * {
+  max-width: 44rem;
+}
+
+@media (max-width: 640px) {
+  /* The mobile topbar names the route and the section strip names the
+     section, so a header with nothing but a title is a dead band here. */
+  .settings-page .sec-main > .page-header:not(:has(.page-header-actions)) {
+    display: none;
+  }
+}

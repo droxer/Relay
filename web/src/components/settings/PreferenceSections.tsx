@@ -1,24 +1,9 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  SUPPORTED_LANGUAGES,
-  SUPPORTED_THEMES,
-  type Language,
-  type Theme,
-} from "../lib/appStorage";
-import {
-  ICON,
-  PrefAppearance,
-  PrefLanguage,
-} from "./icons";
+import type { Language, Theme } from "../../lib/appStorage";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-export type { Language, Theme };
-export { SUPPORTED_LANGUAGES, SUPPORTED_THEMES };
 
 const LANGUAGES: { code: Language; label: string; native: string }[] = [
   { code: "en",    label: "English",            native: "English"   },
@@ -27,18 +12,6 @@ const LANGUAGES: { code: Language; label: string; native: string }[] = [
 ];
 
 const THEME_VALUES: Theme[] = ["light", "dark", "system"];
-
-/* Settings categories. Adding a new settings area = one entry here plus a
-   case in renderSection (and its `pref.<id>` i18n label). The left nav and
-   the content panel are both driven by this list. */
-type CategoryId = "appearance" | "language";
-
-type IconComponent = ComponentType<{ size?: number }>;
-
-const CATEGORIES: { id: CategoryId; labelKey: string; Icon: IconComponent }[] = [
-  { id: "appearance", labelKey: "pref.appearance", Icon: PrefAppearance },
-  { id: "language", labelKey: "pref.language", Icon: PrefLanguage },
-];
 
 const LANGUAGE_BADGES: Record<Language, string> = {
   en: "EN",
@@ -91,7 +64,7 @@ function ThemeOption({ value, selected }: { value: Theme; selected: boolean }) {
   );
 }
 
-function AppearanceSection({
+export function AppearanceSection({
   theme,
   onThemeChange,
 }: {
@@ -143,7 +116,7 @@ function LanguageOption({
   );
 }
 
-function LanguageSection({
+export function LanguageSection({
   language,
   onLanguageChange,
 }: {
@@ -168,57 +141,5 @@ function LanguageSection({
         />
       ))}
     </RadioGroup>
-  );
-}
-
-export interface PreferencesPanelProps {
-  theme: Theme;
-  onThemeChange: (theme: Theme) => void;
-  language: Language;
-  onLanguageChange: (language: Language) => void;
-}
-
-export function PreferencesPanel({
-  theme,
-  onThemeChange,
-  language,
-  onLanguageChange,
-}: PreferencesPanelProps) {
-  const { t } = useTranslation();
-  const [active, setActive] = useState<CategoryId>("appearance");
-
-  return (
-    <Tabs
-      className="pref-body"
-      orientation="vertical"
-      value={active}
-      onValueChange={(value) => setActive(value as CategoryId)}
-    >
-      <TabsList className="pref-nav" render={<nav />} aria-label={t("pref.title")}>
-        {CATEGORIES.map(({ id, labelKey, Icon }) => (
-          <TabsTrigger
-            key={id}
-            value={id}
-            className={`pref-nav-item ${active === id ? "active" : ""}`}
-            data-modal-initial-focus={active === id ? "" : undefined}
-          >
-            <Icon size={ICON.sm} />
-            <span className="pref-nav-label">{t(labelKey)}</span>
-          </TabsTrigger>
-        ))}
-      </TabsList>
-
-      <div className="pref-content">
-        <TabsContent value="appearance">
-          <AppearanceSection theme={theme} onThemeChange={onThemeChange} />
-        </TabsContent>
-        <TabsContent value="language">
-          <LanguageSection
-            language={language}
-            onLanguageChange={onLanguageChange}
-          />
-        </TabsContent>
-      </div>
-    </Tabs>
   );
 }

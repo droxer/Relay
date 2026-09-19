@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type ComponentType, type MouseEvent, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -7,7 +7,6 @@ import {
   NavAdmin,
   NavAgents,
   NavBacklog,
-  NavComputer,
   NavLogout,
   NavMore,
   NavPreferences,
@@ -15,7 +14,6 @@ import {
   NavRoutine,
   NavSidebarCollapse,
   NavSidebarExpand,
-  NavSkills,
   NavTeams,
   NavThreads,
   type GlyphProps,
@@ -51,14 +49,13 @@ const MORE_ROUTES: readonly {
 }[] = [
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
-  { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
-  { route: "computer", Icon: NavComputer, labelKey: "nav.computer" },
+  { route: "settings", Icon: NavPreferences, labelKey: "nav.settings" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
-export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, prefsOpen, setPrefsOpen, onLogout, onOpenCommandMenu }: {
+export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu }: {
   sidenavExpanded: boolean;
   setSidenavExpanded: (expanded: boolean) => void;
   width: number;
@@ -68,8 +65,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   onNavigateRoute: (route: AppRoute) => void;
   hrefForRoute: (route: AppRoute) => string;
   isAdmin: boolean;
-  prefsOpen: boolean;
-  setPrefsOpen: Dispatch<SetStateAction<boolean>>;
   onLogout: () => void;
   onOpenCommandMenu: () => void;
 }) {
@@ -79,8 +74,8 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   /* Open/closed only. The menus used to carry viewport coordinates because
      they were positioned by hand; the Menu positioner anchors to the trigger
      and handles flipping, so there is nothing left to store. */
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
-  /* The expanded rail anchors the settings menu to the FOOTER rather than to
+  const [accountOpen, setAccountOpen] = useState(false);
+  /* The expanded rail anchors the account menu to the FOOTER rather than to
      its trigger — see the menu's own note below. */
   const footerRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -112,22 +107,19 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   /* Only one rail menu at a time. Two Menu roots do not know about each other,
      so the mutual close stays here — it is the one piece of this behaviour
      that was ever app-specific. */
-  function onPreferencesOpenChange(open: boolean) {
+  function onAccountOpenChange(open: boolean) {
     if (open) {
       hideNavTooltip();
       setMoreOpen(false);
     }
-    setPreferencesOpen(open);
+    setAccountOpen(open);
   }
   function onMoreOpenChange(open: boolean) {
     if (open) {
       hideNavTooltip();
-      setPreferencesOpen(false);
+      setAccountOpen(false);
     }
     setMoreOpen(open);
-  }
-  function openPreferences() {
-    setPrefsOpen(true);
   }
   function handleLogout() {
     onLogout();
@@ -142,7 +134,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      once per key press, never per pointer move. */
   const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
-  const moreActive = ["routine", "teams", "skills", "computer", "admin"].includes(route);
+  const moreActive = ["routine", "teams", "settings", "admin"].includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (
@@ -260,39 +252,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <span className="sidenav-label sr-only">{t("nav.teams")}</span>
           </a>
         </div>
-        <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.manage")}>
-          <span className="sidenav-group-label sidenav-overflow-item sr-only" aria-hidden="true">{t("nav.manage")}</span>
-          <a
-            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "skills" ? "active" : ""}`}
-            data-nav="skills"
-            href={hrefForRoute("skills")}
-            aria-label={t("nav.skills")}
-            aria-current={route === "skills" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "skills")}
-            onMouseEnter={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavSkills size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.skills")}</span>
-          </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item ${route === "computer" ? "active" : ""}`}
-            data-nav="computer"
-            href={hrefForRoute("computer")}
-            aria-label={t("nav.computer")}
-            aria-current={route === "computer" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "computer")}
-            onMouseEnter={(e) => showNavTooltip(t("nav.computer"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.computer"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavComputer size={ICON.lg} aria-hidden="true" />
-            <span className="sidenav-label sr-only">{t("nav.computer")}</span>
-          </a>
-          {isAdmin ? (
+        {isAdmin ? (
+          <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.manage")}>
+            <span className="sidenav-group-label sidenav-overflow-item sr-only" aria-hidden="true">{t("nav.manage")}</span>
             <a
               className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "admin" ? "active" : ""}`}
               data-nav="admin"
@@ -308,7 +270,10 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
               <NavAdmin size={ICON.lg} />
               <span className="sidenav-label sr-only">{t("nav.admin")}</span>
             </a>
-          ) : null}
+          </div>
+        ) : null}
+        {/* Mobile-only: the destinations that do not fit the bottom tab bar. */}
+        <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.more_label")}>
           <DropdownMenu open={moreOpen} onOpenChange={onMoreOpenChange}>
             {/* aria-haspopup / aria-expanded come from the trigger now — the
                 pair used to be written by hand on both rail menus. */}
@@ -371,22 +336,22 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           <ActionSearch size={ICON.md} />
           <span className="sr-only">{t("command.title")}</span>
         </Button>
-        <DropdownMenu open={preferencesOpen} onOpenChange={onPreferencesOpenChange}>
+        <DropdownMenu open={accountOpen} onOpenChange={onAccountOpenChange}>
           <DropdownMenuTrigger
             render={
               <Button
                 variant="ghost"
-                className={`sidenav-btn ${prefsOpen || preferencesOpen ? "active" : ""}`}
+                className={`sidenav-btn ${route === "settings" || accountOpen ? "active" : ""}`}
                 data-nav="settings"
                 type="button"
-                aria-label={t("nav.preferences")}
-                onMouseEnter={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget, true)}
+                aria-label={t("nav.account")}
+                onMouseEnter={(e) => showNavTooltip(t("nav.account"), e.currentTarget, true)}
                 onMouseLeave={hideNavTooltip}
-                onFocus={(e) => showNavTooltip(t("nav.preferences"), e.currentTarget, true)}
+                onFocus={(e) => showNavTooltip(t("nav.account"), e.currentTarget, true)}
                 onBlur={hideNavTooltip}
               >
                 <NavPreferences size={ICON.md} />
-                <span className="sr-only">{t("nav.preferences")}</span>
+                <span className="sr-only">{t("nav.account")}</span>
               </Button>
             }
           />
@@ -401,10 +366,21 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             anchor={sidenavExpanded ? footerRef : undefined}
             className="sidenav-settings-menu"
           >
-            <DropdownMenuItem onClick={openPreferences}>
+            <DropdownMenuLinkItem
+              render={
+                <a
+                  href={hrefForRoute("settings")}
+                  aria-current={route === "settings" ? "page" : undefined}
+                  onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+                    setAccountOpen(false);
+                    handleRouteClick(event, "settings");
+                  }}
+                />
+              }
+            >
               <NavPreferences size={ICON.md} />
-              <span>{t("nav.preferences")}</span>
-            </DropdownMenuItem>
+              <span>{t("nav.settings")}</span>
+            </DropdownMenuLinkItem>
             <DropdownMenuItem danger onClick={handleLogout}>
               <NavLogout size={ICON.md} />
               <span>{t("nav.logout")}</span>

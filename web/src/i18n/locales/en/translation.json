@@ -56,7 +56,6 @@
   "skip_to_content": "Skip to content",
   "nav": {
     "threads": "Threads",
-    "computer": "My Computer",
     "workspace": "Workspace",
     "workspace_label": "Workspace",
     "manage": "Manage",
@@ -65,13 +64,13 @@
     "routine": "Routines",
     "agents": "Agents",
     "teams": "Teams",
-    "skills": "Skills",
     "admin": "Control panel",
     "channels": "Channels",
     "coming_soon": "Coming soon",
     "coming_soon_short": "Soon",
     "refresh": "Refresh",
-    "preferences": "Preferences",
+    "settings": "Settings",
+    "account": "Account",
     "logout": "Logout",
     "collapse": "Collapse",
     "expand": "Expand",
@@ -1254,9 +1253,6 @@
     "signing_in": "Signing in…"
   },
   "pref": {
-    "title": "Preferences",
-    "sub": "Theme and locale",
-    "close": "Close preferences",
     "appearance": "Appearance",
     "language": "Language",
     "save": "Save",
@@ -1974,5 +1970,9 @@
       "title": "Review the result",
       "body": "Open the linked thread and inspect the output and artifacts. Accept the work if it meets the requirements, or request changes with clear feedback."
     }
+  },
+  "settings": {
+    "eyebrow": "You / Preferences",
+    "sub": "Your computers, skills, and how Relay looks."
   }
 }

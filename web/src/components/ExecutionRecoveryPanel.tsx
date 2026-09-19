@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelaySession, RelayTaskListItem } from "../types";
-import { hrefForRoute, navigateToAppPath } from "../lib/appRoute";
+import { hrefForRoute, hrefForSettingsSection, navigateToAppPath } from "../lib/appRoute";
 import { executionRecoveryGuide, taskRecoveryGuide, type RecoveryGuide } from "../lib/executionRecovery";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -32,7 +32,11 @@ function RecoveryLink({ href, onNavigate, children }: { href: string; onNavigate
 function RecoveryDestination({ guide }: { guide: RecoveryGuide }) {
   const { t } = useTranslation();
   if (!guide.destination) return null;
-  const href = hrefForRoute(guide.destination);
+  // "computer" is a settings section, not a route of its own — the label still
+  // names the place the reader is being sent to.
+  const href = guide.destination === "computer"
+    ? hrefForSettingsSection("computers")
+    : hrefForRoute(guide.destination);
   return <RecoveryLink href={href} onNavigate={() => { void navigateToAppPath(href); }}>{t(`recovery.${guide.destination}`)}</RecoveryLink>;
 }
 

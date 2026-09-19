@@ -1,0 +1,139 @@
+/* =====================================================================
+   Section rail  (sec-* namespace)
+
+   The shape a surface takes when it is one destination holding several
+   sections: a rail naming the surface and listing its sections, beside a
+   content column that renders the selected one. The control panel
+   (Dashboard / Employees / Computers / Settings) and personal settings
+   (Computers / Skills / Appearance / Language) are the two consumers —
+   one grammar, so a section list reads the same on both.
+
+   Narrow viewports have no room for a second column, so the rail folds
+   into a horizontal strip above the content.
+   ===================================================================== */
+
+.sec-shell {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  background: var(--surface-0);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sec-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 0.5px solid var(--line-1);
+  /* Shell zone role (see --surface-list in palette.css): every list rail —
+     threads, agents, teams — sits on the same elevation step between the nav
+     rail and the detail canvas. */
+  background: var(--surface-list);
+}
+
+/* The rail's own header names the surface; the content column's header names
+   the section. The rail is 240px at its widest, so it takes a tighter inset
+   than --page-gutter. */
+.sec-rail > .page-header {
+  padding: var(--sp-5) var(--sp-4);
+  background: transparent;
+}
+
+.sec-nav {
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-2);
+}
+
+.sec-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sec-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: var(--type-label);
+  text-align: start;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.sec-nav-btn:hover {
+  color: var(--ink-1);
+  background: var(--surface-2);
+}
+
+/* Selection is carried by the fill and the ink, not by a heavier face: the
+   row keeps --type-label, the one weight that role owns. */
+.sec-nav-btn[data-active="true"] {
+  color: var(--ink-1);
+  background: var(--surface-2);
+}
+
+.sec-nav-label { min-width: 0; }
+
+/* The content column. A section that brings its own page frame (the computers
+   roster, the skills library) fills it; the rest get the column's own header
+   plus a scrolling body. */
+.sec-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sec-section-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-6) var(--page-gutter) var(--sp-8);
+}
+
+@media (max-width: 820px) {
+  .sec-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sec-rail {
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 0.5px solid var(--line-1);
+  }
+
+  /* The content header already names the section, and the mobile topbar names
+     the route — so the rail's own identity block is redundant here. */
+  .sec-rail > .page-header { display: none; }
+
+  .sec-nav { flex: 1; min-width: 0; padding: var(--sp-2); }
+  .sec-nav-list { flex-direction: row; gap: var(--sp-2); }
+  .sec-nav-item { flex: 1; min-width: 0; }
+  .sec-nav-btn { justify-content: center; }
+  .sec-nav-btn svg { display: none; }
+}
+
+@media (max-width: 640px) {
+  .sec-section-body { padding: var(--sp-4); }
+}
