@@ -221,12 +221,12 @@ describe("routine columns", () => {
     backlogTask({ id: "r2", title: "Weekly", isRoutine: true, routineEnabled: false }),
     backlogTask({ id: "r3", title: "Hourly", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-04-01" }),
   ];
-  const columns = routineSortColumns(new Set<string>(), () => "", "2026-04-01");
+  const columns = routineSortColumns(() => "");
 
   it("offers a column for every sortable header the list renders", () => {
     assert.deepEqual(
       columns.map((column) => column.key),
-      ["title", "state", "priority", "assignee", "nextRun"],
+      ["title", "priority", "assignee", "nextRun"],
     );
   });
 
@@ -235,8 +235,9 @@ describe("routine columns", () => {
     assert.equal(applySort(routines, columns, { key: "nextRun", direction: "desc" }).at(-1)?.id, "r2");
   });
 
-  it("orders state by schedule urgency, running first", () => {
-    const running = routineSortColumns(new Set(["r2"]), () => "", "2026-04-01");
-    assert.equal(applySort(routines, running, { key: "state", direction: "asc" })[0].id, "r2");
+  it("offers no state column — the section rail owns schedule health", () => {
+    // A state sort would be an order no control on the list could show: the
+    // state cell is a dot with no header, and the sort menu mirrors headers.
+    assert.equal(columns.map((column) => String(column.key)).includes("state"), false);
   });
 });

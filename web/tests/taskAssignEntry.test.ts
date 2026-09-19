@@ -82,8 +82,8 @@ describe("Task assignment discoverability", () => {
     }
     // Both backlog views (board card + list row) carry the button.
     assert.equal(backlogRecords.match(/<NavAgents size=\{ICON\.sm\} \/>/g)?.length, 2);
-    // Routines share one RoutineAssignButton across both views.
-    assert.equal(routineRecords.match(/<RoutineAssignButton onAssign=\{onAssign\} \/>/g)?.length, 2);
+    // The routine board is a list only, so its one row carries the button.
+    assert.equal(routineRecords.match(/<RoutineAssignButton onAssign=\{onAssign\} \/>/g)?.length, 1);
   });
 
   it("navigates in-app paths through the shared navigation event", async () => {

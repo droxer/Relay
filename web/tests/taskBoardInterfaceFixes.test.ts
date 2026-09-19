@@ -40,10 +40,11 @@ describe("task board interface review fixes", () => {
   });
 
   it("exposes the stats-bar label through a group role", () => {
-    for (const src of [backlogChrome, routineChrome]) {
-      assert.doesNotMatch(src, /<p className="backlog-stats" aria-label/);
-      assert.match(src, /<p className="backlog-stats" role="group" aria-label/);
-    }
+    // The backlog is the only board with a stat bar: the routine board's rail
+    // already counts every schedule state, so a bar there only restated it.
+    assert.doesNotMatch(backlogChrome, /<p className="backlog-stats" aria-label/);
+    assert.match(backlogChrome, /<p className="backlog-stats" role="group" aria-label/);
+    assert.doesNotMatch(routineChrome, /backlog-stats/);
   });
 
   it("stores backlog and routine filters in the URL", () => {

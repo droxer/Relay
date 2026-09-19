@@ -107,27 +107,22 @@ export function routineStateCounts(
 }
 
 /** The keys the routine list's sortable column headers speak. */
-export type RoutineSortKey = "title" | "state" | "priority" | "assignee" | "nextRun";
+export type RoutineSortKey = "title" | "priority" | "assignee" | "nextRun";
 
 /**
  * Sortable columns for the routine list, in header order.
  *
- * State is derived, not stored (see `routineState` above), so its comparator
- * closes over the same `running` set the rows render from — sorting off the
- * dormant `status` field would order the list by the noise that function
- * exists to ignore.
+ * Schedule state is NOT among them: the rail beside the list owns that
+ * dimension, and the list's state cell is a dot with no header above it, so a
+ * state order would be an active sort no control on the surface could show or
+ * undo. The default order (`compareRoutineTasks`) already runs urgency-first,
+ * which is what a state sort was reaching for.
  */
 export function routineSortColumns(
-  running: ReadonlySet<string>,
   assigneeName: (task: RelayTaskListItem) => string,
-  today = isoToday(),
 ): readonly SortColumn<RelayTaskListItem, RoutineSortKey>[] {
   return [
     { key: "title", compare: byText((task) => task.title) },
-    {
-      key: "state",
-      compare: byRank((task) => routineState(task, running, today), ROUTINE_STATE_ORDER),
-    },
     { key: "priority", compare: byRank((task) => task.priority, TASK_PRIORITIES) },
     {
       key: "assignee",
@@ -184,14 +179,6 @@ export function runningRoutineIds(tasks: RelayTaskListItem[]): Set<string> {
     ids.add(task.sourceRoutineId);
   }
   return ids;
-}
-
-export function runningRoutineCount(
-  routines: RelayTaskListItem[],
-  tasks: RelayTaskListItem[],
-): number {
-  const running = runningRoutineIds(tasks);
-  return routines.filter((routine) => running.has(routine.id)).length;
 }
 
 function compareRoutineTasks(left: RelayTaskListItem, right: RelayTaskListItem): number {

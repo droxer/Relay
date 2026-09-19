@@ -19,8 +19,6 @@ describe("task board review regressions", () => {
   it("hydrates persisted views after the deterministic first render", () => {
     assert.match(backlogPage, /useState<BacklogView>\("board"\)/);
     assert.match(backlogPage, /useEffect\(\(\) => \{\s*setView\(parseBacklogView\(null\)\)/);
-    assert.match(routinesPage, /useState<RoutineView>\("card"\)/);
-    assert.match(routinesPage, /useEffect\(\(\) => \{\s*setView\(parseRoutineView\(null\)\)/);
   });
 
   it("limits backlog selection to records rendered on current lane pages", () => {
@@ -37,11 +35,16 @@ describe("task board review regressions", () => {
     assert.doesNotMatch(routineChrome, /value: "enabled"|value: "disabled"/);
   });
 
-  it("only offers state sorting where it changes a flat card collection", () => {
-    assert.match(routinesPage, /data-view=\{view\}/);
-    assert.match(routinesPage, /view === "card"[\s\S]{0,240}key: "state"/);
-    assert.match(routinesPage, /next === "list" && sort\?\.key === "state"/);
-    assert.match(listSortStyles, /\.routine-page\[data-view="card"\] \.list-sort-menu\s*\{\s*display:\s*flex;/);
+  it("gives the routine board one view and one sort grammar", () => {
+    // The card grid is gone: the routine board is the list, so there is no
+    // view toggle, no stored view preference, and no state sort option that
+    // no column header could show.
+    assert.doesNotMatch(routinesPage, /RoutineViewToggle|parseRoutineView|RoutineCard/);
+    assert.doesNotMatch(routineChrome, /RoutineViewToggle|ROUTINE_VIEW_STORAGE_KEY/);
+    assert.doesNotMatch(routinesPage, /key: "state"/);
+    // Sorting has to stay reachable exactly where the column headers stop
+    // being rendered — the same 820 tier the backlog list restacks at.
+    assert.match(listSortStyles, /@media \(max-width: 820px\) \{[\s\S]{0,240}\.routine-page \.list-sort-menu \{ display: flex; \}/);
   });
 
   it("shows pending feedback and blocks duplicate starts", () => {

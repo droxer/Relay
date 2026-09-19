@@ -1,30 +1,31 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ICON, ViewGrid, ViewList } from "../icons";
 import { StateMark } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, FilterSelect } from "../FiltersBar";
-import { readViewPreference } from "../../lib/viewPreference";
 import {
-  routineDueTone,
   ROUTINE_STATE_ORDER,
-  runningRoutineCount,
   type RoutineState,
   TASK_ROUTINE_CADENCES,
   TASK_ROUTINE_TYPES,
   type RoutineFilters,
 } from "../../lib/routine";
 import type { FilterSpec } from "../../lib/urlFilters";
-import type { EmployeeAgent, RelayTaskListItem } from "../../types";
+import type { EmployeeAgent } from "../../types";
 
-/* Routine board chrome — the stat bar, the filter bar, and the card/list view
-   toggle. Split out of RoutinesPage the same way BacklogChrome was split out
-   of BacklogPage: the page owns state and dispatch, these own presentation. */
+/* Routine board chrome — the section rail and the filter bar. Split out of
+   RoutinesPage the same way BacklogChrome was split out of BacklogPage: the
+   page owns state and dispatch, these own presentation.
+
+   There is no stat bar here on purpose. It counted Enabled / Due / Running
+   over a board whose rail already names every schedule state with its count
+   beside it — Running was the same number twice, Enabled was all-minus-paused
+   and Due was overdue-plus-due, three arithmetics of the rail's own figures
+   spending a band of the surface to restate them. */
 
 export const initialRoutineFilters: RoutineFilters = {
   query: "",
@@ -46,17 +47,6 @@ export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
   assignee: { param: "assignee" },
   state: { param: "state", allowed: ROUTINE_STATE_ORDER },
 };
-
-export type RoutineView = "card" | "list";
-
-export const ROUTINE_VIEW_STORAGE_KEY = "relay-web.routineView";
-const ROUTINE_VIEWS: readonly RoutineView[] = ["card", "list"];
-
-export function parseRoutineView(value: string | null): RoutineView {
-  return ROUTINE_VIEWS.includes(value as RoutineView)
-    ? value as RoutineView
-    : readViewPreference(ROUTINE_VIEW_STORAGE_KEY, "card", ROUTINE_VIEWS);
-}
 
 export function activeRoutineFilterCount(filters: RoutineFilters): number {
   let count = 0;
@@ -80,36 +70,6 @@ export function formatNextRunDate(value: string): string {
     month: "short",
     day: "numeric",
   }).format(date);
-}
-
-export function RoutineStats({ routines, tasks }: { routines: RelayTaskListItem[]; tasks: RelayTaskListItem[] }) {
-  const { t } = useTranslation();
-  const stats = useMemo(() => {
-    const enabled = routines.filter((task) => task.routineEnabled).length;
-    const due = routines.filter((task) => routineDueTone(task) !== "neutral").length;
-    const running = runningRoutineCount(routines, tasks);
-    return { total: routines.length, enabled, due, running };
-  }, [routines, tasks]);
-
-  return (
-    <p className="backlog-stats" role="group" aria-label={t("routine.metrics")}>
-      <span className="backlog-stat">
-        <span className="backlog-stat-eyebrow">{t("routine.metric_enabled")}</span>
-        <span className="backlog-stat-value">{stats.enabled}</span>
-      </span>
-      <span className="backlog-stat">
-        <span className="backlog-stat-eyebrow">{t("routine.metric_due")}</span>
-        <span className="backlog-stat-value">
-          {stats.due > 0 ? <StateMark shape="ring" className="backlog-stat-mark" /> : null}
-          {stats.due}
-        </span>
-      </span>
-      <span className="backlog-stat">
-        <span className="backlog-stat-eyebrow">{t("routine.metric_running")}</span>
-        <span className="backlog-stat-value">{stats.running}</span>
-      </span>
-    </p>
-  );
 }
 
 export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: EmployeeAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
@@ -208,33 +168,5 @@ export function RoutineStateNav({
       onChange={onChange}
       label={t("routine.state")}
     />
-  );
-}
-
-export function RoutineViewToggle({ view, onChange }: { view: RoutineView; onChange: (view: RoutineView) => void }) {
-  const { t } = useTranslation();
-  return (
-    <div className="backlog-view-toggle" role="group" aria-label={t("routine.view")}>
-      <Button variant="ghost"
-        type="button"
-        className="backlog-view-btn"
-        data-active={view === "card" ? "true" : "false"}
-        aria-pressed={view === "card"}
-        tooltip={t("routine.view_card")}
-        onClick={() => onChange("card")}
-      >
-        <ViewGrid size={ICON.sm} />
-      </Button>
-      <Button variant="ghost"
-        type="button"
-        className="backlog-view-btn"
-        data-active={view === "list" ? "true" : "false"}
-        aria-pressed={view === "list"}
-        tooltip={t("routine.view_list")}
-        onClick={() => onChange("list")}
-      >
-        <ViewList size={ICON.sm} />
-      </Button>
-    </div>
   );
 }

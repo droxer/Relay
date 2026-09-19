@@ -80,12 +80,9 @@
    table's restack breakpoint and you have to move its line here too. */
 .list-sort-menu { display: none; }
 
-/* Routine cards are a flat collection, including on wide screens where no
-   sortable table header exists. State sorting is meaningful there. */
-.routine-page[data-view="card"] .list-sort-menu { display: flex; }
-
 @media (max-width: 820px) {
   .backlog-page .list-sort-menu { display: flex; }
+  .routine-page .list-sort-menu { display: flex; }
   .adm-view .list-sort-menu { display: flex; }
 }
 

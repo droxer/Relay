@@ -2,7 +2,7 @@
 
 import { TaskRecoveryPanel } from "./ExecutionRecoveryPanel";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
@@ -14,7 +14,6 @@ import { type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type
 import { agentReadyForTask } from "../lib/backlog";
 import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
 import { useEmployeeNames } from "../hooks/useEmployeeNames";
-import { writeViewPreference } from "../lib/viewPreference";
 import { filterRoutineTasks, latestRoutineSession, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -25,18 +24,13 @@ import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyRoutineForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import {
+  activeRoutineFilterCount,
   initialRoutineFilters,
-  parseRoutineView,
   ROUTINE_FILTER_SPEC,
   RoutineFiltersBar,
   RoutineStateNav,
-  RoutineStats,
-  RoutineViewToggle,
-  ROUTINE_VIEW_STORAGE_KEY,
-  type RoutineView,
 } from "./task-board/RoutineChrome";
 import {
-  RoutineCard,
   RoutineDrawerMeta,
   RoutineRow,
   RoutineRowsHead,
@@ -82,7 +76,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   } = useRelayMutations();
   // The filters live in the query string — same reasoning as the backlog's.
   const [filters, setFilters] = useUrlFilters(initialRoutineFilters, ROUTINE_FILTER_SPEC);
-  const [view, setView] = useState<RoutineView>("card");
   const [form, setForm] = useState<RoutineTaskFormState | null>(null);
   const [formBaseline, setFormBaseline] = useState<RoutineTaskFormState | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -96,15 +89,14 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
   const routineTasks = useMemo(() => tasks.filter((task) => task.isRoutine), [tasks]);
   // Derived once for the whole board: `routineState` then costs a Set lookup
-  // per card instead of a full task scan.
+  // per row instead of a full task scan.
   const runningIds = useMemo(() => runningRoutineIds(tasks), [tasks]);
-  /* The state column sorts by DERIVED schedule health, so its comparator has
-     to close over the same `runningIds` the rows render from — see
-     `routineSortColumns`. Unsorted, `applySort` is the identity and
-     `filterRoutineTasks`' own order (enabled first, then next run) stands. */
+  /* Unsorted, `applySort` is the identity and `filterRoutineTasks`' own order
+     (enabled first, then next run) stands — schedule health is the rail's
+     dimension, not a column, so no comparator reads it. */
   const sortColumns = useMemo(
-    () => routineSortColumns(runningIds, (task) => taskAssigneeDisplayName(task, currentUser, employeeNames) ?? ""),
-    [currentUser, employeeNames, runningIds],
+    () => routineSortColumns((task) => taskAssigneeDisplayName(task, currentUser, employeeNames) ?? ""),
+    [currentUser, employeeNames],
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { page, setPage } = usePagination();
@@ -124,9 +116,9 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     () => Object.values(sectionCounts).reduce((sum, count) => sum + count, 0),
     [sectionCounts],
   );
-  /* One flat collection on one cursor, in either view. Schedule health used
-     to band this list — and page each band off its own cursor — but the rail
-     beside it names the section now, so a band would only repeat it. */
+  /* One flat collection on one cursor. Schedule health used to band this
+     list — and page each band off its own cursor — but the rail beside it
+     names the section now, so a band would only repeat it. */
   const pagedTasks = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
   // Selection follows what is on screen, so "select all" then Delete cannot
   // reach a routine on a page the reader never saw.
@@ -138,22 +130,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   // drops out of the selection immediately, so a batch action can never reach
   // a record the board is no longer showing.
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
-
-  // Browser storage is unavailable to the server. Restore it after hydration
-  // so the initial server and client trees always agree.
-  useEffect(() => {
-    setView(parseRoutineView(null));
-  }, []);
-
-  function changeView(next: RoutineView) {
-    /* The list orders by its column headers, and it has no state column —
-       the dot cell shows the state but nothing sorts on it. So a state sort
-       carried over from the cards would be an active order with no control
-       showing it. (Not a grouping concern: nothing on this board groups.) */
-    if (next === "list" && sort?.key === "state") setSort(null);
-    setView(next);
-    writeViewPreference(ROUTINE_VIEW_STORAGE_KEY, next);
-  }
 
   function openRoutineForm(next: RoutineTaskFormState) {
     setForm(next);
@@ -304,6 +280,12 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     ? t("routine.all_states")
     : t(`routine.states.${filters.state}`);
 
+  /* The rail already carries the selected section's count, so the board's own
+     header restates it whenever the bar is clear. It earns the number only
+     once a filter or the search box has narrowed the section below what the
+     rail says. */
+  const sectionNarrowed = activeRoutineFilterCount(filters) > 0 || filters.query.trim().length > 0;
+
   const editingTask = form?.id ? tasks.find((task) => task.id === form.id) : undefined;
   const editingSession = editingTask ? linkedSession(editingTask) : undefined;
 
@@ -329,7 +311,7 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   }
 
   return (
-    <section id="routine-panel" className="routine-page sec-shell" data-view={view} aria-label={t("routine.title")} tabIndex={-1}>
+    <section id="routine-panel" className="routine-page sec-shell" aria-label={t("routine.title")} tabIndex={-1}>
       {/* The rail names the surface and lists its sections; the board's own
           header names the section being read. Same rail-and-content shape as
           the control panel and personal settings — see section-rail.css. */}
@@ -358,10 +340,9 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           title={sectionLabel}
           titleAs="h2"
           titleVariant="display"
-          count={t("routine.sub", { count: filteredTasks.length })}
+          count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
           actions={
             <TaskBoardHeaderActions
-              leading={<RoutineViewToggle view={view} onChange={changeView} />}
               refreshLabel={t("nav.refresh")}
               createLabel={t("routine.new")}
               isRefreshing={isRefreshing}
@@ -371,7 +352,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           }
         />
 
-        <RoutineStats routines={routineTasks} tasks={tasks} />
         <RoutineFiltersBar
           filters={filters}
           agents={logicalAgents}
@@ -380,7 +360,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
             <SortMenu
               options={[
                 { key: "title", label: t("backlog.col_task") },
-                ...(view === "card" ? [{ key: "state" as const, label: t("routine.state") }] : []),
                 { key: "priority", label: t("backlog.priority") },
                 { key: "assignee", label: t("backlog.assignee") },
                 { key: "nextRun", label: t("routine.next_run") },
@@ -399,7 +378,7 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
             createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
             onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
           />
-        ) : view === "list" ? (
+        ) : (
           /* One table, one header, no bands: the rail beside this list has
              already said which schedule state is on screen.
 
@@ -425,7 +404,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
               </Table>
               <Table className="routine-rows-body" aria-label={sectionLabel}>
                 {pagedTasks.items.map((task) => {
-                  const session = linkedSession(task);
                   const assignment = taskAssignmentDisplay(task);
                   return (
                     <RoutineRow
@@ -434,7 +412,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
                       selected={visibleSelection.has(task.id)}
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                       state={routineState(task, runningIds)}
-                      session={session}
                       assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
                       assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
                       agentDisplayName={assignment.name}
@@ -444,30 +421,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
                   );
                 })}
               </Table>
-            </div>
-            <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
-          </>
-        ) : (
-          <>
-            <div className="routine-list">
-            {pagedTasks.items.map((task) => {
-              const assignment = taskAssignmentDisplay(task);
-              return (
-                <RoutineCard
-                  key={task.id}
-                  task={task}
-                  selected={visibleSelection.has(task.id)}
-                  onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                  state={routineState(task, runningIds)}
-                  showState={filters.state === "all"}
-                  assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                  assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
-                  agentDisplayName={assignment.name}
-                  ready={assignment.ready}
-                  {...routineHandlers(task)}
-                />
-              );
-            })}
             </div>
             <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
           </>
