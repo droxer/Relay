@@ -4349,6 +4349,10 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
             json={"workspacePath": "/Users/alice/project"},
         )
         assert enrolled.status_code == 201
+        install = enrolled.json()["installCommand"]
+        assert install.startswith("curl -fsSL https://api.example.com/computer/install.sh | sh -s -- ")
+        assert enrolled.json()["nodeToken"] not in install
+        assert "backend.internal" not in install
         node_id = enrolled.json()["node"]["id"]
         responses = [
             enrolled,

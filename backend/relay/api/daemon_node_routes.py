@@ -24,6 +24,7 @@ from ..services.node_agents import (
     remove_node_agents,
     sync_node_agents,
 )
+from .computer_installer_routes import computer_install_command
 from .deps import AppContextDep
 from .helpers import (
     EMPLOYEE_DEVICE_SANDBOX_MODE,
@@ -331,6 +332,7 @@ def create_local_device_enrollment(
             request, node, sandbox_mode, prompt_for_token=bool(node_token)
         ),
         "reused": reused,
+        "installCommand": computer_install_command(request, node),
     }
     if node.get("sandboxToken"):
         response["sandboxToken"] = node["sandboxToken"]

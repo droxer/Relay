@@ -12,7 +12,8 @@
     "web"
   ],
   "scripts": {
-    "build": "npm run build -w relay-core && npm run build -w relay-chat && npm run build -w relay-daemon && npm run build -w relay-supervisor && npm run build -w web && tsc -p packages/tsconfig.json",
+    "build:computer": "npm run build -w relay-core && npm run build -w relay-daemon && node tools/build-computer.mjs",
+    "build": "npm run build -w relay-core && npm run build -w relay-chat && npm run build -w relay-daemon && npm run build -w relay-supervisor && node tools/build-computer.mjs && npm run build -w web && tsc -p packages/tsconfig.json",
     "test": "npm run test:ts && npm run test:py",
     "test:ts": "npm run build && node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-chat/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js dist/web/tests/*.test.js && npm run test:react -w web",
     "test:py": "UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest",

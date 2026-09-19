@@ -39,6 +39,7 @@ build-packages:
 	npm run build -w relay-core
 	npm run build -w relay-daemon
 	npm run build -w relay-supervisor
+	node tools/build-computer.mjs
 
 test:
 	npm test
