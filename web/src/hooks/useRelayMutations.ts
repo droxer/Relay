@@ -199,6 +199,10 @@ export function useRelayMutations() {
       queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
         (current ?? []).filter((task) => task.id !== taskId));
     },
+    onSettled: () => {
+      void invalidateTasks();
+      void invalidateSessions();
+    },
     onError: (error: unknown) => {
       const messageKey = error instanceof RelayApiError && error.code === "task_execution_active"
         ? "errors.task_execution_active"
@@ -232,7 +236,10 @@ export function useRelayMutations() {
       }
     },
     onError: onRelayError("Failed to delete tasks", "errors.delete_task"),
-    onSettled: () => void invalidateTasks(),
+    onSettled: () => {
+      void invalidateTasks();
+      void invalidateSessions();
+    },
   });
 
   const assignTaskMutation = useMutation({

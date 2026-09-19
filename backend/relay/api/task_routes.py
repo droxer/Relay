@@ -764,7 +764,9 @@ def update_task(
 def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     try:
-        result = delete_task_record(ctx, task_id, actor)
+        lifecycle = request.app.state.execution_lifecycle
+        with ctx.registry.dispatch_lock, lifecycle.admission_scope():
+            result = delete_task_record(ctx, task_id, actor, execution_lifecycle=lifecycle)
     except TaskDeletionError as error:
         status_code = {
             "task_not_found": 404,

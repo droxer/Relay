@@ -1874,7 +1874,7 @@ def test_blocked_dispatch_reports_the_recorded_failure_not_progress(
     assert _unclaimable_dispatch(backlog, "claude")["code"] == "task_not_assigned"
 
 
-@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("active", [False, True, "reserved"])
 def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> None:
     from relay.persistence.store_common import relay_event
 
@@ -1897,7 +1897,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
                 "workspacePath": root, "taskGoal": "Routine run",
                 "participants": ["human", "codex"], "ownerEmployeeId": "admin",
             })
-            if not active or index != 2:
+            if active is not True or index != 2:
                 sessions.append_event(session["id"], relay_event(
                     "session.completed", session["id"], {"outcome": "Done"}))
             tasks.link_session(task["id"], session["id"])
@@ -1906,6 +1906,11 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             "workspacePath": root, "taskGoal": "Keep me",
             "participants": ["human"], "ownerEmployeeId": "admin",
         })
+        if active == "reserved":
+            # Fail on the last thread after earlier deletes to prove rollback.
+            blocked_id = sorted(linked)[-1]
+            monkeypatch.setattr(client.app.state.execution_lifecycle, "status",
+                                lambda session: {"canDelete": session["id"] != blocked_id})
         response = client.delete(f"/api/v1/tasks/{routine['id']}")
         assert response.status_code == (409 if active else 200)
         for session_id in linked:
