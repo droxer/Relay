@@ -4,9 +4,10 @@
    The shape a surface takes when it is one destination holding several
    sections: a rail naming the surface and listing its sections, beside a
    content column that renders the selected one. The control panel
-   (Dashboard / Employees / Computers / Settings) and personal settings
-   (Computers / Skills / Appearance / Language) are the two consumers —
-   one grammar, so a section list reads the same on both.
+   (Dashboard / Employees / Computers / Settings), personal settings
+   (Computers / Skills / Appearance / Language), and the routine board
+   (schedule health) are the consumers — one grammar, so a section list reads
+   the same on all three.
 
    Narrow viewports have no room for a second column, so the rail folds
    into a horizontal strip above the content.
@@ -88,7 +89,24 @@
   background: var(--surface-2);
 }
 
-.sec-nav-label { min-width: 0; }
+.sec-nav-label { min-width: 0; flex: 1; }
+
+/* How many records the section holds. Trailing, dim, and tabular so the
+   column of numbers stays a column as the counts change width. */
+.sec-nav-count {
+  flex: none;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An empty section stays in the rail — a list that dropped its empty rows
+   would reshuffle under the pointer as a filter narrowed the board — but it
+   recedes, so the sections holding something are what the eye lands on. */
+.sec-nav-btn[data-empty="true"]:not([data-active="true"]) {
+  color: var(--ink-3);
+}
+
+.sec-nav-btn[data-empty="true"] .sec-nav-count { color: var(--ink-4); }
 
 /* The content column. A section that brings its own page frame (the computers
    roster, the skills library) fills it; the rest get the column's own header
@@ -130,8 +148,18 @@
   .sec-nav { flex: 1; min-width: 0; padding: var(--sp-2); }
   .sec-nav-list { flex-direction: row; gap: var(--sp-2); }
   .sec-nav-item { flex: 1; min-width: 0; }
-  .sec-nav-btn { justify-content: center; }
-  .sec-nav-btn svg { display: none; }
+  .sec-nav-btn { justify-content: center; gap: var(--sp-2); }
+  .sec-nav-label { flex: none; }
+  .sec-nav-btn > svg { display: none; }
+
+  /* Four short sections divide a phone's width; seven do not. A rail this
+     long stops splitting the width evenly and becomes a scrolling strip of
+     chips at their own size — the container already scrolls (overflow-x
+     above), it was the `flex: 1` cells that were crushing seven labels into
+     55px each and stacking them on top of one another. */
+  .sec-nav-list:has(> :nth-child(5)) .sec-nav-item { flex: 0 0 auto; }
+  .sec-nav-list:has(> :nth-child(5)) .sec-nav-btn { padding: 0 var(--sp-3); }
+  .sec-nav-list:has(> :nth-child(5)) .sec-nav-label { white-space: nowrap; }
 }
 
 @media (max-width: 640px) {

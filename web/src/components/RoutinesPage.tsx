@@ -15,10 +15,10 @@ import { agentReadyForTask } from "../lib/backlog";
 import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
 import { useEmployeeNames } from "../hooks/useEmployeeNames";
 import { writeViewPreference } from "../lib/viewPreference";
-import { filterRoutineTasks, latestRoutineSession, routineSortColumns, routineState, runningRoutineIds, routinesByState, ROUTINE_STATE_ORDER, type RoutineState } from "../lib/routine";
+import { filterRoutineTasks, latestRoutineSession, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
-import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
-import { useLanePagination, usePagination } from "../hooks/usePagination";
+import { paginate } from "../lib/pagination";
+import { usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
@@ -29,6 +29,7 @@ import {
   parseRoutineView,
   ROUTINE_FILTER_SPEC,
   RoutineFiltersBar,
+  RoutineStateNav,
   RoutineStats,
   RoutineViewToggle,
   ROUTINE_VIEW_STORAGE_KEY,
@@ -40,8 +41,6 @@ import {
   RoutineRow,
   RoutineRowsHead,
 } from "./task-board/RoutineRecords";
-import { ListGroup } from "./ListGroup";
-import { ROUTINE_STATE_SHAPE } from "./RoutineStateBadge";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
 import {
   EMPTY_TASK_SELECTION,
@@ -109,31 +108,31 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { page, setPage } = usePagination();
-  const { lanePages: groupPages, setLanePage: setGroupPage } = useLanePagination(ROUTINE_STATE_ORDER);
   const filteredTasks = useMemo(
     () => applySort(filterRoutineTasks(tasks, filters), sortColumns, sort),
     [filters, sort, sortColumns, tasks],
   );
-  // The CARD view is a flat collection and pages off one cursor. The LIST
-  // groups by schedule health, so it pages per band — one cursor for the
-  // whole list would empty a band because of the cursor rather than because
-  // no routine is in that state.
-  const pagedTasks = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
-  const grouped = useMemo(() => routinesByState(filteredTasks, runningIds), [filteredTasks, runningIds]);
-  const pagedGroups = useMemo(
-    () => Object.fromEntries(ROUTINE_STATE_ORDER.map((state) => [
-      state,
-      paginate(grouped[state], groupPages[state] ?? 1, LANE_PAGE_SIZE),
-    ])) as Record<RoutineState, ReturnType<typeof paginate<RelayTaskListItem>>>,
-    [grouped, groupPages],
+  /* The rail's numbers answer "how many of what I am looking at are
+     overdue", so they are counted against every filter EXCEPT the one the
+     rail itself owns. Counting the already-narrowed list would put the whole
+     board in the selected section and a 0 beside every other one. */
+  const sectionCounts = useMemo(
+    () => routineStateCounts(filterRoutineTasks(tasks, { ...filters, state: "all" }), runningIds),
+    [filters, runningIds, tasks],
   );
+  const sectionTotal = useMemo(
+    () => Object.values(sectionCounts).reduce((sum, count) => sum + count, 0),
+    [sectionCounts],
+  );
+  /* One flat collection on one cursor, in either view. Schedule health used
+     to band this list — and page each band off its own cursor — but the rail
+     beside it names the section now, so a band would only repeat it. */
+  const pagedTasks = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
   // Selection follows what is on screen, so "select all" then Delete cannot
   // reach a routine on a page the reader never saw.
   const visibleIds = useMemo(
-    () => (view === "list"
-      ? ROUTINE_STATE_ORDER.flatMap((state) => pagedGroups[state].items)
-      : pagedTasks.items).map((task) => task.id),
-    [pagedGroups, pagedTasks, view],
+    () => pagedTasks.items.map((task) => task.id),
+    [pagedTasks],
   );
   // Derived, not stored: a routine hidden by a filter (or deleted elsewhere)
   // drops out of the selection immediately, so a batch action can never reach
@@ -147,6 +146,10 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   }, []);
 
   function changeView(next: RoutineView) {
+    /* The list orders by its column headers, and it has no state column —
+       the dot cell shows the state but nothing sorts on it. So a state sort
+       carried over from the cards would be an active order with no control
+       showing it. (Not a grouping concern: nothing on this board groups.) */
     if (next === "list" && sort?.key === "state") setSort(null);
     setView(next);
     writeViewPreference(ROUTINE_VIEW_STORAGE_KEY, next);
@@ -295,6 +298,12 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     };
   }
 
+  /* The content column's header names the section the rail has selected —
+     the rail names the surface. */
+  const sectionLabel = filters.state === "all"
+    ? t("routine.all_states")
+    : t(`routine.states.${filters.state}`);
+
   const editingTask = form?.id ? tasks.find((task) => task.id === form.id) : undefined;
   const editingSession = editingTask ? linkedSession(editingTask) : undefined;
 
@@ -320,149 +329,146 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   }
 
   return (
-    <section id="routine-panel" className="routine-page backlog-page" data-view={view} aria-label={t("routine.title")} tabIndex={-1}>
-      <PageHeader
-        kicker={t("nav.workspace")}
-        title={t("routine.title")}
-        count={t("routine.sub", { count: routineTasks.length })}
-        actions={
-          <TaskBoardHeaderActions
-            leading={<RoutineViewToggle view={view} onChange={changeView} />}
-            refreshLabel={t("nav.refresh")}
-            createLabel={t("routine.new")}
-            isRefreshing={isRefreshing}
-            onRefresh={() => void onRefresh()}
-            onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
-          />
-        }
-      />
-
-      <RoutineStats routines={routineTasks} tasks={tasks} />
-      <RoutineFiltersBar
-        filters={filters}
-        agents={logicalAgents}
-        onChange={setFilters}
-        sortMenu={
-          <SortMenu
-            options={[
-              { key: "title", label: t("backlog.col_task") },
-              ...(view === "card" ? [{ key: "state" as const, label: t("routine.state") }] : []),
-              { key: "priority", label: t("backlog.priority") },
-              { key: "assignee", label: t("backlog.assignee") },
-              { key: "nextRun", label: t("routine.next_run") },
-            ]}
-            sort={sort}
-            onSortChange={setSort}
-            label={t("routine.sort_label")}
-          />
-        }
-      />
-
-      {filteredTasks.length === 0 ? (
-        <BoardEmpty
-          title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
-          body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
-          createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
-          onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+    <section id="routine-panel" className="routine-page sec-shell" data-view={view} aria-label={t("routine.title")} tabIndex={-1}>
+      {/* The rail names the surface and lists its sections; the board's own
+          header names the section being read. Same rail-and-content shape as
+          the control panel and personal settings — see section-rail.css. */}
+      <div className="sec-rail">
+        <PageHeader
+          kicker={t("nav.workspace")}
+          title={t("routine.title")}
+          subtitle={t("routine.sub", { count: routineTasks.length })}
+          titleVariant="display"
+          layout="stacked"
         />
-      ) : view === "list" ? (
-        /* Grouped by schedule health — the fact a routine list is read for.
-           The per-row state word is gone with it: the band above the row has
-           already said it, and the column it held went to the record.
+        <RoutineStateNav
+          value={filters.state}
+          counts={sectionCounts}
+          total={sectionTotal}
+          onChange={(state) => setFilters({ ...filters, state })}
+        />
+      </div>
 
-           One hoisted column header above every group — see RoutineRowsHead.
-           This list felt the repetition worst: six routines across four
-           schedule states meant four bands and four header rows of furniture
-           for six rows of content.
-
-           `data-density="compact"` is the same scope the backlog list opts
-           into. The two lists are one record grammar (see RoutineRecords),
-           and this one was running at the root rhythm while the backlog ran
-           compact — a 77px routine row against a 52px task row for the same
-           kind of record. */
-        <div className="backlog-rows routine-rows" data-density="compact">
-          <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
-            <RoutineRowsHead
-              sort={sort}
-              onSort={toggleSort}
-              selectAll={
-                <TaskSelectAllCheckbox
-                  state={selectionCheckState(visibleSelection, visibleIds)}
-                  label={t("routine.select_all_routines")}
-                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                />
-              }
+      <div className="sec-main">
+        <PageHeader
+          title={sectionLabel}
+          titleAs="h2"
+          titleVariant="display"
+          count={t("routine.sub", { count: filteredTasks.length })}
+          actions={
+            <TaskBoardHeaderActions
+              leading={<RoutineViewToggle view={view} onChange={changeView} />}
+              refreshLabel={t("nav.refresh")}
+              createLabel={t("routine.new")}
+              isRefreshing={isRefreshing}
+              onRefresh={() => void onRefresh()}
+              onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
             />
-          </Table>
-          {ROUTINE_STATE_ORDER.map((state) => {
-            const group = grouped[state];
-            if (group.length === 0) return null;
-            const label = t(`routine.states.${state}`);
-            const groupPage = pagedGroups[state];
-            return (
-              <ListGroup
-                key={state}
-                data-routine-state={state}
-                label={label}
-                count={group.length}
-                shape={ROUTINE_STATE_SHAPE[state]}
-              >
-                <Table className="list-group-rows" aria-label={label}>
-                  {groupPage.items.map((task) => {
-                    const session = linkedSession(task);
-                    const assignment = taskAssignmentDisplay(task);
-                    return (
-                      <RoutineRow
-                        key={task.id}
-                        task={task}
-                        selected={visibleSelection.has(task.id)}
-                        onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                        state={state}
-                        session={session}
-                        assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                        assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
-                        agentDisplayName={assignment.name}
-                        ready={assignment.ready}
-                        {...routineHandlers(task)}
-                      />
-                    );
-                  })}
-                </Table>
-                <Pagination
-                  compact
-                  className="list-group-pager"
-                  page={groupPage}
-                  onPageChange={(next) => setGroupPage(state, next)}
-                  label={label}
+          }
+        />
+
+        <RoutineStats routines={routineTasks} tasks={tasks} />
+        <RoutineFiltersBar
+          filters={filters}
+          agents={logicalAgents}
+          onChange={setFilters}
+          sortMenu={
+            <SortMenu
+              options={[
+                { key: "title", label: t("backlog.col_task") },
+                ...(view === "card" ? [{ key: "state" as const, label: t("routine.state") }] : []),
+                { key: "priority", label: t("backlog.priority") },
+                { key: "assignee", label: t("backlog.assignee") },
+                { key: "nextRun", label: t("routine.next_run") },
+              ]}
+              sort={sort}
+              onSortChange={setSort}
+              label={t("routine.sort_label")}
+            />
+          }
+        />
+
+        {filteredTasks.length === 0 ? (
+          <BoardEmpty
+            title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
+            body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
+            createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
+            onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+          />
+        ) : view === "list" ? (
+          /* One table, one header, no bands: the rail beside this list has
+             already said which schedule state is on screen.
+
+             `data-density="compact"` is the same scope the backlog list opts
+             into. The two lists are one record grammar (see RoutineRecords),
+             and this one was running at the root rhythm while the backlog ran
+             compact — a 77px routine row against a 52px task row for the same
+             kind of record. */
+          <>
+            <div className="backlog-rows routine-rows" data-density="compact">
+              <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
+                <RoutineRowsHead
+                  sort={sort}
+                  onSort={toggleSort}
+                  selectAll={
+                    <TaskSelectAllCheckbox
+                      state={selectionCheckState(visibleSelection, visibleIds)}
+                      label={t("routine.select_all_routines")}
+                      onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                    />
+                  }
                 />
-              </ListGroup>
-            );
-          })}
-        </div>
-      ) : (
-        <>
-          <div className="routine-list">
-          {pagedTasks.items.map((task) => {
-            const assignment = taskAssignmentDisplay(task);
-            return (
-              <RoutineCard
-                key={task.id}
-                task={task}
-                selected={visibleSelection.has(task.id)}
-                onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                state={routineState(task, runningIds)}
-                assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
-                agentDisplayName={assignment.name}
-                ready={assignment.ready}
-                {...routineHandlers(task)}
-              />
-            );
-          })}
-          </div>
-          <Pagination page={pagedTasks} onPageChange={setPage} label={t("routine.title")} />
-        </>
-      )}
+              </Table>
+              <Table className="routine-rows-body" aria-label={sectionLabel}>
+                {pagedTasks.items.map((task) => {
+                  const session = linkedSession(task);
+                  const assignment = taskAssignmentDisplay(task);
+                  return (
+                    <RoutineRow
+                      key={task.id}
+                      task={task}
+                      selected={visibleSelection.has(task.id)}
+                      onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
+                      state={routineState(task, runningIds)}
+                      session={session}
+                      assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
+                      assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
+                      agentDisplayName={assignment.name}
+                      ready={assignment.ready}
+                      {...routineHandlers(task)}
+                    />
+                  );
+                })}
+              </Table>
+            </div>
+            <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
+          </>
+        ) : (
+          <>
+            <div className="routine-list">
+            {pagedTasks.items.map((task) => {
+              const assignment = taskAssignmentDisplay(task);
+              return (
+                <RoutineCard
+                  key={task.id}
+                  task={task}
+                  selected={visibleSelection.has(task.id)}
+                  onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
+                  state={routineState(task, runningIds)}
+                  showState={filters.state === "all"}
+                  assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
+                  assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
+                  agentDisplayName={assignment.name}
+                  ready={assignment.ready}
+                  {...routineHandlers(task)}
+                />
+              );
+            })}
+            </div>
+            <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
+          </>
+        )}
+      </div>
 
       <TaskSelectionBar
         count={visibleSelection.size}
