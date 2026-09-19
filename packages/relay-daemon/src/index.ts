@@ -524,9 +524,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           runtimeSignal,
         );
         if (!response.ok) {
+          const detail = `Command poll failed: ${response.status} ${await response.text()}`;
+          // Gone is permanent: use the same clean shutdown as a deleted-node
+          // registration instead of trying to bring the node back.
+          if (response.status === 410) throw new DaemonHttpError(detail, response.status);
           // The backend may have restarted with fresh state or demoted this node;
           // re-register before treating the rejection as fatal.
-          const detail = `Command poll failed: ${response.status} ${await response.text()}`;
           logger.warn("command poll rejected; re-registering", { sandboxId, error: detail });
           await register();
           lastRegisteredAt = Date.now();

@@ -12,14 +12,17 @@ interface InstallOptions {
   employeeId: string;
   workspace: string;
   foreground: boolean;
+  verbose: boolean;
 }
 
 export function parseInstallArgs(args: string[]): InstallOptions {
   const values = new Map<string, string>();
   let foreground = false;
+  let verbose = false;
   for (let i = 0; i < args.length; i++) {
     const key = args[i]!;
     if (key === '--foreground') { foreground = true; continue; }
+    if (key === '--verbose') { verbose = true; continue; }
     if (!['--backend-url', '--sandbox-id', '--employee-id', '--workspace'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
     const value = args[++i];
     if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${key}`);
@@ -39,7 +42,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   }
   const workspace = values.get('--workspace')!;
   if (!isAbsolute(workspace)) throw new Error('Workspace must be an absolute path.');
-  return { backendUrl, sandboxId, employeeId, workspace, foreground };
+  return { backendUrl, sandboxId, employeeId, workspace, foreground, verbose };
 }
 
 const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -48,6 +51,8 @@ const shell = (value: string): string => `'${value.replace(/'/g, "'\\''")}'`;
 
 export function serviceDefinition(platform: string, id: string, argv: string[], logDir: string, path: string): { name: string; content: string } {
   const name = `build.relay.computer.${id}`;
+  // Deleted nodes exit successfully. Recover crashes without restarting an
+  // intentional shutdown and repeatedly contacting a deleted registration.
   if (platform === 'darwin') {
     return { name, content: `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,7 +61,7 @@ export function serviceDefinition(platform: string, id: string, argv: string[], 
 <key>ProgramArguments</key><array>${argv.map(arg => `<string>${xml(arg)}</string>`).join('')}</array>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>${xml(path)}</string>
 <key>RELAY_DAEMON_STATE_DIR</key><string>${xml(dirname(logDir))}</string></dict>
-<key>RunAtLoad</key><true/><key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>10</integer>
+<key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>10</integer>
 <key>StandardOutPath</key><string>${xml(join(logDir, 'service.log'))}</string>
 <key>StandardErrorPath</key><string>${xml(join(logDir, 'service.log'))}</string>
 </dict></plist>\n` };
@@ -70,7 +75,7 @@ Type=simple
 ExecStart=${argv.map(systemd).join(' ')}
 Environment=${systemd(`PATH=${path}`).replace(/\$\$/g, '$')}
 Environment=${systemd(`RELAY_DAEMON_STATE_DIR=${dirname(logDir)}`).replace(/\$\$/g, '$')}
-Restart=always
+Restart=on-failure
 RestartSec=10
 UMask=0077
 [Install]
@@ -132,8 +137,10 @@ async function install(): Promise<void> {
     const domain = `gui/${process.getuid!()}`;
     spawnSync('launchctl', ['bootout', `${domain}/${service.name}`], { stdio: 'ignore' });
     execFileSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' });
-    console.log(`Relay service started. Logs: ${join(logDir, 'service.log')}`);
-    console.log(`Stop: launchctl bootout ${domain}/${service.name}`);
+    if (options.verbose) {
+      console.log(`Logs: ${join(logDir, 'service.log')}`);
+      console.log(`Stop: launchctl bootout ${domain}/${service.name}`);
+    }
   } else {
     const directory = join(homedir(), '.config', 'systemd', 'user');
     mkdirSync(directory, { recursive: true });
@@ -141,11 +148,14 @@ async function install(): Promise<void> {
     execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' });
     execFileSync('systemctl', ['--user', 'enable', `${service.name}.service`], { stdio: 'inherit' });
     execFileSync('systemctl', ['--user', 'restart', `${service.name}.service`], { stdio: 'inherit' });
-    console.log(`Relay service started. Logs: journalctl --user -u ${service.name}`);
-    console.log(`Stop: systemctl --user disable --now ${service.name}`);
+    if (options.verbose) {
+      console.log(`Logs: journalctl --user -u ${service.name}`);
+      console.log(`Stop: systemctl --user disable --now ${service.name}`);
+    }
   }
-  console.log('Relay will start when you log in. Check the computer status in Relay.');
-  console.log(`CLI installed at ${wrapper}. Commands copied from Relay work without changing PATH.`);
+  console.log('Connected to Relay. You can close this terminal.');
+  console.log('Relay runs in the background and starts automatically when you log in.');
+  if (options.verbose) console.log(`CLI installed at ${wrapper}.`);
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

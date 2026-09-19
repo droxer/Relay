@@ -5,6 +5,8 @@ import { parseInstallArgs, serviceDefinition } from '../src/install.js';
 const args = ['--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--employee-id', 'alice', '--workspace', '/tmp/a project'];
 test('installer requires scoped settings and rejects unsupported origins and identifiers', () => {
   assert.equal(parseInstallArgs(args).workspace, '/tmp/a project');
+  assert.equal(parseInstallArgs(args).verbose, false);
+  assert.equal(parseInstallArgs([...args, '--verbose']).verbose, true);
   assert.throws(() => parseInstallArgs(args.slice(0, -2)), /workspace/);
   assert.throws(() => parseInstallArgs([...args, '--token', 'secret']), /Unknown/);
   assert.throws(() => parseInstallArgs(args.map(x => x === 'node-1' ? '../bad' : x)), /sandbox-id/);
@@ -78,6 +80,8 @@ test('installer verifies registration and writes a service using the real packag
     assert.equal(registrations[0]!.workspacePath, workspace);
     assert.equal(registrations[0]!.sandboxMode, 'none');
     assert.doesNotMatch(stdout + stderr, /fixture-token/);
+    assert.match(stdout, /Connected to Relay\. You can close this terminal\./);
+    assert.doesNotMatch(stdout, /launchctl|systemctl|journalctl|CLI installed at|Logs:/);
     const credential = join(home, '.relay/daemon-nodes/node-install-test/credentials/alice.token');
     assert.equal(readFileSync(credential, 'utf8').trim(), 'fixture-token');
     assert.equal(statSync(credential).mode & 0o777, 0o600);
@@ -91,10 +95,14 @@ test('installer verifies registration and writes a service using the real packag
     assert.match(content, /RELAY_DAEMON_STATE_DIR/);
     assert.match(readFileSync(calls, 'utf8'), /bootstrap|restart/);
     // Reconnecting the same computer replaces its service instead of creating another.
-    await exec(process.execPath, command, {
+    const verbose = await exec(process.execPath, [...command, '--verbose'], {
       env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SERVICE_CALLS: calls, RELAY_DAEMON_NODE_TOKEN: 'fixture-token' },
       timeout: 30_000,
     });
+    assert.match(verbose.stdout, /Logs:/);
+    assert.match(verbose.stdout, /Stop:/);
+    assert.match(verbose.stdout, /CLI installed at/);
+    assert.doesNotMatch(verbose.stdout + verbose.stderr, /fixture-token/);
     assert.equal(readFileSync(service, 'utf8'), content);
     assert.equal(registrations.length, 2);
 

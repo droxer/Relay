@@ -120,6 +120,22 @@ npm run test:py
 `test:py` uses `UV_CACHE_DIR=.uv-cache` so dependency downloads and builds stay
 inside the repository workspace.
 
+### Personal-computer setup troubleshooting
+
+Use the installation command from **Connect this computer** and enter the node
+token when prompted. Successful setup prints **Connected to Relay**; the service
+runs in the background without a PATH change or another manual daemon command.
+Re-running setup for the same computer replaces its service definition.
+
+For troubleshooting, append `--verbose` to that installation command to print the
+log location, service stop command, and CLI location. This re-runs setup and
+restarts the service, so use it when no work is running on that computer.
+
+New or reinstalled services restart after failures, but stay stopped after a
+clean exit, including when the backend reports the computer was deleted. Existing
+service definitions receive this policy on the next setup run. Login startup is
+still enabled; a deleted registration exits cleanly if launched again at login.
+
 ## Pre-commit hooks
 
 Relay uses [pre-commit](https://pre-commit.com/) to run lightweight checks before

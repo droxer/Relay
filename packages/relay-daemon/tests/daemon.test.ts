@@ -3242,33 +3242,40 @@ for (const workspaceLayout of ["task", "node-root"] as const) {
   });
 }
 
-test("daemon stops instead of retrying when the backend reports the node was deleted", async () => {
-  const registrations: string[] = [];
-  await runRelayDaemon({
-    backendUrl: "http://relay.test",
-    sandboxId: "sbx_deleted",
-    employeeId: "alice",
-    workspacePath: process.cwd(),
-    token: "node_token",
-    pollIntervalMs: 5,
-    shutdownGraceMs: 10,
-    logger: testLogger(),
-    environment: fakeEnvironment(),
-    fetchFn: async (url) => {
-      const path = new URL(String(url)).pathname;
-      if (path === "/api") return jsonResponse({ name: "Relay backend" });
-      if (path === "/api/v1/daemon-node-registrations") {
-        registrations.push(path);
-        return jsonResponse({ detail: "Daemon node sbx_deleted was deleted in the control panel." }, 410);
-      }
-      return jsonResponse({ commands: [] });
-    },
-  });
+for (const deletedDuring of ["registration", "poll"]) {
+  test(`daemon stops instead of retrying when deletion is reported during ${deletedDuring}`, async () => {
+    const registrations: string[] = [];
+    await runRelayDaemon({
+      backendUrl: "http://relay.test",
+      sandboxId: "sbx_deleted",
+      employeeId: "alice",
+      workspacePath: process.cwd(),
+      token: "node_token",
+      signal: AbortSignal.timeout(1000),
+      pollIntervalMs: 5,
+      shutdownGraceMs: 10,
+      logger: testLogger(),
+      environment: fakeEnvironment(),
+      fetchFn: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") {
+          registrations.push(path);
+          if (deletedDuring === "poll") return jsonResponse({ ok: true });
+          return jsonResponse({ detail: "Daemon node sbx_deleted was deleted in the control panel." }, 410);
+        }
+        if (path.endsWith("/commands") && deletedDuring === "poll") {
+          return jsonResponse({ detail: "Daemon node sbx_deleted was deleted in the control panel." }, 410);
+        }
+        return jsonResponse({ commands: [] });
+      },
+    });
 
-  // One rejected attempt, and no "stopped" registration afterwards: the node
-  // is gone, so there is nothing left to report to.
-  assert.equal(registrations.length, 1);
-});
+    // One initial attempt, and no "stopped" registration afterwards: the node
+    // is gone, so there is nothing left to report to.
+    assert.equal(registrations.length, 1);
+  });
+}
 
 test("daemon cannot inherit a stale verdict from the shared workspace", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "relay-stale-verdict-"));

@@ -70,7 +70,11 @@ export function SectionNav<Id extends string>({
             <li key={item.id} className="sec-nav-item">
               <Button
                 variant="ghost"
-                {...(item.href ? { render: <a href={item.href} /> } : { type: "button" as const })}
+                {...(item.href
+                  ? // `nativeButton` must travel with the anchor: the primitive
+                    // otherwise keeps native button semantics it no longer has.
+                    { render: <a href={item.href} />, nativeButton: false as const }
+                  : { type: "button" as const })}
                 className="sec-nav-btn"
                 data-active={active ? "true" : "false"}
                 data-empty={item.count === 0 ? "true" : undefined}
