@@ -228,3 +228,40 @@ def test_executor_disabled_after_routing_releases_known_rejected_claim(execution
     assert not current.get("dispatchClaim")
     assert not ctx.registry.daemon_store.active_run_request_for_task(task["id"])
     assert current["dispatchOutcome"]["code"] == "agent_offline"
+
+
+@pytest.mark.parametrize("source", ["manual", "scheduler"])
+@pytest.mark.parametrize("code", ["task_wip_limit", "capacity_exhausted", "dispatch_failed"])
+def test_failed_dispatch_requires_manual_retry(execution, monkeypatch, source, code):
+    ctx, task, _ = execution
+    original = ctx.backend.run
+    calls = []
+
+    async def fail(*args, **kwargs):
+        calls.append(args)
+        raise ValueError(f"{code}: fixture rejection")
+
+    monkeypatch.setattr(ctx.backend, "run", fail)
+    if source == "manual":
+        result = asyncio.run(start_task_on_ready_node(
+            ctx, task, {"employeeId": "alice", "isAdmin": False}
+        ))
+        assert result["dispatch"]["state"] == "rejected"
+    else:
+        asyncio.run(scheduler(ctx).tick())
+    blocked = ctx.task_store.get_task(task["id"])
+    assert blocked["status"] == "blocked"
+    assert blocked["dispatchOutcome"]["code"] == code
+    assert "manually" in blocked["blockerReason"]
+    assert "dispatchRetry" not in blocked
+    # Even a new scheduler must not dispatch it again.
+    for _ in range(3):
+        asyncio.run(scheduler(ctx).tick())
+    assert len(calls) == 1
+    monkeypatch.setattr(ctx.backend, "run", original)
+    if code != "dispatch_failed":
+        result = asyncio.run(start_task_on_ready_node(
+            ctx, ctx.task_store.get_task(task["id"]),
+            {"employeeId": "alice", "isAdmin": False}
+        ))
+        assert result["dispatch"]["state"] == "started"
