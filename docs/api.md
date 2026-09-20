@@ -279,6 +279,13 @@ that project's recent Threads, active tasks, active runs, artifacts, and bound
 Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
+The browser project detail opens on Tasks. `?tab=profile` opens Team,
+`?tab=workspace` opens files, and `?tab=activities` opens supporting activity.
+The Tasks view filters the complete task summary collection by `projectId`,
+excludes deleted tasks and routine definitions, and includes routine occurrences.
+Progress counts accepted (`done`) tasks against that collection. Workflow columns
+retain blocked and human-waiting labels within their recorded workflow stage.
+
 Task/thread creation accepts `projectId`. Project dispatch rejects Computer,
 team, or non-member overrides; the backend resolves the fixed roster and the
 current daemon instance for the project's stable Computer identity.
