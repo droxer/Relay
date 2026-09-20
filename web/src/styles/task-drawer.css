@@ -455,18 +455,60 @@
   }
 }
 
-/* Pointer capability, not viewport width, decides whether hover can reveal
-   card actions. This also covers landscape tablets wider than 820px. */
-@media (hover: none), (pointer: coarse) {
-  .backlog-task-actions {
-    position: static;
-    margin-top: var(--sp-3);
-    padding: var(--sp-3) 0 0;
-    background: transparent;
-    border-radius: 0;
-    opacity: 1;
-    pointer-events: auto;
-  }
+/* ── Task peek ────────────────────────────────────────────────────────── */
+
+/* The peek is the tile's missing context, one click deep. Its sections stack
+   in the drawer's column body; the action bar pins to the bottom edge the
+   way a form footer does. */
+.task-peek-description {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  /* The author wrote the line breaks; the tile used to clamp them away. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Provenance and outcome — what the tile's facts line does not say. */
+.task-peek-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  color: var(--ink-3);
+  font: var(--type-label);
+}
+
+/* Always visible — a drawer has no hover to reveal into, and the tile's
+   hover-revealed action bar is exactly the pattern this drawer replaced. */
+.task-peek-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: auto;
+  padding-top: var(--sp-4);
+  border-top: 0.5px solid var(--line-1);
+}
+
+.task-peek-action-groups {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* The way OUT of the peek to the full record: quiet text, loud on hover. */
+.task-peek-open-record {
+  color: var(--ink-3);
+  font: var(--type-label-strong);
+  text-decoration: none;
+}
+
+.task-peek-open-record:hover {
+  color: var(--ink-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
