@@ -17,6 +17,7 @@ def setup(tmp_path, monkeypatch):
     client = TestClient(app)
     _bootstrap(client)
     node = _register_computer(app, "node_alice", "machine-a")
+    app.state.registry.update_status(node["id"], {"capabilities": [*node["capabilities"], "task-workspaces"]})
     agent = _agent(client, app, node, "Builder", "codex")
     _login_alice(client)
     response = client.post(
@@ -101,3 +102,52 @@ def test_precreated_idle_thread_can_start_without_duplicate_execution(setup, sco
     if scope == "agent":
         assert command["sessionId"] == original_session_id
     assert app.state.session_store.get_session(original_session_id)
+
+
+@pytest.mark.parametrize("scope", ["agent", "project", "routine"])
+def test_explicit_start_retries_blocked_dispatch_without_automatic_retry(setup, monkeypatch, scope):
+    app, client, node, agent, project = setup
+    assignment = {"projectId": project["id"]} if scope == "project" else {"assignedAgentId": agent["id"]}
+    if scope == "routine":
+        assignment.update(isRoutine=True, routineCadence="weekly", routineEnabled=True,
+                          routineNextRunDate=app.state.today().isoformat())
+    created = client.post("/api/v1/tasks", json={"title": "Retry failed work", **assignment})
+    assert created.status_code == 201, created.text
+    task = created.json()
+    original_run = app.state.backend.run
+
+    async def unavailable(*args, **kwargs):
+        raise ValueError("capacity_exhausted: fixture computer is full")
+
+    monkeypatch.setattr(app.state.backend, "run", unavailable)
+    failed = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
+    assert failed["task"]["status"] == "blocked", failed
+    failed_id = failed["task"]["id"]
+    monkeypatch.setattr(app.state.backend, "run", original_run)
+    assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 0
+    assert app.state.task_store.get_task(failed_id)["status"] == "blocked"
+
+    retried = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+    assert retried.status_code == 202, retried.text
+    result = retried.json()
+    assert result["dispatch"]["state"] == "started", result
+    assert result["task"]["id"] == failed_id
+    assert not result["task"].get("blockerReason")
+    again = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
+    assert again["dispatch"]["state"] == "queued", again
+    commands = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    assert len([command for command in commands if command["type"] == "run.start"]) == 1
+
+
+def test_explicit_start_does_not_unblock_owned_execution(setup):
+    app, client, node, agent, _ = setup
+    task = client.post("/api/v1/tasks", json={"title": "Already admitted", "assignedAgentId": agent["id"]}).json()
+    started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
+    assert started["dispatch"]["state"] == "started", started
+    app.state.task_store.update_task(task["id"], {"status": "blocked", "blockerReason": "Waiting for reconciliation"})
+    result = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
+    assert result["dispatch"]["code"] == "task_execution_active", result
+    assert result["task"]["status"] == "blocked"
+    assert result["task"]["blockerReason"] == "Waiting for reconciliation"
+    commands = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    assert len([command for command in commands if command["type"] == "run.start"]) == 1
