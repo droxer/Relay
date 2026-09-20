@@ -338,6 +338,7 @@
     "actions_dispatch": "派發",
     "actions_state": "變更狀態",
     "start": "開始",
+    "retry": "重試",
     "start_team": "啟動團隊",
     "discuss": "討論",
     "open_thread": "開啟對話",

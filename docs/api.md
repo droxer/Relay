@@ -84,6 +84,11 @@ POST   /api/v1/admin/chat-integrations/{id}/webhook-secret-rotations
 DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
+An explicit `POST /api/v1/tasks/{id}/runs` retries a blocked task (or the
+routine's existing blocked occurrence) after checking that no dispatch claim or
+run request owns it. It records the status change through task events. Automatic
+scheduling never reopens blocked tasks.
+
 Thread collaboration inputs are semantic. `intent` is `accomplish`, `discuss`,
 or `review`; omitting `addressAgentId` addresses the current room. Recovery
 `kind` is `rerun` or `handoff`. The backend resolves membership, executor,

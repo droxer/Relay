@@ -340,6 +340,7 @@
     "actions_dispatch": "Dispatch",
     "actions_state": "Change state",
     "start": "Start",
+    "retry": "Retry",
     "start_team": "Start team",
     "discuss": "Discuss",
     "open_thread": "Open thread",

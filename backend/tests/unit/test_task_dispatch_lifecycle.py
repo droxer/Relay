@@ -40,7 +40,7 @@ def test_routine_retry_dispatches_only_without_a_live_session(monkeypatch, sessi
         dispatch.assert_not_awaited()
         assert result["session"]["id"] == "old"
     else:
-        dispatch.assert_awaited_once_with(ctx, occurrence, {}, assignments=None)
+        dispatch.assert_awaited_once_with(ctx, occurrence, {}, assignments=None, retry_blocked=False)
         assert result["session"]["id"] == "new"
         ctx.task_store.link_session.assert_called_once_with("routine", "new")
 

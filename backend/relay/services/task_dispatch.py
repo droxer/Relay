@@ -218,12 +218,14 @@ class TaskDispatcher:
         *,
         assignments: list[dict[str, Any]] | None,
         record_pending: bool,
+        retry_blocked: bool = False,
     ) -> None:
         self.ctx = ctx
         self.task = task
         self.actor = actor
         self.run_assignments = assignments or []
         self.record_pending = record_pending
+        self.retry_blocked = retry_blocked
         self.team_assignment_resolved = False
         self.project_assignment_resolved = False
         self.project_snapshot: dict[str, Any] | None = None
@@ -245,6 +247,30 @@ class TaskDispatcher:
         return self._prepared_node, result
 
     def _prepare_dispatch(self) -> DispatchResult | None:
+        if (
+            self.retry_blocked
+            and self.task.get("status") == "blocked"
+            and not self.task.get("isRoutine")
+        ):
+            # Only an explicit user start may reopen failed work. Serialize the
+            # ownership check and status event with admission and other writes.
+            with (
+                self.ctx.registry.dispatch_lock,
+                self.ctx.task_store.task_write_scope(self.task["id"]) as current,
+            ):
+                self.task = current
+                if current.get("status") == "blocked":
+                    if self._execution_active():
+                        return self._active_result()
+                    self.task = self.ctx.task_store.update_task_if_not_dispatching(
+                        current["id"],
+                        {
+                            "status": "assigned",
+                            "actorEmployeeId": self.actor.get("employeeId"),
+                            "expectedStatus": "blocked",
+                            "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
+                        },
+                    )
         if not self._dispatchable():
             return _record_result(
                 self.ctx,
@@ -255,21 +281,8 @@ class TaskDispatcher:
             )
         # Queued executions remain assigned until the daemon starts. Do not
         # re-resolve (and potentially block) work that already has an owner.
-        daemon_store = self.ctx.registry.daemon_store
-        if (
-            dispatch_claim_active(self.task)
-            or daemon_store.active_run_request_for_task(self.task["id"])
-            or any(
-                daemon_store.active_run_request_for_session_any_node(session_id)
-                for session_id in self.task.get("linkedSessionIds", [])
-            )
-        ):
-            return _result(
-                self.task,
-                "queued",
-                code="task_execution_active",
-                message="This task already has a dispatch or execution in progress.",
-            )
+        if self._execution_active():
+            return self._active_result()
         project_result = self._resolve_project_assignments()
         if project_result:
             return project_result
@@ -290,6 +303,25 @@ class TaskDispatcher:
             return claim_result
         self._prepared_node = node
         return None
+
+    def _execution_active(self) -> bool:
+        daemon_store = self.ctx.registry.daemon_store
+        return bool(
+            dispatch_claim_active(self.task)
+            or daemon_store.active_run_request_for_task(self.task["id"])
+            or any(
+                daemon_store.active_run_request_for_session_any_node(session_id)
+                for session_id in self.task.get("linkedSessionIds", [])
+            )
+        )
+
+    def _active_result(self) -> DispatchResult:
+        return _result(
+            self.task,
+            "queued",
+            code="task_execution_active",
+            message="This task already has a dispatch or execution in progress.",
+        )
 
     def _dispatchable(self) -> bool:
         """Refuse a task that is not waiting to run, before anything mutates it.
@@ -701,6 +733,7 @@ async def start_task_on_ready_node(
     *,
     assignments: list[dict[str, Any]] | None = None,
     record_pending: bool = True,
+    retry_blocked: bool = False,
 ) -> DispatchResult | None:
     return await TaskDispatcher(
         ctx,
@@ -708,6 +741,7 @@ async def start_task_on_ready_node(
         actor,
         assignments=assignments,
         record_pending=record_pending,
+        retry_blocked=retry_blocked,
     ).start()
 
 
@@ -719,6 +753,7 @@ async def start_routine_occurrence_on_ready_node(
     agent: str | None,
     run_date: date,
     assignments: list[dict[str, Any]] | None = None,
+    retry_blocked: bool = False,
 ) -> DispatchResult | None:
     prepared = await run_in_threadpool(_prepare_routine_occurrence, ctx, routine, agent, run_date)
     if prepared is None or "dispatch" in prepared:
@@ -726,7 +761,10 @@ async def start_routine_occurrence_on_ready_node(
     occurrence = prepared
     # The occurrence is an immutable assignment snapshot. A routine may be
     # reassigned after promotion, but that must only affect later occurrences.
-    result = await start_task_on_ready_node(ctx, occurrence, actor, assignments=None)
+    result = await start_task_on_ready_node(
+        ctx, occurrence, actor, assignments=None,
+        retry_blocked=retry_blocked,
+    )
     if result and result.get("session"):
         await run_in_threadpool(ctx.task_store.link_session, routine["id"], result["session"]["id"])
     return result

@@ -288,6 +288,7 @@ async def start_routine_occurrence_on_ready_node(
         agent=agent,
         assignments=assignments,
         run_date=ctx.today(),
+        retry_blocked=True,
     )
 
 
@@ -1017,7 +1018,7 @@ async def start_task(
         )
     else:
         result = await start_task_on_ready_node(
-            ctx, task, actor, assignments=assignments or None
+            ctx, task, actor, assignments=assignments or None, retry_blocked=True
         )
     if not result or not result.get("session"):
         return (

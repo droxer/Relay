@@ -247,6 +247,9 @@ make backend BACKEND_PORT=9000
 ```
 
 Failed task dispatches block immediately and require an explicit manual retry.
+Use **Retry** on the blocked task card/row, or **Run** on its routine. The manual
+start endpoint reopens the existing blocked task/occurrence only when no active
+dispatch claim or run request owns it; repeated starts do not duplicate runs.
 There is no automatic retry count, backoff, or retry timer. The failure reason
 remains on the task. The scheduler still promotes future routine occurrences
 and starts newly assigned work when a daemon becomes available.

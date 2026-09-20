@@ -93,7 +93,6 @@ export function BacklogTaskCard({
   const startDisabled =
     (!task.assignedAgentId && !task.assignedTeamId && !canDiscuss) ||
     task.status === "running" ||
-    task.status === "blocked" ||
     task.status === "done";
   const result = taskResultLine(task, session);
   const age = workAgeDays(task);
@@ -201,8 +200,8 @@ export function BacklogTaskCard({
                   onClick={onStart}
                   disabled={startDisabled}
                   loading={starting}
-                  aria-label={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-                  title={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+                  aria-label={task.status === "blocked" ? t("backlog.retry") : ["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+                  title={task.status === "blocked" ? t("backlog.retry") : ["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
                 >
                   <ActionStart size={ICON.sm} />
                 </Button>
@@ -350,7 +349,6 @@ export function BacklogTaskRow({
   const startDisabled =
     (!task.assignedAgentId && !task.assignedTeamId && !canDiscuss) ||
     task.status === "running" ||
-    task.status === "blocked" ||
     task.status === "done";
 
   return (
@@ -422,8 +420,8 @@ export function BacklogTaskRow({
             onClick={onStart}
             disabled={startDisabled}
             loading={starting}
-            aria-label={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-            title={["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+            aria-label={task.status === "blocked" ? t("backlog.retry") : ["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
+            title={task.status === "blocked" ? t("backlog.retry") : ["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
           >
             <ActionStart size={ICON.sm} />
           </Button>

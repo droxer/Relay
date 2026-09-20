@@ -134,7 +134,9 @@ def test_explicit_start_retries_blocked_dispatch_without_automatic_retry(setup, 
     assert result["task"]["id"] == failed_id
     assert not result["task"].get("blockerReason")
     again = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
-    assert again["dispatch"]["state"] == "queued", again
+    assert again["dispatch"]["code"] == (
+        "already_started" if scope == "routine" else "task_execution_active"
+    ), again
     commands = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
     assert len([command for command in commands if command["type"] == "run.start"]) == 1
 

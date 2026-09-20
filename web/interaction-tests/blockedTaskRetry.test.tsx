@@ -17,7 +17,7 @@ it.each([BacklogTaskCard, BacklogTaskRow])("offers an explicit retry for a block
     dragging={false} onDragStart={vi.fn()} onDragEnd={vi.fn()} onTouchStart={vi.fn()} />);
   expect(onStart).not.toHaveBeenCalled();
   const retry = screen.getByRole("button", { name: "backlog.retry" });
-  expect(retry).not.toBeDisabled();
+  expect((retry as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(retry);
   expect(onStart).toHaveBeenCalledTimes(1);
 });
