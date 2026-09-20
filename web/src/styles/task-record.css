@@ -177,3 +177,38 @@
   letter-spacing: var(--type-body-sm-track);
   text-align: right;
 }
+
+/* ── Drawer presentation ──────────────────────────────────────────── */
+
+/* On the routines board the record opens as a drawer over the list instead
+   of taking the route. The drawer chrome already carries the kicker, title,
+   and close, so what renders here is the toolbar, the band, and the tabs. */
+.record-drawer {
+  background: transparent;
+}
+
+.record-drawer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+/* The band is a flush strip on the page; inset by the drawer body's padding
+   it needs its top edge drawn. */
+.record-drawer .record-band {
+  border-top: 0.5px solid var(--line-1);
+  margin-bottom: var(--sp-4);
+}
+
+/* The drawer's body is the scroll container here — the page mode's flex
+   fill would only clip against it. */
+.record-drawer .workspace-body {
+  flex: none;
+}
+
+.record-drawer .record-missing {
+  padding: 0;
+}

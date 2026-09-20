@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
@@ -273,6 +273,16 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
     };
   }
 
+  /* The record opens as a drawer over the board: the URL says which record,
+     and the board stays put beneath it. The mirror keeps the last open record
+     around through the drawer's exit animation — the URL has already moved on
+     by then, the same deferral the form drawer gets from `onClosed`. */
+  const [lastRecord, setLastRecord] = useState<{ taskId: string; runId: string | null } | null>(null);
+  useEffect(() => {
+    if (recordTaskId) setLastRecord({ taskId: recordTaskId, runId: recordRunId ?? null });
+  }, [recordTaskId, recordRunId]);
+  const drawerRecord = recordTaskId ? { taskId: recordTaskId, runId: recordRunId ?? null } : lastRecord;
+
   /* The content column's header names the section the rail has selected —
      the rail names the surface. */
   const sectionLabel = filters.state === "all"
@@ -305,45 +315,6 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
         });
       },
     };
-  }
-
-  /* The record surface takes the whole route when the path names one. The
-     board's drawer stays mounted below it: the record delegates editing back
-     here rather than carrying a second copy of the form. */
-  if (recordTaskId) {
-    return (
-      <>
-        <TaskRecordView
-          taskId={recordTaskId}
-          runId={recordRunId}
-          tasks={tasks}
-          onEdit={editTask}
-          onOpenThread={onOpenThread}
-          onOpenRecord={onOpenRecord}
-          onDeleted={() => onOpenRecord(null)}
-        />
-        {form ? (
-          <TaskDrawer
-            open={drawerOpen}
-            form={form}
-            logicalAgents={logicalAgents}
-            teams={teams}
-            saving={saving}
-            deleting={deleting}
-            initialFocus={assignmentFocus ? "assignment" : "title"}
-            title={form.id ? t("routine.edit") : t("routine.new")}
-            subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
-            onClose={() => { void closeRoutineForm(); }}
-            onClosed={releaseRoutineForm}
-            onChange={(next) => {
-              if (next.variant === "routine") setForm(next);
-            }}
-            onSubmit={(event) => void submitRoutine(event)}
-            onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
-          />
-        ) : null}
-      </>
-    );
   }
 
   return (
@@ -489,6 +460,29 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
           }}
           onSubmit={(event) => void submitRoutine(event)}
           onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
+          layer={drawerRecord ? 1 : 0}
+        />
+      ) : null}
+
+      {/* The record rides over the board rather than replacing it: the rail
+          and the list keep their places — and their filters, which the record
+          route now carries — while the drawer is open. Editing still happens
+          here: the record delegates `onEdit` up, and the form drawer stacks
+          above the record's. */}
+      {drawerRecord ? (
+        <TaskRecordView
+          taskId={drawerRecord.taskId}
+          runId={drawerRecord.runId}
+          tasks={tasks}
+          drawer={{
+            open: Boolean(recordTaskId),
+            onClose: () => onOpenRecord(null),
+            onClosed: () => setLastRecord(null),
+          }}
+          onEdit={editTask}
+          onOpenThread={onOpenThread}
+          onOpenRecord={onOpenRecord}
+          onDeleted={() => onOpenRecord(null)}
         />
       ) : null}
     </section>

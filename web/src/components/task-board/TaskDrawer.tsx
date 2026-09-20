@@ -53,6 +53,8 @@ type TaskDrawerProps = {
   onDelete?: () => void;
   /** Fires after the drawer's exit animation completes — release form state here. */
   onClosed?: () => void;
+  /** Stacking order — 1 when the form opens above a record drawer. */
+  layer?: number;
 };
 
 function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
@@ -173,6 +175,7 @@ export function TaskDrawer({
   onSubmit,
   onDelete,
   onClosed,
+  layer,
 }: TaskDrawerProps) {
   const { t } = useTranslation();
   const priorityLabelId = useId();
@@ -250,6 +253,7 @@ export function TaskDrawer({
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
       onClosed={onClosed}
+      layer={layer}
     >
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
