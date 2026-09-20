@@ -2488,6 +2488,12 @@ class DaemonNodeRegistry:
         if not self._claim_and_advance_run_request(event):
             self.clear_run_output(event["runId"])
 
+    def assert_node_authenticated(self, sandbox_id: str, token: str | None) -> None:
+        """Validate a runtime token without renewing liveness or changing node state."""
+        self._hydrate_node(sandbox_id)
+        with self.dispatch_scope([sandbox_id]):
+            self._assert_authorized(sandbox_id, token)
+
     def assert_node_event_authorized(self, sandbox_id: str, token: str | None) -> None:
         """Authorize non-run events without attempting run-event bookkeeping."""
         self._hydrate_node(sandbox_id)

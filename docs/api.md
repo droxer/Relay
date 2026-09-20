@@ -325,6 +325,12 @@ POST /api/v1/daemon-nodes/{id}/heartbeat
 The request is authenticated with the daemon node token and may include
 `activeCommandLeases` so liveness and delivery ownership renew together.
 
+`GET /api/v1/daemon-nodes/{id}/auth-check` validates the daemon's runtime bearer
+token and returns `{ "sandboxId": "<id>", "authenticated": true }`. It does not
+register the node, renew liveness, or change its status. Invalid tokens and
+unknown/deleted nodes return 401. Doctor and personal-computer setup require
+this endpoint; update the backend before distributing the updated daemon client.
+
 `GET /api/v1/daemon-nodes/{id}/commands` returns `commands` plus a `heartbeat`
 observation containing `observedAt` and matching `commandLeases`, and
 `processingMs` measuring server-side poll processing (including long-poll

@@ -25,7 +25,7 @@ function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): stri
     "exec",
     "--json",
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    ...(trustedExecution() ? ["--dangerously-bypass-approvals-and-sandbox"] : []),
   ];
   const model = isLocalAgentExecution() ? undefined : openaiModel();
   if (model) argv.push("-m", model);
@@ -44,8 +44,7 @@ function buildClaudeInvocation(
   const argv = [
     ...agentArgv("claude"),
     "-p",
-    "--permission-mode",
-    "bypassPermissions",
+    ...(trustedExecution() ? ["--permission-mode", "bypassPermissions"] : []),
     "--add-dir",
     workspace,
     "--verbose",
@@ -94,7 +93,7 @@ function buildKimiInvocation(prompt: string, skillPaths: string[] | undefined, w
   // Kimi asks before tool calls by default. The run is headless, so nothing can
   // answer and the agent would stall; --auto is its equivalent of Claude's
   // bypassPermissions and Codex's approval bypass.
-  const argv = ["kimi", "--auto"];
+  const argv = ["kimi", ...(trustedExecution() ? ["--auto"] : [])];
   for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
   const model = isLocalAgentExecution() ? undefined : kimiModel();
   if (model && !kimiApiKey() && !process.env.KIMI_MODEL_NAME) argv.push("--model", model);
@@ -141,4 +140,12 @@ function nativeSkillPrompt(prompt: string, state: AgentState): string {
   if (!isLocalAgentExecution() || !state.skill_paths?.length) return prompt;
   const paths = state.skill_paths.map((path) => JSON.stringify(`${path}/SKILL.md`));
   return `${prompt}\n\n[Assigned skills]\nRead and follow these skill instructions before working:\n${paths.join("\n")}`;
+}
+
+/** BoxLite is already isolated. Local execution preserves native policy by default. */
+function trustedExecution(): boolean {
+  if (!isLocalAgentExecution()) return true;
+  const policy = process.env.RELAY_LOCAL_PERMISSION_POLICY ?? "native";
+  if (policy !== "native" && policy !== "trusted") throw new Error(`Invalid local permission policy: ${policy}`);
+  return policy === "trusted";
 }

@@ -736,6 +736,18 @@ async def daemon_commands(
         raise HTTPException(404, str(error))
 
 
+@router.get("/daemon-nodes/{sandbox_id}/auth-check")
+def daemon_auth_check(
+    sandbox_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    """Read-only runtime-token verification for daemon diagnostics and setup."""
+    try:
+        ctx.registry.assert_node_authenticated(sandbox_id, bearer_token(request))
+    except (PermissionError, KeyError, DeletedDaemonNodeError) as error:
+        raise HTTPException(401, "Unauthorized daemon node.") from error
+    return {"sandboxId": sandbox_id, "authenticated": True}
+
+
 @router.get("/daemon-nodes/{sandbox_id}/skill-blobs/{sha256}")
 def daemon_skill_blob(
     sandbox_id: str, sha256: str, request: Request, ctx: AppContextDep

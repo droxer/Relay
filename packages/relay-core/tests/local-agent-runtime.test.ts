@@ -71,3 +71,16 @@ test("local managed skills do not replace the user's authorization home", () => 
     assert.match(command, /\/relay\/skills\/review\/SKILL\.md/);
   }
 }));
+
+
+test("local permissions remain native unless trusted execution is explicit", () => local(() => {
+  for (const build of [buildClaudeCommand, buildCodexCommand, buildKimiCommand]) {
+    assert.doesNotMatch(build(initialAgentState("task")), /bypassPermissions|dangerously-bypass|--auto/);
+  }
+  process.env.RELAY_LOCAL_PERMISSION_POLICY = "trusted";
+  assert.match(buildCodexCommand(initialAgentState("task")), /dangerously-bypass/);
+  assert.match(buildClaudeCommand(initialAgentState("task")), /bypassPermissions/);
+  assert.match(buildKimiCommand(initialAgentState("task")), /--auto/);
+  process.env.RELAY_LOCAL_PERMISSION_POLICY = "typo";
+  assert.throws(() => buildCodexCommand(initialAgentState("task")), /permission policy/i);
+}));

@@ -217,3 +217,11 @@ export function localRuntimeEnvironment(): NodeJS.ProcessEnv {
   }
   return env;
 }
+
+/** Explicit runtime profiles take precedence over automatically loaded Relay dotenv values. */
+export function applyLocalRuntimeEnvironment(env: Record<string, string>): void {
+  for (const [key, value] of Object.entries(env)) {
+    process.env[key] = value;
+    DOT_ENV_VALUES.delete(key);
+  }
+}
