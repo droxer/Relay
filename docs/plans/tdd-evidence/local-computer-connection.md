@@ -16,7 +16,10 @@ available. Agent execution stays on daemons.
 ## Validation
 
 - Full `npm test`: builds all packages, downloadable installer and Next.js,
-  then runs compiled TypeScript, React interactions and Python tests.
+  then runs compiled TypeScript, React interactions and Python tests. Final run:
+  1,620 TypeScript tests, 164 React tests and 1,752 Python tests passed, including
+  the PostgreSQL migration/schema drift checks. Two additional device polling
+  cases passed in the focused coverage run.
 - Packaged installer and durable outbox focused run: 9 passed. Installer tests
   use isolated homes, fake service commands and a local HTTP fixture; they do
   not install a service on the developer's computer.
