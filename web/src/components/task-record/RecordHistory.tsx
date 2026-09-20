@@ -16,10 +16,10 @@ import type { RelayTaskEvent } from "../../types";
  * rest was reachable only through the API.
  *
  * A routine does not come here — its runs happen in occurrences, and one flat
- * timeline across all of them says nothing about any single run. `RoutineRunLedger`
- * is that surface.
+ * timeline across all of them says nothing about any single run. `RecordRuns` is that
+ * surface.
  */
-export function TaskDrawerHistory({
+export function RecordHistory({
   taskId,
   onOpenThread,
 }: {

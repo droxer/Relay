@@ -20,7 +20,7 @@ function taskArtifactDate(value: string | undefined, locale: string): string {
   }).format(date);
 }
 
-export function TaskDrawerArtifacts({ taskId }: { taskId: string }) {
+export function RecordArtifacts({ taskId }: { taskId: string }) {
   const { t, i18n } = useTranslation();
   const { open } = useArtifactViewer();
   const [artifacts, setArtifacts] = useState<ArtifactIndexItem[] | null>(null);

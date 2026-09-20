@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { installNavigationHistory } from "../lib/navigationGuard";
+import { rememberListUrl } from "../lib/recordBack";
 import type { RelaySession } from "../types";
 import {
   DEFAULT_ADMIN_SECTION,
@@ -118,6 +119,19 @@ export function useAppRouter({
     void syncAppStateToUrl(state, replace, () => setLocationState(state));
   }, []);
 
+  /* The record routes. `null` returns to the list, which is what a breadcrumb
+     does when the reader arrived by deep link and has no history to go back
+     to — see `navigateBackToList` in lib/recordBack. */
+  const navigateToTaskRecord = useCallback((taskId: string | null) => {
+    if (taskId) rememberListUrl();
+    navigateToAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
+  }, [navigateToAppState]);
+
+  const navigateToRoutineRecord = useCallback((routineId: string | null, runId: string | null = null) => {
+    if (routineId) rememberListUrl();
+    navigateToAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: routineId, runId });
+  }, [navigateToAppState]);
+
   const navigateToAgent = useCallback((agentId: string | null) => {
     navigateToAppState({ route: "agents", mobileView: "chat", sessionId: null, agentId });
   }, [navigateToAppState]);
@@ -153,6 +167,8 @@ export function useAppRouter({
     routedSessionId: locationState.sessionId,
     projectId: locationState.projectId ?? null,
     agentId: locationState.agentId ?? null,
+    recordTaskId: locationState.taskId ?? null,
+    recordRunId: locationState.runId ?? null,
     teamWorkspaceId: locationState.teamWorkspaceId ?? null,
     settingsSection: locationState.settingsSection ?? DEFAULT_SETTINGS_SECTION,
     adminSection: locationState.adminSection ?? DEFAULT_ADMIN_SECTION,
@@ -164,6 +180,8 @@ export function useAppRouter({
     hrefForSideNavRoute,
     syncThreadUrl,
     navigateToAgent,
+    navigateToTaskRecord,
+    navigateToRoutineRecord,
     navigateToSettings,
     navigateToAdminSection,
     navigateToTeamWorkspace,

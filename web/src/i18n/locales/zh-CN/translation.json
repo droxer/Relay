@@ -1960,5 +1960,31 @@
   "settings": {
     "eyebrow": "个人 / 偏好",
     "sub": "你的电脑、技能，以及 Relay 的外观。"
+  },
+  "record": {
+    "detail_label": "记录：{{title}}",
+    "record_label": "记录信息",
+    "sections": "记录分区",
+    "tab_runs": "运行",
+    "tab_activity": "动态",
+    "tab_definition": "定义",
+    "tab_files": "文件",
+    "settings": "设置",
+    "no_description": "暂无描述。",
+    "created": "创建于",
+    "updated": "更新于",
+    "enabled_yes": "已启用",
+    "enabled_no": "已暂停",
+    "run_now": "立即运行",
+    "retry_run": "重试",
+    "cancel_run": "取消运行",
+    "edit": "编辑",
+    "run_of": "{{date}} 的运行",
+    "scheduled_for": "计划日期",
+    "runs_show_earlier": "查看更早的运行",
+    "loading": "正在加载记录…",
+    "not_found_title": "未找到记录",
+    "not_found_body": "该任务或例行任务已不存在。",
+    "run_not_of_routine": "该运行属于其他例行任务。"
   }
 }

@@ -1,0 +1,179 @@
+/* =====================================================================
+   Task record — one task or routine as an addressable surface.
+
+   The shell is the agent record's (.workspace-page / .record-band /
+   .workspace-body in workspace.css); only what this record adds lives
+   here: the breadcrumb, the run ledger's rows, and the definition panel.
+   ===================================================================== */
+
+/* ── Breadcrumb ───────────────────────────────────────────────────── */
+
+/* Sits in the header's kicker slot, so it inherits that slot's type and
+   only has to say it is a link. */
+.record-back {
+  color: inherit;
+  text-decoration: none;
+}
+
+.record-back:hover {
+  color: var(--ink-1);
+  text-decoration: underline;
+}
+
+/* ── Shared empty / loading line ──────────────────────────────────── */
+
+.record-empty {
+  margin: 0;
+  padding: var(--sp-3) 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-missing {
+  padding: var(--sp-7);
+  color: var(--ink-2);
+}
+
+/* ── Run ledger ───────────────────────────────────────────────────── */
+
+.record-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One destination per row. The whole row is the link — a ledger read by
+   scanning down a date column cannot afford a second target per line. */
+.record-run-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0.5px solid transparent;
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-decoration: none;
+}
+
+.record-run-link:hover {
+  border-color: var(--line-1);
+  background: var(--control-fill-hover);
+}
+
+/* The mark carries the outcome's tone; the row's own text stays neutral so
+   a ledger of thirty runs does not read as thirty coloured lines. */
+.record-run[data-outcome="failed"] .record-run-outcome {
+  color: var(--err);
+}
+
+.record-run-date {
+  flex: none;
+  min-width: 4.5rem;
+  color: var(--ink-1);
+}
+
+.record-run-outcome {
+  flex: none;
+}
+
+.record-run-reason {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-run-meta,
+.record-run-files {
+  flex: none;
+  margin-left: auto;
+  color: var(--ink-3);
+}
+
+/* Two trailing columns; only the first claims the free space. */
+.record-run-meta ~ .record-run-files {
+  margin-left: 0;
+}
+
+.record-run-more {
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: none;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  cursor: pointer;
+}
+
+.record-run-more:hover {
+  background: var(--control-fill-hover);
+}
+
+/* ── Definition ───────────────────────────────────────────────────── */
+
+/* Document and rail, the same split the agent profile uses: the prose gets
+   the measure, the settings get the column. */
+.record-definition {
+  display: grid;
+  gap: var(--sp-7);
+  align-items: start;
+}
+
+@container record (min-width: 768px) {
+  .record-definition {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+  }
+}
+
+.record-section-title {
+  margin: 0 0 var(--sp-3);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--track-0);
+  text-transform: uppercase;
+}
+
+.record-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.record-facts-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.record-facts-row:last-child {
+  border-bottom: none;
+}
+
+.record-facts-row dt {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-facts-row dd {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-align: right;
+}

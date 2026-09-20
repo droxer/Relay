@@ -1977,5 +1977,31 @@
   "settings": {
     "eyebrow": "You / Preferences",
     "sub": "Your computers, skills, and how Relay looks."
+  },
+  "record": {
+    "detail_label": "Record: {{title}}",
+    "record_label": "Record facts",
+    "sections": "Record sections",
+    "tab_runs": "Runs",
+    "tab_activity": "Activity",
+    "tab_definition": "Definition",
+    "tab_files": "Files",
+    "settings": "Settings",
+    "no_description": "No description.",
+    "created": "Created",
+    "updated": "Updated",
+    "enabled_yes": "On",
+    "enabled_no": "Paused",
+    "run_now": "Run now",
+    "retry_run": "Retry",
+    "cancel_run": "Cancel run",
+    "edit": "Edit",
+    "run_of": "Run of {{date}}",
+    "scheduled_for": "Scheduled for",
+    "runs_show_earlier": "Show earlier runs",
+    "loading": "Loading record…",
+    "not_found_title": "Record not found",
+    "not_found_body": "This task or routine no longer exists.",
+    "run_not_of_routine": "This run belongs to a different routine."
   }
 }

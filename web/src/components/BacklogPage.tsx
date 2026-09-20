@@ -1,6 +1,5 @@
 "use client";
 
-import { TaskRecoveryPanel } from "./ExecutionRecoveryPanel";
 
 import { TASK_FLOW_STAGES } from "../lib/taskFlow";
 
@@ -25,6 +24,7 @@ import { SortMenu } from "@/components/ui/SortMenu";
 import { readDraggedTaskId, TASK_DRAG_MEDIA_TYPE, taskDropRejection } from "../lib/taskDrag";
 import { emptyBacklogForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type BacklogTaskFormState } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
+import { TaskRecordView } from "./task-record/TaskRecordView";
 import { InlineTaskCreate } from "./task-board/InlineTaskCreate";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { PageHeader } from "./PageHeader";
@@ -43,6 +43,10 @@ import { taskRef } from "../lib/taskRef";
 
 
 interface BacklogPageProps {
+  /** The task whose record is open, from `/backlog/<id>`. */
+  recordTaskId?: string | null;
+  /** Opens a record; `null` returns to the board. */
+  onOpenRecord: (taskId: string | null) => void;
   tasks: RelayTaskListItem[];
   sessions: RelaySession[];
   nodes: DaemonNodeMonitorRecord[];
@@ -93,7 +97,7 @@ function dragGhostStyle(point: DragPoint): CSSProperties {
 }
 
 
-export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
+export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -139,7 +143,6 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
     },
     onCancel: endTaskDrag,
   });
-  const editingTask = tasks.find(task => task.id === form?.id);
   const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
   const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
@@ -470,6 +473,7 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
       .map((agent) => ({ agentId: agent.id, agent: agent.executorKind }));
     return {
       starting: startTaskMutation.isPending && startTaskMutation.variables?.taskId === task.id,
+      onOpen: () => onOpenRecord(task.id),
       onEdit: () => editTask(task),
       onAssign: () => assignTask(task),
       onStart: () => {
@@ -497,6 +501,44 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
       },
       onDone: () => void updateTaskMutation.mutate({ taskId: task.id, input: { status: "done" } }),
     };
+  }
+
+  /* The record surface takes the whole route when the path names one. The
+     drawer stays mounted below it: the record delegates editing back here
+     rather than carrying a second copy of the form. */
+  if (recordTaskId) {
+    return (
+      <>
+        <TaskRecordView
+          taskId={recordTaskId}
+          tasks={tasks}
+          onEdit={editTask}
+          onOpenThread={onOpenThread}
+          onOpenRecord={(nextId) => onOpenRecord(nextId)}
+          onDeleted={() => onOpenRecord(null)}
+        />
+        {form ? (
+          <TaskDrawer
+            open={drawerOpen}
+            form={form}
+            logicalAgents={logicalAgents}
+            teams={teams}
+            saving={saving}
+            deleting={deleting}
+            initialFocus={assignmentFocus ? "assignment" : "title"}
+            title={form.id ? t("backlog.edit_task") : t("backlog.new_task")}
+            subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("backlog.new_task_id")}
+            onClose={() => { void closeTaskForm(); }}
+            onClosed={releaseTaskForm}
+            onChange={(next) => {
+              if (next.variant === "backlog") setForm(next);
+            }}
+            onSubmit={(event) => void submitTask(event)}
+            onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
+          />
+        ) : null}
+      </>
+    );
   }
 
   return (
@@ -755,8 +797,6 @@ export function BacklogPage({ tasks, sessions, nodes, currentUser, isRefreshing,
           onChange={(next) => {
             if (next.variant === "backlog") setForm(next);
           }}
-          meta={editingTask ? <TaskRecoveryPanel task={editingTask} onOpenThread={onOpenThread} /> : undefined}
-          onOpenThread={onOpenThread}
           onSubmit={(event) => void submitTask(event)}
           onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
         />

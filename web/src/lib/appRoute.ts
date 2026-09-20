@@ -39,6 +39,10 @@ export type AppLocationState = {
   sessionId: string | null;
   projectId?: string | null;
   agentId?: string | null;
+  /** The task or routine whose record is open — `/backlog/<id>`, `/routines/<id>`. */
+  taskId?: string | null;
+  /** The occurrence open as a run, under the routine named by `taskId`. */
+  runId?: string | null;
   teamWorkspaceId?: string | null;
   settingsSection?: SettingsSection | null;
   adminSection?: AdminSection | null;
@@ -85,6 +89,17 @@ export function parseAppPath(pathname: string, _search = ""): AppLocationState {
   if (head === "projects" && second && rest[0] === "threads" && rest[1] && rest.length === 2) {
     return { route: "projects", ...base, projectId: decodeSegment(second), sessionId: decodeSegment(rest[1]) };
   }
+  if (head === "backlog" && second && rest.length === 0) {
+    return { route: "backlog", ...base, taskId: decodeSegment(second) };
+  }
+  if (head === "routines" && second && rest.length === 0) {
+    return { route: "routine", ...base, taskId: decodeSegment(second) };
+  }
+  // A routine never runs itself, so one of its runs is addressed under it:
+  // the segment names the promoted occurrence that carried the run.
+  if (head === "routines" && second && rest[0] === "runs" && rest[1] && rest.length === 2) {
+    return { route: "routine", ...base, taskId: decodeSegment(second), runId: decodeSegment(rest[1]) };
+  }
   if (head === "agents" && second && rest.length === 0) {
     return { route: "agents", ...base, agentId: decodeSegment(second) };
   }
@@ -114,6 +129,8 @@ export function pathForAppState({
   sessionId,
   projectId,
   agentId,
+  taskId,
+  runId,
   teamWorkspaceId,
   composingNew,
   login,
@@ -124,6 +141,11 @@ export function pathForAppState({
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
+  if (route === "backlog" && taskId) return `/backlog/${encodeURIComponent(taskId)}`;
+  if (route === "routine" && taskId) {
+    const routinePath = `/routines/${encodeURIComponent(taskId)}`;
+    return runId ? `${routinePath}/runs/${encodeURIComponent(runId)}` : routinePath;
+  }
   if (route === "teams" && teamWorkspaceId) return `/teams/${encodeURIComponent(teamWorkspaceId)}`;
   if (route === "settings") {
     const section = settingsSection ?? DEFAULT_SETTINGS_SECTION;
@@ -167,6 +189,11 @@ export function hrefForRoute(route: AppRoute, sessionId?: string | null): string
 }
 
 const AGENT_TABS = new Set(["profile", "skills", "activities"]);
+/* The record surface's tabs, by vocabulary. Registered here for the same
+   reason the agent's are: a tab id this table does not list is stripped on
+   arrival, so the control toggles and lands back where it started. */
+const TASK_RECORD_TABS = new Set(["activity", "definition", "files"]);
+const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "files"]);
 const TEAM_TABS = new Set(["profile", "activities"]);
 const PROJECT_TABS = new Set(["profile", "workspace", "activities"]);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
@@ -294,6 +321,18 @@ function copyFilterParams(head: string, source: URLSearchParams, target: URLSear
   }
 }
 
+/** Keeps `?tab=` only when the record declares it, and never for its default
+ *  — the URL should not advertise a tab the reader did not choose. */
+function copyRecordTab(
+  source: URLSearchParams,
+  target: URLSearchParams,
+  tabs: ReadonlySet<string>,
+  defaultTab: string,
+): void {
+  const requested = source.get("tab");
+  if (requested && requested !== defaultTab && tabs.has(requested)) target.set("tab", requested);
+}
+
 /** Returns only query parameters owned by the current route and tab. */
 export function canonicalSearchForPath(pathname: string, search = ""): string {
   const source = new URLSearchParams(search);
@@ -326,6 +365,14 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
       copyParam(source, target, "path");
       copyParam(source, target, "item");
     }
+  } else if (head === "backlog" && entityId && rest.length === 0) {
+    copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
+  } else if (head === "routines" && entityId && rest.length === 0) {
+    copyRecordTab(source, target, ROUTINE_RECORD_TABS, "runs");
+  } else if (head === "routines" && entityId && rest[0] === "runs" && rest[1] && rest.length === 2) {
+    // A run is a task record, so it speaks the task vocabulary even though it
+    // is addressed under its routine.
+    copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
   } else if (head === "agents" && !entityId) {
     copyParam(source, target, "q");
     const availability = source.get("availability");

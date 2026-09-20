@@ -253,6 +253,8 @@ export function App() {
     routedSessionId,
     projectId: routedProjectId,
     agentId,
+    recordTaskId,
+    recordRunId,
     teamWorkspaceId,
     settingsSection,
     adminSection,
@@ -263,6 +265,8 @@ export function App() {
     hrefForSideNavRoute,
     syncThreadUrl,
     navigateToAgent,
+    navigateToTaskRecord,
+    navigateToRoutineRecord,
     navigateToSettings,
     navigateToAdminSection,
     navigateToTeamWorkspace,
@@ -681,7 +685,7 @@ export function App() {
       theme={preferences.theme}
       onThemeChange={preferences.setTheme}
     >
-      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${teamWorkspaceId}`}>
+      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${recordTaskId}:${recordRunId}:${teamWorkspaceId}`}>
       <Suspense fallback={<RouteFallback />}>
         {notFound ? (
           <section className="route-loading" role="status">
@@ -696,6 +700,8 @@ export function App() {
           />
         ) : route === "channels" ? <ChannelsPage /> : route === "backlog" ? (
           <BacklogPage
+            recordTaskId={recordTaskId}
+            onOpenRecord={navigateToTaskRecord}
             tasks={tasks}
             sessions={sessions}
             nodes={visibleNodes}
@@ -706,8 +712,10 @@ export function App() {
           />
         ) : route === "routine" ? (
           <RoutinesPage
+            recordTaskId={recordTaskId}
+            recordRunId={recordRunId}
+            onOpenRecord={navigateToRoutineRecord}
             tasks={tasks}
-            sessions={sessions}
             nodes={visibleNodes}
             currentUser={user}
             isRefreshing={isRefreshing}

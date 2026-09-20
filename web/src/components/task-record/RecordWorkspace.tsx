@@ -28,7 +28,7 @@ import { taskWorkspaceState } from "./taskWorkspaceState";
  *  The artifact list above stays the durable record either way.
  *
  *  A routine lists its occurrence directories; the routine itself never runs. */
-export function TaskDrawerWorkspace({ taskId }: { taskId: string }) {
+export function RecordWorkspace({ taskId }: { taskId: string }) {
   const { t } = useTranslation();
   const [path, setPath] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
