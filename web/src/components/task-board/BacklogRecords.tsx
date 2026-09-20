@@ -51,6 +51,7 @@ import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 
 export function BacklogTaskCard({
   task,
+  projectName,
   ready,
   assigneeDisplayName,
   assigneeIsSelf,
@@ -64,6 +65,7 @@ export function BacklogTaskCard({
   onOpen,
 }: {
   task: RelayTaskListItem;
+  projectName?: string;
   ready: boolean;
   assigneeDisplayName?: string;
   assigneeIsSelf?: boolean;
@@ -118,6 +120,7 @@ export function BacklogTaskCard({
             onOpen();
           }}
         >{task.title}</a>
+        {projectName ? <span className="task-project-label">{projectName}</span> : null}
           {/* One line of facts, and only facts the lane above does not already
               state: no status word (the lane IS the status) and no "No due
               date" on every undated card. The agent is named — a bare
@@ -217,6 +220,7 @@ export function BacklogRowsHead({
 
 export function BacklogTaskRow({
   task,
+  projectName,
   session,
   routineTitle,
   ready,
@@ -235,6 +239,7 @@ export function BacklogTaskRow({
   onDone,
 }: {
   task: RelayTaskListItem;
+  projectName?: string;
   session?: RelaySession;
   /** Title of the routine this task was promoted from, when it was. */
   routineTitle?: string;
@@ -294,6 +299,7 @@ export function BacklogTaskRow({
             onOpen();
           }}
         >{task.title}</a>
+        {projectName ? <span className="task-project-label">{projectName}</span> : null}
         <TaskFlowDetails task={task} execution={session?.execution} />
         <RoutineOriginBadge task={task} routineTitle={routineTitle} />
       </TableCell>

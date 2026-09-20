@@ -2,6 +2,7 @@ import type { AgentName, CurrentUser, TaskPriority, TaskRoutineCadence, TaskRout
 
 export type TaskBoardFormBase = {
   id?: string;
+  projectId?: string;
   title: string;
   description: string;
   priority: TaskPriority;
@@ -81,6 +82,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
   if (a.variant !== b.variant) return false;
   if (
     a.id !== b.id
+    || a.projectId !== b.projectId
     || a.title !== b.title
     || a.description !== b.description
     || a.priority !== b.priority

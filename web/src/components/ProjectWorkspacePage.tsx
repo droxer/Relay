@@ -1,20 +1,16 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getWorkspaceBrief } from "../api";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentLabel } from "../lib/plan";
 import {
   orderedProjectMembers,
   parseProjectPageTab,
-  projectActivitiesState,
   projectMemberState,
   projectPageActions,
   projectReadOnly,
-  scopeProjectActivities,
   MAX_PROJECT_MEMBERS,
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
@@ -42,10 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectMemberEditor } from "./ProjectMemberEditor";
 import { ProjectWorkspaceFiles } from "./ProjectWorkspaceFiles";
 import {
-  ActivitiesSkeleton,
-  WorkspaceActivities,
   WorkspaceEmpty,
-  WorkspaceError,
 } from "./workspace/WorkspacePrimitives";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
 import { TonePill } from "./StatusPill";
@@ -58,7 +51,6 @@ import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { taskRef } from "../lib/taskRef";
 
-const PROJECT_ACTIVITY_POLL_MS = 3000;
 
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the three that are not it. */
@@ -66,7 +58,6 @@ const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
   tasks: "project.tasks_subtitle",
   profile: "project.tasks_team_subtitle",
   workspace: "project.tasks_workspace_subtitle",
-  activities: "project.tasks_activities_subtitle",
 };
 
 function ProjectMark({ size = 18 }: { size?: number }) {
@@ -223,7 +214,6 @@ export function ProjectWorkspacePage({
   currentUser,
   computers,
   onOpenThread,
-  onNewThread,
   onOpenSettings,
   onBack,
 }: {
@@ -237,7 +227,7 @@ export function ProjectWorkspacePage({
   currentUser: CurrentUser;
   computers: DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string) => void;
-  onNewThread: () => void;
+  onNewThread?: () => void;
   onOpenSettings: () => void;
   onBack: () => void;
 }) {
@@ -266,12 +256,6 @@ export function ProjectWorkspacePage({
   /* The same form the backlog board edits through, seeded so a task created
      here belongs to this project. */
   const taskForm = useBacklogTaskForm({ currentUser, seed: { projectId: project.id } });
-  const briefQuery = useQuery({
-    queryKey: ["project-workspace-brief", project.id],
-    queryFn: ({ signal }) => getWorkspaceBrief({ projectId: project.id }, signal),
-    enabled: pageTab === "activities",
-    refetchInterval: pageTab === "activities" ? PROJECT_ACTIVITY_POLL_MS : false,
-  });
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
@@ -307,20 +291,7 @@ export function ProjectWorkspacePage({
     },
   ];
 
-  const error = briefQuery.error instanceof Error
-    ? briefQuery.error.message
-    : briefQuery.error
-      ? String(briefQuery.error)
-      : "";
-  const scopedBrief = briefQuery.data
-    ? scopeProjectActivities(briefQuery.data, project.id)
-    : undefined;
   const actions = projectPageActions(project);
-  const activitiesState = projectActivitiesState({
-    isLoading: briefQuery.isLoading,
-    hasData: Boolean(scopedBrief),
-    hasError: Boolean(error),
-  });
   /* Archived/disabled projects are read-only rooms — no member management. */
   const membersReadOnly = projectReadOnly(project);
 
@@ -359,20 +330,6 @@ export function ProjectWorkspacePage({
                 {t("project.edit")}
               </Button>
             ) : null}
-            {actions.newThread && pageTab === "activities" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                // The shared list-header create affordance — a plain ghost
-                // plus, same as every other list header.
-                className="page-header-icon-action"
-                onClick={onNewThread}
-                aria-label={t("project.new_thread", { project: project.name })}
-                tooltip={t("project.new_thread_short")}
-              >
-                <ActionAdd size={ICON.md} aria-hidden="true" />
-              </Button>
-            ) : null}
           </>
         )}
         toolbar={(
@@ -387,12 +344,7 @@ export function ProjectWorkspacePage({
                   ? t("project.tasks_tab")
                   : tab === "profile"
                   ? t("project.tasks_team_tab")
-                  : tab === "workspace"
-                    ? t("workspace.tab_workspace")
-                    : t("workspace.tab_activities")}
-                {tab === "activities" && scopedBrief?.sessions.length ? (
-                  <span className="workspace-page-tab-count tnum">{scopedBrief.sessions.length}</span>
-                ) : null}
+                  : t("workspace.tab_workspace")}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -421,22 +373,6 @@ export function ProjectWorkspacePage({
         </TabsContent>
         <TabsContent value="workspace" className="workspace-inspect">
           <ProjectWorkspaceFiles projectId={project.id} />
-        </TabsContent>
-        <TabsContent value="activities">
-          {activitiesState === "loading" ? (
-            <ActivitiesSkeleton />
-          ) : activitiesState === "error" || !scopedBrief ? (
-            <WorkspaceError
-              message={error || t("workspace.load_failed")}
-              onRetry={() => void briefQuery.refetch()}
-            />
-          ) : (
-            <WorkspaceActivities
-              brief={scopedBrief}
-              emptyMark={<ProjectMark />}
-              onOpenThread={onOpenThread}
-            />
-          )}
         </TabsContent>
       </div>
 
@@ -477,6 +413,7 @@ export function ProjectWorkspacePage({
           open={taskForm.open}
           form={taskForm.form}
           logicalAgents={agents}
+          projects={[project]}
           teams={teams}
           saving={taskForm.saving}
           deleting={taskForm.deleting}

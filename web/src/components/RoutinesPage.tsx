@@ -8,7 +8,7 @@ import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
+import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
 import { useEmployeeNames } from "../hooks/useEmployeeNames";
@@ -20,6 +20,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyRoutineForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
+import { ProjectDrawer } from "./ProjectDrawer";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
@@ -51,6 +52,7 @@ import { Table } from "@/components/ui/table";
 import { taskRef } from "../lib/taskRef";
 
 interface RoutinesPageProps {
+  projects?: ProjectRecord[];
   /** The routine whose record is open, from `/routines/<id>`. */
   recordTaskId?: string | null;
   /** The occurrence open as a run, from `/routines/<id>/runs/<runId>`. */
@@ -65,7 +67,7 @@ interface RoutinesPageProps {
   onOpenThread: (sessionId: string) => void;
 }
 
-export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenRecord, tasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -86,6 +88,7 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
   const [assignmentFocus, setAssignmentFocus] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
   const startInFlight = useRef<string | null>(null);
@@ -163,6 +166,7 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
     openRoutineForm({
       variant: "routine",
       id: task.id,
+      projectId: task.projectId,
       title: task.title,
       acceptancePolicy: task.acceptancePolicy ?? "automatic",
       description: task.description,
@@ -180,7 +184,7 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
 
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form || !form.title.trim()) return;
+    if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
     setSaving(true);
     try {
       const payload = {
@@ -198,7 +202,7 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
         ...taskAssignmentMutationFields(form),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else await createTaskMutation.mutateAsync(payload);
+      else if (form.projectId) await createTaskMutation.mutateAsync({ ...payload, projectId: form.projectId });
       dismissRoutineForm();
     } catch {
       // mutation onError surfaces a toast; keep the drawer open for retry.
@@ -448,6 +452,8 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
           open={drawerOpen}
           form={form}
           logicalAgents={logicalAgents}
+          projects={projects}
+          onCreateProject={() => setCreatingProject(true)}
           teams={teams}
           saving={saving}
           deleting={deleting}
@@ -486,6 +492,9 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
           onDeleted={() => onOpenRecord(null)}
         />
       ) : null}
+      <ProjectDrawer open={creatingProject} computers={nodes} layer={drawerRecord ? 2 : 1}
+        onClose={() => setCreatingProject(false)}
+        onSaved={(project) => setForm((current) => current ? { ...current, projectId: project.id } : current)} />
     </section>
   );
 }

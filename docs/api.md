@@ -279,8 +279,16 @@ that project's recent Threads, active tasks, active runs, artifacts, and bound
 Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
-The browser project detail opens on Tasks. `?tab=profile` opens Team,
-`?tab=workspace` opens files, and `?tab=activities` opens supporting activity.
+Tasks is the browser's top-level destination for project work. A secondary
+project sidebar (a dropdown on mobile) selects a project or All projects.
+`/backlog` opens All projects; existing `/projects/{id}` URLs select that project
+inside Tasks. `/projects` also opens All projects. The project detail opens on
+Tasks. `?tab=profile` opens Agents and `?tab=workspace` opens shared files.
+The project Activities tab is removed; old `?tab=activities` links canonicalize
+to Tasks. Activity, execution history, results, and task files live in task records.
+Browser task and routine creation requires choosing a project; project-board
+creation inherits the selected project. The existing backend optional-project
+contract and legacy data remain compatible pending the ownership migration.
 On Tasks, `?task={taskId}` opens a task record drawer. Its `recordTab` parameter
 selects `definition` or `files`; omitting it shows Activity. Drawer tabs do not
 change the project's `tab`, and drawer parameters are removed on other project tabs.

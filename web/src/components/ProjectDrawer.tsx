@@ -29,12 +29,14 @@ export function ProjectDrawer({
   project,
   onClose,
   onSaved,
+  layer,
 }: {
   open: boolean;
   computers: DaemonNodeMonitorRecord[];
   project?: ProjectRecord | null;
   onClose: () => void;
   onSaved: (project: ProjectRecord) => void;
+  layer?: number;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
@@ -157,6 +159,7 @@ export function ProjectDrawer({
   return (
     <Drawer
       open={open}
+      layer={layer}
       onClose={() => { void requestClose(); }}
       kicker={t("project.setup_kicker")}
       title={t(project ? "project.edit" : "project.setup_title")}

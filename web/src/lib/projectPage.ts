@@ -5,11 +5,11 @@ import type {
   WorkspaceBriefResponse,
 } from "../types.js";
 
-export type ProjectPageTab = "tasks" | "profile" | "workspace" | "activities";
+export type ProjectPageTab = "tasks" | "profile" | "workspace";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 export type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["tasks", "profile", "workspace", "activities"];
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["tasks", "profile", "workspace"];
 
 /** Backend roster cap — the add-member affordance hides at the limit. */
 export const MAX_PROJECT_MEMBERS = 32;

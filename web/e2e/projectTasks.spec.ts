@@ -12,8 +12,11 @@ for (const mobile of [false, true]) {
       description: "", priority: "normal", isRoutine: false, routineEnabled: false,
       linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp,
     }));
+    const requests: string[] = [];
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
+      requests.push(route.request().url());
+
       let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks, sandboxes: [], skills: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
       if (path.endsWith("/tasks") && route.request().method() === "POST") {
@@ -22,26 +25,95 @@ for (const mobile of [false, true]) {
         const created = { ...tasks[0], ...input, id: "created", activity: [], events: [] };
         tasks.push(created); body = created;
       }
+      const detail = tasks.find((task) => path.endsWith(`/tasks/${task.id}`));
+      if (detail) body = { ...detail, activity: [], events: [] };
+      if (path.endsWith("/events")) body = { events: [] };
+      if (path.endsWith("/runs")) body = { runs: [] };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.goto("/projects/launch");
     await expect(page.getByRole("tab", { name: "Tasks", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("link", { name: "Write the release brief" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Write the release brief" })).toBeVisible();
     await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
+    await expect(page.getByRole("tab", { name: "Activities", exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-nav="projects"]')).toHaveCount(0);
+    await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
+    if (mobile) await expect(page.locator(".task-project-nav-mobile select")).toHaveValue("launch");
+    else await expect(page.locator(".task-project-nav").getByRole("link", { name: /Autumn launch/ })).toHaveAttribute("aria-current", "page");
     await page.getByRole("textbox", { name: "New task", exact: true }).fill("Prepare release notes");
     await page.getByRole("button", { name: "New task", exact: true }).click();
-    await expect(page.getByRole("link", { name: "Prepare release notes" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Prepare release notes" })).toBeVisible();
     await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "7");
     await expect(page.getByRole("textbox", { name: "New task", exact: true })).toHaveValue("");
     const panel = page.locator(".project-tasks-panel");
     expect(await panel.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
-    const finalCard = page.getByRole("link", { name: "Choose the release date" });
+    const finalCard = page.getByRole("button", { name: "Choose the release date" });
     await finalCard.scrollIntoViewIfNeeded();
     await expect(finalCard).toBeInViewport();
     await panel.evaluate((el) => { el.scrollTop = 0; });
     await page.locator(".project-task-board").evaluate((el) => { el.scrollLeft = 0; });
     await page.screenshot({ path: `/tmp/relay-project-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    await page.getByRole("tab", { name: "Team", exact: true }).click();
-    await expect(page.getByRole("tab", { name: "Team", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "Agents", exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Agents", exact: true })).toHaveAttribute("aria-selected", "true");
+    // Global creation from a project section returns to that project's tasks.
+    await page.keyboard.press("c");
+    await expect(page.getByRole("tab", { name: "Tasks", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("textbox", { name: "New task", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "Prepare release notes", exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Activity", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Definition", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    if (mobile) await page.locator(".task-project-nav-mobile select").selectOption("");
+    else await page.locator(".task-project-nav").getByRole("link", { name: "All projects", exact: true }).click();
+    await expect(page).toHaveURL(/\/backlog$/);
+    await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Global project task");
+    await dialog.getByRole("button", { name: "Create task", exact: true }).click();
+    await expect(dialog.getByText("Choose a project before creating a task.")).toBeVisible();
+    await dialog.getByRole("combobox", { name: "Projects", exact: true }).click();
+    await page.getByRole("option", { name: "Autumn launch", exact: true }).click();
+    await dialog.getByRole("button", { name: "Create task", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Global project task", exact: true })).toBeVisible();
+    expect(requests.some((url) => url.includes("workspace/brief"))).toBe(false);
   });
 }
+
+test("creating the first project preserves a global task draft", async ({ page }) => {
+  const stamp = "2026-09-01T00:00:00Z";
+  const projects: any[] = [];
+  const tasks: any[] = [];
+  const node = { activeRuns: [], agents: [], queuedCommandCount: 0, stale: false, id: "node", computerId: "computer", employeeId: "u", displayName: "Work computer", capabilities: ["project-workspaces"], online: true, status: "ready", workspacePath: "/workspace" };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [node], projects, tasks, sandboxes: [], skills: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/projects") && route.request().method() === "POST") {
+      const project = { ...route.request().postDataJSON(), id: "first", ownerEmployeeId: "u", computerId: "computer", enabled: true, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/first", createdAt: stamp, updatedAt: stamp };
+      projects.push(project); body = { project };
+    }
+    if (path.endsWith("/tasks") && route.request().method() === "POST") {
+      const input = route.request().postDataJSON();
+      expect(input).toMatchObject({ title: "Keep this draft", projectId: "first" });
+      const task = { events: [], activity: [], ...input, id: "task", createdAt: stamp, updatedAt: stamp, linkedSessionIds: [], isRoutine: false, routineEnabled: false, status: "backlog" };
+      tasks.push(task); body = task;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/backlog");
+  await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
+  const taskForm = page.getByRole("dialog", { name: "New task", exact: true });
+  await taskForm.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
+  await taskForm.getByRole("button", { name: "Create project", exact: true }).click();
+  const projectForm = page.getByRole("dialog", { name: "Start a new project", exact: true });
+  await projectForm.getByRole("textbox").fill("First project");
+  await projectForm.getByRole("combobox", { name: "Computer", exact: true }).click();
+  await page.getByRole("option", { name: "Work computer", exact: true }).click();
+  await projectForm.getByRole("button", { name: "Create project", exact: true }).click();
+  await expect(projectForm).toHaveCount(0);
+  await expect(taskForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Keep this draft");
+  await expect(taskForm.getByRole("combobox", { name: "Projects", exact: true })).toContainText("First project");
+  await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
+});

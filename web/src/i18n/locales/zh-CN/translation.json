@@ -60,7 +60,7 @@
     "workspace_label": "工作区",
     "manage": "管理",
     "workforce": "工作团队",
-    "backlog": "待办",
+    "backlog": "任务",
     "routine": "例行任务",
     "agents": "智能体",
     "teams": "团队",
@@ -168,7 +168,7 @@
     "member_choose_required": "请先选择智能体。",
     "member_no_agents": "此电脑上的所有智能体都已是成员。",
     "tasks_tab": "任务",
-    "tasks_team_tab": "团队",
+    "tasks_team_tab": "智能体",
     "tasks_subtitle": "规划任务、跟踪进度并审核交付成果。",
     "tasks_progress": "项目进度",
     "tasks_completed": "项任务已完成",
@@ -186,7 +186,10 @@
     "project": "项目",
     "tasks_team_subtitle": "谁在这个项目中工作，以及各自负责什么。",
     "tasks_workspace_subtitle": "这个项目的工作产出的文件。",
-    "tasks_activities_subtitle": "这个项目中正在进行的会话。"
+    "tasks_activities_subtitle": "这个项目中正在进行的会话。",
+    "all_projects": "所有项目",
+    "choose": "选择项目",
+    "required": "创建任务前请选择项目。"
   },
   "thread": {
     "search_placeholder": "搜索对话…",
@@ -306,7 +309,7 @@
     "cancel": "取消"
   },
   "backlog": {
-    "title": "待办",
+    "title": "所有项目",
     "sub_one": "{{count}} 个任务",
     "sub_other": "{{count}} 个任务",
     "filters": "待办筛选",

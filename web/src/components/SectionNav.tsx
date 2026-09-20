@@ -75,6 +75,7 @@ export function SectionNav<Id extends string>({
                     // otherwise keeps native button semantics it no longer has.
                     { render: <a href={item.href} />, nativeButton: false as const }
                   : { type: "button" as const })}
+                role={item.href ? "link" : undefined}
                 className="sec-nav-btn"
                 data-active={active ? "true" : "false"}
                 data-empty={item.count === 0 ? "true" : undefined}

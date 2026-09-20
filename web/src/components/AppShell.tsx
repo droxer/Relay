@@ -58,6 +58,8 @@ export type MobileChatChrome = {
 };
 
 type AppShellProps = {
+  taskWorkspace?: boolean;
+  onNewTask?: () => void;
   /** The open settings section, so the mobile topbar can name it the way it
    *  names the control panel's — both are rail-and-content surfaces. */
   settingsSection: SettingsSection;
@@ -118,6 +120,8 @@ function SettingsButton({ route, href, onNavigate }: { route: AppRoute; href: st
 }
 
 export function AppShell({
+  taskWorkspace = false,
+  onNewTask,
   route,
   settingsSection,
   onNavigateRoute,
@@ -153,11 +157,12 @@ export function AppShell({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const queueNewTask = useCallback(() => {
+    if (onNewTask) { onNewTask(); return; }
     // Queue before navigating: the event notifies a mounted backlog directly,
     // and the one-shot flag survives the route change for a mounting one.
     taskCreateIntent()?.queue();
-    if (route !== "backlog") onNavigateRoute("backlog");
-  }, [onNavigateRoute, route]);
+    if (!taskWorkspace) onNavigateRoute("backlog");
+  }, [onNavigateRoute, onNewTask, taskWorkspace]);
 
   const runCommand = useCallback((id: CommandId) => {
     if (id.startsWith("go:")) {
@@ -217,18 +222,18 @@ export function AppShell({
     [isAdmin, t],
   );
 
-  const isThreadRoute = route === "main" || route === "projects";
+  const isThreadRoute = route === "main" || (route === "projects" && !taskWorkspace);
   const directoryLabel = route === "projects" ? t("project.projects") : t("nav.threads");
   /* A rail-and-content surface names its SECTION here — the strip under the
      topbar is the only other place the section appears, and the route name is
      already the eyebrow. Both consumers of the rail read the same way. */
-  const mobileRouteTitle = route === "admin"
+  const mobileRouteTitle = taskWorkspace ? t("nav.backlog") : route === "admin"
     ? t(`admin.v2.title_${adminView}`)
     : route === "settings"
       ? t(SETTINGS_SECTION_LABEL_KEYS[settingsSection])
       : isThreadRoute
         ? directoryLabel
-        : t(WORK_ROUTE_LABEL_KEYS[route]);
+        : t(WORK_ROUTE_LABEL_KEYS[route as keyof typeof WORK_ROUTE_LABEL_KEYS]);
   const isMobileChat = isThreadRoute && mobileView === "chat";
 
   return (
@@ -236,6 +241,7 @@ export function AppShell({
       className="messenger-shell"
       data-mobile-view={mobileView}
       data-route={route}
+      data-task-workspace={taskWorkspace || undefined}
       data-sidenav={sidenavExpanded ? "open" : "closed"}
       data-space={threadSpaceOpen ? "open" : undefined}
       data-sidenav-resizing={sidenavResizing || undefined}

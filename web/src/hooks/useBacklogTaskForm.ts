@@ -46,8 +46,9 @@ export function useBacklogTaskForm({
   const confirmDiscardChanges = useUnsavedChangesGuard(dirty && !saving && !deleting);
 
   function openForm(next: BacklogTaskFormState): void {
-    setForm(next);
-    setFormBaseline(next);
+    const seeded = { ...next, projectId: next.projectId || seed?.projectId };
+    setForm(seeded);
+    setFormBaseline(seeded);
     setOpen(true);
   }
 
@@ -55,6 +56,7 @@ export function useBacklogTaskForm({
     openForm({
       variant: "backlog",
       id: task.id,
+      projectId: task.projectId,
       title: task.title,
       description: task.description,
       priority: task.priority,
@@ -96,7 +98,7 @@ export function useBacklogTaskForm({
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!form || !form.title.trim()) return;
+    if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
     setSaving(true);
     try {
       const payload = {
@@ -109,7 +111,7 @@ export function useBacklogTaskForm({
         ...taskAssignmentMutationFields(form),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else await createTaskMutation.mutateAsync({ ...payload, ...(seed ?? {}) });
+      else if (form.projectId) await createTaskMutation.mutateAsync({ ...payload, projectId: form.projectId });
       dismiss();
     } catch {
       // mutation onError surfaces a toast; keep the drawer open for retry.

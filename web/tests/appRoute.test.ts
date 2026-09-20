@@ -169,7 +169,7 @@ describe("app pathname routes", () => {
     );
     assert.equal(
       canonicalBrowserUrl("/projects/project-1", "?tab=activities&path=stale&item=file%3Aa.ts"),
-      "/projects/project-1?tab=activities",
+      "/projects/project-1",
     );
     assert.equal(canonicalBrowserUrl("/agents/agent-1", "?tab=artifacts&item=artifact%3Aold"), "/agents/agent-1");
     assert.equal(canonicalBrowserUrl("/agents/agent-1", "?tab=activities"), "/agents/agent-1?tab=activities");
