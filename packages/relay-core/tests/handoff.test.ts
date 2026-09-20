@@ -1474,6 +1474,24 @@ describe("Pi provider config", () => {
     );
   });
 
+  it("keeps the native Codex provider when no custom endpoint is configured", () => {
+    withEnv({ OPENAI_API_KEY: "test-key" }, () => {
+      assert.doesNotMatch(buildCodexCommand(state()), /model_provider=/);
+      assert.doesNotMatch(guestCodexConfigToml(), /dashscope/);
+    });
+  });
+
+  it("maps Kimi API credentials to the supported temporary model environment", () => {
+    withEnv({ MOONSHOT_API_KEY: "test-key", MOONSHOT_MODEL: "kimi-k2.5", MOONSHOT_BASE_URL: "https://example.invalid/v1" }, () => {
+      const env = Object.fromEntries(agentCredentialEnv("kimi"));
+      assert.equal(env.KIMI_MODEL_API_KEY, "test-key");
+      assert.equal(env.KIMI_MODEL_NAME, "kimi-k2.5");
+      assert.equal(env.KIMI_MODEL_BASE_URL, "https://example.invalid/v1");
+      assert.doesNotMatch(buildKimiCommand(state()), /--model kimi-k2.5/);
+      assert.doesNotMatch(buildKimiCommand(state()), /test-key/);
+    });
+  });
+
   it("fully defines the dashscope provider so codex config loading does not fail", () => {
     withEnv(
       {

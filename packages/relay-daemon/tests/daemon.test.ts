@@ -560,6 +560,9 @@ test("local agent processes never inherit another provider's credentials", async
     PI_API_KEY: "pi-secret",
     KIMI_API_KEY: "kimi-secret",
     MOONSHOT_API_KEY: "moonshot-secret",
+    CLAUDE_API_KEY: "claude-alias-secret",
+    LLM_API_KEY: "llm-alias-secret",
+    KIMI_MODEL_API_KEY: "kimi-model-secret",
   };
   const previous = captureEnv(Object.keys(providerEnv));
   Object.assign(process.env, providerEnv);
@@ -577,6 +580,9 @@ test("local agent processes never inherit another provider's credentials", async
       ["PI_API_KEY", null],
       ["KIMI_API_KEY", null],
       ["MOONSHOT_API_KEY", null],
+      ["CLAUDE_API_KEY", null],
+      ["LLM_API_KEY", null],
+      ["KIMI_MODEL_API_KEY", null],
     ]);
   } finally {
     restoreCapturedEnv(previous);
