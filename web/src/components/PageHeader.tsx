@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 export function PageHeader({
   title,
   count,
+  facts,
   kicker,
   subtitle,
   toolbar,
@@ -14,6 +15,9 @@ export function PageHeader({
 }: {
   title: ReactNode;
   count?: ReactNode;
+  /** Compact record facts riding the title line next to the title, for
+   *  surfaces whose facts must not claim a band row above every tab. */
+  facts?: ReactNode;
   kicker?: ReactNode;
   subtitle?: ReactNode;
   toolbar?: ReactNode;
@@ -54,6 +58,7 @@ export function PageHeader({
           {count != null ? (
             <span className="page-header-count">{count}</span>
           ) : null}
+          {facts ? <div className="page-header-facts">{facts}</div> : null}
         </div>
         {subtitle ? <p className="page-header-subtitle">{subtitle}</p> : null}
         {toolbar ? <div className="page-header-toolbar">{toolbar}</div> : null}

@@ -29,13 +29,18 @@ export interface RecordFact {
 export function RecordBand({
   facts,
   label,
+  variant = "band",
 }: {
   facts: readonly RecordFact[];
   label: string;
+  /** "band" is the full-width row under the header; "title" packs the same
+      facts onto the header's title line, for pages whose tab panels need the
+      vertical room the band row would take. */
+  variant?: "band" | "title";
 }) {
   if (!facts.length) return null;
   return (
-    <dl className="record-band" aria-label={label}>
+    <dl className={variant === "title" ? "record-band record-band--title" : "record-band"} aria-label={label}>
       {facts.map((fact) => (
         <div className="record-band-cell" key={fact.key}>
           <dt className="record-band-label">{fact.label}</dt>
