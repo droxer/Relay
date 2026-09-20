@@ -32,6 +32,8 @@ export function TaskRecordView({
   runId,
   tasks,
   drawer,
+  originLabel,
+  tabSearchKey,
   onEdit,
   onOpenThread,
   onOpenRecord,
@@ -49,6 +51,10 @@ export function TaskRecordView({
     /** Fires after the drawer's exit animation — release the mirrored record here. */
     onClosed?: () => void;
   };
+  /** Where this record was opened from, when that is not one of the boards —
+   *  a record riding over a project must not claim the backlog as its origin. */
+  originLabel?: string;
+  tabSearchKey?: "tab" | "recordTab";
   onEdit: (task: RelayTaskListItem) => void;
   onOpenThread: (sessionId: string) => void;
   onOpenRecord: (taskId: string, runId?: string | null) => void;
@@ -137,7 +143,7 @@ export function TaskRecordView({
   }
 
   async function deleteRecord(): Promise<void> {
-    if (!task) return;
+    if (busyAction || !task) return;
     const routine = recordVariant(task) === "routine";
     const confirmed = await confirm({
       title: t(routine ? "routine.delete_title" : "backlog.delete_title"),
@@ -147,12 +153,15 @@ export function TaskRecordView({
       tone: "danger",
     });
     if (!confirmed) return;
+    setBusyAction("delete");
     try {
       await deleteTaskMutation.mutateAsync({ taskId: task.id });
       announce({ message: t(routine ? "routine.toast_deleted" : "backlog.toast_deleted"), tone: "success" });
       onDeleted();
     } catch {
       // The toast reports it; the record stays open so the reader can retry.
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -183,6 +192,7 @@ export function TaskRecordView({
         parentRoutine={parentRoutine}
         busyAction={busyAction}
         presentation={drawer ? "drawer" : "page"}
+        tabSearchKey={tabSearchKey}
         onOpenThread={onOpenThread}
         onOpenRun={(nextId) => {
           // The breadcrumb passes the routine's own id; a row passes a run's.
@@ -216,7 +226,7 @@ export function TaskRecordView({
     >
       {parentRoutine.title}
     </a>
-  ) : t(task && recordVariant(task) === "task" ? "nav.backlog" : "nav.routine");
+  ) : originLabel ?? t(task && recordVariant(task) === "task" ? "nav.backlog" : "nav.routine");
 
   return (
     <Drawer

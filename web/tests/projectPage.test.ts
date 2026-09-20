@@ -8,6 +8,7 @@ import {
   scopeProjectActivities,
   projectMemberState,
   projectPageActions,
+  projectReadOnly,
   resolveProjectOverviewState,
   showThreadChrome,
   agentsEligibleForProject,
@@ -257,5 +258,18 @@ describe("project page behavior", () => {
       agentsEligibleForProject([...eligible, ...rejected], computerId, "node-1").map((entry) => entry.id),
       ["by-computer", "by-node", "by-daemon"],
     );
+  });
+});
+
+describe("projectReadOnly", () => {
+  it("closes an archived or disabled project for work", () => {
+    assert.equal(projectReadOnly(project()), false);
+    assert.equal(projectReadOnly(project({ enabled: false })), true);
+    assert.equal(projectReadOnly(project({ archivedAt: "2026-09-01T00:00:00Z" })), true);
+  });
+
+  it("treats a task with no project as open", () => {
+    assert.equal(projectReadOnly(undefined), false);
+    assert.equal(projectReadOnly(null), false);
   });
 });

@@ -24,6 +24,8 @@ export function recordBandFacts(
   running: ReadonlySet<string>,
   locale: string,
   t: (key: string, options?: Record<string, unknown>) => string,
+  /** The project this task belongs to, when it has one and its name resolves. */
+  project?: { id: string; name: string },
 ): RecordFact[] {
   const facts: RecordFact[] = [];
   if (variant === "routine") {
@@ -57,6 +59,17 @@ export function recordBandFacts(
       key: "due",
       label: task.scheduledFor ? t("record.scheduled_for") : t("backlog.due"),
       value: recordDate(task.scheduledFor ?? task.dueDate, locale),
+    });
+  }
+  /* A task opened from a project used to arrive with no trace of the project
+     it belongs to — the band is where that coordinate belongs, next to the
+     other facts the reader clicked a row to keep. */
+  if (project) {
+    facts.push({
+      key: "project",
+      label: t("project.project"),
+      value: project.name,
+      title: project.id,
     });
   }
   facts.push({

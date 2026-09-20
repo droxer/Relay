@@ -7,7 +7,7 @@ import {
   ICON,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
-import type { AgentName, AgentTeam, DaemonNodeMonitorRecord, EmployeeAgent, ProjectRecord, RelayArtifact, RelaySession } from "../types";
+import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, EmployeeAgent, ProjectRecord, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
 import {
   buildExecutorDisplayNameMap,
   buildLogicalAgentImageMap,
@@ -21,6 +21,7 @@ import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { ThreadHeader } from "./ThreadHeader";
+import { ThreadBand } from "./ThreadBand";
 import { TranscriptEmpty } from "./TranscriptEmpty";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { phaseDividerLabel } from "../lib/projectMessages";
@@ -38,6 +39,11 @@ import { Button } from "@/components/ui/button";
 
 export type ThreadsViewProps = {
   directoryMode: "threads" | "projects";
+  /** The shell's task list — the project board reads its lanes from it
+   *  rather than opening a second observer on the same query. */
+  tasks: RelayTaskListItem[];
+  teams: AgentTeam[];
+  currentUser: CurrentUser;
   filteredThreads: ThreadItem[];
   projects: ProjectRecord[];
   selectedProjectId: string | null;
@@ -121,6 +127,9 @@ export type ThreadsViewProps = {
 
 export function ThreadsView({
   directoryMode,
+  tasks,
+  teams,
+  currentUser,
   filteredThreads,
   projects,
   selectedProjectId,
@@ -272,6 +281,9 @@ export function ThreadsView({
         <ProjectWorkspacePage
           project={selectedProject}
           agents={logicalAgents}
+          teams={teams}
+          tasks={tasks}
+          currentUser={currentUser}
           computers={runtimeNodes}
           onOpenThread={onSelectThread}
           onNewThread={() => onNewThread(selectedProject.id)}
@@ -353,6 +365,18 @@ export function ThreadsView({
           onToggleThreadList={onToggleThreadList}
           onBackToThreads={onBackToThreads}
         />
+
+        {/* The thread's coordinates, in the same band every other record
+            surface prints — the project above all, which the thread knew
+            about and never showed. */}
+        {activeSession ? (
+          <ThreadBand
+            session={activeSession}
+            agentName={activeAgentDisplayName}
+            computers={runtimeNodes}
+            onOpenProject={onSelectProject}
+          />
+        ) : null}
 
         {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
 

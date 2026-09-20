@@ -182,7 +182,11 @@
     "tasks_accept": "验收成果",
     "tasks_add_team": "请先在团队中添加已启用的项目成员。",
     "tasks_lane_empty": "暂无任务",
-    "tasks_load_failed": "无法加载项目任务。"
+    "tasks_load_failed": "无法加载项目任务。",
+    "project": "项目",
+    "tasks_team_subtitle": "谁在这个项目中工作，以及各自负责什么。",
+    "tasks_workspace_subtitle": "这个项目的工作产出的文件。",
+    "tasks_activities_subtitle": "这个项目中正在进行的会话。"
   },
   "thread": {
     "search_placeholder": "搜索对话…",
@@ -250,7 +254,12 @@
       "completed": "已完成",
       "failed": "已失败",
       "cancelled": "已取消"
-    }
+    },
+    "band_label": "会话档案",
+    "band_project": "项目",
+    "band_agent": "智能体",
+    "band_computer": "电脑",
+    "band_updated": "更新时间"
   },
   "composer": {
     "placeholder": "给智能体发消息…",

@@ -10,6 +10,7 @@ import { recordActions, type RecordAction } from "./recordActions";
 export function TaskRecordActions({
   task,
   variant,
+  readOnly = false,
   busyAction,
   onRun,
   onCancel,
@@ -20,6 +21,8 @@ export function TaskRecordActions({
 }: {
   task: RelayTaskListItem;
   variant: RecordVariant;
+  /** The task's project is closed for work — the record is readable, not actionable. */
+  readOnly?: boolean;
   busyAction: RecordAction | null;
   onRun: () => void;
   onCancel: () => void;
@@ -29,7 +32,12 @@ export function TaskRecordActions({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
-  const actions = recordActions(task);
+  const actions = recordActions(task, { readOnly });
+  // One action at a time: every button reads the same lock the record holds.
+  const busy = busyAction !== null;
+  /* Editing and deleting change the room too, so they go with the rest. An
+     archived project keeps its records readable and nothing more. */
+  if (readOnly) return null;
 
   return (
     <>
@@ -65,10 +73,21 @@ export function TaskRecordActions({
           {t("backlog.done")}
         </Button>
       ) : null}
-      <Button type="button" variant="ghost" size="cta" onClick={onEdit}>
+      <Button type="button" variant="ghost" size="cta" disabled={busy} onClick={onEdit}>
         {t("record.edit")}
       </Button>
-      <Button type="button" variant="ghost" size="cta" onClick={onDelete}>
+      {/* Destructive, and it says so. As a ghost beside Edit it was the one
+          irreversible action on the record wearing the same clothes as the
+          most reversible one — and with no busy state it took a second
+          click before the first delete had landed. */}
+      <Button
+        type="button"
+        variant="destructive"
+        size="cta"
+        loading={busyAction === "delete"}
+        disabled={busy}
+        onClick={onDelete}
+      >
         {t(variant === "routine" ? "routine.delete_task" : "backlog.delete_task")}
       </Button>
     </>

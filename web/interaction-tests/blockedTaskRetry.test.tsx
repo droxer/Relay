@@ -37,3 +37,24 @@ it("offers an explicit retry for a blocked assigned task on the record", () => {
   fireEvent.click(retry);
   expect(onRun).toHaveBeenCalledTimes(1);
 });
+
+/* An archived or disabled project is a read-only room. The project board
+   hides Start and Accept there; the record drawer riding over that same
+   project used to keep offering Retry, Block, Done, Edit and Delete. */
+it("offers nothing on a record whose project is closed for work", () => {
+  render(<TaskRecordActions task={blockedTask} variant="task" readOnly busyAction={null}
+    onRun={vi.fn()} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
+    onEdit={vi.fn()} onDelete={vi.fn()} />);
+  expect(screen.queryByRole("button")).toBeNull();
+});
+
+it("marks delete as destructive and holds it while another action runs", () => {
+  const onDelete = vi.fn();
+  render(<TaskRecordActions task={blockedTask} variant="task" busyAction="retry"
+    onRun={vi.fn()} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
+    onEdit={vi.fn()} onDelete={onDelete} />);
+  const remove = screen.getByRole("button", { name: "backlog.delete_task" }) as HTMLButtonElement;
+  expect(remove.disabled).toBe(true);
+  fireEvent.click(remove);
+  expect(onDelete).not.toHaveBeenCalled();
+});

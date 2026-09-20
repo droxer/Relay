@@ -69,8 +69,8 @@ export function RecordWorkspace({ taskId }: { taskId: string }) {
   });
 
   return (
-    <section className="task-drawer-artifacts" aria-label={t("backlog.workspace")}>
-      <h3 className="task-drawer-artifacts-title">{t("backlog.workspace")}</h3>
+    <section className="record-panel" aria-label={t("backlog.workspace")}>
+      <h3 className="record-panel-title">{t("backlog.workspace")}</h3>
       <Button variant="ghost" type="button" onClick={() => {
         void fileQuery.refetch();
         if (selectedPath) void contentQuery.refetch();
@@ -79,30 +79,30 @@ export function RecordWorkspace({ taskId }: { taskId: string }) {
           the top of the drawer owns navigation to the blocking thread, and one
           drawer should not offer the same thread twice. */}
       {statusQuery.data?.waiting ? (
-        <p className="task-drawer-artifacts-empty" role="status">
+        <p className="record-panel-note" role="status">
           {t("backlog.workspace_waiting")}
           {statusQuery.data.blockingTitle ? ` ${statusQuery.data.blockingTitle}` : ""}
         </p>
       ) : null}
       {fileQuery.data?.sharedWithProject ? (
-        <p className="task-drawer-artifacts-empty">{t("backlog.workspace_shared_project")}</p>
+        <p className="record-panel-note">{t("backlog.workspace_shared_project")}</p>
       ) : null}
       {["not-created", "offline", "unsupported", "denied"].includes(state) ? (
-        <p className="task-drawer-artifacts-empty" role="status">
+        <p className="record-panel-note" role="status">
           {t(`backlog.workspace_${state.replace("-", "_")}`)}
         </p>
       ) : state === "loading" ? (
-        <p className="task-drawer-artifacts-empty" role="status" aria-live="polite">
+        <p className="record-panel-note" role="status" aria-live="polite">
           {t("backlog.workspace_loading")}
         </p>
       ) : state === "unavailable" ? (
-        <p className="task-drawer-artifacts-empty">{t("backlog.workspace_unavailable")}</p>
+        <p className="record-panel-note">{t("backlog.workspace_unavailable")}</p>
       ) : state === "failed" ? (
-        <p className="task-drawer-artifacts-empty" role="alert">
+        <p className="record-panel-note" role="alert">
           {t("backlog.workspace_error")}
         </p>
       ) : state === "empty" ? (
-        <p className="task-drawer-artifacts-empty">{t("backlog.workspace_empty")}</p>
+        <p className="record-panel-note">{t("backlog.workspace_empty")}</p>
       ) : selectedPath ? (
         <div className="thread-space-files">
           <div className="thread-space-files-bar">

@@ -311,13 +311,6 @@
   flex-shrink: 0;
 }
 
-.workspace-preview-file-type {
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  text-transform: lowercase;
-}
-
 .workspace-preview-close {
   width: 28px;
   height: var(--control-h-xs);
@@ -597,11 +590,4 @@
 
 .workspace-profile .adm-drawer-section {
   margin-top: var(--sp-6);
-}
-
-.workspace-profile-id {
-  margin: 0 0 var(--sp-4);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
 }

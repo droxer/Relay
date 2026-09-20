@@ -3,7 +3,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getWorkspaceBrief, listTasks } from "../api";
+import { getWorkspaceBrief } from "../api";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentLabel } from "../lib/plan";
@@ -13,13 +13,22 @@ import {
   projectActivitiesState,
   projectMemberState,
   projectPageActions,
+  projectReadOnly,
   scopeProjectActivities,
   MAX_PROJECT_MEMBERS,
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
 } from "../lib/projectPage";
 import { truncateId, formatRelativeTime } from "../lib/adminHelpers";
-import type { DaemonNodeMonitorRecord, EmployeeAgent, ProjectMember, ProjectRecord } from "../types";
+import type {
+  AgentTeam,
+  CurrentUser,
+  DaemonNodeMonitorRecord,
+  EmployeeAgent,
+  ProjectMember,
+  ProjectRecord,
+  RelayTaskListItem,
+} from "../types";
 import { AgentStateBadge } from "./AgentStateBadge";
 import {
   ActionAdd,
@@ -43,9 +52,22 @@ import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 
 import { ProjectTasks } from "./ProjectTasks";
-import { TASKS_QUERY_KEY } from "../hooks/useRelayData";
+import { TaskDrawer } from "./task-board/TaskDrawer";
+import { TaskRecordView } from "./task-record/TaskRecordView";
+import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
+import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
+import { taskRef } from "../lib/taskRef";
 
 const PROJECT_ACTIVITY_POLL_MS = 3000;
+
+/* The header's subtitle says what the open tab is for. It used to describe
+   the tasks board on every tab, including the three that are not it. */
+const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
+  tasks: "project.tasks_subtitle",
+  profile: "project.tasks_team_subtitle",
+  workspace: "project.tasks_workspace_subtitle",
+  activities: "project.tasks_activities_subtitle",
+};
 
 function ProjectMark({ size = 18 }: { size?: number }) {
   return (
@@ -196,6 +218,9 @@ function ProjectProfile({
 export function ProjectWorkspacePage({
   project,
   agents,
+  teams,
+  tasks,
+  currentUser,
   computers,
   onOpenThread,
   onNewThread,
@@ -204,13 +229,19 @@ export function ProjectWorkspacePage({
 }: {
   project: ProjectRecord;
   agents: EmployeeAgent[];
+  teams: AgentTeam[];
+  /* The shell already polls the task list; a second observer on the same
+     query key with its own interval polled the whole table twice over for
+     one project's lanes. */
+  tasks: RelayTaskListItem[];
+  currentUser: CurrentUser;
   computers: DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string) => void;
   onNewThread: () => void;
   onOpenSettings: () => void;
   onBack: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
   const [pageTab, setPageTab] = useUrlSearchState(
     "tab",
@@ -219,12 +250,22 @@ export function ProjectWorkspacePage({
     (value) => value === "tasks" ? null : value,
     "push",
   );
-  const tasksQuery = useQuery({
-    queryKey: TASKS_QUERY_KEY,
-    queryFn: async ({ signal }) => (await listTasks(signal)).tasks ?? [],
-    enabled: pageTab === "tasks",
-    refetchInterval: pageTab === "tasks" ? PROJECT_ACTIVITY_POLL_MS : false,
-  });
+  /* The open record, as a param this path owns — a project task opens over
+     the project rather than sending the reader to the backlog board, and the
+     record is still an address somebody can paste. */
+  const [recordTaskId, setRecordTaskId] = useUrlSearchState<string | null>(
+    "task",
+    null,
+    (value) => value || null,
+    (value) => value,
+    "push",
+  );
+  /* The exiting drawer still needs its record after the param clears. */
+  const recordMirror = useRecordDrawerMirror(recordTaskId, recordTaskId);
+  const drawerRecordId = recordMirror.record;
+  /* The same form the backlog board edits through, seeded so a task created
+     here belongs to this project. */
+  const taskForm = useBacklogTaskForm({ currentUser, seed: { projectId: project.id } });
   const briefQuery = useQuery({
     queryKey: ["project-workspace-brief", project.id],
     queryFn: ({ signal }) => getWorkspaceBrief({ projectId: project.id }, signal),
@@ -281,7 +322,7 @@ export function ProjectWorkspacePage({
     hasError: Boolean(error),
   });
   /* Archived/disabled projects are read-only rooms — no member management. */
-  const membersReadOnly = Boolean(project.archivedAt || !project.enabled);
+  const membersReadOnly = projectReadOnly(project);
 
   return (
     <Tabs
@@ -299,7 +340,7 @@ export function ProjectWorkspacePage({
             {project.name}
           </span>
         )}
-        subtitle={t("project.tasks_subtitle")}
+        subtitle={t(PROJECT_TAB_SUBTITLE[pageTab])}
         titleVariant="record"
         layout="stacked"
         actions={(
@@ -357,11 +398,15 @@ export function ProjectWorkspacePage({
 
       <div className="workspace-body">
         <TabsContent value="tasks" className="project-tasks-panel">
-          {tasksQuery.isPending ? <ActivitiesSkeleton /> : tasksQuery.isError ? (
-            <WorkspaceError message={t("project.tasks_load_failed")} onRetry={() => void tasksQuery.refetch()} />
-          ) : (
-            <ProjectTasks key={project.id} project={project} tasks={tasksQuery.data ?? []} agents={agents} />
-          )}
+          <ProjectTasks
+            key={project.id}
+            project={project}
+            tasks={tasks}
+            agents={agents}
+            teams={teams}
+            locale={i18n.language}
+            onOpenRecord={(taskId) => setRecordTaskId(taskId)}
+          />
         </TabsContent>
         <TabsContent value="profile">
           <ProjectProfile
@@ -400,6 +445,51 @@ export function ProjectWorkspacePage({
         computers={computers}
         onClose={() => setMemberEditor(null)}
       />
+
+      {/* One record surface, the same one both boards mount — the project
+          keeps the reader's place, and editing goes through the shared form
+          drawer stacked above it. */}
+      {drawerRecordId ? (
+        <TaskRecordView
+          taskId={drawerRecordId}
+          tasks={tasks}
+          drawer={{
+            open: Boolean(recordTaskId),
+            onClose: () => setRecordTaskId(null),
+            onClosed: recordMirror.release,
+          }}
+          /* The drawer rides over the project, so the project is where it
+             came from — not the backlog board it never went through. */
+          originLabel={project.name}
+          tabSearchKey="recordTab"
+          onEdit={taskForm.editTask}
+          onOpenThread={onOpenThread}
+          onOpenRecord={(nextId) => setRecordTaskId(nextId)}
+          onDeleted={() => setRecordTaskId(null)}
+        />
+      ) : null}
+
+      {taskForm.form ? (
+        <TaskDrawer
+          open={taskForm.open}
+          form={taskForm.form}
+          logicalAgents={agents}
+          teams={teams}
+          saving={taskForm.saving}
+          deleting={taskForm.deleting}
+          initialFocus={taskForm.assignmentFocus ? "assignment" : "title"}
+          title={taskForm.form.id ? t("backlog.edit_task") : t("backlog.new_task")}
+          subtitle={taskForm.form.id ? `${t("backlog.col_ref")} ${taskRef(taskForm.form.id)}` : t("backlog.new_task_id")}
+          onClose={() => { void taskForm.requestClose(); }}
+          onClosed={taskForm.release}
+          onChange={(next) => {
+            if (next.variant === "backlog") taskForm.setForm(next);
+          }}
+          onSubmit={(event) => void taskForm.submit(event)}
+          onDelete={taskForm.form.id ? () => { void taskForm.remove(); } : undefined}
+          layer={drawerRecordId ? 1 : 0}
+        />
+      ) : null}
     </Tabs>
   );
 }

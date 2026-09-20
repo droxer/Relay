@@ -186,7 +186,11 @@
     "tasks_lane_empty": "No tasks",
     "tasks_load_failed": "Could not load project tasks.",
     "tasks_attention_one": "{{count}} task needs attention",
-    "tasks_attention_other": "{{count}} tasks need attention"
+    "tasks_attention_other": "{{count}} tasks need attention",
+    "project": "Project",
+    "tasks_team_subtitle": "Who works in this project, and what each of them owns.",
+    "tasks_workspace_subtitle": "The files this project's work has produced.",
+    "tasks_activities_subtitle": "Conversations happening in this project."
   },
   "thread": {
     "search_placeholder": "Search threads…",
@@ -254,7 +258,12 @@
       "completed": "Completed",
       "failed": "Failed",
       "cancelled": "Cancelled"
-    }
+    },
+    "band_label": "Thread record",
+    "band_project": "Project",
+    "band_agent": "Agent",
+    "band_computer": "Computer",
+    "band_updated": "Updated"
   },
   "composer": {
     "placeholder": "Message the agent…",

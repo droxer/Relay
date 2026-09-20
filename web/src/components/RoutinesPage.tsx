@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
@@ -22,6 +22,7 @@ import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyRoutineForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
+import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import {
   activeRoutineFilterCount,
   initialRoutineFilters,
@@ -277,11 +278,11 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
      and the board stays put beneath it. The mirror keeps the last open record
      around through the drawer's exit animation — the URL has already moved on
      by then, the same deferral the form drawer gets from `onClosed`. */
-  const [lastRecord, setLastRecord] = useState<{ taskId: string; runId: string | null } | null>(null);
-  useEffect(() => {
-    if (recordTaskId) setLastRecord({ taskId: recordTaskId, runId: recordRunId ?? null });
-  }, [recordTaskId, recordRunId]);
-  const drawerRecord = recordTaskId ? { taskId: recordTaskId, runId: recordRunId ?? null } : lastRecord;
+  const recordMirror = useRecordDrawerMirror(
+    recordTaskId ? `${recordTaskId}\u0000${recordRunId ?? ""}` : null,
+    recordTaskId ? { taskId: recordTaskId, runId: recordRunId ?? null } : null,
+  );
+  const drawerRecord = recordMirror.record;
 
   /* The content column's header names the section the rail has selected —
      the rail names the surface. */
@@ -477,7 +478,7 @@ export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, n
           drawer={{
             open: Boolean(recordTaskId),
             onClose: () => onOpenRecord(null),
-            onClosed: () => setLastRecord(null),
+            onClosed: recordMirror.release,
           }}
           onEdit={editTask}
           onOpenThread={onOpenThread}

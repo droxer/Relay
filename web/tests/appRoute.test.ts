@@ -203,6 +203,33 @@ describe("app pathname routes", () => {
     );
   });
 
+  it("keeps the space panel's own tab on thread paths", () => {
+    // Half-addressable state was the bug: ?space=1&artifact= survived reload
+    // while the Project / This thread switcher did not, so a project
+    // workspace view could not be linked at all.
+    assert.equal(
+      canonicalBrowserUrl("/threads/ses-1", "?space=1&spaceTab=project"),
+      "/threads/ses-1?space=1&spaceTab=project",
+    );
+    // "thread" is the solo default and never advertises itself, and the tab
+    // only means something while the panel is open.
+    assert.equal(canonicalBrowserUrl("/threads/ses-1", "?space=1&spaceTab=thread"), "/threads/ses-1?space=1");
+    assert.equal(canonicalBrowserUrl("/threads/ses-1", "?spaceTab=project"), "/threads/ses-1");
+    assert.equal(canonicalBrowserUrl("/threads/ses-1", "?space=1&spaceTab=bogus"), "/threads/ses-1?space=1");
+  });
+
+  it("keeps the open task record on a project path", () => {
+    // A project task opens as a drawer over the project, so the record is
+    // addressable without leaving the project the reader came from.
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?task=task-9"), "/projects/project-1?task=task-9");
+    assert.equal(
+      canonicalBrowserUrl("/projects/project-1", "?tab=tasks&task=task-9"),
+      "/projects/project-1?task=task-9",
+    );
+    // The record lives on the tasks tab; no other tab can show it.
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=profile&task=task-9"), "/projects/project-1?tab=profile");
+  });
+
   it("reports which paths keep the thread space params", () => {
     // A surface that writes ?space=1 on a path that does not own it gets the
     // param canonicalized straight back out, so the toggle does nothing at

@@ -281,6 +281,9 @@ exclusive.
 
 The browser project detail opens on Tasks. `?tab=profile` opens Team,
 `?tab=workspace` opens files, and `?tab=activities` opens supporting activity.
+On Tasks, `?task={taskId}` opens a task record drawer. Its `recordTab` parameter
+selects `definition` or `files`; omitting it shows Activity. Drawer tabs do not
+change the project's `tab`, and drawer parameters are removed on other project tabs.
 The Tasks view filters the complete task summary collection by `projectId`,
 excludes deleted tasks and routine definitions, and includes routine occurrences.
 Progress counts accepted (`done`) tasks against that collection. Workflow columns

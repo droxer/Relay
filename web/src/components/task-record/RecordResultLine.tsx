@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskRuns } from "../../api";
+import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { hrefForRoute } from "../../lib/appRoute";
 import { formatRunDuration, runDurationMs, runOutcome } from "../../lib/taskRuns";
 import type { TaskRun } from "../../types";
@@ -26,20 +27,16 @@ export function RecordResultLine({
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const [run, setRun] = useState<TaskRun | null | undefined>(undefined);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setRun(undefined);
-    listTaskRuns(taskId, { limit: 1 }, controller.signal)
-      .then((response) => setRun(response.runs[0] ?? null))
-      // A missing summary is not worth an error banner — the artifact list and
-      // the timeline below it still answer the question, just less directly.
-      .catch(() => {
-        if (!controller.signal.aborted) setRun(null);
-      });
-    return () => controller.abort();
-  }, [taskId]);
+  /* Cached like the rest of the record. A missing summary is still not worth
+     an error banner — the artifact list and the timeline below it answer the
+     same question, just less directly — so this one stays silent on failure
+     rather than joining `RecordFailure`. */
+  const { data } = useQuery({
+    queryKey: ["task-runs", taskId, 1],
+    queryFn: ({ signal }) => listTaskRuns(taskId, { limit: 1 }, signal),
+    staleTime: RELAY_POLL_INTERVALS_MS.tasks,
+  });
+  const run: TaskRun | undefined = data?.runs[0];
 
   if (!run) return null;
 
@@ -72,7 +69,7 @@ export function RecordResultLine({
       ) : null}
       {run.latestSessionId ? (
         <a
-          className="task-drawer-artifact-download task-result-thread"
+          className="record-inline-action task-result-thread"
           href={hrefForRoute("main", run.latestSessionId)}
           onClick={(event) => {
             if (!onOpenThread) return;

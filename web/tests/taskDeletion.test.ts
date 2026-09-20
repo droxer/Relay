@@ -38,16 +38,42 @@ describe("task deletion", () => {
   });
 
   it("keeps deletion behind each edit drawer and a danger confirmation", async () => {
-    const backlogSource = await readFile(resolve("web/src/components/BacklogPage.tsx"), "utf8");
+    /* The backlog form is a shared controller now — the project board edits
+       through the same one — so the guarantee is asserted where it lives. */
+    const backlogSource = await readFile(resolve("web/src/hooks/useBacklogTaskForm.ts"), "utf8");
     const routineSource = await readFile(resolve("web/src/components/RoutinesPage.tsx"), "utf8");
     const drawerSource = await readFile(resolve("web/src/components/task-board/TaskDrawer.tsx"), "utf8");
 
     for (const source of [backlogSource, routineSource]) {
       assert.match(source, /tone: "danger"/);
       assert.match(source, /deleteTaskMutation\.mutateAsync/);
-      assert.match(source, /onDelete=\{form\.id/);
+    }
+    // Every surface that mounts the drawer only offers Delete on a saved task.
+    for (const path of [
+      "web/src/components/BacklogPage.tsx",
+      "web/src/components/RoutinesPage.tsx",
+      "web/src/components/ProjectWorkspacePage.tsx",
+    ]) {
+      assert.match(await readFile(resolve(path), "utf8"), /onDelete=\{(taskForm\.)?form\.id/);
     }
     assert.match(drawerSource, /variant="destructive"/);
+
+    /* The record surface deletes too, and its button has to mark itself the
+       same way — it sat as a ghost beside Edit, and without a busy state a
+       second click fired a second delete before the first had landed. */
+    const recordActionsSource = await readFile(
+      resolve("web/src/components/task-record/TaskRecordActions.tsx"),
+      "utf8",
+    );
+    assert.match(recordActionsSource, /variant="destructive"/);
+    assert.match(recordActionsSource, /loading=\{busyAction === "delete"\}/);
+    const recordViewSource = await readFile(
+      resolve("web/src/components/task-record/TaskRecordView.tsx"),
+      "utf8",
+    );
+    assert.match(recordViewSource, /setBusyAction\("delete"\)/);
+    assert.match(recordViewSource, /if \(busyAction \|\| !task\) return;/);
+
     assert.match(drawerSource, /disabled=\{busy\}/);
     assert.match(drawerSource, /routine\.delete_task/);
     assert.match(drawerSource, /routine\.deleting/);

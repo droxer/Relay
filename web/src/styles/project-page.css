@@ -326,25 +326,46 @@
   text-transform: uppercase;
 }
 
+/* The KPI rung, not the page-title rung: this numeral sits inside a tab
+   panel, under a record title it must not outweigh. */
 .project-task-completion {
   display: block;
-  font: var(--type-display);
-  letter-spacing: var(--type-display-track);
+  font: var(--type-title-content);
+  letter-spacing: var(--type-title-content-track);
   font-variant-numeric: tabular-nums;
 }
 
 .project-task-completion span {
   color: var(--ink-4);
-  font: var(--type-title-content);
-  letter-spacing: var(--type-title-content-track);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
 
 .project-task-summary p,
 .project-task-lane-empty,
 .project-task-meta,
-.project-task-card time {
+.project-task-card time,
+.project-task-blocker {
   color: var(--ink-3);
   font: var(--type-body-sm);
+}
+
+/* Status marks, same grammar as the backlog list and the record band — the
+   lane's own header carries the stage, so these only appear for a status the
+   lane cannot show. */
+.project-task-exception,
+.project-task-attention {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.project-task-exception > svg,
+.project-task-attention > svg {
+  flex: none;
 }
 
 .project-task-progress-copy {
@@ -417,10 +438,18 @@
   overflow-wrap: anywhere;
 }
 
+/* The record opens over the project, so the title is a button, not a link
+   out of here. It still reads as the card's one destination. */
 .project-task-title {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-1);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .project-task-title:hover {
@@ -435,13 +464,19 @@
   width: 100%;
 }
 
-.project-task-error {
-  color: var(--ink-2);
+/* A failed action, reported on the card that raised it. Distinct from the
+   blocker reason above, which is the task's own state, not an error. */
+.project-task-failure {
+  color: var(--err);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 @media (max-width: 640px) {
   .project-task-summary { grid-template-columns: 1fr; gap: var(--sp-3); }
-  .project-task-board { grid-template-columns: 1fr; overflow: visible; }
+  /* The lanes stay lanes. Stacking them to one column discarded the only
+     thing a board is for and left one very long scroll in its place, so the
+     board keeps its columns and scrolls sideways instead. */
+  .project-task-board { grid-auto-columns: 78vw; grid-auto-flow: column; grid-template-columns: none; }
   .project-task-create { flex-wrap: wrap; }
 }

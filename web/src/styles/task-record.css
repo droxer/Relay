@@ -212,3 +212,216 @@
 .record-drawer .record-missing {
   padding: 0;
 }
+
+/* ── Panel failure ────────────────────────────────────────────────── */
+
+/* A panel that fails inside a tab is not a failed page, so it reports on one
+   line rather than through `WorkspaceError`'s full-pane block — but it offers
+   the same way out. Three panels used to fail three different ways, two of
+   them with no retry at all. */
+.record-failure {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-3) 0;
+  color: var(--err);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-failure > span {
+  min-width: 0;
+}
+
+.record-run-more:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* =====================================================================
+   The record's tab panels.
+
+   These rules lived in task-drawer.css under `task-drawer-*` names. The
+   record replaced that drawer but kept wearing its classes, so a sheet
+   named for the retired surface styled the live one and any change to the
+   form drawer silently restyled the record. Only the form drawer's own
+   three classes stayed behind.
+
+   `record-inline-action` was `task-drawer-artifact-download` — a name that
+   described one of the three things it was on; the other two are "open
+   thread" links.
+   ===================================================================== */
+/* ── Result summary ───────────────────────────────────────────────── */
+
+.task-result-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0.5px solid var(--line-2);
+  /* 6px control rung, matching the list rows it sits above. */
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+
+.task-result-when,
+.task-result-duration,
+.task-result-files {
+  color: var(--ink-3);
+}
+
+.task-result-reason {
+  flex: 1 1 100%;
+  min-width: 0;
+  color: var(--ink-3);
+}
+
+/* Pushed to the row's end; wraps with the reason when both are present. */
+.task-result-thread {
+  margin-left: auto;
+}
+
+/* ── Generated artifacts and workspace files ──────────────────────── */
+
+.record-panel {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 0.5px solid var(--line-2);
+}
+
+.record-panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.record-panel-count {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-panel-note {
+  margin: 0;
+  color: var(--ink-4);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-file {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.record-file-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-2);
+  border: 0.5px solid transparent;
+  /* List row, not a card: the 6px control rung, same call .adm-assign-node
+     makes for the same shape. */
+  border-radius: var(--r-2);
+  background: none;
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-align: left;
+  cursor: pointer;
+}
+
+.record-file-main:hover {
+  border-color: var(--line-1);
+  background: var(--control-fill-hover);
+}
+
+.record-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-file-meta {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-inline-action {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.record-inline-action:hover {
+  color: var(--ink-1);
+}
+
+/* ── Run history timeline ─────────────────────────────────────────── */
+
+.record-timeline {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 0.5px solid var(--line-2);
+}
+
+.record-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-timeline-entry {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-timeline-time {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.record-timeline-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
