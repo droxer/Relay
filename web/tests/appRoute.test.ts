@@ -345,3 +345,8 @@ it("preserves computer device approval through login redirects", () => {
 it("preserves approval when the legacy computer path redirects to settings", () => {
   assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
 });
+
+it("keeps the project team tab explicit and canonicalizes Tasks as the default", () => {
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p?tab=profile");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p");
+});

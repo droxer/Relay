@@ -835,6 +835,7 @@ export interface TaskMutationInput {
 
 export interface CreateTaskInput extends TaskMutationInput {
   title: string;
+  projectId?: string;
 }
 
 export interface StartTaskResponse {
