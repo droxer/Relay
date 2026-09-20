@@ -1032,3 +1032,11 @@ export function revokeSkillAssignment(skillId: string, assignmentId: string): Pr
 export function promoteSkillRevision(skillId: string, revisionId: string): Promise<SkillRecord> { return apiJson(`/skills/${encodeURIComponent(skillId)}/revisions/${encodeURIComponent(revisionId)}/promote`, { method: "POST", body: {} }); }
 export function readSkillFile(skillId: string, path: string, channel: "stable" | "latest" = "stable", signal?: AbortSignal): Promise<SkillFilePreview> { return apiJson(`/skills/${encodeURIComponent(skillId)}/files?path=${encodeURIComponent(path)}&channel=${channel}`, { signal }); }
 export function skillExportUrl(skillId: string, channel: "stable" | "latest" = "stable") { return `/api/v1/skills/${encodeURIComponent(skillId)}/export?channel=${channel}`; }
+
+export function requestRuntimeRefresh(nodeId: string): Promise<{ commandId: string }> {
+  return apiJson(`/daemon-nodes/${encodeURIComponent(nodeId)}/runtime-refresh`, { method: "POST" });
+}
+
+export function getRuntimeRefresh(nodeId: string, commandId: string): Promise<{ status: string }> {
+  return apiJson(`/daemon-nodes/${encodeURIComponent(nodeId)}/runtime-refresh/${encodeURIComponent(commandId)}`);
+}

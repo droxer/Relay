@@ -619,6 +619,12 @@
     "avatar": "Avatar"
   },
   "computer": {
+    "refresh_runtimes": "Refresh runtimes",
+    "refresh_waiting": "Waiting for current tasks to finish",
+    "refresh_pending": "Detecting runtimes…",
+    "refresh_completed": "Runtimes refreshed",
+    "refresh_failed": "Could not refresh runtimes. Try again.",
+    "refresh_upgrade": "Update Relay Computer to refresh runtimes.",
     "title": "My Computer",
     "count_one": "{{count}} computer",
     "count_other": "{{count}} computers",

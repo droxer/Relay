@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
+from ..core.ids import new_database_id
 from ..core.models import DaemonNodeRegistration
 from ..daemon_registry import public_sandbox_record
 from ..daemon_registry.registry import DeletedDaemonNodeError
@@ -261,6 +262,42 @@ def update_daemon_node_disabled_agents(
         public_sandbox_record(updated),
     )
     return {"node": present_computer(ctx, monitor_node)}
+
+
+def _runtime_refresh_node(request: Request, ctx: AppContextDep, sandbox_id: str) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    if not actor.get("user"):
+        raise HTTPException(401, "Authentication required.")
+    node = ctx.registry.get(sandbox_id)
+    if not node or node.get("status") == "deleted":
+        raise HTTPException(404, "Computer not found.")
+    if not actor_can_access_sandbox(actor, node):
+        raise HTTPException(403, "Daemon node access denied.")
+    return node
+
+
+@router.post("/daemon-nodes/{sandbox_id}/runtime-refresh", status_code=202)
+def request_runtime_refresh(sandbox_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    node = _runtime_refresh_node(request, ctx, sandbox_id)
+    if "runtime-refresh" not in (node.get("capabilities") or []):
+        raise HTTPException(409, "Update Relay Computer to refresh runtimes.")
+    if not ctx.registry.is_live(sandbox_id):
+        raise HTTPException(409, "Connect this computer before refreshing runtimes.")
+    command_id = new_database_id()
+    try:
+        ctx.registry.enqueue(sandbox_id, {"id": command_id, "type": "runtime.refresh"})
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    return {"commandId": command_id}
+
+
+@router.get("/daemon-nodes/{sandbox_id}/runtime-refresh/{command_id}")
+def runtime_refresh_status(sandbox_id: str, command_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    _runtime_refresh_node(request, ctx, sandbox_id)
+    command = ctx.daemon_store.get_command(command_id)
+    if not command or command["nodeId"] != sandbox_id or command["command"]["type"] != "runtime.refresh":
+        raise HTTPException(404, "Refresh request not found.")
+    return {"status": command["status"]}
 
 
 @router.post("/daemon-node-enrollments/local", status_code=201)

@@ -706,6 +706,19 @@ class LocalDaemonStore:
         self._notify_command(record["nodeId"])
         return updated
 
+    def complete_runtime_refresh(self, node_id: str, acknowledgement: dict[str, Any]) -> None:
+        with self._lock:
+            record = self._get_command(acknowledgement["commandId"])
+            if not record or record["nodeId"] != node_id or record["command"]["type"] != "runtime.refresh":
+                return
+            if record["status"] != "dispatched" or record.get("leaseId") != acknowledgement["leaseId"]:
+                return
+            now = now_iso()
+            updated = {**record, "status": "completed", "updatedAt": now, "completedAt": now}
+            _write_json(self.commands_dir / f"{safe_name(record['id'])}.json", updated)
+            self._index_command(updated)
+            self.append_daemon_event(daemon_event("daemon.command.runtime-refreshed", {"nodeId": node_id, "commandId": record["id"]}))
+
     def record_workspace_response(self, node_id: str, response: dict[str, Any]) -> None:
         command_id = str(response["commandId"])
         with self._lock:
@@ -2302,6 +2315,25 @@ class DatabaseDaemonStore:
             )
         self._notify_command(record["nodeId"])
         return updated
+
+    def complete_runtime_refresh(self, node_id: str, acknowledgement: dict[str, Any]) -> None:
+        """Acknowledge only the refresh lease held by this authenticated node."""
+        with store_transaction(self.engine) as conn:
+            now = _parse_iso(now_iso())
+            changed = conn.execute(
+                update(self.commands)
+                .where(self.commands.c.id == acknowledgement["commandId"])
+                .where(self.commands.c.node_id == self._node_pk(conn, node_id))
+                .where(self.commands.c.type == "runtime.refresh")
+                .where(self.commands.c.status == "dispatched")
+                .where(self.commands.c.lease_id == acknowledgement["leaseId"])
+                .values(status="completed", updated_at=now, completed_at=now)
+            )
+            if changed.rowcount:
+                self._append_daemon_event(conn, daemon_event(
+                    "daemon.command.runtime-refreshed",
+                    {"nodeId": node_id, "commandId": acknowledgement["commandId"]},
+                ))
 
     def record_workspace_response(self, node_id: str, response: dict[str, Any]) -> None:
         command_id = str(response["commandId"])

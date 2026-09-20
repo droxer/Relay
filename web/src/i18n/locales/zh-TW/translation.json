@@ -614,6 +614,12 @@
     "avatar": "頭像"
   },
   "computer": {
+    "refresh_runtimes": "重新偵測執行環境",
+    "refresh_waiting": "等待目前任務結束後偵測",
+    "refresh_pending": "正在偵測執行環境…",
+    "refresh_completed": "執行環境已更新",
+    "refresh_failed": "偵測失敗，請重試。",
+    "refresh_upgrade": "升級 Relay Computer 後可重新偵測。",
     "title": "我的電腦",
     "count_one": "{{count}} 台電腦",
     "count_other": "{{count}} 台電腦",

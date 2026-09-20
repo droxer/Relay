@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 AgentName = Literal["claude", "pi", "codex", "kimi"]
 SessionStatus = Literal[
@@ -44,7 +44,13 @@ class RelayModel(BaseModel):
         return self.model_dump(by_alias=True, exclude_none=True)
 
 
+class RuntimeRefreshAcknowledgement(RelayModel):
+    command_id: str
+    lease_id: str
+
+
 class DaemonNodeRegistration(RelayModel):
+    runtime_refresh_commands: list[RuntimeRefreshAcknowledgement] = Field(default_factory=list, max_length=50)
     sandbox_id: str
     employee_id: str | None = None
     token: str

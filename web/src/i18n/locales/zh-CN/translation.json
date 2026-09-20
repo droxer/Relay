@@ -614,6 +614,12 @@
     "avatar": "头像"
   },
   "computer": {
+    "refresh_runtimes": "重新检测运行时",
+    "refresh_waiting": "等待当前任务结束后检测",
+    "refresh_pending": "正在检测运行时…",
+    "refresh_completed": "运行时已更新",
+    "refresh_failed": "检测失败，请重试。",
+    "refresh_upgrade": "升级 Relay Computer 后可重新检测。",
     "title": "我的电脑",
     "count_one": "{{count}} 台电脑",
     "count_other": "{{count}} 台电脑",

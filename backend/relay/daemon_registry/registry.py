@@ -206,6 +206,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
     {
         "work-results",
         "agent-skills",
+        "runtime-refresh",
         DAEMON_CAPABILITY_GENERATED_FILES,
         DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
         DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
@@ -676,6 +677,8 @@ class DaemonNodeRegistry:
         if not retired_at:
             self._retire_superseded_incarnations(sandbox)
         self.daemon_store.register_node(sandbox)
+        for command in payload.get("runtimeRefreshCommands") or []:
+            self.daemon_store.complete_runtime_refresh(sandbox["id"], command)
         logger.info(
             "Daemon node registered",
             sandbox_id=sandbox["id"],

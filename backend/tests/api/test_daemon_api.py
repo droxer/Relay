@@ -4390,6 +4390,9 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         command = next(c for c in commands if c["id"] == command_id)
         assert command["type"] == "runtime.refresh"
         assert client.get(endpoint + f"/{command_id}").json()["status"] == "dispatched"
+        stale_ack = {"commandId": command_id, "leaseId": "stale-lease"}
+        assert client.post("/api/v1/daemon-node-registrations", json={**registration, "runtimeRefreshCommands": [stale_ack]}).status_code == 200
+        assert client.get(endpoint + f"/{command_id}").json()["status"] == "dispatched"
         ack = {"commandId": command_id, "leaseId": command["leaseId"]}
         assert client.post("/api/v1/daemon-node-registrations", json={**registration, "runtimeRefreshCommands": [ack]}).status_code == 200
         assert client.get(endpoint + f"/{command_id}").json()["status"] == "completed"

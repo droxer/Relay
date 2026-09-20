@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { AgentMark } from "../AgentMark";
+import { RuntimeRefreshButton } from "./RuntimeRefreshButton";
 import { RuntimeMark } from "../RuntimeMark";
 import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
@@ -127,6 +128,8 @@ export function ComputerCard({
             <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
             {t("admin.v2.manage_executors")}
           </Button>
+          <RuntimeRefreshButton nodeId={node.id} online={isNodeOnline(node)}
+            supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
           <Button type="button" variant="outline" size="dense" onClick={() => onShowToken(node)}>
             <ActionKey size={ICON.sm} aria-hidden="true" />
             {t("computer.token_button")}
