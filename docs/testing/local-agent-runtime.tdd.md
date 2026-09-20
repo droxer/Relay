@@ -24,6 +24,11 @@ the final implementation commit.
 
 ## Validation
 
+- Final `npm test`: PASS, including production builds and TypeScript compilation,
+  1,620 Node tests, 161 React interaction tests, and 1,749 Python tests.
+  Python emitted 533 dependency/reflection warnings; no tests failed or skipped.
+- `git diff --check` and repository pre-commit checks: PASS.
+- Implementation checkpoint: `69a879d1` (local branch, not pushed).
 - Focused initial suite: 120 tests passed.
 - Node coverage run: 112 tests passed. Across test and packaged copies of the three
   extracted runtime modules: 88.62% lines, 77.56% branches, 94.55% functions.
