@@ -200,38 +200,14 @@
   pointer-events: none;
 }
 
-/* ── Routine state — schedule health, in the shared status-pill grammar ──
-   A routine never moves through the board, so it gets its own vocabulary:
-   running · overdue · due today · scheduled · unscheduled · paused. The two
-   "not really scheduled" states are separated by *which* thing is dashed —
-   unscheduled dashes the mark (the schedule is on, the date is missing),
-   paused dashes the pill border (the whole schedule is off). */
-/* Accent only. The chip itself is a Badge (variant="state"), which owns the
-   padding, hairline, radius, and label type this rule used to restate. What
-   is genuinely local is the six-step schedule-health accent below and the
-   dashed border a paused routine takes — neither is expressible as one of
-   Badge's five semantic tones. */
-.routine-state {
-  --state-accent: var(--ink-3);
-  --tone: var(--state-accent);
-  gap: var(--sp-2);
-  color: var(--ink-2);
-}
-
-.routine-state .state-mark { --mark-accent: var(--state-accent); }
-
-.routine-state[data-state="running"] { --state-accent: var(--live); color: var(--ink-1); }
-.routine-state[data-state="overdue"] { --state-accent: var(--err); color: var(--ink-1); }
-.routine-state[data-state="due"] { --state-accent: var(--warn); }
-.routine-state[data-state="scheduled"] { --state-accent: var(--ink-3); }
-.routine-state[data-state="unscheduled"] { --state-accent: var(--ink-4); color: var(--ink-3); }
-
-.routine-state[data-state="paused"] {
-  --state-accent: var(--ink-4);
-  border-style: dashed;
-  color: var(--ink-3);
-}
-
+/* Routine schedule health has no pill of its own any more. A routine never
+   moves through the board, so it gets its own vocabulary — running · overdue
+   · due today · scheduled · unscheduled · paused — but it is now carried by
+   the StateMark shape on the rail row and the list row (ROUTINE_STATE_SHAPE
+   in task-board/routineVocabulary.ts, with an sr-only word beside it) and as
+   a plain fact in the detail pane's RecordBand. The `.routine-state` pill
+   that used to restate it a third way is gone; the row tint it seeded lives
+   on as `[data-routine-state]` in backlog-list.css. */
 /* The title is a Button, so it arrives with the primitive's `whitespace-nowrap`
    and `shrink-0`. Left alone a long title is sliced at the card edge with no
    ellipsis (text-overflow defaults to `clip`), hiding over half the text with

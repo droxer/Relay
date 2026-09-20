@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ActionStart, ICON, NavAgents } from "../icons";
 import { PriorityBadge } from "../PriorityBadge";
 import { StateMark } from "../StateMark";
-import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
+import { ROUTINE_STATE_SHAPE } from "./routineVocabulary";
 import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { formatNextRunDate } from "./RoutineChrome";

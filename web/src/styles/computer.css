@@ -511,8 +511,11 @@ button.computer-run-open:hover {
   gap: var(--sp-2);
 }
 
+/* 500, not 600: the weight ladder is 400/500/700 (tokens/roles.css) and a
+   term label is the medium rung. 600 reached this file through Tailwind's
+   `font-semibold` default and was the one sheet stepping off the ladder. */
 .computer-platform-support dt {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ink-1);
 }
 

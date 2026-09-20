@@ -60,9 +60,9 @@ describe("routine detail pane", () => {
   });
 
   it("shows one list at phone width, not the rail and the table both", () => {
-    assert.match(
-      styles,
-      /\.routine-page\[data-view="list"\] \.routine-main,\s*\n\s*\.routine-page\[data-view="detail"\] \.routine-roster \{\s*\n\s*display: none;/,
-    );
+    // Below the tier the rail is gone in BOTH views: the table is the list
+    // there (it keeps selection, dispatch and — via the bar — the rail's
+    // search and state), and an open record is the whole screen.
+    assert.match(styles, /@media \(max-width: 820px\)[\s\S]{0,600}\.routine-roster \{\s*\n\s*display: none;/);
   });
 });

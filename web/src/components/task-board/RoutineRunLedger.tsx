@@ -42,7 +42,10 @@ export function RoutineRunLedger({
     setFailed(false);
     setExpanded(null);
     listTaskRuns(taskId, {}, controller.signal)
-      .then((response) => setRuns(response.runs))
+      // `?? []` because `runs.length` is read unconditionally below: a
+      // response missing the key would otherwise take down the whole pane
+      // that mounts this, which is not what a bad payload deserves.
+      .then((response) => setRuns(response.runs ?? []))
       .catch(() => {
         if (!controller.signal.aborted) setFailed(true);
       });

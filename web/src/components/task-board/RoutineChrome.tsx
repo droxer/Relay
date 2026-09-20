@@ -68,6 +68,15 @@ export function formatNextRunDate(value: string): string {
   }).format(date);
 }
 
+/**
+ * The table's filter bar.
+ *
+ * It carries the rail's two controls as well — search and schedule state —
+ * but only at the width where the rail is not on screen (see
+ * `.routine-narrow-only` in backlog-list.css). Same trade the sort menu
+ * makes: one piece of state, two controls, never both visible at once. They
+ * write the same `filters`, so the two widths cannot disagree.
+ */
 export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: EmployeeAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
 
@@ -76,12 +85,30 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
       ariaLabel={t("routine.filters_table")}
       searchName="routine-table-filters"
       searchLabel={t("routine.search")}
+      query={filters.query}
+      onQueryChange={(query) => onChange({ ...filters, query })}
       activeCount={activeRoutineFilterCount(filters)}
-      /* No search box and no state control: the rail beside this table owns
-         both. Clearing the bar leaves them exactly where the reader set them —
-         they are not in this bar to be cleared. */
+      /* Clearing the bar leaves search and state where the reader set them:
+         above 820 those controls live in the rail, and a Clear here must not
+         reach across to a control the reader cannot see being cleared. */
       onClear={() => onChange({ ...initialRoutineFilters, state: filters.state, query: filters.query })}
-      trailing={sortMenu}
+      trailing={
+        <>
+          <span className="routine-narrow-only">
+            <FilterSelect
+              name="routine-state-filter-narrow"
+              label={t("routine.state")}
+              value={filters.state}
+              onValueChange={(state) => onChange({ ...filters, state })}
+              options={[
+                { value: "all" as const, label: t("routine.all_states") },
+                ...ROUTINE_STATE_ORDER.map((value) => ({ value, label: t(`routine.states.${value}`) })),
+              ]}
+            />
+          </span>
+          {sortMenu}
+        </>
+      }
     >
       <FilterSelect
         name="routine-type-filter"

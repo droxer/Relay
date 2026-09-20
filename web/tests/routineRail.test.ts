@@ -51,10 +51,15 @@ describe("routine roster rail", () => {
     assert.match(page, /query=\{filters\.query\}/);
     assert.match(page, /setFilters\(\{ \.\.\.filters, state \}\)/);
     assert.doesNotMatch(page, /useState<RoutineState/);
-    // One search box and one state control on the surface: the table's bar
-    // below carries neither.
-    assert.doesNotMatch(chrome, /routine-state-filter/);
-    assert.doesNotMatch(chrome, /onQueryChange/);
+    /* One search box and one state control VISIBLE at a time. The table's bar
+       carries a second pair for the widths where the rail is not rendered —
+       the same trade the sort menu makes against the column headers — and
+       both write the same `filters`, so they cannot disagree. */
+    assert.match(chrome, /routine-state-filter-narrow/);
+    assert.match(chrome, /className="routine-narrow-only"/);
+    const styles = await read("src/styles/backlog-list.css");
+    assert.match(styles, /\.routine-narrow-only,[\s\S]{0,220}display: none;/);
+    assert.match(styles, /@media \(max-width: 820px\)[\s\S]{0,900}\.routine-narrow-only \{ display: inline-flex; \}/);
   });
 
   it("offers every state to narrow by, including the empty ones", async () => {

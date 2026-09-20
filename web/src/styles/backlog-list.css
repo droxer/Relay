@@ -785,28 +785,33 @@
   }
 }
 
+/* The rail's two controls, duplicated into the table's filter bar for the
+   widths where the rail is not rendered. Hidden by default for the same
+   reason .list-sort-menu is: above the breakpoint the rail carries them, and
+   two visible controls for one filter is the duplication this page just
+   spent a redesign removing. */
+.routine-narrow-only,
+/* The bar's own search box is one of those two controls — it is rendered by
+   the shared FiltersBar rather than wrapped here, so it is hidden by name. */
+.routine-board .backlog-filter-search-wrap { display: none; }
+
 @media (max-width: 820px) {
   .routine-page {
     display: flex;
     flex-direction: column;
   }
 
+  /* The rail goes away entirely below this tier, in BOTH views: the table is
+     the list at phone width (with the rail's search and state beside its
+     Filters button), and an open record is the whole screen. Stacking the
+     rail above either one printed the same routines twice. */
   .routine-roster {
-    flex: 1;
-    border-right: 0;
-  }
-
-  .routine-page[data-view="list"] .routine-main,
-  .routine-page[data-view="detail"] .routine-roster {
     display: none;
   }
 
-  /* The topbar already names the route, so the rail's own title is clipped
-     here (responsive.css) — leaving a 91px band holding one "+". Collapse it
-     to the control it actually contains. */
-  .routine-roster > .page-header {
-    padding-block: var(--sp-2);
-  }
+  .routine-narrow-only { display: inline-flex; }
+
+  .routine-board .backlog-filter-search-wrap { display: flex; }
 
   .routine-mobile-back {
     display: flex;

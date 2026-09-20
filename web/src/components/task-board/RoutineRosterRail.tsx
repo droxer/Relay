@@ -7,7 +7,7 @@ import { FilterSelect } from "../FiltersBar";
 import { PageHeader } from "../PageHeader";
 import { RelayEmptyState } from "../RelayEmptyState";
 import { StateMark } from "../StateMark";
-import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
+import { ROUTINE_STATE_SHAPE } from "./routineVocabulary";
 import { ActionAdd, ICON } from "../icons";
 import { formatNextRunDate } from "./RoutineChrome";
 import { ROUTINE_STATE_ORDER, type RoutineState } from "../../lib/routine";
