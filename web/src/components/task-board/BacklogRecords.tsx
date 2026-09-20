@@ -473,6 +473,8 @@ function TaskFlowDetails({ task, execution, showAge = true }: { task: RelayTaskL
   // Nothing to say is nothing to draw. The element used to render empty, and
   // an empty flex row still carries its own margin — 12px of nowhere on every
   // card that was neither blocked, waiting, nor in flight.
+  const blocker = task.attention?.evidence === "unknown" || task.blockerReason === "Execution needs attention."
+    ? t("recovery.unknown.title") : task.attention?.summary || task.blockerReason;
   const recovering = execution && !["running", "terminal"].includes(execution.phase);
   if (!recovering && task.status !== "blocked" && task.status !== "waiting_for_human" && age === null) return null;
   return <div className="backlog-meta backlog-flow">
@@ -485,9 +487,9 @@ function TaskFlowDetails({ task, execution, showAge = true }: { task: RelayTaskL
         a truncated line is reaching for — who blocked it and when are facts
         the drawer states in full. */
     task.status === "blocked" ? (
-      <span className="backlog-blocker" title={task.blockerReason || undefined}>
-        {task.blockerReason
-          ? `${t("backlog.statuses.blocked")}: ${task.blockerReason}`
+      <span className="backlog-blocker" title={blocker || undefined}>
+        {blocker
+          ? `${t("backlog.statuses.blocked")}: ${blocker}`
           : t("backlog.statuses.blocked")}
       </span>
     ) : null}

@@ -329,6 +329,11 @@ def task_update_events(
         status_payload = {"status": payload["status"]}
         if payload.get("blockerReason"):
             status_payload["reason"] = payload["blockerReason"]
+        if payload["status"] == "blocked":
+            status_payload["attention"] = payload.get("attention") or {
+                "code": "manual_block" if payload.get("actorEmployeeId") else "unknown",
+                "source": "operator" if payload.get("actorEmployeeId") else "legacy",
+            }
         if payload.get("actorEmployeeId"):
             status_payload["actorEmployeeId"] = payload["actorEmployeeId"]
         events.append(relay_task_event("task.status", task_id, status_payload))

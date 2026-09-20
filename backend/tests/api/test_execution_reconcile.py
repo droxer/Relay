@@ -237,3 +237,26 @@ def test_reconcile_denies_an_employee_who_does_not_own_the_thread(monkeypatch) -
         assert response.status_code == 403
         session = client.get(f"/api/v1/threads/{session_id}").json()
         assert not [e for e in session["events"] if e["type"] == "session.execution_reconciled"]
+
+
+def test_reconcile_cannot_discard_a_retained_terminal_result(monkeypatch):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+        store = app.state.registry.daemon_store
+        store.update_run_request(run["request"]["id"], {
+            "status": "finalizing", "state": {
+                "_relay_recovery_required": True,
+                "_relay_terminal_claim_id": "saved-result",
+            },
+        })
+        before = store.get_run_request(run["request"]["id"])
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["canRetrySave"] is True
+        assert status["canReportGone"] is False
+        assert client.post(f"/api/v1/threads/{session_id}/execution/reconcile").status_code == 409
+        assert store.get_run_request(run["request"]["id"]) == before

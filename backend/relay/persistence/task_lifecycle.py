@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .execution_attention import UNKNOWN_REASON, blocked_attention
+
 FLOW_STAGES = ("backlog", "assigned", "running", "review", "done")
 
 
@@ -59,11 +61,8 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             ] = previous
         if status == "blocked":
             task.setdefault("blockedAt", event["timestamp"])
-            task["blockerReason"] = (
-                event.get("reason")
-                or task.get("blockerReason")
-                or "Execution needs attention."
-            )
+            task["blockerReason"] = event.get("reason") or UNKNOWN_REASON
+            task["attention"] = blocked_attention(event)
             task["blockerOwnerEmployeeId"] = event.get("actorEmployeeId") or flow_scope(
                 task
             )
@@ -83,6 +82,7 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             "blockerReason",
             "blockerOwnerEmployeeId",
             "blockedFromStatus",
+            "attention",
         ):
             task.pop(field, None)
     if status != "waiting_for_human":

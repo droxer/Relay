@@ -436,7 +436,12 @@ class TaskScheduler:
                 )
                 if error.permanent:
                     self.task_store.update_task(
-                        task["id"], {"status": "blocked", "blockerReason": message}
+                        task["id"],
+                        {
+                            "status": "blocked",
+                            "blockerReason": message,
+                            "attention": {"code": error.code, "source": "dispatch"},
+                        },
                     )
                 skipped += 1
                 continue
@@ -454,7 +459,12 @@ class TaskScheduler:
                 )
                 if error.permanent:
                     self.task_store.update_task(
-                        task["id"], {"status": "blocked", "blockerReason": message}
+                        task["id"],
+                        {
+                            "status": "blocked",
+                            "blockerReason": message,
+                            "attention": {"code": error.code, "source": "dispatch"},
+                        },
                     )
                 skipped += 1
                 continue
@@ -467,7 +477,12 @@ class TaskScheduler:
                 )
                 if error.code in PERMANENT_DISPATCH_CODES:
                     self.task_store.update_task(
-                        task["id"], {"status": "blocked", "blockerReason": str(error)}
+                        task["id"],
+                        {
+                            "status": "blocked",
+                            "blockerReason": str(error),
+                            "attention": {"code": dispatch_reason_code(error.code), "source": "dispatch"},
+                        },
                     )
                     skipped += 1
                     continue

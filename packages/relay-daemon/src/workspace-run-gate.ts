@@ -35,6 +35,16 @@ export class WorkspaceRunGate {
   private readonly owners = new Map<string, string>();
   private readonly waiters = new Map<string, Set<WorkspaceGateObserver>>();
   private readonly tails = new Map<string, Promise<void>>();
+  private readonly notifications = new WeakMap<WorkspaceGateObserver, Promise<void>>();
+
+  private notify(observer: WorkspaceGateObserver, owner: string | null | undefined): Promise<void> {
+    // Serialize each waiter's updates, without making another execution depend
+    // on that waiter's transport or cancellation signal.
+    const pending = (this.notifications.get(observer) ?? Promise.resolve())
+      .catch(() => undefined).then(() => observer.onWaiting?.(owner));
+    this.notifications.set(observer, pending);
+    return pending;
+  }
 
   constructor(private readonly workspaceRoot?: string) {}
 
@@ -61,7 +71,7 @@ export class WorkspaceRunGate {
         const waiters = this.waiters.get(key) ?? new Set<WorkspaceGateObserver>();
         waiters.add(observer);
         this.waiters.set(key, waiters);
-        await observer.onWaiting?.(this.owners.get(key));
+        await this.notify(observer, this.owners.get(key));
       }
       await waitForTurn(predecessor, signal);
       signal?.throwIfAborted();
@@ -69,10 +79,10 @@ export class WorkspaceRunGate {
       if (observer) {
         this.waiters.get(key)?.delete(observer);
         this.owners.set(key, observer.sessionId);
-        await observer.onWaiting?.(null);
+        await this.notify(observer, null);
         for (const waiter of this.waiters.get(key) ?? []) {
           // A cancelled queued run must not fail the current workspace owner.
-          await waiter.onWaiting?.(observer.sessionId).catch(() => undefined);
+          void this.notify(waiter, observer.sessionId).catch(() => undefined);
         }
       }
       signal?.throwIfAborted();

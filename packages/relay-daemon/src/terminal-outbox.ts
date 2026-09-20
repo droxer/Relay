@@ -74,7 +74,11 @@ export class TerminalOutbox {
         });
         if (response.ok) rmSync(join(this.directory, `${record.key}.json`), { force: true });
         await response.body?.cancel();
-      } catch { return; } // Keep durable evidence for the next heartbeat/restart.
+      } catch {
+        // A request-specific timeout must not starve the rest of the batch.
+        // Retain this evidence and let other completed executions reconcile.
+        if (signal?.aborted) return;
+      }
     }
   }
 }

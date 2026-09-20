@@ -235,7 +235,7 @@ class SessionController:
             if self.task_store and self.task_id:
                 task = self.task_store.get_task(self.task_id)
                 if task.get("status") != "blocked" or task.get("blockerReason") != outcome:
-                    self._update_task_status("blocked", outcome, {"sessionId": session_id})
+                    self._update_task_status("blocked", outcome, {"sessionId": session_id, "code": "execution_failed"})
             logger.info("Session failed", session_id=session_id, outcome=outcome)
             return session
 
@@ -307,7 +307,7 @@ class SessionController:
                 },
             ),
         )
-        self._update_task_status("blocked", note, {"sessionId": session_id})
+        self._update_task_status("blocked", note, {"sessionId": session_id, "code": "execution_cancelled"})
         logger.info("Session cancelled", session_id=session_id, note=note)
         return session
 
@@ -759,6 +759,8 @@ class SessionController:
                 "blocked",
                 f"{step_result['agent']} failed with exit code {step_result['exitCode']}.",
                 {
+                    "code": "agent_exit_failed",
+                    "runId": step_result["runId"],
                     "agent": step_result["agent"],
                     "sessionId": session_id,
                 },
@@ -818,9 +820,18 @@ class SessionController:
             next_status = status
             if status == "done" and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human":
                 next_status = "review"
+            payload: dict[str, Any] = {"status": next_status, "reason": message}
+            if next_status == "blocked":
+                payload["attention"] = {
+                    "code": extras.get("code", "unknown"),
+                    "source": "execution",
+                    **{key: extras[key] for key in ("sessionId", "runId") if extras.get(key)},
+                    **({"runRequestId": self.task_execution_owner["requestId"]}
+                       if self.task_execution_owner else {}),
+                }
             self.task_store.append_event(
                 task_id,
-                relay_task_event("task.status", task_id, {"status": next_status, "reason": message}),
+                relay_task_event("task.status", task_id, payload),
                 execution_owner=self.task_execution_owner,
             )
             self.task_store.record_activity(

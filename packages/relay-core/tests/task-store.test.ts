@@ -65,3 +65,22 @@ describe("task team assignment events", () => {
     assert.deepEqual(rebuilt.linkedSessionIds, []);
   });
 });
+
+describe("blocked execution explanations", () => {
+  it("replays the exact source and clears it when unblocked", () => {
+    const task = materializeTaskEvents([
+      relayTaskEvent("task.created", "task", { title: "Task", description: "", priority: "normal" }),
+      relayTaskEvent("task.status", "task", { status: "blocked", reason: "Executor exited", attention: { code: "agent_exit_failed", source: "execution", sessionId: "actual" } }),
+    ]);
+    assert.equal(task.attention?.sessionId, "actual");
+    assert.equal(task.attention?.summary, "Executor exited");
+    assert.equal(task.attention?.evidence, "recorded");
+    const unknown = materializeTaskEvents([...task.events, relayTaskEvent("task.status", "task", { status: "blocked" })]);
+    assert.equal(unknown.attention?.code, "unknown");
+    assert.equal(unknown.attention?.evidence, "unknown");
+    assert.equal(unknown.attention?.sessionId, undefined);
+    assert.notEqual(unknown.blockerReason, "Executor exited");
+    const resumed = materializeTaskEvents([...task.events, relayTaskEvent("task.status", "task", { status: "assigned" })]);
+    assert.equal(resumed.attention, undefined);
+  });
+});
