@@ -138,6 +138,73 @@ describe("record vocabulary", () => {
   });
 });
 
+describe("record data access", () => {
+  const panels = [
+    "RecordRuns.tsx",
+    "RecordHistory.tsx",
+    "RecordArtifacts.tsx",
+    "RecordResultLine.tsx",
+  ];
+
+  it("reads every panel through the query cache", () => {
+    /* Four of the record's six panels hand-rolled useEffect + AbortController
+       + local state while the other two used React Query. Tab panels unmount
+       on switch and the strip activates on arrow keys, so the uncached half
+       refired its whole request set per keystroke. */
+    for (const panel of panels) {
+      const source = readWeb(`src/components/task-record/${panel}`);
+      assert.match(source, /useQuery/, `${panel} must read through the query cache`);
+      assert.doesNotMatch(source, /new AbortController\(\)/, `${panel} must not hand-roll its fetch`);
+      assert.match(source, /staleTime/, `${panel} needs a staleness horizon or tab surfing refires it`);
+    }
+  });
+
+  it("offers a way out of a failed panel", () => {
+    // Two panels used to render a dead-end alert and one stayed silent, while
+    // the Files tab beside them offered Retry.
+    for (const panel of ["RecordRuns.tsx", "RecordHistory.tsx", "RecordArtifacts.tsx"]) {
+      const source = readWeb(`src/components/task-record/${panel}`);
+      assert.match(source, /RecordFailure/, `${panel} must offer a retry`);
+      assert.match(source, /refetch\(\)/, `${panel}'s retry must actually refetch`);
+    }
+  });
+
+  it("refines a list in place instead of restarting it", () => {
+    // "Show earlier" and the versions toggle both used to blank the list.
+    for (const panel of ["RecordRuns.tsx", "RecordArtifacts.tsx"]) {
+      assert.match(readWeb(`src/components/task-record/${panel}`), /keepPreviousData/, panel);
+    }
+  });
+});
+
+describe("record surface hygiene", () => {
+  it("wears its own classes, not the retired drawer's", () => {
+    /* The record replaced a drawer and kept wearing its classes, so the
+       sheet named for the retired surface styled the live one and any
+       change to the form drawer silently restyled the record. The form
+       drawer's own three classes are the only ones left. */
+    const DRAWER_OWN = new Set(["task-drawer-form-grid", "task-drawer-next-run", "task-drawer-title-error"]);
+    for (const panel of [
+      "RecordRuns.tsx", "RecordHistory.tsx", "RecordArtifacts.tsx",
+      "RecordResultLine.tsx", "RecordWorkspace.tsx", "TaskRecordPage.tsx",
+    ]) {
+      const borrowed = (readWeb(`src/components/task-record/${panel}`).match(/task-drawer-[a-z-]+/g) ?? [])
+        .filter((name) => !DRAWER_OWN.has(name));
+      assert.deepEqual(borrowed, [], `${panel} borrows the drawer's classes`);
+    }
+  });
+
+  it("mirrors a closing record drawer through one seam", () => {
+    // Three boards open a record drawer; each had written the mirror out by
+    // hand and one had drifted to adjusting it during render.
+    for (const board of ["BacklogPage.tsx", "RoutinesPage.tsx", "ProjectWorkspacePage.tsx"]) {
+      const source = readWeb(`src/components/${board}`);
+      assert.match(source, /useRecordDrawerMirror/, `${board} must mirror through the shared hook`);
+      assert.doesNotMatch(source, /setLastRecord/, `${board} must not keep its own mirror`);
+    }
+  });
+});
+
 describe("record actions", () => {
   const assigned = { assignedAgentId: "agent-1", assignedTeamId: "", routineEnabled: true };
 
@@ -157,6 +224,26 @@ describe("record actions", () => {
     // can be marked done, and a finished one offers nothing.
     assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "review" }), ["block", "done"]);
     assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "done" }), []);
+  });
+
+  it("offers nothing on a task whose project is closed for work", () => {
+    /* An archived or disabled project is a read-only room. The project board
+       already hides Start and Accept there; without this the record drawer
+       riding over that same project still offered Run, Block, Done, Edit and
+       Delete — the rule enforced in one component and bypassed one click
+       away. */
+    const statuses = ["backlog", "assigned", "running", "waiting_for_human", "review", "blocked"] as const;
+    for (const status of statuses) {
+      for (const isRoutine of [true, false]) {
+        assert.deepEqual(
+          recordActions({ ...assigned, isRoutine, status }, { readOnly: true }),
+          [],
+          `${status}/${isRoutine ? "routine" : "task"} must offer nothing in a closed project`,
+        );
+      }
+    }
+    // An open project is unaffected.
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "running" }, { readOnly: false }), ["cancel"]);
   });
 
   it("never offers retry and cancel at once", () => {

@@ -71,10 +71,15 @@ describe("Task assignment discoverability", () => {
       readFile(resolve("web/src/components/task-board/RoutineRecords.tsx"), "utf8"),
     ]);
 
+    /* The backlog form is a shared controller now, so the focus intent lives
+       there rather than on the page that mounts it. */
+    const backlogForm = await readFile(resolve("web/src/hooks/useBacklogTaskForm.ts"), "utf8");
+    assert.match(backlogForm, /setAssignmentFocus\(true\)/);
+    assert.match(routinesSource, /setAssignmentFocus\(true\)/);
+
     for (const source of [backlogSource, routinesSource]) {
       assert.match(source, /onAssign: \(\) => assignTask\(task\)/);
-      assert.match(source, /setAssignmentFocus\(true\)/);
-      assert.match(source, /initialFocus=\{assignmentFocus \? "assignment" : "title"\}/);
+      assert.match(source, /initialFocus=\{(taskForm\.)?assignmentFocus \? "assignment" : "title"\}/);
     }
     for (const records of [backlogRecords, routineRecords]) {
       assert.match(records, /onAssign: \(\) => void/);

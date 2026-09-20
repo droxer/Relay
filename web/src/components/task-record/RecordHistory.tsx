@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskEvents } from "../../api";
+import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
+import { RecordFailure } from "./RecordFailure";
 import { hrefForRoute } from "../../lib/appRoute";
 import { taskHistoryEntries } from "../../lib/taskHistory";
 import { historyEntryLabel, historyTime } from "./taskHistoryLabel";
@@ -21,56 +23,56 @@ import type { RelayTaskEvent } from "../../types";
  */
 export function RecordHistory({
   taskId,
+  live = false,
   onOpenThread,
 }: {
   taskId: string;
+  /** The task is running — the timeline grows while the reader watches it. */
+  live?: boolean;
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const [events, setEvents] = useState<RelayTaskEvent[] | null>(null);
-  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setEvents(null);
-    setFailed(false);
-    listTaskEvents(taskId, {}, controller.signal)
-      .then((response) => setEvents(response.events))
-      .catch(() => {
-        if (!controller.signal.aborted) setFailed(true);
-      });
-    return () => controller.abort();
-  }, [taskId]);
-
+  /* Cached, and polled while the task is actually running. The timeline used
+     to load once per mount and then sit frozen — on the surface whose job is
+     watching a task, with a run ledger polling beside it on the routine's. */
+  const eventsQuery = useQuery({
+    queryKey: ["task-events", taskId],
+    queryFn: ({ signal }) => listTaskEvents(taskId, {}, signal),
+    // See RecordRuns: a tab switch must not refire this on every keystroke.
+    staleTime: RELAY_POLL_INTERVALS_MS.tasks,
+    refetchInterval: live ? RELAY_POLL_INTERVALS_MS.tasks : false,
+  });
+  const events: RelayTaskEvent[] | undefined = eventsQuery.data?.events;
   const entries = events ? taskHistoryEntries(events, taskId) : [];
 
   return (
-    <section className="task-drawer-history" aria-label={t("backlog.history_title")}>
-      <h3 className="task-drawer-artifacts-title">
+    <section className="record-timeline" aria-label={t("backlog.history_title")}>
+      <h3 className="record-panel-title">
         {t("backlog.history_title")}
         {entries.length > 0 ? (
-          <span className="task-drawer-artifacts-count tnum">{entries.length}</span>
+          <span className="record-panel-count tnum">{entries.length}</span>
         ) : null}
       </h3>
-      {failed ? (
-        <p className="task-drawer-artifacts-empty" role="alert">{t("backlog.history_error")}</p>
-      ) : events === null ? (
-        <p className="task-drawer-artifacts-empty" role="status" aria-live="polite">{t("backlog.history_loading")}</p>
+      {eventsQuery.isError ? (
+        <RecordFailure message={t("backlog.history_error")} onRetry={() => void eventsQuery.refetch()} />
+      ) : !events ? (
+        <p className="record-panel-note" role="status" aria-live="polite">{t("backlog.history_loading")}</p>
       ) : entries.length === 0 ? (
-        <p className="task-drawer-artifacts-empty">{t("backlog.history_empty")}</p>
+        <p className="record-panel-note">{t("backlog.history_empty")}</p>
       ) : (
-        <ol className="task-drawer-history-list">
+        <ol className="record-timeline-list">
           {entries.map((entry) => {
             const sessionId = entry.sessionId;
             return (
-            <li key={entry.id} className="task-drawer-history-entry">
-              <span className="task-drawer-history-time tnum">{historyTime(entry.timestamp, i18n.language)}</span>
-              <span className="task-drawer-history-label">
+            <li key={entry.id} className="record-timeline-entry">
+              <span className="record-timeline-time tnum">{historyTime(entry.timestamp, i18n.language)}</span>
+              <span className="record-timeline-label">
                 {historyEntryLabel(entry, t)}
               </span>
               {sessionId ? (
                 <a
-                  className="task-drawer-artifact-download"
+                  className="record-inline-action"
                   href={hrefForRoute("main", sessionId)}
                   onClick={(event) => {
                     if (!onOpenThread) return;

@@ -182,7 +182,11 @@
     "tasks_accept": "驗收成果",
     "tasks_add_team": "請先在團隊中新增已啟用的專案成員。",
     "tasks_lane_empty": "暫無任務",
-    "tasks_load_failed": "無法載入專案任務。"
+    "tasks_load_failed": "無法載入專案任務。",
+    "project": "專案",
+    "tasks_team_subtitle": "誰在這個專案中工作，以及各自負責什麼。",
+    "tasks_workspace_subtitle": "這個專案的工作產出的檔案。",
+    "tasks_activities_subtitle": "這個專案中正在進行的會話。"
   },
   "thread": {
     "search_placeholder": "搜尋對話…",
@@ -250,7 +254,12 @@
       "completed": "已完成",
       "failed": "已失敗",
       "cancelled": "已取消"
-    }
+    },
+    "band_label": "會話檔案",
+    "band_project": "專案",
+    "band_agent": "智能體",
+    "band_computer": "電腦",
+    "band_updated": "更新時間"
   },
   "composer": {
     "placeholder": "傳送訊息給智能體…",

@@ -758,6 +758,9 @@ export function App() {
         ) : (
           <ThreadsView
             directoryMode={route === "projects" ? "projects" : "threads"}
+            tasks={tasks}
+            teams={teams}
+            currentUser={user}
             filteredThreads={directoryThreads}
             projects={route === "projects" ? directoryProjects : []}
             selectedProjectId={route === "projects" ? routedProjectId : null}

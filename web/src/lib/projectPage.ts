@@ -62,10 +62,24 @@ export function projectMemberState(member: ProjectMember, agent?: EmployeeAgent)
   } as const;
 }
 
+/**
+ * Whether a project is closed for work.
+ *
+ * An archived or disabled project is a read-only room: its conversations and
+ * files stay readable, but nothing new may run in it. Every surface that can
+ * act on something belonging to a project asks HERE — the board used to
+ * decide it inline, which left the rule enforced in one component and
+ * bypassed by every other route to the same task.
+ */
+export function projectReadOnly(project: ProjectRecord | null | undefined): boolean {
+  if (!project) return false;
+  return Boolean(project.archivedAt) || !project.enabled;
+}
+
 export function projectPageActions(project: ProjectRecord) {
   return {
     settings: true,
-    newThread: !project.archivedAt && project.enabled,
+    newThread: !projectReadOnly(project),
   } as const;
 }
 

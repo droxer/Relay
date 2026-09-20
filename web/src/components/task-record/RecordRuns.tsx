@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskRuns } from "../../api";
+import { RecordFailure } from "./RecordFailure";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { formatRunDuration, runDurationMs, runOutcome, type RunOutcome } from "../../lib/taskRuns";
 import type { TaskRun } from "../../types";
@@ -63,45 +65,32 @@ export function RecordRuns({
   onOpenRun: (runTaskId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const [runs, setRuns] = useState<TaskRun[] | null>(null);
   const [limit, setLimit] = useState(RUN_PAGE_SIZE);
-  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let cancelled = false;
+  /* Through the query cache, like every other read in the app: a tab switch
+     re-renders this panel from cache instead of refetching the ledger, and
+     "show earlier" widens the ask without the list going back to a spinner
+     (`keepPreviousData`) — it used to blank itself on every click. */
+  const runsQuery = useQuery({
+    queryKey: ["task-runs", taskId, limit],
+    queryFn: ({ signal }) => listTaskRuns(taskId, { limit }, signal),
+    placeholderData: keepPreviousData,
+    // Tab panels unmount on switch and the tab strip activates on arrow keys,
+    // so without a staleness horizon surfing the tabs refires every panel's
+    // request per keystroke. One poll interval is how fresh the rest of the
+    // record is anyway.
+    staleTime: RELAY_POLL_INTERVALS_MS.tasks,
+    // A routine whose last run finished in March has nothing to poll for; one
+    // with a run in flight is watched until it lands.
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((run) => !isTerminal(run)) ? RELAY_POLL_INTERVALS_MS.tasks : false,
+  });
+  const runs = runsQuery.data?.runs;
 
-    const load = () => {
-      listTaskRuns(taskId, { limit }, controller.signal)
-        .then((response) => {
-          if (cancelled) return;
-          setRuns(response.runs);
-          // A routine whose last run finished in March has nothing to poll
-          // for; one with a run in flight is watched until it lands.
-          if (response.runs.some((run) => !isTerminal(run))) {
-            timer = setTimeout(load, RELAY_POLL_INTERVALS_MS.tasks);
-          }
-        })
-        .catch(() => {
-          if (!cancelled && !controller.signal.aborted) setFailed(true);
-        });
-    };
-
-    setRuns(null);
-    setFailed(false);
-    load();
-    return () => {
-      cancelled = true;
-      controller.abort();
-      if (timer) clearTimeout(timer);
-    };
-  }, [taskId, limit]);
-
-  if (failed) {
-    return <p className="record-empty" role="alert">{t("backlog.runs.error")}</p>;
+  if (runsQuery.isError) {
+    return <RecordFailure message={t("backlog.runs.error")} onRetry={() => void runsQuery.refetch()} />;
   }
-  if (runs === null) {
+  if (!runs) {
     return <p className="record-empty" role="status" aria-live="polite">{t("backlog.runs.loading")}</p>;
   }
   if (runs.length === 0) {
@@ -124,7 +113,12 @@ export function RecordRuns({
       {/* The runs endpoint caps a page and has no cursor, so "earlier" is a
           larger ask rather than a next page. */}
       {runs.length >= limit ? (
-        <button type="button" className="record-run-more" onClick={() => setLimit((current) => current + RUN_PAGE_SIZE)}>
+        <button
+          type="button"
+          className="record-run-more"
+          disabled={runsQuery.isFetching}
+          onClick={() => setLimit((current) => current + RUN_PAGE_SIZE)}
+        >
           {t("record.runs_show_earlier")}
         </button>
       ) : null}

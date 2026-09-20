@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { artifactRenderMode } from "../../lib/artifactPreview";
 import {
@@ -30,6 +30,7 @@ import {
 } from "../icons";
 import { Button } from "@/components/ui/button";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
+import { useUrlSearchState } from "@/hooks/useUrlSearchState";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
@@ -78,10 +79,38 @@ export function ThreadSpacePanel({
   // source view onto a file the user has not looked at yet.
   const [view, setView] = useState<ArtifactView>("preview");
 
-  // The tab is per-thread: switching threads re-derives the default rather
-  // than carrying a solo thread's own-files choice onto a project thread.
-  const [tab, setTab] = useState<SpaceTab>(() => defaultSpaceTab(projectId));
-  useEffect(() => setTab(defaultSpaceTab(projectId)), [projectId, sessionId]);
+  /* The tab lives in the URL beside `?space=1&artifact=`, so the whole panel
+     is one addressable state: a project workspace view can be linked, not
+     only an open artifact. It stays per-thread all the same — switching
+     threads re-derives the default rather than carrying a solo thread's
+     own-files choice onto a project thread. */
+  /* Stable identities: the reset effect below depends on the setter, and an
+     inline parse/serialize would rebuild it every render into a loop. */
+  const parseTab = useCallback(
+    (value: string | null): SpaceTab =>
+      value === "project" || value === "thread" ? value : defaultSpaceTab(projectId),
+    [projectId],
+  );
+  const serializeTab = useCallback(
+    (value: SpaceTab): string | null => (value === "project" ? value : null),
+    [],
+  );
+  const [tab, setTab] = useUrlSearchState<SpaceTab>(
+    "spaceTab",
+    defaultSpaceTab(projectId),
+    parseTab,
+    serializeTab,
+  );
+  /* Re-derive the default when the reader moves to ANOTHER thread — never on
+     arrival. Resetting on mount too would overwrite the tab a pasted link
+     just asked for, which is the whole reason the tab is in the URL. */
+  const threadKey = `${sessionId}\u0000${projectId ?? ""}`;
+  const lastThreadKey = useRef(threadKey);
+  useEffect(() => {
+    if (lastThreadKey.current === threadKey) return;
+    lastThreadKey.current = threadKey;
+    setTab(defaultSpaceTab(projectId));
+  }, [threadKey, projectId, setTab]);
   const selectedId = selected?.artifact.id ?? null;
   useEffect(() => setView("preview"), [selectedId]);
   const renderMode = selected ? artifactRenderMode(selected.artifact) : "none";

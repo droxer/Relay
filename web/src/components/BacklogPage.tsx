@@ -3,10 +3,11 @@
 
 import { TASK_FLOW_STAGES } from "../lib/taskFlow";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
-import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
+import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -22,7 +23,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { readDraggedTaskId, TASK_DRAG_MEDIA_TYPE, taskDropRejection } from "../lib/taskDrag";
-import { emptyBacklogForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type BacklogTaskFormState } from "../lib/taskBoardForm";
+import { emptyBacklogForm, taskStartMutationInput } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { InlineTaskCreate } from "./task-board/InlineTaskCreate";
@@ -114,12 +115,23 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
   // opening a record and coming back, and it is a link somebody can paste.
   const [filters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
   const [view, setView] = useState<BacklogView>("board");
-  const [form, setForm] = useState<BacklogTaskFormState | null>(null);
-  const [formBaseline, setFormBaseline] = useState<BacklogTaskFormState | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [assignmentFocus, setAssignmentFocus] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  /* The form is a shared controller, not this board's own: the project board
+     opens the same record drawer and edits through the same form. */
+  const {
+    form,
+    setForm,
+    open: drawerOpen,
+    assignmentFocus,
+    saving,
+    deleting,
+    openForm: openTaskForm,
+    editTask,
+    assignTask,
+    release: releaseTaskForm,
+    requestClose: closeTaskForm,
+    submit: submitTask,
+    remove: deleteBacklog,
+  } = useBacklogTaskForm({ currentUser });
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -131,11 +143,8 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
      routines board uses, in both views here. The id is mirrored so the
      exiting drawer still has its record after the route clears; `onClosed`
      releases the mirror. */
-  const [lastRecordId, setLastRecordId] = useState<string | null>(null);
-  useEffect(() => {
-    if (recordTaskId) setLastRecordId(recordTaskId);
-  }, [recordTaskId]);
-  const drawerRecordId = recordTaskId ?? lastRecordId;
+  const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
+  const drawerRecordId = recordMirror.record;
   const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
   const boardRef = useRef<HTMLDivElement | null>(null);
   const startInFlight = useRef<string | null>(null);
@@ -152,8 +161,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
     },
     onCancel: endTaskDrag,
   });
-  const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
-  const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
   /* Routine definitions travel in the same list as their occurrences, so the
      board can name a task's parent routine without another request. */
@@ -236,100 +243,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
       return true;
     } catch {
       return false;
-    }
-  }
-
-  function openTaskForm(next: BacklogTaskFormState) {
-    setForm(next);
-    setFormBaseline(next);
-    setDrawerOpen(true);
-  }
-
-  // Quick-assign entry from a card/row: same drawer, focus on the picker.
-  function assignTask(task: RelayTaskListItem) {
-    setAssignmentFocus(true);
-    editTask(task);
-  }
-
-  // The drawer calls this after its exit animation completes — only then is
-  // the form released, so every exit (save, delete, discard) animates out.
-  function releaseTaskForm() {
-    setForm(null);
-    setFormBaseline(null);
-    setAssignmentFocus(false);
-  }
-
-  function dismissTaskForm() {
-    setDrawerOpen(false);
-  }
-
-  async function closeTaskForm() {
-    if (!drawerOpen || saving || deleting) return;
-    if (!(await confirmDiscardChanges())) return;
-    dismissTaskForm();
-  }
-
-  function editTask(task: RelayTaskListItem) {
-    openTaskForm({
-      variant: "backlog",
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      priority: task.priority,
-      status: task.status,
-      acceptancePolicy: task.acceptancePolicy ?? "automatic",
-      startedAt: task.startedAt,
-      dueDate: task.dueDate ?? "",
-      assigneeEmployeeId: task.assigneeEmployeeId ?? task.ownerEmployeeId ?? currentUser.employeeId ?? currentUser.username,
-      assignedAgent: task.assignedAgent ?? "",
-      assignedAgentId: task.assignedAgentId ?? "",
-      assignedTeamId: task.assignedTeamId ?? "",
-    });
-  }
-
-  async function submitTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!form || !form.title.trim()) return;
-    setSaving(true);
-    try {
-      const payload = {
-        title: form.title.trim(),
-        description: form.description,
-        priority: form.priority,
-        ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
-        acceptancePolicy: form.acceptancePolicy ?? "human",
-        dueDate: form.dueDate,
-        ...taskAssignmentMutationFields(form),
-      };
-      if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else await createTaskMutation.mutateAsync(payload);
-      dismissTaskForm();
-    } catch {
-      // mutation onError surfaces a toast; keep the drawer open for retry.
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function deleteBacklog() {
-    if (!form?.id || deleting) return;
-    const confirmed = await confirm({
-      title: t("backlog.delete_title"),
-      message: t("backlog.delete_body", { title: form.title }),
-      confirmLabel: t("backlog.delete_task"),
-      cancelLabel: t("dialog.cancel"),
-      tone: "danger",
-    });
-    if (!confirmed) return;
-    setDeleting(true);
-    try {
-      await deleteTaskMutation.mutateAsync({ taskId: form.id });
-      dismissTaskForm();
-      announce({ message: t("backlog.toast_deleted"), tone: "success" });
-    } catch {
-      // mutation onError surfaces a toast; keep the drawer open for retry.
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -759,7 +672,7 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
           drawer={{
             open: Boolean(recordTaskId),
             onClose: () => onOpenRecord(null),
-            onClosed: () => setLastRecordId(null),
+            onClosed: recordMirror.release,
           }}
           onEdit={editTask}
           onOpenThread={onOpenThread}

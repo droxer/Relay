@@ -12,11 +12,16 @@ import type { RelayTaskListItem } from "../../types.js";
  * detail surface for both boards: the backlog's peek drawer carried them,
  * and retiring the peek could not retire the actions with it.
  */
-export type RecordAction = "run" | "retry" | "cancel" | "block" | "unblock" | "done";
+export type RecordAction = "run" | "retry" | "cancel" | "block" | "unblock" | "done" | "delete";
 
 export function recordActions(
   task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineEnabled" | "assignedAgentId" | "assignedTeamId">,
+  /** Set when the task belongs to a project that is closed for work. */
+  options?: { readOnly?: boolean },
 ): readonly RecordAction[] {
+  // A read-only room offers no actions at all — see `projectReadOnly`. The
+  // record is still fully readable; it just cannot be acted on.
+  if (options?.readOnly) return [];
   const assigned = Boolean(task.assignedAgentId || task.assignedTeamId);
   if (task.status === "running") return ["cancel"];
   if (task.isRoutine) return assigned && task.routineEnabled ? ["run"] : [];

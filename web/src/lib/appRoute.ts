@@ -361,6 +361,12 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     if (source.get("space") === "1") {
       target.set("space", "1");
       copyParam(source, target, "artifact");
+      /* The panel's own tab, for the same reason as the selection above: half
+         the panel's state being addressable meant a project workspace view
+         could not be linked at all. "thread" is the solo default and never
+         advertises itself. */
+      const spaceTab = source.get("spaceTab");
+      if (spaceTab === "project") target.set("spaceTab", spaceTab);
     }
   } else if (head === "projects" && entityId && rest.length === 0) {
     const tab = source.get("tab") || "tasks";
@@ -368,6 +374,17 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     if (tab === "workspace") {
       copyParam(source, target, "path");
       copyParam(source, target, "item");
+    }
+    /* A project task opens as a drawer over the project rather than sending
+       the reader to the backlog board, so the open record is addressable
+       without leaving the project. It belongs to the tasks tab; no other tab
+       has a board to open it over. */
+    if (tab === "tasks") {
+      copyParam(source, target, "task");
+      const recordTab = source.get("recordTab");
+      if (target.has("task") && (recordTab === "definition" || recordTab === "files")) {
+        target.set("recordTab", recordTab);
+      }
     }
   } else if (head === "backlog" && entityId && rest.length === 0) {
     copyRecordTab(source, target, TASK_RECORD_TABS, "activity");

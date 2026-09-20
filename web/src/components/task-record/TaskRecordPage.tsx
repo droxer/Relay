@@ -2,8 +2,10 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useProjectLookup } from "../../hooks/useProjectLookup";
 import { useUrlSearchState } from "../../hooks/useUrlSearchState";
 import { pathForAppState } from "../../lib/appRoute";
+import { projectReadOnly } from "../../lib/projectPage";
 import { navigateRecordBack, recordBackHref } from "../../lib/recordBack";
 import type { RelayTaskListItem } from "../../types";
 import { PageHeader } from "../PageHeader";
@@ -55,6 +57,7 @@ export function TaskRecordPage({
   parentRoutine,
   busyAction,
   presentation = "page",
+  tabSearchKey = "tab",
   onOpenThread,
   onOpenRun,
   onRun,
@@ -72,6 +75,7 @@ export function TaskRecordPage({
   busyAction: RecordAction | null;
   /** "drawer" drops the page header; the surrounding drawer carries it. */
   presentation?: "page" | "drawer";
+  tabSearchKey?: "tab" | "recordTab";
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
@@ -86,16 +90,30 @@ export function TaskRecordPage({
   const tabs = recordTabs(variant);
   const fallbackTab = defaultRecordTab(variant);
   const [tab, setTab] = useUrlSearchState<RecordTab>(
-    "tab",
+    tabSearchKey,
     fallbackTab,
     (value) => parseRecordTab(value, variant),
     (value) => (value === fallbackTab ? null : value),
     "push",
   );
 
+  /* A task opened from a project arrives with no other trace of it — the
+     band is where that coordinate belongs. The same lookup answers whether
+     the project is closed for work, which is what the actions below read. */
+  const projectOf = useProjectLookup();
+  const project = projectOf(task.projectId);
+  const projectName = project?.name;
+  const readOnly = projectReadOnly(project);
   const facts = useMemo<RecordFact[]>(
-    () => recordBandFacts(task, variant, runningRoutineIds, i18n.language, t),
-    [task, variant, runningRoutineIds, i18n.language, t],
+    () => recordBandFacts(
+      task,
+      variant,
+      runningRoutineIds,
+      i18n.language,
+      t,
+      task.projectId ? { id: task.projectId, name: projectName || task.projectId } : undefined,
+    ),
+    [task, variant, runningRoutineIds, i18n.language, t, projectName],
   );
 
   const listPath = pathForAppState({
@@ -127,6 +145,7 @@ export function TaskRecordPage({
     <TaskRecordActions
       task={task}
       variant={variant}
+      readOnly={readOnly}
       busyAction={busyAction}
       onRun={onRun}
       onCancel={onCancel}
@@ -203,7 +222,7 @@ export function TaskRecordPage({
                 of how it got there. */}
             <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} />
             <RecordResultLine taskId={task.id} onOpenThread={onOpenThread} />
-            <RecordHistory taskId={task.id} onOpenThread={onOpenThread} />
+            <RecordHistory taskId={task.id} live={task.status === "running"} onOpenThread={onOpenThread} />
           </TabsContent>
         )}
         <TabsContent value="definition">
