@@ -2214,7 +2214,14 @@ class DaemonNodeRegistry:
             "run.failed": "failed",
             "run.cancelled": "cancelled",
         }.get(event["type"])
-        if record.get("status") != "dispatched":
+        late_output = (
+            event.get("replayed") is True
+            and event["type"] in {"run.output", "run.output.batch", "run.collaboration"}
+            and record.get("status") in {"completed", "failed", "cancelled"}
+        )
+        if late_output and (not event.get("leaseId") or event["leaseId"] != record.get("leaseId")):
+            raise PermissionError("Replayed output must match the completed command lease.")
+        if record.get("status") != "dispatched" and not late_output:
             command = record["command"]
             replay_matches = (
                 record.get("nodeId") == sandbox_id
@@ -2260,7 +2267,8 @@ class DaemonNodeRegistry:
             ),
             "startedAt": record.get("dispatchedAt", record["createdAt"]),
         }
-        self.active_commands[event["commandId"]] = active
+        if not late_output:
+            self.active_commands[event["commandId"]] = active
         if (
             active["sandboxId"] != sandbox_id
             or active["runId"] != event["runId"]
@@ -2347,7 +2355,8 @@ class DaemonNodeRegistry:
                 self._ensure_agent_started_for_command(run_request, command)
             self._record_handoff_delivery(command, "running")
             self._record_skipped_skills(command, event.get("skillsSkipped"))
-            self._note_run_progress(command)
+            if not late_output:
+                self._note_run_progress(command)
             return
         if event["type"] == "run.output":
             seen = self._output_sequences_for_run(event["sessionId"], event["runId"])
@@ -2370,7 +2379,8 @@ class DaemonNodeRegistry:
             )
             seen[event["stream"]] = event["sequence"]
             self._append_run_output(event["runId"], event["text"])
-            self._note_run_progress(command)
+            if not late_output:
+                self._note_run_progress(command)
             return
         if event["type"] == "run.output.batch":
             seen = self._output_sequences_for_run(event["sessionId"], event["runId"])
@@ -2400,7 +2410,8 @@ class DaemonNodeRegistry:
             seen.update(candidate_seen)
             for entry in accepted_entries:
                 self._append_run_output(event["runId"], entry["text"])
-            self._note_run_progress(command)
+            if not late_output:
+                self._note_run_progress(command)
             return
         if event["type"] == "run.collaboration":
             seen = self._output_sequences_for_run(event["sessionId"], event["runId"])
@@ -2432,7 +2443,8 @@ class DaemonNodeRegistry:
                 hydrate_events=False,
             )
             seen["collaboration"] = event["sequence"]
-            self._note_run_progress(command)
+            if not late_output:
+                self._note_run_progress(command)
             return
         accepted = False
         if event["type"] == "run.completed":

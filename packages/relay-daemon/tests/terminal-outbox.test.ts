@@ -56,7 +56,7 @@ test("output survives restart and is replayed in sequence before the terminal re
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("replay does not skip failed output to deliver later output or completion", async () => {
+test("replay does not skip failed output but still attempts terminal delivery", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-output-order-"));
   try {
     const outbox = new TerminalOutbox(root);
@@ -65,7 +65,19 @@ test("replay does not skip failed output to deliver later output or completion",
     outbox.retain({ type: "run.completed", commandId: "cmd", leaseId: "lease" });
     let attempts = 0;
     await outbox.replay(async () => { attempts++; return new Response("offline", { status: 503 }); }, "http://backend/events", "token");
-    assert.equal(attempts, 1);
+    assert.equal(attempts, 2);
     assert.equal(outbox.pending().length, 3);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("output quota preserves existing evidence and still allows terminal results", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-output-quota-"));
+  try {
+    const completed: string[] = [];
+    const outbox = new TerminalOutbox(root, id => completed.push(id), 1);
+    assert.throws(() => outbox.retain({ type: "run.output", commandId: "cmd", sequence: 0, text: "full" }), /limit exceeded/);
+    outbox.retain({ type: "run.failed", commandId: "cmd", error: "storage limit" });
+    assert.deepEqual(completed, ["cmd"]);
+    assert.equal(outbox.pending().length, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

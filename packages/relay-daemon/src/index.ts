@@ -1071,8 +1071,7 @@ async function executeCommand(
       });
       return { stream, text, sequence };
     });
-    enqueueOutputPost(
-      () => postJsonWithRetry(fetchFn, eventUrl, {
+    const event = {
           type: "run.output.batch",
           commandId: command.id,
           ...commandLeaseEventFields(command),
@@ -1080,7 +1079,14 @@ async function executeCommand(
           runId: command.runId,
           agent,
           entries,
-        } satisfies DaemonNodeEvent, token, signal),
+        } satisfies DaemonNodeEvent;
+    if (outputPostFailure) return;
+    try { persistTerminalEvent(fetchFn, event); } catch (error) {
+      outputPostFailure = error instanceof Error ? error : new Error(String(error));
+      return;
+    }
+    enqueueOutputPost(
+      () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
       { agent, sequence: entries[0]?.sequence },
       entries.reduce((total, entry) => total + Buffer.byteLength(entry.text), 0),
     );
@@ -1097,8 +1103,7 @@ async function executeCommand(
       // them in the agent's JSONL stream.
       outputBuffer.flush();
       const sequence = outputSequence++;
-      enqueueOutputPost(
-        () => postJsonWithRetry(fetchFn, eventUrl, {
+      const event = {
             type: "run.collaboration",
             commandId: command.id,
             ...commandLeaseEventFields(command),
@@ -1107,7 +1112,14 @@ async function executeCommand(
             agent,
             collaboration,
             sequence,
-          } satisfies DaemonNodeEvent, token, signal),
+          } satisfies DaemonNodeEvent;
+      if (outputPostFailure) return;
+      try { persistTerminalEvent(fetchFn, event); } catch (error) {
+        outputPostFailure = error instanceof Error ? error : new Error(String(error));
+        return;
+      }
+      enqueueOutputPost(
+        () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
         { agent, sequence },
         Buffer.byteLength(JSON.stringify(collaboration)),
       );

@@ -7651,7 +7651,7 @@ def test_late_output_from_completed_lease_is_recovered_without_reactivating_run(
             identity = {"commandId": command["id"], "sessionId": command["sessionId"],
                         "runId": command["runId"], "agent": "codex", "leaseId": command["leaseId"]}
             registry.handle_event("sbx_alice", {**identity, "type": "run.failed", "error": "connection lost", "exitCode": 1}, "node_token")
-            event = {**identity, "type": "run.output.batch", "entries": [{"stream": "stdout", "text": "recovered output", "sequence": 0}]}
+            event = {**identity, "type": "run.output.batch", "replayed": True, "entries": [{"stream": "stdout", "text": "recovered output", "sequence": 0}]}
             registry.handle_event("sbx_alice", event, "node_token")
             registry.handle_event("sbx_alice", event, "node_token")
             outputs = [e for e in sessions.get_session(command["sessionId"])["events"] if e["type"] == "agent.output.batch"]
