@@ -14,9 +14,9 @@ import type { RecordFact } from "../workspace/RecordBand";
  * clicked a row still sees what they clicked. Nothing in a tab may restate
  * one of these — see `RecordBand`.
  *
- * It lives in its own module because two surfaces state it: the record page
- * and the board's peek drawer. A second hand-written facts list is how those
- * two end up disagreeing about what a task's status is.
+ * It lives in its own module so the record derives this list once, in one
+ * place — a second hand-written facts list is how two surfaces end up
+ * disagreeing about what a task's status is.
  */
 export function recordBandFacts(
   task: RelayTaskListItem,

@@ -375,7 +375,7 @@
 /* Toolbar clusters — dispatch (assign + start) · navigation · state change —
    separated by a hairline so it reads as distinct groups of actions rather
    than one undifferentiated strip. The tile carries no action bar at all;
-   these groups live on the list rows and in the peek drawer. */
+   these groups live on the list rows. */
 .backlog-action-group {
   display: inline-flex;
   align-items: center;
@@ -395,34 +395,14 @@
    simply never applies. That is how the primary Start action lost its cobalt
    fill (it rendered --surface-0 at weight 500). The neutral actions get their
    chip look from variant="outline". */
-.task-peek-actions button:not([data-variant="icon"]) {
-  min-height: var(--control-h-xs);
-
-  border-radius: var(--r-2);
-  padding: 0 var(--sp-2);
-  cursor: pointer;
-  touch-action: manipulation;
-}
 
 /* Disabled comes from the button base (opacity-50 + pointer-events-none).
    A local 0.45 + cursor:not-allowed made these rows fade one step harder than
    every other disabled button, and the cursor never rendered anyway —
    pointer-events-none means the element receives no hover to style. */
 
-/* Filled only while actionable; a disabled start recedes to a ghost icon so
-   Done/running rows don't scatter faded action blocks. The fill itself comes
-   from the `default` button variant the call site already selects — see
-   BacklogPage's variant={startDisabled ? "ghost" : "default"}.
-
-   A restatement of the fill was removed from this block once before, for the
-   right reason. But the blanket `button:not([data-variant="icon"])` rule above
-   still forced background/color/font onto EVERY non-icon button in the group,
-   the primary included — so the variant was still outranked, and the cobalt
-   read as --surface-0 instead. Both halves have to stay paint-free for the
-   call site's variant to survive. */
 
 /* Icon-only action — square button, glyph centered, label in the tooltip. */
-.task-peek-actions .backlog-action-icon,
 .backlog-row-actions .backlog-action-icon {
   display: inline-flex;
   align-items: center;
@@ -450,13 +430,11 @@
    the icon/text only; status hues never fill, so the wash stays the neutral
    row hover. Reopen reuses the neutral hover since reopening is
    constructive. */
-.task-peek-actions .backlog-action-done:hover:not(:disabled),
 .backlog-row-actions .backlog-action-done:hover:not(:disabled) {
   background: var(--row-hover);
   color: var(--ok);
 }
 
-.task-peek-actions .backlog-action-block:hover:not(:disabled),
 .backlog-row-actions .backlog-action-block:hover:not(:disabled) {
   background: var(--row-hover);
   color: var(--err);

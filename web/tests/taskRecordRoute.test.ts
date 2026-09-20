@@ -146,9 +146,17 @@ describe("record actions", () => {
     assert.deepEqual(recordActions({ ...assigned, isRoutine: true, status: "running" }), ["cancel"]);
   });
 
-  it("offers a refused dispatch a retry", () => {
-    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "blocked" }), ["retry"]);
-    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "assigned" }), ["retry"]);
+  it("offers a refused dispatch a retry, and the state actions beside it", () => {
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "blocked" }), ["retry", "unblock"]);
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "assigned" }), ["retry", "block"]);
+  });
+
+  it("carries the retired peek's state actions", () => {
+    // Block/unblock and mark-done moved here when the record drawer became
+    // the backlog's one detail surface; a review record is the only one that
+    // can be marked done, and a finished one offers nothing.
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "review" }), ["block", "done"]);
+    assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "done" }), []);
   });
 
   it("never offers retry and cancel at once", () => {
@@ -167,7 +175,7 @@ describe("record actions", () => {
   it("will not dispatch a record that has nobody to dispatch to", () => {
     const unassigned = { assignedAgentId: "", assignedTeamId: "", routineEnabled: true };
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: true, status: "backlog" }), []);
-    assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), []);
+    assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), ["unblock"]);
     // A paused routine is not run by a button either.
     assert.deepEqual(
       recordActions({ ...assigned, routineEnabled: false, isRoutine: true, status: "backlog" }),

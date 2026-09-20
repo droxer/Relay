@@ -12,12 +12,9 @@ describe("routine start button", () => {
       resolve("web/src/components/task-board/RoutineRecords.tsx"),
       "utf8",
     );
-    // The backlog board and the lists own their own action clusters, and the
-    // split of backlog.css put them in different sheets — both still agree.
-    const [boardStyles, listStyles] = await Promise.all([
-      readFile(resolve("web/src/styles/task-status.css"), "utf8"),
-      readFile(resolve("web/src/styles/backlog-list.css"), "utf8"),
-    ]);
+    // The backlog list owns the row action cluster; the split of backlog.css
+    // put it in its own sheet.
+    const listStyles = await readFile(resolve("web/src/styles/backlog-list.css"), "utf8");
     const usages = source.match(/<RoutineStartButton\b/g) ?? [];
 
     assert.equal(usages.length, 1);
@@ -37,7 +34,6 @@ describe("routine start button", () => {
     assert.doesNotMatch(source, /<RoutineStartButton[\s\S]*?variant="default"/);
     assert.match(source, /className="backlog-action-primary backlog-action-icon"/);
     assert.match(listStyles, /\.backlog-row-actions \.backlog-action-primary \{[\s\S]*?color: var\(--action\)/);
-    assert.match(boardStyles, /\.task-peek-actions button:not\(\[data-variant="icon"\]\)/);
     assert.match(listStyles, /\.backlog-row-actions button:not\(\[data-variant="icon"\]\)/);
   });
 });

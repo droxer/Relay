@@ -16,7 +16,7 @@ import {
 } from "../icons";
 import { dueTone } from "../../lib/backlog";
 import { taskResultLine } from "../../lib/taskResult";
-import { taskExceptions, taskWorkAgeDays } from "../../lib/taskPeek";
+import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
 import { RoutineOriginBadge } from "./RoutineOriginBadge";
 import { taskRef } from "../../lib/taskRef";
 import { pathForAppState } from "../../lib/appRoute";
@@ -74,7 +74,7 @@ export function BacklogTaskCard({
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   onTouchStart: (event: TouchEvent<HTMLElement>) => void;
-  /** Opens the peek. The title is a destination now, not a form. */
+  /** Opens the record drawer. The title is a destination now, not a form. */
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
@@ -97,9 +97,9 @@ export function BacklogTaskCard({
     >
       {/* The card is a tile: a title and one facts line. Everything else the
           record carries — prose, exceptions, provenance, outcome, actions —
-          is one click away in the peek; a lane of tiles is a scanning
-          surface, not seven small dossiers. The checkbox holds the control
-          gutter (a selection control that moves with the content is
+          is one click away in the record drawer; a lane of tiles is a
+          scanning surface, not seven small dossiers. The checkbox holds the
+          control gutter (a selection control that moves with the content is
           unusable) and the title and facts line share one left edge. */}
       <div className="backlog-card-head">
         <TaskSelectCheckbox
@@ -378,13 +378,11 @@ export function BacklogTaskRow({
 
 /**
  * The exception line: why this task is not simply moving. The derivation is
- * shared (`taskExceptions` in lib/taskPeek) — the list row and the peek
- * drawer render the same list, so the two surfaces cannot disagree about
- * whether a task is blocked or why.
+ * shared (`taskExceptions` in lib/taskExceptions), so the row cannot
+ * disagree with the record about whether a task is blocked or why.
  *
- * Exported for the peek drawer. Nothing to say is nothing to draw: the
- * element used to render empty, and an empty flex row still carries its own
- * margin.
+ * Nothing to say is nothing to draw: the element used to render empty, and
+ * an empty flex row still carries its own margin.
  */
 export function TaskFlowDetails({ task, execution }: { task: RelayTaskListItem; execution?: RelaySession["execution"] }) {
   const { t } = useTranslation();

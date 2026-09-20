@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { BacklogTaskRow } from "../src/components/task-board/BacklogRecords";
-import { TaskPeekDrawer } from "../src/components/task-board/TaskPeekDrawer";
+import { TaskRecordActions } from "../src/components/task-record/TaskRecordActions";
 import type { RelayTaskListItem } from "../src/types";
 
 const blockedTask = {
@@ -24,15 +24,16 @@ it("offers an explicit retry for a blocked assigned task on the list row", () =>
 });
 
 /* The board card is a tile and carries no actions — the retry moved with the
-   rest of the action bar into the peek drawer. */
-it("offers an explicit retry for a blocked assigned task in the peek drawer", () => {
-  const onStart = vi.fn();
-  render(<TaskPeekDrawer open task={blockedTask} canDiscuss={false}
-    starting={false} onStart={onStart} onEdit={vi.fn()} onAssign={vi.fn()}
-    onClose={vi.fn()} onOpenRecord={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()} />);
-  expect(onStart).not.toHaveBeenCalled();
-  const retry = screen.getByRole("button", { name: "backlog.retry" });
+   rest of the action bar into the record drawer, where `recordActions`
+   derives it from the task's own state. */
+it("offers an explicit retry for a blocked assigned task on the record", () => {
+  const onRun = vi.fn();
+  render(<TaskRecordActions task={blockedTask} variant="task" busyAction={null}
+    onRun={onRun} onCancel={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()}
+    onEdit={vi.fn()} onDelete={vi.fn()} />);
+  expect(onRun).not.toHaveBeenCalled();
+  const retry = screen.getByRole("button", { name: "record.retry_run" });
   expect((retry as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(retry);
-  expect(onStart).toHaveBeenCalledTimes(1);
+  expect(onRun).toHaveBeenCalledTimes(1);
 });

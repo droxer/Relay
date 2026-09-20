@@ -7,7 +7,7 @@ import {
   taskBlocker,
   taskExceptions,
   taskWorkAgeDays,
-} from "../src/lib/taskPeek.js";
+} from "../src/lib/taskExceptions.js";
 import type { RelaySession, RelayTask } from "../src/types.js";
 
 function task(input: Partial<RelayTask> & { id: string; title: string }): RelayTask {
@@ -136,8 +136,8 @@ describe("taskExceptions", () => {
 
 /* The card is a tile now: a title and one facts line. Everything it used to
    carry — the description, the exception line, the routine badge, the file
-   count, the ref, and the four-icon action bar — moved into the peek drawer,
-   and these assertions are what stops any of it drifting back. */
+   count, the ref, and the action bar — moved into the record drawer, and
+   these assertions are what stops any of it drifting back. */
 describe("the backlog card stays a tile", () => {
   const source = readFileSync("web/src/components/task-board/BacklogRecords.tsx", "utf8");
   const card = source.slice(
@@ -162,39 +162,12 @@ describe("the backlog card stays a tile", () => {
 
   it("keeps the title a real link to the record", () => {
     assert.ok(card.includes("hrefForTaskRecord(task.id)"), "cmd-click must still reach the record route");
-    assert.ok(card.includes("onOpen"), "a plain click must open the peek");
+    assert.ok(card.includes("onOpen"), "a plain click must open the record drawer");
   });
 
   it("keeps selection and drag intact", () => {
     assert.ok(card.includes("TaskSelectCheckbox"));
     assert.ok(card.includes("onDragStart"));
     assert.ok(card.includes("onTouchStart"));
-  });
-});
-
-/* The peek is a read surface. Editing lives in TaskDrawer, one layer up. */
-describe("the peek drawer", () => {
-  const source = readFileSync("web/src/components/task-board/TaskPeekDrawer.tsx", "utf8");
-
-  it("states the record band facts from the shared builder", () => {
-    assert.ok(source.includes("recordBandFacts"), "the peek and the record must state facts the same way");
-    assert.ok(source.includes("RecordBand"));
-  });
-
-  it("carries the actions the card gave up", () => {
-    for (const handler of ["onAssign", "onStart", "onToggleBlock", "onDone", "onEdit"]) {
-      assert.ok(source.includes(handler), `the peek must offer ${handler}`);
-    }
-  });
-
-  it("links out to the full record", () => {
-    assert.ok(source.includes("onOpenRecord"));
-    assert.ok(source.includes("backlog.open_record"));
-  });
-
-  it("holds no form fields of its own", () => {
-    assert.ok(!source.includes("<Input"), "editing belongs to TaskDrawer");
-    assert.ok(!source.includes("<Textarea"), "editing belongs to TaskDrawer");
-    assert.ok(!source.includes("<Select"), "editing belongs to TaskDrawer");
   });
 });
