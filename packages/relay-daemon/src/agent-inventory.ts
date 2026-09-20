@@ -72,14 +72,21 @@ export async function discoverAgentInventory(
 // Relative paths in AGENT_INVENTORY_SOURCES are trusted, safe constants; they
 // are embedded directly so shell parameter expansion (e.g. ${f#$d/}) works.
 const SAFE_REL_PATH = /^[A-Za-z0-9._/-]+$/;
+const CONFIG_HOMES: Record<AgentName, string> = {
+  claude: '${CLAUDE_CONFIG_DIR:-$home/.claude}',
+  codex: '${CODEX_HOME:-$home/.codex}',
+  pi: '${PI_CODING_AGENT_DIR:-$home/.pi}',
+  kimi: '${KIMI_CODE_HOME:-$home/.kimi-code}',
+};
 
 function buildInventoryScript(): string {
   const lines = ["set -u", "sep=$(printf '\\t')", 'home="${HOME:-/home/agent}"'];
   for (const agent of AGENT_NAMES) {
     const source = AGENT_INVENTORY_SOURCES[agent];
+    lines.push(`config_home="${CONFIG_HOMES[agent]}"`);
     if (source.skillsDir && SAFE_REL_PATH.test(source.skillsDir)) {
       lines.push(
-        `d="$home/${source.skillsDir}"`,
+        `d="$config_home/skills"`,
         `if [ -d "$d" ]; then`,
         `  find "$d" -maxdepth 4 -type f -name SKILL.md 2>/dev/null | while IFS= read -r f; do`,
         `    rel="\${f#$d/}"`,
@@ -91,8 +98,13 @@ function buildInventoryScript(): string {
     }
     for (const rel of [...(source.mcpJson ?? []), ...(source.mcpToml ?? [])]) {
       if (!SAFE_REL_PATH.test(rel)) continue;
+      // Claude's default global files live beside ~/.claude, while custom
+      // homes hold them inside CLAUDE_CONFIG_DIR.
+      const configPath = agent === "claude"
+        ? `\${CLAUDE_CONFIG_DIR:-$home}/${rel}`
+        : `$config_home/${rel.split("/").pop()}`;
       lines.push(
-        `m="$home/${rel}"`,
+        `m="${configPath}"`,
         `if [ -f "$m" ]; then`,
         `  payload=$(base64 < "$m" | tr -d '\\n')`,
         `  printf 'MCP%s%s%s%s%s%s\\n' "$sep" ${shellQuote(agent)} "$sep" ${shellQuote(rel)} "$sep" "$payload"`,

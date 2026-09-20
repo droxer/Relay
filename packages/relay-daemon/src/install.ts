@@ -5,6 +5,8 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runRelayDaemonDoctor } from './index.js';
+import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment } from 'relay-core';
+import { captureRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
 
 interface InstallOptions {
   backendUrl: string;
@@ -13,6 +15,8 @@ interface InstallOptions {
   workspace: string;
   foreground: boolean;
   verbose: boolean;
+  runtimeEnvFile?: string;
+  localPermissionPolicy: "native" | "trusted";
 }
 
 export function parseInstallArgs(args: string[]): InstallOptions {
@@ -23,7 +27,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
     const key = args[i]!;
     if (key === '--foreground') { foreground = true; continue; }
     if (key === '--verbose') { verbose = true; continue; }
-    if (!['--backend-url', '--sandbox-id', '--employee-id', '--workspace'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
+    if (!['--backend-url', '--sandbox-id', '--employee-id', '--workspace', '--runtime-env-file', '--local-permission-policy'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
     const value = args[++i];
     if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${key}`);
     values.set(key, value);
@@ -42,7 +46,11 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   }
   const workspace = values.get('--workspace')!;
   if (!isAbsolute(workspace)) throw new Error('Workspace must be an absolute path.');
-  return { backendUrl, sandboxId, employeeId, workspace, foreground, verbose };
+  const localPermissionPolicy = values.get('--local-permission-policy') ?? 'native';
+  if (localPermissionPolicy !== 'native' && localPermissionPolicy !== 'trusted') throw new Error('Local permission policy must be native or trusted.');
+  const runtimeEnvFile = values.get('--runtime-env-file');
+  if (runtimeEnvFile && !isAbsolute(runtimeEnvFile)) throw new Error('--runtime-env-file must be an absolute path.');
+  return { backendUrl, sandboxId, employeeId, workspace, foreground, verbose, localPermissionPolicy, ...(runtimeEnvFile ? { runtimeEnvFile } : {}) };
 }
 
 const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -93,22 +101,45 @@ async function install(): Promise<void> {
   if (!process.env.RELAY_DAEMON_NODE_TOKEN?.trim()) throw new Error('A node token is required.');
   const stateDir = join(homedir(), '.relay', 'daemon-nodes', options.sandboxId);
   process.env.RELAY_DAEMON_STATE_DIR = stateDir;
+  const nodeToken = process.env.RELAY_DAEMON_NODE_TOKEN;
+  const runtimeEnv = localRuntimeEnvironment();
+  runtimeEnv.PATH = `${dirname(process.execPath)}:${runtimeEnv.PATH ?? '/usr/bin:/bin'}`;
+  const profile = !options.foreground || options.runtimeEnvFile
+    ? captureRuntimeProfile(runtimeEnv, options.runtimeEnvFile) : undefined;
+  const installerEnvironment = process.env;
+  if (profile) {
+    // Preflight uses the same selected environment as the installed service.
+    const selectedEnvironment = runtimeProfileEnvironment(profile);
+    process.env = { ...selectedEnvironment, RELAY_DAEMON_STATE_DIR: stateDir };
+    applyLocalRuntimeEnvironment(selectedEnvironment);
+  }
+  process.env.RELAY_LOCAL_PERMISSION_POLICY = options.localPermissionPolicy;
   console.log('Checking backend, workspace and node credentials…');
   // Missing agent CLIs do not block computer enrollment; they can be installed later.
-  const report = await runRelayDaemonDoctor({
-    backendUrl: options.backendUrl, sandboxId: options.sandboxId,
-    employeeId: options.employeeId, workspacePath: options.workspace,
-    sandbox: 'none', allowHostAgentExecution: true, stateDir,
-    token: process.env.RELAY_DAEMON_NODE_TOKEN,
-    signal: AbortSignal.timeout(60_000),
-  });
+  let report;
+  try {
+    report = await runRelayDaemonDoctor({
+      backendUrl: options.backendUrl, sandboxId: options.sandboxId,
+      employeeId: options.employeeId, workspacePath: options.workspace,
+      sandbox: 'none', allowHostAgentExecution: true, stateDir,
+      token: nodeToken,
+      signal: AbortSignal.timeout(60_000),
+    });
+  } finally {
+    process.env = installerEnvironment;
+  }
   const failures = report.checks.filter(check => !check.ok && !check.name.startsWith('agent:'));
   if (failures.length) throw new Error(failures.map(check => `${check.name}: ${check.detail}`).join('\n'));
+  // Persist the already-issued token only after read-only authentication succeeds.
+  // The running daemon owns registration; reinstalling never marks a live node stopped.
+  ensureDaemonNodeToken({ credentialDirectory: join(stateDir, 'credentials'), employeeId: options.employeeId, token: nodeToken });
+  const runtimeProfile = profile ? writeRuntimeProfile(stateDir, profile) : undefined;
   delete process.env.RELAY_DAEMON_NODE_TOKEN;
   delete process.env.RELAY_DAEMON_TOKEN;
   const cli = join(dirname(fileURLToPath(import.meta.url)), 'cli.js');
   const argv = [process.execPath, cli, '--backend-url', options.backendUrl, '--sandbox-id', options.sandboxId,
-    '--employee-id', options.employeeId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution'];
+    '--employee-id', options.employeeId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
+    '--local-permission-policy', options.localPermissionPolicy, ...(runtimeProfile ? ['--runtime-profile', runtimeProfile] : [])];
   const binDir = join(homedir(), '.local', 'bin');
   mkdirSync(binDir, { recursive: true });
   const wrapper = join(binDir, 'relay-daemon');

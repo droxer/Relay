@@ -4367,3 +4367,54 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
             assert body["daemonEnv"]["RELAY_BACKEND_URL"] == "https://api.example.com"
             assert "--backend-url https://api.example.com" in body["daemonCommand"]
             assert "backend.internal" not in body["daemonCommand"]
+
+
+def test_daemon_auth_check_is_read_only_and_requires_node_token(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from relay.daemon_registry.credentials import hash_daemon_node_token
+
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        registry = app.state.registry
+        registry.register(
+            {
+                "sandboxId": "doctor-node",
+                "protocolVersion": 1,
+                "employeeId": "alice",
+                "token": "runtime-token",
+                "supportedAgents": ["codex"],
+                "status": "busy",
+            }
+        )
+        node = registry.get("doctor-node")
+        assert node is not None
+        node["uiTokenHash"] = hash_daemon_node_token("ui-token")
+        before = deepcopy(node)
+
+        def forbid_seen(*_args):
+            raise AssertionError("doctor must not renew liveness")
+
+        monkeypatch.setattr(registry, "_mark_seen", forbid_seen)
+        response = client.get(
+            "/api/v1/daemon-nodes/doctor-node/auth-check",
+            headers={"Authorization": "Bearer runtime-token"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"sandboxId": "doctor-node", "authenticated": True}
+        assert registry.get("doctor-node") == before
+        for token in ["ui-token", "wrong", ""]:
+            assert client.get(
+                "/api/v1/daemon-nodes/doctor-node/auth-check",
+                headers={"Authorization": f"Bearer {token}"},
+            ).status_code == 401
+        assert client.get(
+            "/api/v1/daemon-nodes/missing/auth-check",
+            headers={"Authorization": "Bearer runtime-token"},
+        ).status_code == 401
+        registry.retire_deleted("doctor-node")
+        assert client.get(
+            "/api/v1/daemon-nodes/doctor-node/auth-check",
+            headers={"Authorization": "Bearer runtime-token"},
+        ).status_code == 401

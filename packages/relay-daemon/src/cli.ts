@@ -2,8 +2,10 @@
 import { homedir } from "node:os";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { loadPackageEnv } from "relay-core";
+import { applyLocalRuntimeEnvironment, loadPackageEnv } from "relay-core";
 import { resolveSandboxMode, runRelayDaemon, runRelayDaemonDoctor } from "./index.js";
+
+import { loadRuntimeProfile } from "./runtime-profile.js";
 
 loadPackageEnv("relay-daemon");
 
@@ -35,7 +37,12 @@ Options:
                         Explicitly allow sandbox "none" to run model-generated
                         commands with this user's host permissions (also
                         RELAY_ALLOW_HOST_AGENT_EXECUTION=1).
-  --doctor              Check backend, token, workspace, auth, and agent CLIs,
+  --local-permission-policy <native|trusted>
+                        Local CLI permissions (default: native). Trusted bypasses
+                        runtime approvals. Also RELAY_LOCAL_PERMISSION_POLICY.
+  --runtime-profile <path>
+                        Private local runtime settings and credential-file reference.
+  --doctor              Read-only backend/token check plus local agent preflight,
                         then exit without running the daemon loop.
   --help                Show this help message.
   --version             Show version information.
@@ -55,6 +62,8 @@ export interface DaemonCliArgs {
   workspace?: string;
   workspaceId?: string;
   sandbox?: string;
+  localPermissionPolicy?: "native" | "trusted";
+  runtimeProfile?: string;
   useLocalAgentHome: boolean;
   allowHostAgentExecution: boolean;
   doctor: boolean;
@@ -75,6 +84,8 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
   let workspace: string | undefined;
   let workspaceId: string | undefined;
   let sandbox: string | undefined;
+  let localPermissionPolicy: "native" | "trusted" | undefined;
+  let runtimeProfile: string | undefined;
   let useLocalAgentHome = false;
   let allowHostAgentExecution = false;
   let doctor = false;
@@ -92,6 +103,14 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
       useLocalAgentHome = true;
     } else if (arg === "--allow-host-agent-execution") {
       allowHostAgentExecution = true;
+    } else if (arg === "--local-permission-policy") {
+      const value = argv[++i];
+      if (value !== "native" && value !== "trusted") throw new Error("Local permission policy must be native or trusted.");
+      localPermissionPolicy = value;
+    } else if (arg === "--runtime-profile") {
+      const value = argv[++i];
+      if (!value || value.startsWith("--")) throw new Error("--runtime-profile requires a path.");
+      runtimeProfile = value;
     } else if (arg === "--backend-url") {
       const value = argv[i + 1];
       if (!value || value.startsWith("-")) {
@@ -161,6 +180,8 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
     workspace,
     workspaceId,
     sandbox,
+    ...(localPermissionPolicy ? { localPermissionPolicy } : {}),
+    ...(runtimeProfile ? { runtimeProfile } : {}),
     useLocalAgentHome,
     allowHostAgentExecution,
     doctor,
@@ -181,6 +202,11 @@ export async function main(argv: string[] = process.argv): Promise<void> {
     showVersion();
     return;
   }
+
+  if (args.runtimeProfile) applyLocalRuntimeEnvironment(loadRuntimeProfile(args.runtimeProfile));
+  const policy = args.localPermissionPolicy ?? process.env.RELAY_LOCAL_PERMISSION_POLICY ?? "native";
+  if (policy !== "native" && policy !== "trusted") throw new Error("Local permission policy must be native or trusted.");
+  process.env.RELAY_LOCAL_PERMISSION_POLICY = policy;
 
   const sandboxId = args.sandboxId ?? process.env.RELAY_SANDBOX_ID;
   const enrollmentToken = args.enrollmentToken ?? process.env.RELAY_ENROLLMENT_TOKEN;
