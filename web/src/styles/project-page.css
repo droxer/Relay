@@ -1,8 +1,5 @@
-/* Project room — an operational dossier, not another dashboard. The page is
-   flat --surface-0 like every other route: no blueprint grid, no translucent
-   header — member tiles are opaque cards in the shared card grammar, and
-   files/activity retain the shared workspace grammar so moving between
-   records never changes the controls. */
+/* Project workspace: tasks lead, with team, files, and activity using the
+   shared record surfaces and design tokens. */
 
 .project-mark {
   display: inline-grid;
@@ -296,4 +293,155 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/* A project's working surface: progress above five quiet workflow lanes. */
+.project-tasks-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.project-tasks {
+  display: grid;
+  gap: var(--sp-5);
+  padding: clamp(var(--sp-4), 3vw, var(--sp-7));
+  min-width: 0;
+  overflow: auto;
+}
+
+.project-task-summary {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr);
+  gap: var(--sp-6);
+  align-items: center;
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.project-task-eyebrow {
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-transform: uppercase;
+}
+
+.project-task-completion {
+  display: block;
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-task-completion span {
+  color: var(--ink-4);
+  font: var(--type-title-content);
+  letter-spacing: var(--type-title-content-track);
+}
+
+.project-task-summary p,
+.project-task-lane-empty,
+.project-task-meta,
+.project-task-card time {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+.project-task-progress-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-3);
+}
+
+.project-task-progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+}
+
+.project-task-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--ink-2);
+}
+
+.project-task-create {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.project-task-create input {
+  min-width: 0;
+  flex: 1;
+}
+
+.project-task-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: var(--sp-4);
+}
+
+.project-task-lane {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.project-task-lane h3 {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-1);
+  border-bottom: 1px solid var(--line-1);
+  font: var(--type-body-sm);
+  font-weight: 500;
+}
+
+.project-task-lane h3 > span:last-child {
+  color: var(--ink-4);
+}
+
+.project-task-card {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  overflow-wrap: anywhere;
+}
+
+.project-task-title {
+  color: var(--ink-1);
+  font: var(--type-label);
+  text-decoration: none;
+}
+
+.project-task-title:hover {
+  text-decoration: underline;
+}
+
+.project-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  justify-content: space-between;
+  width: 100%;
+}
+
+.project-task-error {
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+@media (max-width: 640px) {
+  .project-task-summary { grid-template-columns: 1fr; gap: var(--sp-3); }
+  .project-task-board { grid-template-columns: 1fr; overflow: visible; }
+  .project-task-create { flex-wrap: wrap; }
 }

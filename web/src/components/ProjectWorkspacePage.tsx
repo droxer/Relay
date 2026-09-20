@@ -3,7 +3,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getWorkspaceBrief } from "../api";
+import { getWorkspaceBrief, listTasks } from "../api";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentLabel } from "../lib/plan";
@@ -41,6 +41,9 @@ import {
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
+
+import { ProjectTasks } from "./ProjectTasks";
+import { TASKS_QUERY_KEY } from "../hooks/useRelayData";
 
 const PROJECT_ACTIVITY_POLL_MS = 3000;
 
@@ -211,11 +214,17 @@ export function ProjectWorkspacePage({
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
   const [pageTab, setPageTab] = useUrlSearchState(
     "tab",
-    "profile" as ProjectPageTab,
+    "tasks" as ProjectPageTab,
     parseProjectPageTab,
-    (value) => value === "profile" ? null : value,
+    (value) => value === "tasks" ? null : value,
     "push",
   );
+  const tasksQuery = useQuery({
+    queryKey: TASKS_QUERY_KEY,
+    queryFn: async ({ signal }) => (await listTasks(signal)).tasks ?? [],
+    enabled: pageTab === "tasks",
+    refetchInterval: pageTab === "tasks" ? PROJECT_ACTIVITY_POLL_MS : false,
+  });
   const briefQuery = useQuery({
     queryKey: ["project-workspace-brief", project.id],
     queryFn: ({ signal }) => getWorkspaceBrief({ projectId: project.id }, signal),
@@ -290,7 +299,7 @@ export function ProjectWorkspacePage({
             {project.name}
           </span>
         )}
-        subtitle={t("project.page_subtitle", { count: project.members.length })}
+        subtitle={t("project.tasks_subtitle")}
         titleVariant="record"
         layout="stacked"
         actions={(
@@ -305,7 +314,7 @@ export function ProjectWorkspacePage({
                 {t("project.edit")}
               </Button>
             ) : null}
-            {actions.newThread ? (
+            {actions.newThread && pageTab === "activities" ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -329,8 +338,10 @@ export function ProjectWorkspacePage({
                 value={tab}
                 className={`workspace-page-tab${pageTab === tab ? " is-active" : ""}`}
               >
-                {tab === "profile"
-                  ? t("workspace.tab_profile")
+                {tab === "tasks"
+                  ? t("project.tasks_tab")
+                  : tab === "profile"
+                  ? t("project.tasks_team_tab")
                   : tab === "workspace"
                     ? t("workspace.tab_workspace")
                     : t("workspace.tab_activities")}
@@ -345,6 +356,13 @@ export function ProjectWorkspacePage({
       <RecordBand facts={bandFacts} label={t("project.band_label")} />
 
       <div className="workspace-body">
+        <TabsContent value="tasks" className="project-tasks-panel">
+          {tasksQuery.isPending ? <ActivitiesSkeleton /> : tasksQuery.isError ? (
+            <WorkspaceError message={t("project.tasks_load_failed")} onRetry={() => void tasksQuery.refetch()} />
+          ) : (
+            <ProjectTasks key={project.id} project={project} tasks={tasksQuery.data ?? []} agents={agents} />
+          )}
+        </TabsContent>
         <TabsContent value="profile">
           <ProjectProfile
             project={project}

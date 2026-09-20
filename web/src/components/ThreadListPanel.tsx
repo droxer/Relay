@@ -1,10 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { StateMark } from "./StateMark";
 import {
   ActionAdd,
-  ChevronDownIcon,
   ICON,
   NavProjects,
 } from "./icons";
@@ -17,16 +15,8 @@ import { limitThreadGroups, railLimitFor, RAIL_PAGE_SIZE } from "../lib/threads"
 import { useStableCallback } from "@/hooks/useStableCallback";
 import { projectThreadBuckets } from "../lib/threads";
 import {
-  expandProject,
-  isProjectExpanded,
   projectDirectoryState,
-  projectEmptyKey,
   projectFolderSelection,
-  projectFolderTone,
-  readProjectExpansion,
-  toggleProjectExpansion,
-  writeProjectExpansion,
-  type ProjectExpansion,
 } from "../lib/projectDirectory";
 import {
   clampThreadListWidth,
@@ -97,17 +87,6 @@ export function ThreadListPanel({
   const renameThread = useStableCallback(onRenameThread);
   const closeThread = useStableCallback(onCloseThread);
   const now = useMinuteClock();
-  // Which folders are open, remembered across reloads. Read after mount
-  // rather than in the initializer: the export is prerendered, so touching
-  // localStorage during the first render mismatches hydration.
-  const [expansion, setExpansion] = useState<ProjectExpansion>({});
-  useEffect(() => setExpansion(readProjectExpansion()), []);
-
-  const applyExpansion = useCallback((next: ProjectExpansion) => {
-    setExpansion(next);
-    writeProjectExpansion(next);
-  }, []);
-
   /* Ceiling measured against the live chat column — read once per gesture and
      once per key press, never per pointer move. */
   const listCeiling = useCallback(() => maxThreadListWidth(width, chatColumnWidth(), viewportWidth()), [width]);
@@ -168,41 +147,11 @@ export function ThreadListPanel({
     limited.hasMore ? <div key={`more-${limit}`} ref={sentinelRef} className="conversation-rail-sentinel" aria-hidden="true" /> : null];
   };
 
-  // Threads inside a project render flat: the group headers that make sense
-  // for a long unscoped list are pure chrome around one to five rows, so the
-  // attention order (needs you → running → idle) is kept but the grouping is
-  // dropped and each row carries its own state pip instead.
-  const renderProjectThreads = (items: ThreadItem[]) => {
-    const groups = groupThreads(items);
-    const flat: Array<{ item: ThreadItem; state: "attn" | "run" | "idle" }> = [
-      ...groups.needsYou.map((item) => ({ item, state: "attn" as const })),
-      ...groups.running.map((item) => ({ item, state: "run" as const })),
-      ...groups.idle.map((item) => ({ item, state: "idle" as const })),
-    ];
-    return (
-      <ul className="conversation-rows">
-        {flat.map(({ item, state }) => (
-          <ThreadRow
-            key={item.session.id}
-            item={item}
-            tone={state}
-            layout="nested"
-            selected={selectedSessionId === item.session.id}
-            onSelect={selectThread}
-            onRename={renameThread}
-            onClose={closeThread}
-            now={now}
-          />
-        ))}
-      </ul>
-    );
-  };
-
   return (
     // Compact density: the rail is a list layout, so thread and project names
     // sit one rung down (16 → 15px) against their 13px meta — the same
     // treatment the agent roster and teams table get.
-    <aside id="thread-panel" className="thread-panel" aria-label={t("nav.threads")} tabIndex={-1} data-density="compact">
+    <aside id="thread-panel" className="thread-panel" aria-label={t(directoryMode === "projects" ? "project.projects" : "nav.threads")} tabIndex={-1} data-density="compact">
       <div className="thread-panel-inner">
       {/* Same frame as every other list rail: PageHeader over a
           .list-filter-bar band, each carrying its own hairline. */}
@@ -244,22 +193,8 @@ export function ThreadListPanel({
         aria-label={directoryMode === "projects" ? t("project.projects") : t("nav.threads")}
       >
         {directoryMode === "projects" ? hierarchy.projects.map(({ project, threads: projectThreads }) => {
-          const expanded = isProjectExpanded(project, expansion);
           const computerLabel = computers.find((computer) => computer.id === project.computerId)?.displayName
             || project.computerId.replace(/^device:[^:]+:/, "");
-          // A collapsed project hides its threads, so the row needs its own
-          // signal for "something in here needs a look" — the same attn/run
-          // vocabulary as a thread's own state pip, aggregated up one level.
-          const projectGroups = groupThreads(projectThreads);
-          const projectState = projectFolderTone({
-            needsYou: projectGroups.needsYou.length,
-            running: projectGroups.running.length,
-            expanded,
-          });
-          const emptyKey = projectEmptyKey({
-            threadCount: projectThreads.length,
-            hasQuery: query.trim().length > 0,
-          });
           const selection = projectFolderSelection({
             projectId: project.id,
             selectedProjectId,
@@ -267,7 +202,7 @@ export function ThreadListPanel({
             threadIds: projectThreads.map((item) => item.session.id),
           });
           return (
-          <section key={project.id} className={`project-folder${selection ? ` ${selection}` : ""}${project.archivedAt ? " archived" : ""}${expanded ? " expanded" : " collapsed"}`}>
+          <section key={project.id} className={`project-folder${selection ? ` ${selection}` : ""}${project.archivedAt ? " archived" : ""}`}>
             {/* The folder header is a rail row like any other — `.rail-row` +
                 data-selected is the one place the wash and the leading accent
                 are defined (tokens/base.css), shared with thread, agent and
@@ -279,45 +214,19 @@ export function ThreadListPanel({
               <Button
                 variant="ghost"
                 type="button"
-                className="project-folder-toggle"
-                aria-label={t(expanded ? "project.collapse" : "project.expand", { project: project.name })}
-                aria-expanded={expanded}
-                onClick={() => applyExpansion(toggleProjectExpansion(expansion, project))}
-              >
-                <ChevronDownIcon size={ICON.sm} />
-              </Button>
-              <Button
-                variant="ghost"
-                type="button"
                 className="project-folder-select"
                 aria-current={selection === "selected" ? "page" : undefined}
                 tooltip={`${project.name} · ${t("project.member_count", { count: project.members.length })} · ${computerLabel}`}
                 aria-label={project.name}
-                onClick={() => {
-                  // Selecting opens the folder, but only as a normal explicit
-                  // choice — the chevron still collapses it afterwards.
-                  applyExpansion(expandProject(expansion, project.id));
-                  onSelectProject(project.id);
-                }}
+                onClick={() => onSelectProject(project.id)}
               >
                 <span className="project-folder-icon">
                   <NavProjects size={ICON.sm} aria-hidden="true" />
-                  {projectState ? (
-                    <StateMark
-                      tone={projectState === "run" ? "live" : "warn"}
-                      className="project-folder-pip"
-                    />
-                  ) : null}
                 </span>
                 <span className="project-folder-name">{project.name}</span>
-                {project.archivedAt ? <small>{t("project.archived")}</small> : null}
-                <span className="project-folder-count tnum">{projectThreads.length}</span>
+                <span className="project-folder-count">{t(project.archivedAt ? "project.state_archived" : project.enabled ? "project.state_active" : "project.state_disabled")}</span>
               </Button>
             </div>
-            {expanded && (projectThreads.length > 0 || emptyKey) ? <div className="project-folder-threads">
-                {renderProjectThreads(projectThreads)}
-                {emptyKey ? <p className="project-folder-empty">{t(emptyKey)}</p> : null}
-              </div> : null}
           </section>
         )}) : renderThreads()}
         {/* The rail is too narrow for a doodle, so the vignette is dropped;
