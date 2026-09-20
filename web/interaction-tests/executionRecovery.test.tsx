@@ -210,3 +210,25 @@ it("does not offer the gone report on a healthy thread or without a handler", ()
   view.rerender(<ExecutionRecoveryPanel session={{ ...session(""), execution: execution("execution_active", "running") }} onReportGone={vi.fn()} />);
   expect(view.container.textContent).toBe("");
 });
+
+
+it.each(["queued", "unresponsive", "stopping", "finalizing"])("never offers a gone report outside recovery_required: %s", phase => {
+  const onReportGone = vi.fn();
+  render(<ExecutionRecoveryPanel session={{ ...session("future_reason"), execution: execution("future_reason", phase) }} onReportGone={onReportGone} />);
+  expect(screen.queryByRole("button", { name: "recovery.report_gone" })).toBeNull();
+});
+it("does not retry saving before recovery is required", () => {
+  render(<ExecutionRecoveryPanel session={{ ...session("finalization_failed"), execution: execution("finalization_failed", "finalizing") }} onRetry={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "recovery.retry" })).toBeNull();
+});
+it("does not use an old dispatch failure or unrelated thread for a recorded execution blocker", () => {
+  const blocked = { ...task("agent_offline"), attention: {
+    schemaVersion: 1 as const, code: "unknown", source: "execution" as const,
+    summary: "Agent failed without a classified reason", evidence: "recorded" as const,
+    observedAt: "2026-09-20T00:00:00Z", sessionId: "actual-source",
+  } };
+  render(<TaskRecoveryPanel task={blocked} />);
+  expect(screen.getByText("recovery.unknown.title")).toBeTruthy();
+  expect(screen.getByText(blocked.attention.summary)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "recovery.thread" }).getAttribute("href")).toBe("/threads/actual-source");
+});
