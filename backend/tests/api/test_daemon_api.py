@@ -4399,3 +4399,33 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         _enroll_employee(client, "bob")
         assert client.post(endpoint).status_code == 403
         assert client.get(endpoint + f"/{command_id}").status_code == 403
+
+
+def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        browser = TestClient(app)
+        device = TestClient(app)
+        _bootstrap_admin(browser)
+        _enroll_employee(browser, "alice")
+        started = device.post("/api/v1/computer-authorizations", json={"workspacePath": "/Users/alice/work", "displayName": "Alice laptop"})
+        assert started.status_code == 201
+        grant = started.json()
+        headers = {"Authorization": f"Device {grant['deviceCode']}"}
+        endpoint = "/api/v1/computer-authorizations/token"
+        assert device.post(endpoint, headers=headers).status_code == 202
+        approval = f"/api/v1/computer-authorizations/{grant['userCode']}"
+        assert device.post(approval + "/approve").status_code == 401
+        details = browser.get(approval).json()
+        assert details["workspacePath"] == "/Users/alice/work"
+        assert "deviceCode" not in details
+        assert browser.post(approval + "/approve").status_code == 200
+        wrong = device.post(endpoint, headers={"Authorization": "Device wrong"})
+        assert wrong.status_code == 401
+        redeemed = device.post(endpoint, headers=headers)
+        assert redeemed.status_code == 200
+        assert redeemed.json()["employeeId"] == "alice"
+        assert redeemed.json()["token"]
+        assert device.post(endpoint, headers=headers).status_code == 410
+        assert browser.post(approval + "/approve").status_code == 409
