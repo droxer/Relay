@@ -50,7 +50,7 @@ test('installer verifies authentication and writes a service using the real pack
   mkdirSync(customHome);
   writeFileSync(join(bin, 'codex'), '#!/bin/sh\nprintf "%s" "$CODEX_HOME" > "$CODEX_HOME/observed"\n', { mode: 0o755 });
   const calls = join(root, 'service-calls');
-  for (const name of ['launchctl', 'systemctl']) {
+  for (const name of ['launchctl', 'systemctl', 'open', 'xdg-open']) {
     const file = join(bin, name);
     writeFileSync(file, '#!/bin/sh\nprintf "%s\\n" "$@" >> "$SERVICE_CALLS"\n');
     chmodSync(file, 0o755);
@@ -63,6 +63,17 @@ test('installer verifies authentication and writes a service using the real pack
     request.on('end', () => {
       if (request.url === '/api/v1/daemon-node-registrations') registrations.push(JSON.parse(body));
       response.setHeader('Content-Type', 'application/json');
+      if (request.url === '/api/v1/computer-authorizations') {
+        assert.equal(JSON.parse(body).workspacePath, workspace);
+        response.statusCode = 201;
+        response.end(JSON.stringify({ deviceCode: 'device-fixture-secret', verificationUrl: `http://${request.headers.host}/computer?connect=browser-code` }));
+        return;
+      }
+      if (request.url === '/api/v1/computer-authorizations/token') {
+        assert.equal(request.headers.authorization, 'Device device-fixture-secret');
+        response.end(JSON.stringify({ sandboxId: 'node-install-test', employeeId: 'alice', token: 'fixture-token', workspacePath: workspace }));
+        return;
+      }
       response.statusCode = deleted ? 410 : 200;
       response.end(deleted ? JSON.stringify({ detail: 'Daemon node was deleted in the control panel.' }) : JSON.stringify({ sandboxId: 'node-install-test', authenticated: true }));
     });
@@ -116,6 +127,16 @@ test('installer verifies authentication and writes a service using the real pack
     assert.doesNotMatch(verbose.stdout + verbose.stderr, /fixture-token/);
     assert.equal(readFileSync(service, 'utf8'), content);
     assert.equal(registrations.length, 0);
+
+    // New-device setup obtains the credential through browser approval;
+    // neither credential appears in console output or the service definition.
+    const deviceSetup = await exec(process.execPath, [command[0]!, '--backend-url', `http://127.0.0.1:${address.port}`, '--workspace', workspace], {
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SERVICE_CALLS: calls }, timeout: 30_000,
+    });
+    assert.match(deviceSetup.stdout, /Confirm this computer in your browser/);
+    assert.doesNotMatch(deviceSetup.stdout + deviceSetup.stderr, /device-fixture-secret|fixture-token/);
+    assert.equal(registrations.length, 0);
+    assert.equal(readFileSync(service, 'utf8'), content);
 
     // Exercise the actual CLI: 410 is an intentional shutdown (exit 0), not a crash.
     deleted = true;

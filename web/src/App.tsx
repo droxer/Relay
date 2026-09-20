@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { logout } from "./api";
 import type { AgentName, AgentTeam, EmployeeAgent, RelayArtifact, RelaySession } from "./types";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
+import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
 import { useRelayData } from "./hooks/useRelayData";
 import { useRelayMutations } from "./hooks/useRelayMutations";
@@ -645,6 +646,11 @@ export function App() {
 
   if (!user) {
     return <LoginScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
+  }
+
+  const deviceCode = new URL(window.location.href).searchParams.get("connect");
+  if (["/computer", "/settings/computers"].includes(window.location.pathname) && deviceCode && /^[A-Za-z0-9_-]{32}$/.test(deviceCode)) {
+    return <DeviceApproval code={deviceCode} />;
   }
 
   return (

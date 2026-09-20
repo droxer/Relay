@@ -336,3 +336,12 @@ describe("app pathname routes", () => {
     );
   });
 });
+
+it("preserves computer device approval through login redirects", () => {
+  const url = "/computer?connect=abcdefghijklmnopqrstuvwxyz123456";
+  assert.equal(canonicalBrowserUrl("/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), url);
+});
+
+it("preserves approval when the legacy computer path redirects to settings", () => {
+  assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
+});

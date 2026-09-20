@@ -698,6 +698,8 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "waiting": value["waiting"],
             **({"blockingSessionId": blocker} if blocker else {}),
         }
+    if value.get("replayed") is True and event_type in {"run.output", "run.output.batch", "run.collaboration"}:
+        lease_field = {**lease_field, "replayed": True}
     if event_type == "run.output":
         if (
             value.get("stream") not in ("stdout", "stderr")

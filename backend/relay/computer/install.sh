@@ -47,9 +47,11 @@ main() {
     fi
     release="$relay_root/releases/@@BUNDLE_SHA256@@"
     if [ ! -d "$release" ]; then mv "$relay_tmp/client" "$release"; fi
+    legacy_setup=false
+    for arg in "$@"; do [ "$arg" != '--sandbox-id' ] || legacy_setup=true; done
     # Prompt on the controlling terminal, never on the piped script's stdin.
     # The token travels only via the child environment, never argv or history.
-    if [ -z "${RELAY_DAEMON_NODE_TOKEN:-}" ]; then
+    if [ "$legacy_setup" = true ] && [ -z "${RELAY_DAEMON_NODE_TOKEN:-}" ]; then
         printf 'Relay node token: ' >/dev/tty
         tty_state=$(stty -g </dev/tty)
         trap 'stty "$tty_state" </dev/tty; exit 1' HUP INT TERM
@@ -59,7 +61,7 @@ main() {
         trap 'exit 1' HUP INT TERM
         printf '\n' >/dev/tty
     fi
-    [ -n "$RELAY_DAEMON_NODE_TOKEN" ] || fail 'Node token must not be empty.'
+    [ "$legacy_setup" != true ] || [ -n "${RELAY_DAEMON_NODE_TOKEN:-}" ] || fail 'Node token must not be empty.'
     export RELAY_DAEMON_NODE_TOKEN
     "$relay_node" "$release/node_modules/relay-daemon/dist/install.js" "$@"
 }

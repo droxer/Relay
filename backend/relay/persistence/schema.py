@@ -9,6 +9,7 @@ whichever store happened to be imported first.
 from __future__ import annotations
 
 from ..chat import integrations as _chat_integrations  # noqa: F401
+from ..security import device_authorization as _device_authorization  # noqa: F401
 from ..security import auth as _auth  # noqa: F401
 from . import agent_placement_store as _agent_placement_store  # noqa: F401
 from . import agent_store as _agent_store  # noqa: F401

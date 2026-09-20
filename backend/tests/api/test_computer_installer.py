@@ -121,7 +121,7 @@ def test_token_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
     env.pop("RELAY_DAEMON_NODE_TOKEN")
     script = tmp_path / "installer.sh"
     script.write_text(source)
-    command = f"cat {shlex.quote(str(script))} | sh -s -- --foreground"
+    command = f"cat {shlex.quote(str(script))} | sh -s -- --foreground --sandbox-id sbx_test"
     # script(1) supplies a controlling terminal while the installer itself gets
     # a pipe, exactly as curl | sh does. No preexec_fn in the threaded API suite.
     argv = (["script", "-q", "/dev/null", "sh", "-c", command] if sys.platform == "darwin"

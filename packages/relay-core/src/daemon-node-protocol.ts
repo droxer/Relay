@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -162,6 +162,7 @@ export interface DaemonSkippedSkill {
 }
 
 export interface DaemonNodeRegistration {
+  runtimeRefreshCommands?: Array<{ commandId: string; leaseId: string }>;
   sandboxId: string;
   employeeId?: string;
   token: string;
@@ -295,7 +296,7 @@ export interface DaemonWorkspaceReadCommand {
 
 export type DaemonWorkspaceErrorCode = "invalid-path" | "not-found" | "is-directory" | "io-error";
 
-export type DaemonNodeCommand = DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand;
+export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand;
 
 export type DaemonNodeEvent =
   | {

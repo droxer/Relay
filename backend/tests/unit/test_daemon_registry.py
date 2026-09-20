@@ -7635,3 +7635,30 @@ def test_capacity_wait_of_next_assignment_does_not_create_orphan(store_factory, 
             assert registry.take_commands("sbx_alice", "node_token") == []
 
     asyncio.run(run_flow())
+
+
+def test_late_output_from_completed_lease_is_recovered_without_reactivating_run() -> None:
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions = LocalSessionStore(root)
+            daemons = LocalDaemonStore(root)
+            registry = DaemonNodeRegistry(sessions, daemons)
+            registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                               "workspacePath": "/workspace/alice", "protocolVersion": 2,
+                               "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"], "status": "ready"})
+            await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "recover output", "assignments": [{"agent": "codex"}]})
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            identity = {"commandId": command["id"], "sessionId": command["sessionId"],
+                        "runId": command["runId"], "agent": "codex", "leaseId": command["leaseId"]}
+            registry.handle_event("sbx_alice", {**identity, "type": "run.failed", "error": "connection lost", "exitCode": 1}, "node_token")
+            event = {**identity, "type": "run.output.batch", "replayed": True, "entries": [{"stream": "stdout", "text": "recovered output", "sequence": 0}]}
+            registry.handle_event("sbx_alice", event, "node_token")
+            registry.handle_event("sbx_alice", event, "node_token")
+            outputs = [e for e in sessions.get_session(command["sessionId"])["events"] if e["type"] == "agent.output.batch"]
+            assert len(outputs) == 1
+            assert outputs[0]["entries"][0]["text"] == "recovered output"
+            assert daemons.get_command(command["id"])["status"] == "failed"
+            assert command["id"] not in registry.active_commands
+            with pytest.raises(PermissionError):
+                registry.handle_event("sbx_alice", {**event, "leaseId": "wrong-lease"}, "node_token")
+    asyncio.run(flow())

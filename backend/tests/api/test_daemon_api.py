@@ -4369,6 +4369,93 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
             assert "backend.internal" not in body["daemonCommand"]
 
 
+def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _enroll_employee(client, "alice")
+        enrolled = client.post("/api/v1/daemon-node-enrollments/local", json={"workspacePath": "/Users/alice/project"}).json()
+        node_id, token = enrolled["node"]["id"], enrolled["nodeToken"]
+        endpoint = f"/api/v1/daemon-nodes/{node_id}/runtime-refresh"
+        assert client.post(endpoint).status_code == 409
+        registration = {"sandboxId": node_id, "token": token, "protocolVersion": 2,
+                        "supportedAgents": ["codex"], "capabilities": ["runtime-refresh"]}
+        assert client.post("/api/v1/daemon-node-registrations", json=registration).status_code == 200
+        response = client.post(endpoint)
+        assert response.status_code == 202
+        command_id = response.json()["commandId"]
+        commands = client.get(f"/api/v1/daemon-nodes/{node_id}/commands", headers={"Authorization": f"Bearer {token}"}).json()["commands"]
+        command = next(c for c in commands if c["id"] == command_id)
+        assert command["type"] == "runtime.refresh"
+        assert client.get(endpoint + f"/{command_id}").json()["status"] == "dispatched"
+        stale_ack = {"commandId": command_id, "leaseId": "stale-lease"}
+        assert client.post("/api/v1/daemon-node-registrations", json={**registration, "runtimeRefreshCommands": [stale_ack]}).status_code == 200
+        assert client.get(endpoint + f"/{command_id}").json()["status"] == "dispatched"
+        ack = {"commandId": command_id, "leaseId": command["leaseId"]}
+        assert client.post("/api/v1/daemon-node-registrations", json={**registration, "runtimeRefreshCommands": [ack]}).status_code == 200
+        assert client.get(endpoint + f"/{command_id}").json()["status"] == "completed"
+        _enroll_employee(client, "bob")
+        assert client.post(endpoint).status_code == 403
+        assert client.get(endpoint + f"/{command_id}").status_code == 403
+
+
+def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        browser = TestClient(app)
+        device = TestClient(app)
+        _bootstrap_admin(browser)
+        _enroll_employee(browser, "alice")
+        started = device.post("/api/v1/computer-authorizations", json={"workspacePath": "/Users/alice/work", "displayName": "Alice laptop"})
+        assert started.status_code == 201
+        grant = started.json()
+        headers = {"Authorization": f"Device {grant['deviceCode']}"}
+        endpoint = "/api/v1/computer-authorizations/token"
+        assert device.post(endpoint, headers=headers).status_code == 202
+        approval = f"/api/v1/computer-authorizations/{grant['userCode']}"
+        assert device.post(approval + "/approve").status_code == 401
+        details = browser.get(approval).json()
+        assert details["workspacePath"] == "/Users/alice/work"
+        assert "deviceCode" not in details
+        assert browser.post(approval + "/approve").status_code == 200
+        wrong = device.post(endpoint, headers={"Authorization": "Device wrong"})
+        assert wrong.status_code == 401
+        redeemed = device.post(endpoint, headers=headers)
+        assert redeemed.status_code == 200
+        assert redeemed.json()["employeeId"] == "alice"
+        assert redeemed.json()["token"]
+        assert device.post(endpoint, headers=headers).status_code == 410
+        assert browser.post(approval + "/approve").status_code == 409
+
+
+def test_device_authorization_expires_without_provisioning_a_node(monkeypatch) -> None:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import update
+    from relay.security.device_authorization import computer_authorizations
+    from relay.persistence.store_common import store_transaction
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        browser = TestClient(app)
+        device = TestClient(app)
+        _bootstrap_admin(browser)
+        _enroll_employee(browser, "alice")
+        grant = device.post("/api/v1/computer-authorizations", json={
+            "workspacePath": "/Users/alice/work", "displayName": "Alice laptop"}).json()
+        with store_transaction(app.state.session_store.engine) as conn:
+            conn.execute(update(computer_authorizations).values(
+                expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+        approval = f"/api/v1/computer-authorizations/{grant['userCode']}"
+        assert browser.get(approval).status_code == 410
+        assert browser.post(approval + "/approve").status_code == 410
+        assert device.post("/api/v1/computer-authorizations/token", headers={
+            "Authorization": f"Device {grant['deviceCode']}"}).status_code == 401
+
+
 def test_daemon_auth_check_is_read_only_and_requires_node_token(monkeypatch) -> None:
     from copy import deepcopy
 

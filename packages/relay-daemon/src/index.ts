@@ -283,6 +283,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   }
   let agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, options.signal);
   let agentInventory = await discoverAgentInventory(environment.execStream, options.signal, inventoryDiscoveryTimeoutMs);
+  const runtimeRefreshCommands = new Map<string, string>();
+  let refreshedCommands: Array<{ commandId: string; leaseId: string }> = [];
   const buildRegistration = (includeEmployeeId = Boolean(configuredEmployeeId), status?: DaemonNodeRegistration["status"]): DaemonNodeRegistration => ({
     sandboxId,
     ...(includeEmployeeId ? { employeeId: effectiveEmployeeId } : {}),
@@ -299,7 +301,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       maxConcurrentRuns,
       ...(agentInventory[executorKind as AgentName] ? { inventory: agentInventory[executorKind as AgentName] } : {}),
     })),
+    runtimeRefreshCommands: refreshedCommands,
     capabilities: [
+      "runtime-refresh",
       DAEMON_CAPABILITY_AGENT_SKILLS,
       DAEMON_CAPABILITY_HANDOFF_VALIDATION,
       DAEMON_CAPABILITY_GENERATED_FILES,
@@ -503,10 +507,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         if (stopping) return { commands: [] };
         // Capability re-registration refreshes agent inventory independently
         // of the lightweight liveness heartbeat.
-        if (activeRuns.size === 0 && Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs) {
+        if (activeRuns.size === 0 && (runtimeRefreshCommands.size > 0 || Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs)) {
           agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal);
           agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
+          refreshedCommands = [...runtimeRefreshCommands].slice(0, 50).map(([commandId, leaseId]) => ({ commandId, leaseId }));
           updateHeartbeatSettings(await register());
+          for (const { commandId } of refreshedCommands) runtimeRefreshCommands.delete(commandId);
+          refreshedCommands = [];
           lastRegisteredAt = Date.now();
         }
         commandPollStartedAt = performance.now();
@@ -552,6 +559,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       }, logger, { sandboxId, what: "command poll" }, reconnectControl);
       if (stopping) break;
       for (const command of body.commands ?? []) {
+        if (command.type === "runtime.refresh") {
+          runtimeRefreshCommands.set(command.id, command.leaseId);
+          continue;
+        }
         if (command.type === "run.start") {
           const active = activeRuns.get(command.id);
           if (active) {
@@ -1052,8 +1063,7 @@ async function executeCommand(
       });
       return { stream, text, sequence };
     });
-    enqueueOutputPost(
-      () => postJsonWithRetry(fetchFn, eventUrl, {
+    const event = {
           type: "run.output.batch",
           commandId: command.id,
           ...commandLeaseEventFields(command),
@@ -1061,7 +1071,14 @@ async function executeCommand(
           runId: command.runId,
           agent,
           entries,
-        } satisfies DaemonNodeEvent, token, signal),
+        } satisfies DaemonNodeEvent;
+    if (outputPostFailure) return;
+    try { persistTerminalEvent(fetchFn, event); } catch (error) {
+      outputPostFailure = error instanceof Error ? error : new Error(String(error));
+      return;
+    }
+    enqueueOutputPost(
+      () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
       { agent, sequence: entries[0]?.sequence },
       entries.reduce((total, entry) => total + Buffer.byteLength(entry.text), 0),
     );
@@ -1078,8 +1095,7 @@ async function executeCommand(
       // them in the agent's JSONL stream.
       outputBuffer.flush();
       const sequence = outputSequence++;
-      enqueueOutputPost(
-        () => postJsonWithRetry(fetchFn, eventUrl, {
+      const event = {
             type: "run.collaboration",
             commandId: command.id,
             ...commandLeaseEventFields(command),
@@ -1088,7 +1104,14 @@ async function executeCommand(
             agent,
             collaboration,
             sequence,
-          } satisfies DaemonNodeEvent, token, signal),
+          } satisfies DaemonNodeEvent;
+      if (outputPostFailure) return;
+      try { persistTerminalEvent(fetchFn, event); } catch (error) {
+        outputPostFailure = error instanceof Error ? error : new Error(String(error));
+        return;
+      }
+      enqueueOutputPost(
+        () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
         { agent, sequence },
         Buffer.byteLength(JSON.stringify(collaboration)),
       );
