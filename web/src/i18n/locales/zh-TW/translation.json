@@ -189,6 +189,7 @@
     "tasks_activities_subtitle": "這個專案中正在進行的會話。"
   },
   "thread": {
+    "back_to_project_activities": "返回專案動態",
     "search_placeholder": "搜尋對話…",
     "search_label": "搜尋對話",
     "resize_label": "調整對話清單寬度",

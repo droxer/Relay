@@ -2,16 +2,19 @@ import { useTranslation } from "react-i18next";
 import type { EmployeeAgent, RelaySession } from "../types";
 import {
   ICON,
+  NavBack,
   NavThreads,
 } from "./icons";
 import { ArtifactNavButton } from "./ArtifactNavButton";
 import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { navigateToAppPath, pathForAppState } from "../lib/appRoute";
 
-export function ThreadHeader({ activeSession, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
+export function ThreadHeader({ activeSession, projectId, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
   activeSession: RelaySession | undefined;
+  projectId?: string | null;
   /** Agents in the room, in join order. Shown only once a thread has more
    *  than one — a solo thread already names its agent in the composer. Drawn
    *  as a face stack: the header is a row the title has first claim on, so
@@ -25,12 +28,32 @@ export function ThreadHeader({ activeSession, participants, artifactCount, space
   onBackToThreads: () => void;
 }) {
   const { t } = useTranslation();
+  const parentProjectId = projectId ?? activeSession?.projectId;
+  const projectActivitiesHref = parentProjectId
+    ? `${pathForAppState({ route: "projects", mobileView: "chat", sessionId: null, projectId: parentProjectId })}?tab=activities`
+    : null;
   return (
     <header className="chat-header">
       <div className="chat-title">
-        <Button variant="ghost" className="mobile-back-button" type="button" aria-label={t("nav.threads")} onClick={onBackToThreads}>
-          <NavThreads size={ICON.md} /><span>{t("nav.threads")}</span>
-        </Button>
+        {projectActivitiesHref ? (
+          <a
+            className={buttonVariants({ variant: "ghost" })}
+            href={projectActivitiesHref}
+            aria-label={t("thread.back_to_project_activities")}
+            title={t("thread.back_to_project_activities")}
+            onClick={(event) => {
+              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              void navigateToAppPath(projectActivitiesHref);
+            }}
+          >
+            <NavBack size={ICON.md} /><span>{t("workspace.tab_activities")}</span>
+          </a>
+        ) : (
+          <Button variant="ghost" className="mobile-back-button" type="button" aria-label={t("nav.threads")} onClick={onBackToThreads}>
+            <NavThreads size={ICON.md} /><span>{t("nav.threads")}</span>
+          </Button>
+        )}
         <div className="chat-title-text">
           <h2 title={activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : undefined}>{activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : t("thread.new_thread")}</h2>
         {activeSession?.execution && activeSession.execution.phase !== "terminal" ? (
