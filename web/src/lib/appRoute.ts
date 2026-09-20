@@ -520,10 +520,11 @@ export function syncAppStateToUrl(state: AppLocationState, replace = false, onCo
 }
 
 /** Push an in-app path (search params allowed) and notify route/search listeners. */
-export function navigateToAppPath(path: string): Promise<void> {
+export function navigateToAppPath(path: string, options?: { replace?: boolean }): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   return requestNavigation(() => {
-    window.history.pushState(window.history.state, "", path);
+    if (options?.replace) window.history.replaceState(window.history.state, "", path);
+    else window.history.pushState(window.history.state, "", path);
     window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
   });
 }

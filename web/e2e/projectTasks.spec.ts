@@ -91,6 +91,8 @@ for (const mobile of [false, true]) {
     await page.goto("/projects/launch?task=task-0&recordTab=files");
     await expect(page).toHaveURL((url) => url.pathname === "/backlog/task-0" && url.searchParams.get("project") === "launch" && url.searchParams.get("tab") === "files");
     await expect(page.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.goBack();
+    await expect(page).toHaveURL(/\/backlog$/);
     await page.locator('[data-nav="projects"]').click();
     await expect(page).toHaveURL(/\/projects$/);
     await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");

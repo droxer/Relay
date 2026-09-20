@@ -78,3 +78,6 @@ updated verification is recorded below.
 - Production dependency audit against registry.npmjs.org: 0 vulnerabilities.
 - Screenshots inspected at desktop and 390px mobile width. Task details keep
   the project navigation and visible title, tabs, and actions on mobile.
+- Backend suite: 1,753 passed with 536 warnings in 271.55 seconds. Final redirect
+  changes were rechecked with all Node/React tests and the 3 browser journeys;
+  legacy redirects replace history so browser Back returns to the task list.

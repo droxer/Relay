@@ -250,7 +250,7 @@ export function ProjectWorkspacePage({
     if (!recordTaskId) return;
     const recordTab = new URLSearchParams(window.location.search).get("recordTab");
     const suffix = recordTab === "files" || recordTab === "definition" ? `&tab=${recordTab}` : "";
-    void navigateToAppPath(projectTasksHref(project.id, recordTaskId) + suffix);
+    void navigateToAppPath(projectTasksHref(project.id, recordTaskId) + suffix, { replace: true });
   }, [project.id, recordTaskId]);
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
