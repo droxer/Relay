@@ -6,19 +6,19 @@ import { listTaskRuns } from "../../api";
 import { hrefForRoute } from "../../lib/appRoute";
 import { formatRunDuration, runDurationMs, runOutcome } from "../../lib/taskRuns";
 import type { TaskRun } from "../../types";
-import { StateMark } from "../StateMark";
 
 /**
- * What one plain task's run produced.
+ * The facts of one plain task's run: when it ended, how long it took, what it
+ * left behind, and why it stopped if it stopped badly.
  *
- * The drawer already listed the task's files and its event timeline, but never
- * said how the run itself came out — a person had to read the timeline to the
- * end and infer it. This states it: outcome, when, how long, how many files.
+ * It deliberately does NOT name the outcome. On the drawer it had to, because
+ * nothing else did; on the record surface the band above already states the
+ * status, and `RecordBand`'s contract is that no panel restates a band fact.
  *
  * A plain task ran as itself, so `/tasks/{id}/runs` answers with exactly one
- * row; a routine's many rows are `RoutineRunLedger`'s job.
+ * row; a routine's many rows are `RecordRuns`' job.
  */
-export function TaskResultSummary({
+export function RecordResultLine({
   taskId,
   onOpenThread,
 }: {
@@ -49,8 +49,6 @@ export function TaskResultSummary({
 
   return (
     <section className="task-result-summary" data-outcome={outcome} aria-label={t("backlog.result_title")}>
-      <StateMark tone={outcome === "done" ? "good" : outcome === "failed" ? "bad" : outcome === "running" ? "live" : "neutral"} shape={outcome === "pending" ? "dashed" : undefined} />
-      <span className="task-result-outcome">{t(`backlog.runs.outcome.${outcome}`)}</span>
       {when ? (
         <span className="task-result-when tnum">
           {new Intl.DateTimeFormat(i18n.language || undefined, {

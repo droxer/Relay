@@ -659,6 +659,13 @@ export function createTask(input: CreateTaskInput): Promise<RelayTask> {
   });
 }
 
+/** One task or routine, by id. The list poll carries most records already,
+ *  but a deep link to a record arrives before the list resolves — and an
+ *  occurrence may sit outside whatever the list is showing. */
+export function getTask(taskId: string, signal?: AbortSignal): Promise<RelayTask> {
+  return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}`, { signal });
+}
+
 export function updateTask(taskId: string, input: TaskMutationInput): Promise<RelayTask> {
   return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}`, {
     method: "PATCH",

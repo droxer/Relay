@@ -1,7 +1,5 @@
 "use client";
 
-import { TaskRecoveryPanel } from "./ExecutionRecoveryPanel";
-
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
@@ -10,11 +8,11 @@ import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem } from "../types";
+import { type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
 import { useEmployeeNames } from "../hooks/useEmployeeNames";
-import { filterRoutineTasks, latestRoutineSession, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
+import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
 import { usePagination } from "../hooks/usePagination";
@@ -23,6 +21,7 @@ import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { emptyRoutineForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
+import { TaskRecordView } from "./task-record/TaskRecordView";
 import {
   activeRoutineFilterCount,
   initialRoutineFilters,
@@ -31,7 +30,6 @@ import {
   RoutineStateNav,
 } from "./task-board/RoutineChrome";
 import {
-  RoutineDrawerMeta,
   RoutineRow,
   RoutineRowsHead,
 } from "./task-board/RoutineRecords";
@@ -52,8 +50,13 @@ import { Table } from "@/components/ui/table";
 import { taskRef } from "../lib/taskRef";
 
 interface RoutinesPageProps {
+  /** The routine whose record is open, from `/routines/<id>`. */
+  recordTaskId?: string | null;
+  /** The occurrence open as a run, from `/routines/<id>/runs/<runId>`. */
+  recordRunId?: string | null;
+  /** Opens a record; `null` returns to the board. */
+  onOpenRecord: (routineId: string | null, runId?: string | null) => void;
   tasks: RelayTaskListItem[];
-  sessions: RelaySession[];
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
   isRefreshing: boolean;
@@ -61,7 +64,7 @@ interface RoutinesPageProps {
   onOpenThread: (sessionId: string) => void;
 }
 
-export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+export function RoutinesPage({ recordTaskId, recordRunId, onOpenRecord, tasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -256,10 +259,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
     }
   }
 
-  function linkedSession(task: RelayTaskListItem): RelaySession | undefined {
-    return latestRoutineSession(task, tasks, sessions);
-  }
-
   function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; ready: boolean } {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
     if (team) {
@@ -286,9 +285,6 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
      rail says. */
   const sectionNarrowed = activeRoutineFilterCount(filters) > 0 || filters.query.trim().length > 0;
 
-  const editingTask = form?.id ? tasks.find((task) => task.id === form.id) : undefined;
-  const editingSession = editingTask ? linkedSession(editingTask) : undefined;
-
   // Quick-assign entry from a card/row: same drawer, focus on the picker.
   function assignTask(task: RelayTaskListItem) {
     setAssignmentFocus(true);
@@ -298,6 +294,7 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
   function routineHandlers(task: RelayTaskListItem) {
     return {
       starting: startTaskMutation.isPending && startTaskMutation.variables?.taskId === task.id,
+      onOpen: () => onOpenRecord(task.id),
       onEdit: () => editTask(task),
       onAssign: () => assignTask(task),
       onStart: () => {
@@ -308,6 +305,45 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
         });
       },
     };
+  }
+
+  /* The record surface takes the whole route when the path names one. The
+     board's drawer stays mounted below it: the record delegates editing back
+     here rather than carrying a second copy of the form. */
+  if (recordTaskId) {
+    return (
+      <>
+        <TaskRecordView
+          taskId={recordTaskId}
+          runId={recordRunId}
+          tasks={tasks}
+          onEdit={editTask}
+          onOpenThread={onOpenThread}
+          onOpenRecord={onOpenRecord}
+          onDeleted={() => onOpenRecord(null)}
+        />
+        {form ? (
+          <TaskDrawer
+            open={drawerOpen}
+            form={form}
+            logicalAgents={logicalAgents}
+            teams={teams}
+            saving={saving}
+            deleting={deleting}
+            initialFocus={assignmentFocus ? "assignment" : "title"}
+            title={form.id ? t("routine.edit") : t("routine.new")}
+            subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
+            onClose={() => { void closeRoutineForm(); }}
+            onClosed={releaseRoutineForm}
+            onChange={(next) => {
+              if (next.variant === "routine") setForm(next);
+            }}
+            onSubmit={(event) => void submitRoutine(event)}
+            onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
+          />
+        ) : null}
+      </>
+    );
   }
 
   return (
@@ -446,24 +482,11 @@ export function RoutinesPage({ tasks, sessions, nodes, currentUser, isRefreshing
           initialFocus={assignmentFocus ? "assignment" : "title"}
           title={form.id ? t("routine.edit") : t("routine.new")}
           subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
-          meta={editingTask ? (
-            <>
-              {/* The meta row below already links this occurrence's thread. */}
-              <TaskRecoveryPanel task={editingTask} excludeSessionId={editingSession?.id} onOpenThread={onOpenThread} />
-              <RoutineDrawerMeta
-                task={editingTask}
-                state={routineState(editingTask, runningIds)}
-                session={editingSession}
-                onOpenThread={onOpenThread}
-              />
-            </>
-          ) : undefined}
           onClose={() => { void closeRoutineForm(); }}
           onClosed={releaseRoutineForm}
           onChange={(next) => {
             if (next.variant === "routine") setForm(next);
           }}
-          onOpenThread={onOpenThread}
           onSubmit={(event) => void submitRoutine(event)}
           onDelete={form.id ? () => { void deleteRoutine(); } : undefined}
         />

@@ -201,7 +201,7 @@ describe("reviewed design regressions", () => {
     // One back control, one spelling of it, on every surface a file opens on.
     for (const surface of [
       "src/components/space/ThreadSpaceFiles.tsx",
-      "src/components/task-board/TaskDrawerWorkspace.tsx",
+      "src/components/task-record/RecordWorkspace.tsx",
       "src/components/artifact/ArtifactPreviewHeader.tsx",
     ]) {
       assert.match(readWeb(surface), /<FilePaneBack/, `${surface} rolls its own back control`);
@@ -216,7 +216,7 @@ describe("reviewed design regressions", () => {
     const surfaces = [
       "src/components/ProjectWorkspaceFiles.tsx",
       "src/components/space/ThreadSpaceFiles.tsx",
-      "src/components/task-board/TaskDrawerWorkspace.tsx",
+      "src/components/task-record/RecordWorkspace.tsx",
     ];
     for (const surface of surfaces) {
       assert.match(readWeb(surface), /<WorkspaceFileActions/, `${surface} builds its own file controls`);

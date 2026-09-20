@@ -18,6 +18,11 @@ import { dueTone } from "../../lib/backlog";
 import { taskResultLine } from "../../lib/taskResult";
 import { RoutineOriginBadge } from "./RoutineOriginBadge";
 import { taskRef } from "../../lib/taskRef";
+import { pathForAppState } from "../../lib/appRoute";
+
+function hrefForTaskRecord(taskId: string): string {
+  return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
+}
 import { TaskReference } from "./TaskReference";
 import { TaskAssignee, TaskExecutionBadge } from "../TaskAssignee";
 import { Button } from "@/components/ui/button";
@@ -59,6 +64,7 @@ export function BacklogTaskCard({
   onDragStart,
   onDragEnd,
   onTouchStart,
+  onOpen,
   onEdit,
   onAssign,
   onStart,
@@ -81,6 +87,8 @@ export function BacklogTaskCard({
   onDragStart: (event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   onTouchStart: (event: TouchEvent<HTMLElement>) => void;
+  /** Opens the task's record. The title is a destination now, not a form. */
+  onOpen: () => void;
   onEdit: () => void;
   onAssign: () => void;
   onStart: () => void;
@@ -127,7 +135,15 @@ export function BacklogTaskCard({
           onCheckedChange={onToggleSelect}
         />
         <div className="backlog-card-body">
-          <Button variant="ghost" type="button" className="backlog-task-title" onClick={onEdit}>{task.title}</Button>
+          <a
+          className="backlog-task-title"
+          href={hrefForTaskRecord(task.id)}
+          onClick={(event) => {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            onOpen();
+          }}
+        >{task.title}</a>
           <TaskFlowDetails task={task} execution={session?.execution} showAge={false} />
           {task.description ? <p className="backlog-description">{task.description}</p> : null}
           {/* One line of facts, and only facts the lane above does not already
@@ -315,6 +331,7 @@ export function BacklogTaskRow({
   canDiscuss,
   selected,
   onToggleSelect,
+  onOpen,
   onEdit,
   onAssign,
   onStart,
@@ -333,6 +350,8 @@ export function BacklogTaskRow({
   canDiscuss: boolean;
   selected: boolean;
   onToggleSelect: () => void;
+  /** Opens the task's record. The title is a destination now, not a form. */
+  onOpen: () => void;
   onEdit: () => void;
   onAssign: () => void;
   onStart: () => void;
@@ -372,7 +391,15 @@ export function BacklogTaskRow({
       </TableCell>
       <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell>
       <TableCell render={<div />} className="backlog-row-lead">
-        <Button variant="ghost" type="button" className="backlog-row-title" onClick={onEdit}>{task.title}</Button>
+        <a
+          className="backlog-row-title"
+          href={hrefForTaskRecord(task.id)}
+          onClick={(event) => {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            onOpen();
+          }}
+        >{task.title}</a>
         <TaskFlowDetails task={task} execution={session?.execution} />
         <RoutineOriginBadge task={task} routineTitle={routineTitle} />
       </TableCell>

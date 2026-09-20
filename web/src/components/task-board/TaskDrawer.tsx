@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -30,11 +30,6 @@ import {
   type TaskBoardFormState,
 } from "../../lib/taskBoardForm";
 import { Drawer } from "@/components/ui/Drawer";
-import { TaskDrawerArtifacts } from "./TaskDrawerArtifacts";
-import { TaskDrawerWorkspace } from "./TaskDrawerWorkspace";
-import { TaskDrawerHistory } from "./TaskDrawerHistory";
-import { RoutineRunLedger } from "./RoutineRunLedger";
-import { TaskResultSummary } from "./TaskResultSummary";
 import {
   AssignmentField,
   type AgentView,
@@ -58,10 +53,6 @@ type TaskDrawerProps = {
   onDelete?: () => void;
   /** Fires after the drawer's exit animation completes — release form state here. */
   onClosed?: () => void;
-  /** Read-only context (status, linked thread, recent activity) shown above the form in edit mode. */
-  meta?: ReactNode;
-  /** Opens a thread in place from the run history; falls back to plain navigation. */
-  onOpenThread?: (sessionId: string) => void;
 };
 
 function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
@@ -182,8 +173,6 @@ export function TaskDrawer({
   onSubmit,
   onDelete,
   onClosed,
-  meta,
-  onOpenThread,
 }: TaskDrawerProps) {
   const { t } = useTranslation();
   const priorityLabelId = useId();
@@ -257,13 +246,12 @@ export function TaskDrawer({
       title={title}
       subtitle={subtitle}
       subtitleMono={Boolean(form.id)}
-      width={form.variant === "routine" ? "routine" : "task"}
+      width="task"
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
       onClosed={onClosed}
     >
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
-        {meta}
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
@@ -380,28 +368,6 @@ export function TaskDrawer({
                 aria-label={t("routine.enabled")}
               />
             </div>
-          </>
-        ) : null}
-        {form.id ? (
-          <>
-            {/* Both variants roll artifacts up the same way: a routine's files
-                come from its occurrences' sessions, resolved by the backend. */}
-            {/* The outcome leads: a person opening a finished task wants to
-                know how it came out before what it left behind. */}
-            {form.variant === "routine" ? null : (
-              <TaskResultSummary taskId={form.id} onOpenThread={onOpenThread} />
-            )}
-            <TaskDrawerArtifacts taskId={form.id} />
-            {/* Files produced sit next to files indexed: the artifact list is
-                the durable record, the workspace is what is there right now. */}
-            <TaskDrawerWorkspace taskId={form.id} />
-            {/* A routine's runs happen in its occurrences, so it reads as a
-                ledger of runs; a plain task ran once and reads as a timeline. */}
-            {form.variant === "routine" ? (
-              <RoutineRunLedger taskId={form.id} onOpenThread={onOpenThread} />
-            ) : (
-              <TaskDrawerHistory taskId={form.id} onOpenThread={onOpenThread} />
-            )}
           </>
         ) : null}
         <div className="adm-form-actions">

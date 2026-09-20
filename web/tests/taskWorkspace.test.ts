@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { taskWorkspaceState } from "../src/components/task-board/taskWorkspaceState.js";
+import { taskWorkspaceState } from "../src/components/task-record/taskWorkspaceState.js";
 
 describe("task workspace section state", () => {
   it("reports loading before the first response", () => {
