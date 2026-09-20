@@ -6541,7 +6541,10 @@ def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
         ),
     ],
 )
-def test_daemon_store_reclaims_expired_command_leases(store_factory) -> None:
+def test_daemon_store_reclaims_expired_command_leases(store_factory, monkeypatch) -> None:
+    # Both stores must see the same clock regardless of database/fs latency.
+    now = "2026-06-13T00:00:00.000Z"
+    monkeypatch.setattr("relay.persistence.daemon_store.now_iso", lambda: now)
     with TemporaryDirectory() as root:
         store = store_factory(root)
         store.register_node(
@@ -6579,7 +6582,7 @@ def test_daemon_store_reclaims_expired_command_leases(store_factory) -> None:
         assert first["leaseExpiresAt"]
         assert store.take_queued_commands("sbx_alice") == []
 
-        time.sleep(0.08)
+        now = "2026-06-13T00:00:00.080Z"
 
         [second] = store.take_queued_commands("sbx_alice", lease_seconds=0.05)
         assert second["id"] == "00000000-0000-4000-8000-000000000040"

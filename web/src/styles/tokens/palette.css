@@ -721,12 +721,15 @@
   --track-caps: 0.03em;
 
   /* Families — Noto Sans carries reading, control, and display text, separated
-     by the 400/500/700 product ladder rather than by face. next/font self-hosts
-     the variable Latin family behind --font-app-sans. JetBrains Mono remains
+     by the 400/500/700 product ladder rather than by face. Fontsource supplies
+     the self-hosted variable families behind --font-app-*. JetBrains Mono remains
      technical text only and is sized to its own metrics. */
   /* Transcript content is multilingual even when the UI language is English.
      Keep explicit Han fallbacks in the default stacks so agent-authored CJK
      never depends on a browser's last-resort missing-glyph substitution. */
+  --font-app-sans: "Noto Sans Variable";
+  --font-app-cjk-sc: "Noto Sans SC Variable";
+  --font-app-cjk-tc: "Noto Sans TC Variable";
   --font-sans: var(--font-app-sans), "Noto Sans", "PingFang SC", "PingFang TC", "Microsoft YaHei UI", "Microsoft JhengHei UI", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans SC", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans SC", "Noto Sans TC", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;

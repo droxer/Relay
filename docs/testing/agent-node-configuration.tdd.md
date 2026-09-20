@@ -45,12 +45,13 @@ use the user's installed runtime and its existing authorization.
 - Earlier cloud regressions retain their RED/GREEN history in `4626c6b0` and
   `b70a36e5`; native runtime behavior is governed by the contract above.
 
-## Broader verification and limits
+## Initial broader verification and limits
 
-- `npm test` was attempted; the web build fails while fetching Google fonts.
+- The initial `npm test` attempt failed while fetching Google fonts. The
+  continuation below removes this build dependency.
 - All compiled package and web unit tests: 1,608 passed, one existing failure in
   `dimensionScales.test.ts` against `computer.css` (`font-weight: 600`). Both
-  files are unchanged by these fixes.
+  files were unchanged by the runtime fixes.
 - `npm run test:react -w web`: 143 passed.
 - `npm run test:py`: 1,732 passed.
 - `npx tsc -p web/tsconfig.json --noEmit`: passed.
@@ -62,3 +63,44 @@ reading or changing the operator's real login files. No paid model requests or
 live cloud provisioning were performed. Offline readiness cannot establish
 provider-side key validity or network availability. No schema or container-image
 change is needed; rebuild/restart the daemon to use the updated runtime path.
+
+## Validation blocker follow-up
+
+The continuation fixes the two unrelated issues that prevented a complete test
+run after the runtime changes:
+
+- RED: `dimensionScales.test.ts` reproduced the unsupported weight 600 on
+  `.computer-platform-support dt`. That emphasis label now uses the existing
+  700 rung.
+- RED checkpoint: `6b16c239` requires UI fonts to resolve from installed assets
+  instead of `next/font/google`. The prior build failed downloading Noto CJK
+  subsets from `fonts.gstatic.com`.
+- GREEN: all 32 typography/dimension tests pass. The application now imports
+  version-locked Fontsource 5.3.0 packages, preserving Noto Sans and regional
+  SC/TC variable families, on-demand unicode subsets, and bundled OFL licenses.
+- Browser smoke: served the production static export on loopback and used
+  headless Chromium with all external requests blocked. `document.fonts.load`
+  loaded the English, simplified Chinese, and traditional Chinese samples;
+  computed body families matched the locale and no font request failed.
+- CSS lint and npm audit pass (zero reported vulnerabilities).
+
+The first complete run after removing those blockers passed the build, all 1,610
+TypeScript tests, and all 143 React tests. Python reported 1,730 passed and two
+failures that exposed timing assumptions in the test harness:
+
+- The piped installer test closed `script(1)` stdin via `communicate()` before
+  the token was consumed, producing “Could not read node token.” It now waits
+  for the fixture installer's acknowledgement before closing that pipe.
+- The lease reclamation test expected database operations to finish before a
+  50 ms lease expired. It now freezes the store clock for the in-lease assertion
+  and advances it explicitly beyond expiry for the retry assertion.
+
+Both fixes preserve the original behavior assertions. All 261 tests in the two
+affected Python files pass after these changes.
+
+Final verification: the complete Python suite passes all 1,732 tests (527
+existing warnings). Together with the successful production build, 1,610
+TypeScript tests, and 143 React tests, all validation stages pass. The initial
+combined `npm test` failure remains recorded above; after the Python-only
+harness fixes, `npm run test:py` was rerun in full. No production backend
+behavior was changed for these timing fixes.
