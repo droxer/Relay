@@ -356,10 +356,10 @@ describe("app pathname routes", () => {
       browserUrlForAppState({ ...onBoard, taskId: "R-42", runId: "T-2288" }, "/routines/R-42", "?state=paused&tab=files"),
       "/routines/R-42/runs/T-2288?tab=files&state=paused",
     );
-    // Another board's record is still a fresh surface.
+    // Task records also retain their list filters.
     assert.equal(
       browserUrlForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: "T-1001" }, "/backlog", "?status=blocked"),
-      "/backlog/T-1001",
+      "/backlog/T-1001?status=blocked",
     );
   });
 });

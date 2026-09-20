@@ -87,3 +87,77 @@
     margin-top: 0;
   }
 }
+
+.task-nav-group {
+  margin-top: var(--sp-3);
+}
+
+.task-nav-group-heading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.task-nav-group-heading > .sec-nav-btn {
+  min-width: 0;
+  padding-inline: var(--sp-2);
+}
+
+.task-nav-chevron-open {
+  transform: rotate(90deg);
+}
+
+.task-nav-group-list {
+  list-style: none;
+  margin: var(--sp-1) 0 0 var(--sp-3);
+  padding: 0 0 0 var(--sp-3);
+  border-left: 1px solid var(--line-2);
+}
+
+.task-nav-task {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  text-decoration: none;
+}
+
+.task-nav-task span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-nav-task:hover {
+  background: var(--control-fill-hover);
+}
+
+.task-nav-task[aria-current="page"] {
+  background: var(--action-soft);
+  color: var(--ink-1);
+}
+
+.task-nav-empty {
+  padding: var(--sp-2);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+.tasks-workspace-content > .backlog-page > .workspace-page {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 820px) {
+  .messenger-shell[data-route="backlog"] #task-record-panel .page-header {
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .messenger-shell[data-route="backlog"] #task-record-panel .page-header-lead {
+    width: 100%;
+  }
+}

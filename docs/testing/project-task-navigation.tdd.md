@@ -5,10 +5,9 @@ project Activities so execution details live in tasks.
 
 ## Delivered behavior
 
-- Tasks is the primary destination; projects appear in its secondary sidebar.
-  All projects opens the combined task board. Mobile uses a project selector.
-- Existing project URLs select the project inside Tasks. Legacy Activities URLs
-  return to Tasks; task Activity, Definition, and Files remain available.
+- Projects retains its directory and project details. Tasks groups task links by project in its secondary sidebar.
+  All tasks opens the combined task board. Mobile uses a project selector.
+- Project URLs stay in Projects. Selecting a project task opens its full detail in Tasks. Legacy project task links redirect there; Activity, Definition, and Files remain available.
 - Browser task and routine forms require an enabled, unarchived project. Project
   task creation inherits its project. Executor options respect project membership.
 - Global New task from a project's secondary section returns to its Tasks tab.
@@ -19,9 +18,9 @@ project Activities so execution details live in tasks.
 ## RED / GREEN evidence
 
 `npm run test:react -w web -- taskProjectNavigation.test.tsx` initially failed
-because `ProjectTaskNav` did not exist. The assertions guard against restoring
-the separate Projects destination or the Activities tab. The focused navigation
-tests now pass.
+because `ProjectTaskNav` did not exist. That initial revision removed Projects;
+the navigation correction below supersedes that behavior. Project Activities
+remains removed.
 
 Browser testing reproduced a shortcut that retained the Agents tab because
 same-path navigation preserved query parameters. Explicit navigation to the
@@ -34,7 +33,7 @@ left new untracked components referencing old tracked prop contracts. No hooks
 were bypassed. The failed-command evidence is recorded here instead of claiming a
 successful RED commit.
 
-## Verification
+## Initial revision verification
 
 | Guarantee | Command | Result |
 | --- | --- | --- |
@@ -61,3 +60,24 @@ unchanged. Backend enforcement, event-backed legacy assignment, non-null schema
 migration, and project creation before computer setup remain planned in
 `../project-task-ownership-design.md`. No production data or external resources
 were changed. Project and cross-project boards retain their existing layouts.
+
+## Navigation correction
+
+The clarified design retains Projects as a separate destination. RED checkpoint
+`933180f9` captures separate selected navigation states, expandable project task
+groups, task links, and persistent project scope. Task details now render in the
+Tasks main pane. The earlier verification table describes the initial revision;
+updated verification is recorded below.
+
+- Updated navigation and creation tests: 12 passed. ProjectTaskNav coverage:
+  97.05% statements, 93.33% branches, 100% functions and lines.
+- Updated full frontend suite: 1,680 Node tests and 187 React tests passed.
+- Updated desktop/mobile and draft-preservation journeys: 3 passed, including
+  task tab interaction, legacy project task links, and returning to Projects.
+- Production build, TypeScript compilation, CSS lint, and diff checks passed.
+- Production dependency audit against registry.npmjs.org: 0 vulnerabilities.
+- Screenshots inspected at desktop and 390px mobile width. Task details keep
+  the project navigation and visible title, tabs, and actions on mobile.
+- Backend suite: 1,753 passed with 536 warnings in 271.55 seconds. Final redirect
+  changes were rechecked with all Node/React tests and the 3 browser journeys;
+  legacy redirects replace history so browser Back returns to the task list.

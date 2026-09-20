@@ -96,7 +96,7 @@ describe("Task assignment discoverability", () => {
     const appRouteSource = await readFile(resolve("web/src/lib/appRoute.ts"), "utf8");
     const routerSource = await readFile(resolve("web/src/hooks/useAppRouter.ts"), "utf8");
 
-    assert.match(appRouteSource, /export function navigateToAppPath\(path: string\)/);
+    assert.match(appRouteSource, /export function navigateToAppPath\(path: string, options\?/);
     assert.match(routerSource, /window\.addEventListener\(APP_NAVIGATION_EVENT, applyCurrentLocation\)/);
   });
 });

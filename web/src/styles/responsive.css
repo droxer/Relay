@@ -261,6 +261,7 @@
      record's content. (The control panel is not one of these: its sections
      live in their own nav strip, so its content header would only restate the
      section name the topbar already carries.) */
+  .messenger-shell[data-route="backlog"] #task-record-panel .page-header,
   .messenger-shell[data-route="agents"] .page-header,
   .messenger-shell[data-route="teams"] .page-header,
   .messenger-shell[data-route="projects"] .page-header {
@@ -270,6 +271,7 @@
     border-bottom-color: var(--line-2);
   }
 
+  .messenger-shell[data-route="backlog"] #task-record-panel .page-header-lead,
   .messenger-shell[data-route="agents"] .page-header-lead,
   .messenger-shell[data-route="teams"] .page-header-lead,
   .messenger-shell[data-route="projects"] .page-header-lead {

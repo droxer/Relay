@@ -25,7 +25,7 @@ it("lists projects with live open task counts and navigates without losing nativ
   const project = screen.getByRole("link", { name: /Launch/ });
   expect(project.getAttribute("aria-current")).toBe("page");
   expect(project.textContent).toBe("Launch1");
-  expect(project.getAttribute("href")).toBe("/projects/p");
+  expect(project.getAttribute("href")).toBe("/backlog?project=p");
   fireEvent.click(screen.getByRole("link", { name: /Support/ }));
   expect(select).toHaveBeenLastCalledWith("q");
   fireEvent.click(screen.getByRole("link", { name: /project.all_projects/ }));
@@ -51,12 +51,12 @@ it("reports failed project loading and allows retry", () => {
   expect(retry).toHaveBeenCalled();
 });
 
-it("has one Tasks destination selected on project routes", () => {
+it("keeps separate Projects and Tasks destinations and selects Projects on project routes", () => {
   render(<SideNav sidenavExpanded={false} setSidenavExpanded={vi.fn()} width={200}
     onResize={vi.fn()} onResizeActive={vi.fn()} route="projects" onNavigateRoute={vi.fn()}
     hrefForRoute={(route) => `/${route}`} isAdmin={false} onLogout={vi.fn()} onOpenCommandMenu={vi.fn()} />);
-  expect(screen.queryByRole("link", { name: "project.projects" })).toBeNull();
-  expect(screen.getByRole("link", { name: "nav.backlog" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link", { name: "project.projects" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link", { name: "nav.backlog" }).getAttribute("aria-current")).toBeNull();
 });
 
 it("redirects legacy project Activities tabs to tasks while preserving task details", () => {
@@ -64,4 +64,31 @@ it("redirects legacy project Activities tabs to tasks while preserving task deta
   expect(parseProjectPageTab("activities")).toBe("tasks");
   expect(canonicalBrowserUrl("/projects/p", "?tab=activities")).toBe("/projects/p");
   expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=files")).toBe("/projects/p?task=t&recordTab=files");
+});
+
+
+it("groups task links below their project and highlights the selected task", () => {
+  const open = vi.fn();
+  render(<ProjectTaskNav projects={projects} projectId="p" taskId="1" onOpenTask={open}
+    tasks={[
+      { id: "1", title: "Write release notes", projectId: "p", status: "backlog" },
+      { id: "2", title: "Answer customers", projectId: "q", status: "running" },
+      { id: "3", title: "Deleted task", projectId: "p", status: "backlog", deletedAt: "today" },
+      { id: "4", title: "Routine definition", projectId: "p", status: "backlog", isRoutine: true },
+    ] as RelayTaskListItem[]} onSelect={vi.fn()} onCreate={vi.fn()} status="ready" onRetry={vi.fn()} />);
+  const link = screen.getByRole("link", { name: /Write release notes/ });
+  expect(link.getAttribute("aria-current")).toBe("page");
+  expect(link.getAttribute("href")).toBe("/backlog/1?project=p");
+  expect(link.closest("section")?.getAttribute("aria-label")).toBe("Launch");
+  expect(screen.getByRole("link", { name: /Answer customers/ }).closest("section")?.getAttribute("aria-label")).toBe("Support");
+  expect(screen.queryByRole("link", { name: /Deleted task|Routine definition/ })).toBeNull();
+  fireEvent.click(screen.getByRole("link", { name: /Answer customers/ }));
+  expect(open).toHaveBeenCalledWith("2", "q");
+  fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+  expect(screen.queryByRole("link", { name: /Write release notes/ })).toBeNull();
+});
+
+it("preserves project scope and filters through task record navigation", () => {
+  expect(canonicalBrowserUrl("/backlog", "?project=p&q=ship")).toBe("/backlog?project=p&q=ship");
+  expect(canonicalBrowserUrl("/backlog/t", "?project=p&q=ship&tab=files")).toBe("/backlog/t?tab=files&project=p&q=ship");
 });

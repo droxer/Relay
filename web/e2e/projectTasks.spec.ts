@@ -36,10 +36,8 @@ for (const mobile of [false, true]) {
     await expect(page.getByRole("button", { name: "Write the release brief" })).toBeVisible();
     await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
     await expect(page.getByRole("tab", { name: "Activities", exact: true })).toHaveCount(0);
-    await expect(page.locator('[data-nav="projects"]')).toHaveCount(0);
-    await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
-    if (mobile) await expect(page.locator(".task-project-nav-mobile select")).toHaveValue("launch");
-    else await expect(page.locator(".task-project-nav").getByRole("link", { name: /Autumn launch/ })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
+    await expect(page.locator('[data-nav="backlog"]')).not.toHaveAttribute("aria-current", "page");
     await page.getByRole("textbox", { name: "New task", exact: true }).fill("Prepare release notes");
     await page.getByRole("button", { name: "New task", exact: true }).click();
     await expect(page.getByRole("button", { name: "Prepare release notes" })).toBeVisible();
@@ -62,9 +60,23 @@ for (const mobile of [false, true]) {
     await page.getByRole("button", { name: "Prepare release notes", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Definition", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/backlog\/created\?project=launch/);
+    await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Prepare release notes", exact: true })).toBeInViewport();
+    const definitionTab = page.getByRole("tab", { name: "Definition", exact: true });
+    expect((await definitionTab.boundingBox())?.width).toBeGreaterThan(60);
+    await definitionTab.click();
+    await expect(page.getByRole("tab", { name: "Definition", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
+    if (mobile) await expect(page.locator(".task-project-nav-mobile select")).toHaveValue("launch");
+    else {
+      await page.locator(".task-project-nav").getByRole("link", { name: "Write the release brief", exact: true }).click();
+      await expect(page).toHaveURL(/\/backlog\/task-0\?project=launch/);
+    }
+    await page.screenshot({ path: `/tmp/relay-grouped-tasks-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     if (mobile) await page.locator(".task-project-nav-mobile select").selectOption("");
-    else await page.locator(".task-project-nav").getByRole("link", { name: "All projects", exact: true }).click();
+    else await page.locator(".task-project-nav").getByRole("link", { name: "All tasks", exact: true }).click();
     await expect(page).toHaveURL(/\/backlog$/);
     await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
     const dialog = page.getByRole("dialog");
@@ -75,7 +87,15 @@ for (const mobile of [false, true]) {
     await page.getByRole("option", { name: "Autumn launch", exact: true }).click();
     await dialog.getByRole("button", { name: "Create task", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Global project task", exact: true })).toBeVisible();
+    await expect(page.locator("#backlog-panel").getByRole("link", { name: "Global project task", exact: true })).toBeVisible();
+    await page.goto("/projects/launch?task=task-0&recordTab=files");
+    await expect(page).toHaveURL((url) => url.pathname === "/backlog/task-0" && url.searchParams.get("project") === "launch" && url.searchParams.get("tab") === "files");
+    await expect(page.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.goBack();
+    await expect(page).toHaveURL(/\/backlog$/);
+    await page.locator('[data-nav="projects"]').click();
+    await expect(page).toHaveURL(/\/projects$/);
+    await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
     expect(requests.some((url) => url.includes("workspace/brief"))).toBe(false);
   });
 }
@@ -115,5 +135,5 @@ test("creating the first project preserves a global task draft", async ({ page }
   await expect(taskForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Keep this draft");
   await expect(taskForm.getByRole("combobox", { name: "Projects", exact: true })).toContainText("First project");
   await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
-  await expect(page.getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
+  await expect(page.locator("#backlog-panel").getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
 });

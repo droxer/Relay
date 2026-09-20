@@ -52,7 +52,6 @@ describe("task deletion", () => {
     for (const path of [
       "web/src/components/BacklogPage.tsx",
       "web/src/components/RoutinesPage.tsx",
-      "web/src/components/ProjectWorkspacePage.tsx",
     ]) {
       assert.match(await readFile(resolve(path), "utf8"), /onDelete=\{(taskForm\.)?form\.id/);
     }
