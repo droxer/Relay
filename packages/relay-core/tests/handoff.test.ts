@@ -1216,6 +1216,7 @@ describe("execution manager boundary", () => {
     process.env = {
       KIMI_CODE_HOME: join(tmpdir(), "relay-missing-kimi-code-home"),
       KIMI_API_KEY: "kimi-key",
+      KIMI_MODEL: "kimi-k2.5",
     };
     try {
       await prepareGuestAgentAuth(["kimi"]);
@@ -1235,7 +1236,7 @@ describe("execution manager boundary", () => {
     try {
       await assert.rejects(
         () => prepareGuestAgentAuth(["kimi"]),
-        /Kimi requires a host Kimi Code login, KIMI_API_KEY, or MOONSHOT_API_KEY/,
+        /Kimi requires a valid config.toml/,
       );
     } finally {
       process.env = oldEnv;
@@ -1250,7 +1251,7 @@ describe("execution manager boundary", () => {
     mkdirSync(credentials, { recursive: true });
     mkdirSync(oauth, { recursive: true });
     mkdirSync(bin, { recursive: true });
-    writeFileSync(join(temp, "config.toml"), "default_model = \"kimi-test\"\n");
+    writeFileSync(join(temp, "config.toml"), 'default_model = "kimi-test"\n[models.kimi-test]\nprovider = "kimi"\nmodel = "kimi-k2.5"\n[providers.kimi]\ntype = "kimi"\napi_key = "test-key"\n');
     writeFileSync(join(temp, "tui.toml"), "theme = \"dark\"\n");
     writeFileSync(join(credentials, "kimi-code.json"), "{\"token\":\"secret\"}\n");
     writeFileSync(join(oauth, "kimi-code"), "");
@@ -1472,6 +1473,17 @@ describe("Pi provider config", () => {
         assert.match(claudeCommand, /--model claude-model/);
       },
     );
+  });
+
+  it("accepts Codex API-key readiness without requiring an interactive login", () => {
+    const home = mkdtempSync(join(tmpdir(), "relay-codex-api-ready-"));
+    const cli = join(home, "codex");
+    writeFileSync(cli, '#!/bin/sh\n[ "$1" = "--version" ]\n');
+    chmodSync(cli, 0o755);
+    withEnv({ PATH: `${home}:${process.env.PATH}`, RELAY_RUN_AS_CURRENT_USER: "1", RELAY_AGENT_HOME: home, RELAY_AGENT_WORKSPACE: home, OPENAI_API_KEY: "test-key" }, () => {
+      const result = runShellCommand(getAgent("codex").preflight.command());
+      assert.equal(result.exit_code, 0, result.stderr);
+    });
   });
 
   it("keeps the native Codex provider when no custom endpoint is configured", () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 
 import {
@@ -5,6 +6,9 @@ import {
   anthropicBaseUrl,
   anthropicModel,
   hostWorkspaceOwner,
+  kimiApiKey,
+  kimiBaseUrl,
+  kimiModel,
   openaiBaseUrl,
   openaiApiKey,
   openaiModel,
@@ -60,6 +64,10 @@ const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   kimi: [
     "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
     "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
+    "KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL",
+    "KIMI_MODEL_PROVIDER_TYPE", "KIMI_MODEL_MAX_CONTEXT_SIZE", "KIMI_MODEL_CAPABILITIES",
+    "KIMI_MODEL_DISPLAY_NAME", "KIMI_MODEL_MAX_OUTPUT_SIZE", "KIMI_MODEL_REASONING_KEY",
+    "KIMI_MODEL_THINKING_EFFORT", "KIMI_MODEL_ADAPTIVE_THINKING",
   ],
 };
 
@@ -97,8 +105,14 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
   kimi: () => {
     const env: Array<[string, string]> = [];
     for (const key of AGENT_CREDENTIAL_ENV_NAMES.kimi) {
+      if (["KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL"].includes(key)) continue;
       const value = process.env[key];
       if (value) env.push([key, value]);
+    }
+    if (kimiApiKey() || process.env.KIMI_MODEL_NAME) {
+      pushEnv(env, "KIMI_MODEL_NAME", kimiModel());
+      pushEnv(env, "KIMI_MODEL_API_KEY", kimiApiKey());
+      pushEnv(env, "KIMI_MODEL_BASE_URL", kimiBaseUrl());
     }
     return env;
   },
@@ -122,7 +136,11 @@ export function agentCredentialEnvNames(agent: AgentName): readonly string[] {
  * keys back; otherwise one agent sees every provider's credentials.
  */
 export function allAgentCredentialEnvNames(): string[] {
-  return [...new Set(Object.values(AGENT_CREDENTIAL_ENV_NAMES).flat())];
+  return [...new Set([
+    ...Object.values(AGENT_CREDENTIAL_ENV_NAMES).flat(),
+    "CLAUDE_API_KEY", "CLAUDE_BASE_URL", "CLAUDE_MODEL",
+    "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
+  ])];
 }
 
 /**
@@ -153,9 +171,7 @@ export function guestEnvExports(): string {
 
 export function guestCodexConfigToml(): string {
   const lines = [
-    "[sandbox]",
-    'default_mode = "danger-full-access"',
-    'model_provider = "dashscope"',
+    'sandbox_mode = "danger-full-access"',
   ];
   const model = openaiModel();
   const baseUrl = openaiBaseUrl();
@@ -164,6 +180,7 @@ export function guestCodexConfigToml(): string {
   }
   if (baseUrl) {
     lines.push(
+      'model_provider = "dashscope"',
       "",
       "[model_providers.dashscope]",
       'name = "DashScope"',
@@ -187,10 +204,6 @@ export function guestCodexAuthJson(apiKey: string): string {
 
 export function guestPiAuthJson(): string {
   const auth: Record<string, { type: "api_key"; key: string }> = {};
-  const anthropicKey = anthropicApiKey();
-  if (anthropicKey) auth.anthropic = { type: "api_key", key: anthropicKey };
-  const openaiKey = openaiApiKey();
-  if (openaiKey) auth.openai = { type: "api_key", key: openaiKey };
   const piKey = piApiKey();
   if (piKey) auth[piProvider()] = { type: "api_key", key: piKey };
   return JSON.stringify(auth);
@@ -234,8 +247,6 @@ export function codexCliConfigOverrides(): string[] {
   const multiAgent = codexMultiAgentEnabled();
   const argv = [
     "-c",
-    'model_provider="dashscope"',
-    "-c",
     `features.multi_agent=${multiAgent}`,
   ];
   const model = openaiModel();
@@ -243,6 +254,8 @@ export function codexCliConfigOverrides(): string[] {
   if (model) argv.push("-c", `model=${JSON.stringify(model)}`);
   if (baseUrl) {
     argv.push(
+      "-c",
+      'model_provider="dashscope"',
       "-c",
       'model_providers.dashscope.name="DashScope"',
       "-c",
@@ -278,7 +291,7 @@ export function runAsAgent(command: string, workspacePath?: string): string {
     return [
       `export HOME=${shellQuote(home)}`,
       `export CODEX_HOME=${shellQuote(`${home}/.codex`)}`,
-      `export PI_CODING_AGENT_DIR=${shellQuote(`${home}/.pi/agent`)}`,
+      `export PI_CODING_AGENT_DIR=${shellQuote(piAgentDirectory())}`,
       `export KIMI_CODE_HOME=${shellQuote(`${home}/.kimi-code`)}`,
       infrastructureExports,
       `cd ${shellQuote(workspace)}`,
@@ -309,4 +322,17 @@ export function agentHomePath(): string {
 
 export function encodeBase64(value: string): string {
   return Buffer.from(value).toString("base64");
+}
+
+/** Keep native Pi login untouched; explicit Relay credentials use a private overlay. */
+export function piAgentDirectory(): string {
+  const home = agentHomePath();
+  if (process.env.RELAY_RUN_AS_CURRENT_USER !== "1" || (!piApiKey() && !piBaseUrl())) {
+    return `${home}/.pi/agent`;
+  }
+  // Separate daemons with different provider settings must not overwrite one another.
+  const key = createHash("sha256").update(JSON.stringify([
+    piProvider(), piApiKey(), piBaseUrl(), piModel(), piApi(),
+  ])).digest("hex").slice(0, 24);
+  return `${home}/.relay/pi/${key}/agent`;
 }

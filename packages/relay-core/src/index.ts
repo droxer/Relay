@@ -159,6 +159,7 @@ export {
   guestPiModelsJson,
   runAsAgent,
   agentHomePath,
+  piAgentDirectory,
   agentWorkspacePath,
   sessionGuestEnv,
   setSessionGuestEnv,

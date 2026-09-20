@@ -81,9 +81,35 @@ PI_BASE_URL=...           # optional override
 PI_MODEL=...              # optional override
 KIMI_API_KEY=...          # optional; Kimi agent via Moonshot API
 KIMI_BASE_URL=...         # optional override
-KIMI_MODEL=...            # optional override
+KIMI_MODEL=...            # required model ID when using an API key
 MOONSHOT_API_KEY=...      # alternative Moonshot credential
 ```
+
+Agent configuration works in both local (`none`) and BoxLite execution:
+
+- Claude accepts the configured Anthropic API key. Local nodes can also use an
+  existing Claude login; BoxLite guests need the API key.
+- Codex keeps its native/saved provider when `OPENAI_BASE_URL` is empty. A custom
+  endpoint selects Relay's `dashscope` provider. Local API-key setups do not
+  require an interactive login; BoxLite provisioning requires an API key.
+- Pi uses the selected provider's credentials and model settings. On local nodes,
+  explicit Relay credentials create a private configuration under
+  `~/.relay/pi/<configuration-id>/agent`; the original `~/.pi/agent` files are
+  preserved. Without Relay credentials or an endpoint override, local Pi keeps
+  its existing login. BoxLite generates the corresponding guest configuration.
+- Kimi accepts an existing configured model and API key or file-backed OAuth
+  login. With `KIMI_API_KEY` (or `MOONSHOT_API_KEY`), also set `KIMI_MODEL` (or
+  `MOONSHOT_MODEL`) to a model ID. Relay translates these to Kimi's temporary
+  `KIMI_MODEL_NAME`, `KIMI_MODEL_API_KEY`, and `KIMI_MODEL_BASE_URL` variables;
+  native `KIMI_MODEL_*` values take precedence. Without an API key, `KIMI_MODEL`
+  selects an alias from the saved configuration. Readiness rejects missing
+  models or credentials before dispatch; it does not verify keys with a paid
+  model request.
+
+Provider keys and their supported aliases are removed from local subprocess
+inheritance and only the selected agent's credentials are injected. Remote
+hosts need their own credentials or login files; provider launchers do not
+transfer an operator's local login automatically.
 
 Precedence, widest to narrowest: shell environment values always win, then a
 package-local `.env`/`.env.local`, then the `packages/.env` fallback. A key

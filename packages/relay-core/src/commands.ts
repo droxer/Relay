@@ -6,7 +6,7 @@ import {
   kimiTaskPrompt,
   piTaskPrompt,
 } from "./prompts.js";
-import { kimiModel } from "./env.js";
+import { kimiApiKey, kimiModel } from "./env.js";
 import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { AgentState } from "./state.js";
 
@@ -103,7 +103,7 @@ function buildKimiInvocation(prompt: string, skillPaths: string[] | undefined, w
   const argv = ["kimi", "--auto"];
   for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
   const model = kimiModel();
-  if (model) argv.push("--model", model);
+  if (model && !kimiApiKey() && !process.env.KIMI_MODEL_NAME) argv.push("--model", model);
   // stream-json emits one JSON message object per stdout line (parsed by
   // KimiStreamRenderer) and keeps thinking + the resume notice off stdout.
   argv.push("--output-format", "stream-json", "--prompt", prompt);

@@ -99,7 +99,12 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
       subdir: ".codex",
       skillsSubpath: "skills",
     },
-    preflight: { label: "Codex auth", command: () => runAsAgent("codex login status") },
+    preflight: {
+      label: "Codex auth",
+      command: () => runAsAgent(
+        'if [ -n "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" ]; then codex --version; else codex login status; fi',
+      ),
+    },
   },
   kimi: {
     name: "kimi",
@@ -112,7 +117,7 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     needsGuestAuth: true,
     // Each path is a container whose direct children are skill directories.
     skillDelivery: { kind: "skills-dir-flag", flag: "--skills-dir" },
-    preflight: { label: "Kimi", command: () => runAsAgent("kimi --version && kimi doctor") },
+    preflight: { label: "Kimi", command: () => runAsAgent("kimi --version && kimi doctor && kimi provider list --json > /dev/null") },
   },
 };
 

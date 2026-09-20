@@ -60,6 +60,7 @@ import {
   ensureMachineId,
   GUEST_WORKSPACE,
   agentHomePath,
+  piAgentDirectory,
   agentCredentialEnv,
   allAgentCredentialEnvNames,
   DAEMON_CAPABILITY_GENERATED_FILES,
@@ -83,6 +84,7 @@ import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { BoundedTextCapture } from "./bounded-text.js";
+import { assertKimiConfigured, prepareLocalPiAuth } from "./agent-auth.js";
 import { materializeSkills } from "./agent-skills.js";
 
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
@@ -1276,6 +1278,8 @@ function createExecutionEnvironment(
 
 async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void> {
   const def = getAgent(agent);
+  if (agent === "pi") prepareLocalPiAuth();
+  if (agent === "kimi") assertKimiConfigured(join(agentHomePath(), ".kimi-code"));
   prepareLocalAgentSkills();
   const result = await localProcessExecStream("bash", ["-c", def.preflight.command()], {
     signal,
@@ -1524,7 +1528,7 @@ function localAgentSubprocessEnv(): NodeJS.ProcessEnv {
   const home = agentHomePath();
   env.HOME = home;
   env.CODEX_HOME = join(home, ".codex");
-  env.PI_CODING_AGENT_DIR = join(home, ".pi", "agent");
+  env.PI_CODING_AGENT_DIR = piAgentDirectory();
   env.KIMI_CODE_HOME = join(home, ".kimi-code");
   return env;
 }
