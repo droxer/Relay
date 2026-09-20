@@ -80,11 +80,9 @@ describe("Task assignment discoverability", () => {
       assert.match(records, /onAssign: \(\) => void/);
       assert.match(records, /backlog\.assign_task/);
     }
-    // The board card is a tile now, so its quick-assign moved with the rest
-    // of the action bar into the peek drawer; the list row keeps its own.
-    const peekSource = await readFile(resolve("web/src/components/task-board/TaskPeekDrawer.tsx"), "utf8");
+    // The board card is a tile now, so its quick-assign went with the peek
+    // drawer into the record's Edit; the list row keeps its own button.
     assert.equal(backlogRecords.match(/<NavAgents size=\{ICON\.sm\} \/>/g)?.length, 1);
-    assert.equal(peekSource.match(/<NavAgents size=\{ICON\.sm\} \/>/g)?.length, 1);
     // The routine board is a list only, so its one row carries the button.
     assert.equal(routineRecords.match(/<RoutineAssignButton onAssign=\{onAssign\} \/>/g)?.length, 1);
   });

@@ -59,6 +59,8 @@ export function TaskRecordPage({
   onOpenRun,
   onRun,
   onCancel,
+  onToggleBlock,
+  onDone,
   onEdit,
   onDelete,
 }: {
@@ -74,6 +76,8 @@ export function TaskRecordPage({
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
   onCancel: () => void;
+  onToggleBlock: () => void;
+  onDone: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -126,6 +130,8 @@ export function TaskRecordPage({
       busyAction={busyAction}
       onRun={onRun}
       onCancel={onCancel}
+      onToggleBlock={onToggleBlock}
+      onDone={onDone}
       onEdit={onEdit}
       onDelete={onDelete}
     />

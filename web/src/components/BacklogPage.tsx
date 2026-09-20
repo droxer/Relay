@@ -65,7 +65,6 @@ import {
 } from "./task-board/backlogVocabulary";
 import { BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
 import { BacklogRowsHead, BacklogTaskCard, BacklogTaskRow } from "./task-board/BacklogRecords";
-import { TaskPeekDrawer } from "./task-board/TaskPeekDrawer";
 import { ListGroup } from "./ListGroup";
 import { TASK_STATUS_SHAPE } from "./task-board/backlogVocabulary";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
@@ -128,13 +127,15 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
   // The lane whose inline create field is open, if any. Also the target
   // status for an inline create committed from the list view.
   const [inlineCreateStatus, setInlineCreateStatus] = useState<TaskStatus | null>(null);
-  /* The card is a tile; a plain click opens this peek rather than the record
-     route. Id, not object: the board keeps feeding fresh task data into the
-     open drawer, and a deleted record simply closes it. `peekOpen` is
-     separate from the id for the same reason the form's drawerOpen is — the
-     exit animation needs the content to outlive the close request. */
-  const [peekTaskId, setPeekTaskId] = useState<string | null>(null);
-  const [peekOpen, setPeekOpen] = useState(false);
+  /* The record opens as a drawer over the board — the same shape the
+     routines board uses, in both views here. The id is mirrored so the
+     exiting drawer still has its record after the route clears; `onClosed`
+     releases the mirror. */
+  const [lastRecordId, setLastRecordId] = useState<string | null>(null);
+  useEffect(() => {
+    if (recordTaskId) setLastRecordId(recordTaskId);
+  }, [recordTaskId]);
+  const drawerRecordId = recordTaskId ?? lastRecordId;
   const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
   const boardRef = useRef<HTMLDivElement | null>(null);
   const startInFlight = useRef<string | null>(null);
@@ -475,20 +476,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
     moveTaskToLane(taskId, status);
   }
 
-  function openPeek(taskId: string) {
-    setPeekTaskId(taskId);
-    setPeekOpen(true);
-  }
-
-  function closePeek() {
-    setPeekOpen(false);
-  }
-
-  // The drawer calls this after its exit animation completes — only then is
-  // the peeked task released, so the close animates out with content intact.
-  function releasePeek() {
-    setPeekTaskId(null);
-  }
 
   function taskHandlers(task: RelayTaskListItem) {
     const discussionAssignments = logicalAgents
@@ -524,44 +511,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
       },
       onDone: () => void updateTaskMutation.mutate({ taskId: task.id, input: { status: "done" } }),
     };
-  }
-
-  /* The record surface takes the whole route when the path names one. The
-     drawer stays mounted below it: the record delegates editing back here
-     rather than carrying a second copy of the form. */
-  if (recordTaskId) {
-    return (
-      <>
-        <TaskRecordView
-          taskId={recordTaskId}
-          tasks={tasks}
-          onEdit={editTask}
-          onOpenThread={onOpenThread}
-          onOpenRecord={(nextId) => onOpenRecord(nextId)}
-          onDeleted={() => onOpenRecord(null)}
-        />
-        {form ? (
-          <TaskDrawer
-            open={drawerOpen}
-            form={form}
-            logicalAgents={logicalAgents}
-            teams={teams}
-            saving={saving}
-            deleting={deleting}
-            initialFocus={assignmentFocus ? "assignment" : "title"}
-            title={form.id ? t("backlog.edit_task") : t("backlog.new_task")}
-            subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("backlog.new_task_id")}
-            onClose={() => { void closeTaskForm(); }}
-            onClosed={releaseTaskForm}
-            onChange={(next) => {
-              if (next.variant === "backlog") setForm(next);
-            }}
-            onSubmit={(event) => void submitTask(event)}
-            onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
-          />
-        ) : null}
-      </>
-    );
   }
 
   return (
@@ -748,7 +697,7 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                       onDragStart={(event) => beginTaskDrag(task, event)}
                       onDragEnd={endTaskDrag}
                       onTouchStart={(event) => touchDrag.onTouchStart(task.id, event)}
-                      onOpen={() => openPeek(task.id)}
+                      onOpen={() => onOpenRecord(task.id)}
                     />
                   );
                 })}
@@ -799,31 +748,25 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
         onClear={() => setSelection(EMPTY_TASK_SELECTION)}
       />
 
-      {(() => {
-        const peekTask = peekTaskId ? backlogTasks.find((task) => task.id === peekTaskId) ?? null : null;
-        if (!peekTask) return null;
-        const handlers = taskHandlers(peekTask);
-        return (
-          <TaskPeekDrawer
-            open={peekOpen}
-            task={peekTask}
-            session={linkedSession(peekTask)}
-            routineTitle={peekTask.sourceRoutineId ? routineTitles.get(peekTask.sourceRoutineId) : undefined}
-            canDiscuss={canDiscussTask(peekTask) && discussionAgentsForTask(peekTask, nodes, logicalAgents).length > 0}
-            starting={handlers.starting}
-            onClose={closePeek}
-            onClosed={releasePeek}
-            onOpenRecord={() => { closePeek(); onOpenRecord(peekTask.id); }}
-            /* Editing is one layer up: the peek hands off to TaskDrawer and
-               steps aside, exactly as the record page does. */
-            onEdit={() => { closePeek(); editTask(peekTask); }}
-            onAssign={() => { closePeek(); assignTask(peekTask); }}
-            onStart={handlers.onStart}
-            onToggleBlock={handlers.onToggleBlock}
-            onDone={handlers.onDone}
-          />
-        );
-      })()}
+      {/* The record rides over the board rather than replacing it — the same
+          drawer the routines board opens, in both views here. Editing still
+          happens here: the record delegates `onEdit` up, and the form drawer
+          stacks above the record's. */}
+      {drawerRecordId ? (
+        <TaskRecordView
+          taskId={drawerRecordId}
+          tasks={tasks}
+          drawer={{
+            open: Boolean(recordTaskId),
+            onClose: () => onOpenRecord(null),
+            onClosed: () => setLastRecordId(null),
+          }}
+          onEdit={editTask}
+          onOpenThread={onOpenThread}
+          onOpenRecord={(nextId) => onOpenRecord(nextId)}
+          onDeleted={() => onOpenRecord(null)}
+        />
+      ) : null}
 
       {form ? (
         <TaskDrawer
@@ -843,6 +786,7 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
           }}
           onSubmit={(event) => void submitTask(event)}
           onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
+          layer={drawerRecordId ? 1 : 0}
         />
       ) : null}
     </section>

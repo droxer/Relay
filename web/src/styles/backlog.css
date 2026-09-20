@@ -370,8 +370,8 @@
   /* One height for every tile on the board. A lane is a column of peers and
      the reader scans down it, so the title sits on the same line in every
      tile and the facts on the same line. Text clamps inside the frame (see
-     .backlog-task-title); whatever does not fit is detail the peek drawer
-     already carries in full. */
+    .backlog-task-title); whatever does not fit is detail the record drawer
+    already carries in full. */
   height: var(--card-h-tile);
   /* A lane is a flex column, so without this the cards in a full lane shrink
      to share the lane's height — the frame has to refuse that. */

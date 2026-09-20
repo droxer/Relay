@@ -3,10 +3,10 @@ import type { RelaySession, RelayTaskListItem } from "../types.js";
 /**
  * Why a task is not simply moving — as data, not as markup.
  *
- * The board card used to derive all of this inline and the peek drawer would
- * have derived it a second time, which is how two surfaces end up disagreeing
- * about whether a task is blocked. The card is a tile now and states none of
- * it; the list row and the peek drawer both read this.
+ * The board card used to derive all of this inline and every other surface
+ * would have derived it a second time, which is how two surfaces end up
+ * disagreeing about whether a task is blocked. The card is a tile now and
+ * states none of it; the list row reads this.
  *
  * Kept pure and free of `t()`: an unknown blocker resolves to a translation
  * key at the call site, not here.

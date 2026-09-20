@@ -14,6 +14,7 @@ const routineRecords = source("components/task-board/RoutineRecords.tsx");
 const taskDrawer = source("components/task-board/TaskDrawer.tsx");
 const taskDrawerStyles = source("styles/task-drawer.css");
 const listSortStyles = source("styles/list-sort.css");
+const recordStyles = source("styles/task-record.css");
 
 describe("task board review regressions", () => {
   it("hydrates persisted views after the deterministic first render", () => {
@@ -26,14 +27,15 @@ describe("task board review regressions", () => {
     assert.doesNotMatch(backlogPage, /const visibleTasks = view === "list"[\s\S]{0,120}: filteredTasks/);
   });
 
-  it("keeps card actions off the tile and always visible in the peek", () => {
+  it("keeps card actions off the tile and the record drawer's always visible", () => {
     // The hover-revealed card action bar is gone — it hid the card's own
     // facts on hover and vanished entirely on coarse pointers. The tile
-    // carries no actions; the peek drawer's bar is plain layout with no
-    // opacity gate, so every pointer sees the same controls.
+    // carries no actions; the record drawer's toolbar is plain layout with
+    // no opacity gate, so every pointer sees the same controls.
     assert.doesNotMatch(taskDrawerStyles, /backlog-task-actions/);
-    assert.match(taskDrawerStyles, /\.task-peek-actions\s*\{/);
-    assert.doesNotMatch(taskDrawerStyles, /\.task-peek-actions\s*\{[^}]*opacity:\s*0/);
+    assert.doesNotMatch(taskDrawerStyles, /task-peek/);
+    assert.match(recordStyles, /\.record-drawer-toolbar\s*\{[^}]*display:\s*flex/);
+    assert.doesNotMatch(recordStyles, /\.record-drawer-toolbar\s*\{[^}]*opacity:\s*0/);
   });
 
   it("offers the same exact routine states that records display", () => {

@@ -16,8 +16,8 @@ describe("task references", () => {
       assert.match(records, /className="backlog-row-ref code">\{taskRef\(task\.id\)\}/);
     }
     // The card is a tile and states no address of its own: the ref rides in
-    // the shared record band, so the peek drawer and the record page print
-    // the same identity the row did.
+    // the shared record band, so the record drawer prints the same identity
+    // the row did.
     assert.match(bandFacts, /value: taskRef\(task\.id\)/);
     assert.match(bandFacts, /t\("backlog\.col_ref"\)/);
   });
