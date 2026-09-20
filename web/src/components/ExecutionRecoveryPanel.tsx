@@ -65,9 +65,10 @@ function ExecutionRecoveryContent({ session, guide, onRetry, onReportGone }: {
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     <p>{t(`recovery.${guide.key}.body`)}</p>
     {computer ? <p className="recovery-context">{t("recovery.host", { computer })}</p> : null}
+    {execution.lastConfirmedAt && Number.isFinite(Date.parse(execution.lastConfirmedAt)) ? <p className="recovery-context">{t("recovery.last_confirmed", { time: new Date(execution.lastConfirmedAt).toLocaleString() })}</p> : null}
     {execution.deletionRequested ? <p>{t("recovery.deletion_pending")}</p> : null}
     <div className="recovery-actions">
-      {guide.key === "finalization_failed" && onRetry ? <Button type="button" variant="outline" size="dense" disabled={feedback === "pending"} onClick={async () => {
+      {guide.retrySave && onRetry ? <Button type="button" variant="outline" size="dense" disabled={feedback === "pending"} onClick={async () => {
         setFeedback("pending");
         try { await onRetry(); setFeedback("requested"); }
         catch { setFeedback("failed"); }
@@ -107,9 +108,15 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
   const { t } = useTranslation();
   const guide = taskRecoveryGuide(task);
   if (!guide) return null;
-  const linked = task.workspaceWaiting?.blockingSessionId || task.linkedSessionIds.at(-1);
+  const linked = task.workspaceWaiting?.blockingSessionId || (task.status === "blocked" && task.attention ? task.attention.sessionId : task.linkedSessionIds.at(-1));
   const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
-  const reason = task.status === "blocked" ? task.blockerReason : task.status === "assigned" && task.dispatchOutcome?.state !== "started" ? task.dispatchOutcome?.message : undefined;
+  let reason: string | undefined;
+  if (task.status === "blocked") {
+    reason = task.attention?.summary ?? task.blockerReason;
+    if (task.attention?.evidence === "unknown" || reason === "Execution needs attention.") reason = undefined;
+  } else if (task.status === "assigned" && task.dispatchOutcome?.state !== "started") {
+    reason = task.dispatchOutcome?.message;
+  }
   return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} aria-label={t("recovery.title")}>
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     {reason ? <p className="recovery-context">{reason}</p> : null}

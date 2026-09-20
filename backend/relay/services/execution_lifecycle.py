@@ -72,6 +72,11 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         "phase": phase, "executionConfirmed": confirmed,
         "deletionRequested": bool(session.get("deletionRequestedAt")),
         "canDelete": phase == "terminal", "blockingReason": reason,
+        "canRetrySave": phase == "recovery_required" and request is not None
+        and request.get("status") == "finalizing" and bool(state.get(TERMINAL_CLAIM_ID_STATE_KEY)),
+        "canReportGone": phase == "recovery_required" and reason != "finalization_failed"
+        and (request or {}).get("status") != "finalizing"
+        and (command or {}).get("status") not in TERMINAL,
         "lastConfirmedAt": (request or {}).get("currentProgressAt"),
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
     }
@@ -150,7 +155,7 @@ class ExecutionLifecycleService:
         with self.registry.dispatch_lock, self.admission_scope():
             session = self.registry.store.get_session(session_id)
             status = self.status(session)
-            if status["phase"] != "recovery_required":
+            if not status["canReportGone"]:
                 return None
             request = self.registry.daemon_store.active_run_request_for_session_any_node(session_id)
             session = self.registry.store.append_event(session_id, relay_event(

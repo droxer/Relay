@@ -21,7 +21,12 @@ def record_dispatch_failure(
     """Block after the first failure, preserving the cause for manual retry."""
     reason = f"{message.rstrip('.')}. Retry this task manually when the problem is resolved."
     task_store.update_task(
-        task["id"], {"status": "blocked", "blockerReason": reason},
+        task["id"],
+        {
+            "status": "blocked",
+            "blockerReason": reason,
+            "attention": {"code": code, "source": "dispatch"},
+        },
     )
     task_store.clear_dispatch_retry(task["id"])
     return task_store.record_dispatch_outcome(

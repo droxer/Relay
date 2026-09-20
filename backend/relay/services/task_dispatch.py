@@ -330,7 +330,12 @@ class TaskDispatcher:
             message = f"The project cannot execute this task ({error.code})."
             if error.permanent:
                 self.task = self.ctx.task_store.update_task(
-                    self.task["id"], {"status": "blocked", "blockerReason": message}
+                    self.task["id"],
+                    {
+                        "status": "blocked",
+                        "blockerReason": message,
+                        "attention": {"code": dispatch_reason_code(error.code), "source": "dispatch"},
+                    },
                 )
             else:
                 self._mark_assigned_if_backlog()
@@ -375,7 +380,12 @@ class TaskDispatcher:
             )
             if error.permanent:
                 self.task = self.ctx.task_store.update_task(
-                    self.task["id"], {"status": "blocked", "blockerReason": message}
+                    self.task["id"],
+                    {
+                        "status": "blocked",
+                        "blockerReason": message,
+                        "attention": {"code": dispatch_reason_code(error.code), "source": "dispatch"},
+                    },
                 )
             return _record_result(
                 self.ctx,
@@ -483,7 +493,12 @@ class TaskDispatcher:
         message = str(error)
         if state == "rejected":
             self.task = self.ctx.task_store.update_task(
-                self.task["id"], {"status": "blocked", "blockerReason": message}
+                self.task["id"],
+                {
+                    "status": "blocked",
+                    "blockerReason": message,
+                    "attention": {"code": dispatch_reason_code(error.code), "source": "dispatch"},
+                },
             )
         if state == "queued":
             capacity = ensure_managed_capacity_for_task(

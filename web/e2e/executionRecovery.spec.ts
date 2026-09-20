@@ -4,8 +4,9 @@ const now = new Date().toISOString();
 const executionFor = (reason: string) => ({ phase: "recovery_required", blockingReason: reason, canDelete: false, executionConfirmed: false, deletionRequested: false, lastConfirmedAt: null, nextRecoveryAt: null });
 const sessionFor = (reason: string) => ({ id: "recovery-thread", title: "Recovery thread", taskGoal: "Recover execution", workspacePath: "/workspace", computerId: "computer-1", ownerEmployeeId: "review-user", participants: ["human"], status: "failed", phase: "created", createdAt: now, updatedAt: now, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0, execution: executionFor(reason) });
 
-async function serveRecoveryThread(page: Page, reason: string): Promise<string[]> {
+async function serveRecoveryThread(page: Page, reason: string, phase = "recovery_required"): Promise<string[]> {
   const session = sessionFor(reason);
+  session.execution.phase = phase;
   const writes: string[] = [];
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
@@ -74,7 +75,7 @@ for (const reason of ["finalization_failed", "termination_unconfirmed"]) {
     } else {
       await expect(panel.getByRole("button", { name: "Retry saving results" })).toHaveCount(0);
       await panel.getByRole("link", { name: "Open Computers" }).click();
-      await expect(page).toHaveURL(/\/computer$/);
+      await expect(page).toHaveURL(/\/settings\/computers$/);
       expect(writes).toEqual([]);
     }
   });
@@ -100,3 +101,15 @@ test("reporting an agent gone asks first, then calls reconcile", async ({ page }
   await expect(panel).toContainText("The execution is released");
   expect(writes).toEqual(["/api/v1/threads/recovery-thread/execution/reconcile"]);
 });
+
+
+for (const phase of ["queued", "unresponsive", "stopping", "finalizing"]) {
+  test(`unknown ${phase} execution never offers an invalid recovery action`, async ({ page }) => {
+    const writes = await serveRecoveryThread(page, "future_reason", phase);
+    await page.goto("/threads/recovery-thread");
+    const panel = page.getByRole("region", { name: "Next steps" });
+    await expect(panel).toContainText("The cause of this blocker is unknown");
+    await expect(panel.getByRole("button")).toHaveCount(0);
+    expect(writes).toEqual([]);
+  });
+}

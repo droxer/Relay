@@ -194,6 +194,8 @@ export interface ExecutionStatus {
   executionConfirmed: boolean;
   deletionRequested: boolean;
   canDelete: boolean;
+  canRetrySave?: boolean;
+  canReportGone?: boolean;
   blockingReason: string | null;
   lastConfirmedAt: string | null;
   nextRecoveryAt: string | null;

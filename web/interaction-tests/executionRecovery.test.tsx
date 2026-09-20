@@ -232,3 +232,31 @@ it("does not use an old dispatch failure or unrelated thread for a recorded exec
   expect(screen.getByText(blocked.attention.summary)).toBeTruthy();
   expect(screen.getByRole("link", { name: "recovery.thread" }).getAttribute("href")).toBe("/threads/actual-source");
 });
+
+it("honors backend recovery capabilities and shows the last confirmation", () => {
+  const denied = { ...session("orphaned_run"), execution: { ...execution("orphaned_run"), canReportGone: false, lastConfirmedAt: "2026-09-20T00:00:00Z" } };
+  const view = render(<ExecutionRecoveryPanel session={denied} onReportGone={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "recovery.report_gone" })).toBeNull();
+  expect(screen.getByText("recovery.last_confirmed")).toBeTruthy();
+  view.rerender(<ExecutionRecoveryPanel session={{ ...session("finalization_failed"), execution: { ...execution("finalization_failed"), canRetrySave: false } }} onRetry={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "recovery.retry" })).toBeNull();
+});
+it("unknown legacy blockers explain missing evidence instead of repeating the fallback", () => {
+  render(<TaskRecoveryPanel task={{ ...task(), blockerReason: "Execution needs attention." }} />);
+  expect(screen.getByText("recovery.unknown.title")).toBeTruthy();
+  expect(screen.queryByText("Execution needs attention.")).toBeNull();
+});
+it("manual blockers retain their reason without linking an unrelated old thread", () => {
+  render(<TaskRecoveryPanel task={{ ...task(), attention: {
+    schemaVersion: 1, code: "manual_block", source: "operator", summary: "Await supplier", evidence: "recorded", observedAt: "now",
+  } }} />);
+  expect(screen.getByText("recovery.manual_block.title")).toBeTruthy();
+  expect(screen.getByText("Await supplier")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "recovery.thread" })).toBeNull();
+});
+
+it("uses explicit server capabilities for an unfamiliar finalization reason", () => {
+  render(<ExecutionRecoveryPanel session={{ ...session("future_save_error"), execution: { ...execution("future_save_error"), canRetrySave: true, canReportGone: false } }} onRetry={vi.fn()} onReportGone={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "recovery.retry" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "recovery.report_gone" })).toBeNull();
+});

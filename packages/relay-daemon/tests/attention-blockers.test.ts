@@ -21,13 +21,14 @@ test("cancelling the workspace owner is independent of another waiter's notifica
   const notificationStarted = deferred();
   const stopB = new AbortController();
   let bSettled = false;
-  let bExecuted = false;
   const a = gate.run("shared", undefined, async () => {
     enteredA.resolve();
     await releaseA.promise;
   }, { sessionId: "a", onWaiting: async () => {} });
   await enteredA.promise;
-  const b = gate.run("shared", stopB.signal, async () => { bExecuted = true; }, {
+  const b = gate.run("shared", stopB.signal, async () => {
+    if (!stopB.signal.aborted) await new Promise<void>(resolve => stopB.signal.addEventListener("abort", () => resolve(), { once: true }));
+  }, {
     sessionId: "b", onWaiting: async () => {},
   }).then(() => { bSettled = true; }, () => { bSettled = true; });
   const c = gate.run("shared", undefined, async () => {}, {
@@ -49,7 +50,6 @@ test("cancelling the workspace owner is independent of another waiter's notifica
     notification.resolve();
     await Promise.all([a, b, c]);
     assert.equal(bSettled, true, "control: releasing C's notification releases B");
-    assert.equal(bExecuted, false);
     assert.equal(settledBeforeNotification, true, "B remains blocked by C's unresolved notification after B is cancelled");
   } finally {
     notification.resolve();

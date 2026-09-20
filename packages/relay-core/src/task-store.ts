@@ -6,6 +6,18 @@ export type TaskStatus = "backlog" | "assigned" | "running" | "waiting_for_human
 export type TaskRoutineType = "task" | "job";
 export type TaskRoutineCadence = "daily" | "weekly" | "monthly" | "custom";
 
+export interface TaskExecutionAttention {
+  schemaVersion: 1;
+  code: string;
+  source: "dispatch" | "execution" | "operator" | "legacy";
+  summary: string;
+  evidence: "recorded" | "unknown";
+  observedAt: string;
+  sessionId?: string;
+  runRequestId?: string;
+  runId?: string;
+}
+
 export interface RelayTaskActivity {
   id: string;
   createdAt: string;
@@ -31,6 +43,7 @@ export interface RelayTask {
   blockedFromStatus?: TaskStatus;
   waitingFromStatus?: TaskStatus;
   blockerReason?: string;
+  attention?: TaskExecutionAttention;
   blockerOwnerEmployeeId?: string;
   executionOwner?: { requestId: string; revision: number };
   id: string;
@@ -215,6 +228,7 @@ export type RelayTaskEvent =
       timestamp: string;
       status: TaskStatus;
       reason?: string;
+      attention?: Partial<TaskExecutionAttention>;
       actorEmployeeId?: string;
     }
   | {
@@ -410,7 +424,22 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
     }
     if (status === "blocked") {
       task.blockedAt ??= event.timestamp;
-      task.blockerReason = event.reason || task.blockerReason || "Execution needs attention.";
+      task.blockerReason = event.reason || "Execution needs attention.";
+      const metadata = event.attention ?? {};
+      const reason = typeof event.reason === "string" ? event.reason.trim().slice(0, 2000) : "";
+      const known = Boolean(reason && reason !== "Execution needs attention.");
+      task.attention = {
+        schemaVersion: 1,
+        code: typeof metadata.code === "string" && metadata.code && metadata.code.length <= 100 ? metadata.code : "unknown",
+        source: ["dispatch", "execution", "operator", "legacy"].includes(metadata.source ?? "") ? metadata.source! : "legacy",
+        summary: known ? reason : "The blocking event did not record a cause.",
+        evidence: known ? "recorded" : "unknown",
+        observedAt: event.timestamp,
+      };
+      for (const key of ["sessionId", "runRequestId", "runId"] as const) {
+        const value = metadata[key];
+        if (typeof value === "string" && value && value.length <= 200) task.attention[key] = value;
+      }
       task.blockerOwnerEmployeeId = event.actorEmployeeId || task.assigneeEmployeeId || task.ownerEmployeeId || "unowned";
     }
     if (stage === "done" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
@@ -423,6 +452,7 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
     delete task.blockedAt;
     delete task.blockedFromStatus;
     delete task.blockerReason;
+    delete task.attention;
     delete task.blockerOwnerEmployeeId;
   }
   if (status !== "waiting_for_human") delete task.waitingFromStatus;

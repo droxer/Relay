@@ -439,7 +439,15 @@ execution endpoint or thread controls. Blocking requires `blockerReason`;
 execution. Active task runs and stale state assumptions reject workflow edits.
 
 Task detail and summary projections include `startedAt`, `finishedAt`,
-`workflowStage`, and blocker metadata when applicable. Dispatch can return
+`workflowStage`, and blocker metadata when applicable. New blocked events also
+produce an `attention` object: `schemaVersion: 1`, `code`, `source`, `summary`,
+`evidence`, `observedAt`, and optional `sessionId`, `runRequestId`, and `runId`.
+The explanation is derived only from that event, never an earlier execution's
+failure. `blockerReason` remains for compatibility. Unblocking clears both fields.
+Historical snapshots may omit `attention`; clients must handle missing fields and
+unknown reason codes. `source` is `dispatch`, `execution`, `operator`, or `legacy`;
+`evidence` is `recorded` or `unknown`. These are diagnostic fields, not permission
+to retry execution. Dispatch can return
 `code=task_wip_limit` with `state=queued`; this is a capacity wait and does not
 consume a failure retry. See [the task lifecycle](task-kanban-lifecycle.md) for
 transition, capacity, history compatibility, and migration policies.
@@ -449,7 +457,12 @@ transition, capacity, history compatibility, and migration policies.
 `GET /api/v1/threads/{id}/execution` returns the same `execution` object included
 in thread detail and list responses. It reports `phase`, `executionConfirmed`,
 `canDelete`, `blockingReason`, `deletionRequested`, `lastConfirmedAt`, and
-`nextRecoveryAt`. Phases are `queued`, `running`, `stopping`, `unresponsive`,
+`nextRecoveryAt`, plus `canRetrySave` and `canReportGone`. These capabilities
+reflect current execution state; operation routes still check actor authorization
+and revalidate state. `canReportGone` is false outside `recovery_required` and
+when a terminal result is retained for finalization; saved evidence must be
+recovered rather than discarded. Clients talking to an older backend must at
+least gate recovery actions on `recovery_required`. Phases are `queued`, `running`, `stopping`, `unresponsive`,
 `finalizing`, `terminal`, and `recovery_required`. A live command lease confirms
 execution ownership; task/session outcome alone never proves remote termination.
 

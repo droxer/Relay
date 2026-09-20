@@ -1916,8 +1916,8 @@
       "body": "Relay is finishing result storage and cleanup. Wait for completion; a new run is not needed. If saving repeatedly fails, a retry action will appear."
     },
     "unknown": {
-      "title": "Execution needs attention",
-      "body": "Relay cannot confirm a safe next step for this execution. Check the computer and ask an administrator to inspect the retained run. If the agent is definitely no longer running, report it as gone to release the execution."
+      "title": "The cause of this blocker is unknown",
+      "body": "Relay does not have a recorded cause for this blocker. Inspect the related execution record or ask the computer owner to investigate."
     },
     "assignment": {
       "title": "Check the task assignment",
@@ -1966,7 +1966,12 @@
     "review": {
       "title": "Review the result",
       "body": "Open the linked thread and inspect the output and artifacts. Accept the work if it meets the requirements, or request changes with clear feedback."
-    }
+    },
+    "manual_block": {
+      "title": "Task blocked manually",
+      "body": "Review the recorded reason with the person responsible. Unblocking restores the prior stage; it does not start an agent."
+    },
+    "last_confirmed": "Last confirmed: {{time}}"
   },
   "settings": {
     "eyebrow": "You / Preferences",

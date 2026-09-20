@@ -12,6 +12,7 @@ export type RecoveryGuide = {
    *  repairs a failed save, but nothing repairs a computer that is never
    *  coming back, and without this the thread can never be deleted. */
   reportGone?: true;
+  retrySave?: true;
 };
 const executionGuides: Record<string, RecoveryGuide> = {
   finalization_failed: { key: "finalization_failed" },  // the result is retained; retry saves it
@@ -26,7 +27,14 @@ const executionGuides: Record<string, RecoveryGuide> = {
 export function executionRecoveryGuide(execution?: RelaySession["execution"]): RecoveryGuide | null {
   if (!execution || execution.phase === "terminal" || execution.phase === "running") return null;
   const reason = execution.blockingReason ?? "";
-  return Object.hasOwn(executionGuides, reason) ? executionGuides[reason] : { key: "unknown", destination: "computer", reportGone: true };
+  const base: RecoveryGuide = Object.hasOwn(executionGuides, reason) ? executionGuides[reason] : { key: "unknown", destination: "computer", reportGone: true };
+  const { reportGone, ...guide } = base;
+  const recovering = execution.phase === "recovery_required";
+  return {
+    ...guide,
+    ...(recovering && (execution.canReportGone ?? Boolean(reportGone)) ? { reportGone: true as const } : {}),
+    ...(recovering && (execution.canRetrySave ?? reason === "finalization_failed") ? { retrySave: true as const } : {}),
+  };
 }
 
 // Use structured dispatch codes, never guess the cause from free-form error text.
@@ -46,6 +54,8 @@ register(["task_wip_limit"], "wip", "backlog");
 register(["task_execution_active", "dispatch_in_progress", "already_active", "dispatch_superseded"], "ownership");
 register(["dispatch_retry_exhausted"], "retry_exhausted");
 register(["dispatch_failed"], "failure", "computer");
+register(["execution_failed", "agent_exit_failed", "execution_cancelled"], "failure");
+register(["manual_block"], "manual_block");
 
 export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null {
   if (task.status === "waiting_for_human") return { key: "human", tone: "info" };
@@ -54,6 +64,11 @@ export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null
   if (task.workspaceWaiting) return { key: "ownership" };
   if (task.status === "running") return null;
   if (task.status !== "blocked" && (!task.dispatchOutcome || task.dispatchOutcome.state === "started")) return null;
+  if (task.status === "blocked" && task.attention) {
+    const code = task.attention.code;
+    return Object.hasOwn(taskGuides, code) ? taskGuides[code] : { key: "unknown" };
+  }
+  if (task.status === "blocked" && (!task.blockerReason || task.blockerReason === "Execution needs attention.")) return { key: "unknown" };
   const code = task.dispatchOutcome?.state !== "started" ? task.dispatchOutcome?.code ?? "" : "";
   return Object.hasOwn(taskGuides, code) ? taskGuides[code] : { key: "failure" };
 }
