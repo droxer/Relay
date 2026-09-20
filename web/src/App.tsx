@@ -517,7 +517,7 @@ export function App() {
     setPendingThreadTeamId(null);
     setSelectedSessionId(sessionId);
     setActiveSessionId(sessionId);
-    syncThreadUrl(sessionId, replace, session?.projectId);
+    syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId);
   }
 
   function startNewThread(projectId: string | null = null) {

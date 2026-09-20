@@ -357,6 +357,7 @@ export function ThreadsView({
       <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
         <ThreadHeader
           activeSession={activeSession}
+          projectId={selectedProjectId}
           participants={threadParticipants}
           artifactCount={artifactCount}
           spaceOpen={spaceOpen}
