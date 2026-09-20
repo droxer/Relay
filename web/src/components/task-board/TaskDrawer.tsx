@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentTeam, EmployeeAgent, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../../types";
+import type { AgentTeam, EmployeeAgent, ProjectRecord, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
 import { manualTaskStatuses } from "../../lib/taskFlow";
 import { TASK_ROUTINE_CADENCES, TASK_ROUTINE_TYPES, isoToday } from "../../lib/routine";
@@ -41,6 +41,8 @@ type TaskDrawerProps = {
   form: TaskBoardFormState;
   logicalAgents: EmployeeAgent[];
   teams?: AgentTeam[];
+  projects?: ProjectRecord[];
+  onCreateProject?: () => void;
   saving: boolean;
   title: string;
   subtitle: string;
@@ -165,6 +167,8 @@ export function TaskDrawer({
   form,
   logicalAgents,
   teams = [],
+  projects = [],
+  onCreateProject,
   saving,
   title,
   subtitle,
@@ -184,6 +188,11 @@ export function TaskDrawer({
   const assignmentFieldId = `${fieldPrefix}-assignment`;
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
   const busy = saving || deleting;
+  const project = projects.find((item) => item.id === form.projectId);
+  const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
+  const projectLabelId = useId();
+  const projectTriggerRef = useRef<HTMLButtonElement>(null);
+  const [projectError, setProjectError] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
   // The submit button names the action it performs, not a generic "Confirm".
   const submitLabel = form.id
@@ -205,15 +214,20 @@ export function TaskDrawer({
         ?.focus();
       return;
     }
+    if (!form.id && (!project || !project.enabled || project.archivedAt)) {
+      setProjectError(true);
+      projectTriggerRef.current?.focus();
+      return;
+    }
     onSubmit(event);
   }
 
-  const agentOptions = logicalAgents.filter((agent) => assignmentOptionVisible(
+  const agentOptions = logicalAgents.filter((agent) => (!form.projectId || project?.members.some((member) => member.agentId === agent.id && member.enabled) || agent.id === form.assignedAgentId) && assignmentOptionVisible(
     agent.supervisorEmployeeId,
     form.assigneeEmployeeId,
     agent.id === form.assignedAgentId,
   ));
-  const teamOptions = teams.filter((team) => assignmentOptionVisible(
+  const teamOptions = teams.filter((team) => (!form.projectId || team.id === form.assignedTeamId) && assignmentOptionVisible(
     team.ownerEmployeeId,
     form.assigneeEmployeeId,
     team.id === form.assignedTeamId,
@@ -256,6 +270,23 @@ export function TaskDrawer({
       layer={layer}
     >
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
+        {!form.id ? (
+          <Field label={t("project.projects")} labelId={projectLabelId} wrapper="div" error={projectError ? t("project.required") : undefined}>
+            <Select value={form.projectId || ""} onValueChange={(value) => {
+              if (!value) return;
+              onChange({ ...clearTaskAssignment(form), ...(form.variant === "backlog" ? { status: form.status } : {}), projectId: value });
+              setProjectError(false);
+            }}>
+              <SelectTrigger ref={projectTriggerRef} className="w-full" aria-labelledby={projectLabelId} aria-invalid={projectError || undefined}>
+                <SelectValue>{() => project?.name ?? t("project.choose")}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {availableProjects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create")}</Button> : null}
+          </Field>
+        ) : project ? <p className="task-project-label">{project.name}</p> : null}
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
@@ -367,7 +398,7 @@ export function TaskDrawer({
               <Switch
                 name={`${fieldPrefix}-enabled`}
                 checked={form.routineEnabled}
-                disabled={!form.assignedAgentId && !form.assignedTeamId && !form.routineEnabled}
+                disabled={!form.projectId && !form.assignedAgentId && !form.assignedTeamId && !form.routineEnabled}
                 onCheckedChange={(checked) => onChange({ ...form, routineEnabled: checked })}
                 aria-label={t("routine.enabled")}
               />

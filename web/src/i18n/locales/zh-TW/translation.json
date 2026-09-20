@@ -60,7 +60,7 @@
     "workspace_label": "工作區",
     "manage": "管理",
     "workforce": "工作團隊",
-    "backlog": "待辦",
+    "backlog": "任務",
     "routine": "例行任務",
     "agents": "智能體",
     "teams": "團隊",
@@ -168,7 +168,7 @@
     "member_choose_required": "請先選擇智能體。",
     "member_no_agents": "此電腦上的所有智能體都已是成員。",
     "tasks_tab": "任務",
-    "tasks_team_tab": "團隊",
+    "tasks_team_tab": "代理",
     "tasks_subtitle": "規劃任務、追蹤進度並審核交付成果。",
     "tasks_progress": "專案進度",
     "tasks_completed": "項任務已完成",
@@ -186,7 +186,10 @@
     "project": "專案",
     "tasks_team_subtitle": "誰在這個專案中工作，以及各自負責什麼。",
     "tasks_workspace_subtitle": "這個專案的工作產出的檔案。",
-    "tasks_activities_subtitle": "這個專案中正在進行的會話。"
+    "tasks_activities_subtitle": "這個專案中正在進行的會話。",
+    "all_projects": "所有專案",
+    "choose": "選擇專案",
+    "required": "建立任務前請選擇專案。"
   },
   "thread": {
     "back_to_project_activities": "返回專案動態",
@@ -307,7 +310,7 @@
     "cancel": "取消"
   },
   "backlog": {
-    "title": "待辦",
+    "title": "所有專案",
     "sub_one": "{{count}} 個任務",
     "sub_other": "{{count}} 個任務",
     "filters": "待辦篩選",

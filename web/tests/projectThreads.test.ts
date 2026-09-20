@@ -74,15 +74,15 @@ describe("project thread buckets", () => {
     );
   });
 
-  it("exposes independent Threads and Projects as separate sidebar directories", async () => {
+  it("exposes Threads and Tasks with projects nested inside Tasks", async () => {
     const sideNavSource = await readFile(resolve("web/src/components/SideNav.tsx"), "utf8");
 
     assert.match(sideNavSource, /href=\{hrefForRoute\("main"\)\}/);
     assert.match(sideNavSource, /aria-label=\{t\("nav\.threads"\)\}/);
     assert.match(sideNavSource, /<span className="sidenav-label sr-only">\{t\("nav\.threads"\)\}<\/span>/);
-    assert.match(sideNavSource, /href=\{hrefForRoute\("projects"\)\}/);
-    assert.match(sideNavSource, /aria-label=\{t\("project\.projects"\)\}/);
-    assert.match(sideNavSource, /<span className="sidenav-label sr-only">\{t\("project\.projects"\)\}<\/span>/);
+    assert.doesNotMatch(sideNavSource, /href=\{hrefForRoute\("projects"\)\}/);
+    assert.match(sideNavSource, /aria-label=\{t\("nav\.backlog"\)\}/);
+    assert.match(sideNavSource, /<span className="sidenav-label sr-only">\{t\("nav\.backlog"\)\}<\/span>/);
   });
 
   it("exposes project settings from the project page", async () => {

@@ -55,11 +55,12 @@ import {
   resolveNewThreadComputer,
   teamRosterForThread,
 } from "./lib/threadRuntime";
-import { validatedReturnTo } from "./lib/appRoute";
+import { navigateToAppPath, validatedReturnTo } from "./lib/appRoute";
+import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
 
 const AdminPage = lazy(() => import("./components/AdminPage").then((m) => ({ default: m.AdminPage })));
-const BacklogPage = lazy(() => import("./components/BacklogPage").then((m) => ({ default: m.BacklogPage })));
+const TasksWorkspace = lazy(() => import("./components/TasksWorkspace").then((m) => ({ default: m.TasksWorkspace })));
 const ChannelsPage = lazy(() => import("./components/ChannelsPage").then((m) => ({ default: m.ChannelsPage })));
 const RoutinesPage = lazy(() => import("./components/RoutinesPage").then((m) => ({ default: m.RoutinesPage })));
 const AgentsPage = lazy(() => import("./components/AgentsPage").then((m) => ({ default: m.AgentsPage })));
@@ -329,6 +330,7 @@ export function App() {
     && !routedProjectId
     && !routedSessionId
     && !composingNew;
+  const isTasksWorkspace = route === "backlog" || showProjectOverview || showProjectDirectoryEmpty;
   const detailAgent = useMemo(
     () => logicalAgents.find((agent) => agent.id === agentId) ?? null,
     [agentId, logicalAgents],
@@ -403,15 +405,16 @@ export function App() {
       : t("thread.new_thread");
 
   const skipLinkHref = useMemo(() => {
+    if (showProjectDirectoryEmpty) return "#backlog-panel";
     if (route === "projects" && showProjectOverview) return "#project-detail-panel";
     if (route === "main" || route === "projects") return mobileView === "threads" ? "#thread-panel" : "#chat-panel";
     if (route === "agents" && agentId) return "#agent-detail-panel";
     return `#${WORK_ROUTE_SKIP_IDS[route]}`;
-  }, [agentId, route, mobileView, showProjectOverview]);
+  }, [agentId, route, mobileView, showProjectOverview, showProjectDirectoryEmpty]);
 
   const awaitingDecision = useMemo(() => isAwaitingFeedbackDecision(activeSession), [activeSession]);
 
-  const threadChromeVisible = showThreadChrome(showProjectOverview);
+  const threadChromeVisible = showThreadChrome(isTasksWorkspace);
   const spaceVisible = threadChromeVisible
     && (route === "main" || route === "projects")
     && space.open
@@ -656,6 +659,7 @@ export function App() {
   return (
     <AppShell
       route={route}
+      taskWorkspace={isTasksWorkspace}
       settingsSection={settingsSection}
       onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
@@ -688,6 +692,11 @@ export function App() {
       user={user}
       onLogout={() => void handleLogout()}
       onNewThread={startNewThread}
+      onNewTask={() => {
+        taskCreateIntent()?.queue();
+        if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}`);
+        else if (route !== "backlog") navigateToRoute("backlog");
+      }}
       theme={preferences.theme}
       onThemeChange={preferences.setTheme}
     >
@@ -704,8 +713,14 @@ export function App() {
             section={adminSection}
             onSelectSection={navigateToAdminSection}
           />
-        ) : route === "channels" ? <ChannelsPage /> : route === "backlog" ? (
-          <BacklogPage
+        ) : route === "channels" ? <ChannelsPage /> : isTasksWorkspace ? (
+          <TasksWorkspace
+            projects={projects}
+            projectsStatus={projectsStatus}
+            projectId={route === "projects" ? routedProjectId : null}
+            agents={logicalAgents}
+            teams={teams}
+            onSelectProject={(id) => id ? selectProject(id) : navigateToRoute("backlog")}
             recordTaskId={recordTaskId}
             onOpenRecord={navigateToTaskRecord}
             tasks={tasks}
@@ -718,6 +733,7 @@ export function App() {
           />
         ) : route === "routine" ? (
           <RoutinesPage
+            projects={projects}
             recordTaskId={recordTaskId}
             recordRunId={recordRunId}
             onOpenRecord={navigateToRoutineRecord}

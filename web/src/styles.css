@@ -60,6 +60,7 @@
 @import "./styles/workspace-files.css" layer(relay);
 @import "./styles/workspace-dossier.css" layer(relay);
 @import "./styles/project-page.css" layer(relay);
+@import "./styles/tasks-workspace.css" layer(relay);
 @import "./styles/backlog.css" layer(relay);
 @import "./styles/task-status.css" layer(relay);
 @import "./styles/roster-select.css" layer(relay);

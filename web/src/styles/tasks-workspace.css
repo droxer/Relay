@@ -1,0 +1,89 @@
+/* Project scope stays visible while task content scrolls independently. */
+.tasks-workspace {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.task-project-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-right: 1px solid var(--line-2);
+  background: var(--surface-1);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.task-project-nav-title {
+  font: var(--type-label);
+  color: var(--ink-3);
+  margin: var(--sp-2) 0 var(--sp-4);
+}
+
+.task-project-nav-create {
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.task-project-nav-mobile {
+  display: none;
+}
+
+.tasks-workspace-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tasks-workspace-content > .backlog-page,
+.tasks-workspace-content > .workspace-page {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-project-label {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+@media (max-width: 820px) {
+  .tasks-workspace {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .task-project-nav {
+    flex-direction: row;
+    align-items: center;
+    padding: var(--sp-2) var(--sp-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--line-2);
+  }
+
+  .task-project-nav-desktop {
+    display: none;
+  }
+
+  .task-project-nav-mobile {
+    display: block;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-project-nav-mobile select {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .task-project-nav-create {
+    margin-top: 0;
+  }
+}

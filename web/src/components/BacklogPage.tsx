@@ -26,13 +26,12 @@ import { readDraggedTaskId, TASK_DRAG_MEDIA_TYPE, taskDropRejection } from "../l
 import { emptyBacklogForm, taskStartMutationInput } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
-import { InlineTaskCreate } from "./task-board/InlineTaskCreate";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
-import { type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem, type TaskStatus } from "../types";
+import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem, type TaskStatus } from "../types";
 import { useEmployeeNames } from "../hooks/useEmployeeNames";
 import { useEdgeAutoScroll } from "../hooks/useEdgeAutoScroll";
 import { useUrlFilters } from "../hooks/useUrlFilters";
@@ -44,6 +43,8 @@ import { taskRef } from "../lib/taskRef";
 
 
 interface BacklogPageProps {
+  projects?: ProjectRecord[];
+  onCreateProject?: (onCreated: (id: string) => void) => void;
   /** The task whose record is open, from `/backlog/<id>`. */
   recordTaskId?: string | null;
   /** Opens a record; `null` returns to the board. */
@@ -78,7 +79,7 @@ import {
   toggleSelected,
   type TaskSelection,
 } from "../lib/taskSelection";
-import { Table, TableRow } from "@/components/ui/table";
+import { Table } from "@/components/ui/table";
 
 
 
@@ -98,7 +99,7 @@ function dragGhostStyle(point: DragPoint): CSSProperties {
 }
 
 
-export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
+export function BacklogPage({ projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -107,7 +108,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
   const {
     startTaskMutation,
     updateTaskMutation,
-    createTaskMutation,
     deleteTaskMutation,
     deleteTasksMutation,
   } = useRelayMutations();
@@ -136,9 +136,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
   const [deletingSelection, setDeletingSelection] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<TaskStatus | null>(null);
-  // The lane whose inline create field is open, if any. Also the target
-  // status for an inline create committed from the list view.
-  const [inlineCreateStatus, setInlineCreateStatus] = useState<TaskStatus | null>(null);
   /* The record opens as a drawer over the board — the same shape the
      routines board uses, in both views here. The id is mirrored so the
      exiting drawer still has its record after the route clears; `onClosed`
@@ -222,29 +219,16 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
 
   // The `c` chord and the palette's "New task" land here: the event path
   // covers an already-mounted board, the one-shot flag covers the navigation
-  // that mounts it. Inline creation always seeds the backlog lane.
+  // that mounts it. The form requires a project before creating.
   useEffect(() => {
     const channel = taskCreateIntent();
     if (!channel) return;
     const openInlineCreate = () => {
-      if (channel.consume()) setInlineCreateStatus("backlog");
+      if (channel.consume()) openTaskForm(emptyBacklogForm(currentUser));
     };
     openInlineCreate();
     return channel.subscribe(openInlineCreate);
   }, []);
-
-  // Rapid-entry commit: on success the field stays open (Linear's card
-  // creation rhythm); on failure the mutation's toast speaks and the text
-  // stays put for a retry.
-  async function submitInlineCreate(title: string): Promise<boolean> {
-    if (!inlineCreateStatus) return false;
-    try {
-      await createTaskMutation.mutateAsync({ title, status: inlineCreateStatus });
-      return true;
-    } catch {
-      return false;
-    }
-  }
 
   async function deleteSelectedTasks() {
     const targets = selectedTasks(filteredTasks, visibleSelection);
@@ -510,9 +494,8 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
           </Table>
           {TASK_FLOW_STAGES.map((status) => {
             const group = grouped[status];
-            const opening = inlineCreateStatus === status;
             // An empty band is noise unless it is where the reader is typing.
-            if (group.length === 0 && !opening) return null;
+            if (group.length === 0) return null;
             const label = t(`backlog.statuses.${status}`);
             const groupPage = pagedLanes[status];
             return (
@@ -523,17 +506,9 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                 count={group.length}
                 shape={TASK_STATUS_SHAPE[status]}
                 addLabel={t("backlog.new_task")}
-                onAdd={status === "backlog" ? () => setInlineCreateStatus(status) : status === "assigned" ? () => openTaskForm({ ...emptyBacklogForm(currentUser), status: "assigned" }) : undefined}
+                onAdd={status === "backlog" || status === "assigned" ? () => openTaskForm({ ...emptyBacklogForm(currentUser), status }) : undefined}
               >
                 <Table className="list-group-rows" aria-label={label}>
-                  {opening ? (
-                    <TableRow className="backlog-inline-create-row">
-                      <InlineTaskCreate
-                        onSubmit={submitInlineCreate}
-                        onClose={() => setInlineCreateStatus(null)}
-                      />
-                    </TableRow>
-                  ) : null}
                   {groupPage.items.map((task) => {
                     const discussionAgents = discussionAgentsForTask(task, nodes, logicalAgents);
                     const assignment = taskAssignmentDisplay(task);
@@ -541,6 +516,7 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                       <BacklogTaskRow
                         key={task.id}
                         task={task}
+                        projectName={projects.find((project) => project.id === task.projectId)?.name}
                         session={linkedSession(task)}
                         routineTitle={task.sourceRoutineId ? routineTitles.get(task.sourceRoutineId) : undefined}
                         selected={visibleSelection.has(task.id)}
@@ -592,7 +568,7 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                 <span className="backlog-lane-count tnum">{grouped[status].length}</span>
               </header>
               <div className="backlog-task-list">
-                {grouped[status].length === 0 && inlineCreateStatus !== status ? (
+                {grouped[status].length === 0 ? (
                   <p className="backlog-empty">{t("backlog.empty_lane")}</p>
                 ) : pagedLanes[status].items.map((task) => {
                   const assignment = taskAssignmentDisplay(task);
@@ -600,6 +576,7 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                     <BacklogTaskCard
                       key={task.id}
                       task={task}
+                      projectName={projects.find((project) => project.id === task.projectId)?.name}
                       selected={visibleSelection.has(task.id)}
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                       assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
@@ -614,17 +591,12 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                     />
                   );
                 })}
-                {inlineCreateStatus === status ? (
-                  <InlineTaskCreate
-                    onSubmit={submitInlineCreate}
-                    onClose={() => setInlineCreateStatus(null)}
-                  />
-                ) : (status === "backlog" || status === "assigned") ? (
+                {(status === "backlog" || status === "assigned") ? (
                   <Button
                     variant="ghost"
                     type="button"
                     className="backlog-lane-add"
-                    onClick={() => status === "assigned" ? openTaskForm({ ...emptyBacklogForm(currentUser), status: "assigned" }) : setInlineCreateStatus("backlog")}
+                    onClick={() => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
                   >
                     <ActionAdd size={ICON.sm} />
                     <span>{t("backlog.new_task")}</span>
@@ -686,6 +658,8 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
           open={drawerOpen}
           form={form}
           logicalAgents={logicalAgents}
+          projects={projects}
+          onCreateProject={onCreateProject ? () => onCreateProject((id) => setForm((current) => current ? { ...current, projectId: id } : current)) : undefined}
           teams={teams}
           saving={saving}
           deleting={deleting}

@@ -108,13 +108,13 @@ describe("sidenav destinations", () => {
      needs its More entry. */
   /* `channels` is deliberately kept out of the nav — designIssues.test.ts
      enforces its absence — and stays reachable through the command palette. */
-  const HIDDEN_ROUTES = new Set(["channels"]);
+  const HIDDEN_ROUTES = new Set(["channels", "projects"]);
   /* `settings` is personal, not a work destination: it hangs off the footer's
      account menu (the gear) rather than the destination list, so its anchor is
      a menu link item. Checked below instead of in the rail-anchor loop. */
   const FOOTER_ROUTES = new Set(["settings"]);
 
-  it("gives every app route a rail anchor", () => {
+  it("gives each top-level destination a rail anchor", () => {
     assert.ok(routes.length >= 9);
     for (const route of routes) {
       if (FOOTER_ROUTES.has(route)) {

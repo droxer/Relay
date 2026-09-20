@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import {
@@ -11,6 +11,7 @@ import {
   projectTaskQueue,
   type ProjectTaskAssignee,
 } from "../lib/projectTasks";
+import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { projectReadOnly } from "../lib/projectPage";
 import { taskStartMutationInput } from "../lib/taskBoardForm";
 import type { AgentTeam, EmployeeAgent, ProjectRecord, RelayTaskListItem } from "../types";
@@ -49,6 +50,7 @@ export function ProjectTasks({ project, tasks, agents, teams, locale, onOpenReco
 }) {
   const { t } = useTranslation();
   const { createTaskMutation, updateTaskMutation, startTaskMutation } = useRelayMutations();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const pendingActions = useRef(new Set<string>());
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -59,6 +61,18 @@ export function ProjectTasks({ project, tasks, agents, teams, locale, onOpenReco
   const work = projectTaskQueue(tasks, project.id);
   const progress = projectTaskProgress(work);
   const canStart = project.members.some((member) => member.enabled);
+
+  useEffect(() => {
+    const channel = taskCreateIntent();
+    if (!channel) return;
+    let frame = 0;
+    const focus = () => {
+      if (channel.consume()) frame = requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    focus();
+    const unsubscribe = channel.subscribe(focus);
+    return () => { unsubscribe(); cancelAnimationFrame(frame); };
+  }, []);
 
   // Keep each action locked until its own request settles.
   async function perform(key: string, action: () => Promise<unknown>) {
@@ -113,7 +127,7 @@ export function ProjectTasks({ project, tasks, agents, teams, locale, onOpenReco
       </section>
       {!readOnly ? (
         <form className="project-task-create" onSubmit={create}>
-          <Input aria-label={t("backlog.new_task")} placeholder={t("project.tasks_placeholder")}
+          <Input ref={inputRef} aria-label={t("backlog.new_task")} placeholder={t("project.tasks_placeholder")}
             maxLength={500} value={title} disabled={busy.has("create")} onChange={(event) => setTitle(event.target.value)} />
           <Button type="submit" loading={busy.has("create")} disabled={busy.has("create") || !title.trim()}>{t("backlog.new_task")}</Button>
         </form>

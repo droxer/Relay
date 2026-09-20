@@ -195,7 +195,7 @@ const AGENT_TABS = new Set(["profile", "skills", "activities"]);
 const TASK_RECORD_TABS = new Set(["activity", "definition", "files"]);
 const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "files"]);
 const TEAM_TABS = new Set(["profile", "activities"]);
-const PROJECT_TABS = new Set(["tasks", "profile", "workspace", "activities"]);
+const PROJECT_TABS = new Set(["tasks", "profile", "workspace"]);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
 
 /**
@@ -369,7 +369,8 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
       if (spaceTab === "project") target.set("spaceTab", spaceTab);
     }
   } else if (head === "projects" && entityId && rest.length === 0) {
-    const tab = source.get("tab") || "tasks";
+    const requestedTab = source.get("tab") || "tasks";
+    const tab = PROJECT_TABS.has(requestedTab) ? requestedTab : "tasks";
     if (PROJECT_TABS.has(tab) && tab !== "tasks") target.set("tab", tab);
     if (tab === "workspace") {
       copyParam(source, target, "path");
