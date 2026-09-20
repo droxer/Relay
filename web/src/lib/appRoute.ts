@@ -369,10 +369,20 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
   } else if (head === "routines" && entityId && rest.length === 0) {
     copyRecordTab(source, target, ROUTINE_RECORD_TABS, "runs");
+    /* The record opens as a drawer over the board, so the route co-owns the
+       board's params — stripping them would reset the list still showing
+       beneath the drawer. */
+    copySortParams(head, source, target);
+    copyPageParams(head, source, target);
+    copyFilterParams(head, source, target);
   } else if (head === "routines" && entityId && rest[0] === "runs" && rest[1] && rest.length === 2) {
     // A run is a task record, so it speaks the task vocabulary even though it
     // is addressed under its routine.
     copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
+    // Same drawer-over-board reasoning as the routine record above.
+    copySortParams(head, source, target);
+    copyPageParams(head, source, target);
+    copyFilterParams(head, source, target);
   } else if (head === "agents" && !entityId) {
     copyParam(source, target, "q");
     const availability = source.get("availability");
@@ -448,6 +458,10 @@ export function validatedReturnTo(value: string | null, origin = "http://relay.l
  * thread — the team-room case, where artifacts pile up — must not silently
  * close the panel. Moving to a different path starts clean, because an
  * artifact selection only describes the thread it came from.
+ *
+ * The one exception is the routines board: a record there is a drawer over
+ * the list, not a replacement for it, so list ↔ record navigations hand the
+ * destination every current param it owns — the list's filters above all.
  */
 export function browserUrlForAppState(
   state: AppLocationState,
@@ -455,7 +469,13 @@ export function browserUrlForAppState(
   currentSearch = "",
 ): string {
   const nextPath = pathForAppState(state);
-  return nextPath === currentPathname ? canonicalBrowserUrl(nextPath, currentSearch) : nextPath;
+  if (nextPath === currentPathname) return canonicalBrowserUrl(nextPath, currentSearch);
+  const [nextHead] = pathSegments(nextPath);
+  const [currentHead] = pathSegments(currentPathname);
+  if (nextHead === "routines" && nextHead === currentHead) {
+    return canonicalBrowserUrl(nextPath, currentSearch);
+  }
+  return nextPath;
 }
 
 export function syncAppStateToUrl(state: AppLocationState, replace = false, onCommit?: () => void): Promise<void> {

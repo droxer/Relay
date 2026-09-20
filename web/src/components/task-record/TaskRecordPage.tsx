@@ -45,6 +45,11 @@ import {
  * IS a task — the run view is this component under a routine breadcrumb, not
  * a fourth surface.
  *
+ * Two presentations: "page" takes the whole route (the backlog board), while
+ * "drawer" (the routines board) drops the page header — the drawer's own
+ * chrome carries the kicker, title, and close — and keeps the tabs, actions,
+ * band, and body.
+ *
  * Everything that differs between the two vocabularies is a value in
  * `recordVocabulary.ts`. A branch on `isRoutine` inside a tab panel means the
  * difference belongs there instead.
@@ -54,6 +59,7 @@ export function TaskRecordPage({
   runningRoutineIds,
   parentRoutine,
   busyAction,
+  presentation = "page",
   onOpenThread,
   onOpenRun,
   onRun,
@@ -67,6 +73,8 @@ export function TaskRecordPage({
   /** Set when this record is open as one of a routine's runs. */
   parentRoutine?: { id: string; title: string };
   busyAction: RecordAction | null;
+  /** "drawer" drops the page header; the surrounding drawer carries it. */
+  presentation?: "page" | "drawer";
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
@@ -102,61 +110,74 @@ export function TaskRecordPage({
     : recordBackHref(listPath);
   const backLabel = parentRoutine ? parentRoutine.title : t(variant === "routine" ? "nav.routine" : "nav.backlog");
 
+  const drawer = presentation === "drawer";
+  const tabsList = (
+    <TabsList className="workspace-page-tabs" aria-label={t("record.sections")}>
+      {tabs.map((item) => (
+        <TabsTrigger
+          key={item}
+          value={item}
+          className={`workspace-page-tab${tab === item ? " is-active" : ""}`}
+        >
+          {t(`record.tab_${item}`)}
+        </TabsTrigger>
+      ))}
+    </TabsList>
+  );
+  const actions = (
+    <TaskRecordActions
+      task={task}
+      variant={variant}
+      busyAction={busyAction}
+      onRun={onRun}
+      onCancel={onCancel}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+  );
+
   return (
     <Tabs
       render={<section id="task-record-panel" tabIndex={-1} />}
-      className="workspace-page"
+      className={drawer ? "workspace-page record-drawer" : "workspace-page"}
       aria-label={t("record.detail_label", { title: task.title })}
       value={tab}
       onValueChange={(value) => setTab(value as RecordTab)}
     >
-      <PageHeader
-        kicker={(
-          <a
-            className="record-back"
-            href={backHref}
-            onClick={(event) => {
-              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-              event.preventDefault();
-              if (parentRoutine) {
-                onOpenRun(parentRoutine.id);
-                return;
-              }
-              navigateRecordBack(listPath);
-            }}
-          >
-            {backLabel}
-          </a>
-        )}
-        title={recordTitle(task, parentRoutine, i18n.language, t)}
-        titleVariant="record"
-        titleAs="h2"
-        layout="stacked"
-        toolbar={(
-          <TabsList className="workspace-page-tabs" aria-label={t("record.sections")}>
-            {tabs.map((item) => (
-              <TabsTrigger
-                key={item}
-                value={item}
-                className={`workspace-page-tab${tab === item ? " is-active" : ""}`}
-              >
-                {t(`record.tab_${item}`)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        )}
-        actions={(
-          <TaskRecordActions
-            task={task}
-            variant={variant}
-            busyAction={busyAction}
-            onRun={onRun}
-            onCancel={onCancel}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
-        )}
-      />
+      {drawer ? (
+        /* The drawer chrome already named the record; this row is the
+           sections and what can be done about them. */
+        <div className="record-drawer-toolbar">
+          {tabsList}
+          {actions}
+        </div>
+      ) : (
+        <PageHeader
+          kicker={(
+            <a
+              className="record-back"
+              href={backHref}
+              onClick={(event) => {
+                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+                event.preventDefault();
+                if (parentRoutine) {
+                  onOpenRun(parentRoutine.id);
+                  return;
+                }
+                navigateRecordBack(listPath);
+              }}
+            >
+              {backLabel}
+            </a>
+          )}
+          title={recordTitle(task, parentRoutine, i18n.language, t)}
+          titleVariant="record"
+          titleAs="h2"
+          layout="stacked"
+          toolbar={tabsList}
+          actions={actions}
+        />
+      )}
 
       <RecordBand facts={facts} label={t("record.record_label")} />
 
@@ -202,7 +223,7 @@ export function TaskRecordPage({
  * otherwise be two records with one name. The date it was scheduled for is
  * what tells them apart.
  */
-function recordTitle(
+export function recordTitle(
   task: RelayTaskListItem,
   parentRoutine: { id: string; title: string } | undefined,
   locale: string,

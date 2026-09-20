@@ -93,8 +93,21 @@ describe("task record routes", () => {
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=nonsense"), "/backlog/T-1001");
   });
 
-  it("does not let a list's filters leak onto a record", () => {
-    assert.equal(canonicalBrowserUrl("/routines/R-42", "?state=paused&q=digest"), "/routines/R-42");
+  it("keeps the board's own params on the record the drawer opens over", () => {
+    // The routines record is a drawer over the board — the list beneath keeps
+    // its filters, so the record route co-owns them.
+    assert.equal(
+      canonicalBrowserUrl("/routines/R-42", "?state=paused&q=digest"),
+      "/routines/R-42?q=digest&state=paused",
+    );
+    assert.equal(
+      canonicalBrowserUrl("/routines/R-42/runs/T-2288", "?sort=title&page=2"),
+      "/routines/R-42/runs/T-2288?sort=title&page=2",
+    );
+    // Params the board does not own are still stripped, and the backlog
+    // record — still a full-page surface — starts clean.
+    assert.equal(canonicalBrowserUrl("/routines/R-42", "?status=blocked"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?status=blocked"), "/backlog/T-1001");
   });
 });
 
