@@ -24,9 +24,9 @@ function state(overrides: Partial<AgentState> = {}): AgentState {
   };
 }
 
-function asCurrentUser<T>(build: () => T): T {
+function asCurrentUser<T>(build: () => T, mode = "1"): T {
   const previous = process.env.RELAY_RUN_AS_CURRENT_USER;
-  process.env.RELAY_RUN_AS_CURRENT_USER = "1";
+  process.env.RELAY_RUN_AS_CURRENT_USER = mode;
   try {
     return build();
   } finally {
@@ -87,15 +87,15 @@ describe("skill delivery", () => {
     assert.match(command, /--skills-dir '\/views\/b c'/);
   });
 
-  it("injects only the delivery environment variable inside the agent shell", () => {
+  it("injects only the delivery environment variable inside the guest agent shell", () => {
     const skill_env = {
       CLAUDE_CONFIG_DIR: "/runs/claude's-config",
       CODEX_HOME: "/runs/codex-home",
       UNDECLARED_SECRET: "must-not-leak",
     };
-    const claude = asCurrentUser(() => buildClaudeCommand(state({ skill_env })));
-    const codex = asCurrentUser(() => buildCodexCommand(state({ skill_env })));
-    assert.ok(claude.includes("export CLAUDE_CONFIG_DIR='/runs/claude'\\''s-config'"));
+    const claude = asCurrentUser(() => buildClaudeCommand(state({ skill_env })), "0");
+    const codex = asCurrentUser(() => buildCodexCommand(state({ skill_env })), "0");
+    assert.match(claude, /CLAUDE_CONFIG_DIR=.*runs\/claude/);
     assert.doesNotMatch(claude, /CODEX_HOME='\/runs\/codex-home'/);
     assert.doesNotMatch(claude, /UNDECLARED_SECRET/);
     assert.match(codex, /export CODEX_HOME=\/runs\/codex-home/);

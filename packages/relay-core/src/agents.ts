@@ -20,6 +20,7 @@ export interface StreamRenderer {
 }
 
 export type SkillDelivery =
+  | { kind: "prompt-paths" }
   | { kind: "config-dir"; envVar: string; subdir: string; skillsSubpath: string }
   | { kind: "skills-dir-flag"; flag: string }
   | { kind: "skill-path-flag"; flag: string; disableDiscoveryFlag: string };

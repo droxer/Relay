@@ -236,3 +236,14 @@ test("rejects symlinked cache roots and tampered immutable views", async () => w
 }));
 
 function randomName(): string { return `cache-${Math.random().toString(16).slice(2)}`; }
+
+test("native task-context skills materialize without creating an auth configuration view", async () => withFixture(async (f) => {
+  const result = await materializeSkills({
+    bundle: f.bundle(), agentId: "local-agent", delivery: { kind: "prompt-paths" },
+    agentHome: f.agentHome, cacheDir: f.cacheDir, execStream: localProcessExecStream,
+    fetchBlob: async (sha) => f.blobs[sha]!,
+  });
+  assert.deepEqual(result.env, {});
+  assert.equal(readFileSync(join(result.skillPaths[0]!, "SKILL.md"), "utf8"), f.blobs[Object.keys(f.blobs)[0]!]!.toString());
+  assert.deepEqual(readdirSync(f.agentHome), []);
+}));

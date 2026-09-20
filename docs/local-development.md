@@ -68,8 +68,9 @@ cp packages/relay-core/.env.example packages/relay-core/.env
 cp packages/relay-daemon/.env.example packages/relay-daemon/.env
 ```
 
-Set agent credentials in `packages/.env`, or in a package-local `.env` file to
-override them for that package:
+For BoxLite guests, set agent credentials in `packages/.env`, or in a
+package-local `.env` file to override them for that package. Local computers
+use the installed CLI's own login and configuration:
 
 ```bash
 ANTHROPIC_API_KEY=...
@@ -85,31 +86,37 @@ KIMI_MODEL=...            # required model ID when using an API key
 MOONSHOT_API_KEY=...      # alternative Moonshot credential
 ```
 
-Agent configuration works in both local (`none`) and BoxLite execution:
+Local computers (`--sandbox none`) run the user's installed agent CLI from
+`PATH`, using its existing login, provider, model, and configuration. Log in and
+configure Claude, Codex, Pi, or Kimi directly with that CLI before connecting the
+computer. Relay does not generate local agent credentials or provider config,
+translate Relay credential aliases, select a model/provider, or install shared
+skills into the user's agent directories. Native launch-environment settings,
+including custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and
+`KIMI_CODE_HOME`, remain available. Relay's automatically loaded `.env` values do
+not override these local runtime settings.
 
-- Claude accepts the configured Anthropic API key. Local nodes can also use an
-  existing Claude login; BoxLite guests need the API key.
-- Codex keeps its native/saved provider when `OPENAI_BASE_URL` is empty. A custom
-  endpoint selects Relay's `dashscope` provider. Local API-key setups do not
-  require an interactive login; BoxLite provisioning requires an API key.
-- Pi uses the selected provider's credentials and model settings. On local nodes,
-  explicit Relay credentials create a private configuration under
-  `~/.relay/pi/<configuration-id>/agent`; the original `~/.pi/agent` files are
-  preserved. Without Relay credentials or an endpoint override, local Pi keeps
-  its existing login. BoxLite generates the corresponding guest configuration.
-- Kimi accepts an existing configured model and API key or file-backed OAuth
-  login. With `KIMI_API_KEY` (or `MOONSHOT_API_KEY`), also set `KIMI_MODEL` (or
-  `MOONSHOT_MODEL`) to a model ID. Relay translates these to Kimi's temporary
-  `KIMI_MODEL_NAME`, `KIMI_MODEL_API_KEY`, and `KIMI_MODEL_BASE_URL` variables;
-  native `KIMI_MODEL_*` values take precedence. Without an API key, `KIMI_MODEL`
-  selects an alias from the saved configuration. Readiness rejects missing
-  models or credentials before dispatch; it does not verify keys with a paid
-  model request.
+For local Claude/Codex tasks with assigned Relay skills, materialized skill paths
+are included in the task instructions instead of replacing the CLI's auth/config
+home. Local Pi/Kimi use their explicit skill-path options. The user's native
+skills and runtime configuration otherwise remain under that runtime's control.
 
-Provider keys and their supported aliases are removed from local subprocess
-inheritance and only the selected agent's credentials are injected. Remote
-hosts need their own credentials or login files; provider launchers do not
-transfer an operator's local login automatically.
+BoxLite guests are provisioned separately from the environment variables above:
+
+- Claude requires the configured Anthropic API key.
+- Codex requires an API key and uses the native provider when `OPENAI_BASE_URL`
+  is empty; a custom endpoint selects Relay's `dashscope` provider.
+- Pi receives generated auth and model files for the selected provider.
+- Kimi accepts copied login/configuration files or `KIMI_API_KEY` plus
+  `KIMI_MODEL` (also accepting Moonshot aliases). Relay maps these to Kimi's
+  native temporary-model variables. This model requirement applies to guest
+  API-key provisioning, not to local CLI logins.
+
+Provider keys and aliases are stripped from subprocess inheritance, then only
+the selected runtime's native launch credentials (local) or provisioned
+credentials (BoxLite) are injected. Readiness is offline and does not verify
+provider-side key revocation or endpoint availability. A remote daemon using
+`--sandbox none` likewise expects its host's native runtimes to be configured.
 
 Precedence, widest to narrowest: shell environment values always win, then a
 package-local `.env`/`.env.local`, then the `packages/.env` fallback. A key

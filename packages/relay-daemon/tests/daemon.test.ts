@@ -373,7 +373,7 @@ test("local process execution strips daemon tokens from agent subprocess env", a
     assert.equal(result.exit_code, 0, result.stderr || result.error_message);
     const env = JSON.parse(result.stdout) as Record<string, string | null>;
     assert.equal(env.home, agentHome);
-    assert.equal(env.codexHome, `${agentHome}/.codex`);
+    assert.equal(env.codexHome, process.env.CODEX_HOME || `${agentHome}/.codex`);
     assert.equal(env.databaseUrl, null);
     assert.equal(env.relayAuthStore, null);
     assert.equal(env.backendUrl, null);
@@ -2466,14 +2466,11 @@ test("parseInventoryOutput reads skill frontmatter and MCP servers per agent", (
   assert.equal(inventory["bogus-agent" as "claude"], undefined);
 });
 
-test("agent skills are provisioned and inventoried for every supported CLI", () => {
+test("BoxLite skills are provisioned for every supported CLI", () => {
   const boxSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/box.ts"), "utf8");
-  const daemonSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/index.ts"), "utf8");
   for (const directory of [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"]) {
     assert.match(boxSource, new RegExp(directory.replace(".", "\\.")));
-    assert.match(daemonSource, new RegExp(directory.replace(".", "\\.")));
   }
-  assert.match(daemonSource, /ensureLocalAgentReady[\s\S]*prepareHostAgentSkills/);
 });
 
 test("discoverAgentInventory scans live Kimi and Codex homes while ignoring legacy Kimi files", async () => {

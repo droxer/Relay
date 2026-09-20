@@ -1,5 +1,5 @@
 import { anthropicModel, openaiModel, piModel, piProvider } from "./env.js";
-import { agentWorkspacePath, codexCliConfigOverrides, runAsAgent } from "./guest.js";
+import { agentWorkspacePath, codexCliConfigOverrides, isLocalAgentExecution, runAsAgent } from "./guest.js";
 import {
   claudeTaskPrompt,
   codexTaskPrompt,
@@ -11,17 +11,14 @@ import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { AgentState } from "./state.js";
 
 export function buildCodexCommand(state: AgentState, workspacePath?: string): string {
-  const argv = [...codexBaseArgv({ workspacePath }), codexTaskPrompt(state)];
+  const argv = [...codexBaseArgv({ workspacePath }), nativeSkillPrompt(codexTaskPrompt(state), state)];
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CODEX_HOME"), workspacePath);
 }
 
 function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): string[] {
   const workspace = workspacePath ?? agentWorkspacePath();
   const argv = [
-    "stdbuf",
-    "-oL",
-    "-eL",
-    "codex",
+    ...agentArgv("codex"),
     ...codexCliConfigOverrides(),
     "-C",
     workspace,
@@ -30,13 +27,13 @@ function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): stri
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
   ];
-  const model = openaiModel();
+  const model = isLocalAgentExecution() ? undefined : openaiModel();
   if (model) argv.push("-m", model);
   return argv;
 }
 
 export function buildClaudeCommand(state: AgentState, workspacePath?: string): string {
-  return buildClaudeInvocation(claudeTaskPrompt(state), state, workspacePath);
+  return buildClaudeInvocation(nativeSkillPrompt(claudeTaskPrompt(state), state), state, workspacePath);
 }
 function buildClaudeInvocation(
   prompt: string,
@@ -45,10 +42,7 @@ function buildClaudeInvocation(
 ): string {
   const workspace = workspacePath ?? agentWorkspacePath();
   const argv = [
-    "stdbuf",
-    "-oL",
-    "-eL",
-    "claude",
+    ...agentArgv("claude"),
     "-p",
     "--permission-mode",
     "bypassPermissions",
@@ -59,7 +53,7 @@ function buildClaudeInvocation(
     "stream-json",
     "--include-partial-messages",
   ];
-  const model = anthropicModel();
+  const model = isLocalAgentExecution() ? undefined : anthropicModel();
   if (model) argv.push("--model", model);
   argv.push(prompt);
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
@@ -69,14 +63,14 @@ export function buildPiCommand(state: AgentState, workspacePath?: string): strin
   return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath);
 }
 function buildPiInvocation(prompt: string, skillPaths: string[] | undefined, workspacePath?: string): string {
-  const argv = ["stdbuf", "-oL", "-eL", "pi", "--no-session"];
+  const argv = [...agentArgv("pi"), "--no-session"];
   if (skillPaths !== undefined) {
     argv.push("--no-skills");
     for (const path of skillPaths) argv.push("--skill", path);
   }
-  const provider = piProvider();
+  const provider = isLocalAgentExecution() ? undefined : piProvider();
   if (provider) argv.push("--provider", provider);
-  const model = piModel();
+  const model = isLocalAgentExecution() ? undefined : piModel();
   if (model) argv.push("--model", model);
   const jsonCommand = shellCommand([...argv, "--mode", "json", prompt]);
   const streamingCommand = shellCommand([...argv, "-P", prompt]);
@@ -102,7 +96,7 @@ function buildKimiInvocation(prompt: string, skillPaths: string[] | undefined, w
   // bypassPermissions and Codex's approval bypass.
   const argv = ["kimi", "--auto"];
   for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
-  const model = kimiModel();
+  const model = isLocalAgentExecution() ? undefined : kimiModel();
   if (model && !kimiApiKey() && !process.env.KIMI_MODEL_NAME) argv.push("--model", model);
   // stream-json emits one JSON message object per stdout line (parsed by
   // KimiStreamRenderer) and keeps thinking + the resume notice off stdout.
@@ -111,16 +105,17 @@ function buildKimiInvocation(prompt: string, skillPaths: string[] | undefined, w
 }
 
 function withSkillEnv(command: string, state: AgentState, allowedKey: string): string {
+  if (isLocalAgentExecution()) return command;
   const value = state.skill_env?.[allowedKey];
   return value === undefined ? command : `export ${allowedKey}=${shellQuote(value)} && ${command}`;
 }
 
 export function buildPiPreflightCommand(): string {
   const listModelsArgv = ["pi", "--list-models"];
-  const provider = piProvider();
-  const model = piModel();
+  const provider = isLocalAgentExecution() ? undefined : piProvider();
+  const model = isLocalAgentExecution() ? undefined : piModel();
   let modelCheck: string;
-  if (model) {
+  if (model && provider) {
     listModelsArgv.push(`${provider} ${model}`);
     const listModelsCommand = shellCommand(listModelsArgv);
     const modelRowPattern = shellQuote(
@@ -135,4 +130,15 @@ export function buildPiPreflightCommand(): string {
     modelCheck = shellCommand(listModelsArgv);
   }
   return runAsAgent(["node --version", "command -v pi", "pi --version", modelCheck].join(" && "));
+}
+
+function agentArgv(agent: string): string[] {
+  return isLocalAgentExecution() ? [agent] : ["stdbuf", "-oL", "-eL", agent];
+}
+
+/** Local skills are task context; the CLI keeps its own config and auth home. */
+function nativeSkillPrompt(prompt: string, state: AgentState): string {
+  if (!isLocalAgentExecution() || !state.skill_paths?.length) return prompt;
+  const paths = state.skill_paths.map((path) => JSON.stringify(`${path}/SKILL.md`));
+  return `${prompt}\n\n[Assigned skills]\nRead and follow these skill instructions before working:\n${paths.join("\n")}`;
 }

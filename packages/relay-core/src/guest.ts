@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 
 import {
@@ -9,6 +8,7 @@ import {
   kimiApiKey,
   kimiBaseUrl,
   kimiModel,
+  localRuntimeEnvironment,
   openaiBaseUrl,
   openaiApiKey,
   openaiModel,
@@ -56,6 +56,7 @@ export function setSessionGuestEnv(env: Array<[string, string]>): void {
  * when a new agent is added to the registry. Resolution reads `process.env`
  * (and the `.env`-derived fallbacks in env.ts) at call time so injection is
  * scoped to the single command invocation rather than the VM's lifetime.
+ * Local execution uses native launch variables without .env values or aliases.
  */
 const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"],
@@ -70,6 +71,18 @@ const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
     "KIMI_MODEL_THINKING_EFFORT", "KIMI_MODEL_ADAPTIVE_THINKING",
   ],
 };
+
+// Local CLIs consume their native environment and saved login, never Relay aliases.
+const NATIVE_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
+  claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"],
+  codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"],
+  pi: ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "KIMI_API_KEY"],
+  kimi: AGENT_CREDENTIAL_ENV_NAMES.kimi.filter((key) => key.startsWith("KIMI_MODEL_") && key !== "KIMI_MODEL"),
+};
+
+export function isLocalAgentExecution(): boolean {
+  return process.env.RELAY_RUN_AS_CURRENT_USER === "1";
+}
 
 const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
   claude: () => {
@@ -120,12 +133,16 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
 
 /** The credential/provider env a single agent run needs — nothing else. */
 export function agentCredentialEnv(agent: AgentName): Array<[string, string]> {
+  if (isLocalAgentExecution()) {
+    const env = localRuntimeEnvironment();
+    return NATIVE_CREDENTIAL_ENV_NAMES[agent].flatMap((key) => env[key] ? [[key, env[key]] as [string, string]] : []);
+  }
   return AGENT_CREDENTIAL_ENV[agent]();
 }
 
 /** The credential/provider keys {@link agentCredentialEnv} may return for an agent. */
 export function agentCredentialEnvNames(agent: AgentName): readonly string[] {
-  return AGENT_CREDENTIAL_ENV_NAMES[agent];
+  return [...new Set([...AGENT_CREDENTIAL_ENV_NAMES[agent], ...NATIVE_CREDENTIAL_ENV_NAMES[agent]])];
 }
 
 /**
@@ -138,6 +155,7 @@ export function agentCredentialEnvNames(agent: AgentName): readonly string[] {
 export function allAgentCredentialEnvNames(): string[] {
   return [...new Set([
     ...Object.values(AGENT_CREDENTIAL_ENV_NAMES).flat(),
+    ...Object.values(NATIVE_CREDENTIAL_ENV_NAMES).flat(),
     "CLAUDE_API_KEY", "CLAUDE_BASE_URL", "CLAUDE_MODEL",
     "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
   ])];
@@ -244,6 +262,7 @@ export function guestPiModelsJson(): string {
 }
 
 export function codexCliConfigOverrides(): string[] {
+  if (isLocalAgentExecution()) return [];
   const multiAgent = codexMultiAgentEnabled();
   const argv = [
     "-c",
@@ -290,9 +309,6 @@ export function runAsAgent(command: string, workspacePath?: string): string {
   if (process.env.RELAY_RUN_AS_CURRENT_USER === "1") {
     return [
       `export HOME=${shellQuote(home)}`,
-      `export CODEX_HOME=${shellQuote(`${home}/.codex`)}`,
-      `export PI_CODING_AGENT_DIR=${shellQuote(piAgentDirectory())}`,
-      `export KIMI_CODE_HOME=${shellQuote(`${home}/.kimi-code`)}`,
       infrastructureExports,
       `cd ${shellQuote(workspace)}`,
       command,
@@ -322,17 +338,4 @@ export function agentHomePath(): string {
 
 export function encodeBase64(value: string): string {
   return Buffer.from(value).toString("base64");
-}
-
-/** Keep native Pi login untouched; explicit Relay credentials use a private overlay. */
-export function piAgentDirectory(): string {
-  const home = agentHomePath();
-  if (process.env.RELAY_RUN_AS_CURRENT_USER !== "1" || (!piApiKey() && !piBaseUrl())) {
-    return `${home}/.pi/agent`;
-  }
-  // Separate daemons with different provider settings must not overwrite one another.
-  const key = createHash("sha256").update(JSON.stringify([
-    piProvider(), piApiKey(), piBaseUrl(), piModel(), piApi(),
-  ])).digest("hex").slice(0, 24);
-  return `${home}/.relay/pi/${key}/agent`;
 }

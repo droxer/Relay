@@ -1,3 +1,8 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentCredentialEnv, buildClaudeCommand, buildCodexCommand, buildKimiCommand, buildPiCommand, buildPiPreflightCommand, initialAgentState } from "../src/index.js";
@@ -34,4 +39,35 @@ test("local credential resolution uses native variables without translating Rela
   process.env.ANTHROPIC_API_KEY = "native-anthropic-key";
   assert.equal(Object.fromEntries(agentCredentialEnv("pi")).ANTHROPIC_API_KEY, "native-anthropic-key");
   assert.equal(Object.fromEntries(agentCredentialEnv("pi")).PI_API_KEY, undefined);
+}));
+
+test("local execution excludes Relay dotenv credentials but preserves the native launch environment", () => {
+  const directory = mkdtempSync(join(tmpdir(), "relay-native-env-"));
+  try {
+    writeFileSync(join(directory, ".env"), "ANTHROPIC_API_KEY=relay-key\nKIMI_MODEL_API_KEY=relay-kimi-key\nCODEX_HOME=/relay/config\n");
+    const moduleUrl = new URL("../src/index.js", import.meta.url).href;
+    const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+      const {localRuntimeEnvironment, agentCredentialEnv} = await import(${JSON.stringify(moduleUrl)});
+      const env = localRuntimeEnvironment();
+      console.log(JSON.stringify({
+        noRelayKey: !env.ANTHROPIC_API_KEY && !env.KIMI_MODEL_API_KEY,
+        ownHome: env.CODEX_HOME === '/user/custom-codex',
+        ownKey: Object.fromEntries(agentCredentialEnv('codex')).CODEX_API_KEY === 'user-key',
+        noClaudeInjection: agentCredentialEnv('claude').length === 0,
+      }));
+    `], {
+      cwd: directory, encoding: "utf8",
+      env: { PATH: process.env.PATH, HOME: directory, RELAY_RUN_AS_CURRENT_USER: "1", CODEX_HOME: "/user/custom-codex", CODEX_API_KEY: "user-key" },
+    });
+    assert.deepEqual(JSON.parse(output), { noRelayKey: true, ownHome: true, ownKey: true, noClaudeInjection: true });
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("local managed skills do not replace the user's authorization home", () => local(() => {
+  const state = { ...initialAgentState("task"), skill_paths: ["/relay/skills/review"], skill_env: { CLAUDE_CONFIG_DIR: "/relay/isolated-claude", CODEX_HOME: "/relay/isolated-codex" } };
+  for (const build of [buildClaudeCommand, buildCodexCommand]) {
+    const command = build(state);
+    assert.doesNotMatch(command, /isolated-claude|isolated-codex/);
+    assert.match(command, /\/relay\/skills\/review\/SKILL\.md/);
+  }
 }));

@@ -453,8 +453,7 @@ describe("prompts", () => {
       const command = buildClaudeCommand(state());
 
       assert.match(command, /export HOME=\/tmp\/relay-agent-home/);
-      assert.match(command, /CODEX_HOME=\/tmp\/relay-agent-home\/\.codex/);
-      assert.match(command, /PI_CODING_AGENT_DIR=\/tmp\/relay-agent-home\/\.pi\/agent/);
+      assert.doesNotMatch(command, /export (CODEX_HOME|PI_CODING_AGENT_DIR)=/);
       assert.match(command, /cd \/tmp\/relay-host-workspace/);
       assert.match(command, /--add-dir \/tmp\/relay-host-workspace/);
       assert.doesNotMatch(command, /su agent/);
@@ -544,7 +543,7 @@ describe("agent command invocation", () => {
     const homePath = join(temp, "codex-home.txt");
     writeFileSync(fakeCodex, [
       "#!/bin/sh",
-      "printf '%s\\n' \"$CODEX_HOME\" > \"$CODEX_HOME_OUT\"",
+      "printf '%s\\n' \"${CODEX_HOME:-$HOME/.codex}\" > \"$CODEX_HOME_OUT\"",
       "printf '%s\\n' \"$@\" > \"$CODEX_ARGS_OUT\"",
       "printf '%s\\n' '{\"type\":\"turn.completed\"}'",
     ].join("\n"));
@@ -567,7 +566,7 @@ describe("agent command invocation", () => {
       assert.ok(args.includes("--json"));
       assert.ok(args.includes("--skip-git-repo-check"));
       assert.ok(args.includes("--dangerously-bypass-approvals-and-sandbox"));
-      assert.ok(args.includes("features.multi_agent=true"));
+      assert.ok(!args.some((arg) => arg.startsWith("features.multi_agent=")));
       assert.ok(!args.some((arg) => arg.startsWith("features.multi_agent_v2=")));
       assert.equal(args[args.indexOf("-C") + 1], workspace);
       assert.ok(args.indexOf("exec") > args.indexOf(workspace));
@@ -1954,7 +1953,7 @@ describe("agent registry", () => {
       },
       () => {
         const command = buildKimiCommand(state({ task_goal: "Wire up Kimi" }));
-        assert.match(command, /kimi --auto --model kimi-test --output-format stream-json --prompt/);
+        assert.match(command, /kimi --auto --output-format stream-json --prompt/);
         assert.match(command, /Wire up Kimi/);
         assert.ok(command.indexOf("--model kimi-test") < command.indexOf("--prompt"));
         // --auto (never asks) is the sandbox stance, not -y (still asks
