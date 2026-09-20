@@ -35,6 +35,7 @@ export {
   kimiModel,
   loadPackageEnv,
   localRuntimeEnvironment,
+  applyLocalRuntimeEnvironment,
   openaiBaseUrl,
   openaiApiKey,
   openaiModel,

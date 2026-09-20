@@ -565,7 +565,7 @@ describe("agent command invocation", () => {
       assert.ok(args.includes("exec"));
       assert.ok(args.includes("--json"));
       assert.ok(args.includes("--skip-git-repo-check"));
-      assert.ok(args.includes("--dangerously-bypass-approvals-and-sandbox"));
+      assert.ok(!args.includes("--dangerously-bypass-approvals-and-sandbox"));
       assert.ok(!args.some((arg) => arg.startsWith("features.multi_agent=")));
       assert.ok(!args.some((arg) => arg.startsWith("features.multi_agent_v2=")));
       assert.equal(args[args.indexOf("-C") + 1], workspace);
@@ -1953,11 +1953,11 @@ describe("agent registry", () => {
       },
       () => {
         const command = buildKimiCommand(state({ task_goal: "Wire up Kimi" }));
-        assert.match(command, /kimi --auto --output-format stream-json --prompt/);
+        assert.match(command, /kimi --output-format stream-json --prompt/);
+        assert.doesNotMatch(command, /--auto/);
         assert.match(command, /Wire up Kimi/);
         assert.ok(command.indexOf("--model kimi-test") < command.indexOf("--prompt"));
-        // --auto (never asks) is the sandbox stance, not -y (still asks
-        // questions), matching Claude's bypassPermissions and Codex's bypass.
+        // Local commands preserve the runtime's native permission policy.
         assert.doesNotMatch(command, /--yolo/);
         assert.doesNotMatch(command, /stdbuf/);
       },

@@ -1136,7 +1136,7 @@ test("relay daemon doctor reports per-agent preflight failures", async () => {
     fetchFn: async (url) => {
       const path = new URL(String(url)).pathname;
       if (path === "/api") return jsonResponse({ name: "Relay backend" });
-      if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+      if (path === "/api/v1/daemon-nodes/sbx_test/auth-check") return jsonResponse({ sandboxId: "sbx_test", authenticated: true });
       throw new Error(`unexpected URL ${url}`);
     },
   });
@@ -3459,3 +3459,58 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
     } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
   });
 }
+
+
+test("doctor authenticates without registering or persisting credentials", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-readonly-doctor-"));
+  const requests: string[] = [];
+  try {
+    const report = await runRelayDaemonDoctor({
+      sandboxId: "sbx_test", employeeId: "alice", workspacePath: root,
+      stateDir: join(root, "state"), token: "test-token", logger: testLogger(),
+      environment: fakeEnvironment(), backendUrl: "http://relay.test",
+      fetchFn: async (url, init) => {
+        requests.push(`${init?.method ?? "GET"} ${new URL(String(url)).pathname}`);
+        return jsonResponse({ sandboxId: "sbx_test", authenticated: true });
+      },
+    });
+    assert.equal(report.ok, true);
+    assert.deepEqual(requests, ["GET /api", "GET /api/v1/daemon-nodes/sbx_test/auth-check"]);
+    assert.equal(existsSync(join(root, "state", "credentials")), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("local process cleanup has a deadline and reports failure", async (t) => {
+  const originalKill = process.kill;
+  let expired = false;
+  const release = setTimeout(() => { expired = true; }, 200);
+  t.mock.method(process, "kill", (pid: number, signal?: NodeJS.Signals | number) => {
+    if (pid < 0) {
+      if (!expired) return true;
+      throw Object.assign(new Error("gone"), { code: "ESRCH" });
+    }
+    return originalKill(pid, signal);
+  });
+  try {
+    const result = await localProcessExecStream(process.execPath, ["-e", ""], {
+      cleanupTimeoutMs: 20,
+    });
+    assert.equal(result.exit_code, -1);
+    assert.match(result.error_message ?? "", /cleanup.*timed out/i);
+  } finally { clearTimeout(release); }
+});
+
+test("inventory uses the same custom homes as local execution", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-custom-inventory-"));
+  const previous = process.env;
+  try {
+    const codexHome = join(root, "custom codex");
+    mkdirSync(join(codexHome, "skills", "custom"), { recursive: true });
+    writeFileSync(join(codexHome, "skills", "custom", "SKILL.md"), "---\nname: custom\n---\n");
+    writeFileSync(join(codexHome, "config.toml"), '[mcp_servers.custom]\ncommand = "custom-server"\n');
+    process.env = { ...previous, RELAY_AGENT_HOME: root, CODEX_HOME: codexHome };
+    const inventory = await discoverAgentInventory(localProcessExecStream);
+    assert.deepEqual(inventory.codex?.skills.map(skill => skill.name), ["custom"]);
+    assert.deepEqual(inventory.codex?.mcpServers.map(server => server.name), ["custom"]);
+  } finally { process.env = previous; rmSync(root, { recursive: true, force: true }); }
+});

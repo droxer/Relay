@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
+export { localProcessExecStream } from "./local-runtime.js";
 import { accessSync, chmodSync, constants, mkdirSync, statSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -57,12 +58,11 @@ import {
   initialAgentState,
   mergeAgentState,
   ensureDaemonNodeToken,
+  readDaemonNodeToken,
   ensureMachineId,
   GUEST_WORKSPACE,
   agentHomePath,
-  localRuntimeEnvironment,
   agentCredentialEnv,
-  allAgentCredentialEnvNames,
   DAEMON_CAPABILITY_GENERATED_FILES,
   DAEMON_CAPABILITY_AGENT_SKILLS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,
@@ -83,8 +83,6 @@ import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
-import { BoundedTextCapture } from "./bounded-text.js";
-import { assertKimiConfigured } from "./agent-auth.js";
 import { materializeSkills } from "./agent-skills.js";
 
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
@@ -765,7 +763,7 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
       options.allowHostAgentExecution ?? process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION === "1",
     );
   }
-  const stateDir = resolveDaemonStateDirectory(sandboxId ?? "doctor", options.stateDir);
+  const stateDir = resolve(options.stateDir ?? process.env.RELAY_DAEMON_STATE_DIR ?? join(homedir(), ".relay", "daemon-nodes", safeLogFileName(sandboxId ?? "doctor")));
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const logger = options.logger ?? createDaemonLogger({
     workspacePath,
@@ -784,12 +782,9 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
   }
   let token = "";
   try {
-    token = ensureDaemonNodeToken({
-      credentialDirectory: join(stateDir, "credentials"),
-      legacyWorkspacePath: workspacePath,
-      employeeId,
-      token: options.token ?? process.env.RELAY_DAEMON_TOKEN ?? process.env.RELAY_DAEMON_NODE_TOKEN,
-    }).token;
+    token = options.token?.trim() || process.env.RELAY_DAEMON_NODE_TOKEN?.trim() || process.env.RELAY_DAEMON_TOKEN?.trim()
+      || readDaemonNodeToken(join(stateDir, "credentials"), employeeId) || "";
+    if (!token) throw new Error("No saved node token. Enroll this computer before running doctor.");
     add("token", true, "daemon node token resolved.");
   } catch (error) {
     add("token", false, error instanceof Error ? error.message : String(error));
@@ -807,20 +802,17 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
   const environment = options.environment ?? createExecutionEnvironment(sandboxMode, sandboxId, workspacePath, logger);
   const agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, options.signal);
   if (token) {
-    await postJson(fetchFn, relayApiUrl(backendUrl, "/daemon-node-registrations"), {
-      sandboxId,
-      ...(configuredEmployeeId ? { employeeId } : {}),
-      token,
-      workspacePath,
-      sandboxMode,
-      protocolVersion: DAEMON_NODE_PROTOCOL_VERSION,
-      supportedAgents: readyAgents(agentHealth),
-      agentHealth,
-      status: "stopped",
-    } satisfies DaemonNodeRegistration).then(
-      () => add("registration", true, "backend accepted daemon node registration."),
-      (error: unknown) => add("registration", false, error instanceof Error ? error.message : String(error)),
-    );
+    try {
+      const response = await fetchFn(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/auth-check`), {
+        headers: { Authorization: `Bearer ${token}` }, signal: options.signal ?? AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`Node authentication failed (HTTP ${response.status}).`);
+      const body = await response.json() as { sandboxId?: string; authenticated?: boolean };
+      if (body.sandboxId !== sandboxId || body.authenticated !== true) throw new Error("Token does not identify this enrolled node.");
+      add("authentication", true, "backend accepted the enrolled node token.");
+    } catch (error) {
+      add("authentication", false, error instanceof Error ? error.message : String(error));
+    }
   }
   for (const agent of AGENT_NAMES) {
     const health = agentHealth[agent];
@@ -1271,28 +1263,7 @@ function createExecutionEnvironment(
   logger: DaemonLogger,
 ): DaemonExecutionEnvironment {
   if (mode === "boxlite") return createBoxliteEnvironment(sandboxId, workspacePath, logger);
-  return {
-    sandboxMode: "none",
-    ensureAgentReady: async (agent, signal) => ensureLocalAgentReady(agent, signal),
-    execStream: localProcessExecStream,
-    close: async () => undefined,
-  };
-}
-
-async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void> {
-  const def = getAgent(agent);
-  if (agent === "kimi") {
-    const env = localRuntimeEnvironment();
-    assertKimiConfigured(env.KIMI_CODE_HOME || join(agentHomePath(), ".kimi-code"), { native: true });
-  }
-  const result = await localProcessExecStream("bash", ["-c", def.preflight.command()], {
-    signal,
-    env: Object.fromEntries(agentCredentialEnv(agent)),
-  });
-  if (result.exit_code !== 0) {
-    const detail = (result.stderr || result.stdout || result.error_message || "").trim();
-    throw new Error(`${def.preflight.label} preflight failed.${detail ? ` ${detail}` : ""}`);
-  }
+  return createLocalRuntime();
 }
 
 export interface BoxliteEnvironmentOptions {
@@ -1370,158 +1341,6 @@ function boxNameForSandbox(sandboxId: string): string {
   return `relay-${sandboxId.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48)}`;
 }
 
-export async function localProcessExecStream(
-  cmd: string,
-  args: string[] = [],
-  options: {
-    cwd?: string;
-    stdoutRenderer?: (chunk: string) => string;
-    stderrRenderer?: (chunk: string) => string;
-    sink?: (text: string) => void;
-    signal?: AbortSignal;
-    env?: Record<string, string>;
-  } = {},
-): Promise<StreamExecResult> {
-  if (options.signal?.aborted) {
-    return {
-      exit_code: -1,
-      stdout: "",
-      stderr: "",
-      error_message: "Execution cancelled before start.",
-    };
-  }
-  return new Promise((resolve) => {
-    const detached = process.platform !== "win32";
-    const child = spawn(cmd, args, {
-      cwd: options.cwd,
-      env: { ...localAgentSubprocessEnv(), ...options.env },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached,
-    });
-    const stdoutCapture = new BoundedTextCapture();
-    const stderrCapture = new BoundedTextCapture();
-    let killTimer: NodeJS.Timeout | undefined;
-    const terminate = (signal: NodeJS.Signals): void => {
-      if (detached && child.pid) {
-        try {
-          process.kill(-child.pid, signal);
-          return;
-        } catch {
-          // Fall back to the direct child below if the process group is gone.
-        }
-      }
-      child.kill(signal);
-    };
-    const abort = (): void => {
-      terminate("SIGTERM");
-      // Escalate in case the agent ignores SIGTERM.
-      killTimer = setTimeout(() => terminate("SIGKILL"), SIGKILL_DELAY_MS);
-      killTimer.unref?.();
-    };
-    options.signal?.addEventListener("abort", abort, { once: true });
-    if (options.signal?.aborted) abort();
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (text: string) => {
-      stdoutCapture.append(text);
-      const rendered = options.stdoutRenderer ? options.stdoutRenderer(text) : text;
-      if (rendered) options.sink?.(rendered);
-    });
-    child.stderr.on("data", (text: string) => {
-      stderrCapture.append(text);
-      const rendered = options.stderrRenderer ? options.stderrRenderer(text) : text;
-      if (rendered) options.sink?.(rendered);
-    });
-    child.on("close", async (code) => {
-      if (killTimer) clearTimeout(killTimer);
-      options.signal?.removeEventListener("abort", abort);
-      if (detached && child.pid) {
-        // The parent can exit before a child that closed its inherited pipes.
-        // Finish the process group before reporting a terminal execution; do
-        // not cancel escalation just because the parent emitted close.
-        terminate("SIGKILL");
-        const groupId = child.pid;
-        await new Promise<void>((finished) => {
-          const check = (): void => {
-            try { process.kill(-groupId, 0); } catch (error) {
-              if ((error as NodeJS.ErrnoException).code === "ESRCH") {
-                finished();
-                return;
-              }
-            }
-            setTimeout(check, 100);
-          };
-          check();
-        });
-      }
-      resolve({
-        exit_code: code ?? -1,
-        stdout: stdoutCapture.toString(),
-        stderr: stderrCapture.toString(),
-      });
-    });
-    child.on("error", (error) => {
-      if (killTimer) clearTimeout(killTimer);
-      options.signal?.removeEventListener("abort", abort);
-      resolve({
-        exit_code: -1,
-        stdout: stdoutCapture.toString(),
-        stderr: stderrCapture.toString(),
-        error_message: error.message,
-      });
-    });
-  });
-}
-
-const AGENT_SUBPROCESS_ENV_DENY = new Set([
-  "DATABASE_URL",
-  "RELAY_CONTROL_PANEL_VERSION",
-  "RELAY_DATABASE_URL",
-  "RELAY_DATA_DIR",
-  "RELAY_EMPLOYEE_ID",
-  "RELAY_ENROLLMENT_TOKEN",
-  "RELAY_SANDBOX_ID",
-  "RELAY_SANDBOX_MODE",
-  "RELAY_STORAGE",
-  "RELAY_USE_LOCAL_AGENT_HOME",
-  "RELAY_WEB_UI_DIST_DIR",
-]);
-
-const AGENT_SUBPROCESS_ENV_DENY_PREFIXES = [
-  "RELAY_ADMIN_",
-  "RELAY_AUTH_",
-  "RELAY_BACKEND_",
-  "RELAY_CHAT_",
-  "RELAY_DAEMON_",
-  "RELAY_SUPERVISOR_",
-  "RELAY_TASK_SCHEDULER_",
-];
-
-function localAgentSubprocessEnv(): NodeJS.ProcessEnv {
-  const env = localRuntimeEnvironment();
-  for (const key of Object.keys(env)) {
-    if (isDeniedAgentSubprocessEnv(key)) {
-      delete env[key];
-    }
-  }
-  // A local node runs agents as child processes of the daemon, so anything in
-  // the daemon's own environment is inherited. Provider credentials must not
-  // ride along: the caller layers the running agent's own keys back on top, and
-  // inheriting the rest would hand every agent every provider's key — exactly
-  // the leak the BoxLite guest avoids by never holding credentials at all.
-  for (const key of allAgentCredentialEnvNames()) delete env[key];
-  const home = agentHomePath();
-  env.HOME = home;
-  env.CODEX_HOME ??= join(home, ".codex");
-  env.PI_CODING_AGENT_DIR ??= join(home, ".pi", "agent");
-  env.KIMI_CODE_HOME ??= join(home, ".kimi-code");
-  return env;
-}
-
-function isDeniedAgentSubprocessEnv(key: string): boolean {
-  return AGENT_SUBPROCESS_ENV_DENY.has(key)
-    || AGENT_SUBPROCESS_ENV_DENY_PREFIXES.some((prefix) => key.startsWith(prefix));
-}
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -1681,7 +1500,6 @@ function normalizeWorkspacePath(value?: string): string | undefined {
 const REQUEST_TIMEOUT_MS = 30_000;
 const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 250;
 const SHUTDOWN_TERMINAL_EVENT_TIMEOUT_MS = 500;
-const SIGKILL_DELAY_MS = 5_000;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 5_000;

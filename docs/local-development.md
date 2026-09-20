@@ -96,6 +96,16 @@ including custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and
 `KIMI_CODE_HOME`, remain available. Relay's automatically loaded `.env` values do
 not override these local runtime settings.
 
+Local execution defaults to `--local-permission-policy native`: Relay does not
+add Codex's approval/sandbox bypass, Claude's `bypassPermissions`, or Kimi's
+`--auto`. The CLI's own policy still applies; this is not an OS sandbox, and
+headless tasks needing interactive approval may fail or wait until cancelled.
+For an explicitly trusted computer, pass `--local-permission-policy trusted`
+(or set `RELAY_LOCAL_PERMISSION_POLICY=trusted`) to opt into those flags.
+`--allow-host-agent-execution` remains required independently. BoxLite keeps its
+existing unattended execution policy inside the guest. Pi has no additional
+permission override in either policy.
+
 For local Claude/Codex tasks with assigned Relay skills, materialized skill paths
 are included in the task instructions instead of replacing the CLI's auth/config
 home. Local Pi/Kimi use their explicit skill-path options. The user's native
@@ -163,6 +173,32 @@ Re-running setup for the same computer replaces its service definition.
 For troubleshooting, append `--verbose` to that installation command to print the
 log location, service stop command, and CLI location. This re-runs setup and
 restarts the service, so use it when no work is running on that computer.
+
+Setup saves a private `~/.relay/daemon-nodes/<id>/runtime-profile.json`. It
+preserves selected native configuration directories, PATH, proxy and certificate
+settings; the daemon loads it through `--runtime-profile <absolute-path>`.
+Preflight uses the same selected environment. Agent discovery honors the active
+Claude/Codex/Pi/Kimi configuration directories, including custom homes.
+
+Prefer each CLI's saved login for background services. If a runtime needs native
+environment credentials, place the required key/value pairs in a private JSON
+file owned by your user (`chmod 600`) and append
+`--runtime-env-file /absolute/path/runtime-env.json` to setup. The profile stores
+only the file reference, not copies of these credentials. Only supported runtime
+variables are accepted; arbitrary shell variables and `NODE_OPTIONS` are rejected.
+Setup fails if launch-time provider settings would otherwise be silently lost.
+The reference is loaded at daemon startup; restart the service after rotating it.
+Do not put this file in the agent workspace or commit it to a repository.
+
+The installer also accepts `--local-permission-policy native|trusted` and saves
+the choice in service arguments. Reinstall existing services to receive profiles;
+existing manual local launches now use `native` unless explicitly configured.
+
+`--doctor` checks the issued node token through a read-only authentication
+endpoint and performs local CLI preflight. It does not register a node, renew its
+heartbeat, generate a token, or overwrite saved credentials. The running daemon
+owns registration. Diagnostics may still write local logs and invoke CLI health
+commands; CLI-owned side effects are controlled by that runtime.
 
 New or reinstalled services restart after failures, but stay stopped after a
 clean exit, including when the backend reports the computer was deleted. Existing

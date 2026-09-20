@@ -88,3 +88,11 @@ test("host agent execution requires an explicit high-risk opt-in", () => {
   assert.doesNotThrow(() => assertHostAgentExecutionAllowed("none", true));
   assert.doesNotThrow(() => assertHostAgentExecutionAllowed("boxlite", false));
 });
+
+
+test("local permission policy is explicit and rejects invalid values", () => {
+  assert.equal(parseArgs(["node", "relay-daemon", "--local-permission-policy", "trusted"]).localPermissionPolicy, "trusted");
+  assert.equal(parseArgs(["node", "relay-daemon", "--runtime-profile", "/private/runtime.json"]).runtimeProfile, "/private/runtime.json");
+  assert.throws(() => parseArgs(["node", "relay-daemon", "--local-permission-policy", "typo"]), /policy/);
+  assert.throws(() => parseArgs(["node", "relay-daemon", "--runtime-profile"]), /path/);
+});
