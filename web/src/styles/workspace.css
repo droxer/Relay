@@ -210,6 +210,32 @@
   color: var(--ink-2);
 }
 
+/* Title-line variant: the same facts, packed onto the header's title row
+   instead of a full-width band, so the tab body keeps the band's height.
+   Cells go horizontal — eyebrow label beside its value, hairlines off. */
+.record-band--title {
+  border-bottom: 0;
+  gap: var(--sp-4);
+  align-items: baseline;
+}
+
+.record-band--title .record-band-cell {
+  flex: 0 1 auto;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 0;
+  border-right: 0;
+}
+
+@media (max-width: 820px) {
+  /* Overrides the base band's two-up phone grid: the title row already
+     wraps, so the facts stay one wrapping line under it. */
+  .record-band--title {
+    display: flex;
+  }
+}
+
 /* One shell for all three tab panels, so a tab switch changes the content
    and nothing about the frame. It also owns the container context the
    profile grid queries — the pane's width depends on whether the roster is

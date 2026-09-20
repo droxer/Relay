@@ -260,11 +260,12 @@
     border: 0;
   }
 
-  /* The mobile topbar already names the page, so the in-page header recedes
+  /* The mobile topbar already names the page, so the in-page title recedes
      to a screen-reader clip — the h1 stays in the a11y tree (unlike
-     display:none), matching the other routes' clip-not-remove treatment. */
+     display:none), matching the other routes' clip-not-remove treatment.
+     Only the title clips: the record facts share its row and stay visible. */
   .project-workspace-page .page-header-kicker,
-  .project-workspace-page .page-header-title-row,
+  .project-workspace-page .page-header-title,
   .project-workspace-page .page-header-subtitle {
     position: absolute;
     width: 1px;

@@ -334,6 +334,10 @@ export function ProjectWorkspacePage({
     >
       <PageHeader
         kicker={t("project.page_kicker")}
+        /* The record's common facts ride the title line on every tab instead
+           of claiming a band row above the tab body, so each panel keeps the
+           full height under the header. */
+        facts={<RecordBand facts={bandFacts} label={t("project.band_label")} variant="title" />}
         title={(
           <span className="workspace-header-title">
             <span className="workspace-header-mark"><ProjectMark size={ICON.sm} /></span>
@@ -394,7 +398,6 @@ export function ProjectWorkspacePage({
           </TabsList>
         )}
       />
-      <RecordBand facts={bandFacts} label={t("project.band_label")} />
 
       <div className="workspace-body">
         <TabsContent value="tasks" className="project-tasks-panel">
