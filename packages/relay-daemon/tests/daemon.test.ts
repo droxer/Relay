@@ -3459,3 +3459,41 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
     } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
   });
 }
+
+
+test("explicit runtime refresh re-registers before the periodic refresh is due", async () => {
+  const stop = new AbortController();
+  const registrations: DaemonNodeRegistration[] = [];
+  let served = false;
+  let checks = 0;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "sbx_explicit_refresh", employeeId: "alice",
+    workspacePath: process.cwd(), sandbox: "none", token: "node_token", pollIntervalMs: 1,
+    heartbeatIntervalMs: 60_000, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+    environment: fakeEnvironment({ ensure: async () => { checks += 1; } }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({});
+      if (path.endsWith("/daemon-node-registrations")) {
+        const body = await jsonBody<DaemonNodeRegistration>(init);
+        if (body.status !== "stopped") registrations.push(body);
+        if (registrations.length === 2) stop.abort();
+        return jsonResponse({});
+      }
+      if (path.endsWith("/commands")) {
+        if (!served) {
+          served = true;
+          return jsonResponse({ commands: [{ id: "refresh-1", type: "runtime.refresh", leaseId: "lease-refresh" }] });
+        }
+        if (registrations.length < 2) stop.abort();
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  assert.equal(registrations.length, 2);
+  assert.ok(checks >= 8);
+  assert.deepEqual((registrations[1] as unknown as { runtimeRefreshCommands: unknown }).runtimeRefreshCommands,
+    [{ commandId: "refresh-1", leaseId: "lease-refresh" }]);
+});

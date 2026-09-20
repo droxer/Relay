@@ -4367,3 +4367,32 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
             assert body["daemonEnv"]["RELAY_BACKEND_URL"] == "https://api.example.com"
             assert "--backend-url https://api.example.com" in body["daemonCommand"]
             assert "backend.internal" not in body["daemonCommand"]
+
+
+def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _enroll_employee(client, "alice")
+        enrolled = client.post("/api/v1/daemon-node-enrollments/local", json={"workspacePath": "/Users/alice/project"}).json()
+        node_id, token = enrolled["node"]["id"], enrolled["nodeToken"]
+        endpoint = f"/api/v1/daemon-nodes/{node_id}/runtime-refresh"
+        assert client.post(endpoint).status_code == 409
+        registration = {"sandboxId": node_id, "token": token, "protocolVersion": 2,
+                        "supportedAgents": ["codex"], "capabilities": ["runtime-refresh"]}
+        assert client.post("/api/v1/daemon-node-registrations", json=registration).status_code == 200
+        response = client.post(endpoint)
+        assert response.status_code == 202
+        command_id = response.json()["commandId"]
+        commands = client.get(f"/api/v1/daemon-nodes/{node_id}/commands", headers={"Authorization": f"Bearer {token}"}).json()["commands"]
+        command = next(c for c in commands if c["id"] == command_id)
+        assert command["type"] == "runtime.refresh"
+        assert client.get(endpoint + f"/{command_id}").json()["status"] == "dispatched"
+        ack = {"commandId": command_id, "leaseId": command["leaseId"]}
+        assert client.post("/api/v1/daemon-node-registrations", json={**registration, "runtimeRefreshCommands": [ack]}).status_code == 200
+        assert client.get(endpoint + f"/{command_id}").json()["status"] == "completed"
+        _enroll_employee(client, "bob")
+        assert client.post(endpoint).status_code == 403
+        assert client.get(endpoint + f"/{command_id}").status_code == 403
