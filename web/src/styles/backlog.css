@@ -366,14 +366,13 @@
 .backlog-task {
   position: relative;
   content-visibility: auto;
-  contain-intrinsic-size: auto var(--card-h-record);
-  /* One height for every card on the board. A lane is a column of peers and
-     the reader scans down it, so a card that grows a description must not
-     become a different object than the card above it — the title sits on the
-     same line in every card, the facts on the same line, the actions on the
-     same line. Text clamps inside the frame (see .backlog-task-title and
-     .backlog-description); the drawer carries the full record. */
-  height: var(--card-h-record);
+  contain-intrinsic-size: auto var(--card-h-tile);
+  /* One height for every tile on the board. A lane is a column of peers and
+     the reader scans down it, so the title sits on the same line in every
+     tile and the facts on the same line. Text clamps inside the frame (see
+     .backlog-task-title); whatever does not fit is detail the peek drawer
+     already carries in full. */
+  height: var(--card-h-tile);
   /* A lane is a flex column, so without this the cards in a full lane shrink
      to share the lane's height — the frame has to refuse that. */
   flex: none;
@@ -411,18 +410,14 @@
 
 /* The card is a control gutter and a text column, and nothing else. The
    checkbox holds the gutter because it is the card's handle — a selection
-   control that moves with the content is unusable — and every other part of
-   the record (title, description, facts, footer) shares the column's single
-   left edge. Before this the title sat inside the flex row with the checkbox
-   while the description and meta started at the card's padding edge, so any
-   card with a description read as two blocks misaligned by 24px. */
+   control that moves with the content is unusable — and the title and the
+   facts line share the column's single left edge. */
 .backlog-card-head {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
-  /* The head IS the card's interior now that the card is a fixed frame: it
-     takes the full remaining height so the body inside it can pin its footer
-     to the bottom edge. */
+  /* The head IS the tile's interior: it takes the full frame height so the
+     facts line inside it can pin to the bottom edge. */
   flex: 1;
   min-height: 0;
 }
@@ -442,60 +437,8 @@
   flex: none;
   margin-top: 2px;
 }
-
-/* Footer: the record's address at rest, its actions on hover, in ONE reserved
-   row. The action bar used to be absolutely positioned across the card's
-   bottom edge and faded in on hover — which meant hovering a card hid its own
-   meta line, so every fact the reader was scanning vanished under the buttons
-   that appeared because the pointer arrived. Now the row is always laid out
-   and the only thing the actions cover is the reference. */
-.backlog-card-foot {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: none;
-  height: var(--control-h-xs);
-  /* No `margin-top: auto` here: the facts line above already carries it, and
-     two auto margins SPLIT the free space between them — which is why the
-     facts were floating in the middle of short cards instead of sitting on
-     the footer. One auto margin, one bottom edge. */
-  padding-top: var(--sp-2);
-}
-
-/* The card equivalent of the list's REF column. It is an address rather than
-   task metadata, so it sits in the footer at the dimmest tier and steps aside
-   for the actions on hover — it used to ride the meta line on
-   `margin-inline-start: auto`, which put it on a line of its own the moment
-   that line wrapped, which at lane width is most cards. */
-.backlog-task-ref {
-  display: inline-flex;
-  align-items: baseline;
-  color: var(--ink-4);
-  font-size: var(--fs-1);
-  line-height: var(--leading-snug);
-  white-space: nowrap;
-  transition: opacity var(--t-fast) var(--ease);
-}
-
-.backlog-task:hover .backlog-task-ref,
-.backlog-task:focus-within .backlog-task-ref {
-  opacity: 0;
-}
-
 .backlog-blocker {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--err);
-}
-
-/* ON A CARD ONLY: one line, ellipsised, tooltip for the rest. The reason is
-   free text an operator typed and it ran to three lines on a lane-width card,
-   which in a fixed frame pushed the card's own action row out through the
-   bottom edge. The list row must keep wrapping — it lays the reason out in a
-   flex row BESIDE the task title, so a nowrap reason takes its full intrinsic
-   width and starves the title to nothing. */
-.backlog-task .backlog-blocker {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

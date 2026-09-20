@@ -233,9 +233,9 @@
 }
 
 /* The title is a Button, so it arrives with the primitive's `whitespace-nowrap`
-   and `shrink-0`. Left alone a long title is sliced at the card edge with no
+   and `shrink-0`. Left alone a long title is sliced at the tile edge with no
    ellipsis (text-overflow defaults to `clip`), hiding over half the text with
-   no cue. Wrap to two lines and clamp, matching .backlog-description. */
+   no cue. Wrap to two lines and clamp. */
 .backlog-task-title {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -244,16 +244,15 @@
   overflow: hidden;
   width: 100%;
   min-width: 0;
-  /* At most two lines, and only as many as the title needs — the card aligns
-     its peers at the TOP (this title) and at the BOTTOM (facts + actions),
+  /* At most two lines, and only as many as the title needs — the tile aligns
+     its peers at the TOP (this title) and at the BOTTOM (the facts line),
      with the slack in the middle.
 
      `height: auto` is load-bearing: the title is a Button, so it arrives with
      the primitive's `h-(--control-h)` — a 44px CONTROL height on what is
-     really a heading. Every one-line title was therefore two lines tall, with
-     the empty line pushing the description and the blocked reason down into
-     the middle of the card. `1lh` keeps the two-line cap on the type scale,
-     so the compact density scope's smaller --fs-4 shortens it to match. */
+     really a heading. Every one-line title was therefore two lines tall. `1lh`
+     keeps the two-line cap on the type scale, so the compact density scope's
+     smaller --fs-4 shortens it to match. */
   height: auto;
   max-height: calc(2 * 1lh);
   flex: none;
@@ -280,26 +279,8 @@
   text-underline-offset: 2px;
 }
 
-/* Two lines at most, and none when the record has no description — the card
-   does not reserve it, because the alignment that matters is the facts line,
-   and that is held by the frame's bottom edge rather than by counting blank
-   lines above it. */
-.backlog-description {
-  margin: var(--sp-2) 0 0;
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  max-height: calc(2 * 1lh);
-  flex: none;
-}
-
-/* Every fact the card states about the task, on one wrapping line below the
-   title: the badges that used to head the card, then cadence, assignee, date
-   and outcome.
+/* Every fact the tile states about the task, on one wrapping line below the
+   title: the badges that used to head the card, then assignee and date.
 
    The hand-written `·` separators are gone. They were there to divide runs of
    plain text, but every atom on this line now carries its own boundary — a
@@ -318,40 +299,16 @@
   font: var(--type-label);
 }
 
-/* On a card the facts line rides the BOTTOM of the frame, directly above the
-   action row: `margin-top: auto` puts the card's slack above it, so every
-   card in a lane states its priority, agent and date on the same line no
-   matter how much prose sits over it. `0 1 auto` lets it clip rather than
-   grow, so an unusually chatty record spends its own space and never the
-   grid's. In the list rows this class is plain content and keeps flowing. */
+/* On a tile the facts line rides the BOTTOM of the frame: `margin-top: auto`
+   puts the tile's slack above it, so every tile in a lane states its
+   priority, agent and date on the same line. `0 1 auto` lets it clip rather
+   than grow, so an unusually chatty record spends its own space and never
+   the grid's. In the list rows this class is plain content and keeps
+   flowing. */
 .backlog-task .backlog-meta {
   flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
-  /* No bottom fade here, deliberately. This region is sized to its content
-     (`0 1 auto`), so its box ends ON the last row and a fade would dim a row
-     that fits — on every card carrying an exception line. The frame is sized
-     to hold the facts instead; the fleet card's body, which does own its
-     slack, is where a fade earns its place. */
-}
-
-/* The exception line — why this task is not simply moving — is exactly one
-   row on a card: the reason clamps (see .backlog-blocker) and the work age
-   moved down to the facts line, which is where a fact belongs. It used to
-   carry both, wrap to two rows, and get sliced through the middle of the
-   second one. One row cannot be sliced, so it holds its height outright. */
-.backlog-task .backlog-flow {
-  flex: none;
-  flex-wrap: nowrap;
-  min-width: 0;
-}
-
-/* The bottom anchor, and ONLY on the facts line. It must exclude the flow row
-   above — that row carries .backlog-meta too, so it was taking an auto margin
-   of its own, and two auto margins SPLIT the free space instead of pushing
-   one block down: a blocked card with no description stated "Blocked"
-   floating in the middle of its own frame. */
-.backlog-task .backlog-meta:not(.backlog-flow) {
   margin-top: auto;
 }
 
@@ -415,33 +372,10 @@
   color: var(--ink-3);
 }
 
-/* The card's actions live in the reserved footer row (.backlog-card-foot in
-   backlog.css), stacked over the reference rather than over the record's
-   facts. They are absolutely positioned WITHIN that row, so the row's height
-   is the same whether they are showing or not and nothing moves on hover. */
-.backlog-task-actions {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  background: var(--surface-1);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--t-fast) var(--ease);
-}
-
-.backlog-task:hover .backlog-task-actions,
-.backlog-task:focus-within .backlog-task-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 /* Toolbar clusters — dispatch (assign + start) · navigation · state change —
    separated by a hairline so it reads as distinct groups of actions rather
-   than one undifferentiated strip. */
+   than one undifferentiated strip. The tile carries no action bar at all;
+   these groups live on the list rows and in the peek drawer. */
 .backlog-action-group {
   display: inline-flex;
   align-items: center;
@@ -460,34 +394,14 @@
    specificity: there is no specificity war to notice in review, the variant
    simply never applies. That is how the primary Start action lost its cobalt
    fill (it rendered --surface-0 at weight 500). The neutral actions get their
-   chip look from variant="outline"; the native <select> paints below. */
-.backlog-task-actions select,
-.backlog-task-actions button:not([data-variant="icon"]) {
+   chip look from variant="outline". */
+.task-peek-actions button:not([data-variant="icon"]) {
   min-height: var(--control-h-xs);
 
   border-radius: var(--r-2);
   padding: 0 var(--sp-2);
   cursor: pointer;
   touch-action: manipulation;
-}
-
-/* The select is a native control with no variant to inherit from, so it
-   restates the outline tier explicitly. --control-border, NOT --line-1: this
-   boundary is the control's whole affordance and must clear WCAG 1.4.11 (3:1).
-   --line-1 is the STRUCTURAL hairline and measures 1.36:1 light / 1.60:1 dark
-   against --surface-0 — invisible. See the same note in ui/button.tsx. */
-.backlog-task-actions select {
-  max-width: 96px;
-  border: 1px solid var(--control-border);
-  background: var(--control-fill);
-  color: var(--ink-1);
-  font: var(--type-label);
-  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
-}
-
-.backlog-task-actions select:hover {
-  background: var(--control-fill-hover);
-  border-color: var(--line-strong);
 }
 
 /* Disabled comes from the button base (opacity-50 + pointer-events-none).
@@ -508,7 +422,7 @@
    call site's variant to survive. */
 
 /* Icon-only action — square button, glyph centered, label in the tooltip. */
-.backlog-task-actions .backlog-action-icon,
+.task-peek-actions .backlog-action-icon,
 .backlog-row-actions .backlog-action-icon {
   display: inline-flex;
   align-items: center;
@@ -536,13 +450,13 @@
    the icon/text only; status hues never fill, so the wash stays the neutral
    row hover. Reopen reuses the neutral hover since reopening is
    constructive. */
-.backlog-task-actions .backlog-action-done:hover:not(:disabled),
+.task-peek-actions .backlog-action-done:hover:not(:disabled),
 .backlog-row-actions .backlog-action-done:hover:not(:disabled) {
   background: var(--row-hover);
   color: var(--ok);
 }
 
-.backlog-task-actions .backlog-action-block:hover:not(:disabled),
+.task-peek-actions .backlog-action-block:hover:not(:disabled),
 .backlog-row-actions .backlog-action-block:hover:not(:disabled) {
   background: var(--row-hover);
   color: var(--err);

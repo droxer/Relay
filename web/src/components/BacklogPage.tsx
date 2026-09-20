@@ -65,6 +65,7 @@ import {
 } from "./task-board/backlogVocabulary";
 import { BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
 import { BacklogRowsHead, BacklogTaskCard, BacklogTaskRow } from "./task-board/BacklogRecords";
+import { TaskPeekDrawer } from "./task-board/TaskPeekDrawer";
 import { ListGroup } from "./ListGroup";
 import { TASK_STATUS_SHAPE } from "./task-board/backlogVocabulary";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
@@ -127,6 +128,13 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
   // The lane whose inline create field is open, if any. Also the target
   // status for an inline create committed from the list view.
   const [inlineCreateStatus, setInlineCreateStatus] = useState<TaskStatus | null>(null);
+  /* The card is a tile; a plain click opens this peek rather than the record
+     route. Id, not object: the board keeps feeding fresh task data into the
+     open drawer, and a deleted record simply closes it. `peekOpen` is
+     separate from the id for the same reason the form's drawerOpen is — the
+     exit animation needs the content to outlive the close request. */
+  const [peekTaskId, setPeekTaskId] = useState<string | null>(null);
+  const [peekOpen, setPeekOpen] = useState(false);
   const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
   const boardRef = useRef<HTMLDivElement | null>(null);
   const startInFlight = useRef<string | null>(null);
@@ -467,6 +475,21 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
     moveTaskToLane(taskId, status);
   }
 
+  function openPeek(taskId: string) {
+    setPeekTaskId(taskId);
+    setPeekOpen(true);
+  }
+
+  function closePeek() {
+    setPeekOpen(false);
+  }
+
+  // The drawer calls this after its exit animation completes — only then is
+  // the peeked task released, so the close animates out with content intact.
+  function releasePeek() {
+    setPeekTaskId(null);
+  }
+
   function taskHandlers(task: RelayTaskListItem) {
     const discussionAssignments = logicalAgents
       .filter((agent) => agent.enabled && agent.availability === "ready")
@@ -710,8 +733,6 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                 {grouped[status].length === 0 && inlineCreateStatus !== status ? (
                   <p className="backlog-empty">{t("backlog.empty_lane")}</p>
                 ) : pagedLanes[status].items.map((task) => {
-                  const session = linkedSession(task);
-                  const discussionAgents = discussionAgentsForTask(task, nodes, logicalAgents);
                   const assignment = taskAssignmentDisplay(task);
                   return (
                     <BacklogTaskCard
@@ -719,18 +740,15 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
                       task={task}
                       selected={visibleSelection.has(task.id)}
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                      session={session}
-                      routineTitle={task.sourceRoutineId ? routineTitles.get(task.sourceRoutineId) : undefined}
                       assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
                       assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
                       agentDisplayName={assignment.name}
                       ready={assignment.ready}
-                      canDiscuss={canDiscussTask(task) && discussionAgents.length > 0}
                       dragging={draggedTaskId === task.id}
                       onDragStart={(event) => beginTaskDrag(task, event)}
                       onDragEnd={endTaskDrag}
                       onTouchStart={(event) => touchDrag.onTouchStart(task.id, event)}
-                      {...taskHandlers(task)}
+                      onOpen={() => openPeek(task.id)}
                     />
                   );
                 })}
@@ -780,6 +798,32 @@ export function BacklogPage({ recordTaskId, onOpenRecord, tasks, sessions, nodes
         onDelete={() => { void deleteSelectedTasks(); }}
         onClear={() => setSelection(EMPTY_TASK_SELECTION)}
       />
+
+      {(() => {
+        const peekTask = peekTaskId ? backlogTasks.find((task) => task.id === peekTaskId) ?? null : null;
+        if (!peekTask) return null;
+        const handlers = taskHandlers(peekTask);
+        return (
+          <TaskPeekDrawer
+            open={peekOpen}
+            task={peekTask}
+            session={linkedSession(peekTask)}
+            routineTitle={peekTask.sourceRoutineId ? routineTitles.get(peekTask.sourceRoutineId) : undefined}
+            canDiscuss={canDiscussTask(peekTask) && discussionAgentsForTask(peekTask, nodes, logicalAgents).length > 0}
+            starting={handlers.starting}
+            onClose={closePeek}
+            onClosed={releasePeek}
+            onOpenRecord={() => { closePeek(); onOpenRecord(peekTask.id); }}
+            /* Editing is one layer up: the peek hands off to TaskDrawer and
+               steps aside, exactly as the record page does. */
+            onEdit={() => { closePeek(); editTask(peekTask); }}
+            onAssign={() => { closePeek(); assignTask(peekTask); }}
+            onStart={handlers.onStart}
+            onToggleBlock={handlers.onToggleBlock}
+            onDone={handlers.onDone}
+          />
+        );
+      })()}
 
       {form ? (
         <TaskDrawer

@@ -428,7 +428,8 @@
   touch-action: manipulation;
 }
 
-/* Disabled comes from the button base — see .backlog-task-actions above. */
+/* Disabled comes from the button base — see the action rules in
+   task-status.css. */
 
 /* In the LIST the primary is an --action GLYPH, not an --action plate. The
    filled `default` variant put a saturated rectangle on every startable row,
@@ -437,10 +438,7 @@
    rest too, so the start action is still the one coloured thing in the group
    without the column of blue. Contrast is on the glyph against the row, the
    same relationship a link has with its paragraph — not an --opacity-ghost
-   control, which would fail 1.4.11.
-
-   The board CARD keeps the fill (task-status.css): one per card, and a card
-   is an object large enough to carry a call to action. */
+   control, which would fail 1.4.11. */
 .backlog-row-actions .backlog-action-primary {
   display: inline-flex;
   align-items: center;
@@ -457,7 +455,7 @@
 
 /* Filled only while actionable; a disabled start recedes to a ghost icon. The
    fill comes from the `default` variant the call site selects — see the note
-   on .backlog-task-actions .backlog-action-primary above. */
+   on the shared action-icon rules in task-status.css. */
 
 /* The reference is the first thing a narrow viewport can lose: it addresses
    the row, it does not describe it. */

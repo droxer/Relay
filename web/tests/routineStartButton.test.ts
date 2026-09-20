@@ -37,7 +37,7 @@ describe("routine start button", () => {
     assert.doesNotMatch(source, /<RoutineStartButton[\s\S]*?variant="default"/);
     assert.match(source, /className="backlog-action-primary backlog-action-icon"/);
     assert.match(listStyles, /\.backlog-row-actions \.backlog-action-primary \{[\s\S]*?color: var\(--action\)/);
-    assert.match(boardStyles, /\.backlog-task-actions button:not\(\[data-variant="icon"\]\)/);
+    assert.match(boardStyles, /\.task-peek-actions button:not\(\[data-variant="icon"\]\)/);
     assert.match(listStyles, /\.backlog-row-actions button:not\(\[data-variant="icon"\]\)/);
   });
 });
