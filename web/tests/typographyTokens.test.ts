@@ -19,7 +19,7 @@ const fontsDir = path.join(repoRoot, "web", "src", "app", "fonts");
 const readWebSource = (rel: string) => readFileSync(path.join(repoRoot, "web", "src", rel), "utf8");
 
 describe("local typography assets", () => {
-  it("ships the technical face locally and lets next/font self-host the Google UI families", () => {
+  it("ships the technical face locally with its license", () => {
     const mono = path.join(fontsDir, "JetBrainsMono-Variable.woff2");
     assert.ok(existsSync(mono), "missing JetBrainsMono-Variable.woff2");
     assert.ok(statSync(mono).size > 1024, "JetBrainsMono-Variable.woff2 is not a materialized font binary");
@@ -34,19 +34,38 @@ describe("local typography assets", () => {
     }
   });
 
+  it("resolves licensed variable font subsets locally for Latin and both Chinese regions", () => {
+    const layout = readWebSource("app/layout.tsx");
+    for (const pkg of ["noto-sans", "noto-sans-sc", "noto-sans-tc"]) {
+      assert.ok(layout.includes(`import "@fontsource-variable/${pkg}/index.css";`));
+      const dir = path.join(repoRoot, "node_modules", "@fontsource-variable", pkg);
+      assert.match(readFileSync(path.join(dir, "LICENSE"), "utf8"), /SIL OPEN FONT LICENSE/);
+      const css = readFileSync(path.join(dir, "index.css"), "utf8");
+      assert.match(css, /font-weight: 100 900/);
+      assert.match(css, /font-display: swap/);
+      assert.match(css, /unicode-range:/);
+      const urls = [...css.matchAll(/url\(([^)]+)\)/g)].map((match) => match[1]);
+      assert.ok(urls.length > 0);
+      for (const url of urls) {
+        assert.ok(url.startsWith("./files/"), `font URL must resolve locally: ${url}`);
+        assert.equal(readFileSync(path.join(dir, url)).subarray(0, 4).toString("ascii"), "wOF2");
+      }
+    }
+  });
+
   it("retires Mona Sans, Geist, and Geist Mono rather than leaving them dormant", () => {
     // Leaving the old binaries in the tree would ship ~203 KB nobody loads.
     for (const file of ["MonaSans-Variable.woff2", "Geist-Variable.woff2", "GeistMono-Variable.woff2", "OFL-MonaSans.txt"]) {
       assert.ok(!existsSync(path.join(fontsDir, file)), `${file} should have been removed`);
     }
     // No retired face may survive in the token layer, and the layout must get
-    // the UI families from Next's self-hosted Google font integration.
+    // the UI families from installed, self-hosted font packages.
     for (const file of ["styles/tokens/palette.css", "styles/tokens/roles.css", "styles/tokens/base.css", "styles/tokens/shadcn-bridge.css"]) {
       const code = readWebSource(file).replace(/\/\*[\s\S]*?\*\//g, "");
       assert.doesNotMatch(code, /Geist|IBM Plex|Optimistic VF|Montserrat/, `${file} still references a retired family`);
     }
     const layout = readWebSource("app/layout.tsx");
-    assert.match(layout, /import\s*\{[^}]*Noto_Sans[^}]*Noto_Sans_SC[^}]*Noto_Sans_TC[^}]*\}\s*from\s*["']next\/font\/google["']/s);
+    assert.doesNotMatch(layout, /next\/font\/google/, "production builds must not download fonts from Google");
     assert.doesNotMatch(layout, /IBMPlexSans|Optimistic VF|Montserrat/);
   });
 });
@@ -88,13 +107,18 @@ describe("application typography roles", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
-    assert.match(layout, /const appSans\s*=\s*Noto_Sans\(\{[^}]*weight:\s*["']variable["'][^}]*variable:\s*["']--font-app-sans["']/s);
-    assert.match(layout, /const appCjkSc\s*=\s*Noto_Sans_SC\(\{[^}]*variable:\s*["']--font-app-cjk-sc["'][^}]*preload:\s*false/s);
-    assert.match(layout, /const appCjkTc\s*=\s*Noto_Sans_TC\(\{[^}]*variable:\s*["']--font-app-cjk-tc["'][^}]*preload:\s*false/s);
+    for (const [pkg, variable, family] of [
+      ["noto-sans", "--font-app-sans", "Noto Sans Variable"],
+      ["noto-sans-sc", "--font-app-cjk-sc", "Noto Sans SC Variable"],
+      ["noto-sans-tc", "--font-app-cjk-tc", "Noto Sans TC Variable"],
+    ]) {
+      assert.ok(layout.includes(`import "@fontsource-variable/${pkg}/index.css";`));
+      assert.ok(palette.includes(`${variable}: "${family}";`));
+    }
     assert.match(layout, /src:\s*["']\.\/fonts\/JetBrainsMono-Variable\.woff2["']/);
     assert.match(layout, /variable:\s*["']--font-app-mono["']/);
     assert.doesNotMatch(layout, /MonaSans|--font-app-display|Geist/);
-    assert.doesNotMatch(layout, /fonts\.(?:googleapis|gstatic)\.com/, "Google fonts must be self-hosted by next/font");
+    assert.doesNotMatch(layout, /fonts\.(?:googleapis|gstatic)\.com/, "fonts must be self-hosted");
 
     // The display tier is the SANS family at a heavier weight — hierarchy
     // comes from weight and size, never from a second face. The mono is

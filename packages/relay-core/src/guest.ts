@@ -5,6 +5,10 @@ import {
   anthropicBaseUrl,
   anthropicModel,
   hostWorkspaceOwner,
+  kimiApiKey,
+  kimiBaseUrl,
+  kimiModel,
+  localRuntimeEnvironment,
   openaiBaseUrl,
   openaiApiKey,
   openaiModel,
@@ -52,6 +56,7 @@ export function setSessionGuestEnv(env: Array<[string, string]>): void {
  * when a new agent is added to the registry. Resolution reads `process.env`
  * (and the `.env`-derived fallbacks in env.ts) at call time so injection is
  * scoped to the single command invocation rather than the VM's lifetime.
+ * Local execution uses native launch variables without .env values or aliases.
  */
 const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"],
@@ -60,8 +65,24 @@ const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   kimi: [
     "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
     "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
+    "KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL",
+    "KIMI_MODEL_PROVIDER_TYPE", "KIMI_MODEL_MAX_CONTEXT_SIZE", "KIMI_MODEL_CAPABILITIES",
+    "KIMI_MODEL_DISPLAY_NAME", "KIMI_MODEL_MAX_OUTPUT_SIZE", "KIMI_MODEL_REASONING_KEY",
+    "KIMI_MODEL_THINKING_EFFORT", "KIMI_MODEL_ADAPTIVE_THINKING",
   ],
 };
+
+// Local CLIs consume their native environment and saved login, never Relay aliases.
+const NATIVE_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
+  claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"],
+  codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"],
+  pi: ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "KIMI_API_KEY"],
+  kimi: AGENT_CREDENTIAL_ENV_NAMES.kimi.filter((key) => key.startsWith("KIMI_MODEL_") && key !== "KIMI_MODEL"),
+};
+
+export function isLocalAgentExecution(): boolean {
+  return process.env.RELAY_RUN_AS_CURRENT_USER === "1";
+}
 
 const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
   claude: () => {
@@ -97,8 +118,14 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
   kimi: () => {
     const env: Array<[string, string]> = [];
     for (const key of AGENT_CREDENTIAL_ENV_NAMES.kimi) {
+      if (["KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL"].includes(key)) continue;
       const value = process.env[key];
       if (value) env.push([key, value]);
+    }
+    if (kimiApiKey() || process.env.KIMI_MODEL_NAME) {
+      pushEnv(env, "KIMI_MODEL_NAME", kimiModel());
+      pushEnv(env, "KIMI_MODEL_API_KEY", kimiApiKey());
+      pushEnv(env, "KIMI_MODEL_BASE_URL", kimiBaseUrl());
     }
     return env;
   },
@@ -106,12 +133,16 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
 
 /** The credential/provider env a single agent run needs — nothing else. */
 export function agentCredentialEnv(agent: AgentName): Array<[string, string]> {
+  if (isLocalAgentExecution()) {
+    const env = localRuntimeEnvironment();
+    return NATIVE_CREDENTIAL_ENV_NAMES[agent].flatMap((key) => env[key] ? [[key, env[key]] as [string, string]] : []);
+  }
   return AGENT_CREDENTIAL_ENV[agent]();
 }
 
 /** The credential/provider keys {@link agentCredentialEnv} may return for an agent. */
 export function agentCredentialEnvNames(agent: AgentName): readonly string[] {
-  return AGENT_CREDENTIAL_ENV_NAMES[agent];
+  return [...new Set([...AGENT_CREDENTIAL_ENV_NAMES[agent], ...NATIVE_CREDENTIAL_ENV_NAMES[agent]])];
 }
 
 /**
@@ -122,7 +153,12 @@ export function agentCredentialEnvNames(agent: AgentName): readonly string[] {
  * keys back; otherwise one agent sees every provider's credentials.
  */
 export function allAgentCredentialEnvNames(): string[] {
-  return [...new Set(Object.values(AGENT_CREDENTIAL_ENV_NAMES).flat())];
+  return [...new Set([
+    ...Object.values(AGENT_CREDENTIAL_ENV_NAMES).flat(),
+    ...Object.values(NATIVE_CREDENTIAL_ENV_NAMES).flat(),
+    "CLAUDE_API_KEY", "CLAUDE_BASE_URL", "CLAUDE_MODEL",
+    "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
+  ])];
 }
 
 /**
@@ -153,9 +189,7 @@ export function guestEnvExports(): string {
 
 export function guestCodexConfigToml(): string {
   const lines = [
-    "[sandbox]",
-    'default_mode = "danger-full-access"',
-    'model_provider = "dashscope"',
+    'sandbox_mode = "danger-full-access"',
   ];
   const model = openaiModel();
   const baseUrl = openaiBaseUrl();
@@ -164,6 +198,7 @@ export function guestCodexConfigToml(): string {
   }
   if (baseUrl) {
     lines.push(
+      'model_provider = "dashscope"',
       "",
       "[model_providers.dashscope]",
       'name = "DashScope"',
@@ -187,10 +222,6 @@ export function guestCodexAuthJson(apiKey: string): string {
 
 export function guestPiAuthJson(): string {
   const auth: Record<string, { type: "api_key"; key: string }> = {};
-  const anthropicKey = anthropicApiKey();
-  if (anthropicKey) auth.anthropic = { type: "api_key", key: anthropicKey };
-  const openaiKey = openaiApiKey();
-  if (openaiKey) auth.openai = { type: "api_key", key: openaiKey };
   const piKey = piApiKey();
   if (piKey) auth[piProvider()] = { type: "api_key", key: piKey };
   return JSON.stringify(auth);
@@ -231,10 +262,9 @@ export function guestPiModelsJson(): string {
 }
 
 export function codexCliConfigOverrides(): string[] {
+  if (isLocalAgentExecution()) return [];
   const multiAgent = codexMultiAgentEnabled();
   const argv = [
-    "-c",
-    'model_provider="dashscope"',
     "-c",
     `features.multi_agent=${multiAgent}`,
   ];
@@ -243,6 +273,8 @@ export function codexCliConfigOverrides(): string[] {
   if (model) argv.push("-c", `model=${JSON.stringify(model)}`);
   if (baseUrl) {
     argv.push(
+      "-c",
+      'model_provider="dashscope"',
       "-c",
       'model_providers.dashscope.name="DashScope"',
       "-c",
@@ -277,9 +309,6 @@ export function runAsAgent(command: string, workspacePath?: string): string {
   if (process.env.RELAY_RUN_AS_CURRENT_USER === "1") {
     return [
       `export HOME=${shellQuote(home)}`,
-      `export CODEX_HOME=${shellQuote(`${home}/.codex`)}`,
-      `export PI_CODING_AGENT_DIR=${shellQuote(`${home}/.pi/agent`)}`,
-      `export KIMI_CODE_HOME=${shellQuote(`${home}/.kimi-code`)}`,
       infrastructureExports,
       `cd ${shellQuote(workspace)}`,
       command,

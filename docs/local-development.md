@@ -68,8 +68,9 @@ cp packages/relay-core/.env.example packages/relay-core/.env
 cp packages/relay-daemon/.env.example packages/relay-daemon/.env
 ```
 
-Set agent credentials in `packages/.env`, or in a package-local `.env` file to
-override them for that package:
+For BoxLite guests, set agent credentials in `packages/.env`, or in a
+package-local `.env` file to override them for that package. Local computers
+use the installed CLI's own login and configuration:
 
 ```bash
 ANTHROPIC_API_KEY=...
@@ -81,9 +82,41 @@ PI_BASE_URL=...           # optional override
 PI_MODEL=...              # optional override
 KIMI_API_KEY=...          # optional; Kimi agent via Moonshot API
 KIMI_BASE_URL=...         # optional override
-KIMI_MODEL=...            # optional override
+KIMI_MODEL=...            # required model ID when using an API key
 MOONSHOT_API_KEY=...      # alternative Moonshot credential
 ```
+
+Local computers (`--sandbox none`) run the user's installed agent CLI from
+`PATH`, using its existing login, provider, model, and configuration. Log in and
+configure Claude, Codex, Pi, or Kimi directly with that CLI before connecting the
+computer. Relay does not generate local agent credentials or provider config,
+translate Relay credential aliases, select a model/provider, or install shared
+skills into the user's agent directories. Native launch-environment settings,
+including custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and
+`KIMI_CODE_HOME`, remain available. Relay's automatically loaded `.env` values do
+not override these local runtime settings.
+
+For local Claude/Codex tasks with assigned Relay skills, materialized skill paths
+are included in the task instructions instead of replacing the CLI's auth/config
+home. Local Pi/Kimi use their explicit skill-path options. The user's native
+skills and runtime configuration otherwise remain under that runtime's control.
+
+BoxLite guests are provisioned separately from the environment variables above:
+
+- Claude requires the configured Anthropic API key.
+- Codex requires an API key and uses the native provider when `OPENAI_BASE_URL`
+  is empty; a custom endpoint selects Relay's `dashscope` provider.
+- Pi receives generated auth and model files for the selected provider.
+- Kimi accepts copied login/configuration files or `KIMI_API_KEY` plus
+  `KIMI_MODEL` (also accepting Moonshot aliases). Relay maps these to Kimi's
+  native temporary-model variables. This model requirement applies to guest
+  API-key provisioning, not to local CLI logins.
+
+Provider keys and aliases are stripped from subprocess inheritance, then only
+the selected runtime's native launch credentials (local) or provisioned
+credentials (BoxLite) are injected. Readiness is offline and does not verify
+provider-side key revocation or endpoint availability. A remote daemon using
+`--sandbox none` likewise expects its host's native runtimes to be configured.
 
 Precedence, widest to narrowest: shell environment values always win, then a
 package-local `.env`/`.env.local`, then the `packages/.env` fallback. A key

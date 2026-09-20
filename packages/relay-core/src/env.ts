@@ -11,6 +11,7 @@ export const DEVBOX_IMAGE = "relay-devbox:v1";
 export const OCI_LAYOUT_DIR = resolve(REPO_ROOT, ".oci/relay-devbox-v1");
 export const DOCKERFILE = resolve(REPO_ROOT, "dockerfile");
 const ORIGINAL_ENV_KEYS = new Set(Object.keys(process.env));
+const DOT_ENV_VALUES = new Map<string, string>();
 
 export const ANTHROPIC_ENV_KEYS = [
   "ANTHROPIC_API_KEY",
@@ -45,6 +46,7 @@ function loadDotEnv(path: string, options: { overrideLoaded?: boolean } = {}): v
       value = value.slice(1, -1);
     }
     process.env[key] = value;
+    DOT_ENV_VALUES.set(key, value);
   }
 }
 
@@ -116,15 +118,15 @@ export function requireOpenaiApiKey(): string {
 }
 
 export function kimiApiKey(): string | undefined {
-  return process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
+  return process.env.KIMI_MODEL_API_KEY || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
 }
 
 export function kimiBaseUrl(): string | undefined {
-  return process.env.KIMI_BASE_URL || process.env.MOONSHOT_BASE_URL;
+  return process.env.KIMI_MODEL_BASE_URL || process.env.KIMI_BASE_URL || process.env.MOONSHOT_BASE_URL;
 }
 
 export function kimiModel(): string | undefined {
-  return process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL;
+  return process.env.KIMI_MODEL_NAME || process.env.KIMI_MODEL || process.env.MOONSHOT_MODEL;
 }
 
 export function piApiKey(provider = piProvider()): string | undefined {
@@ -205,4 +207,13 @@ export function requirePiConfig(): void {
       "Pi requires PI_API_KEY, OPENAI_API_KEY/CODEX_API_KEY, or ANTHROPIC_API_KEY.",
     );
   }
+}
+
+/** Exclude values Relay loaded from .env while retaining the user's launch environment. */
+export function localRuntimeEnvironment(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const [key, value] of DOT_ENV_VALUES) {
+    if (env[key] === value) delete env[key];
+  }
+  return env;
 }

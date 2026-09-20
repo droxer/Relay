@@ -60,7 +60,8 @@ Phosphor.
   deliberate: a pulsing blue dot beside a blue button would put "working" and
   "press me" in the same colour.
 - **One sans, every job.** Relay self-hosts **Noto Sans Variable** through
-  `next/font`, with region-matched **Noto Sans SC/TC** families for Chinese.
+  version-locked Fontsource packages, with region-matched **Noto Sans SC/TC**
+  families for Chinese.
   Hierarchy is built from **size and
   weight** (400/500/700), never from a second face. The weight ramp is
   inverted against the usual expectation: the display tiers are 500 and the
@@ -345,8 +346,10 @@ glyph with no inter-character spacing to track.
 
 **CJK:** `html:lang(zh-CN)` / `html:lang(zh-TW)` select Noto Sans SC/TC for
 both Latin and Han glyphs, keeping mixed-script labels internally coherent.
-Both region families are self-hosted by `next/font` but set `preload: false`,
-so the browser fetches only the family selected by the pre-paint language.
+Both region families are bundled from `@fontsource-variable` 5.3.0 (OFL-1.1)
+with unicode-range subsets and no preload, so the browser fetches only the
+subsets needed by the pre-paint language and visible text. Builds need no
+Google Fonts connection after npm dependencies are installed.
 Platform CJK faces remain resilient fallbacks. Every track is pinned to 0 in
 Chinese because Han glyphs are square and must never be tightened; reading
 leading loosens to 1.7/1.8/1.9.

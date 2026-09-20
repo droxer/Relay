@@ -373,7 +373,7 @@ test("local process execution strips daemon tokens from agent subprocess env", a
     assert.equal(result.exit_code, 0, result.stderr || result.error_message);
     const env = JSON.parse(result.stdout) as Record<string, string | null>;
     assert.equal(env.home, agentHome);
-    assert.equal(env.codexHome, `${agentHome}/.codex`);
+    assert.equal(env.codexHome, process.env.CODEX_HOME || `${agentHome}/.codex`);
     assert.equal(env.databaseUrl, null);
     assert.equal(env.relayAuthStore, null);
     assert.equal(env.backendUrl, null);
@@ -560,6 +560,9 @@ test("local agent processes never inherit another provider's credentials", async
     PI_API_KEY: "pi-secret",
     KIMI_API_KEY: "kimi-secret",
     MOONSHOT_API_KEY: "moonshot-secret",
+    CLAUDE_API_KEY: "claude-alias-secret",
+    LLM_API_KEY: "llm-alias-secret",
+    KIMI_MODEL_API_KEY: "kimi-model-secret",
   };
   const previous = captureEnv(Object.keys(providerEnv));
   Object.assign(process.env, providerEnv);
@@ -577,6 +580,9 @@ test("local agent processes never inherit another provider's credentials", async
       ["PI_API_KEY", null],
       ["KIMI_API_KEY", null],
       ["MOONSHOT_API_KEY", null],
+      ["CLAUDE_API_KEY", null],
+      ["LLM_API_KEY", null],
+      ["KIMI_MODEL_API_KEY", null],
     ]);
   } finally {
     restoreCapturedEnv(previous);
@@ -2460,14 +2466,11 @@ test("parseInventoryOutput reads skill frontmatter and MCP servers per agent", (
   assert.equal(inventory["bogus-agent" as "claude"], undefined);
 });
 
-test("agent skills are provisioned and inventoried for every supported CLI", () => {
+test("BoxLite skills are provisioned for every supported CLI", () => {
   const boxSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/box.ts"), "utf8");
-  const daemonSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/index.ts"), "utf8");
   for (const directory of [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"]) {
     assert.match(boxSource, new RegExp(directory.replace(".", "\\.")));
-    assert.match(daemonSource, new RegExp(directory.replace(".", "\\.")));
   }
-  assert.match(daemonSource, /ensureLocalAgentReady[\s\S]*prepareHostAgentSkills/);
 });
 
 test("discoverAgentInventory scans live Kimi and Codex homes while ignoring legacy Kimi files", async () => {

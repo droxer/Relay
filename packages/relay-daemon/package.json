@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@boxlite-ai/boxlite": "^0.9.7",
-    "relay-core": "0.1.0"
+    "relay-core": "0.1.0",
+    "smol-toml": "^1.8.0"
   },
   "engines": {
     "node": ">=22.19.0"

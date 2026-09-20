@@ -453,8 +453,7 @@ describe("prompts", () => {
       const command = buildClaudeCommand(state());
 
       assert.match(command, /export HOME=\/tmp\/relay-agent-home/);
-      assert.match(command, /CODEX_HOME=\/tmp\/relay-agent-home\/\.codex/);
-      assert.match(command, /PI_CODING_AGENT_DIR=\/tmp\/relay-agent-home\/\.pi\/agent/);
+      assert.doesNotMatch(command, /export (CODEX_HOME|PI_CODING_AGENT_DIR)=/);
       assert.match(command, /cd \/tmp\/relay-host-workspace/);
       assert.match(command, /--add-dir \/tmp\/relay-host-workspace/);
       assert.doesNotMatch(command, /su agent/);
@@ -544,7 +543,7 @@ describe("agent command invocation", () => {
     const homePath = join(temp, "codex-home.txt");
     writeFileSync(fakeCodex, [
       "#!/bin/sh",
-      "printf '%s\\n' \"$CODEX_HOME\" > \"$CODEX_HOME_OUT\"",
+      "printf '%s\\n' \"${CODEX_HOME:-$HOME/.codex}\" > \"$CODEX_HOME_OUT\"",
       "printf '%s\\n' \"$@\" > \"$CODEX_ARGS_OUT\"",
       "printf '%s\\n' '{\"type\":\"turn.completed\"}'",
     ].join("\n"));
@@ -567,7 +566,7 @@ describe("agent command invocation", () => {
       assert.ok(args.includes("--json"));
       assert.ok(args.includes("--skip-git-repo-check"));
       assert.ok(args.includes("--dangerously-bypass-approvals-and-sandbox"));
-      assert.ok(args.includes("features.multi_agent=true"));
+      assert.ok(!args.some((arg) => arg.startsWith("features.multi_agent=")));
       assert.ok(!args.some((arg) => arg.startsWith("features.multi_agent_v2=")));
       assert.equal(args[args.indexOf("-C") + 1], workspace);
       assert.ok(args.indexOf("exec") > args.indexOf(workspace));
@@ -1216,6 +1215,7 @@ describe("execution manager boundary", () => {
     process.env = {
       KIMI_CODE_HOME: join(tmpdir(), "relay-missing-kimi-code-home"),
       KIMI_API_KEY: "kimi-key",
+      KIMI_MODEL: "kimi-k2.5",
     };
     try {
       await prepareGuestAgentAuth(["kimi"]);
@@ -1235,7 +1235,7 @@ describe("execution manager boundary", () => {
     try {
       await assert.rejects(
         () => prepareGuestAgentAuth(["kimi"]),
-        /Kimi requires a host Kimi Code login, KIMI_API_KEY, or MOONSHOT_API_KEY/,
+        /Kimi requires a valid config.toml/,
       );
     } finally {
       process.env = oldEnv;
@@ -1250,7 +1250,7 @@ describe("execution manager boundary", () => {
     mkdirSync(credentials, { recursive: true });
     mkdirSync(oauth, { recursive: true });
     mkdirSync(bin, { recursive: true });
-    writeFileSync(join(temp, "config.toml"), "default_model = \"kimi-test\"\n");
+    writeFileSync(join(temp, "config.toml"), 'default_model = "kimi-test"\n[models.kimi-test]\nprovider = "kimi"\nmodel = "kimi-k2.5"\n[providers.kimi]\ntype = "kimi"\napi_key = "test-key"\n');
     writeFileSync(join(temp, "tui.toml"), "theme = \"dark\"\n");
     writeFileSync(join(credentials, "kimi-code.json"), "{\"token\":\"secret\"}\n");
     writeFileSync(join(oauth, "kimi-code"), "");
@@ -1472,6 +1472,35 @@ describe("Pi provider config", () => {
         assert.match(claudeCommand, /--model claude-model/);
       },
     );
+  });
+
+  it("accepts Codex API-key readiness without requiring an interactive login", () => {
+    const home = mkdtempSync(join(tmpdir(), "relay-codex-api-ready-"));
+    const cli = join(home, "codex");
+    writeFileSync(cli, '#!/bin/sh\n[ "$1" = "--version" ]\n');
+    chmodSync(cli, 0o755);
+    withEnv({ PATH: `${home}:${process.env.PATH}`, RELAY_RUN_AS_CURRENT_USER: "1", RELAY_AGENT_HOME: home, RELAY_AGENT_WORKSPACE: home, OPENAI_API_KEY: "test-key" }, () => {
+      const result = runShellCommand(getAgent("codex").preflight.command());
+      assert.equal(result.exit_code, 0, result.stderr);
+    });
+  });
+
+  it("keeps the native Codex provider when no custom endpoint is configured", () => {
+    withEnv({ OPENAI_API_KEY: "test-key" }, () => {
+      assert.doesNotMatch(buildCodexCommand(state()), /model_provider=/);
+      assert.doesNotMatch(guestCodexConfigToml(), /dashscope/);
+    });
+  });
+
+  it("maps Kimi API credentials to the supported temporary model environment", () => {
+    withEnv({ MOONSHOT_API_KEY: "test-key", MOONSHOT_MODEL: "kimi-k2.5", MOONSHOT_BASE_URL: "https://example.invalid/v1" }, () => {
+      const env = Object.fromEntries(agentCredentialEnv("kimi"));
+      assert.equal(env.KIMI_MODEL_API_KEY, "test-key");
+      assert.equal(env.KIMI_MODEL_NAME, "kimi-k2.5");
+      assert.equal(env.KIMI_MODEL_BASE_URL, "https://example.invalid/v1");
+      assert.doesNotMatch(buildKimiCommand(state()), /--model kimi-k2.5/);
+      assert.doesNotMatch(buildKimiCommand(state()), /test-key/);
+    });
   });
 
   it("fully defines the dashscope provider so codex config loading does not fail", () => {
@@ -1924,7 +1953,7 @@ describe("agent registry", () => {
       },
       () => {
         const command = buildKimiCommand(state({ task_goal: "Wire up Kimi" }));
-        assert.match(command, /kimi --auto --model kimi-test --output-format stream-json --prompt/);
+        assert.match(command, /kimi --auto --output-format stream-json --prompt/);
         assert.match(command, /Wire up Kimi/);
         assert.ok(command.indexOf("--model kimi-test") < command.indexOf("--prompt"));
         // --auto (never asks) is the sandbox stance, not -y (still asks

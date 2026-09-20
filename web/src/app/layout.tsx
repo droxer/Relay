@@ -1,39 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans, Noto_Sans_SC, Noto_Sans_TC } from "next/font/google";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
+import "@fontsource-variable/noto-sans/index.css";
+import "@fontsource-variable/noto-sans-sc/index.css";
+import "@fontsource-variable/noto-sans-tc/index.css";
 import "../styles.css";
 
 import { InlineScript } from "../components/InlineScript";
 import { Providers } from "./providers";
 
-// Noto Sans carries reading, control, and display text. The regional SC/TC
-// builds include Latin as well as Han, so mixed-script labels stay in one
-// family when the UI language is Chinese. next/font downloads the Google
-// assets during the build and self-hosts them; browsers never depend on Google
-// at runtime. The CJK families are not preloaded together — CSS selects only
-// the region matching the pre-paint lang attribute.
-const appSans = Noto_Sans({
-  subsets: ["latin"],
-  weight: "variable",
-  variable: "--font-app-sans",
-  display: "swap",
-});
-
-const appCjkSc = Noto_Sans_SC({
-  weight: "variable",
-  variable: "--font-app-cjk-sc",
-  display: "swap",
-  preload: false,
-});
-
-const appCjkTc = Noto_Sans_TC({
-  weight: "variable",
-  variable: "--font-app-cjk-tc",
-  display: "swap",
-  preload: false,
-});
+// UI fonts ship from version-locked Fontsource packages. Their unicode-range
+// subsets load on demand, including the SC/TC family selected by the pre-paint
+// language. Builds and browsers do not need a Google Fonts connection.
 
 // Technical text stays on the compact JetBrains Mono face already vendored by
 // the application. Its Latin subset is sufficient because the locale-specific
@@ -93,7 +72,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${appMono.variable} ${appSans.variable} ${appCjkSc.variable} ${appCjkTc.variable}`}
+      className={appMono.variable}
       suppressHydrationWarning
     >
       <head>

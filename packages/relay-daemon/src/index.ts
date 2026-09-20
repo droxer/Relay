@@ -60,6 +60,7 @@ import {
   ensureMachineId,
   GUEST_WORKSPACE,
   agentHomePath,
+  localRuntimeEnvironment,
   agentCredentialEnv,
   allAgentCredentialEnvNames,
   DAEMON_CAPABILITY_GENERATED_FILES,
@@ -83,6 +84,7 @@ import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { BoundedTextCapture } from "./bounded-text.js";
+import { assertKimiConfigured } from "./agent-auth.js";
 import { materializeSkills } from "./agent-skills.js";
 
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
@@ -972,10 +974,13 @@ async function executeCommand(
   }
   logger.info("agent ready", commandLogFields(sandboxId, command));
   const executionAgentHome = environment.sandboxMode === "boxlite" ? "/home/agent" : agentHomePath();
+  const delivery = getAgent(command.agent).skillDelivery;
   const materialized = await materializeSkills({
     bundle: command.skills,
     agentId: command.logicalAgentId ?? `${command.agent}:${command.sessionId}`,
-    delivery: getAgent(command.agent).skillDelivery,
+    delivery: environment.sandboxMode === "none" && delivery.kind === "config-dir"
+      ? { kind: "prompt-paths" }
+      : delivery,
     agentHome: executionAgentHome,
     cacheDir: join(executionAgentHome, ".relay", "managed-skills"),
     execStream: environment.execStream,
@@ -1276,7 +1281,10 @@ function createExecutionEnvironment(
 
 async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void> {
   const def = getAgent(agent);
-  prepareLocalAgentSkills();
+  if (agent === "kimi") {
+    const env = localRuntimeEnvironment();
+    assertKimiConfigured(env.KIMI_CODE_HOME || join(agentHomePath(), ".kimi-code"), { native: true });
+  }
   const result = await localProcessExecStream("bash", ["-c", def.preflight.command()], {
     signal,
     env: Object.fromEntries(agentCredentialEnv(agent)),
@@ -1286,25 +1294,6 @@ async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Pr
     throw new Error(`${def.preflight.label} preflight failed.${detail ? ` ${detail}` : ""}`);
   }
 }
-
-const LOCAL_AGENT_SKILL_DIRS = [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"];
-let localSkillsPreparedFor: string | undefined;
-
-/**
- * Mirror the configured skills into each CLI's inventory directory once per
- * daemon lifetime. A local node's agent home is the operator's real home
- * directory, so this writes into files they own — doing it on every run would
- * rewrite that tree continuously, and synchronously, in the run's hot path.
- */
-function prepareLocalAgentSkills(): void {
-  const home = agentHomePath();
-  if (localSkillsPreparedFor === home) return;
-  for (const relativeDir of LOCAL_AGENT_SKILL_DIRS) {
-    prepareHostAgentSkills(join(home, relativeDir));
-  }
-  localSkillsPreparedFor = home;
-}
-
 
 export interface BoxliteEnvironmentOptions {
   boxliteHome?: string;
@@ -1509,7 +1498,7 @@ const AGENT_SUBPROCESS_ENV_DENY_PREFIXES = [
 ];
 
 function localAgentSubprocessEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+  const env = localRuntimeEnvironment();
   for (const key of Object.keys(env)) {
     if (isDeniedAgentSubprocessEnv(key)) {
       delete env[key];
@@ -1523,9 +1512,9 @@ function localAgentSubprocessEnv(): NodeJS.ProcessEnv {
   for (const key of allAgentCredentialEnvNames()) delete env[key];
   const home = agentHomePath();
   env.HOME = home;
-  env.CODEX_HOME = join(home, ".codex");
-  env.PI_CODING_AGENT_DIR = join(home, ".pi", "agent");
-  env.KIMI_CODE_HOME = join(home, ".kimi-code");
+  env.CODEX_HOME ??= join(home, ".codex");
+  env.PI_CODING_AGENT_DIR ??= join(home, ".pi", "agent");
+  env.KIMI_CODE_HOME ??= join(home, ".kimi-code");
   return env;
 }
 

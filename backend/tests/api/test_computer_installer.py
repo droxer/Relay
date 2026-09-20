@@ -142,6 +142,17 @@ def test_token_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
         time.sleep(0.1)  # allow stty after the prompt to disable echo
         process.stdin.write(b"test-token\n")
         process.stdin.flush()
+        # communicate() closes stdin. Keep script(1)'s input open until the
+        # installer has consumed the token; otherwise macOS can deliver EOF to
+        # the controlling terminal before the queued line reaches read(1).
+        deadline = time.monotonic() + 10
+        while b"INSTALL_STARTED" not in output and time.monotonic() < deadline:
+            if select.select([process.stdout], [], [], 0.2)[0]:
+                chunk = os.read(process.stdout.fileno(), 8192)
+                if not chunk:
+                    break
+                output += chunk
+        assert b"INSTALL_STARTED" in output, output
         tail, _ = process.communicate(timeout=10)
         output += tail
         assert process.returncode == 0, output

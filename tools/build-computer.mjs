@@ -12,10 +12,11 @@ try {
     mkdirSync(dest, { recursive: true });
     cpSync(`packages/${name}/dist`, join(dest, 'dist'), { recursive: true });
     const manifest = JSON.parse(readFileSync(`packages/${name}/package.json`, 'utf8'));
-    // Direct execution has no external runtime dependencies. BoxLite is not shipped.
-    delete manifest.dependencies;
+    // BoxLite is not shipped; direct execution uses the bundled TOML parser.
+    if (manifest.dependencies) delete manifest.dependencies["@boxlite-ai/boxlite"];
     writeFileSync(join(dest, 'package.json'), JSON.stringify(manifest));
   }
+  cpSync(resolve('node_modules/smol-toml'), join(staging, 'node_modules/smol-toml'), { recursive: true });
   mkdirSync(resolve('backend/relay/computer'), { recursive: true });
   execFileSync('tar', ['-czf', output + '.tmp', '-C', staging, 'node_modules']);
   renameSync(output + '.tmp', output);

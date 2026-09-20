@@ -25,6 +25,7 @@ import {
 import { shellQuote } from "relay-core";
 import { hostWorkspaceOwner } from "relay-core";
 import type { AgentName, AgentOutputSink, StreamExecResult } from "relay-core";
+import { assertKimiConfigured } from "./agent-auth.js";
 import { BoundedTextCapture } from "./bounded-text.js";
 
 export type BoxLiteModule = typeof import("@boxlite-ai/boxlite");
@@ -372,6 +373,7 @@ export async function prepareGuestAgentAuth(agents: Iterable<AgentName> = ["code
     );
   }
   if (selectedAgents.has("kimi")) {
+    assertKimiConfigured(hostKimiCodeHomePath());
     const files = collectKimiCodeFiles(hostKimiCodeHomePath(), false);
     if (files.length > 0) {
       script.push(...kimiCodeGuestSetupScript("/home/agent/.kimi-code", files));
