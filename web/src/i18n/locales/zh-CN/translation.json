@@ -187,9 +187,11 @@
     "tasks_team_subtitle": "谁在这个项目中工作，以及各自负责什么。",
     "tasks_workspace_subtitle": "这个项目的工作产出的文件。",
     "tasks_activities_subtitle": "这个项目中正在进行的会话。",
-    "all_projects": "所有项目",
+    "all_projects": "所有任务",
     "choose": "选择项目",
-    "required": "创建任务前请选择项目。"
+    "required": "创建任务前请选择项目。",
+    "grouped_tasks": "按项目分组的任务",
+    "no_tasks": "暂无任务"
   },
   "thread": {
     "search_placeholder": "搜索对话…",
@@ -309,7 +311,7 @@
     "cancel": "取消"
   },
   "backlog": {
-    "title": "所有项目",
+    "title": "所有任务",
     "sub_one": "{{count}} 个任务",
     "sub_other": "{{count}} 个任务",
     "filters": "待办筛选",

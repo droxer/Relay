@@ -90,5 +90,5 @@ it("groups task links below their project and highlights the selected task", () 
 
 it("preserves project scope and filters through task record navigation", () => {
   expect(canonicalBrowserUrl("/backlog", "?project=p&q=ship")).toBe("/backlog?project=p&q=ship");
-  expect(canonicalBrowserUrl("/backlog/t", "?project=p&q=ship&tab=files")).toBe("/backlog/t?project=p&q=ship&tab=files");
+  expect(canonicalBrowserUrl("/backlog/t", "?project=p&q=ship&tab=files")).toBe("/backlog/t?tab=files&project=p&q=ship");
 });

@@ -330,7 +330,7 @@ export function App() {
     && !routedProjectId
     && !routedSessionId
     && !composingNew;
-  const isTasksWorkspace = route === "backlog" || showProjectOverview || showProjectDirectoryEmpty;
+  const isTasksWorkspace = route === "backlog";
   const detailAgent = useMemo(
     () => logicalAgents.find((agent) => agent.id === agentId) ?? null,
     [agentId, logicalAgents],
@@ -405,7 +405,6 @@ export function App() {
       : t("thread.new_thread");
 
   const skipLinkHref = useMemo(() => {
-    if (showProjectDirectoryEmpty) return "#backlog-panel";
     if (route === "projects" && showProjectOverview) return "#project-detail-panel";
     if (route === "main" || route === "projects") return mobileView === "threads" ? "#thread-panel" : "#chat-panel";
     if (route === "agents" && agentId) return "#agent-detail-panel";
@@ -414,7 +413,7 @@ export function App() {
 
   const awaitingDecision = useMemo(() => isAwaitingFeedbackDecision(activeSession), [activeSession]);
 
-  const threadChromeVisible = showThreadChrome(isTasksWorkspace);
+  const threadChromeVisible = showThreadChrome(isTasksWorkspace || showProjectOverview || showProjectDirectoryEmpty);
   const spaceVisible = threadChromeVisible
     && (route === "main" || route === "projects")
     && space.open
@@ -717,10 +716,6 @@ export function App() {
           <TasksWorkspace
             projects={projects}
             projectsStatus={projectsStatus}
-            projectId={route === "projects" ? routedProjectId : null}
-            agents={logicalAgents}
-            teams={teams}
-            onSelectProject={(id) => id ? selectProject(id) : navigateToRoute("backlog")}
             recordTaskId={recordTaskId}
             onOpenRecord={navigateToTaskRecord}
             tasks={tasks}

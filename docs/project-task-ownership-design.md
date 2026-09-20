@@ -18,15 +18,14 @@ its acceptance criteria, priority, and progress. Runs are attempts to complete a
 task; conversations and artifacts preserve the evidence of those attempts.
 
 ```text
-Main navigation    Project sidebar       Main content
-Tasks              All projects          Website launch
-Agents                                   Tasks · Routines · Files
-Computers          PROJECTS
-                   Website launch  ←     List / Board   + New task
+Main navigation    Secondary navigation       Main content
+Projects           Project list               Project details / agents / workspace
+Tasks              All tasks                  Task list or selected task details
+                   Website launch
+                     Write release brief
+                     Build launch page
                    Internal tools
-                   Customer support
-
-                   + New project
+                     Update onboarding
 ```
 
 Project membership is mandatory. Agent assignment, a due date, and execution
@@ -50,27 +49,20 @@ requires choosing a project.
 
 ### Tasks navigation with a project sidebar
 
-Tasks is the single top-level destination for project work. Its secondary sidebar
-lists accessible projects, with All projects first and New project at the bottom.
-There is no separate top-level Projects destination. All projects is the sidebar
-label for the cross-project All tasks view described below; it is not a project
-directory or a container that can own tasks.
+Projects and Tasks remain separate top-level destinations. Projects opens the
+project list and project details, including agents, workspace, and settings.
+Tasks opens a shared task surface with a secondary sidebar of tasks grouped by
+project. Expand a project to reveal its tasks; select a task to read Activity,
+Definition, and Files in the main pane while the sidebar stays visible.
 
-Selecting a project opens its task list or board and visibly selects that project
-in the sidebar. Project rows show the name and open task count; project purpose,
-attention counts, and execution readiness belong in the selected project's header.
-Use one task surface for both project and cross-project views, with project scope
-supplied as a filter, so actions and status meanings stay consistent.
+The All tasks entry opens the cross-project list. Selecting a project heading
+filters that list, and New task inherits the selected project. Creating from All
+tasks requires choosing a project. On mobile, a project dropdown provides scope.
 
-Keep the project sidebar visible while navigating a project's sections. Project
-agent configuration and settings live inside the selected project; the main Agents
-destination continues to manage agents across projects. New task inherits the
-selected project, while creation from All projects requires a project picker.
-
-On mobile, replace the secondary sidebar with a project dropdown containing the
-same selection and creation actions. Project scope must remain visible. Encode
-selection in navigation state so reload, deep links, and browser Back preserve it.
-Existing project links resolve to the selected project inside Tasks.
+Project pages retain their task overview, but selecting a task navigates to Tasks.
+`/projects` and `/projects/{id}` remain project destinations; `/backlog?project={id}`
+is the scoped task list and `/backlog/{taskId}?project={id}` is the task detail.
+Legacy project task drawer links redirect to the corresponding Tasks detail.
 
 Keep the existing workflow: Backlog → Ready → Running → Review → Done. Ready
 uses the existing `assigned` status. Blocked and waiting-for-human remain visible
@@ -223,7 +215,7 @@ Acceptance checks:
   races with archive, dispatch claims, and project reassignment.
 - All tasks and project views agree on records and actions; project filtering,
   counts, pagination, cache refresh, and stable detail navigation remain correct.
-- Tasks has one secondary project sidebar, with All projects and New project;
+- Tasks has one secondary project sidebar, with All tasks, expandable project task groups, and New project;
   selecting a project scopes both the view and creation. Mobile selection,
   existing project links, reload, and browser Back preserve project context.
 - Migration is restartable and preserves event replay, files, bindings, task IDs,

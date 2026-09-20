@@ -10,6 +10,7 @@ import {
   NavLogout,
   NavMore,
   NavPreferences,
+  NavProjects,
   NavRoutine,
   NavSidebarCollapse,
   NavSidebarExpand,
@@ -169,15 +170,30 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <NavThreads size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.threads")}</span>
           </a>
+          <a
+            className={`sidenav-btn ${route === "projects" ? "active" : ""}`}
+            data-nav="projects"
+            href={hrefForRoute("projects")}
+            aria-label={t("project.projects")}
+            aria-current={route === "projects" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "projects")}
+            onMouseEnter={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavProjects size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("project.projects")}</span>
+          </a>
         </div>
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workspace")}>
           <span className="sidenav-group-label sr-only" aria-hidden="true">{t("nav.workspace")}</span>
           <a
-            className={`sidenav-btn ${(route === "backlog" || route === "projects") ? "active" : ""}`}
+            className={`sidenav-btn ${route === "backlog" ? "active" : ""}`}
             data-nav="backlog"
             href={hrefForRoute("backlog")}
             aria-label={t("nav.backlog")}
-            aria-current={(route === "backlog" || route === "projects") ? "page" : undefined}
+            aria-current={route === "backlog" ? "page" : undefined}
             onClick={(event) => handleRouteClick(event, "backlog")}
             onMouseEnter={(e) => showNavTooltip(t("nav.backlog"), e.currentTarget)}
             onMouseLeave={hideNavTooltip}

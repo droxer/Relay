@@ -43,6 +43,8 @@ import { taskRef } from "../lib/taskRef";
 
 
 interface BacklogPageProps {
+  projectId?: string;
+  recordAsPage?: boolean;
   projects?: ProjectRecord[];
   onCreateProject?: (onCreated: (id: string) => void) => void;
   /** The task whose record is open, from `/backlog/<id>`. */
@@ -99,7 +101,7 @@ function dragGhostStyle(point: DragPoint): CSSProperties {
 }
 
 
-export function BacklogPage({ projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
+export function BacklogPage({ projectId, recordAsPage = false, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -131,17 +133,14 @@ export function BacklogPage({ projects = [], onCreateProject, recordTaskId, onOp
     requestClose: closeTaskForm,
     submit: submitTask,
     remove: deleteBacklog,
-  } = useBacklogTaskForm({ currentUser });
+  } = useBacklogTaskForm({ currentUser, seed: { projectId } });
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<TaskStatus | null>(null);
-  /* The record opens as a drawer over the board — the same shape the
-     routines board uses, in both views here. The id is mirrored so the
-     exiting drawer still has its record after the route clears; `onClosed`
-     releases the mirror. */
+  // Embedded callers retain drawer exit state; Tasks renders the record as a page.
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
-  const drawerRecordId = recordMirror.record;
+  const drawerRecordId = recordAsPage ? recordTaskId : recordMirror.record;
   const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
   const boardRef = useRef<HTMLDivElement | null>(null);
   const startInFlight = useRef<string | null>(null);
@@ -412,9 +411,10 @@ export function BacklogPage({ projects = [], onCreateProject, recordTaskId, onOp
 
   return (
     <section id="backlog-panel" className="backlog-page" data-view={view} aria-label={t("backlog.title")} tabIndex={-1}>
+      {!(recordAsPage && recordTaskId) ? <>
       <PageHeader
         kicker={t("nav.workspace")}
-        title={t("backlog.title")}
+        title={projects.find((project) => project.id === projectId)?.name ?? t("backlog.title")}
         count={t("backlog.sub", { count: backlogTasks.length })}
         actions={
           <TaskBoardHeaderActions
@@ -633,15 +633,14 @@ export function BacklogPage({ projects = [], onCreateProject, recordTaskId, onOp
         onClear={() => setSelection(EMPTY_TASK_SELECTION)}
       />
 
-      {/* The record rides over the board rather than replacing it — the same
-          drawer the routines board opens, in both views here. Editing still
-          happens here: the record delegates `onEdit` up, and the form drawer
-          stacks above the record's. */}
+      </> : null}
+
+      {/* Tasks keeps the project sidebar beside the record; editing uses the shared form. */}
       {drawerRecordId ? (
         <TaskRecordView
           taskId={drawerRecordId}
           tasks={tasks}
-          drawer={{
+          drawer={recordAsPage ? undefined : {
             open: Boolean(recordTaskId),
             onClose: () => onOpenRecord(null),
             onClosed: recordMirror.release,
@@ -673,7 +672,7 @@ export function BacklogPage({ projects = [], onCreateProject, recordTaskId, onOp
           }}
           onSubmit={(event) => void submitTask(event)}
           onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
-          layer={drawerRecordId ? 1 : 0}
+          layer={drawerRecordId && !recordAsPage ? 1 : 0}
         />
       ) : null}
     </section>

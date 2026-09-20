@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
@@ -45,11 +45,8 @@ import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 
 import { ProjectTasks } from "./ProjectTasks";
-import { TaskDrawer } from "./task-board/TaskDrawer";
-import { TaskRecordView } from "./task-record/TaskRecordView";
-import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
-import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
-import { taskRef } from "../lib/taskRef";
+import { navigateToAppPath } from "../lib/appRoute";
+import { projectTasksHref } from "./ProjectTaskNav";
 
 
 /* The header's subtitle says what the open tab is for. It used to describe
@@ -240,22 +237,21 @@ export function ProjectWorkspacePage({
     (value) => value === "tasks" ? null : value,
     "push",
   );
-  /* The open record, as a param this path owns — a project task opens over
-     the project rather than sending the reader to the backlog board, and the
-     record is still an address somebody can paste. */
-  const [recordTaskId, setRecordTaskId] = useUrlSearchState<string | null>(
+  // Accept legacy project task links and redirect them to the Tasks destination.
+  const [recordTaskId] = useUrlSearchState<string | null>(
     "task",
     null,
     (value) => value || null,
     (value) => value,
     "push",
   );
-  /* The exiting drawer still needs its record after the param clears. */
-  const recordMirror = useRecordDrawerMirror(recordTaskId, recordTaskId);
-  const drawerRecordId = recordMirror.record;
-  /* The same form the backlog board edits through, seeded so a task created
-     here belongs to this project. */
-  const taskForm = useBacklogTaskForm({ currentUser, seed: { projectId: project.id } });
+  // Preserve old project-task deep links, but task details now belong to Tasks.
+  useEffect(() => {
+    if (!recordTaskId) return;
+    const recordTab = new URLSearchParams(window.location.search).get("recordTab");
+    const suffix = recordTab === "files" || recordTab === "definition" ? `&tab=${recordTab}` : "";
+    void navigateToAppPath(projectTasksHref(project.id, recordTaskId) + suffix);
+  }, [project.id, recordTaskId]);
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
@@ -360,7 +356,7 @@ export function ProjectWorkspacePage({
             agents={agents}
             teams={teams}
             locale={i18n.language}
-            onOpenRecord={(taskId) => setRecordTaskId(taskId)}
+            onOpenRecord={(taskId) => void navigateToAppPath(projectTasksHref(project.id, taskId))}
           />
         </TabsContent>
         <TabsContent value="profile">
@@ -385,51 +381,6 @@ export function ProjectWorkspacePage({
         onClose={() => setMemberEditor(null)}
       />
 
-      {/* One record surface, the same one both boards mount — the project
-          keeps the reader's place, and editing goes through the shared form
-          drawer stacked above it. */}
-      {drawerRecordId ? (
-        <TaskRecordView
-          taskId={drawerRecordId}
-          tasks={tasks}
-          drawer={{
-            open: Boolean(recordTaskId),
-            onClose: () => setRecordTaskId(null),
-            onClosed: recordMirror.release,
-          }}
-          /* The drawer rides over the project, so the project is where it
-             came from — not the backlog board it never went through. */
-          originLabel={project.name}
-          tabSearchKey="recordTab"
-          onEdit={taskForm.editTask}
-          onOpenThread={onOpenThread}
-          onOpenRecord={(nextId) => setRecordTaskId(nextId)}
-          onDeleted={() => setRecordTaskId(null)}
-        />
-      ) : null}
-
-      {taskForm.form ? (
-        <TaskDrawer
-          open={taskForm.open}
-          form={taskForm.form}
-          logicalAgents={agents}
-          projects={[project]}
-          teams={teams}
-          saving={taskForm.saving}
-          deleting={taskForm.deleting}
-          initialFocus={taskForm.assignmentFocus ? "assignment" : "title"}
-          title={taskForm.form.id ? t("backlog.edit_task") : t("backlog.new_task")}
-          subtitle={taskForm.form.id ? `${t("backlog.col_ref")} ${taskRef(taskForm.form.id)}` : t("backlog.new_task_id")}
-          onClose={() => { void taskForm.requestClose(); }}
-          onClosed={taskForm.release}
-          onChange={(next) => {
-            if (next.variant === "backlog") taskForm.setForm(next);
-          }}
-          onSubmit={(event) => void taskForm.submit(event)}
-          onDelete={taskForm.form.id ? () => { void taskForm.remove(); } : undefined}
-          layer={drawerRecordId ? 1 : 0}
-        />
-      ) : null}
     </Tabs>
   );
 }

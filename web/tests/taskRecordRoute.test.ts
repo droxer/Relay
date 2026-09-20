@@ -104,10 +104,9 @@ describe("task record routes", () => {
       canonicalBrowserUrl("/routines/R-42/runs/T-2288", "?sort=title&page=2"),
       "/routines/R-42/runs/T-2288?sort=title&page=2",
     );
-    // Params the board does not own are still stripped, and the backlog
-    // record — still a full-page surface — starts clean.
+    // Unknown params are stripped; task records preserve their list filters.
     assert.equal(canonicalBrowserUrl("/routines/R-42", "?status=blocked"), "/routines/R-42");
-    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?status=blocked"), "/backlog/T-1001");
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?status=blocked"), "/backlog/T-1001?status=blocked");
   });
 });
 
@@ -195,9 +194,8 @@ describe("record surface hygiene", () => {
   });
 
   it("mirrors a closing record drawer through one seam", () => {
-    // Three boards open a record drawer; each had written the mirror out by
-    // hand and one had drifted to adjusting it during render.
-    for (const board of ["BacklogPage.tsx", "RoutinesPage.tsx", "ProjectWorkspacePage.tsx"]) {
+    // Drawer presentations retain their record during the exit animation.
+    for (const board of ["BacklogPage.tsx", "RoutinesPage.tsx"]) {
       const source = readWeb(`src/components/${board}`);
       assert.match(source, /useRecordDrawerMirror/, `${board} must mirror through the shared hook`);
       assert.doesNotMatch(source, /setLastRecord/, `${board} must not keep its own mirror`);

@@ -187,9 +187,11 @@
     "tasks_team_subtitle": "誰在這個專案中工作，以及各自負責什麼。",
     "tasks_workspace_subtitle": "這個專案的工作產出的檔案。",
     "tasks_activities_subtitle": "這個專案中正在進行的會話。",
-    "all_projects": "所有專案",
+    "all_projects": "所有任務",
     "choose": "選擇專案",
-    "required": "建立任務前請選擇專案。"
+    "required": "建立任務前請選擇專案。",
+    "grouped_tasks": "依專案分組的任務",
+    "no_tasks": "尚無任務"
   },
   "thread": {
     "search_placeholder": "搜尋對話…",
@@ -309,7 +311,7 @@
     "cancel": "取消"
   },
   "backlog": {
-    "title": "所有專案",
+    "title": "所有任務",
     "sub_one": "{{count}} 個任務",
     "sub_other": "{{count}} 個任務",
     "filters": "待辦篩選",

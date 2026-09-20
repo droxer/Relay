@@ -261,6 +261,7 @@ const LANE_PAGE_PARAMS: Record<string, readonly string[]> = {
  */
 const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | null>> = {
   backlog: {
+    project: null,
     q: null,
     status: new Set(["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"]),
     priority: new Set(["high", "normal", "low"]),
@@ -389,6 +390,9 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     }
   } else if (head === "backlog" && entityId && rest.length === 0) {
     copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
+    copySortParams(head, source, target);
+    copyPageParams(head, source, target);
+    copyFilterParams(head, source, target);
   } else if (head === "routines" && entityId && rest.length === 0) {
     copyRecordTab(source, target, ROUTINE_RECORD_TABS, "runs");
     /* The record opens as a drawer over the board, so the route co-owns the
@@ -495,7 +499,7 @@ export function browserUrlForAppState(
   if (nextPath === currentPathname || computerRedirect) return canonicalBrowserUrl(nextPath, currentSearch);
   const [nextHead] = pathSegments(nextPath);
   const [currentHead] = pathSegments(currentPathname);
-  if (nextHead === "routines" && nextHead === currentHead) {
+  if ((nextHead === "routines" || nextHead === "backlog") && nextHead === currentHead) {
     return canonicalBrowserUrl(nextPath, currentSearch);
   }
   return nextPath;
