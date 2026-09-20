@@ -619,6 +619,16 @@
     "avatar": "Avatar"
   },
   "computer": {
+    "device_setup_intro": "Run the installer, choose a directory on your computer, then confirm in your browser.",
+    "device_approval_title": "Connect this computer?",
+    "device_approve": "Connect computer",
+    "device_approved": "Approved. Return to the terminal to finish setup.",
+    "device_approval_scope": "This connects the displayed directory and local agent tools to your Relay account. Agents run with your local user permissions. Confirm only if you started this setup.",
+    "device_error": "This connection request could not be completed. Try again or restart setup.",
+    "device_loading": "Preparing installation command…",
+    "device_choose_directory": "In the terminal, choose the local workspace directory.",
+    "device_confirm_browser": "Confirm the computer and directory in the browser window that opens.",
+    "device_manual": "Manual setup with a node token",
     "refresh_runtimes": "Refresh runtimes",
     "refresh_waiting": "Waiting for current tasks to finish",
     "refresh_pending": "Detecting runtimes…",

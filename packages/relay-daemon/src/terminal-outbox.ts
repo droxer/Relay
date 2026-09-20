@@ -53,7 +53,7 @@ export class TerminalOutbox {
     if (!existsSync(path)) {
       const data = JSON.stringify(event);
       const bytes = Buffer.byteLength(data);
-      if (output && this.outputBytes + bytes > this.maxOutputBytes) throw new Error("Durable output storage limit exceeded.");
+      if (output && (this.outputBytes + bytes > this.maxOutputBytes || this.sizes.size >= 4096)) throw new Error("Durable output storage limit exceeded.");
       const temporary = join(this.directory, `${key}.${randomUUID()}.tmp`);
       const fd = openSync(temporary, "wx", 0o600);
       try { writeFileSync(fd, data); fsyncSync(fd); } finally { closeSync(fd); }

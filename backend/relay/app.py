@@ -23,6 +23,7 @@ from .api import (
     chat_routes,
     collaboration_routes,
     computer_installer_routes,
+    device_authorization_routes,
     daemon_node_routes,
     managed_node_routes,
     node_workspace_routes,
@@ -395,6 +396,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     api_routers = (
         auth_routes.router,
+        device_authorization_routes.router,
         agent_routes.router,
         team_routes.router,
         project_routes.router,

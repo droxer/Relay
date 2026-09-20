@@ -4429,3 +4429,28 @@ def test_device_authorization_requires_browser_approval_and_single_use_redemptio
         assert redeemed.json()["token"]
         assert device.post(endpoint, headers=headers).status_code == 410
         assert browser.post(approval + "/approve").status_code == 409
+
+
+def test_device_authorization_expires_without_provisioning_a_node(monkeypatch) -> None:
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import update
+    from relay.security.device_authorization import computer_authorizations
+    from relay.persistence.store_common import store_transaction
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        browser = TestClient(app)
+        device = TestClient(app)
+        _bootstrap_admin(browser)
+        _enroll_employee(browser, "alice")
+        grant = device.post("/api/v1/computer-authorizations", json={
+            "workspacePath": "/Users/alice/work", "displayName": "Alice laptop"}).json()
+        with store_transaction(app.state.session_store.engine) as conn:
+            conn.execute(update(computer_authorizations).values(
+                expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)))
+        approval = f"/api/v1/computer-authorizations/{grant['userCode']}"
+        assert browser.get(approval).status_code == 410
+        assert browser.post(approval + "/approve").status_code == 410
+        assert device.post("/api/v1/computer-authorizations/token", headers={
+            "Authorization": f"Device {grant['deviceCode']}"}).status_code == 401

@@ -342,6 +342,10 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
   if (head === "login" && !entityId) {
     const rawReturnTo = source.get("returnTo");
     if (rawReturnTo) target.set("returnTo", validatedReturnTo(rawReturnTo));
+  } else if ((head === "computer" && !entityId) || (head === "settings" && entityId === "computers" && rest.length === 0)) {
+    const code = source.get("connect");
+    if (code && /^[A-Za-z0-9_-]{32}$/.test(code)) target.set("connect", code);
+    if (head === "settings") copyPageParams(head, source, target);
   } else if (
     (head === "threads" && entityId !== "new" && rest.length === 0)
     || (head === "projects" && Boolean(entityId) && rest[0] === "threads" && Boolean(rest[1]) && rest.length === 2)
@@ -455,7 +459,8 @@ export function browserUrlForAppState(
   currentSearch = "",
 ): string {
   const nextPath = pathForAppState(state);
-  return nextPath === currentPathname ? canonicalBrowserUrl(nextPath, currentSearch) : nextPath;
+  const computerRedirect = currentPathname === "/computer" && nextPath === "/settings/computers";
+  return nextPath === currentPathname || computerRedirect ? canonicalBrowserUrl(nextPath, currentSearch) : nextPath;
 }
 
 export function syncAppStateToUrl(state: AppLocationState, replace = false, onCommit?: () => void): Promise<void> {

@@ -1,9 +1,12 @@
 /** Personal-computer installer entrypoint. Included only in the downloadable client. */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { homedir, hostname } from 'node:os';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline/promises';
+import { createReadStream, createWriteStream, statSync, accessSync, constants } from 'node:fs';
+import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
 
 interface InstallOptions {
@@ -13,6 +16,7 @@ interface InstallOptions {
   workspace: string;
   foreground: boolean;
   verbose: boolean;
+  deviceSetup: boolean;
 }
 
 export function parseInstallArgs(args: string[]): InstallOptions {
@@ -28,21 +32,22 @@ export function parseInstallArgs(args: string[]): InstallOptions {
     if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${key}`);
     values.set(key, value);
   }
-  for (const key of ['--backend-url', '--sandbox-id', '--employee-id', '--workspace']) {
+  const deviceSetup = !values.has('--sandbox-id');
+  for (const key of deviceSetup ? ['--backend-url'] : ['--backend-url', '--sandbox-id', '--employee-id', '--workspace']) {
     if (!values.has(key)) throw new Error(`Missing ${key}`);
   }
   const backendUrl = values.get('--backend-url')!;
   const url = new URL(backendUrl);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('Backend must use HTTPS (HTTP is allowed for loopback only).');
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Backend URL must be an origin.');
-  const sandboxId = values.get('--sandbox-id')!;
-  const employeeId = values.get('--employee-id')!;
+  const sandboxId = values.get('--sandbox-id') ?? '';
+  const employeeId = values.get('--employee-id') ?? '';
   for (const [key, value] of [['sandbox-id', sandboxId], ['employee-id', employeeId]]) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value!)) throw new Error(`Invalid --${key}`);
+    if (!deviceSetup && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value!)) throw new Error(`Invalid --${key}`);
   }
-  const workspace = values.get('--workspace')!;
-  if (!isAbsolute(workspace)) throw new Error('Workspace must be an absolute path.');
-  return { backendUrl, sandboxId, employeeId, workspace, foreground, verbose };
+  const workspace = values.get('--workspace') ?? '';
+  if ((!deviceSetup || workspace) && !isAbsolute(workspace)) throw new Error('Workspace must be an absolute path.');
+  return { backendUrl, sandboxId, employeeId, workspace, foreground, verbose, deviceSetup };
 }
 
 const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -89,6 +94,32 @@ async function install(): Promise<void> {
   if (!options.foreground && process.platform === 'linux') {
     const probe = spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' });
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
+  }
+  if (options.deviceSetup) {
+    if (!options.workspace) {
+      const input = createReadStream('/dev/tty');
+      const output = createWriteStream('/dev/tty');
+      const prompt = createInterface({ input, output });
+      try {
+        const selected = await prompt.question('Local workspace directory (absolute path): ');
+        options.workspace = selected.startsWith('~/') ? join(homedir(), selected.slice(2)) : selected.trim();
+      } finally { prompt.close(); input.destroy(); output.end(); }
+    }
+    if (!isAbsolute(options.workspace) || !statSync(options.workspace).isDirectory()) throw new Error('Choose an existing absolute workspace directory.');
+    accessSync(options.workspace, constants.R_OK | constants.W_OK);
+    options.workspace = resolve(options.workspace);
+    const authorized = await authorizeComputer({
+      backendUrl: options.backendUrl, workspace: options.workspace, displayName: hostname().slice(0, 80),
+      openBrowser: url => {
+        console.log(`Confirm this computer in your browser:\n${url}`);
+        const browser = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true });
+        browser.on('error', () => { console.log('Open the URL above in a browser to continue.'); });
+        browser.unref();
+      },
+    });
+    options.sandboxId = authorized.sandboxId;
+    options.employeeId = authorized.employeeId;
+    process.env.RELAY_DAEMON_NODE_TOKEN = authorized.token;
   }
   if (!process.env.RELAY_DAEMON_NODE_TOKEN?.trim()) throw new Error('A node token is required.');
   const stateDir = join(homedir(), '.relay', 'daemon-nodes', options.sandboxId);

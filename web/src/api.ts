@@ -1040,3 +1040,14 @@ export function requestRuntimeRefresh(nodeId: string): Promise<{ commandId: stri
 export function getRuntimeRefresh(nodeId: string, commandId: string): Promise<{ status: string }> {
   return apiJson(`/daemon-nodes/${encodeURIComponent(nodeId)}/runtime-refresh/${encodeURIComponent(commandId)}`);
 }
+
+export interface ComputerAuthorizationDetails { displayName: string; workspacePath: string; status: string }
+export function getComputerSetupCommand(): Promise<{ installCommand: string }> {
+  return apiJson("/computer-authorizations/setup-command");
+}
+export function getComputerAuthorization(code: string): Promise<ComputerAuthorizationDetails> {
+  return apiJson(`/computer-authorizations/${encodeURIComponent(code)}`);
+}
+export function approveComputerAuthorization(code: string): Promise<{ status: string }> {
+  return apiJson(`/computer-authorizations/${encodeURIComponent(code)}/approve`, { method: "POST" });
+}

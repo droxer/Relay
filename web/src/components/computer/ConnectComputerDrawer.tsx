@@ -13,6 +13,7 @@ import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { isNodeOnline } from "../../lib/adminHelpers";
 import { Alert } from "@/components/ui/alert";
+import { ComputerDeviceSetup } from "./ComputerDeviceSetup";
 import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
 
 interface ConnectComputerDrawerProps {
@@ -36,6 +37,7 @@ interface ConnectComputerDrawerProps {
  */
 export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }: ConnectComputerDrawerProps) {
   const { t } = useTranslation();
+  const [manualSetup, setManualSetup] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
 
   useEffect(() => {
     if (open) {
+      setManualSetup(false);
       setWorkspacePath("");
       setDisplayName("");
       setFieldError(null);
@@ -103,6 +106,12 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
   const token = result?.nodeToken ?? result?.sandboxToken;
   const liveNode = result ? nodes.find((node) => node.id === result.node.id) : undefined;
   const connected = Boolean(liveNode && isNodeOnline(liveNode));
+
+  if (!manualSetup) return <Drawer open={open} onClose={onClose} kicker={t("computer.title")}
+    title={t("computer.connect_title")} subtitle={t("computer.device_setup_intro")} width="form"
+    closeLabel={t("drawer.close")}>
+    {open && <ComputerDeviceSetup onManual={() => setManualSetup(true)} />}
+  </Drawer>;
 
   return (
     <Drawer

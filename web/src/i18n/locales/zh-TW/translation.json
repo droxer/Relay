@@ -614,6 +614,16 @@
     "avatar": "頭像"
   },
   "computer": {
+    "device_setup_intro": "執行安裝程式，在本機選擇目錄，然後在瀏覽器中確認。",
+    "device_approval_title": "連接這台電腦？",
+    "device_approve": "確認連接",
+    "device_approved": "已授權，請返回終端完成安裝。",
+    "device_approval_scope": "這會將顯示的目錄和本機 agent 工具連接到你的 Relay 帳號。Agent 使用你的本機使用者權限執行。請確認這是你發起的安裝。",
+    "device_error": "無法完成連接請求，請重試或重新執行安裝程式。",
+    "device_loading": "正在準備安裝命令…",
+    "device_choose_directory": "在終端中選擇本機工作目錄。",
+    "device_confirm_browser": "在開啟的瀏覽器中確認電腦和目錄。",
+    "device_manual": "使用節點 token 手動連接",
     "refresh_runtimes": "重新偵測執行環境",
     "refresh_waiting": "等待目前任務結束後偵測",
     "refresh_pending": "正在偵測執行環境…",
