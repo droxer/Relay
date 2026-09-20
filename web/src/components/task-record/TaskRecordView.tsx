@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useDialogs } from "@/components/ui/DialogProvider";
+import { Drawer } from "@/components/ui/Drawer";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
 import { useTaskRecord } from "../../hooks/useTaskRecord";
+import { pathForAppState } from "../../lib/appRoute";
 import { runningRoutineIds } from "../../lib/routine";
 import { taskStartMutationInput } from "../../lib/taskBoardForm";
 import type { RelayTaskListItem } from "../../types";
-import { TaskRecordPage } from "./TaskRecordPage";
+import { TaskRecordPage, recordTitle } from "./TaskRecordPage";
 import type { RecordAction } from "./recordActions";
 import { recordVariant } from "./recordVocabulary";
 
@@ -19,11 +21,17 @@ import { recordVariant } from "./recordVocabulary";
  * `/routines/<id>/runs/<occurrenceId>` answer to one implementation of what a
  * record can do. The boards keep the editing drawer — the record delegates
  * `onEdit` back to them rather than growing a second copy of the form.
+ *
+ * Two presentations: without `drawer` the record takes the whole route (the
+ * backlog board); with it the record renders inside the shared Drawer over
+ * the board (the routines board), and this wrapper lends the drawer its
+ * header — the record's title, and the routine breadcrumb for a run.
  */
 export function TaskRecordView({
   taskId,
   runId,
   tasks,
+  drawer,
   onEdit,
   onOpenThread,
   onOpenRecord,
@@ -34,12 +42,19 @@ export function TaskRecordView({
   /** The occurrence open as a run, when the path names one. */
   runId?: string | null;
   tasks: RelayTaskListItem[];
+  /** Present the record as a drawer over the board rather than as the page. */
+  drawer?: {
+    open: boolean;
+    onClose: () => void;
+    /** Fires after the drawer's exit animation — release the mirrored record here. */
+    onClosed?: () => void;
+  };
   onEdit: (task: RelayTaskListItem) => void;
   onOpenThread: (sessionId: string) => void;
   onOpenRecord: (taskId: string, runId?: string | null) => void;
   onDeleted: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { announce, confirm } = useDialogs();
   const { startTaskMutation, cancelRunMutation, deleteTaskMutation } = useRelayMutations();
   const [busyAction, setBusyAction] = useState<RecordAction | null>(null);
@@ -54,28 +69,7 @@ export function TaskRecordView({
     [runId, taskId, tasks],
   );
   const running = useMemo(() => runningRoutineIds(tasks), [tasks]);
-
-  if (notFound || (!task && !isPending)) {
-    return (
-      <section className="record-missing" role="status" tabIndex={-1}>
-        <h1>{t("record.not_found_title")}</h1>
-        <p>{error ?? t("record.not_found_body")}</p>
-      </section>
-    );
-  }
-  if (!task) {
-    return <section className="record-missing" role="status" aria-live="polite">{t("record.loading")}</section>;
-  }
-  /* A run addressed under a routine it does not belong to is not that run.
-     Rendering it anyway would put a breadcrumb over it that lies. */
-  if (runId && task.sourceRoutineId && task.sourceRoutineId !== taskId) {
-    return (
-      <section className="record-missing" role="status" tabIndex={-1}>
-        <h1>{t("record.not_found_title")}</h1>
-        <p>{t("record.run_not_of_routine")}</p>
-      </section>
-    );
-  }
+  const parentRoutine = runId && parent ? { id: parent.id, title: parent.title } : undefined;
 
   async function runRecord(): Promise<void> {
     if (busyAction || !task) return;
@@ -123,22 +117,77 @@ export function TaskRecordView({
     }
   }
 
-  return (
-    <TaskRecordPage
-      task={task}
-      runningRoutineIds={running}
-      parentRoutine={runId && parent ? { id: parent.id, title: parent.title } : undefined}
-      busyAction={busyAction}
-      onOpenThread={onOpenThread}
-      onOpenRun={(nextId) => {
-        // The breadcrumb passes the routine's own id; a row passes a run's.
-        if (nextId === taskId) onOpenRecord(taskId, null);
-        else onOpenRecord(taskId, nextId);
+  let body: ReactNode;
+  if (notFound || (!task && !isPending)) {
+    body = (
+      <section className="record-missing" role="status" tabIndex={-1}>
+        <h1>{t("record.not_found_title")}</h1>
+        <p>{error ?? t("record.not_found_body")}</p>
+      </section>
+    );
+  } else if (!task) {
+    body = <section className="record-missing" role="status" aria-live="polite">{t("record.loading")}</section>;
+  /* A run addressed under a routine it does not belong to is not that run.
+     Rendering it anyway would put a breadcrumb over it that lies. */
+  } else if (runId && task.sourceRoutineId && task.sourceRoutineId !== taskId) {
+    body = (
+      <section className="record-missing" role="status" tabIndex={-1}>
+        <h1>{t("record.not_found_title")}</h1>
+        <p>{t("record.run_not_of_routine")}</p>
+      </section>
+    );
+  } else {
+    body = (
+      <TaskRecordPage
+        task={task}
+        runningRoutineIds={running}
+        parentRoutine={parentRoutine}
+        busyAction={busyAction}
+        presentation={drawer ? "drawer" : "page"}
+        onOpenThread={onOpenThread}
+        onOpenRun={(nextId) => {
+          // The breadcrumb passes the routine's own id; a row passes a run's.
+          if (nextId === taskId) onOpenRecord(taskId, null);
+          else onOpenRecord(taskId, nextId);
+        }}
+        onRun={() => { void runRecord(); }}
+        onCancel={() => { void cancelRecord(); }}
+        onEdit={() => onEdit(task)}
+        onDelete={() => { void deleteRecord(); }}
+      />
+    );
+  }
+
+  if (!drawer) return body;
+
+  /* The drawer's header speaks for the record: the routine breadcrumb for a
+     run, the board's name otherwise — the page presentation carries the same
+     words in its own header. */
+  const kicker = parentRoutine ? (
+    <a
+      className="record-back"
+      href={pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: parentRoutine.id })}
+      onClick={(event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+        event.preventDefault();
+        onOpenRecord(parentRoutine.id, null);
       }}
-      onRun={() => { void runRecord(); }}
-      onCancel={() => { void cancelRecord(); }}
-      onEdit={() => onEdit(task)}
-      onDelete={() => { void deleteRecord(); }}
-    />
+    >
+      {parentRoutine.title}
+    </a>
+  ) : t(task && recordVariant(task) === "task" ? "nav.backlog" : "nav.routine");
+
+  return (
+    <Drawer
+      open={drawer.open}
+      onClose={drawer.onClose}
+      onClosed={drawer.onClosed}
+      width="wide"
+      kicker={kicker}
+      title={task ? recordTitle(task, parentRoutine, i18n.language, t) : placeholder?.title ?? t("record.loading")}
+      closeLabel={t("drawer.close")}
+    >
+      {body}
+    </Drawer>
   );
 }

@@ -310,4 +310,29 @@ describe("app pathname routes", () => {
       "/threads/ses-1",
     );
   });
+
+  it("hands the routines record drawer every param the board owns", () => {
+    const onBoard = { route: "routine" as const, mobileView: "chat" as const, sessionId: null };
+    // Opening a record keeps the list's filters — the list is still showing
+    // beneath the drawer.
+    assert.equal(
+      browserUrlForAppState({ ...onBoard, taskId: "R-42" }, "/routines", "?state=paused&q=digest"),
+      "/routines/R-42?q=digest&state=paused",
+    );
+    // Closing it hands them back; the record's tab stays with the record.
+    assert.equal(
+      browserUrlForAppState(onBoard, "/routines/R-42", "?state=paused&tab=files"),
+      "/routines?state=paused",
+    );
+    // Routine to one of its runs carries both the tab and the filters.
+    assert.equal(
+      browserUrlForAppState({ ...onBoard, taskId: "R-42", runId: "T-2288" }, "/routines/R-42", "?state=paused&tab=files"),
+      "/routines/R-42/runs/T-2288?tab=files&state=paused",
+    );
+    // Another board's record is still a fresh surface.
+    assert.equal(
+      browserUrlForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: "T-1001" }, "/backlog", "?status=blocked"),
+      "/backlog/T-1001",
+    );
+  });
 });
