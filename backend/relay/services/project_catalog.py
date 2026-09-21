@@ -109,6 +109,7 @@ def update_project_payload(
             target_node_id=target_node_id,
             agent_store=agent_store,
             placement_store=placement_store,
+            previous_project=current,
         )
         if "members" in patch:
             patch["members"] = members
@@ -127,6 +128,7 @@ def validate_project_roster(
     target_node_id: str | None,
     agent_store: Any,
     placement_store: Any,
+    previous_project: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     if not isinstance(raw_members, list):
         raise ProjectValidationError("project_members_required")
@@ -143,12 +145,28 @@ def validate_project_roster(
     lead = next(member for member in members if member["agentId"] == lead_agent_id)
     if not lead.get("enabled", True):
         raise ProjectValidationError("project_lead_disabled")
+    previous_members = {
+        member["agentId"]: member
+        for member in (previous_project or {}).get("members", [])
+    }
     for member in members:
         agent = agent_store.get_agent(member["agentId"])
         if not agent or agent.get("deletedAt"):
             raise ProjectValidationError("project_member_not_found")
         if agent.get("supervisorEmployeeId") != owner_employee_id:
             raise ProjectValidationError("project_member_wrong_owner")
+        previous = previous_members.get(member["agentId"])
+        newly_enabled = member["enabled"] and previous and not previous.get("enabled", True)
+        newly_lead = (
+            member["agentId"] == lead_agent_id
+            and lead_agent_id != (previous_project or {}).get("leadAgentId")
+        )
+        # Existing members may lose readiness independently of this project.
+        # Permit metadata edits, disabling, and incremental removal without
+        # requiring every other member to be repaired first. Admission still
+        # checks runtime readiness; additions and activation check it here too.
+        if previous is not None and not newly_enabled and not newly_lead:
+            continue
         if not agent.get("enabled", True):
             raise ProjectValidationError("project_member_disabled")
         placements = placement_store.list_placements(agent_id=agent["id"])
