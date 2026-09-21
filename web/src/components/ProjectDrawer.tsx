@@ -50,6 +50,7 @@ export function ProjectDrawer({
   const computerLabelId = useId();
   const initializedKeyRef = useRef<string | null>(null);
   const initialDraftKeyRef = useRef(projectDraftKey("", ""));
+  const initialVersionRef = useRef(project?.version);
   const projectComputers = useMemo(
     () => computers.filter((computer) => computer.capabilities?.includes("project-workspaces")),
     [computers],
@@ -74,9 +75,10 @@ export function ProjectDrawer({
       initializedKeyRef.current = null;
       return;
     }
-    const initializationKey = project ? `${project.id}:${project.version}` : "new";
+    const initializationKey = project?.id ?? "new";
     if (initializedKeyRef.current === initializationKey) return;
     initializedKeyRef.current = initializationKey;
+    initialVersionRef.current = project?.version;
     if (!project) {
       reset();
       initialDraftKeyRef.current = projectDraftKey("", "");
@@ -120,7 +122,7 @@ export function ProjectDrawer({
       const result = project
         ? await updateProjectMutation.mutateAsync({
             projectId: project.id,
-            input: { expectedVersion: project.version, name: name.trim() },
+            input: { expectedVersion: initialVersionRef.current ?? project.version, name: name.trim() },
           })
         : await createProjectMutation.mutateAsync({
             name: name.trim(),
