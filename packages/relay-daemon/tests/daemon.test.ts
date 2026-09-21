@@ -3054,6 +3054,50 @@ test("relay daemon serves project workspace commands", async () => {
   assert.equal(error.code, "invalid-path");
 });
 
+test("relay daemon deletes a project workspace and acknowledges repeated delivery", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-ws-"));
+  const projectId = "prj_workspace_delete";
+  const workspaceSubpath = "projects/prj_workspace_delete";
+  const projectRoot = join(root, workspaceSubpath);
+  mkdirSync(projectRoot, { recursive: true });
+  writeFileSync(join(projectRoot, "report.md"), "hello");
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  let registration: DaemonNodeRegistration | undefined;
+  let served = false;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+    pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+    environment: fakeEnvironment({ exec: async () => ({ exit_code: 0, stdout: "", stderr: "" }) }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") { registration = await jsonBody<DaemonNodeRegistration>(init); return jsonResponse({ ok: true }); }
+      if (path.endsWith("/commands")) {
+        if (!served) { served = true; return jsonResponse({ commands: [
+          { id: "cmd_delete", type: "workspace.delete", sessionId: projectId, workspaceLayout: "project", workspaceSubpath, path: "", leaseId: "lease-one" },
+          { id: "cmd_retry", type: "workspace.delete", sessionId: projectId, workspaceLayout: "project", workspaceSubpath, path: "", leaseId: "lease-two" },
+        ] }); }
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/events")) {
+        events.push(await jsonBody<DaemonNodeEvent>(init));
+        if (events.length === 2) stop.abort();
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    },
+  });
+  try {
+    assert.equal(existsSync(projectRoot), false);
+    assert.equal(registration?.capabilities?.includes("project-workspace-delete"), true);
+    assert.deepEqual(events, [
+      { type: "workspace.deleted", commandId: "cmd_delete", leaseId: "lease-one", path: "" },
+      { type: "workspace.deleted", commandId: "cmd_retry", leaseId: "lease-two", path: "" },
+    ]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("relay daemon resolves a task workspace under the node root", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-ws-"));
   const taskId = "tsk_workspace_read";

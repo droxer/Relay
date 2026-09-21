@@ -15,6 +15,7 @@ from ..services.project_catalog import (
     update_project_payload,
 )
 from ..services.project_runtime import project_runtime_node
+from ..services.project_deletion import delete_project as delete_project_record
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, request_actor
 from .project_helpers import project_for_owner
@@ -198,7 +199,7 @@ def update_project(
     return {"project": project}
 
 
-@router.delete("/projects/{project_id}")
+@router.post("/projects/{project_id}/archive")
 def archive_project(
     project_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
@@ -220,3 +221,27 @@ def archive_project(
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
     return {"project": project}
+
+
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    project = _readable_project(ctx, request, project_id)
+    if project["ownerEmployeeId"] != actor["employeeId"]:
+        raise HTTPException(403, "Project belongs to another employee.")
+    try:
+        expected_version = int(request.query_params.get("expectedVersion", ""))
+    except ValueError as error:
+        raise HTTPException(400, "project_expected_version_required") from error
+    try:
+        return delete_project_record(
+            ctx, project_id, expected_version=expected_version,
+            employee_id=actor["employeeId"],
+            lifecycle=request.app.state.execution_lifecycle,
+        )
+    except KeyError as error:
+        raise HTTPException(404, "Project not found.") from error
+    except ProjectVersionConflict as error:
+        raise _project_error(error) from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error

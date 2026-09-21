@@ -312,6 +312,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
       DAEMON_CAPABILITY_THREAD_WORKSPACES,
       DAEMON_CAPABILITY_PROJECT_WORKSPACES,
+      "project-workspace-delete",
       DAEMON_CAPABILITY_TASK_WORKSPACES,
       DAEMON_CAPABILITY_ROUND_RESULT,
   DAEMON_CAPABILITY_WORK_RESULTS,
@@ -705,6 +706,24 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             agent: command.agent,
           });
           activeRuns.get(command.commandId)?.controller.abort(command.reason);
+        } else if (command.type === "workspace.delete") {
+          try {
+            if (command.workspaceLayout !== "project" || command.path !== "") {
+              throw new Error("Only a complete project workspace can be deleted.");
+            }
+            threadWorkspaces.deleteProject(command.sessionId, command.workspaceSubpath);
+            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+              type: "workspace.deleted", commandId: command.id,
+              ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "",
+            }, token, runtimeSignal);
+          } catch (error) {
+            // Unacknowledged leases are retried. Cleanup must survive I/O
+            // failures and lost acknowledgements, and is idempotent.
+            logger.error("project workspace cleanup failed; will retry", {
+              sandboxId, commandId: command.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         } else if (command.type === "workspace.list" || command.type === "workspace.read") {
           // A durable workspaceSubpath is validated before the workspace-read helpers
           // run, so an escaping subpath throws here rather than inside workspaceCommandEvent —

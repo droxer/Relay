@@ -51,6 +51,7 @@
     "team_lead_not_member": "The team lead must be one of its members.",
     "task_agent_and_team_conflict": "Choose either an agent or a team, not both.",
     "save_project": "Couldn't save the project. Check its Computer and agent roles, then try again.",
+    "delete_project": "Couldn't delete the project. Refresh it and try again.",
     "archive_project": "Couldn't archive the project. Refresh it and try again."
   },
   "skip_to_content": "Skip to content",
@@ -82,6 +83,15 @@
     "resize_label": "Resize sidebar"
   },
   "project": {
+    "delete": "Delete project",
+    "deleting": "Deleting…",
+    "delete_confirm_title": "Delete {{project}} permanently?",
+    "delete_confirm_message": "This permanently deletes all project tasks, routines, conversations, and artifacts, and queues deletion of its workspace files when its computer connects. This cannot be undone. Shared agents and the computer are kept.",
+    "deleted": "Project deleted",
+    "cleanup_queued": "Workspace file cleanup is queued and will run when the project computer connects.",
+    "delete_active": "Stop all running project work before deleting the project.",
+    "delete_unavailable": "Update or reconnect the project computer with support for workspace deletion, then try again.",
+
     "projects": "Projects",
     "create": "Create project",
     "edit": "Project settings",

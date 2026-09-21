@@ -1,4 +1,4 @@
-import { accessSync, constants, lstatSync, mkdirSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, lstatSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 
 import { GUEST_WORKSPACE, type DaemonNodeSandboxMode } from "relay-core";
@@ -84,6 +84,16 @@ export class ThreadWorkspaceManager {
     const workspace = this.resolveSubpath(sessionId, workspaceSubpath);
     mkdirSync(workspace.hostPath, { recursive: true });
     return this.resolveSubpath(sessionId, workspaceSubpath);
+  }
+
+  /** Only the canonical root of one project may be permanently removed. */
+  deleteProject(projectId: string, workspaceSubpath: string): void {
+    validateThreadId(projectId);
+    if (workspaceSubpath !== `projects/${projectId}`) {
+      throw new Error("Project cleanup requires its canonical workspace path.");
+    }
+    const workspace = this.resolveSubpath(projectId, workspaceSubpath);
+    rmSync(workspace.hostPath, { recursive: true, force: true });
   }
 
   /** Existing sessions created before thread directories keep their node-root cwd. */

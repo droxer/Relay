@@ -46,7 +46,7 @@ from .helpers import (
 
 router = APIRouter()
 WORKSPACE_EVENT_TYPES = frozenset(
-    {"workspace.listing", "workspace.file", "workspace.error"}
+    {"workspace.listing", "workspace.file", "workspace.error", "workspace.deleted"}
 )
 
 # A self-enrolled personal computer is direct-run only; the rule is shared with

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import {
   assignTask,
   archiveProject,
+  deleteProject,
   cancelRun,
   createTask,
   createProject,
@@ -315,6 +316,36 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to archive project", "errors.archive_project"),
   });
 
+  const deleteProjectMutation = useMutation({
+    mutationFn: ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) =>
+      deleteProject(projectId, expectedVersion),
+    onSuccess: async ({ deletedProjectId }) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY }),
+        queryClient.cancelQueries({ queryKey: SESSIONS_QUERY_KEY }),
+        queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY }),
+      ]);
+      queryClient.setQueryData<ProjectRecord[]>(PROJECTS_QUERY_KEY, (current) =>
+        current?.filter((project) => project.id !== deletedProjectId));
+      queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
+        current?.filter((session) => session.projectId !== deletedProjectId));
+      queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
+        current?.filter((task) => task.projectId !== deletedProjectId));
+      await Promise.all([invalidateProjects(), invalidateSessions(), invalidateTasks()]);
+      queryClient.removeQueries({ queryKey: ["workspace-files", `project:${deletedProjectId}`] });
+      queryClient.removeQueries({ queryKey: ["workspace-file", `project:${deletedProjectId}`] });
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === "task-record"
+        && (query.state.data as RelayTask | undefined)?.projectId === deletedProjectId });
+      announce({ message: `${t("project.deleted")}. ${t("project.cleanup_queued")}`, tone: "info" });
+    },
+    onError: (error: unknown) => {
+      const code = error instanceof Error ? error.message : "";
+      const key = code.includes("project_execution_active") ? "project.delete_active"
+        : code.includes("project_cleanup_unavailable") ? "project.delete_unavailable" : "errors.delete_project";
+      reportMutationError("Failed to delete project", error, t(key));
+    },
+  });
+
   const updateTeamMutation = useMutation({
     mutationFn: ({ teamId, input }: { teamId: string; input: Partial<TeamMutationInput> }) =>
       updateTeam(teamId, input),
@@ -353,6 +384,7 @@ export function useRelayMutations() {
     createProjectMutation,
     updateProjectMutation,
     archiveProjectMutation,
+    deleteProjectMutation,
     updateTeamMutation,
     deleteTeamMutation,
     invalidateRelay,

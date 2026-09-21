@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -294,11 +294,24 @@ export interface DaemonWorkspaceReadCommand {
   path: string;
 }
 
+export interface DaemonWorkspaceDeleteCommand {
+  id: string;
+  type: "workspace.delete";
+  leaseId?: string;
+  leaseExpiresAt?: string;
+  attempt?: number;
+  sessionId: string;
+  workspaceLayout: "project";
+  workspaceSubpath: string;
+  path: "";
+}
+
 export type DaemonWorkspaceErrorCode = "invalid-path" | "not-found" | "is-directory" | "io-error";
 
-export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand;
+export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand | DaemonWorkspaceDeleteCommand;
 
 export type DaemonNodeEvent =
+  | { type: "workspace.deleted"; commandId: string; leaseId?: string; path: string }
   | {
       type: "run.executing";
       commandId: string;

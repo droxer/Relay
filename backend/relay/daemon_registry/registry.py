@@ -207,6 +207,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         "work-results",
         "agent-skills",
         "runtime-refresh",
+        "project-workspace-delete",
         DAEMON_CAPABILITY_GENERATED_FILES,
         DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
         DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
@@ -420,12 +421,14 @@ class DaemonNodeRegistry:
         daemon_store: Any,
         *,
         task_store: TaskStore | None = None,
+        project_store: Any = None,
         liveness_timeout_ms: int = DAEMON_NODE_LIVENESS_TIMEOUT_MS,
     ):
         self.store = store
         self.daemon_store = daemon_store
         self.daemon_store.session_store = store
         self.task_store = task_store
+        self.project_store = project_store
         self.liveness_timeout_ms = liveness_timeout_ms
         self.sandboxes: dict[str, dict[str, Any]] = {}
         self.active_commands: dict[str, dict[str, Any]] = {}
@@ -1636,6 +1639,17 @@ class DaemonNodeRegistry:
         deliverable_records: list[dict[str, Any]] = []
         for record in records:
             command = record["command"]
+            if command.get("type") == "workspace.delete":
+                # Local command storage cannot join the project SQL transaction.
+                # Never deliver cleanup if that transaction rolled back, including
+                # after a process crash between enqueue and database commit.
+                if self.project_store is None or self.project_store.get_project(command["sessionId"]):
+                    self.daemon_store.record_workspace_response(sandbox_id, {
+                        "type": "workspace.error", "commandId": command["id"],
+                        "path": "", "code": "invalid-path",
+                        "message": "Project still exists; cleanup cancelled.",
+                    })
+                    continue
             if command.get("type") != "run.start":
                 deliverable_records.append(record)
                 continue

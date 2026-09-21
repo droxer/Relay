@@ -433,7 +433,7 @@ def test_project_bounds_and_member_deletion_guard(monkeypatch) -> None:
             ).status_code
             == 200
         )
-        archived = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+        archived = client.post(f"/api/v1/projects/{project['id']}/archive?expectedVersion=1")
         assert archived.status_code == 200
         listed = client.get("/api/v1/projects").json()["projects"]
         assert listed[0]["archivedAt"]
@@ -467,8 +467,8 @@ def test_employee_delete_requires_archival_and_preserves_history(
             },
         ).json()["project"]
         if archive_first:
-            archived = client.delete(
-                f"/api/v1/projects/{project['id']}?expectedVersion=1"
+            archived = client.post(
+                f"/api/v1/projects/{project['id']}/archive?expectedVersion=1"
             )
             assert archived.status_code == 200, archived.text
         client.post("/api/v1/auth/logout")

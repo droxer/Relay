@@ -274,7 +274,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     # Heal any agent left with multiple active placements before the
     # one-agent-one-computer invariant (idempotent; a no-op once collapsed).
     reconcile_single_active_placement(agent_placement_store)
-    registry = DaemonNodeRegistry(session_store, daemon_store, task_store=task_store)
+    registry = DaemonNodeRegistry(session_store, daemon_store, task_store=task_store, project_store=project_store)
     backend = ServerDaemonNodeBackend(
         registry,
         agent_store=agent_store,
