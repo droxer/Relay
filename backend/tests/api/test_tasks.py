@@ -1827,6 +1827,10 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
             }
         )
         client.app.state.task_store.link_session(running["id"], session["id"])
+        client.app.state.registry.daemon_store.create_run_request({
+            "nodeId": "sbx_alice", "sessionId": session["id"],
+            "taskGoal": "Active linked work", "assignments": [], "state": {},
+        })
 
         session_delete = client.delete(f"/api/v1/tasks/{running['id']}")
         assert session_delete.status_code == 409
@@ -1900,6 +1904,11 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             if active is not True or index != 2:
                 sessions.append_event(session["id"], relay_event(
                     "session.completed", session["id"], {"outcome": "Done"}))
+            if active is True and index == 2:
+                client.app.state.registry.daemon_store.create_run_request({
+                    "nodeId": "sbx_admin", "sessionId": session["id"],
+                    "taskGoal": "Active occurrence", "assignments": [], "state": {},
+                })
             tasks.link_session(task["id"], session["id"])
             linked.append(session["id"])
         unrelated = sessions.create_session({
@@ -1920,3 +1929,42 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             assert client.get(f"/api/v1/tasks/{task['id']}").status_code == (200 if active else 404)
         if not active:
             assert client.delete(f"/api/v1/tasks/{routine['id']}").json()["outcome"] == "already_deleted"
+
+
+@pytest.mark.parametrize("routine", [False, True])
+@pytest.mark.parametrize("session_status", ["created", "waiting_for_human", "completed"])
+@pytest.mark.parametrize("reserved", [False, True])
+def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, reserved) -> None:
+    from relay.persistence.store_common import relay_event
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        payload = {"title": "Delete idle work"}
+        if routine:
+            payload.update(isRoutine=True, routineType="task", routineCadence="daily", routineEnabled=False)
+        task = client.post("/api/v1/tasks", json=payload).json()
+        tasks = client.app.state.task_store
+        linked_task = tasks.create_routine_occurrence(task["id"], "2026-09-21") if routine else task
+        sessions = client.app.state.session_store
+        session = sessions.create_session({
+            "workspacePath": root, "taskGoal": "Linked work",
+            "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+        })
+        if session_status != "created":
+            sessions.append_event(session["id"], relay_event(
+                "session.status", session["id"], {"status": session_status, "phase": session_status}))
+        tasks.link_session(linked_task["id"], session["id"])
+        if reserved:
+            client.app.state.registry.daemon_store.create_run_request({
+                "nodeId": "sbx_admin", "sessionId": session["id"],
+                "taskGoal": "Pending execution", "assignments": [], "state": {},
+            })
+        execution = client.get(f"/api/v1/threads/{session['id']}/execution").json()
+        assert execution["canDelete"] is (not reserved)
+        response = client.delete(f"/api/v1/tasks/{task['id']}")
+        assert response.status_code == (409 if reserved else 200), response.text
+        assert client.get(f"/api/v1/tasks/{task['id']}").status_code == (200 if reserved else 404)
+        assert client.get(f"/api/v1/threads/{session['id']}").status_code == (
+            404 if routine and not reserved else 200)
