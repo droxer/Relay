@@ -67,3 +67,54 @@ def test_project_task_cannot_select_a_disabled_project_member(project_context, e
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={"assignedAgentId": worker["id"]})
     assert response.status_code == 400, response.text
     assert response.json()["detail"] == "project_agent_not_member"
+
+
+def close_project(client, project, state):
+    if state == "archived":
+        response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    else:
+        response = client.patch(f"/api/v1/projects/{project['id']}", json={"expectedVersion": 1, "enabled": False})
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize("state", ["disabled", "archived"])
+def test_closed_project_blocks_user_writes_but_keeps_history_readable(project_context, state):
+    app, client, node, project, lead, worker = project_context
+    task = client.post("/api/v1/tasks", json={"title": "History", "projectId": project["id"]}).json()
+    close_project(client, project, state)
+    requests = [
+        ("POST", "/api/v1/tasks", {"title": "New", "projectId": project["id"]}),
+        ("POST", "/api/v1/threads", {"taskGoal": "New thread", "projectId": project["id"]}),
+        ("PATCH", f"/api/v1/tasks/{task['id']}", {"title": "Changed"}),
+        ("PUT", f"/api/v1/tasks/{task['id']}/assignment", {"agentId": worker["id"]}),
+        ("POST", f"/api/v1/tasks/{task['id']}/pickups", {"agentId": worker["id"]}),
+        ("POST", f"/api/v1/tasks/{task['id']}/runs", {}),
+        ("DELETE", f"/api/v1/tasks/{task['id']}", None),
+    ]
+    before = app.state.task_store.get_task(task["id"])
+    for method, path, body in requests:
+        response = client.request(method, path, json=body)
+        assert response.status_code in (404, 409), (method, path, response.text)
+    assert app.state.task_store.get_task(task["id"]) == before
+    assert client.get(f"/api/v1/tasks/{task['id']}").status_code == 200
+    assert client.get(f"/api/v1/projects/{project['id']}").status_code == 200
+    assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
+
+
+@pytest.mark.parametrize("state", ["disabled", "archived"])
+def test_closed_project_routines_do_not_promote_or_advance_schedule(project_context, state):
+    app, client, node, project, lead, worker = project_context
+    created = client.post("/api/v1/tasks", json={
+        "title": "Daily", "projectId": project["id"], "isRoutine": True,
+        "routineCadence": "daily", "routineEnabled": True, "routineNextRunDate": "2026-09-21",
+    })
+    assert created.status_code == 201, created.text
+    routine = created.json()
+    close_project(client, project, state)
+    promoted, skipped = app.state.task_scheduler._promote_due_routines(date(2026, 9, 21))
+    assert (promoted, skipped) == (0, 1)
+    started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
+    assert started.status_code == 409
+    after = app.state.task_store.get_task(routine["id"])
+    assert after["routineNextRunDate"] == routine["routineNextRunDate"]
+    assert after["occurrenceIds"] == []
