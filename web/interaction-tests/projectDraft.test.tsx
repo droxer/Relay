@@ -13,11 +13,11 @@ vi.mock("@/components/ui/select", () => ({
 }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
 it("preserves a dirty member draft when polling advances the project version", () => {
-  const member = { agentId: "a", role: "implementer", functionTitle: "Original", responsibilities: "Build", enabled: true };
+  const member = { agentId: "a", role: "implementer", responsibilities: "Build", enabled: true };
   const project = { id: "p", version: 1, name: "Project", members: [member], leadAgentId: null, computerId: "c" } as any;
   const props = { open: true, member: member as any, project, agents: [], computers: [], onClose: vi.fn() };
   const view = render(<ProjectMemberEditor {...props} />);
-  const input = view.container.querySelector('input[name="function-title"]') as HTMLInputElement;
+  const input = view.container.querySelector('textarea[name="responsibilities"]') as HTMLTextAreaElement;
   fireEvent.change(input, { target: { value: "Unsaved work" } });
   view.rerender(<ProjectMemberEditor {...props} project={{ ...project, version: 2 }} />);
   expect(input.value).toBe("Unsaved work");

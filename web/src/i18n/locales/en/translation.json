@@ -105,10 +105,9 @@
     "member_count_one": "{{count}} agent",
     "member_count_other": "{{count}} agents",
     "role": "Project role",
-    "function_title": "Function",
     "responsibilities": "Responsibilities",
     "instructions": "Project instructions (optional)",
-    "member_fields_required": "Every project agent needs a function and responsibilities.",
+    "member_fields_required": "Every project agent needs responsibilities.",
     "roles": {
       "implementer": "Implementer",
       "reviewer": "Reviewer",

@@ -132,10 +132,7 @@ def _phase(role: str) -> str:
 
 
 def _member_brief(member: dict[str, Any]) -> str:
-    parts = [
-        f"Project function: {member['functionTitle']}.",
-        f"Responsibilities: {member['responsibilities']}.",
-    ]
+    parts = [f"Responsibilities: {member['responsibilities']}."]
     if member.get("instructions"):
         parts.append(f"Project instructions: {member['instructions']}")
     return " ".join(parts)

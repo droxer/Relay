@@ -101,7 +101,6 @@ class DatabaseProjectStore:
         # projection deliberately does not own a database FK to agents.
         Column("agent_id", entity_uuid_type(), nullable=False),
         Column("role", Text, nullable=False),
-        Column("function_title", Text, nullable=False),
         Column("responsibilities", Text, nullable=False),
         Column("instructions", Text, nullable=True),
         Column("enabled", Boolean, nullable=False),
@@ -329,7 +328,6 @@ class DatabaseProjectStore:
                 "project_id": project["id"],
                 "agent_id": member["agentId"],
                 "role": member["role"],
-                "function_title": member["functionTitle"],
                 "responsibilities": member["responsibilities"],
                 "instructions": member.get("instructions"),
                 "enabled": member.get("enabled", True),

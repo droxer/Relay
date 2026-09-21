@@ -107,13 +107,11 @@ def test_employee_creates_and_updates_computer_bound_project(monkeypatch) -> Non
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "技术负责人",
                         "responsibilities": "拆解范围并验收交付",
                     },
                     {
                         "agentId": reviewer["id"],
                         "role": "reviewer",
-                        "functionTitle": "质量负责人",
                         "responsibilities": "审查风险与回归测试",
                         "instructions": "优先检查并发写入风险。",
                     },
@@ -132,7 +130,6 @@ def test_employee_creates_and_updates_computer_bound_project(monkeypatch) -> Non
         assert project["members"][1] == {
             "agentId": reviewer["id"],
             "role": "reviewer",
-            "functionTitle": "质量负责人",
             "responsibilities": "审查风险与回归测试",
             "instructions": "优先检查并发写入风险。",
             "enabled": True,
@@ -151,7 +148,6 @@ def test_employee_creates_and_updates_computer_bound_project(monkeypatch) -> Non
                     {
                         "agentId": lead["id"],
                         "role": "implementer",
-                        "functionTitle": "交付负责人",
                         "responsibilities": "完成实现与交付",
                     }
                 ],
@@ -190,7 +186,6 @@ def test_concurrent_project_archive_maps_stale_update_to_conflict(monkeypatch) -
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -241,13 +236,11 @@ def test_project_rejects_member_on_another_computer(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     },
                     {
                         "agentId": remote["id"],
                         "role": "reviewer",
-                        "functionTitle": "Reviewer",
                         "responsibilities": "Review",
                     },
                 ],
@@ -278,7 +271,6 @@ def test_project_rejects_incompatible_computer_and_inactive_agent(monkeypatch) -
                 {
                     "agentId": lead["id"],
                     "role": "planner",
-                    "functionTitle": "Lead",
                     "responsibilities": "Plan",
                 }
             ],
@@ -329,7 +321,6 @@ def test_project_update_revalidates_legacy_placements(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -360,7 +351,6 @@ def test_project_update_revalidates_legacy_placements(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan and coordinate",
                     }
                 ],
@@ -394,7 +384,6 @@ def test_project_bounds_and_member_deletion_guard(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -412,7 +401,6 @@ def test_project_bounds_and_member_deletion_guard(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -473,7 +461,6 @@ def test_employee_delete_requires_archival_and_preserves_history(
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -523,7 +510,6 @@ def test_project_routes_are_owner_scoped(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -610,7 +596,6 @@ def test_project_task_creates_project_scoped_thread(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "implementer",
-                        "functionTitle": "Builder",
                         "responsibilities": "Build",
                     }
                 ],
@@ -659,7 +644,6 @@ def test_project_thread_and_task_reject_assignment_overrides(monkeypatch) -> Non
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -742,7 +726,6 @@ def test_project_thread_rejects_another_computer(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -762,7 +745,7 @@ def test_project_thread_rejects_another_computer(monkeypatch) -> None:
         assert response.json()["detail"] == "project_computer_mismatch"
 
 
-def test_project_task_dispatch_compiles_member_role_and_function(monkeypatch) -> None:
+def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -782,14 +765,12 @@ def test_project_task_dispatch_compiles_member_role_and_function(monkeypatch) ->
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "技术负责人",
                         "responsibilities": "先定义边界与实现顺序",
                         "instructions": "不要直接跳过计划阶段。",
                     },
                     {
                         "agentId": reviewer["id"],
                         "role": "reviewer",
-                        "functionTitle": "质量负责人",
                         "responsibilities": "最后审查风险与回归",
                     },
                 ],
@@ -813,7 +794,6 @@ def test_project_task_dispatch_compiles_member_role_and_function(monkeypatch) ->
         assert command["workspaceSubpath"] == project["workspaceSubpath"]
         assert command["logicalAgentId"] == lead["id"]
         assert command["role"] == "planner"
-        assert "技术负责人" in command["state"]["assignment_brief"]
         assert "先定义边界与实现顺序" in command["state"]["assignment_brief"]
         assert "不要直接跳过计划阶段" in command["state"]["assignment_brief"]
 
@@ -839,7 +819,6 @@ def test_project_dispatch_fails_closed_after_incompatible_daemon_replacement(
                     {
                         "agentId": lead["id"],
                         "role": "implementer",
-                        "functionTitle": "Builder",
                         "responsibilities": "Build",
                     }
                 ],
@@ -891,7 +870,6 @@ def test_manual_project_routine_dispatches_project_roster(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "implementer",
-                        "functionTitle": "Builder",
                         "responsibilities": "Build",
                     }
                 ],
@@ -943,13 +921,11 @@ def test_scheduler_dispatches_assigned_project_task(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan delivery",
                     },
                     {
                         "agentId": reviewer["id"],
                         "role": "reviewer",
-                        "functionTitle": "Reviewer",
                         "responsibilities": "Review delivery",
                     },
                 ],
@@ -1001,13 +977,11 @@ def test_project_room_run_expands_fixed_roster(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "implementer",
-                        "functionTitle": "Builder",
                         "responsibilities": "Build the change",
                     },
                     {
                         "agentId": reviewer["id"],
                         "role": "reviewer",
-                        "functionTitle": "Reviewer",
                         "responsibilities": "Review the change",
                     },
                 ],
@@ -1057,7 +1031,6 @@ def test_project_room_rejects_malformed_assignment_instead_of_running_everyone(
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -1109,7 +1082,6 @@ def test_project_workspace_browses_persistent_root_without_thread(
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],
@@ -1235,7 +1207,6 @@ def test_project_workspace_and_brief_are_project_scoped(monkeypatch) -> None:
                         {
                             "agentId": lead["id"],
                             "role": "planner",
-                            "functionTitle": "Lead",
                             "responsibilities": "Plan",
                         }
                     ],
@@ -1331,7 +1302,7 @@ def test_empty_project_can_add_and_remove_its_last_member(monkeypatch) -> None:
         project = created.json()["project"]
         assert project["leadAgentId"] is None
         member = {
-            "agentId": lead["id"], "role": "planner", "functionTitle": "Lead",
+            "agentId": lead["id"], "role": "planner",
             "responsibilities": "Plan",
         }
         added = client.patch(f"/api/v1/projects/{project['id']}", json={
