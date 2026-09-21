@@ -5,6 +5,9 @@ import { canonicalBrowserUrl } from "../src/lib/appRoute";
 import type { RelayTaskListItem } from "../src/types";
 
 vi.mock("../src/hooks/useProjectLookup", () => ({ useProjectLookup: () => () => undefined }));
+vi.mock("../src/hooks/useEmployeeNames", () => ({ useEmployeeNames: () => new Map() }));
+vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
+vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents: [] }) }));
 vi.mock("../src/components/task-record/RecordHistory", () => ({ RecordHistory: () => null }));
 vi.mock("../src/components/task-record/RecordResultLine", () => ({ RecordResultLine: () => null }));
 vi.mock("../src/components/task-record/RecordArtifacts", () => ({ RecordArtifacts: () => null }));
@@ -17,6 +20,7 @@ it("changes a project record tab without changing the project tab or closing the
   window.history.replaceState({}, "", "/projects/p?task=t");
   render(<TaskRecordPage
     task={{ id: "t", title: "Task", status: "backlog", priority: "normal", createdAt: "2026-09-01", updatedAt: "2026-09-01" } as RelayTaskListItem}
+    currentUser={{ id: "u-1", username: "fei", role: "user", employeeId: "fei" }}
     runningRoutineIds={new Set()} busyAction={null} presentation="drawer" tabSearchKey="recordTab"
     onOpenThread={vi.fn()} onOpenRun={vi.fn()} onRun={vi.fn()} onCancel={vi.fn()}
     onToggleBlock={vi.fn()} onDone={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()}

@@ -67,4 +67,35 @@ describe("taskHistoryEntries", () => {
     assert.equal(entries[0]?.kind, "dispatch_rejected");
     assert.equal(entries[0]?.message, "no ready node");
   });
+  it("drops activity lines that restate a structured event with a raw id", () => {
+    const entries = taskHistoryEntries([
+      event({ id: "e1", type: "task.assigned", timestamp: "2026-06-01T00:00:00.000Z", teamId: "team_9" } as never),
+      event({
+        id: "e2",
+        type: "task.activity",
+        timestamp: "2026-06-01T00:00:01.000Z",
+        activity: { id: "act_1", createdAt: "2026-06-01T00:00:01.000Z", message: "Assigned to team team_9." },
+      } as never),
+      event({ id: "e3", type: "task.session_linked", timestamp: "2026-06-02T00:00:00.000Z", sessionId: "session_1" } as never),
+      event({
+        id: "e4",
+        type: "task.activity",
+        timestamp: "2026-06-02T00:00:01.000Z",
+        activity: { id: "act_2", createdAt: "2026-06-02T00:00:01.000Z", message: "Linked session session_1." },
+      } as never),
+      event({
+        id: "e5",
+        type: "task.activity",
+        timestamp: "2026-06-03T00:00:00.000Z",
+        activity: { id: "act_3", createdAt: "2026-06-03T00:00:00.000Z", message: "Picked up by the node" },
+      } as never),
+    ], "task_1");
+
+    // The id-bearing duplicates are gone; the structured entries and a real
+    // activity line survive.
+    assert.deepEqual(entries.map((entry) => entry.kind), ["activity", "session_linked", "assigned"]);
+    assert.equal(entries[0]?.message, "Picked up by the node");
+    // The assignment entry carries its target so the label can print a name.
+    assert.equal(entries[2]?.teamId, "team_9");
+  });
 });

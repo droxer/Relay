@@ -290,16 +290,18 @@ export function BacklogTaskRow({
       </TableCell>
       <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell>
       <TableCell render={<div />} className="backlog-row-lead">
-        <a
-          className="backlog-row-title"
-          href={hrefForTaskRecord(task.id)}
-          onClick={(event) => {
-            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-            event.preventDefault();
-            onOpen();
-          }}
-        >{task.title}</a>
-        {projectName ? <span className="task-project-label">{projectName}</span> : null}
+        <div className="backlog-row-lead-main">
+          <a
+            className="backlog-row-title"
+            href={hrefForTaskRecord(task.id)}
+            onClick={(event) => {
+              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+              event.preventDefault();
+              onOpen();
+            }}
+          >{task.title}</a>
+          {projectName ? <span className="task-project-label">{projectName}</span> : null}
+        </div>
         <TaskFlowDetails task={task} execution={session?.execution} />
         <RoutineOriginBadge task={task} routineTitle={routineTitle} />
       </TableCell>

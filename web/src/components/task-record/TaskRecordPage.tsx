@@ -7,7 +7,7 @@ import { useUrlSearchState } from "../../hooks/useUrlSearchState";
 import { pathForAppState } from "../../lib/appRoute";
 import { projectReadOnly } from "../../lib/projectPage";
 import { navigateRecordBack, recordBackHref } from "../../lib/recordBack";
-import type { RelayTaskListItem } from "../../types";
+import type { CurrentUser, RelayTaskListItem } from "../../types";
 import { PageHeader } from "../PageHeader";
 import { RecordBand, type RecordFact } from "../workspace/RecordBand";
 import { recordBandFacts } from "./recordBandFacts";
@@ -21,6 +21,11 @@ import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
 import type { RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
+import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
+import { useEmployeeNames } from "../../hooks/useEmployeeNames";
+import { useTeams } from "../../hooks/useTeams";
+import { taskAssigneeDisplayName, UNRESOLVED_EMPLOYEE_ID } from "../../lib/taskAssignment";
+import type { HistoryNameResolver } from "./taskHistoryLabel";
 import {
   defaultRecordTab,
   parseRecordTab,
@@ -55,6 +60,7 @@ export function TaskRecordPage({
   task,
   runningRoutineIds,
   parentRoutine,
+  currentUser,
   busyAction,
   presentation = "page",
   tabSearchKey = "tab",
@@ -72,6 +78,9 @@ export function TaskRecordPage({
   runningRoutineIds: ReadonlySet<string>;
   /** Set when this record is open as one of a routine's runs. */
   parentRoutine?: { id: string; title: string };
+  /** Who is looking — the band's assignee and the timeline's assignment names
+      resolve through the directories this user can see. */
+  currentUser: CurrentUser;
   busyAction: RecordAction | null;
   /** "drawer" drops the page header; the surrounding drawer carries it. */
   presentation?: "page" | "drawer";
@@ -104,6 +113,19 @@ export function TaskRecordPage({
   const project = projectOf(task.projectId);
   const projectName = project?.name;
   const readOnly = projectReadOnly(project);
+  /* The band names the assignee and the timeline names assignment targets;
+     both resolve through the same directories the boards use. */
+  const employeeNames = useEmployeeNames(currentUser);
+  const { teams } = useTeams(currentUser.employeeId);
+  const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
+  const historyNames = useMemo<HistoryNameResolver>(() => ({
+    teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
+    agentName: (agentId) => logicalAgents.find((agent) => agent.id === agentId)?.displayName,
+  }), [teams, logicalAgents]);
+  const resolvedAssignee = taskAssigneeDisplayName(task, currentUser, employeeNames);
+  const assigneeName = resolvedAssignee && UNRESOLVED_EMPLOYEE_ID.test(resolvedAssignee)
+    ? t("backlog.assignee_unknown")
+    : resolvedAssignee;
   const facts = useMemo<RecordFact[]>(
     () => recordBandFacts(
       task,
@@ -112,8 +134,9 @@ export function TaskRecordPage({
       i18n.language,
       t,
       task.projectId ? { id: task.projectId, name: projectName || task.projectId } : undefined,
+      assigneeName,
     ),
-    [task, variant, runningRoutineIds, i18n.language, t, projectName],
+    [task, variant, runningRoutineIds, i18n.language, t, projectName, assigneeName],
   );
 
   const listPath = pathForAppState({
@@ -222,7 +245,7 @@ export function TaskRecordPage({
                 of how it got there. */}
             <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} />
             <RecordResultLine taskId={task.id} onOpenThread={onOpenThread} />
-            <RecordHistory taskId={task.id} live={task.status === "running"} onOpenThread={onOpenThread} />
+            <RecordHistory taskId={task.id} live={task.status === "running"} names={historyNames} onOpenThread={onOpenThread} />
           </TabsContent>
         )}
         <TabsContent value="definition">

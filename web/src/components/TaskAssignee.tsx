@@ -2,6 +2,7 @@ import type { LogicalAgentAvailability, RelayTaskListItem } from "../types";
 import { cn } from "@/lib/utils";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { IdentityMark } from "./IdentityMark";
+import { UNRESOLVED_EMPLOYEE_ID } from "../lib/taskAssignment";
 import { useTranslation } from "react-i18next";
 
 /**
@@ -39,15 +40,21 @@ export function TaskAssignee({
    *  executor glyph carries the assignee instead. */
   assigneeIsSelf?: boolean;
 }) {
+  const { t } = useTranslation();
+  /* A directory miss arrives as the raw employee UUID (see
+     taskAssigneeDisplayName's fallback). The team branch of the badge below
+     already substitutes a label for exactly this case — the person gets the
+     same courtesy, with no avatar monogram for a name nobody has. */
+  const unresolved = assigneeDisplayName ? UNRESOLVED_EMPLOYEE_ID.test(assigneeDisplayName) : false;
   const assigned = Boolean(assigneeDisplayName);
-  const name = assigneeDisplayName ?? unassignedLabel;
+  const name = unresolved ? t("backlog.assignee_unknown") : assigneeDisplayName ?? unassignedLabel;
 
   return (
     <span className="task-assignee" translate="no" data-unassigned={assigned ? "false" : "true"}>
       {assigneeIsSelf ? null : (
         <>
           <span className="task-assignee-avatar" aria-hidden="true">
-            {assigned ? initialFor(name) : null}
+            {assigned && !unresolved ? initialFor(name) : null}
           </span>
           <span className="task-assignee-name">{name}</span>
         </>

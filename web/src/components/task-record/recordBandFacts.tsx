@@ -26,6 +26,9 @@ export function recordBandFacts(
   t: (key: string, options?: Record<string, unknown>) => string,
   /** The project this task belongs to, when it has one and its name resolves. */
   project?: { id: string; name: string },
+  /** The assignee's resolved display name; without it the raw employee id
+      would stand where a person's name belongs. */
+  assigneeName?: string,
 ): RecordFact[] {
   const facts: RecordFact[] = [];
   if (variant === "routine") {
@@ -75,7 +78,7 @@ export function recordBandFacts(
   facts.push({
     key: "assignee",
     label: t("backlog.assignee"),
-    value: task.assigneeEmployeeId ?? t("backlog.unassigned"),
+    value: assigneeName ?? t("backlog.unassigned"),
   });
   facts.push({
     key: "ref",

@@ -44,6 +44,12 @@ export function RecordResultLine({
   const duration = runDurationMs(run);
   const when = run.endedAt ?? run.startedAt;
 
+  /* A queued run can carry nothing but a thread id. A strip whose only
+     content is a right-floating "Open thread" link reads as a stray, and the
+     timeline below already links that thread — so with no facts, no strip. */
+  if (!when && duration === null && run.artifactCount === 0 && !run.failureMessage) return null;
+
+
   return (
     <section className="task-result-summary" data-outcome={outcome} aria-label={t("backlog.result_title")}>
       {when ? (

@@ -65,6 +65,12 @@ export function taskAssigneeDisplayName(
   return employeeNames?.get(employeeId) ?? employeeId;
 }
 
+/** What `taskAssigneeDisplayName` returns when the directory cannot name an
+    employee: the raw id. Display surfaces test this to substitute a real
+    label ("Unknown employee") — a UUID where a name belongs is how cards used
+    to announce an assignee called "0 064b131e-6f…". */
+export const UNRESOLVED_EMPLOYEE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** True when the task's owning employee is the viewer. Personal views
  *  (backlog/routine) suppress the redundant self chip and let the executor
  *  glyph stand in as the assignee. */

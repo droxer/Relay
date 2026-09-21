@@ -9,7 +9,7 @@ import { useTaskRecord } from "../../hooks/useTaskRecord";
 import { pathForAppState } from "../../lib/appRoute";
 import { runningRoutineIds } from "../../lib/routine";
 import { taskStartMutationInput } from "../../lib/taskBoardForm";
-import type { RelayTaskListItem } from "../../types";
+import type { CurrentUser, RelayTaskListItem } from "../../types";
 import { TaskRecordPage, recordTitle } from "./TaskRecordPage";
 import type { RecordAction } from "./recordActions";
 import { recordVariant } from "./recordVocabulary";
@@ -30,6 +30,7 @@ import { recordVariant } from "./recordVocabulary";
 export function TaskRecordView({
   taskId,
   runId,
+  currentUser,
   tasks,
   drawer,
   originLabel,
@@ -43,6 +44,8 @@ export function TaskRecordView({
   taskId: string;
   /** The occurrence open as a run, when the path names one. */
   runId?: string | null;
+  /** The viewer — assignment and assignee names resolve through their directories. */
+  currentUser: CurrentUser;
   tasks: RelayTaskListItem[];
   /** Present the record as a drawer over the board rather than as the page. */
   drawer?: {
@@ -188,6 +191,7 @@ export function TaskRecordView({
     body = (
       <TaskRecordPage
         task={task}
+        currentUser={currentUser}
         runningRoutineIds={running}
         parentRoutine={parentRoutine}
         busyAction={busyAction}
