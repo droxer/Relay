@@ -35,3 +35,18 @@ it("loads the current project when reopening settings", () => {
   view.rerender(<ProjectDrawer {...props} project={{ ...project, name: "Latest", version: 2 }} />);
   expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("Latest");
 });
+
+it("renames an existing project when its runtime computer is absent", async () => {
+  render(<ProjectDrawer open project={project} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Renamed offline" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
+  await waitFor(() => expect(update).toHaveBeenCalledWith({ projectId: "p", input: { name: "Renamed offline", expectedVersion: 1 } }));
+});
+
+it("still requires a computer to create a project", () => {
+  render(<ProjectDrawer open computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "New project" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  expect(create).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toBe("project.computer_required");
+});
