@@ -163,6 +163,7 @@
     "member_remove": "Remove from project",
     "member_remove_confirm_title": "Remove {{name}} from the project?",
     "member_remove_confirm_message": "They lose their place in this room. The agent itself stays in your workforce.",
+    "member_lead_required": "A project with agents needs an enabled lead. Keep this agent enabled as lead, or make another enabled agent the lead first.",
     "member_make_lead": "Project lead",
     "member_enabled": "Enabled",
     "member_agent": "Agent",

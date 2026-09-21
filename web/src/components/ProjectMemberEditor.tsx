@@ -86,6 +86,7 @@ export function ProjectMemberEditor({
   const { confirm } = useDialogs();
   const { updateProjectMutation } = useRelayMutations();
   const [draft, setDraft] = useState<MemberDraft>(EMPTY_DRAFT);
+  const [leadError, setLeadError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [functionTitleError, setFunctionTitleError] = useState<string | null>(null);
   const [responsibilitiesError, setResponsibilitiesError] = useState<string | null>(null);
@@ -143,19 +144,21 @@ export function ProjectMemberEditor({
           enabled: member.enabled,
           lead: member.agentId === project.leadAgentId,
         }
-      : EMPTY_DRAFT;
+      : { ...EMPTY_DRAFT, lead: project.members.length === 0 };
     setDraft(initial);
+    setLeadError(null);
     setAgentError(null);
     setFunctionTitleError(null);
     setResponsibilitiesError(null);
     initialDraftKeyRef.current = draftKey(initial);
-  }, [open, member, project.id, project.version, project.leadAgentId]);
+  }, [open, member, project.id, project.version, project.leadAgentId, project.members.length]);
 
   const dirty = initializedKeyRef.current !== null && draftKey(draft) !== initialDraftKeyRef.current;
   const confirmDiscard = useUnsavedChangesGuard(open && dirty && !busy);
 
   function patch(patchDraft: Partial<MemberDraft>) {
     setDraft((current) => ({ ...current, ...patchDraft }));
+    setLeadError(null);
     setAgentError(null);
     setFunctionTitleError(null);
     setResponsibilitiesError(null);
@@ -208,6 +211,11 @@ export function ProjectMemberEditor({
       : project.leadAgentId === draft.agentId
         ? null
         : project.leadAgentId;
+    if (members.length && !members.some((item) => item.agentId === leadAgentId && item.enabled)) {
+      setLeadError(t("project.member_lead_required"));
+      return;
+    }
+    setLeadError(null);
     try {
       await updateProjectMutation.mutateAsync({
         projectId: project.id,
@@ -231,8 +239,13 @@ export function ProjectMemberEditor({
     if (!accepted) return;
     const members = rosterPayload(project).filter((item) => item.agentId !== member.agentId);
     const leadAgentId = project.leadAgentId === member.agentId
-      ? members[0]?.agentId ?? null
+      ? members.find((item) => item.enabled)?.agentId ?? null
       : project.leadAgentId;
+    if (members.length && !members.some((item) => item.agentId === leadAgentId && item.enabled)) {
+      setLeadError(t("project.member_lead_required"));
+      return;
+    }
+    setLeadError(null);
     try {
       await updateProjectMutation.mutateAsync({
         projectId: project.id,
@@ -386,6 +399,8 @@ export function ProjectMemberEditor({
             </div>
           </div>
         ) : null}
+
+        {leadError ? <p role="alert" className="text-destructive">{leadError}</p> : null}
 
         <div className="adm-form-actions">
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>

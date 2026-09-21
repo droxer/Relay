@@ -161,6 +161,7 @@
     "member_remove": "移出專案",
     "member_remove_confirm_title": "將 {{name}} 移出專案？",
     "member_remove_confirm_message": "該成員將失去在此專案中的位置，但智能體仍保留在你的團隊中。",
+    "member_lead_required": "專案中有智能體時，需要一位已啟用的負責人。請將此智能體保持為已啟用的負責人，或先將另一位已啟用的智能體設為負責人。",
     "member_make_lead": "專案負責人",
     "member_enabled": "啟用",
     "member_agent": "智能體",
