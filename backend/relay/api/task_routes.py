@@ -155,7 +155,7 @@ def validate_project_task_assignment(
     if not project:
         raise HTTPException(404, "Project not found.")
     if assigned_agent_id not in {
-        member.get("agentId") for member in project.get("members", [])
+        member.get("agentId") for member in project.get("members", []) if member.get("enabled", True)
     }:
         raise HTTPException(400, "project_agent_not_member")
 
@@ -402,7 +402,7 @@ def create_task(
         project
         and assigned_agent_id
         and assigned_agent_id
-        not in {member["agentId"] for member in project.get("members", [])}
+        not in {member["agentId"] for member in project.get("members", []) if member.get("enabled", True)}
     ):
         raise HTTPException(400, "project_agent_not_member")
     if project and assigned_team_id:

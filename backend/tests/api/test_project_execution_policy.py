@@ -34,6 +34,7 @@ def test_explicit_project_assignee_runs_without_unavailable_siblings(project_con
     app, client, node, project, lead, worker = project_context
     created = client.post("/api/v1/tasks", json={
         "title": "Worker only", "projectId": project["id"], "assignedAgentId": worker["id"],
+        "status": "assigned",
         **({"isRoutine": True, "routineCadence": "daily", "routineEnabled": True} if entry == "routine" else {}),
     })
     assert created.status_code == 201, created.text

@@ -41,7 +41,12 @@ def resolve_project_task_assignments(
     if node is None:
         raise ProjectDispatchError("project_computer_offline")
     snapshot = project_runtime_snapshot(project)
-    assignments = project_member_assignments(project, snapshot=snapshot)
+    assigned_agent_id = task.get("assignedAgentId")
+    assignments = project_member_assignments(
+        project,
+        selected_agent_ids=[assigned_agent_id] if assigned_agent_id else None,
+        snapshot=snapshot,
+    )
     return (
         resolve_agent_assignments(
             assignments,

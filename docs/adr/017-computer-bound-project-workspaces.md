@@ -18,7 +18,7 @@ Relay introduces an owner-scoped `Project` aggregate with:
 
 Tasks and sessions may reference `projectId`. Historical rows remain unclassified; Relay does not infer or backfill projects from filesystem paths.
 
-Every project dispatch resolves the current daemon runtime for the project's stable Computer and re-resolves every member placement on that Computer. The backend sends project identity and `workspaceSubpath` to the daemon, but never executes an agent itself. Daemons must advertise `project-workspaces`; older daemons fail closed.
+Every project dispatch resolves the current daemon runtime for the project's stable Computer. A task with an explicit `assignedAgentId` executes only that enabled Project Agent; a task without an explicit assignee executes the enabled roster, lead first. Dispatch re-resolves every selected member placement on that Computer. The backend sends project identity and `workspaceSubpath` to the daemon, but never executes an agent itself. Daemons must advertise `project-workspaces`; older daemons fail closed.
 
 All conversations in a project resolve to the same physical project directory. Runs targeting the same directory are serialized by the daemon workspace gate, while different project directories may run concurrently. The project roster is compiled into each collaboration round, including the project revision and every member's role-specific brief.
 
