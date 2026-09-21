@@ -145,9 +145,29 @@ def test_local_cleanup_command_is_not_delivered_after_transaction_rollback(proje
     assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
 
 
-def test_project_cleanup_rejects_daemon_without_delete_capability(project_env):
+def test_project_deletion_defers_cleanup_until_daemon_upgrade(project_env):
     app, client, node, agent, project, task, routine, session = project_env
-    _register_computer(app, node["id"], "delete-machine")
+    old_node = _register_computer(app, node["id"], "delete-machine")
+    response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+    assert response.status_code == 200, response.text
+    assert response.json()["workspaceCleanup"] == "waiting_for_upgrade"
+    assert app.state.project_store.get_project(project["id"]) is None
+    assert app.state.registry.take_commands(node["id"], f"token_{node['id']}", lease_seconds=0) == []
+    assert app.state.daemon_store.get_command(response.json()["cleanupCommandId"])["status"] != "completed"
+    app.state.registry.register({
+        **old_node, "sandboxId": node["id"], "employeeId": "alice",
+        "protocolVersion": 1, "supportedAgents": ["codex"],
+        "token": f"token_{node['id']}",
+        "capabilities": [*old_node["capabilities"], "project-workspace-delete"],
+    })
+    [command] = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    assert command["id"] == response.json()["cleanupCommandId"]
+    assert command["type"] == "workspace.delete"
+
+
+def test_project_deletion_preserves_records_when_computer_is_missing(project_env):
+    app, client, node, agent, project, task, routine, session = project_env
+    app.state.registry.delete(node["id"])
     response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
     assert response.status_code == 409
     assert response.json()["detail"] == "project_cleanup_unavailable"
