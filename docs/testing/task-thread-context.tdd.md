@@ -58,3 +58,6 @@ navigation, Threads listing, accessible project labels, clicking through,
 reload, and mobile return to the list. Screenshots were inspected on both sizes.
 The production build/typecheck, CSS lint, and diff check pass. Full frontend
 suites pass: 1,688 Node tests and 276 React tests.
+
+The follow-up `npm test` run also passed all 1,805 Python tests (581 warnings,
+276.48 seconds). The complete build, Node, React, and Python command exited 0.
