@@ -113,7 +113,7 @@ export function ProjectDrawer({
       nameRef.current?.focus();
       return;
     }
-    if (!selectedComputerId) {
+    if (!project && !selectedComputerId) {
       setComputerError(t("project.computer_required"));
       computerTriggerRef.current?.focus();
       return;
