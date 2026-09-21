@@ -13,6 +13,15 @@ class ProjectDispatchError(ValueError):
         super().__init__(code)
 
 
+def project_work_error(project: dict[str, Any] | None) -> str | None:
+    """Shared admission policy; history and already admitted results stay writable."""
+    if not project or project.get("archivedAt"):
+        return "project_not_found"
+    if not project.get("enabled", True):
+        return "project_disabled"
+    return None
+
+
 def resolve_project_task_assignments(
     task: dict[str, Any],
     *,
@@ -23,10 +32,8 @@ def resolve_project_task_assignments(
     session_store: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     project = project_store.get_project(task.get("projectId"))
-    if not project or project.get("archivedAt"):
-        raise ProjectDispatchError("project_not_found", permanent=True)
-    if not project.get("enabled", True):
-        raise ProjectDispatchError("project_disabled")
+    if code := project_work_error(project):
+        raise ProjectDispatchError(code, permanent=code == "project_not_found")
     owner = task.get("ownerEmployeeId") or task.get("assigneeEmployeeId")
     if project.get("ownerEmployeeId") != owner:
         raise ProjectDispatchError("project_forbidden", permanent=True)

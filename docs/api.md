@@ -266,8 +266,18 @@ A project has at most 32 members. Names and function titles are limited to 120
 characters, responsibilities to 4,000 characters, and optional project
 instructions to 8,000 characters. Updates use optimistic versions; stale writes
 return `project_version_conflict`. Duplicate live names return
-`project_name_taken`. Archiving is a soft delete: it disables future dispatch
-while preserving tasks, threads, events, and workspace files.
+`project_name_taken`. Existing members that lose readiness may still be edited,
+disabled, or removed; adding or reactivating a member and changing the lead
+require readiness. Execution validates the selected members again.
+
+A project task with `assignedAgentId` runs only that enabled project member.
+Without an explicit assignee it runs the enabled roster, lead first.
+
+Archiving is a soft delete. Archived and disabled projects reject new tasks,
+threads, user task mutations, starts, and routine promotion. Schedules do not
+advance while the project is closed. Historical tasks, threads, events, and
+workspace files remain readable; already admitted runs can finish and record
+results. Project settings can re-enable a disabled project; archival is final.
 Employees with active projects cannot be soft-deleted. After all their projects
 are archived, employee soft deletion is allowed and retains the project history.
 

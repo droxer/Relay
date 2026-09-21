@@ -118,3 +118,23 @@ def test_closed_project_routines_do_not_promote_or_advance_schedule(project_cont
     after = app.state.task_store.get_task(routine["id"])
     assert after["routineNextRunDate"] == routine["routineNextRunDate"]
     assert after["occurrenceIds"] == []
+
+
+@pytest.mark.parametrize("state", ["disabled", "archived"])
+def test_admitted_project_run_can_record_completion_after_closure(project_context, state):
+    app, client, node, project, lead, worker = project_context
+    task = client.post("/api/v1/tasks", json={"title": "Finish admitted work", "projectId": project["id"], "assignedAgentId": worker["id"]}).json()
+    started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+    assert started.json()["dispatch"]["state"] == "started"
+    [command] = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    event = {key: command[key] for key in ("sessionId", "runId", "agent")}
+    event.update(commandId=command["id"], **({"leaseId": command["leaseId"]} if command.get("leaseId") else {}))
+    path = f"/api/v1/daemon-nodes/{node['id']}/events"
+    headers = {"Authorization": f"Bearer token_{node['id']}"}
+    assert client.post(path, headers=headers, json={**event, "type": "run.executing"}).status_code == 200
+    close_project(client, project, state)
+    completed = client.post(path, headers=headers, json={**event, "type": "run.completed", "exitCode": 0, "agentLog": "Delivered"})
+    assert completed.status_code == 200, completed.text
+    session = app.state.session_store.get_session(command["sessionId"])
+    assert any(item["type"] == "agent.completed" for item in session["events"])
+    assert app.state.task_store.get_task(task["id"])["status"] == "review"
