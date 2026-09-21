@@ -1,3 +1,6 @@
+import type { AgentName } from "../types.js";
+import { agentLabel } from "./plan.ts";
+
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** Compact "Mon D, HH:MM" timestamp for workspace rows. Shared by the agent
@@ -31,6 +34,21 @@ export function compactDueDate(value: string | undefined, locale: string): strin
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+/** Display name for a brief task's assignee: the logical agent's displayName
+ *  when the roster is at hand, the executor CLI label when only the runtime
+ *  kind is known, and "" when nothing is assigned — the caller supplies the
+ *  localized "unassigned" fallback. */
+export function taskAssigneeName(
+  task: { assignedAgentId?: string; assignedAgent?: AgentName },
+  agents: ReadonlyArray<{ id: string; displayName: string }> | undefined,
+): string {
+  if (task.assignedAgentId) {
+    const match = agents?.find((agent) => agent.id === task.assignedAgentId);
+    if (match) return match.displayName;
+  }
+  return task.assignedAgent ? agentLabel(task.assignedAgent) : "";
 }
 
 /** The containing directory of a workspace path ("" for a top-level entry). */

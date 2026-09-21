@@ -595,6 +595,7 @@
     "no_activity": "暂无最近活动。",
     "session_runs": "{{count}} 次运行",
     "task_due": "截止 {{date}}",
+    "task_assignee": "负责人 {{name}}",
     "kind_directory": "文件夹",
     "kind_file": "文件",
     "band_label": "智能体档案",
