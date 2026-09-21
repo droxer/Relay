@@ -180,6 +180,7 @@ export function AgentDetailPage({
               brief={brief}
               emptyPulse
               onOpenThread={onOpenThread}
+              agents={[agent]}
             />
           )}
         </TabsContent>

@@ -413,6 +413,20 @@
   background: transparent;
 }
 
+/* Task rows carry more than a title and a meta string: a leading state mark,
+ *  a two-line main (title over the status · assignee · due · updated meta),
+ *  and a trailing priority badge. */
+.workspace-task-card {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.workspace-task-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
 /* ---- profile (workspace-native overrides for adm-cred panel) -------- */
 
 .workspace-profile {

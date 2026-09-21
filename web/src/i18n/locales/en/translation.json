@@ -602,6 +602,7 @@
     "session_runs_one": "{{count}} run",
     "session_runs_other": "{{count}} runs",
     "task_due": "Due {{date}}",
+    "task_assignee": "Assignee {{name}}",
     "kind_directory": "Folder",
     "kind_file": "File",
     "band_label": "Agent record",

@@ -625,6 +625,7 @@ export function TeamWorkspacePage({
               brief={briefQuery.data}
               emptyMark={<IdentityMark kind="team" variant="bare" size={ICON.lg} />}
               onOpenThread={onOpenThread}
+              agents={team.members}
             />
           )}
         </TabsContent>

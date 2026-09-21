@@ -595,6 +595,7 @@
     "no_activity": "暫無最近活動。",
     "session_runs": "{{count}} 次執行",
     "task_due": "截止 {{date}}",
+    "task_assignee": "負責人 {{name}}",
     "kind_directory": "資料夾",
     "kind_file": "檔案",
     "band_label": "智慧體檔案",

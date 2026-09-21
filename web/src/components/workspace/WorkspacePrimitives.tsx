@@ -3,8 +3,11 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { agentLabel } from "../../lib/plan";
-import { compactDate, compactDueDate } from "../../lib/workspaceFormat";
+import { compactDate, compactDueDate, taskAssigneeName } from "../../lib/workspaceFormat";
 import type { WorkspaceBriefResponse, WorkspaceBriefSession, WorkspaceBriefTask } from "../../types";
+import { PriorityBadge } from "../PriorityBadge";
+import { StateMark } from "../StateMark";
+import { TASK_STATUS_SHAPE } from "../task-board/backlogVocabulary";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { Button } from "@/components/ui/button";
 
@@ -160,19 +163,65 @@ function sessionStatusLabel(
   return t(`thread.statuses.${status}`, { defaultValue: status });
 }
 
+/** A brief task as a card, not a one-line pick: the state mark and priority
+ *  badge flank the title, and the meta line names who owns it (assignee),
+ *  when it is due, and when it last moved. Status keeps its text label — the
+ *  10px mark alone cannot carry eight lifecycle states. */
+function ActivityTaskCard({
+  task,
+  agents,
+  onOpen,
+}: {
+  task: WorkspaceBriefTask;
+  agents?: ReadonlyArray<{ id: string; displayName: string }>;
+  onOpen?: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const assigneeName = taskAssigneeName(task, agents);
+  const meta = [
+    task.status ? t(`backlog.statuses.${task.status}`, { defaultValue: task.status }) : "",
+    /* "Assignee <name>" when assigned; the bare "unassigned" label otherwise —
+     *  "Assignee unassigned" restates the field name for an empty value. */
+    assigneeName ? t("workspace.task_assignee", { name: assigneeName }) : t("backlog.unassigned"),
+    task.dueDate ? t("workspace.task_due", { date: compactDueDate(task.dueDate, i18n.language) }) : "",
+    compactDate(task.updatedAt, i18n.language),
+  ].filter(Boolean).join(" · ");
+  const body = (
+    <>
+      <StateMark shape={task.status ? TASK_STATUS_SHAPE[task.status] : "dashed"} />
+      <span className="workspace-task-card-main">
+        <span className="workspace-pick-title">{taskTitle(task)}</span>
+        <span className="workspace-pick-meta tnum">{meta}</span>
+      </span>
+      {task.priority ? <PriorityBadge priority={task.priority} /> : null}
+    </>
+  );
+  if (!onOpen) {
+    return <div className="workspace-pick workspace-activity-pick workspace-task-card is-static">{body}</div>;
+  }
+  return (
+    <Button variant="ghost" type="button" className="workspace-pick workspace-activity-pick workspace-task-card" onClick={onOpen}>
+      {body}
+    </Button>
+  );
+}
+
 /** The activities tabpanel: active-run, thread, and task sections, each
- *  header carrying its own count. Shared verbatim by the agent and team
- *  workspace pages. */
+ *  header carrying its own count. Shared by the agent, team, and project
+ *  workspace pages; `agents` is the caller's roster, used to resolve a task's
+ *  assigned agent id to its display name. */
 export function WorkspaceActivities({
   brief,
   onOpenThread,
   emptyMark,
   emptyPulse = false,
+  agents,
 }: {
   brief?: WorkspaceBriefResponse;
   onOpenThread: (sessionId: string) => void;
   emptyMark?: ReactNode;
   emptyPulse?: boolean;
+  agents?: ReadonlyArray<{ id: string; displayName: string }>;
 }) {
   const { t, i18n } = useTranslation();
   const activeRuns = brief?.activeRuns ?? [];
@@ -239,14 +288,10 @@ export function WorkspaceActivities({
                 const linkedSessionId = task.linkedSessionIds[0];
                 return (
                   <li key={task.id}>
-                    <ActivityRow
-                      title={taskTitle(task)}
-                      meta={[
-                        task.status ? t(`backlog.statuses.${task.status}`, { defaultValue: task.status }) : "",
-                        task.dueDate ? t("workspace.task_due", { date: compactDueDate(task.dueDate, i18n.language) }) : "",
-                        compactDate(task.updatedAt, i18n.language),
-                      ].filter(Boolean).join(" · ")}
-                      onClick={linkedSessionId ? () => onOpenThread(linkedSessionId) : undefined}
+                    <ActivityTaskCard
+                      task={task}
+                      agents={agents}
+                      onOpen={linkedSessionId ? () => onOpenThread(linkedSessionId) : undefined}
                     />
                   </li>
                 );
