@@ -30,6 +30,8 @@
   transition: color var(--t-fast) var(--ease);
 }
 
+.list-sort-button[data-align="start"] { justify-content: flex-start; }
+
 .list-sort-button[data-align="end"] { justify-content: flex-end; }
 
 .list-sort-label {

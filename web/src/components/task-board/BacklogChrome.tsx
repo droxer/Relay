@@ -4,7 +4,7 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { taskFlowMetrics } from "../../lib/taskFlow";
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { type EmployeeAgent, type RelayTaskListItem } from "../../types";
+import { type AgentTeam, type EmployeeAgent, type RelayTaskListItem, type TaskStatus } from "../../types";
 import {
   ICON,
   ViewBoard,
@@ -14,6 +14,8 @@ import { dueTone, TASK_PRIORITIES, TASK_STATUSES, type BacklogFilters } from "..
 import { Button } from "@/components/ui/button";
 import { FiltersBar, FilterSelect } from "../FiltersBar";
 import { Input } from "@/components/ui/input";
+import { SectionNav, type SectionNavItem } from "../SectionNav";
+import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
 import { StateMark } from "../StateMark";
 
 import { activeFilterCount, initialFilters, type BacklogView } from "./backlogVocabulary";
@@ -88,15 +90,19 @@ export function formatDueDate(value: string): string {
 }
 export function BacklogFiltersBar({
   sortMenu,
+  projectFilter,
   filters,
   agents,
+  teams,
   onChange,
 }: {
   filters: BacklogFilters;
   agents: EmployeeAgent[];
+  teams: AgentTeam[];
   onChange: (next: BacklogFilters) => void;
   /** The narrow-width sort control; see SortMenu. */
   sortMenu?: ReactNode;
+  projectFilter?: ReactNode;
 }) {
   const { t } = useTranslation();
 
@@ -104,39 +110,43 @@ export function BacklogFiltersBar({
     <FiltersBar
       ariaLabel={t("backlog.filters")}
       searchName="backlog-query"
+      expandLabel={t("backlog.more_filters")}
       searchLabel={t("backlog.search")}
       query={filters.query}
       onQueryChange={(query) => onChange({ ...filters, query })}
-      activeCount={activeFilterCount(filters)}
-      onClear={() => onChange(initialFilters)}
+      activeCount={activeFilterCount({ ...filters, status: "all" })}
+      onClear={() => onChange({ ...initialFilters, status: filters.status })}
       trailing={sortMenu}
+      quickFilters={<>
+        {projectFilter}
+        <FilterSelect size="sm" className="backlog-quick-select"
+          name="backlog-priority-filter"
+          label={t("backlog.priority")}
+          value={filters.priority}
+          onValueChange={(priority) => onChange({ ...filters, priority })}
+          options={[
+            { value: "all" as const, label: t("backlog.all_priorities") },
+            ...TASK_PRIORITIES.map((priority) => ({
+              value: priority,
+              label: t(`backlog.priorities.${priority}`),
+            })),
+          ]}
+        />
+        <FilterSelect size="sm" className="backlog-quick-select"
+          name="backlog-due-filter"
+          label={t("backlog.due")}
+          value={filters.due}
+          onValueChange={(due) => onChange({ ...filters, due })}
+          options={[
+            { value: "all", label: t("backlog.all_due") },
+            { value: "overdue", label: t("backlog.overdue") },
+            { value: "today", label: t("backlog.today") },
+            { value: "next_week", label: t("backlog.next_week") },
+            { value: "unscheduled", label: t("backlog.unscheduled") },
+          ]}
+        />
+      </>}
     >
-      <FilterSelect
-        name="backlog-status-filter"
-        label={t("backlog.status")}
-        value={filters.status}
-        onValueChange={(status) => onChange({ ...filters, status })}
-        options={[
-          { value: "all" as const, label: t("backlog.all_statuses") },
-          ...TASK_STATUSES.map((status) => ({
-            value: status,
-            label: t(`backlog.statuses.${status}`),
-          })),
-        ]}
-      />
-      <FilterSelect
-        name="backlog-priority-filter"
-        label={t("backlog.priority")}
-        value={filters.priority}
-        onValueChange={(priority) => onChange({ ...filters, priority })}
-        options={[
-          { value: "all" as const, label: t("backlog.all_priorities") },
-          ...TASK_PRIORITIES.map((priority) => ({
-            value: priority,
-            label: t(`backlog.priorities.${priority}`),
-          })),
-        ]}
-      />
       <FilterSelect
         name="backlog-agent-filter"
         label={t("backlog.agent")}
@@ -145,6 +155,27 @@ export function BacklogFiltersBar({
         options={[
           { value: "all", label: t("backlog.all_agents") },
           ...agents.map((agent) => ({ value: agent.id, label: agent.displayName })),
+        ]}
+      />
+      <FilterSelect
+        name="backlog-team-filter"
+        label={t("backlog.team_filter")}
+        value={filters.team}
+        onValueChange={(team) => onChange({ ...filters, team })}
+        options={[
+          { value: "all", label: t("backlog.all_teams") },
+          ...teams.map((team) => ({ value: team.id, label: team.name })),
+        ]}
+      />
+      <FilterSelect
+        name="backlog-assignment-filter"
+        label={t("backlog.assignment_filter")}
+        value={filters.assignment}
+        onValueChange={(assignment) => onChange({ ...filters, assignment })}
+        options={[
+          { value: "all" as const, label: t("backlog.all_assignments") },
+          { value: "assigned" as const, label: t("backlog.with_assignment") },
+          { value: "unassigned" as const, label: t("backlog.without_assignment") },
         ]}
       />
       <Input
@@ -165,18 +196,6 @@ export function BacklogFiltersBar({
           { value: "all", label: t("backlog.all_sources") },
           { value: "direct", label: t("backlog.source_direct") },
           { value: "routine", label: t("backlog.source_routine") },
-        ]}
-      />
-      <FilterSelect
-        name="backlog-due-filter"
-        label={t("backlog.due")}
-        value={filters.due}
-        onValueChange={(due) => onChange({ ...filters, due })}
-        options={[
-          { value: "all", label: t("backlog.all_due") },
-          { value: "overdue", label: t("backlog.overdue") },
-          { value: "today", label: t("backlog.today") },
-          { value: "unscheduled", label: t("backlog.unscheduled") },
         ]}
       />
     </FiltersBar>
@@ -208,4 +227,23 @@ export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onCha
       </Button>
     </div>
   );
+}
+
+/** Same section navigation as Routines; the filter bar owns other dimensions. */
+export function TaskStatusNav({ value, counts, onChange }: {
+  value: "all" | TaskStatus;
+  counts: Record<TaskStatus, number>;
+  onChange: (status: "all" | TaskStatus) => void;
+}) {
+  const { t } = useTranslation();
+  const items: SectionNavItem<"all" | TaskStatus>[] = [
+    { id: "all", label: t("backlog.title"), count: Object.values(counts).reduce((sum, count) => sum + count, 0) },
+    ...TASK_STATUSES.map((status) => ({
+      id: status,
+      label: t(`backlog.statuses.${status}`),
+      mark: <StateMark shape={TASK_STATUS_SHAPE[status]} />,
+      count: counts[status],
+    })),
+  ];
+  return <SectionNav items={items} value={value} onChange={onChange} label={t("backlog.status")} />;
 }

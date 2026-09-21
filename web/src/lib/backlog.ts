@@ -10,8 +10,10 @@ export interface BacklogFilters {
   status: "all" | TaskStatus;
   priority: "all" | TaskPriority;
   agent: string;
+  team: string;
+  assignment: "all" | "assigned" | "unassigned";
   assignee: string;
-  due: "all" | "overdue" | "today" | "unscheduled";
+  due: "all" | "overdue" | "today" | "next_week" | "unscheduled";
   /**
    * Where the task came from: anything (`all`), tasks a person wrote
    * (`direct`), or runs a routine generated (`routine`).
@@ -26,6 +28,9 @@ export interface BacklogFilters {
 export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters, today = isoToday()): RelayTaskListItem[] {
   const query = filters.query.trim().toLowerCase();
   const assignee = filters.assignee.trim().toLowerCase();
+  const nextWeek = new Date(`${today}T12:00:00`);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  const nextWeekEnd = localDateKey(nextWeek);
   return tasks.filter((task) => {
     if (task.isRoutine) return false;
     if (filters.source === "direct" && task.sourceRoutineId) return false;
@@ -36,6 +41,10 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
     }
     if (filters.priority !== "all" && task.priority !== filters.priority) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
+    if (filters.team !== "all" && task.assignedTeamId !== filters.team) return false;
+    const assigned = Boolean(task.assignedAgentId || task.assignedTeamId || task.assignedAgent);
+    if (filters.assignment === "assigned" && !assigned) return false;
+    if (filters.assignment === "unassigned" && assigned) return false;
     if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
     if (query) {
       const haystack = `${task.title} ${task.description} ${task.id}`.toLowerCase();
@@ -43,6 +52,7 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
     }
     if (filters.due === "overdue" && (!task.dueDate || task.dueDate >= today || task.status === "done")) return false;
     if (filters.due === "today" && task.dueDate !== today) return false;
+    if (filters.due === "next_week" && (!task.dueDate || task.dueDate < today || task.dueDate >= nextWeekEnd || task.status === "done")) return false;
     if (filters.due === "unscheduled" && task.dueDate) return false;
     return true;
   }).sort(compareTasks);

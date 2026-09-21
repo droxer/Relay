@@ -3,7 +3,7 @@
 
 import { TASK_FLOW_STAGES } from "../lib/taskFlow";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
@@ -15,10 +15,10 @@ import {
   ActionAdd,
   ICON,
 } from "./icons";
-import { agentReadyForTask, backlogSortColumns, canDiscussTask, discussionAgentsForTask, filterTasks, isTaskStatus, tasksByStatus } from "../lib/backlog";
+import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, canDiscussTask, discussionAgentsForTask, filterTasks, isTaskStatus, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
-import { useLanePagination } from "../hooks/usePagination";
+import { useLanePagination, usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
@@ -39,12 +39,14 @@ import { useTouchTaskDrag } from "../hooks/useTouchTaskDrag";
 import { laneStatusAtPoint, type DragPoint } from "../lib/touchDrag";
 import { writeViewPreference } from "../lib/viewPreference";
 import { Button } from "@/components/ui/button";
+import { FilterSelect } from "./FiltersBar";
 import { taskRef } from "../lib/taskRef";
 
 
 interface BacklogPageProps {
   projectId?: string;
-  recordAsPage?: boolean;
+  projectNotice?: ReactNode;
+  onSelectProject?: (id: string | null) => void;
   projects?: ProjectRecord[];
   onCreateProject?: (onCreated: (id: string) => void) => void;
   /** The task whose record is open, from `/backlog/<id>`. */
@@ -61,16 +63,15 @@ interface BacklogPageProps {
 }
 
 import {
+  activeFilterCount,
   BACKLOG_FILTER_SPEC,
   VIEW_STORAGE_KEY,
   initialFilters,
   parseBacklogView,
   type BacklogView,
 } from "./task-board/backlogVocabulary";
-import { BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
+import { TaskStatusNav, BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
 import { BacklogRowsHead, BacklogTaskCard, BacklogTaskRow } from "./task-board/BacklogRecords";
-import { ListGroup } from "./ListGroup";
-import { TASK_STATUS_SHAPE } from "./task-board/backlogVocabulary";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
 import {
   EMPTY_TASK_SELECTION,
@@ -101,7 +102,7 @@ function dragGhostStyle(point: DragPoint): CSSProperties {
 }
 
 
-export function BacklogPage({ projectId, recordAsPage = false, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
+export function BacklogPage({ projectId, projectNotice, onSelectProject, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const employeeNames = useEmployeeNames(currentUser);
@@ -116,7 +117,7 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
   // The filters live in the query string, so a filtered board survives
   // opening a record and coming back, and it is a link somebody can paste.
   const [filters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
-  const [view, setView] = useState<BacklogView>("board");
+  const [view, setView] = useState<BacklogView>("list");
   /* The form is a shared controller, not this board's own: the project board
      opens the same record drawer and edits through the same form. */
   const {
@@ -138,9 +139,9 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
   const [deletingSelection, setDeletingSelection] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<TaskStatus | null>(null);
-  // Embedded callers retain drawer exit state; Tasks renders the record as a page.
+  // Retain the execution record until the drawer has finished closing.
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
-  const drawerRecordId = recordAsPage ? recordTaskId : recordMirror.record;
+  const drawerRecordId = recordMirror.record;
   const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
   const boardRef = useRef<HTMLDivElement | null>(null);
   const startInFlight = useRef<string | null>(null);
@@ -177,18 +178,14 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
   const filteredTasks = useMemo(
-    () => applySort(filterTasks(backlogTasks, filters), sortColumns, sort),
+    () => applySort(filterTasks(backlogTasks, { ...filters, status: "all" })
+      .filter((task) => filters.status === "all" || task.status === filters.status), sortColumns, sort),
     [backlogTasks, filters, sort, sortColumns],
   );
   const grouped = useMemo(() => tasksByStatus(filteredTasks), [filteredTasks]);
   const hasFilterResults = filteredTasks.length > 0;
   const showEmptyBoard = backlogTasks.length === 0 || !hasFilterResults;
-  /* Both views group by status, so both page per group off ONE cursor set:
-     switching board/list keeps the reader on the same page of the same
-     group. A single whole-list cursor cannot survive grouping — page 2 of
-     the list would empty a band because of the cursor rather than because
-     nothing is in that state. Built here rather than inside the render loop
-     so the drag handlers below can ask what a lane is actually showing. */
+  // Board pagination stays independent for each status lane.
   const pagedLanes = useMemo(
     () => Object.fromEntries(TASK_FLOW_STAGES.map((status) => [
       status,
@@ -198,7 +195,15 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
   );
   /* Selection follows what is on screen in both views, so "select all" then
      Delete cannot reach a card or row on a lane page the reader never saw. */
-  const visibleTasks = TASK_FLOW_STAGES.flatMap((status) => pagedLanes[status].items);
+  const sectionCounts = useMemo(() => {
+    const scope = filterTasks(backlogTasks, { ...filters, status: "all" });
+    return Object.fromEntries(TASK_STATUSES.map((status) => [
+      status, scope.filter((task) => task.status === status).length,
+    ])) as Record<TaskStatus, number>;
+  }, [backlogTasks, filters]);
+  const { page, setPage } = usePagination();
+  const listPage = paginate(filteredTasks, page);
+  const visibleTasks = view === "list" ? listPage.items : TASK_FLOW_STAGES.flatMap((status) => pagedLanes[status].items);
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks]);
   // Derived, not stored: a task hidden by a filter (or deleted elsewhere) drops
   // out of the selection immediately, so a batch action can never reach a
@@ -410,12 +415,18 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
   }
 
   return (
-    <section id="backlog-panel" className="backlog-page" data-view={view} aria-label={t("backlog.title")} tabIndex={-1}>
-      {!(recordAsPage && recordTaskId) ? <>
+    <section id="backlog-panel" className="backlog-page sec-shell" data-view={view} aria-label={t("backlog.title")} tabIndex={-1}>
+      <div className="sec-rail">
+        <PageHeader kicker={t("nav.workspace")} title={t("nav.backlog")}
+          count={t("backlog.sub", { count: backlogTasks.length })} titleVariant="display" layout="stacked" />
+        <TaskStatusNav value={filters.status} counts={sectionCounts}
+          onChange={(status) => setFilters({ ...filters, status })} />
+      </div>
+      <div className="sec-main">
       <PageHeader
-        kicker={t("nav.workspace")}
-        title={projects.find((project) => project.id === projectId)?.name ?? t("backlog.title")}
-        count={t("backlog.sub", { count: backlogTasks.length })}
+        title={filters.status === "all" ? t("backlog.title") : t(`backlog.statuses.${filters.status}`)}
+        titleAs="h2"
+        titleVariant="display"
         actions={
           <TaskBoardHeaderActions
             leading={<BacklogViewToggle view={view} onChange={changeView} />}
@@ -428,18 +439,32 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
         }
       />
 
-      {backlogTasks.length > 0 ? (
+      {projectNotice}
+
+      {onSelectProject || backlogTasks.length > 0 ? (
         <>
-          <BacklogStats tasks={backlogTasks} />
+          {view === "board" ? <BacklogStats tasks={backlogTasks} /> : null}
           <BacklogFiltersBar
             filters={filters}
+            projectFilter={onSelectProject ? <FilterSelect
+              size="sm"
+              className="backlog-quick-select"
+              name="task-project-filter"
+              label={t("project.projects")}
+              value={projectId ?? ""}
+              onValueChange={(id) => onSelectProject(id || null)}
+              options={[
+                { value: "", label: t("project.all_projects") },
+                ...projects.filter((project) => !project.archivedAt || project.id === projectId)
+                  .map((project) => ({ value: project.id, label: project.name })),
+              ]}
+            /> : undefined}
             agents={logicalAgents}
+            teams={teams}
             onChange={setFilters}
             sortMenu={
               <SortMenu
-                /* No `status` entry: both views group by status, so sorting
-                   by it can only reorder rows inside a band that already
-                   holds one status. The key stays valid for old links. */
+                /* Status belongs to the section navigation. */
                 options={[
                   { key: "title", label: t("backlog.col_task") },
                   { key: "priority", label: t("backlog.priority") },
@@ -457,7 +482,7 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
 
       {showEmptyBoard ? (
         (() => {
-          const filtered = backlogTasks.length > 0 && !hasFilterResults;
+          const filtered = activeFilterCount({ ...filters, status: "all" }) > 0 || filters.query.trim().length > 0;
           return (
             <BoardEmpty
               title={filtered ? t("backlog.no_match_title") : t("backlog.no_tasks_title")}
@@ -465,22 +490,16 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
               createLabel={filtered ? undefined : t("backlog.new_task")}
               onCreate={filtered ? undefined : () => openTaskForm(emptyBacklogForm(currentUser))}
               clearLabel={filtered ? t("backlog.clear_filters") : undefined}
-              onClear={filtered ? () => setFilters(initialFilters) : undefined}
+              onClear={filtered ? () => setFilters({ ...initialFilters, status: filters.status }) : undefined}
             />
           );
         })()
       ) : view === "list" ? (
-        /* Grouped by status, same dimension the board lanes on — which is
-           what buys the columns back: a row under a band that says "Blocked"
-           does not have to spend 96px repeating it.
-
-           The column header is hoisted out of the groups and rendered once,
-           sticky, above all of them — see BacklogRowsHead for why it stopped
-           repeating. Its select-all therefore covers every visible row on the
-           page rather than one band's worth. */
+        /* The sidebar owns status; the content stays one flat, sorted list. */
         <div className="backlog-rows" data-density="compact">
           <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
             <BacklogRowsHead
+              compact
               sort={sort}
               onSort={toggleSort}
               selectAll={
@@ -492,57 +511,31 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
               }
             />
           </Table>
-          {TASK_FLOW_STAGES.map((status) => {
-            const group = grouped[status];
-            // An empty band is noise unless it is where the reader is typing.
-            if (group.length === 0) return null;
-            const label = t(`backlog.statuses.${status}`);
-            const groupPage = pagedLanes[status];
-            return (
-              <ListGroup
-                key={status}
-                data-status={status}
-                label={label}
-                count={group.length}
-                shape={TASK_STATUS_SHAPE[status]}
-                addLabel={t("backlog.new_task")}
-                onAdd={status === "backlog" || status === "assigned" ? () => openTaskForm({ ...emptyBacklogForm(currentUser), status }) : undefined}
-              >
-                <Table className="list-group-rows" aria-label={label}>
-                  {groupPage.items.map((task) => {
-                    const discussionAgents = discussionAgentsForTask(task, nodes, logicalAgents);
-                    const assignment = taskAssignmentDisplay(task);
-                    return (
-                      <BacklogTaskRow
-                        key={task.id}
-                        task={task}
-                        projectName={projects.find((project) => project.id === task.projectId)?.name}
-                        session={linkedSession(task)}
-                        routineTitle={task.sourceRoutineId ? routineTitles.get(task.sourceRoutineId) : undefined}
-                        selected={visibleSelection.has(task.id)}
-                        onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                        assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                        assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
-                        agentDisplayName={assignment.name}
-                        ready={assignment.ready}
-                        canDiscuss={canDiscussTask(task) && discussionAgents.length > 0}
-                        {...taskHandlers(task)}
-                      />
-                    );
-                  })}
-                </Table>
-                {/* The band's own cursor, under its own rows — the same
-                    control the lane carries on the board. */}
-                <Pagination
+          <Table className="routine-rows-body" aria-label={t("backlog.title")}>
+            {listPage.items.map((task) => {
+              const discussionAgents = discussionAgentsForTask(task, nodes, logicalAgents);
+              const assignment = taskAssignmentDisplay(task);
+              return (
+                <BacklogTaskRow
+                  key={task.id}
+                  task={task}
+                  projectName={projects.find((project) => project.id === task.projectId)?.name}
                   compact
-                  className="list-group-pager"
-                  page={groupPage}
-                  onPageChange={(next) => setLanePage(status, next)}
-                  label={label}
+                  session={linkedSession(task)}
+                  routineTitle={task.sourceRoutineId ? routineTitles.get(task.sourceRoutineId) : undefined}
+                  selected={visibleSelection.has(task.id)}
+                  onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
+                  assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
+                  assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
+                  agentDisplayName={assignment.name}
+                  ready={assignment.ready}
+                  canDiscuss={canDiscussTask(task) && discussionAgents.length > 0}
+                  {...taskHandlers(task)}
                 />
-              </ListGroup>
-            );
-          })}
+              );
+            })}
+          </Table>
+          <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />
         </div>
       ) : (
         <div
@@ -633,15 +626,15 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
         onClear={() => setSelection(EMPTY_TASK_SELECTION)}
       />
 
-      </> : null}
+      </div>
 
-      {/* Tasks keeps the project sidebar beside the record; editing uses the shared form. */}
+      {/* Execution opens over the list; editing uses a second drawer layer. */}
       {drawerRecordId ? (
         <TaskRecordView
           taskId={drawerRecordId}
           currentUser={currentUser}
           tasks={tasks}
-          drawer={recordAsPage ? undefined : {
+          drawer={{
             open: Boolean(recordTaskId),
             onClose: () => onOpenRecord(null),
             onClosed: recordMirror.release,
@@ -673,7 +666,7 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
           }}
           onSubmit={(event) => void submitTask(event)}
           onDelete={form.id ? () => { void deleteBacklog(); } : undefined}
-          layer={drawerRecordId && !recordAsPage ? 1 : 0}
+          layer={drawerRecordId ? 1 : 0}
         />
       ) : null}
     </section>

@@ -1,8 +1,8 @@
-/* Project scope stays visible while task content scrolls independently. */
+/* Workspace host; the task page owns its status rail and content layout. */
 .tasks-workspace {
   grid-column: 2 / -1;
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -57,7 +57,7 @@
     grid-column: 1 / -1;
     grid-row: 2;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .task-project-nav {
@@ -159,5 +159,44 @@
 
   .messenger-shell[data-route="backlog"] #task-record-panel .page-header-lead {
     width: 100%;
+  }
+}
+
+/* Tasks and Routines share the same section rail and responsive layout. */
+.tasks-workspace-content > .backlog-page.sec-shell {
+  display: grid;
+  padding: 0;
+}
+
+.task-project-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--page-gutter);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+/* Keep common filters compact; secondary controls are revealed on demand. */
+.backlog-filter-quick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0 var(--page-gutter) var(--sp-3);
+}
+
+.backlog-filter-quick > [data-slot="select-trigger"] {
+  max-width: min(100%, 240px);
+}
+
+.backlog-filter-quick .backlog-filter-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+@media (max-width: 820px) {
+  .backlog-filter-quick {
+    padding-inline: var(--sp-4);
   }
 }

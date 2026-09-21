@@ -110,8 +110,9 @@ export function writeThreadListBesideSpace(visible: boolean): void {
 
 /** Whether a page's filters bar was left expanded, keyed by the page's
  *  search field name so each page remembers its own. Defaults to collapsed. */
-export function readFiltersExpanded(scope: string): boolean {
-  return readLayoutFlag(filtersExpandedKeyPrefix + scope);
+export function readFiltersExpanded(scope: string, fallback = false): boolean {
+  const stored = readLayoutValue(filtersExpandedKeyPrefix + scope);
+  return stored === null ? fallback : stored === "true";
 }
 
 export function writeFiltersExpanded(scope: string, expanded: boolean): void {

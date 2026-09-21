@@ -9,6 +9,8 @@ const baseFilters: BacklogFilters = {
   status: "all",
   priority: "all",
   agent: "all",
+  team: "all",
+  assignment: "all",
   assignee: "",
   due: "all",
   source: "all",
@@ -209,5 +211,30 @@ describe("dueTone", () => {
 describe("localDateKey", () => {
   it("uses the user's local calendar day instead of UTC", () => {
     assert.equal(localDateKey(new Date(2026, 5, 24, 0, 30)), "2026-06-24");
+  });
+});
+
+describe("task executor and upcoming filters", () => {
+  const work = [
+    task({ id: "none", title: "None" }),
+    task({ id: "agent", title: "Agent", assignedAgentId: "a" }),
+    task({ id: "team", title: "Team", assignedTeamId: "t" }),
+    task({ id: "legacy", title: "Legacy", assignedAgent: "codex" }),
+  ];
+  it("distinguishes unassigned tasks from agent, team, and legacy assignments", () => {
+    assert.deepEqual(filterTasks(work, { ...baseFilters, assignment: "unassigned" }).map((task) => task.id), ["none"]);
+    assert.equal(filterTasks(work, { ...baseFilters, assignment: "assigned" }).length, 3);
+    assert.deepEqual(filterTasks(work, { ...baseFilters, team: "t", assignment: "assigned" }).map((task) => task.id), ["team"]);
+  });
+  it("uses a seven-calendar-day window starting today, excluding completed and undated tasks", () => {
+    const due = [
+      task({ id: "past", title: "Past", dueDate: "2026-09-20" }),
+      task({ id: "today", title: "Today", dueDate: "2026-09-21" }),
+      task({ id: "last", title: "Last", dueDate: "2026-09-27" }),
+      task({ id: "outside", title: "Outside", dueDate: "2026-09-28" }),
+      task({ id: "done", title: "Done", dueDate: "2026-09-22", status: "done" }),
+      task({ id: "undated", title: "Undated" }),
+    ];
+    assert.deepEqual(filterTasks(due, { ...baseFilters, due: "next_week" }, "2026-09-21").map((task) => task.id), ["today", "last"]);
   });
 });

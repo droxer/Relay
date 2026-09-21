@@ -377,3 +377,13 @@ it("keeps the project team tab explicit and canonicalizes Tasks as the default",
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p?tab=profile");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p");
 });
+
+it("preserves team, assignment, and upcoming task filters in list and record URLs", () => {
+  for (const path of ["/backlog", "/backlog/task-1"]) {
+    const url = new URL(canonicalBrowserUrl(path, "?team=team-a&assignment=unassigned&due=next_week"), "http://relay.test");
+    assert.equal(url.searchParams.get("team"), "team-a");
+    assert.equal(url.searchParams.get("assignment"), "unassigned");
+    assert.equal(url.searchParams.get("due"), "next_week");
+  }
+  assert.equal(canonicalBrowserUrl("/backlog", "?assignment=invalid"), "/backlog");
+});

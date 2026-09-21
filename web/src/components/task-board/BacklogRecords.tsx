@@ -166,10 +166,12 @@ export function BacklogTaskCard({
  * (see .list-group-band) — they name the group, they no longer restart it.
  */
 export function BacklogRowsHead({
+  compact = false,
   sort,
   onSort,
   selectAll,
 }: {
+  compact?: boolean;
   sort: SortState<BacklogSortKey> | null;
   onSort: (key: BacklogSortKey) => void;
   selectAll: ReactNode;
@@ -183,7 +185,7 @@ export function BacklogRowsHead({
       <TableHead className="backlog-rows-head-cell backlog-rows-head-dot">
         <span className="sr-only">{t("backlog.status")}</span>
       </TableHead>
-      <TableHead className="backlog-rows-head-cell backlog-rows-head-ref">{t("backlog.col_ref")}</TableHead>
+      {!compact ? <TableHead className="backlog-rows-head-cell backlog-rows-head-ref">{t("backlog.col_ref")}</TableHead> : null}
       <SortableColumnHeader
         className="backlog-rows-head-cell backlog-rows-head-lead"
         label={t("backlog.col_task")}
@@ -191,13 +193,13 @@ export function BacklogRowsHead({
         sort={sort}
         onSort={onSort}
       />
-      <SortableColumnHeader
+      {!compact ? <SortableColumnHeader
         className="backlog-rows-head-cell backlog-rows-head-tags"
         label={t("backlog.priority")}
         sortKey="priority"
         sort={sort}
         onSort={onSort}
-      />
+      /> : null}
       <SortableColumnHeader
         className="backlog-rows-head-cell backlog-rows-head-due"
         label={t("backlog.due")}
@@ -213,14 +215,16 @@ export function BacklogRowsHead({
         onSort={onSort}
       />
       {/* Actions is not a column of data — there is nothing to order by. */}
-      <TableHead className="backlog-rows-head-cell backlog-rows-head-actions">{t("backlog.actions")}</TableHead>
+      {!compact ? <TableHead className="backlog-rows-head-cell backlog-rows-head-actions">{t("backlog.actions")}</TableHead> : null}
     </TableRow>
   );
 }
 
 export function BacklogTaskRow({
   task,
+  compact = false,
   projectName,
+  showStatus = false,
   session,
   routineTitle,
   ready,
@@ -239,7 +243,9 @@ export function BacklogTaskRow({
   onDone,
 }: {
   task: RelayTaskListItem;
+  compact?: boolean;
   projectName?: string;
+  showStatus?: boolean;
   session?: RelaySession;
   /** Title of the routine this task was promoted from, when it was. */
   routineTitle?: string;
@@ -272,7 +278,7 @@ export function BacklogTaskRow({
     task.status === "done";
 
   return (
-    <TableRow render={<article />} className="backlog-row group list-virtual" data-status={task.status} data-priority={task.priority} data-selected={selected ? "true" : undefined}>
+    <TableRow render={<article />} className="backlog-row group" data-compact={compact || undefined} data-status={task.status} data-priority={task.priority} data-selected={selected ? "true" : undefined}>
       <TableCell className="backlog-row-select-cell">
         <TaskSelectCheckbox
           className="backlog-select-box"
@@ -288,7 +294,7 @@ export function BacklogTaskRow({
         <StateMark shape={TASK_STATUS_SHAPE[task.status]} />
         <span className="sr-only">{t(`backlog.statuses.${task.status}`)}</span>
       </TableCell>
-      <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell>
+      {!compact ? <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell> : null}
       <TableCell render={<div />} className="backlog-row-lead">
         <div className="backlog-row-lead-main">
           <a
@@ -301,26 +307,29 @@ export function BacklogTaskRow({
             }}
           >{task.title}</a>
           {projectName ? <span className="task-project-label">{projectName}</span> : null}
+          {showStatus ? <span className="task-project-label">{t(`backlog.statuses.${task.status}`)}</span> : null}
         </div>
-        <TaskFlowDetails task={task} execution={session?.execution} />
-        <RoutineOriginBadge task={task} routineTitle={routineTitle} />
+        {!compact ? <>
+          <TaskFlowDetails task={task} execution={session?.execution} />
+          <RoutineOriginBadge task={task} routineTitle={routineTitle} />
+        </> : null}
       </TableCell>
-      <TableCell render={<div />} className="backlog-row-tags">
+      {!compact ? <TableCell render={<div />} className="backlog-row-tags">
         <PriorityBadge priority={task.priority} />
-      </TableCell>
+      </TableCell> : null}
       <TableCell className="backlog-row-due">
-        <TaskDueCell
+        {compact ? <span className={cn(tone !== "neutral" && tone)}>{task.dueDate ? formatDueDate(task.dueDate) : "—"}</span> : <TaskDueCell
           date={task.dueDate}
           tone={tone}
           format={formatDueDate}
           emptyLabel={t("backlog.add_due")}
           onEdit={onEdit}
-        />
+        />}
         {/* Files rode in a labelled RESULT column of their own, which stood
             empty on nearly every row — a named column for a fact most rows
             do not have. The count is a footnote to the date the run finished
             against, so it trails it instead. */}
-        {result?.hasFiles ? (
+        {!compact && result?.hasFiles ? (
           <span className="backlog-row-files tnum">
             {t("backlog.result_files", { count: result.fileCount })}
           </span>
@@ -329,7 +338,7 @@ export function BacklogTaskRow({
       <TableCell className="backlog-row-assignee">
         <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} assigneeIsSelf={assigneeIsSelf} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} />
       </TableCell>
-      <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
+      {!compact ? <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
           <Button variant="outline"
             type="button"
@@ -379,7 +388,7 @@ export function BacklogTaskRow({
             <ActionApprove size={ICON.sm} />
           </Button>
         </div>
-      </TableCell>
+      </TableCell> : null}
     </TableRow>
   );
 }

@@ -152,7 +152,7 @@ import { routineSortColumns } from "../src/lib/routine.js";
 import type { RelayTask, RelayTaskListItem } from "../src/types.js";
 
 const NO_FILTERS: BacklogFilters = {
-  query: "", status: "all", priority: "all", agent: "all", assignee: "", due: "all", source: "all",
+  query: "", status: "all", priority: "all", agent: "all", team: "all", assignment: "all", assignee: "", due: "all", source: "all",
 };
 
 function backlogTask(input: Partial<RelayTask> & { id: string; title: string }): RelayTaskListItem {
