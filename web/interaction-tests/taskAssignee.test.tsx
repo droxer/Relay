@@ -1,0 +1,32 @@
+import { render } from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import { BacklogTaskCard, BacklogTaskRow } from "../src/components/task-board/BacklogRecords";
+import type { RelayTaskListItem } from "../src/types";
+
+for (const view of ["card", "row"] as const) {
+  it.each([
+    [{ assignedAgentId: "agent-1", assignedAgent: "codex" }, "Atlas", "Atlas"],
+    [{ assignedAgentId: "agent-missing" }, undefined, "backlog.assignment_unavailable_agent"],
+    [{ assignedAgent: "claude" }, undefined, "claude"],
+    [{ assignedTeamId: "team-1" }, "Builders", "Builders"],
+    [{ assignedTeamId: "team-missing" }, undefined, "backlog.assignment_unavailable_team"],
+    [{}, undefined, "backlog.unassigned"],
+  ])(`shows the assigned agent or explicit fallback on every ${view}: %j`, (assignment, name, expected) => {
+    const task = {
+      id: "task-1", title: "Ship feature", status: "backlog", priority: "normal",
+      ownerEmployeeId: "employee-1", assigneeEmployeeId: "employee-1",
+      linkedSessionIds: [], createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z",
+      ...assignment,
+    } as RelayTaskListItem;
+    const props = { task, ready: false, agentDisplayName: name, selected: false,
+      onToggleSelect: vi.fn(), onOpen: vi.fn() };
+    const { container } = render(view === "card"
+      ? <BacklogTaskCard {...props} dragging={false} onDragStart={vi.fn()} onDragEnd={vi.fn()} onTouchStart={vi.fn()} />
+      : <table><tbody><BacklogTaskRow {...props} canDiscuss={false} starting={false} onStart={vi.fn()}
+          onEdit={vi.fn()} onAssign={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()} /></tbody></table>);
+    const label = container.querySelector(".task-assignee-name");
+    expect(label?.textContent).toBe(expected);
+    expect(label?.closest(".sr-only")).toBeNull();
+    expect(container.querySelectorAll(".task-assignee-name")).toHaveLength(1);
+  });
+}
