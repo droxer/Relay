@@ -19,6 +19,11 @@ export type TaskHistoryEntry = {
   fromOccurrence: boolean;
   /** Thread this line points at, when the event names one. */
   sessionId?: string;
+  /** Assignment target, when the line is an assignment: team or agent id plus
+      the executor kind, so the component can print a name instead of a UUID. */
+  teamId?: string;
+  agentId?: string;
+  agent?: string;
   status?: TaskStatus;
   message?: string;
 };
@@ -50,7 +55,13 @@ function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry 
     case "task.created":
       return { ...base, kind: "created" };
     case "task.assigned":
-      return { ...base, kind: "assigned" };
+      return {
+        ...base,
+        kind: "assigned",
+        ...("teamId" in event ? { teamId: event.teamId } : {}),
+        ...("agentId" in event && event.agentId ? { agentId: event.agentId } : {}),
+        ...("agent" in event ? { agent: event.agent } : {}),
+      };
     case "task.unassigned":
       return { ...base, kind: "unassigned" };
     case "task.status":
@@ -67,18 +78,36 @@ function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry 
         kind: `dispatch_${event.outcome.state}` as TaskHistoryKind,
         message: event.outcome.message ?? event.outcome.code,
       };
-    case "task.activity":
+    case "task.activity": {
+      /* The store writes a structured event AND an activity line for the same
+         action (task_assignment_events, link_session in task_store.py), and
+         the activity's message carries the raw id — "Assigned to team
+         29d9e677-…". The structured sibling renders the same fact with a
+         resolved name, so the id-bearing duplicate is dropped here. */
+      if (DUPLICATE_ACTIVITY_PATTERNS.some((pattern) => pattern.test(event.activity.message))) return undefined;
       return {
         ...base,
         kind: "activity",
         message: event.activity.message,
         ...(event.activity.sessionId ? { sessionId: event.activity.sessionId } : {}),
       };
+    }
     default:
       // Edits and dispatch claim/release churn are not run history.
       return undefined;
   }
 }
+
+/** Messages task_store.py writes next to a structured event that this
+    projection already renders — kept in sync with the exact formats pinned in
+    backend/tests/unit/test_task_store.py. */
+const DUPLICATE_ACTIVITY_PATTERNS = [
+  /^Assigned to team .+\.$/,
+  /^Assigned to logical agent .+\.$/,
+  /^Assigned to (claude|pi|codex|kimi)\.$/,
+  /^Agent assignment cleared\.$/,
+  /^Linked session .+\.$/,
+];
 
 /**
  * Newest-first history for a task, optionally including its occurrences'

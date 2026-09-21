@@ -639,6 +639,7 @@ export function BacklogPage({ projectId, recordAsPage = false, projects = [], on
       {drawerRecordId ? (
         <TaskRecordView
           taskId={drawerRecordId}
+          currentUser={currentUser}
           tasks={tasks}
           drawer={recordAsPage ? undefined : {
             open: Boolean(recordTaskId),

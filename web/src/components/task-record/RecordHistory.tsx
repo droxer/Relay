@@ -7,7 +7,7 @@ import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
 import { hrefForRoute } from "../../lib/appRoute";
 import { taskHistoryEntries } from "../../lib/taskHistory";
-import { historyEntryLabel, historyTime } from "./taskHistoryLabel";
+import { historyEntryLabel, historyTime, type HistoryNameResolver } from "./taskHistoryLabel";
 import type { RelayTaskEvent } from "../../types";
 
 /**
@@ -24,11 +24,14 @@ import type { RelayTaskEvent } from "../../types";
 export function RecordHistory({
   taskId,
   live = false,
+  names,
   onOpenThread,
 }: {
   taskId: string;
   /** The task is running — the timeline grows while the reader watches it. */
   live?: boolean;
+  /** Team/agent names for assignment lines; without them an id still renders. */
+  names?: HistoryNameResolver;
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -68,7 +71,7 @@ export function RecordHistory({
             <li key={entry.id} className="record-timeline-entry">
               <span className="record-timeline-time tnum">{historyTime(entry.timestamp, i18n.language)}</span>
               <span className="record-timeline-label">
-                {historyEntryLabel(entry, t)}
+                {historyEntryLabel(entry, t, names)}
               </span>
               {sessionId ? (
                 <a

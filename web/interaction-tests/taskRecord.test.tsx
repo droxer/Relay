@@ -23,6 +23,9 @@ vi.mock("../src/api", () => ({
   listTaskWorkspaceFiles: vi.fn(async () => ({ files: [] })),
   readTaskWorkspaceFile: vi.fn(),
   taskWorkspaceStatus: vi.fn(async () => ({ state: "idle" })),
+  listTeams: vi.fn(async () => ({ teams: [] })),
+  listEmployeeAgents: vi.fn(async () => ({ agents: [] })),
+  listControlPanelEmployees: vi.fn(async () => ({ employees: [] })),
   RelayApiError: class extends Error { constructor(message: string, public status: number) { super(message); } },
 }));
 vi.mock("../src/hooks/useRelayMutations", () => ({
@@ -66,6 +69,7 @@ function renderRecord(props: Partial<Parameters<typeof TaskRecordView>[0]> = {})
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <TaskRecordView
         taskId="R-42"
+        currentUser={{ id: "u-1", username: "fei", role: "user", employeeId: "fei" }}
         tasks={[ROUTINE]}
         onEdit={onEdit}
         onOpenThread={vi.fn()}

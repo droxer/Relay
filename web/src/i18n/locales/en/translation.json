@@ -360,6 +360,7 @@
     "assignment_waiting_hint": "Waiting for availability",
     "assignment_unavailable_agent": "Unavailable agent",
     "assignment_unavailable_team": "Unavailable team",
+    "assignee_unknown": "Unknown employee",
     "agents_section": "Agents",
     "teams_section": "Teams",
     "assign_task": "Assign agent or team",
@@ -452,6 +453,7 @@
     "history": {
       "created": "Created",
       "assigned": "Assigned",
+      "assigned_to": "Assigned to {{name}}",
       "unassigned": "Unassigned",
       "status": "Status → {{status}}",
       "session_linked": "Thread started",

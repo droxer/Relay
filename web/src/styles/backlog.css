@@ -22,29 +22,38 @@
 .backlog-stats {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  row-gap: var(--sp-3);
   margin: 0;
-  padding: var(--sp-4) var(--page-gutter);
+  padding: var(--sp-3) var(--page-gutter);
   border-bottom: 0.5px solid var(--line-1);
   background: var(--surface-0);
 }
 
+/* Each metric is a small stack — eyebrow over numeral — divided from its
+   neighbour by a hairline. The old run of "Label 7 · Label 1 · …" forced the
+   reader to pair words with numbers across a wrapping sentence; a stack is
+   read top-to-bottom at a glance. */
 .backlog-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--sp-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 4.5rem;
+  padding-right: var(--sp-4);
+  margin-right: var(--sp-4);
+  border-right: 0.5px solid var(--line-2);
 }
 
-.backlog-stat:not(:last-child)::after {
-  content: "·";
-  margin: 0 var(--sp-3);
-  color: var(--ink-3);
+.backlog-stat:last-child {
+  padding-right: 0;
+  margin-right: 0;
+  border-right: none;
 }
 
 .backlog-stat-eyebrow {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-3);
+  white-space: nowrap;
 }
 
 /* Metric numerals are 700 across the app (--type-number, .adm-dash-*-value);

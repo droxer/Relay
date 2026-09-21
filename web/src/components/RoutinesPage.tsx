@@ -479,6 +479,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       {drawerRecord ? (
         <TaskRecordView
           taskId={drawerRecord.taskId}
+          currentUser={currentUser}
           runId={drawerRecord.runId}
           tasks={tasks}
           drawer={{

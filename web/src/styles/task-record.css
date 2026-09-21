@@ -397,31 +397,60 @@
 .record-timeline-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: var(--sp-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Each entry hangs off a marker on a rail, so the list reads as one timeline
+   rather than a run of plain text lines. */
 .record-timeline-entry {
+  position: relative;
   display: flex;
   align-items: baseline;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   min-width: 0;
+  padding-left: var(--sp-5);
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
 
+.record-timeline-entry::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.42em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-4);
+}
+
+.record-timeline-entry:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: calc(0.42em + 7px);
+  bottom: calc(-1 * var(--sp-2));
+  width: 0.5px;
+  background: var(--line-2);
+}
+
+/* The time column reads vertically down the rail, so it keeps a fixed
+   measure; entries from another day carry their date (see historyTime). */
 .record-timeline-time {
   flex: none;
+  width: 7.5rem;
   color: var(--ink-3);
 }
 
+/* A label wraps instead of truncating — a blocked reason or failure message
+   cut at one line is exactly the fact the reader opened the timeline for.
+   It does not claim the row's free space: the inline action that follows
+   belongs next to the words it belongs to, not adrift at the page's edge. */
 .record-timeline-label {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

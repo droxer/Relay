@@ -131,7 +131,7 @@
 .backlog-row-tags { flex: none; width: 104px; }
 
 .backlog-rows-head-assignee,
-.backlog-row-assignee { flex: none; width: 150px; }
+.backlog-row-assignee { flex: none; width: 172px; }
 
 /* 116 → 150: the file count that used to sit in a RESULT column of its own
    now trails the date inside this cell. */
@@ -190,14 +190,26 @@
   background: var(--row-hover);
 }
 
-/* Title, then the routine-provenance chip when the task came from one. The
-   chip caps its own width, so a long routine name cannot crowd out the title. */
+/* Two lines: the title (with its project tag) on top, the exception line —
+   blocked reason, age, recovery state — underneath. They used to share one
+   line, so a long title and a blocked reason truncated each other into
+   unreadability and the reason bled toward the priority column. */
 .backlog-row-lead {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+}
+
+.backlog-row-lead-main {
+  display: flex;
   align-items: center;
   gap: var(--sp-3);
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* The leading rail is a .state-mark; the row owns the accent so the mark and

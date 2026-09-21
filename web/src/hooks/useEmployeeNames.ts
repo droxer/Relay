@@ -30,7 +30,10 @@ export function useEmployeeNames(currentUser: CurrentUser): ReadonlyMap<string, 
   return useMemo(() => {
     const names = new Map<string, string>();
     for (const employee of data ?? []) {
-      const name = employee.displayName?.trim();
+      /* An employee who never set a display name used to fall through to the
+         raw UUID everywhere this map feeds — the @handle is the name they
+         actually answer to. */
+      const name = employee.displayName?.trim() || employee.handle;
       if (employee.id && name) names.set(employee.id, name);
     }
     return names;

@@ -356,6 +356,7 @@
     "assignment_waiting_hint": "等待可用",
     "assignment_unavailable_agent": "智能體不可用",
     "assignment_unavailable_team": "團隊不可用",
+    "assignee_unknown": "未知員工",
     "agents_section": "智能體",
     "teams_section": "團隊",
     "assign_task": "指派智能體或團隊",
@@ -448,6 +449,7 @@
     "history": {
       "created": "已建立",
       "assigned": "已指派",
+      "assigned_to": "已指派給 {{name}}",
       "unassigned": "已取消指派",
       "status": "狀態 → {{status}}",
       "session_linked": "已開啟討論串",
