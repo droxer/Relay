@@ -26,6 +26,8 @@ remain in place. No schema changes or data repair are needed.
 
 ## Validation
 
+- Full Python suite: 1,765 passed.
+- React suite: 35 files, 204 tests passed.
 - Task and thread deletion API files: 61 passed.
 - Final deletion selection: 18 passed, including rollback.
 - Coverage: 88% of `relay.services.task_deletion`; remaining gaps are missing-record recovery and the unchanged fallback policy.
@@ -41,4 +43,6 @@ uv run --project backend --extra dev --with coverage coverage run --data-file=/t
 uv run --project backend --extra dev --with coverage coverage report --data-file=/tmp/relay-task-delete.coverage -m
 ```
 
-RED checkpoint: `aef03dcd`. GREEN checkpoint is the fix commit containing this report.
+RED checkpoint: `aef03dcd`. GREEN checkpoint: `c68c3e27`.
+`git diff --check` and commit hooks passed. The pre-existing `web/next-env.d.ts`
+change was preserved after the build regenerated it.
