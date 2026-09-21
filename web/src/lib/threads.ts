@@ -12,11 +12,11 @@ export type ThreadItem = {
   nodeOffline?: boolean;
   /** The backlog task or routine that started this thread; absent for a chat. */
   origin?: ThreadOrigin;
+  /** Display name for the owning project; falls back to its ID while loading. */
+  projectName?: string;
 };
 
-/** Where a task-driven thread came from. Project membership is not an origin:
- *  project threads live under their project folder, so the rail says so by
- *  placement rather than with a mark. */
+/** The task or routine that owns a conversation, alongside its project badge. */
 export type ThreadOrigin = {
   kind: "backlog" | "routine";
   taskId: string;
@@ -59,7 +59,7 @@ export type ProjectThreadBucket = {
 
 export type ThreadDirectoryMode = "threads" | "projects";
 
-/** Keeps independent conversations and project rooms in separate top-level navigation destinations. */
+/** Threads includes task conversations; Projects scopes its own directory. */
 export function threadsForDirectory(
   threads: readonly ThreadItem[],
   projects: readonly ProjectRecord[],
@@ -68,7 +68,7 @@ export function threadsForDirectory(
   const projectIds = new Set(projects.map((project) => project.id));
   return threads.filter((thread) => {
     const projectId = thread.session.projectId;
-    return mode === "projects" ? Boolean(projectId && projectIds.has(projectId)) : !projectId || !projectIds.has(projectId);
+    return mode === "projects" ? Boolean(projectId && projectIds.has(projectId)) : Boolean(thread.origin) || !projectId || !projectIds.has(projectId);
   });
 }
 
@@ -231,7 +231,8 @@ export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadIt
       && prior.session === item.session
       && prior.runningAgent === item.runningAgent
       && prior.nodeOffline === item.nodeOffline
-      && sameOrigin(prior.origin, item.origin);
+      && sameOrigin(prior.origin, item.origin)
+      && prior.projectName === item.projectName;
     const result = keep ? prior : item;
     if (result !== previous[index]) changed = true;
     return result;

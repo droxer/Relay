@@ -3,6 +3,7 @@ import {
   ActionRemove,
   ICON,
   NavBacklog,
+  NavProjects,
   NavRoutine,
   NodeOffline,
 } from "./icons";
@@ -76,7 +77,9 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const originLabel = item.origin
     ? t(item.origin.kind === "routine" ? "thread.origin_routine" : "thread.origin_backlog", { title: item.origin.title })
     : "";
-  const rowLabel = [label, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
+  const projectName = item.projectName ?? session.projectId;
+  const projectLabel = projectName ? t("thread.project_indicator", { name: projectName }) : "";
+  const rowLabel = [label, projectLabel, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
 
   // The meta line's status text. A live run names its agent; a thread
@@ -113,7 +116,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const { subline, inlineAgents } = threadRowMeta({
     layout,
     hasStatus: Boolean(status),
-    hasOrigin: Boolean(item.origin),
+    hasOrigin: Boolean(item.origin || projectName),
     agentCount: agents.length,
   });
   const agentCluster = agents.length > 0 ? (
@@ -151,6 +154,12 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
     </Badge>
   ) : null;
 
+  const projectBadge = projectName ? (
+    <Badge className="conversation-project" title={projectLabel} aria-hidden="true">
+      <NavProjects size={ICON.xs} /><span>{projectName}</span>
+    </Badge>
+  ) : null;
+
   return (
     <li
       className={`conversation-row rail-row list-virtual${layout === "nested" ? " nested" : ""}`}
@@ -181,7 +190,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
                   they ride here rather than keeping a second line alive for
                   one decorative glyph. */}
               {inlineAgents ? agentCluster : null}
-              {layout === "nested" ? originBadge : null}
+              {layout === "nested" ? <>{projectBadge}{originBadge}</> : null}
             </span>
             {stamp ? (
               <span className="conversation-stamp tnum">
@@ -191,6 +200,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
           </span>
           {subline ? (
             <span className="conversation-subline">
+              {projectBadge}
               {status ? (
                 <span className="conversation-status" data-tone={status.tone}>
                   <StateMark {...PIP[status.tone]} />

@@ -216,6 +216,7 @@
     "edit_member_added": "This agent was added while you were editing. Your draft is preserved; open the existing member to edit it."
   },
   "thread": {
+    "project_indicator": "Project: {{name}}",
     "back_to_task": "Back to task",
     "back_to_project_activities": "Back to project activities",
     "search_placeholder": "Search threads…",

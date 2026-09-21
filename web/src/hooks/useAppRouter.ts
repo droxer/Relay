@@ -115,7 +115,7 @@ export function useAppRouter({
   const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, taskId?: string | null) => {
     const parentTaskId = taskId ?? (locationState.route === "backlog" ? locationState.taskId : null);
     const state: AppLocationState = {
-      route: sessionId && parentTaskId ? "backlog" : projectId ? "projects" : "main",
+      route: sessionId && parentTaskId ? "backlog" : sessionId ? "main" : projectId ? "projects" : "main",
       taskId: sessionId ? parentTaskId : null,
       mobileView: "chat",
       sessionId,

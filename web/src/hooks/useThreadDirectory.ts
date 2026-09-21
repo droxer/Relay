@@ -63,18 +63,21 @@ export function useThreadDirectory({
     const runningBy = new Map(
       visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run.agent] as const)),
     );
+    const projectNames = new Map(projects.map(project => [project.id, project.name]));
     const next = reuseThreadItems(previousItems.current, myThreads.map((session) => ({
       session,
       runningAgent: runningBy.get(session.id),
       nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
       origin: origins.get(session.id),
+      projectName: session.projectId ? projectNames.get(session.projectId) ?? session.projectId : undefined,
     })));
     previousItems.current = next;
     return next;
-  }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins]);
+  }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins, projects]);
 
   const filteredThreads = useMemo(
-    () => threadItems.filter((item) => matchesThreadQuery(item.session, threadQuery)),
+    () => threadItems.filter((item) => matchesThreadQuery(item.session, threadQuery)
+      || Boolean(item.projectName?.toLowerCase().includes(threadQuery.trim().toLowerCase()))),
     [threadItems, threadQuery],
   );
 

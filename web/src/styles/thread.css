@@ -700,3 +700,20 @@
 .conversation-group-count {
   color: var(--ink-4);
 }
+
+/* Project identity stays legible beside the task origin, even in narrow rails. */
+.conversation-project {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  color: var(--ink-2);
+}
+
+.conversation-project > svg {
+  flex-shrink: 0;
+}
+
+.conversation-project > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -12,8 +12,9 @@ import { ProfileImage } from "./ProfileImagePicker";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { canonicalBrowserUrl, navigateToAppPath, pathForAppState } from "../lib/appRoute";
 
-export function ThreadHeader({ taskId, activeSession, projectId, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
+export function ThreadHeader({ taskId, taskThread = false, activeSession, projectId, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
   taskId?: string | null;
+  taskThread?: boolean;
   activeSession: RelaySession | undefined;
   projectId?: string | null;
   /** Agents in the room, in join order. Shown only once a thread has more
@@ -82,7 +83,7 @@ export function ThreadHeader({ taskId, activeSession, projectId, participants, a
         />
       ) : null}
       <div className="chat-tools">
-        {spaceOpen && !taskId ? (
+        {spaceOpen && !taskThread ? (
           <Button
             variant="icon"
             size="icon"

@@ -32,3 +32,14 @@ it("keeps a task conversation in Threads when sending from Threads", async () =>
   await act(async () => result.current.navigateToMobileView("threads"));
   expect(window.location.pathname).toBe("/threads");
 });
+
+it("keeps a task thread visible while projects load and gives it an ID badge", () => {
+  const { result } = renderHook(() => useThreadDirectory({ route: "main", myThreads: [session], projects: [], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] }));
+  render(<ThreadRow item={result.current.directoryThreads[0]} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
+  expect(screen.getByText("p").closest("[data-slot=badge]")).toBeTruthy();
+});
+
+it("does not give an independent thread a project badge", () => {
+  const { container } = render(<ThreadRow item={{ session: { ...session, projectId: undefined } }} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
+  expect(container.querySelector(".conversation-project")).toBeNull();
+});

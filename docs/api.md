@@ -648,3 +648,8 @@ Tasks destination. Legacy `/projects/{projectId}/threads/{threadId}` links
 resolve to the linked task; unlinked project conversations return to project
 details. Legacy `/projects/{projectId}/new` opens the project's task list.
 Projects no longer offer standalone conversation creation in the browser.
+
+Task conversations also appear in Threads at `/threads/{threadId}` with a
+project badge. Opening or sending from Threads preserves that destination;
+opening from a task preserves the nested task route. Both views share the same
+conversation and provide access to its owning task.

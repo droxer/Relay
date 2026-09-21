@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 
 export type ThreadsViewProps = {
   taskId?: string | null;
+  taskThread?: boolean;
   directoryMode: "threads" | "projects";
   /** The shell's task list — the project board reads its lanes from it
    *  rather than opening a second observer on the same query. */
@@ -128,6 +129,7 @@ export type ThreadsViewProps = {
 
 export function ThreadsView({
   taskId,
+  taskThread = false,
   directoryMode,
   tasks,
   teams,
@@ -250,7 +252,7 @@ export function ThreadsView({
 
   return (
     <>
-      {!taskId && <ThreadListPanel
+      {!taskThread && <ThreadListPanel
         directoryMode={directoryMode}
         threads={filteredThreads}
         projects={projects}
@@ -359,6 +361,7 @@ export function ThreadsView({
       <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
         <ThreadHeader
           taskId={taskId}
+          taskThread={taskThread}
           activeSession={activeSession}
           projectId={selectedProjectId}
           participants={threadParticipants}
