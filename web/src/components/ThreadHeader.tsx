@@ -10,9 +10,10 @@ import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { navigateToAppPath, pathForAppState } from "../lib/appRoute";
+import { canonicalBrowserUrl, navigateToAppPath, pathForAppState } from "../lib/appRoute";
 
-export function ThreadHeader({ activeSession, projectId, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
+export function ThreadHeader({ taskId, activeSession, projectId, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
+  taskId?: string | null;
   activeSession: RelaySession | undefined;
   projectId?: string | null;
   /** Agents in the room, in join order. Shown only once a thread has more
@@ -29,7 +30,9 @@ export function ThreadHeader({ activeSession, projectId, participants, artifactC
 }) {
   const { t } = useTranslation();
   const parentProjectId = projectId ?? activeSession?.projectId;
-  const projectActivitiesHref = parentProjectId
+  const projectActivitiesHref = taskId
+    ? canonicalBrowserUrl(`/backlog/${encodeURIComponent(taskId)}`, typeof window !== "undefined" ? window.location.search : "")
+    : parentProjectId
     ? `${pathForAppState({ route: "projects", mobileView: "chat", sessionId: null, projectId: parentProjectId })}?tab=activities`
     : null;
   return (
@@ -39,15 +42,15 @@ export function ThreadHeader({ activeSession, projectId, participants, artifactC
           <a
             className={buttonVariants({ variant: "ghost" })}
             href={projectActivitiesHref}
-            aria-label={t("thread.back_to_project_activities")}
-            title={t("thread.back_to_project_activities")}
+            aria-label={t(taskId ? "thread.back_to_task" : "thread.back_to_project_activities")}
+            title={t(taskId ? "thread.back_to_task" : "thread.back_to_project_activities")}
             onClick={(event) => {
               if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
               event.preventDefault();
               void navigateToAppPath(projectActivitiesHref);
             }}
           >
-            <NavBack size={ICON.md} /><span>{t("workspace.tab_activities")}</span>
+            <NavBack size={ICON.md} /><span>{t(taskId ? "thread.back_to_task" : "workspace.tab_activities")}</span>
           </a>
         ) : (
           <Button variant="ghost" className="mobile-back-button" type="button" aria-label={t("nav.threads")} onClick={onBackToThreads}>
@@ -79,7 +82,7 @@ export function ThreadHeader({ activeSession, projectId, participants, artifactC
         />
       ) : null}
       <div className="chat-tools">
-        {spaceOpen ? (
+        {spaceOpen && !taskId ? (
           <Button
             variant="icon"
             size="icon"

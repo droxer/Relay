@@ -25,6 +25,7 @@ type RelayDataResult = {
   tasks: RelayTaskSummary[];
   projects: ProjectRecord[];
   projectsStatus: ProjectCollectionStatus;
+  tasksStatus: ProjectCollectionStatus;
   projectsError: string;
   isRefreshing: boolean;
   refresh: (signal?: AbortSignal, tokenOverride?: string) => Promise<void>;
@@ -34,7 +35,7 @@ type RelayDataResult = {
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "sandboxes" | "nodes" | "sessions" | "tasks" | "projects" | "projectsStatus" | "projectsError"
+  "sandboxes" | "nodes" | "sessions" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError"
 >;
 
 /* The only fields the app reads off the five polls, folded into one value.
@@ -57,6 +58,7 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
     tasks: (tasksQuery.data as RelayTaskSummary[] | undefined) ?? [],
     projects: (projectsQuery.data as ProjectRecord[] | undefined) ?? [],
     projectsStatus: queryCollectionStatus(projectsQuery),
+    tasksStatus: queryCollectionStatus(tasksQuery),
     projectsError: projectsQuery.error instanceof Error
       ? projectsQuery.error.message
       : projectsQuery.error
@@ -90,7 +92,7 @@ export function useRelayData(
   const overrideRef = useRef<string | undefined>(undefined);
   const fetchToken = () => overrideRef.current ?? tokenRef.current;
 
-  const { sandboxes, nodes, sessions, tasks, projects, projectsStatus, projectsError } = useQueries({
+  const { sandboxes, nodes, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError } = useQueries({
     combine: combineRelayCollections,
     queries: [
       {
@@ -218,6 +220,7 @@ export function useRelayData(
     tasks,
     projects,
     projectsStatus,
+    tasksStatus,
     projectsError,
     isRefreshing: manualRefreshPending,
     refresh,

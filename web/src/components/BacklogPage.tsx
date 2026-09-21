@@ -58,7 +58,7 @@ interface BacklogPageProps {
   currentUser: CurrentUser;
   isRefreshing: boolean;
   onRefresh: () => Promise<void>;
-  onOpenThread: (sessionId: string) => void;
+  onOpenThread: (sessionId: string, taskId?: string) => void;
 }
 
 import {
@@ -396,7 +396,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
         startInFlight.current = task.id;
         startTaskMutation.mutate(taskStartMutationInput(task, discussionAssignments), {
           onSuccess: (result) => {
-            if (!task.assignedAgentId && !task.assignedTeamId && result.session) onOpenThread(result.session.id);
+            if (!task.assignedAgentId && !task.assignedTeamId && result.session) onOpenThread(result.session.id, task.id);
           },
           onSettled: () => { startInFlight.current = null; },
         });
@@ -638,7 +638,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
             onClosed: recordMirror.release,
           }}
           onEdit={editTask}
-          onOpenThread={onOpenThread}
+          onOpenThread={(sessionId) => onOpenThread(sessionId, drawerRecordId)}
           onOpenRecord={(nextId) => onOpenRecord(nextId)}
           onDeleted={() => onOpenRecord(null)}
         />

@@ -51,7 +51,7 @@ export function useAppRouter({
     onSetComposingNewFromPath(Boolean(state.composingNew));
     if (state.composingNew) {
       onClearPendingMessage();
-    } else if ((state.route === "main" || state.route === "projects") && state.sessionId) {
+    } else if ((state.route === "main" || state.route === "projects" || state.route === "backlog") && state.sessionId) {
       onClearPendingMessage();
       onApplySessionFromPath(state.sessionId);
     }
@@ -96,6 +96,10 @@ export function useAppRouter({
   }, [navigateToAppState]);
 
   const navigateToMobileView = useCallback((nextMobileView: MobileView) => {
+    if (locationState.route === "backlog" && locationState.taskId) {
+      navigateToAppState({ ...locationState, sessionId: nextMobileView === "chat" ? currentSessionId : null, mobileView: "chat" });
+      return;
+    }
     const threadRoute = locationState.route === "projects" ? "projects" : "main";
     navigateToAppState({
       route: threadRoute,
@@ -104,20 +108,22 @@ export function useAppRouter({
       projectId: locationState.projectId ?? activeSession?.projectId ?? null,
       composingNew: nextMobileView === "chat" && composingNew,
     });
-  }, [activeSession?.projectId, composingNew, currentSessionId, locationState.projectId, locationState.route, navigateToAppState]);
+  }, [activeSession?.projectId, composingNew, currentSessionId, locationState, navigateToAppState]);
 
   const hrefForSideNavRoute = useCallback((nextRoute: AppRoute) => buildHrefForRoute(nextRoute), []);
 
-  const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null) => {
+  const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, taskId?: string | null) => {
+    const parentTaskId = taskId ?? (locationState.route === "backlog" ? locationState.taskId : null);
     const state: AppLocationState = {
-      route: projectId ? "projects" : "main",
+      route: sessionId && parentTaskId ? "backlog" : projectId ? "projects" : "main",
+      taskId: sessionId ? parentTaskId : null,
       mobileView: "chat",
       sessionId,
       projectId: projectId ?? null,
       composingNew: sessionId === null,
     };
     void syncAppStateToUrl(state, replace, () => setLocationState(state));
-  }, []);
+  }, [locationState.route, locationState.taskId]);
 
   /* The record routes. `null` returns to the list, which is what a breadcrumb
      does when the reader arrived by deep link and has no history to go back

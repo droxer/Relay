@@ -54,3 +54,16 @@
   font: var(--type-body-sm);
   letter-spacing: var(--track-0);
 }
+
+/* Task conversations keep the Tasks destination and omit the thread directory. */
+.messenger-shell[data-task-thread="true"] {
+  grid-template-columns: var(--shell-nav-track) minmax(0, 1fr) var(--shell-space-track);
+}
+
+@media (max-width: 820px) {
+  .messenger-shell[data-task-thread="true"],
+  .messenger-shell[data-task-thread="true"][data-sidenav="open"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+}

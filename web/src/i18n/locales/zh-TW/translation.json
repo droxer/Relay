@@ -125,7 +125,7 @@
     "search_label": "搜尋專案",
     "search_placeholder": "搜尋專案…",
     "no_projects": "尚無專案。",
-    "shared_workspace": "專案房間 · 共用工作空間",
+    "shared_workspace": "專案工作區",
     "page_kicker": "專案",
     "page_label": "{{project}} 專案",
     "page_subtitle": "{{count}} 個智能體",
@@ -212,6 +212,7 @@
     "edit_member_added": "編輯期間該智能體已被新增。草稿已保留；請開啟現有成員進行編輯。"
   },
   "thread": {
+    "back_to_task": "返回任務",
     "back_to_project_activities": "返回專案動態",
     "search_placeholder": "搜尋對話…",
     "search_label": "搜尋對話",

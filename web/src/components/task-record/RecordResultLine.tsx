@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskRuns } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
-import { hrefForRoute } from "../../lib/appRoute";
+import { pathForAppState } from "../../lib/appRoute";
 import { formatRunDuration, runDurationMs, runOutcome } from "../../lib/taskRuns";
 import type { TaskRun } from "../../types";
 
@@ -76,7 +76,7 @@ export function RecordResultLine({
       {run.latestSessionId ? (
         <a
           className="record-inline-action task-result-thread"
-          href={hrefForRoute("main", run.latestSessionId)}
+          href={pathForAppState({ route: "backlog", mobileView: "chat", taskId, sessionId: run.latestSessionId })}
           onClick={(event) => {
             if (!onOpenThread) return;
             if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
