@@ -57,6 +57,7 @@ from .helpers import (
     assignee_employee_id_for_task,
     assignment_list,
     get_task_for_actor,
+    get_task_or_404,
     json_body,
     owner_employee_id_for_create,
     participants_for_assignments,
@@ -65,7 +66,7 @@ from .helpers import (
     workspace_artifact_key,
     workspace_artifacts,
 )
-from .project_helpers import project_for_owner, project_session_fields
+from .project_helpers import ensure_task_project_writable, project_for_owner, project_session_fields
 from .workspace_transport import (
     dispatch_workspace_command,
     live_workspace_file,
@@ -155,7 +156,7 @@ def validate_project_task_assignment(
     if not project:
         raise HTTPException(404, "Project not found.")
     if assigned_agent_id not in {
-        member.get("agentId") for member in project.get("members", [])
+        member.get("agentId") for member in project.get("members", []) if member.get("enabled", True)
     }:
         raise HTTPException(400, "project_agent_not_member")
 
@@ -384,7 +385,7 @@ def create_task(
     owner = owner_employee_id_for_create(actor, body)
     assignee = assignee_employee_id_for_task(actor, body, owner)
     project_id = string_field(body, "projectId") or None
-    project = project_for_owner(ctx, project_id, owner)
+    project = project_for_owner(ctx, project_id, owner, require_enabled=True)
     if project and "assignments" in body:
         raise HTTPException(400, "project_assignment_override_unsupported")
     assigned_agent_id = string_field(body, "assignedAgentId") or None
@@ -402,7 +403,7 @@ def create_task(
         project
         and assigned_agent_id
         and assigned_agent_id
-        not in {member["agentId"] for member in project.get("members", [])}
+        not in {member["agentId"] for member in project.get("members", []) if member.get("enabled", True)}
     ):
         raise HTTPException(400, "project_agent_not_member")
     if project and assigned_team_id:
@@ -533,6 +534,7 @@ def update_task(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
+    ensure_task_project_writable(ctx, current)
     body = _request_body
     title = string_field(body, "title") or None
     description = (
@@ -764,6 +766,11 @@ def update_task(
 @router.delete("/tasks/{task_id}")
 def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
+    current = get_task_or_404(ctx.task_store, task_id)
+    if not actor.get("isAdmin") and current.get("ownerEmployeeId") != actor.get("employeeId"):
+        raise HTTPException(403, "task_delete_forbidden")
+    if not current.get("deletedAt"):
+        ensure_task_project_writable(ctx, current)
     try:
         lifecycle = request.app.state.execution_lifecycle
         with ctx.registry.dispatch_lock, lifecycle.admission_scope():
@@ -790,6 +797,7 @@ def assign_task(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
+    ensure_task_project_writable(ctx, current)
     if task_has_active_linked_session(ctx.session_store, current):
         raise HTTPException(409, "task_execution_active")
     body = _request_body
@@ -857,6 +865,7 @@ def assign_task(
 
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
+    ensure_task_project_writable(ctx, task)
     raw_assignments = body.get("assignments")
     assignments = assignment_list(raw_assignments)
     if body.get("agent") is not None:
@@ -1039,6 +1048,7 @@ async def start_task(
 
 def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     current = get_task_for_actor(ctx.task_store, task_id, actor)
+    ensure_task_project_writable(ctx, current)
     if current.get("status") not in ("backlog", "assigned"):
         raise HTTPException(409, "task_not_dispatchable")
     if task_has_active_linked_session(ctx.session_store, current):

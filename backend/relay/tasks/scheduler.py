@@ -39,6 +39,7 @@ from ..services.dispatch_failure import (
 )
 from ..services.project_runtime import (
     ProjectDispatchError,
+    project_work_error,
     resolve_project_task_assignments,
 )
 from ..services.task_rounds import (
@@ -248,6 +249,11 @@ class TaskScheduler:
         promoted = 0
         skipped = 0
         for routine in self._due_routines(today):
+            if project_id := routine.get("projectId"):
+                project = self.project_store.get_project(project_id) if self.project_store else None
+                if project_work_error(project):
+                    skipped += 1
+                    continue
             routine = self._materialize_legacy_assignment(routine) or routine
             agent = valid_agent(routine.get("assignedAgent"))
             if not (

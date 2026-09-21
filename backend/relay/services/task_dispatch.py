@@ -42,7 +42,7 @@ from .dispatch_failure import (
     record_dispatch_failure,
     safe_dispatch_error_message,
 )
-from .project_runtime import ProjectDispatchError, resolve_project_task_assignments
+from .project_runtime import ProjectDispatchError, project_work_error, resolve_project_task_assignments
 from .task_workspace import (
     recorded_task_workspace,
     resolve_task_workspace,
@@ -773,6 +773,9 @@ async def start_routine_occurrence_on_ready_node(
 def _prepare_routine_occurrence(ctx: TaskDispatchContext, routine: dict[str, Any], agent: str | None, run_date: date) -> Any:
     if not routine.get("isRoutine") or not routine.get("routineEnabled"):
         return None
+    if project_id := routine.get("projectId"):
+        if code := project_work_error(ctx.project_store.get_project(project_id)):
+            return _result(routine, "rejected", code=code, message="This project is closed for work.")
     today = run_date
     today_iso = today.isoformat()
     scheduled_run_date = routine_next_run_date(routine)
