@@ -652,7 +652,7 @@ export function archiveProject(projectId: string, expectedVersion: number): Prom
   });
 }
 
-export function deleteProject(projectId: string, expectedVersion: number): Promise<{ deletedProjectId: string; workspaceCleanup: "queued"; cleanupCommandId: string }> {
+export function deleteProject(projectId: string, expectedVersion: number): Promise<{ deletedProjectId: string; workspaceCleanup: "queued" | "waiting_for_upgrade"; cleanupCommandId: string }> {
   const query = new URLSearchParams({ expectedVersion: String(expectedVersion) });
   return apiJson(`/projects/${encodeURIComponent(projectId)}?${query.toString()}`, { method: "DELETE" });
 }

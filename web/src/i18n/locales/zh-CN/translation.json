@@ -88,9 +88,10 @@
     "delete_confirm_title": "永久删除“{{project}}”？",
     "delete_confirm_message": "这将永久删除项目的所有任务、例行任务、对话和产物，并在所属电脑连接后删除工作区文件。此操作无法撤销。共享的智能体和电脑会保留。",
     "deleted": "项目已删除",
+    "cleanup_waiting_for_upgrade": "工作区文件仍待删除。请更新并重新连接 Relay Computer 以完成清理。",
     "cleanup_queued": "工作区文件清理已排队，将在项目电脑连接后执行。",
     "delete_active": "请先停止项目中所有正在运行的工作，再删除项目。",
-    "delete_unavailable": "请更新或重新连接支持工作区删除的项目电脑，然后重试。",
+    "delete_unavailable": "请重新连接项目电脑，然后删除此项目。",
 
     "projects": "项目",
     "create": "创建项目",

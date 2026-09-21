@@ -17,7 +17,7 @@ must stop first. Archive remains a separate operation.
   and repeats cleanup safely if acknowledgement is lost.
 - The web mutation removes project/task/session cache entries, clears related
   detail caches, and returns to the project directory after confirmation.
-- No schema migration. Deploy the updated daemon before using deletion. Files
+- No schema migration. Older daemons defer file cleanup until updated. Files
   are removed asynchronously when the owning computer polls; the response and
   UI explicitly report queued cleanup.
 
@@ -59,3 +59,28 @@ must stop first. Archive remains a separate operation.
 
 The UI verification uses jsdom interaction tests, not a live-browser E2E run.
 The database-mode tests use SQLite; no live PostgreSQL concurrency run was made.
+
+
+## Follow-up: older daemon compatibility
+
+The reported `project_cleanup_unavailable` error reproduced in both storage modes
+when the owning Computer advertised `project-workspaces` but lacked the newly
+added `project-workspace-delete` capability. Requiring the capability at deletion
+time unnecessarily blocked all record cleanup during a rolling upgrade.
+
+The service now keeps a durable cleanup command and returns
+`workspaceCleanup: "waiting_for_upgrade"`. The registry withholds the command
+from older daemons and delivers it after a capable runtime registers. The UI
+warns explicitly that files remain pending an update and reconnection. Missing
+Computer registrations still fail without removing records.
+
+- RED checkpoint `777ea426`: both compatibility regressions returned 409.
+- GREEN: project deletion/routes and daemon registry tests: **296 passed**.
+- Cleanup notice/cache and deletion-confirmation interaction tests: **5 passed**.
+- Updated deletion service coverage: **89%**.
+- Regression verifies that the same durable job survives incompatible polls and
+  reaches the upgraded daemon in both file-backed and database-backed storage.
+- Full `env -u KIMI_CODE_HOME -u CODEX_HOME npm test` passed: **1,706 TypeScript,
+  238 React, and 1,787 Python tests**. The two added cleanup-notice tests also
+  passed separately after the full React suite had collected its files.
+- Dependency audit: **0 vulnerabilities**; `git diff --check` clean.

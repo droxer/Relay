@@ -319,7 +319,7 @@ export function useRelayMutations() {
   const deleteProjectMutation = useMutation({
     mutationFn: ({ projectId, expectedVersion }: { projectId: string; expectedVersion: number }) =>
       deleteProject(projectId, expectedVersion),
-    onSuccess: async ({ deletedProjectId }) => {
+    onSuccess: async ({ deletedProjectId, workspaceCleanup }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY }),
         queryClient.cancelQueries({ queryKey: SESSIONS_QUERY_KEY }),
@@ -336,7 +336,11 @@ export function useRelayMutations() {
       queryClient.removeQueries({ queryKey: ["workspace-file", `project:${deletedProjectId}`] });
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === "task-record"
         && (query.state.data as RelayTask | undefined)?.projectId === deletedProjectId });
-      announce({ message: `${t("project.deleted")}. ${t("project.cleanup_queued")}`, tone: "info" });
+      announce({
+        message: `${t("project.deleted")}. ${t(workspaceCleanup === "waiting_for_upgrade"
+          ? "project.cleanup_waiting_for_upgrade" : "project.cleanup_queued")}`,
+        tone: workspaceCleanup === "waiting_for_upgrade" ? "warn" : "info",
+      });
     },
     onError: (error: unknown) => {
       const code = error instanceof Error ? error.message : "";

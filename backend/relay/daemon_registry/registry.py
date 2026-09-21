@@ -1650,6 +1650,10 @@ class DaemonNodeRegistry:
                         "message": "Project still exists; cleanup cancelled.",
                     })
                     continue
+                if "project-workspace-delete" not in ((sandbox or {}).get("capabilities") or []):
+                    # An older daemon cannot execute this command. Keep the
+                    # durable lease eligible for retry after a runtime upgrade.
+                    continue
             if command.get("type") != "run.start":
                 deliverable_records.append(record)
                 continue

@@ -41,11 +41,14 @@ def delete_project(
         node for node in ctx.registry.monitor_nodes()
         if computer_id(node) == initial["computerId"]
         and not node.get("retiredAt")
-        and "project-workspace-delete" in (node.get("capabilities") or [])
     ]
     if not nodes:
         raise ProjectDeletionError("project_cleanup_unavailable")
-    node = min(nodes, key=lambda node: (not node.get("online"), node["id"]))
+    node = min(nodes, key=lambda node: (
+        "project-workspace-delete" not in (node.get("capabilities") or []),
+        not node.get("online"), node["id"],
+    ))
+    cleanup_ready = "project-workspace-delete" in (node.get("capabilities") or [])
     with (
         ctx.registry.dispatch_lock,
         ctx.registry.dispatch_scope([node["id"]]),
@@ -114,6 +117,6 @@ def delete_project(
         ctx.chat_store.clear_conversation_sessions(session["id"])
     return {
         "deletedProjectId": project_id,
-        "workspaceCleanup": "queued",
+        "workspaceCleanup": "queued" if cleanup_ready else "waiting_for_upgrade",
         "cleanupCommandId": command_id,
     }

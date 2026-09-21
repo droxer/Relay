@@ -88,9 +88,10 @@
     "delete_confirm_title": "永久刪除「{{project}}」？",
     "delete_confirm_message": "這將永久刪除專案的所有任務、例行任務、對話和產物，並在所屬電腦連線後刪除工作區檔案。此操作無法復原。共用的代理程式和電腦會保留。",
     "deleted": "專案已刪除",
+    "cleanup_waiting_for_upgrade": "工作區檔案仍待刪除。請更新並重新連接 Relay Computer 以完成清理。",
     "cleanup_queued": "工作區檔案清理已排入佇列，將在專案電腦連線後執行。",
     "delete_active": "請先停止專案中所有正在執行的工作，再刪除專案。",
-    "delete_unavailable": "請更新或重新連接支援工作區刪除的專案電腦，然後重試。",
+    "delete_unavailable": "請重新連接專案電腦，然後刪除此專案。",
 
     "projects": "專案",
     "create": "建立專案",

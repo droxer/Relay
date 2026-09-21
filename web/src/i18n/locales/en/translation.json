@@ -88,9 +88,10 @@
     "delete_confirm_title": "Delete {{project}} permanently?",
     "delete_confirm_message": "This permanently deletes all project tasks, routines, conversations, and artifacts, and queues deletion of its workspace files when its computer connects. This cannot be undone. Shared agents and the computer are kept.",
     "deleted": "Project deleted",
+    "cleanup_waiting_for_upgrade": "Workspace files are pending deletion. Update and reconnect Relay Computer to finish cleanup.",
     "cleanup_queued": "Workspace file cleanup is queued and will run when the project computer connects.",
     "delete_active": "Stop all running project work before deleting the project.",
-    "delete_unavailable": "Update or reconnect the project computer with support for workspace deletion, then try again.",
+    "delete_unavailable": "Reconnect the project computer before deleting this project.",
 
     "projects": "Projects",
     "create": "Create project",

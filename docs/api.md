@@ -277,7 +277,10 @@ Shared agents and the Computer remain. Normal thread-deletion audit records and
 historical usage accounting retain their existing retention policy.
 
 Deletion returns `{ deletedProjectId, workspaceCleanup: "queued", cleanupCommandId }`.
-The owning Computer must advertise `project-workspace-delete`; otherwise deletion
+If the owning Computer has an older daemon, deletion succeeds with
+`workspaceCleanup: "waiting_for_upgrade"`. Cleanup stays durable and is withheld
+from daemons until they advertise `project-workspace-delete`; updating and
+reconnecting the Computer completes file removal. A missing Computer registration
 returns `409 project_cleanup_unavailable`. Active execution or dispatch claims
 return `409 project_execution_active` without deleting any records. Database
 records are deleted atomically. Workspace cleanup is durable and runs when that
@@ -285,7 +288,7 @@ Computer polls, including after an offline interval; I/O failures or lost
 acknowledgements leave the command eligible for retry. Local command storage
 additionally refuses delivery if the project still exists after a rollback.
 The daemon removes only `projects/{projectId}` and refuses symlink or escaping
-roots. Upgrade the daemon before using permanent project deletion.
+roots. Older daemons must be updated before pending files can be removed.
 
 Employees with active projects cannot be soft-deleted. After all their projects
 are archived, employee soft deletion is allowed and retains the project history.
