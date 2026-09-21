@@ -21,28 +21,24 @@ def _project(*, enabled: bool = True) -> dict:
             {
                 "agentId": "reviewer",
                 "role": "reviewer",
-                "functionTitle": "Review",
                 "responsibilities": "Review",
                 "enabled": True,
             },
             {
                 "agentId": "lead",
                 "role": "planner",
-                "functionTitle": "Lead",
                 "responsibilities": "Lead",
                 "enabled": True,
             },
             {
                 "agentId": "tester",
                 "role": "tester",
-                "functionTitle": "Test",
                 "responsibilities": "Test",
                 "enabled": True,
             },
             {
                 "agentId": "builder",
                 "role": "implementer",
-                "functionTitle": "Build",
                 "responsibilities": "Build",
                 "enabled": True,
             },

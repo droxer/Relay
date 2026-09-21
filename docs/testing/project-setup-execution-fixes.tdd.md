@@ -115,3 +115,15 @@ Dependency remediation is separate from these fixes.
 Real BoxLite/agent execution and cross-process races between project archival
 and another aggregate's mutation were not exercised. The changes add admission
 checks; they do not introduce a cross-aggregate database transaction.
+
+## Integration with current main
+
+Merged `main` at `d58a598b` for PR #281. Preserved the new permanent-deletion
+controls and archive endpoint alongside draft preservation and bounded conflict
+retry. Member conflict labels now use agent display names because main removed
+member function titles; regression fixtures use responsibilities and instructions.
+
+After resolution, `npm test` passed: production builds and TypeScript compilation,
+1,688 compiled TypeScript tests, 267 React tests, and 1,803 Python tests. Focused
+checks also passed: 41 UI tests and 38 backend project policy/catalog/deletion
+tests. `git diff --check` passed. Browser tests were not rerun for this merge.

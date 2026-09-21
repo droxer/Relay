@@ -15,17 +15,17 @@ vi.mock("@/components/ui/select", () => ({
 }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
 it("preserves a dirty member draft when polling advances the project version", () => {
-  const member = { agentId: "a", role: "implementer", functionTitle: "Original", responsibilities: "Build", enabled: true };
+  const member = { agentId: "a", role: "implementer", responsibilities: "Build", enabled: true };
   const project = { id: "p", version: 1, name: "Project", members: [member], leadAgentId: null, computerId: "c" } as any;
   const props = { open: true, member: member as any, project, agents: [], computers: [], onClose: vi.fn() };
   const view = render(<ProjectMemberEditor {...props} />);
-  const input = view.container.querySelector('input[name="function-title"]') as HTMLInputElement;
+  const input = view.container.querySelector('textarea[name="responsibilities"]') as HTMLTextAreaElement;
   fireEvent.change(input, { target: { value: "Unsaved work" } });
   view.rerender(<ProjectMemberEditor {...props} project={{ ...project, version: 2 }} />);
   expect(input.value).toBe("Unsaved work");
 });
 
-const lead = { agentId: "a", role: "implementer", functionTitle: "Lead", responsibilities: "Build", enabled: true };
+const lead = { agentId: "a", role: "implementer", responsibilities: "Build", enabled: true };
 const other = { ...lead, agentId: "b" };
 function editor(members = [lead], member: typeof lead | null = lead, leadAgentId: string | null = "a") {
   const onClose = vi.fn();
@@ -93,40 +93,40 @@ it("allows assigning another enabled member as lead", async () => {
 
 it("recovers a stale save while retaining other members and unedited fields", async () => {
   const base = { id: "p", version: 1, name: "Project", computerId: "c", members: [lead], leadAgentId: "a", enabled: true } as any;
-  getProject.mockResolvedValue({ project: { ...base, version: 2, members: [{ ...lead, responsibilities: "New responsibility" }, other] } });
+  getProject.mockResolvedValue({ project: { ...base, version: 2, members: [{ ...lead, instructions: "Concurrent instructions" }, other] } });
   mutateAsync.mockRejectedValueOnce(new RelayApiError("project_version_conflict", 409, "project_version_conflict"));
   render(<ProjectMemberEditor open member={lead as any} project={base} agents={[]} computers={[]} onClose={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "project.function_title" }), { target: { value: "My draft" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "My draft" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
   const patch = mutateAsync.mock.calls[1][0].input;
   expect(patch.expectedVersion).toBe(2);
-  expect(patch.members).toEqual([{ ...lead, functionTitle: "My draft", responsibilities: "New responsibility" }, other]);
+  expect(patch.members).toEqual([{ ...lead, responsibilities: "My draft", instructions: "Concurrent instructions" }, other]);
   expect(confirm).toHaveBeenCalled();
 });
 
 it("preserves the draft if the user declines replacing a concurrent edit", async () => {
   const base = { id: "p", version: 1, name: "Project", computerId: "c", members: [lead], leadAgentId: "a", enabled: true } as any;
-  getProject.mockResolvedValue({ project: { ...base, version: 2, members: [{ ...lead, functionTitle: "Their title" }] } });
+  getProject.mockResolvedValue({ project: { ...base, version: 2, members: [{ ...lead, responsibilities: "Their title" }] } });
   mutateAsync.mockRejectedValueOnce(new RelayApiError("project_version_conflict", 409, "project_version_conflict"));
   confirm.mockResolvedValue(false);
   const onClose = vi.fn();
   render(<ProjectMemberEditor open member={lead as any} project={base} agents={[]} computers={[]} onClose={onClose} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "project.function_title" }), { target: { value: "My title" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "My title" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(confirm).toHaveBeenCalled());
   expect(confirm.mock.calls[0][0].message).toContain("Their title");
   expect(confirm.mock.calls[0][0].message).toContain("My title");
   expect(mutateAsync).toHaveBeenCalledTimes(1);
   expect(onClose).not.toHaveBeenCalled();
-  expect((screen.getByRole("textbox", { name: "project.function_title" }) as HTMLInputElement).value).toBe("My title");
+  expect((screen.getByRole("textbox", { name: "project.responsibilities" }) as HTMLInputElement).value).toBe("My title");
 });
 
 it("does not resurrect a member removed during editing", async () => {
   getProject.mockResolvedValue({ project: { id: "p", version: 2, enabled: true, members: [], leadAgentId: null } });
   mutateAsync.mockRejectedValueOnce(new RelayApiError("project_version_conflict", 409, "project_version_conflict"));
   const { onClose } = editor();
-  fireEvent.change(screen.getByRole("textbox", { name: "project.function_title" }), { target: { value: "My draft" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "My draft" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await screen.findByRole("alert");
   expect(mutateAsync).toHaveBeenCalledTimes(1);

@@ -24,7 +24,6 @@ import type {
 const member = (agentId: string, enabled = true): ProjectMember => ({
   agentId,
   role: "implementer",
-  functionTitle: `${agentId} function`,
   responsibilities: `${agentId} responsibilities`,
   enabled,
 });

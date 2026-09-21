@@ -651,9 +651,14 @@ export function updateProject(projectId: string, input: UpdateProjectInput): Pro
 
 export function archiveProject(projectId: string, expectedVersion: number): Promise<{ project: ProjectRecord }> {
   const query = new URLSearchParams({ expectedVersion: String(expectedVersion) });
-  return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}?${query.toString()}`, {
-    method: "DELETE",
+  return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}/archive?${query.toString()}`, {
+    method: "POST",
   });
+}
+
+export function deleteProject(projectId: string, expectedVersion: number): Promise<{ deletedProjectId: string; workspaceCleanup: "queued"; cleanupCommandId: string }> {
+  const query = new URLSearchParams({ expectedVersion: String(expectedVersion) });
+  return apiJson(`/projects/${encodeURIComponent(projectId)}?${query.toString()}`, { method: "DELETE" });
 }
 
 export function createTask(input: CreateTaskInput): Promise<RelayTask> {

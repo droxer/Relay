@@ -59,8 +59,10 @@ ordered roster of Project Agents, and any number of Project Conversations.
 _Avoid_: Folder, Team
 
 **Project Agent**:
-A Logical Agent enlisted in a Project with a project-specific role, function,
-and responsibilities. A Project Agent is not a human Project Member.
+A Logical Agent enlisted in a Project with a project-specific role and
+responsibilities. The role is an orchestration directive (pipeline stage and
+phase); the responsibilities are the agent's outcome contract in prose. A
+Project Agent is not a human Project Member.
 _Avoid_: Project Member, collaborator
 
 **Project Conversation**:

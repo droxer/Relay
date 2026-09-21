@@ -22,7 +22,7 @@ def project_context(monkeypatch, tmp_path):
     _login_alice(client)
     created = client.post("/api/v1/projects", json={
         "name": "Execution policy", "daemonNodeId": node["id"], "leadAgentId": lead["id"],
-        "members": [dict(agentId=agent["id"], role="implementer", functionTitle=agent["displayName"],
+        "members": [dict(agentId=agent["id"], role="implementer",
                          responsibilities="Deliver", enabled=True) for agent in [lead, worker]],
     })
     assert created.status_code == 201, created.text
@@ -71,7 +71,7 @@ def test_project_task_cannot_select_a_disabled_project_member(project_context, e
 
 def close_project(client, project, state):
     if state == "archived":
-        response = client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1")
+        response = client.post(f"/api/v1/projects/{project['id']}/archive?expectedVersion=1")
     else:
         response = client.patch(f"/api/v1/projects/{project['id']}", json={"expectedVersion": 1, "enabled": False})
     assert response.status_code == 200, response.text

@@ -9,9 +9,9 @@ export interface ProjectEditConflict {
 
 export class ProjectEditError extends Error {}
 
-const memberFields = ["role", "functionTitle", "responsibilities", "instructions", "enabled"] as const;
+const memberFields = ["role", "responsibilities", "instructions", "enabled"] as const;
 const labels: Record<string, string> = {
-  functionTitle: "function_title", leadAgentId: "member_make_lead", enabled: "member_enabled",
+  leadAgentId: "member_make_lead", enabled: "member_enabled",
 };
 
 function normalizeMember(member: NonNullable<UpdateProjectInput["members"]>[number]): ProjectMember {
@@ -20,7 +20,7 @@ function normalizeMember(member: NonNullable<UpdateProjectInput["members"]>[numb
 }
 
 /** Reapply only the user's changes onto a freshly fetched revision. */
-export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput, latest: ProjectRecord) {
+export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput, latest: ProjectRecord, memberNames: Record<string, string> = {}) {
   if (latest.id !== base.id || latest.archivedAt || latest.enabled === false) {
     throw new ProjectEditError("project.edit_closed");
   }
@@ -28,8 +28,7 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
   const patch: UpdateProjectInput = { expectedVersion: latest.version };
   function displayValue(field: string, value: unknown): string {
     if (field === "leadAgentId" && value) {
-      return [...latest.members, ...base.members, ...(input.members ?? [])]
-        .find((member) => member.agentId === value)?.functionTitle ?? String(value);
+      return memberNames[String(value)] ?? String(value);
     }
     return String(value ?? "");
   }
@@ -67,14 +66,14 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
       }
       if (!original && saved) throw new ProjectEditError("project.edit_member_added");
       current.set(id, original && saved
-        ? mergeFields(original, member, saved, memberFields, member.functionTitle)
+        ? mergeFields(original, member, saved, memberFields, memberNames[member.agentId] ?? member.agentId)
         : member);
     }
     for (const [id, original] of before) {
       if (desired.has(id)) continue;
       const saved = current.get(id);
       if (saved && memberFields.some((field) => saved[field] !== original[field])) {
-        conflicts.push({ field: "member_remove", member: saved.functionTitle,
+        conflicts.push({ field: "member_remove", member: memberNames[saved.agentId] ?? saved.agentId,
           saved: memberFields.map((field) => String(saved[field] ?? "")).join(" · "), draft: "" });
       }
       current.delete(id);

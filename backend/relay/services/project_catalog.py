@@ -8,7 +8,6 @@ from ..persistence.project_store import ProjectValidationError
 
 PROJECT_NAME_MAX_LENGTH = 120
 PROJECT_MEMBER_MAX_COUNT = 32
-PROJECT_FUNCTION_TITLE_MAX_LENGTH = 120
 PROJECT_RESPONSIBILITIES_MAX_LENGTH = 4_000
 PROJECT_INSTRUCTIONS_MAX_LENGTH = 8_000
 
@@ -192,7 +191,6 @@ def _normalize_member(value: Any) -> dict[str, Any]:
     allowed = {
         "agentId",
         "role",
-        "functionTitle",
         "responsibilities",
         "instructions",
         "enabled",
@@ -209,11 +207,6 @@ def _normalize_member(value: Any) -> dict[str, Any]:
     member = {
         "agentId": agent_id,
         "role": role,
-        "functionTitle": _required_text(
-            value.get("functionTitle"),
-            "project_function_title_required",
-            max_length=PROJECT_FUNCTION_TITLE_MAX_LENGTH,
-        ),
         "responsibilities": _required_text(
             value.get("responsibilities"),
             "project_responsibilities_required",

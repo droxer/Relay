@@ -268,7 +268,6 @@ def test_project_task_keeps_the_project_workspace(monkeypatch) -> None:
                     {
                         "agentId": lead["id"],
                         "role": "planner",
-                        "functionTitle": "Lead",
                         "responsibilities": "Plan",
                     }
                 ],

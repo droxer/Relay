@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { rebaseProjectEdit } from "../src/lib/projectEdit";
 import type { ProjectMember, ProjectRecord, UpdateProjectInput } from "../src/types";
 
-const a: ProjectMember = { agentId: "a", role: "implementer", functionTitle: "A", responsibilities: "Build", enabled: true };
-const b: ProjectMember = { ...a, agentId: "b", functionTitle: "B" };
+const a: ProjectMember = { agentId: "a", role: "implementer", responsibilities: "Build", enabled: true };
+const b: ProjectMember = { ...a, agentId: "b" };
 const base = { id: "p", version: 1, name: "Project", enabled: true, members: [a, b], leadAgentId: "a" } as ProjectRecord;
 const latest = (patch: Partial<ProjectRecord> = {}): ProjectRecord => ({ ...base, version: 2, ...patch });
 const input = (patch: Partial<UpdateProjectInput> = {}): UpdateProjectInput => ({ expectedVersion: 1, members: base.members, leadAgentId: "a", ...patch });
@@ -52,7 +52,7 @@ describe("project edit reconciliation", () => {
 });
 
 it("identifies a conflicting lead change with a translated field and member names", () => {
-  const c = { ...a, agentId: "c", functionTitle: "C" };
-  const result = rebaseProjectEdit(base, input({ leadAgentId: "b" }), latest({ members: [a, b, c], leadAgentId: "c" }));
+  const c = { ...a, agentId: "c" };
+  const result = rebaseProjectEdit(base, input({ leadAgentId: "b" }), latest({ members: [a, b, c], leadAgentId: "c" }), { a: "A", b: "B", c: "C" });
   expect(result.conflicts).toEqual([{ field: "member_make_lead", member: undefined, saved: "C", draft: "B" }]);
 });

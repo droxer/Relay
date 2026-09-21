@@ -7,7 +7,7 @@ from relay.services.project_catalog import update_project_payload
 
 
 def member(agent_id, *, enabled=True):
-    return dict(agentId=agent_id, role="implementer", functionTitle=agent_id,
+    return dict(agentId=agent_id, role="implementer",
                 responsibilities="Build", enabled=enabled)
 
 

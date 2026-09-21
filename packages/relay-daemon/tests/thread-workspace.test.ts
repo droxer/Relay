@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -107,6 +107,41 @@ test("project workspace paths cannot traverse or escape through a symlink", () =
       () => manager.ensureSubpath("ses_one", "projects/linked"),
       /symbolic link|escapes the configured root/,
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("project deletion removes only its canonical workspace and is idempotent", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-project-delete-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    manager.ensureSubpath("project-one", "projects/project-one");
+    const other = manager.ensureSubpath("project-two", "projects/project-two");
+    manager.deleteProject("project-one", "projects/project-one");
+    manager.deleteProject("project-one", "projects/project-one");
+    assert.throws(() => realpathSync(join(root, "projects/project-one")), /ENOENT/);
+    assert.equal(realpathSync(other.hostPath), realpathSync(join(root, "projects/project-two")));
+    for (const path of ["", "projects", "projects/project-two", "../outside", root]) {
+      assert.throws(() => manager.deleteProject("project-one", path));
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("project deletion rejects symlink roots and does not follow child symlinks", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-project-delete-"));
+  const outside = mkdtempSync(join(tmpdir(), "relay-project-outside-"));
+  try {
+    const manager = new ThreadWorkspaceManager(root, "none");
+    mkdirSync(join(root, "projects"));
+    symlinkSync(outside, join(root, "projects/project-one"));
+    assert.throws(() => manager.deleteProject("project-one", "projects/project-one"), /symbolic link/);
+    rmSync(join(root, "projects/project-one"));
+    manager.ensureSubpath("project-one", "projects/project-one");
+    symlinkSync(outside, join(root, "projects/project-one/external"));
+    manager.deleteProject("project-one", "projects/project-one");
+    assert.equal(realpathSync(outside), realpathSync(outside));
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });

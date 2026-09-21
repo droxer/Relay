@@ -30,6 +30,7 @@ export function ProjectDrawer({
   project,
   onClose,
   onSaved,
+  onDeleted,
   layer,
 }: {
   open: boolean;
@@ -37,11 +38,12 @@ export function ProjectDrawer({
   project?: ProjectRecord | null;
   onClose: () => void;
   onSaved: (project: ProjectRecord) => void;
+  onDeleted?: () => void;
   layer?: number;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
-  const { createProjectMutation, updateProjectMutation, archiveProjectMutation } = useRelayMutations();
+  const { createProjectMutation, updateProjectMutation, archiveProjectMutation, deleteProjectMutation } = useRelayMutations();
   const [name, setName] = useState("");
   const [computerId, setComputerId] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function ProjectDrawer({
   const selectedComputerLabel = selectedComputer
     ? selectedComputer.displayName || selectedComputer.id
     : project?.computerId ?? "";
-  const busy = createProjectMutation.isPending || updateProjectMutation.isPending || archiveProjectMutation.isPending || projectSave.pending;
+  const busy = createProjectMutation.isPending || updateProjectMutation.isPending || archiveProjectMutation.isPending || deleteProjectMutation.isPending || projectSave.pending;
 
   useEffect(() => {
     if (!open) {
@@ -163,6 +165,24 @@ export function ProjectDrawer({
     }
   }
 
+  async function remove() {
+    if (!project || busy) return;
+    const accepted = await confirm({
+      title: t("project.delete_confirm_title", { project: project.name }),
+      message: t("project.delete_confirm_message"),
+      confirmLabel: t("project.delete"),
+      tone: "danger",
+    });
+    if (!accepted) return;
+    try {
+      await deleteProjectMutation.mutateAsync({ projectId: project.id, expectedVersion: project.version });
+      onClose();
+      onDeleted?.();
+    } catch {
+      // Preserve settings so the user can retry after resolving the error.
+    }
+  }
+
   return (
     <Drawer
       open={open}
@@ -235,8 +255,11 @@ export function ProjectDrawer({
           <div className="adm-drawer-section">
             <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
             <div className="adm-drawer-section-actions">
-              <Button type="button" variant="destructive" onClick={() => void archive()} loading={archiveProjectMutation.isPending} loadingLabel={t("project.archiving")} disabled={updateProjectMutation.isPending}>
+              <Button type="button" variant="destructive" onClick={() => void archive()} loading={archiveProjectMutation.isPending} loadingLabel={t("project.archiving")} disabled={busy || Boolean(project.archivedAt)}>
                 {t("project.archive")}
+              </Button>
+              <Button type="button" variant="destructive" onClick={() => void remove()} loading={deleteProjectMutation.isPending} loadingLabel={t("project.deleting")} disabled={busy}>
+                {t("project.delete")}
               </Button>
             </div>
           </div>
@@ -244,7 +267,7 @@ export function ProjectDrawer({
         {projectSave.error ? <p role="alert" className="text-destructive">{projectSave.error}</p> : null}
         <div className="adm-form-actions">
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" loading={createProjectMutation.isPending || projectSave.pending}>{t(project ? "project.save" : "project.create")}</Button>
+          <Button size="cta" type="submit" disabled={busy || Boolean(project?.archivedAt)} loading={createProjectMutation.isPending || projectSave.pending}>{t(project ? "project.save" : "project.create")}</Button>
         </div>
       </form>
     </Drawer>

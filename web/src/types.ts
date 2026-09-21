@@ -349,7 +349,6 @@ export interface TasksResponse {
 export interface ProjectMember {
   agentId: string;
   role: AgentRole;
-  functionTitle: string;
   responsibilities: string;
   instructions?: string;
   enabled: boolean;
@@ -382,7 +381,6 @@ export interface CreateProjectInput {
   members: Array<{
     agentId: string;
     role: AgentRole;
-    functionTitle: string;
     responsibilities: string;
     instructions?: string;
     enabled?: boolean;

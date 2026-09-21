@@ -507,6 +507,7 @@ export function ThreadsView({
         project={editingProject}
         onClose={() => setProjectDrawerOpen(false)}
         onSaved={(project) => onSelectProject(project.id)}
+        onDeleted={() => onSelectProject(null)}
       />
     </>
   );

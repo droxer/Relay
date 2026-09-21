@@ -51,6 +51,7 @@
     "team_lead_not_member": "團隊負責人必須是團隊成員。",
     "task_agent_and_team_conflict": "智能體與團隊只能選擇一個。",
     "save_project": "無法儲存專案。請檢查專案電腦與智能體角色後重試。",
+    "delete_project": "無法刪除專案。請重新整理後再試一次。",
     "archive_project": "無法封存專案。請重新整理後再試一次。"
   },
   "skip_to_content": "跳至內容",
@@ -82,6 +83,15 @@
     "resize_label": "調整側邊欄寬度"
   },
   "project": {
+    "delete": "刪除專案",
+    "deleting": "正在刪除…",
+    "delete_confirm_title": "永久刪除「{{project}}」？",
+    "delete_confirm_message": "這將永久刪除專案的所有任務、例行任務、對話和產物，並在所屬電腦連線後刪除工作區檔案。此操作無法復原。共用的代理程式和電腦會保留。",
+    "deleted": "專案已刪除",
+    "cleanup_queued": "工作區檔案清理已排入佇列，將在專案電腦連線後執行。",
+    "delete_active": "請先停止專案中所有正在執行的工作，再刪除專案。",
+    "delete_unavailable": "請更新或重新連接支援工作區刪除的專案電腦，然後重試。",
+
     "projects": "專案",
     "create": "建立專案",
     "name": "專案名稱",
@@ -92,10 +102,9 @@
     "members": "專案智能體",
     "member_count": "{{count}} 個智能體",
     "role": "專案角色",
-    "function_title": "專案職能",
     "responsibilities": "職責",
     "instructions": "專案指令（選填）",
-    "member_fields_required": "每個專案智能體都必須填寫職能與職責。",
+    "member_fields_required": "每個專案智能體都必須填寫職責。",
     "roles": {
       "implementer": "實作",
       "reviewer": "審查",

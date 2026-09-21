@@ -603,7 +603,7 @@ def session_belongs_to_sandbox(
 def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
     event_type = string_field(value, "type")
     command_id = string_field(value, "commandId")
-    if event_type in {"workspace.listing", "workspace.file", "workspace.error"}:
+    if event_type in {"workspace.listing", "workspace.file", "workspace.error", "workspace.deleted"}:
         agent_id = string_field(value, "agentId")
         path = string_field(value, "path")
         if not command_id:
@@ -616,6 +616,8 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             **({"agentId": agent_id} if agent_id else {}),
             "path": path,
         }
+        if event_type == "workspace.deleted":
+            return common
         if event_type == "workspace.listing":
             entries = value.get("entries")
             if not isinstance(value.get("exists"), bool) or not isinstance(

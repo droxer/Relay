@@ -51,6 +51,7 @@
     "team_lead_not_member": "团队负责人必须是团队成员。",
     "task_agent_and_team_conflict": "智能体和团队只能选择一个。",
     "save_project": "无法保存项目。请检查项目电脑与智能体角色后重试。",
+    "delete_project": "无法删除项目。请刷新后重试。",
     "archive_project": "无法归档项目。请刷新后重试。"
   },
   "skip_to_content": "跳至内容",
@@ -82,6 +83,15 @@
     "resize_label": "调整侧边栏宽度"
   },
   "project": {
+    "delete": "删除项目",
+    "deleting": "正在删除…",
+    "delete_confirm_title": "永久删除“{{project}}”？",
+    "delete_confirm_message": "这将永久删除项目的所有任务、例行任务、对话和产物，并在所属电脑连接后删除工作区文件。此操作无法撤销。共享的智能体和电脑会保留。",
+    "deleted": "项目已删除",
+    "cleanup_queued": "工作区文件清理已排队，将在项目电脑连接后执行。",
+    "delete_active": "请先停止项目中所有正在运行的工作，再删除项目。",
+    "delete_unavailable": "请更新或重新连接支持工作区删除的项目电脑，然后重试。",
+
     "projects": "项目",
     "create": "创建项目",
     "edit": "项目设置",
@@ -99,10 +109,9 @@
     "members": "项目智能体",
     "member_count": "{{count}} 个智能体",
     "role": "项目角色",
-    "function_title": "项目职能",
     "responsibilities": "职责",
     "instructions": "项目指令（可选）",
-    "member_fields_required": "每个项目智能体都必须填写职能与职责。",
+    "member_fields_required": "每个项目智能体都必须填写职责。",
     "roles": {
       "implementer": "实现",
       "reviewer": "审查",

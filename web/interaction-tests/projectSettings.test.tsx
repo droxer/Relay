@@ -9,6 +9,7 @@ vi.mock("../src/api", async (original) => ({ ...await original<typeof import("..
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   updateProjectMutation: { isPending: false, mutateAsync: update },
   createProjectMutation: { isPending: false, mutateAsync: create },
+  deleteProjectMutation: { isPending: false, mutateAsync: vi.fn() },
   archiveProjectMutation: { isPending: false, mutateAsync: archive },
 }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));

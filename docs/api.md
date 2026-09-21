@@ -245,7 +245,6 @@ POST /api/v1/projects
   "members": [{
     "agentId": "agent-id",
     "role": "planner",
-    "functionTitle": "Technical lead",
     "responsibilities": "Plan and accept delivery",
     "instructions": "Optional project-only instructions"
   }]
@@ -253,6 +252,7 @@ POST /api/v1/projects
 
 GET    /api/v1/projects/{id}
 PATCH  /api/v1/projects/{id}     { expectedVersion, name?, leadAgentId?, members?, enabled? }
+POST   /api/v1/projects/{id}/archive?expectedVersion={version}
 DELETE /api/v1/projects/{id}?expectedVersion={version}
 GET    /api/v1/projects/{id}/workspace/files?path={relativePath}
 GET    /api/v1/projects/{id}/workspace/file?path={relativePath}
@@ -278,6 +278,25 @@ threads, user task mutations, starts, and routine promotion. Schedules do not
 advance while the project is closed. Historical tasks, threads, events, and
 workspace files remain readable; already admitted runs can finish and record
 results. Project settings can re-enable a disabled project; archival is final.
+Use `POST /projects/{id}/archive` to archive; `DELETE` now permanently deletes.
+Deletion requires the project owner and its current `expectedVersion`, including
+for an archived project. It removes the project, roster, tasks (including routines
+and occurrences), threads, their event histories and stored artifacts. Links from
+other tasks and chat conversation bindings to the deleted threads are removed.
+Shared agents and the Computer remain. Normal thread-deletion audit records and
+historical usage accounting retain their existing retention policy.
+
+Deletion returns `{ deletedProjectId, workspaceCleanup: "queued", cleanupCommandId }`.
+The owning Computer must advertise `project-workspace-delete`; otherwise deletion
+returns `409 project_cleanup_unavailable`. Active execution or dispatch claims
+return `409 project_execution_active` without deleting any records. Database
+records are deleted atomically. Workspace cleanup is durable and runs when that
+Computer polls, including after an offline interval; I/O failures or lost
+acknowledgements leave the command eligible for retry. Local command storage
+additionally refuses delivery if the project still exists after a rollback.
+The daemon removes only `projects/{projectId}` and refuses symlink or escaping
+roots. Upgrade the daemon before using permanent project deletion.
+
 Employees with active projects cannot be soft-deleted. After all their projects
 are archived, employee soft deletion is allowed and retains the project history.
 

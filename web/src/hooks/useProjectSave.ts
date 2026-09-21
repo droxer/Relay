@@ -10,7 +10,7 @@ import type { ProjectRecord, UpdateProjectInput } from "../types";
 type Save = (args: { projectId: string; input: UpdateProjectInput }) => Promise<{ project: ProjectRecord }>;
 
 /** A bounded, explicitly confirmed retry; never overwrite a whole stale roster. */
-export function useProjectSave(mutate: Save) {
+export function useProjectSave(mutate: Save, memberNames: Record<string, string> = {}) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const locked = useRef(false);
@@ -29,7 +29,7 @@ export function useProjectSave(mutate: Save) {
         if (!(cause instanceof RelayApiError) || cause.code !== "project_version_conflict") throw cause;
       }
       const { project: latest } = await getProject(base.id);
-      const { patch, conflicts } = rebaseProjectEdit(base, input, latest);
+      const { patch, conflicts } = rebaseProjectEdit(base, input, latest, memberNames);
       const details = conflicts.map(({ field, member, saved, draft }) => (
         `${member ? `${member} · ` : ""}${t(`project.${field}`)}: ${saved} → ${draft}`
       )).join("\n");
