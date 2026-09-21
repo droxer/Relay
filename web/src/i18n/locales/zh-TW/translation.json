@@ -192,7 +192,14 @@
     "choose": "選擇專案",
     "required": "建立任務前請選擇專案。",
     "grouped_tasks": "依專案分組的任務",
-    "no_tasks": "尚無任務"
+    "no_tasks": "尚無任務",
+    "edit_conflict_title": "專案已變更",
+    "edit_conflict_message": "草稿已保留。要基於最新專案儲存你的修改嗎？其他修改將保留。下方重疊欄位顯示：已儲存的值 → 你的值。",
+    "edit_conflict_retry": "儲存我的修改",
+    "edit_conflict_again": "專案再次發生變更。草稿已保留；再次儲存以查看最新修改。",
+    "edit_closed": "專案已封存或停用。草稿已保留，但無法儲存。",
+    "edit_member_removed": "編輯期間該成員已被移除。草稿已保留；如有需要，請關閉編輯器後重新新增成員。",
+    "edit_member_added": "編輯期間該智能體已被新增。草稿已保留；請開啟現有成員進行編輯。"
   },
   "thread": {
     "back_to_project_activities": "返回專案動態",

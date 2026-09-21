@@ -634,6 +634,10 @@ export function listProjects(signal?: AbortSignal): Promise<ProjectsResponse> {
   return apiJson<ProjectsResponse>("/projects", { signal });
 }
 
+export function getProject(projectId: string): Promise<{ project: ProjectRecord }> {
+  return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}`);
+}
+
 export function createProject(input: CreateProjectInput): Promise<{ project: ProjectRecord }> {
   return apiJson<{ project: ProjectRecord }>("/projects", { method: "POST", body: input });
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
@@ -94,7 +95,8 @@ export function ProjectMemberEditor({
   const functionTitleRef = useRef<HTMLInputElement>(null);
   const responsibilitiesRef = useRef<HTMLTextAreaElement>(null);
   const initializedKeyRef = useRef<string | null>(null);
-  const initialVersionRef = useRef(project.version);
+  const initialProjectRef = useRef(project);
+  const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
   const initialDraftKeyRef = useRef(draftKey(EMPTY_DRAFT));
   const agentLabelId = useId();
   const roleLabelId = useId();
@@ -123,7 +125,7 @@ export function ProjectMemberEditor({
   ];
   const roster = useRosterTabs({ tabs: rosterTabs, activeTab: "agents", label: t("project.member_agent") });
 
-  const busy = updateProjectMutation.isPending;
+  const busy = updateProjectMutation.isPending || projectSave.pending;
 
   useEffect(() => {
     if (!open) {
@@ -133,7 +135,8 @@ export function ProjectMemberEditor({
     const initializationKey = member ? `${project.id}:${member.agentId}` : `${project.id}:new`;
     if (initializedKeyRef.current === initializationKey) return;
     initializedKeyRef.current = initializationKey;
-    initialVersionRef.current = project.version;
+    initialProjectRef.current = project;
+    projectSave.resetError();
     const initial = member
       ? {
           agentId: member.agentId,
@@ -179,6 +182,7 @@ export function ProjectMemberEditor({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     if (!member && !draft.agentId) {
       setAgentError(t("project.member_choose_required"));
       agentTriggerRef.current?.focus();
@@ -202,29 +206,25 @@ export function ProjectMemberEditor({
       ...(draft.instructions.trim() ? { instructions: draft.instructions.trim() } : {}),
       enabled: draft.enabled,
     };
-    const base = rosterPayload(project);
+    const baseProject = initialProjectRef.current;
+    const base = rosterPayload(baseProject);
     const members = member
       ? base.map((item) => (item.agentId === member.agentId ? payload : item))
       : [...base, payload];
     const leadAgentId = draft.lead
       ? draft.agentId
-      : project.leadAgentId === draft.agentId
+      : baseProject.leadAgentId === draft.agentId
         ? null
-        : project.leadAgentId;
+        : baseProject.leadAgentId;
     if (members.length && !members.some((item) => item.agentId === leadAgentId && item.enabled)) {
       setLeadError(t("project.member_lead_required"));
       return;
     }
     setLeadError(null);
-    try {
-      await updateProjectMutation.mutateAsync({
-        projectId: project.id,
-        input: { expectedVersion: initialVersionRef.current, leadAgentId, members },
-      });
-      onClose();
-    } catch {
-      // The shared mutation handler announces the server error; preserve the form.
-    }
+    const result = await projectSave.save(baseProject, {
+      expectedVersion: baseProject.version, leadAgentId, members,
+    });
+    if (result) onClose();
   }
 
   async function remove() {
@@ -237,24 +237,20 @@ export function ProjectMemberEditor({
       tone: "danger",
     });
     if (!accepted) return;
-    const members = rosterPayload(project).filter((item) => item.agentId !== member.agentId);
-    const leadAgentId = project.leadAgentId === member.agentId
+    const baseProject = initialProjectRef.current;
+    const members = rosterPayload(baseProject).filter((item) => item.agentId !== member.agentId);
+    const leadAgentId = baseProject.leadAgentId === member.agentId
       ? members.find((item) => item.enabled)?.agentId ?? null
-      : project.leadAgentId;
+      : baseProject.leadAgentId;
     if (members.length && !members.some((item) => item.agentId === leadAgentId && item.enabled)) {
       setLeadError(t("project.member_lead_required"));
       return;
     }
     setLeadError(null);
-    try {
-      await updateProjectMutation.mutateAsync({
-        projectId: project.id,
-        input: { expectedVersion: initialVersionRef.current, leadAgentId, members },
-      });
-      onClose();
-    } catch {
-      // The shared mutation handler announces the error and keeps the drawer open.
-    }
+    const result = await projectSave.save(baseProject, {
+      expectedVersion: baseProject.version, leadAgentId, members,
+    });
+    if (result) onClose();
   }
 
   return (
@@ -400,6 +396,7 @@ export function ProjectMemberEditor({
           </div>
         ) : null}
 
+        {projectSave.error ? <p role="alert" className="text-destructive">{projectSave.error}</p> : null}
         {leadError ? <p role="alert" className="text-destructive">{leadError}</p> : null}
 
         <div className="adm-form-actions">

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
@@ -50,7 +51,8 @@ export function ProjectDrawer({
   const computerLabelId = useId();
   const initializedKeyRef = useRef<string | null>(null);
   const initialDraftKeyRef = useRef(projectDraftKey("", ""));
-  const initialVersionRef = useRef(project?.version);
+  const initialProjectRef = useRef(project);
+  const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
   const projectComputers = useMemo(
     () => computers.filter((computer) => computer.capabilities?.includes("project-workspaces")),
     [computers],
@@ -68,7 +70,7 @@ export function ProjectDrawer({
   const selectedComputerLabel = selectedComputer
     ? selectedComputer.displayName || selectedComputer.id
     : project?.computerId ?? "";
-  const busy = createProjectMutation.isPending || updateProjectMutation.isPending || archiveProjectMutation.isPending;
+  const busy = createProjectMutation.isPending || updateProjectMutation.isPending || archiveProjectMutation.isPending || projectSave.pending;
 
   useEffect(() => {
     if (!open) {
@@ -78,7 +80,8 @@ export function ProjectDrawer({
     const initializationKey = project?.id ?? "new";
     if (initializedKeyRef.current === initializationKey) return;
     initializedKeyRef.current = initializationKey;
-    initialVersionRef.current = project?.version;
+    initialProjectRef.current = project;
+    projectSave.resetError();
     if (!project) {
       reset();
       initialDraftKeyRef.current = projectDraftKey("", "");
@@ -108,6 +111,7 @@ export function ProjectDrawer({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     if (!name.trim()) {
       setNameError(t("project.name_required"));
       nameRef.current?.focus();
@@ -120,9 +124,8 @@ export function ProjectDrawer({
     }
     try {
       const result = project
-        ? await updateProjectMutation.mutateAsync({
-            projectId: project.id,
-            input: { expectedVersion: initialVersionRef.current ?? project.version, name: name.trim() },
+        ? await projectSave.save(initialProjectRef.current ?? project, {
+            expectedVersion: (initialProjectRef.current ?? project).version, name: name.trim(),
           })
         : await createProjectMutation.mutateAsync({
             name: name.trim(),
@@ -130,6 +133,7 @@ export function ProjectDrawer({
             leadAgentId: null,
             members: [],
           });
+      if (!result) return;
       onClose();
       onSaved(result.project);
     } catch {
@@ -151,6 +155,7 @@ export function ProjectDrawer({
         projectId: project.id,
         expectedVersion: project.version,
       });
+      if (!result) return;
       onClose();
       onSaved(result.project);
     } catch {
@@ -236,9 +241,10 @@ export function ProjectDrawer({
             </div>
           </div>
         ) : null}
+        {projectSave.error ? <p role="alert" className="text-destructive">{projectSave.error}</p> : null}
         <div className="adm-form-actions">
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" loading={createProjectMutation.isPending || updateProjectMutation.isPending}>{t(project ? "project.save" : "project.create")}</Button>
+          <Button size="cta" type="submit" loading={createProjectMutation.isPending || projectSave.pending}>{t(project ? "project.save" : "project.create")}</Button>
         </div>
       </form>
     </Drawer>
