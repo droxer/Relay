@@ -554,7 +554,7 @@ def create_session(
         session_computer_id = resolve_computer_id(node)
     else:
         node = None
-    project = project_for_owner(ctx, project_id, owner) if project_id and owner else None
+    project = project_for_owner(ctx, project_id, owner, require_enabled=True) if project_id and owner else None
     project_fields: dict[str, Any] = {}
     if project:
         ensure_project_node_matches(project, node)

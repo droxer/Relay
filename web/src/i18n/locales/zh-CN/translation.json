@@ -202,7 +202,14 @@
     "choose": "选择项目",
     "required": "创建任务前请选择项目。",
     "grouped_tasks": "按项目分组的任务",
-    "no_tasks": "暂无任务"
+    "no_tasks": "暂无任务",
+    "edit_conflict_title": "项目已更改",
+    "edit_conflict_message": "草稿已保留。要基于最新项目保存你的修改吗？其他修改将保留。下方重叠字段显示：已保存的值 → 你的值。",
+    "edit_conflict_retry": "保存我的修改",
+    "edit_conflict_again": "项目再次发生更改。草稿已保留；再次保存以查看最新修改。",
+    "edit_closed": "项目已归档或停用。草稿已保留，但无法保存。",
+    "edit_member_removed": "编辑期间该成员已被移除。草稿已保留；如有需要，请关闭编辑器后重新添加成员。",
+    "edit_member_added": "编辑期间该智能体已被添加。草稿已保留；请打开现有成员进行编辑。"
   },
   "thread": {
     "back_to_project_activities": "返回项目动态",

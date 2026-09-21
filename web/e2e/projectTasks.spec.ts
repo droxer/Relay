@@ -137,3 +137,46 @@ test("creating the first project preserves a global task draft", async ({ page }
   await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
   await expect(page.locator("#backlog-panel").getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
 });
+
+test("renaming without a runtime node recovers from a concurrent project edit", async ({ page }) => {
+  const stamp = "2026-09-01T00:00:00Z";
+  let project = { id: "edit-project", name: "Original project", ownerEmployeeId: "u", computerId: "node:gone",
+    enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project",
+    workspaceSubpath: "projects/edit-project", createdAt: stamp, updatedAt: stamp };
+  const patches: Array<{ expectedVersion: number; name: string }> = [];
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let status = 200;
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [], sandboxes: [], skills: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Editor", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/projects/edit-project")) {
+      if (route.request().method() === "PATCH") {
+        const input = route.request().postDataJSON();
+        patches.push(input);
+        if (patches.length === 1) {
+          project = { ...project, name: "Concurrent name", version: 2 };
+          status = 409;
+          body = { detail: "project_version_conflict" };
+        } else {
+          expect(input.expectedVersion).toBe(2);
+          project = { ...project, name: input.name, version: 3 };
+          body = { project };
+        }
+      } else body = { project };
+    }
+    await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/projects/edit-project");
+  await page.getByRole("button", { name: "Project settings", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Project settings", exact: true });
+  await editor.getByRole("textbox", { name: "Project name", exact: true }).fill("My project name");
+  await editor.getByRole("button", { name: "Save project", exact: true }).click();
+  const conflict = page.getByRole("alertdialog", { name: "Project changed", exact: true });
+  await expect(conflict).toContainText("Concurrent name");
+  await expect(page.locator('input[name="project-name"]')).toHaveValue("My project name");
+  await expect(page.getByRole("region", { name: "Notifications" }).getByRole("dialog")).toHaveCount(0);
+  await conflict.getByRole("button", { name: "Save my changes", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "My project name", exact: true })).toBeVisible();
+  expect(patches).toEqual([{ expectedVersion: 1, name: "My project name" }, { expectedVersion: 2, name: "My project name" }]);
+});
