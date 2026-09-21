@@ -300,7 +300,12 @@ export function useRelayMutations() {
       cacheProject(project);
       void invalidateProjects();
     },
-    onError: onRelayError("Failed to update project", "errors.save_project"),
+    onError: (error) => {
+      // Project editors reconcile version conflicts and show a confirmation.
+      // A generic failure toast here incorrectly blames the computer/roster.
+      if (error instanceof RelayApiError && error.code === "project_version_conflict") return;
+      onRelayError("Failed to update project", "errors.save_project")(error);
+    },
   });
 
   const archiveProjectMutation = useMutation({

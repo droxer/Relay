@@ -11,7 +11,7 @@ export class ProjectEditError extends Error {}
 
 const memberFields = ["role", "functionTitle", "responsibilities", "instructions", "enabled"] as const;
 const labels: Record<string, string> = {
-  functionTitle: "function_title", leadAgentId: "lead", enabled: "member_enabled",
+  functionTitle: "function_title", leadAgentId: "member_make_lead", enabled: "member_enabled",
 };
 
 function normalizeMember(member: NonNullable<UpdateProjectInput["members"]>[number]): ProjectMember {
@@ -26,6 +26,13 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
   }
   const conflicts: ProjectEditConflict[] = [];
   const patch: UpdateProjectInput = { expectedVersion: latest.version };
+  function displayValue(field: string, value: unknown): string {
+    if (field === "leadAgentId" && value) {
+      return [...latest.members, ...base.members, ...(input.members ?? [])]
+        .find((member) => member.agentId === value)?.functionTitle ?? String(value);
+    }
+    return String(value ?? "");
+  }
   function mergeFields<T extends object, K extends keyof T>(
     before: T, desired: T, current: T, fields: readonly K[], member?: string,
   ): T {
@@ -34,7 +41,7 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
       if (desired[field] === before[field]) continue;
       if (current[field] !== before[field] && current[field] !== desired[field]) {
         conflicts.push({ field: labels[String(field)] ?? String(field), member,
-          saved: String(current[field] ?? ""), draft: String(desired[field] ?? "") });
+          saved: displayValue(String(field), current[field]), draft: displayValue(String(field), desired[field]) });
       }
       merged[field] = desired[field];
     }
