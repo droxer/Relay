@@ -24,7 +24,7 @@ import { pathForAppState } from "../../lib/appRoute";
 export function hrefForTaskRecord(taskId: string): string {
   return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
 }
-import { TaskAssignee, TaskExecutionBadge } from "../TaskAssignee";
+import { TaskAssignee } from "../TaskAssignee";
 import { Button } from "@/components/ui/button";
 import { StateMark } from "../StateMark";
 import { SortableColumnHeader } from "@/components/ui/SortableColumnHeader";
@@ -53,8 +53,6 @@ export function BacklogTaskCard({
   task,
   projectName,
   ready,
-  assigneeDisplayName,
-  assigneeIsSelf,
   agentDisplayName,
   selected,
   onToggleSelect,
@@ -67,8 +65,6 @@ export function BacklogTaskCard({
   task: RelayTaskListItem;
   projectName?: string;
   ready: boolean;
-  assigneeDisplayName?: string;
-  assigneeIsSelf?: boolean;
   agentDisplayName?: string;
   selected: boolean;
   onToggleSelect: () => void;
@@ -82,9 +78,6 @@ export function BacklogTaskCard({
   const { t } = useTranslation();
   const tone = dueTone(task);
   const age = taskWorkAgeDays(task);
-  // Nothing is assigned yet: the empty dashed slot said so with a glyph that
-  // named nobody, on the one lane where unassigned is the normal condition.
-  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
 
   return (
     <article
@@ -129,17 +122,7 @@ export function BacklogTaskCard({
           <div className="backlog-meta">
             <PriorityBadge priority={task.priority} />
             {age !== null ? <span className="tnum">{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}
-            {assigned ? (
-              <span className="backlog-agent">
-                <TaskExecutionBadge task={task} ready={ready} displayName={agentDisplayName} />
-                {/* The badge already announces "<name> · <availability>" to
-                    assistive tech; this is the same string made visible. */}
-                {agentDisplayName ? <span className="backlog-agent-name" aria-hidden="true">{agentDisplayName}</span> : null}
-              </span>
-            ) : null}
-            {assigneeIsSelf ? null : (
-              <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} showAgent={false} />
-            )}
+            <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} />
             {task.dueDate ? (
               <span className={cn("backlog-due", tone !== "neutral" && tone)}>
                 <ActionCalendar size={ICON.sm} />
@@ -228,8 +211,6 @@ export function BacklogTaskRow({
   session,
   routineTitle,
   ready,
-  assigneeDisplayName,
-  assigneeIsSelf,
   agentDisplayName,
   canDiscuss,
   selected,
@@ -250,8 +231,6 @@ export function BacklogTaskRow({
   /** Title of the routine this task was promoted from, when it was. */
   routineTitle?: string;
   ready: boolean;
-  assigneeDisplayName?: string;
-  assigneeIsSelf?: boolean;
   agentDisplayName?: string;
   canDiscuss: boolean;
   selected: boolean;
@@ -336,7 +315,7 @@ export function BacklogTaskRow({
         ) : null}
       </TableCell>
       <TableCell className="backlog-row-assignee">
-        <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} assigneeIsSelf={assigneeIsSelf} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} />
+        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} />
       </TableCell>
       {!compact ? <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>

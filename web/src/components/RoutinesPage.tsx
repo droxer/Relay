@@ -10,8 +10,7 @@ import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
-import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
-import { useEmployeeNames } from "../hooks/useEmployeeNames";
+import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -70,7 +69,6 @@ interface RoutinesPageProps {
 export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenRecord, tasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
-  const employeeNames = useEmployeeNames(currentUser);
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
   const {
@@ -102,8 +100,8 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
      (enabled first, then next run) stands — schedule health is the rail's
      dimension, not a column, so no comparator reads it. */
   const sortColumns = useMemo(
-    () => routineSortColumns((task) => taskAssigneeDisplayName(task, currentUser, employeeNames) ?? ""),
-    [currentUser, employeeNames],
+    () => routineSortColumns((task) => taskAssigneeLabel(task, taskAgentDisplayName(task, logicalAgents, teams), t)),
+    [logicalAgents, teams, t],
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { page, setPage } = usePagination();
@@ -273,7 +271,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       };
     }
     return {
-      name: logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.displayName,
+      name: taskAgentDisplayName(task, logicalAgents, teams),
       ready: agentReadyForTask(task, nodes, logicalAgents),
     };
   }
@@ -424,8 +422,6 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
                       selected={visibleSelection.has(task.id)}
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                       state={routineState(task, runningIds)}
-                      assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                      assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
                       agentDisplayName={assignment.name}
                       ready={assignment.ready}
                       {...routineHandlers(task)}

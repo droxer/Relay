@@ -479,18 +479,18 @@
 
 
 @media (max-width: 900px) {
+  /* Keep the assigned agent visible at tablet widths too. */
   .backlog-row-assignee,
-  .backlog-rows-head-assignee { display: none; }
-  /* The row's dot still carries the outcome, so the file count is the losable
-     half of the result — it goes with the assignee on the backlog's own tier. */
+  .backlog-rows-head-assignee { width: 140px; }
+  /* The row's dot still carries the outcome without the file count. */
   .backlog-row-files { display: none; }
 }
 
 /* ── Mobile: rebuild the flex table row (≈640px of fixed cells, can't fit a
    phone) as a stacked card. A flex-wrap layout (not grid) sidesteps track
    collapse from the overflow:hidden cells. This block sits AFTER the
-   progressive column-hides above (status ≤1100, assignee ≤900) so it wins the
-   cascade and restores them — the card has room for the full record:
+   reference/file-count hides above so it wins the cascade where needed —
+   the card has room for the full record:
    line 1 = title (wraps to 2), line 2 = priority · status · due · assignee,
    line 3 = actions. Column headers are meaningless here, so hide them. */
 @media (max-width: 820px) {
@@ -536,15 +536,14 @@
     line-height: var(--leading-snug);
   }
 
-  /* Line 2: priority · status · due, with the assignee chip pushed right.
-     Restored (the ≤1100/≤900 hides above only make sense for the flex table). */
+  /* Line 2: priority · status · due, with the assignee chip pushed right. */
   .backlog-row-tags     { flex: 0 0 auto; width: auto; }
   .backlog-row-due      { flex: 0 0 auto; width: auto; }
   .backlog-row-files    { display: inline; }
   /* The agent readiness pip is absolutely positioned 3px past the badge's
      right edge; without clearance it kisses the card boundary. Nudge the whole
      assignee cell in so the pip has room to breathe. */
-  .backlog-row-assignee { flex: 0 0 auto; display: inline-flex; width: auto; margin-left: auto; padding-inline-end: var(--sp-1); }
+  .backlog-row-assignee { flex: 0 0 auto; display: inline-flex; width: auto; max-width: 100%; margin-left: auto; padding-inline-end: var(--sp-1); }
 
   /* Line 3: actions on their own row, left-aligned with comfortable targets. */
   .backlog-row-actions {

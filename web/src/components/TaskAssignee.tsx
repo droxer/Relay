@@ -2,64 +2,30 @@ import type { LogicalAgentAvailability, RelayTaskListItem } from "../types";
 import { cn } from "@/lib/utils";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { IdentityMark } from "./IdentityMark";
-import { UNRESOLVED_EMPLOYEE_ID } from "../lib/taskAssignment";
+import { taskAssigneeLabel } from "../lib/taskAssignment";
 import { useTranslation } from "react-i18next";
 
-/**
- * Identity chip for a task's assignee: the owning employee's initial, their
- * handle, and — optionally — the assigned agent glyph.
- *
- * The avatar is neutral: an initial on the chip surface, no per-name hue. The
- * name beside it identifies the person, and colour stays reserved for live
- * agent work.
- */
-
-function initialFor(name: string): string {
-  const trimmed = name.trim();
-  return trimmed ? trimmed[0]!.toUpperCase() : "?";
-}
-
+/** Every task shows its assigned agent/team as a visible name. */
 export function TaskAssignee({
   task,
   ready,
   availability,
-  unassignedLabel,
-  assigneeDisplayName,
   agentDisplayName,
-  showAgent = true,
-  assigneeIsSelf = false,
 }: {
   task: RelayTaskListItem;
   ready: boolean;
   availability?: LogicalAgentAvailability;
-  unassignedLabel: string;
-  assigneeDisplayName?: string;
   agentDisplayName?: string;
-  showAgent?: boolean;
-  /** On personal views, hide the employee chip when it's the viewer — the
-   *  executor glyph carries the assignee instead. */
-  assigneeIsSelf?: boolean;
 }) {
   const { t } = useTranslation();
-  /* A directory miss arrives as the raw employee UUID (see
-     taskAssigneeDisplayName's fallback). The team branch of the badge below
-     already substitutes a label for exactly this case — the person gets the
-     same courtesy, with no avatar monogram for a name nobody has. */
-  const unresolved = assigneeDisplayName ? UNRESOLVED_EMPLOYEE_ID.test(assigneeDisplayName) : false;
-  const assigned = Boolean(assigneeDisplayName);
-  const name = unresolved ? t("backlog.assignee_unknown") : assigneeDisplayName ?? unassignedLabel;
-
+  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
+  const name = taskAssigneeLabel(task, agentDisplayName, t);
   return (
     <span className="task-assignee" translate="no" data-unassigned={assigned ? "false" : "true"}>
-      {assigneeIsSelf ? null : (
-        <>
-          <span className="task-assignee-avatar" aria-hidden="true">
-            {assigned && !unresolved ? initialFor(name) : null}
-          </span>
-          <span className="task-assignee-name">{name}</span>
-        </>
-      )}
-      {showAgent ? <TaskExecutionBadge task={task} ready={ready} availability={availability} displayName={agentDisplayName} /> : null}
+      {assigned && (task.assignedAgent || task.assignedTeamId) ? (
+        <TaskExecutionBadge task={task} ready={ready} availability={availability} displayName={agentDisplayName} />
+      ) : null}
+      <span className="task-assignee-name" title={name}>{name}</span>
     </span>
   );
 }

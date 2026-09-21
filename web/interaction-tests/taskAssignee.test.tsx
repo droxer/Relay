@@ -30,3 +30,15 @@ for (const view of ["card", "row"] as const) {
     expect(container.querySelectorAll(".task-assignee-name")).toHaveLength(1);
   });
 }
+
+it.each(["ready", "busy", "offline", "pending"] as const)(
+  "keeps the team name visible while availability is %s", async (availability) => {
+    const { TaskAssignee } = await import("../src/components/TaskAssignee");
+    const { container } = render(<TaskAssignee
+      task={{ assignedTeamId: "team-1" } as RelayTaskListItem}
+      ready={availability === "ready"} availability={availability}
+      agentDisplayName="Builders" />);
+    expect(container.querySelector(".task-assignee-name")?.textContent).toBe("Builders");
+    expect(container.querySelector(".agent-state")?.getAttribute("title")).toContain(`status.${availability}`);
+  },
+);

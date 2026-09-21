@@ -30,9 +30,8 @@ import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
-import { isTaskAssigneeCurrentUser, taskAssigneeDisplayName, teamReady } from "../lib/taskAssignment";
+import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem, type TaskStatus } from "../types";
-import { useEmployeeNames } from "../hooks/useEmployeeNames";
 import { useEdgeAutoScroll } from "../hooks/useEdgeAutoScroll";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useTouchTaskDrag } from "../hooks/useTouchTaskDrag";
@@ -105,7 +104,6 @@ function dragGhostStyle(point: DragPoint): CSSProperties {
 export function BacklogPage({ projectId, projectNotice, onSelectProject, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
-  const employeeNames = useEmployeeNames(currentUser);
   const { t } = useTranslation();
   const { announce, confirm, prompt } = useDialogs();
   const {
@@ -172,8 +170,8 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
      (priority, then due date, then recency) survives untouched until the
      reader asks for something else. */
   const sortColumns = useMemo(
-    () => backlogSortColumns((task) => taskAssigneeDisplayName(task, currentUser, employeeNames) ?? ""),
-    [currentUser, employeeNames],
+    () => backlogSortColumns((task) => taskAssigneeLabel(task, taskAgentDisplayName(task, logicalAgents, teams), t)),
+    [logicalAgents, teams, t],
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
@@ -279,7 +277,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
       };
     }
     return {
-      name: logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.displayName,
+      name: taskAgentDisplayName(task, logicalAgents, teams),
       ready: agentReadyForTask(task, nodes, logicalAgents),
     };
   }
@@ -525,8 +523,6 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
                   routineTitle={task.sourceRoutineId ? routineTitles.get(task.sourceRoutineId) : undefined}
                   selected={visibleSelection.has(task.id)}
                   onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                  assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                  assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
                   agentDisplayName={assignment.name}
                   ready={assignment.ready}
                   canDiscuss={canDiscussTask(task) && discussionAgents.length > 0}
@@ -572,8 +568,6 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
                       projectName={projects.find((project) => project.id === task.projectId)?.name}
                       selected={visibleSelection.has(task.id)}
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                      assigneeDisplayName={taskAssigneeDisplayName(task, currentUser, employeeNames)}
-                      assigneeIsSelf={isTaskAssigneeCurrentUser(task, currentUser)}
                       agentDisplayName={assignment.name}
                       ready={assignment.ready}
                       dragging={draggedTaskId === task.id}

@@ -140,8 +140,6 @@ export function RoutineRow({
   task,
   state,
   ready,
-  assigneeDisplayName,
-  assigneeIsSelf,
   agentDisplayName,
   selected,
   onToggleSelect,
@@ -154,8 +152,6 @@ export function RoutineRow({
   task: RelayTaskListItem;
   state: RoutineState;
   ready: boolean;
-  assigneeDisplayName?: string;
-  assigneeIsSelf?: boolean;
   agentDisplayName?: string;
   selected: boolean;
   onToggleSelect: () => void;
@@ -212,7 +208,7 @@ export function RoutineRow({
         />
       </TableCell>
       <TableCell className="backlog-row-assignee">
-        <TaskAssignee task={task} ready={ready} assigneeDisplayName={assigneeDisplayName} assigneeIsSelf={assigneeIsSelf} agentDisplayName={agentDisplayName} unassignedLabel={t("backlog.unassigned")} />
+        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} />
       </TableCell>
       <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>

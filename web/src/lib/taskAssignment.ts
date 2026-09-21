@@ -1,4 +1,4 @@
-import type { AgentTeam, CurrentUser, LogicalAgentAvailability } from "../types.js";
+import type { AgentTeam, CurrentUser, EmployeeAgent, LogicalAgentAvailability, RelayTaskListItem } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 
 /** Can this agent/team be offered for a task assigned to `assigneeEmployeeId`?
@@ -81,4 +81,24 @@ export function isTaskAssigneeCurrentUser(
   const employeeId = task.assigneeEmployeeId ?? task.ownerEmployeeId;
   if (!employeeId) return false;
   return employeeId === currentUser.employeeId || employeeId === currentUser.id;
+}
+
+/** Resolve execution identity independently of the employee responsible for the task. */
+export function taskAgentDisplayName(
+  task: RelayTaskListItem,
+  agents: readonly Pick<EmployeeAgent, "id" | "displayName">[],
+  teams: readonly Pick<AgentTeam, "id" | "name">[],
+): string | undefined {
+  if (task.assignedTeamId) return teams.find((team) => team.id === task.assignedTeamId)?.name;
+  return agents.find((agent) => agent.id === task.assignedAgentId)?.displayName;
+}
+
+export function taskAssigneeLabel(
+  task: RelayTaskListItem,
+  resolvedName: string | undefined,
+  t: (key: string) => string,
+): string {
+  if (task.assignedTeamId) return resolvedName || t("backlog.assignment_unavailable_team");
+  if (task.assignedAgentId) return resolvedName || t("backlog.assignment_unavailable_agent");
+  return task.assignedAgent || t("backlog.unassigned");
 }

@@ -22,9 +22,8 @@ import { TaskRecordActions } from "./TaskRecordActions";
 import type { RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
-import { useEmployeeNames } from "../../hooks/useEmployeeNames";
 import { useTeams } from "../../hooks/useTeams";
-import { taskAssigneeDisplayName, UNRESOLVED_EMPLOYEE_ID } from "../../lib/taskAssignment";
+import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
 import {
   defaultRecordTab,
@@ -115,17 +114,13 @@ export function TaskRecordPage({
   const readOnly = projectReadOnly(project);
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
-  const employeeNames = useEmployeeNames(currentUser);
   const { teams } = useTeams(currentUser.employeeId);
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
     agentName: (agentId) => logicalAgents.find((agent) => agent.id === agentId)?.displayName,
   }), [teams, logicalAgents]);
-  const resolvedAssignee = taskAssigneeDisplayName(task, currentUser, employeeNames);
-  const assigneeName = resolvedAssignee && UNRESOLVED_EMPLOYEE_ID.test(resolvedAssignee)
-    ? t("backlog.assignee_unknown")
-    : resolvedAssignee;
+  const assigneeName = taskAssigneeLabel(task, taskAgentDisplayName(task, logicalAgents, teams), t);
   const facts = useMemo<RecordFact[]>(
     () => recordBandFacts(
       task,
