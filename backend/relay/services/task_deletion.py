@@ -29,14 +29,19 @@ class TaskDeletionError(RuntimeError):
 
 
 def task_has_active_linked_session(
-    session_store: SessionStore, task: dict[str, Any]
+    session_store: SessionStore, task: dict[str, Any], *, execution_lifecycle: Any = None
 ) -> bool:
     for session_id in task.get("linkedSessionIds", []):
         try:
             session = session_store.get_session(session_id)
         except (KeyError, FileNotFoundError):
             continue
-        if session.get("status") not in TERMINAL_SESSION_STATUSES:
+        if execution_lifecycle is not None:
+            # An unfinished conversation can be idle, and a completed one can
+            # still hold an execution reservation awaiting daemon exit evidence.
+            if not execution_lifecycle.status(session)["canDelete"]:
+                return True
+        elif session.get("status") not in TERMINAL_SESSION_STATUSES:
             return True
     return False
 
@@ -77,7 +82,9 @@ def _delete_task(
             except (KeyError, FileNotFoundError):
                 continue
         for record in related:
-            if dispatch_claim_active(record) or task_has_active_linked_session(ctx.session_store, record):
+            if dispatch_claim_active(record) or task_has_active_linked_session(
+                ctx.session_store, record, execution_lifecycle=execution_lifecycle
+            ):
                 raise TaskDeletionError("task_execution_active")
 
     try:
@@ -86,7 +93,7 @@ def _delete_task(
             deleted_by=actor_employee_id,
             reject_active_claim=True,
             active_linked_session=lambda current: task_has_active_linked_session(
-                ctx.session_store, current
+                ctx.session_store, current, execution_lifecycle=execution_lifecycle
             ),
         )
         if task.get("isRoutine"):
@@ -102,7 +109,9 @@ def _delete_task(
             for record in related[1:]:
                 ctx.task_store.delete_task(
                     record["id"], deleted_by=actor_employee_id, reject_active_claim=True,
-                    active_linked_session=lambda current: task_has_active_linked_session(ctx.session_store, current),
+                    active_linked_session=lambda current: task_has_active_linked_session(
+                        ctx.session_store, current, execution_lifecycle=execution_lifecycle
+                    ),
                 )
             controller = SessionController(ctx.session_store, task_store=ctx.task_store)
             for session_id in sorted(session_ids):

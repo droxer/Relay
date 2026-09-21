@@ -1918,8 +1918,16 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
         if active == "reserved":
             # Fail on the last thread after earlier deletes to prove rollback.
             blocked_id = sorted(linked)[-1]
-            monkeypatch.setattr(client.app.state.execution_lifecycle, "status",
-                                lambda session: {"canDelete": session["id"] != blocked_id})
+            checks = {}
+
+            def execution_status(session):
+                session_id = session["id"]
+                checks[session_id] = checks.get(session_id, 0) + 1
+                # Preflight and task tombstone checks pass; the final thread
+                # check fails after earlier thread tombstones were written.
+                return {"canDelete": session_id != blocked_id or checks[session_id] < 3}
+
+            monkeypatch.setattr(client.app.state.execution_lifecycle, "status", execution_status)
         response = client.delete(f"/api/v1/tasks/{routine['id']}")
         assert response.status_code == (409 if active else 200)
         for session_id in linked:
