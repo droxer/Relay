@@ -54,6 +54,7 @@ export function BacklogTaskCard({
   projectName,
   ready,
   agentDisplayName,
+  agentImageUrl,
   selected,
   onToggleSelect,
   dragging,
@@ -66,6 +67,7 @@ export function BacklogTaskCard({
   projectName?: string;
   ready: boolean;
   agentDisplayName?: string;
+  agentImageUrl?: string | null;
   selected: boolean;
   onToggleSelect: () => void;
   dragging: boolean;
@@ -122,7 +124,7 @@ export function BacklogTaskCard({
           <div className="backlog-meta">
             <PriorityBadge priority={task.priority} />
             {age !== null ? <span className="tnum">{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}
-            <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} />
+            <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
             {task.dueDate ? (
               <span className={cn("backlog-due", tone !== "neutral" && tone)}>
                 <ActionCalendar size={ICON.sm} />
@@ -212,6 +214,7 @@ export function BacklogTaskRow({
   routineTitle,
   ready,
   agentDisplayName,
+  agentImageUrl,
   canDiscuss,
   selected,
   onToggleSelect,
@@ -232,6 +235,7 @@ export function BacklogTaskRow({
   routineTitle?: string;
   ready: boolean;
   agentDisplayName?: string;
+  agentImageUrl?: string | null;
   canDiscuss: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -315,7 +319,7 @@ export function BacklogTaskRow({
         ) : null}
       </TableCell>
       <TableCell className="backlog-row-assignee">
-        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} />
+        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
       </TableCell>
       {!compact ? <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>

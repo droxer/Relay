@@ -2,6 +2,7 @@ import type { LogicalAgentAvailability, RelayTaskListItem } from "../types";
 import { cn } from "@/lib/utils";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { IdentityMark } from "./IdentityMark";
+import { ProfileImage } from "./ProfileImagePicker";
 import { taskAssigneeLabel } from "../lib/taskAssignment";
 import { useTranslation } from "react-i18next";
 
@@ -11,19 +12,21 @@ export function TaskAssignee({
   ready,
   availability,
   agentDisplayName,
+  agentImageUrl,
 }: {
   task: RelayTaskListItem;
   ready: boolean;
   availability?: LogicalAgentAvailability;
   agentDisplayName?: string;
+  agentImageUrl?: string | null;
 }) {
   const { t } = useTranslation();
   const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
   const name = taskAssigneeLabel(task, agentDisplayName, t);
   return (
     <span className="task-assignee" translate="no" data-unassigned={assigned ? "false" : "true"}>
-      {assigned && (task.assignedAgent || task.assignedTeamId) ? (
-        <TaskExecutionBadge task={task} ready={ready} availability={availability} displayName={agentDisplayName} />
+      {assigned ? (
+        <TaskExecutionBadge task={task} ready={ready} availability={availability} displayName={name} imageUrl={agentImageUrl} />
       ) : null}
       <span className="task-assignee-name" title={name}>{name}</span>
     </span>
@@ -35,11 +38,13 @@ export function TaskExecutionBadge({
   ready,
   availability,
   displayName,
+  imageUrl,
 }: {
   task: RelayTaskListItem;
   ready: boolean;
   availability?: LogicalAgentAvailability;
   displayName?: string;
+  imageUrl?: string | null;
 }) {
   const { t } = useTranslation();
   if (task.assignedTeamId) {
@@ -70,10 +75,10 @@ export function TaskExecutionBadge({
     const label = `${t("teams.assignment_badge", { name })} · ${stateLabel}`;
     return (
       <span className={cn("agent-state", "agent-state--team", tone)} title={label}>
-        <IdentityMark kind="team" />
+        <ProfileImage src={imageUrl} alt="" fallback={<IdentityMark kind="team" />} />
         <span className="sr-only">{label}</span>
       </span>
     );
   }
-  return <AgentStateBadge agent={task.assignedAgent} ready={ready} availability={availability} name={displayName} />;
+  return <AgentStateBadge agent={task.assignedAgent} ready={ready} availability={availability} name={displayName} imageUrl={imageUrl} />;
 }

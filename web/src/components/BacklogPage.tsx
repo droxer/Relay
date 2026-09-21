@@ -268,16 +268,18 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     return latest ? sessions.find((session) => session.id === latest) : undefined;
   }
 
-  function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; ready: boolean } {
+  function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; imageUrl?: string | null; ready: boolean } {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
     if (team) {
       return {
         name: team.name,
+        imageUrl: team.profileImageUrl,
         ready: teamReady(team),
       };
     }
     return {
       name: taskAgentDisplayName(task, logicalAgents, teams),
+      imageUrl: task.assignedTeamId ? undefined : logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.profileImageUrl,
       ready: agentReadyForTask(task, nodes, logicalAgents),
     };
   }
@@ -524,6 +526,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
                   selected={visibleSelection.has(task.id)}
                   onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                   agentDisplayName={assignment.name}
+                  agentImageUrl={assignment.imageUrl}
                   ready={assignment.ready}
                   canDiscuss={canDiscussTask(task) && discussionAgents.length > 0}
                   {...taskHandlers(task)}
@@ -569,6 +572,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
                       selected={visibleSelection.has(task.id)}
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                       agentDisplayName={assignment.name}
+                      agentImageUrl={assignment.imageUrl}
                       ready={assignment.ready}
                       dragging={draggedTaskId === task.id}
                       onDragStart={(event) => beginTaskDrag(task, event)}

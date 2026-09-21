@@ -40,7 +40,7 @@ export function AgentStateBadge({
 }) {
   const { t } = useTranslation();
 
-  if (!agent) {
+  if (!agent && !name && !imageUrl) {
     const label = t("backlog.no_agent");
     return (
       <Tooltip content={label}>
@@ -82,7 +82,7 @@ export function AgentStateBadge({
             fallback={name ? <IdentityMark kind="agent" /> : null}
           />
         ) : (
-          <AgentMark agent={agent} size={ICON.sm} />
+          agent ? <AgentMark agent={agent} size={ICON.sm} /> : <IdentityMark kind="agent" />
         )}
         <span className="sr-only">{label}</span>
       </span>

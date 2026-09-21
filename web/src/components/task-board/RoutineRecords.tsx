@@ -141,6 +141,7 @@ export function RoutineRow({
   state,
   ready,
   agentDisplayName,
+  agentImageUrl,
   selected,
   onToggleSelect,
   onOpen,
@@ -153,6 +154,7 @@ export function RoutineRow({
   state: RoutineState;
   ready: boolean;
   agentDisplayName?: string;
+  agentImageUrl?: string | null;
   selected: boolean;
   onToggleSelect: () => void;
   /** Opens the routine's record. The title is a destination now, not a form. */
@@ -208,7 +210,7 @@ export function RoutineRow({
         />
       </TableCell>
       <TableCell className="backlog-row-assignee">
-        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} />
+        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
       </TableCell>
       <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
         <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>

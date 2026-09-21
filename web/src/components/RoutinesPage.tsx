@@ -262,16 +262,18 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
     }
   }
 
-  function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; ready: boolean } {
+  function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; imageUrl?: string | null; ready: boolean } {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
     if (team) {
       return {
         name: team.name,
+        imageUrl: team.profileImageUrl,
         ready: teamReady(team),
       };
     }
     return {
       name: taskAgentDisplayName(task, logicalAgents, teams),
+      imageUrl: task.assignedTeamId ? undefined : logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.profileImageUrl,
       ready: agentReadyForTask(task, nodes, logicalAgents),
     };
   }
@@ -423,6 +425,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
                       onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
                       state={routineState(task, runningIds)}
                       agentDisplayName={assignment.name}
+                      agentImageUrl={assignment.imageUrl}
                       ready={assignment.ready}
                       {...routineHandlers(task)}
                     />

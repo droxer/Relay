@@ -29,6 +29,9 @@ for (const view of ["card", "row"] as const) {
     expect(label?.textContent).toBe(expected);
     expect(label?.closest(".sr-only")).toBeNull();
     expect(container.querySelectorAll(".task-assignee-name")).toHaveLength(1);
+    if (Object.keys(assignment).length > 0) {
+      expect(container.querySelector('.task-assignee .profile-image[data-has-image="false"]')).not.toBeNull();
+    }
   });
 }
 
@@ -65,3 +68,11 @@ for (const view of ["card", "row", "routine"] as const) {
     expect(container.querySelector(".task-assignee-name")?.textContent).toBe("Atlas");
   });
 }
+
+it("shows the team's saved avatar alongside its name", async () => {
+  const { TaskAssignee } = await import("../src/components/TaskAssignee");
+  const { container } = render(<TaskAssignee task={{ assignedTeamId: "team-1" } as RelayTaskListItem}
+    ready agentDisplayName="Builders" agentImageUrl="/avatars/teams/shape-grid-01.svg" />);
+  expect(container.querySelector(".task-assignee img")?.getAttribute("src")).toBe("/avatars/teams/shape-grid-01.svg");
+  expect(container.querySelector(".task-assignee-name")?.textContent).toBe("Builders");
+});
