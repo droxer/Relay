@@ -14,8 +14,8 @@ documentation locations, and UI metadata from the backend's shared constants.
 /threads/{threadId}
 /projects
 /projects/{projectId}
-/projects/{projectId}/new
-/projects/{projectId}/threads/{threadId}
+/backlog/{taskId}
+/backlog/{taskId}/threads/{threadId}
 /backlog
 /routines
 /agents
@@ -632,3 +632,9 @@ For existing personal computers, `GET /api/v1/daemon-nodes/{id}/token` and
 The Token drawer prefers it for installation/reconnection. BoxLite computers
 and records lacking the owner/workspace needed by the installer retain
 `daemonCommand`; neither response embeds the token in a command.
+
+Task conversations use `/backlog/{taskId}/threads/{threadId}` and retain the
+Tasks destination. Legacy `/projects/{projectId}/threads/{threadId}` links
+resolve to the linked task; unlinked project conversations return to project
+details. Legacy `/projects/{projectId}/new` opens the project's task list.
+Projects no longer offer standalone conversation creation in the browser.

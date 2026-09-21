@@ -160,6 +160,7 @@ export function App() {
     tasks,
     projects,
     projectsStatus,
+    tasksStatus,
     projectsError,
     isRefreshing,
     refresh,
@@ -330,7 +331,8 @@ export function App() {
     && !routedProjectId
     && !routedSessionId
     && !composingNew;
-  const isTasksWorkspace = route === "backlog";
+  const isTaskThread = route === "backlog" && Boolean(recordTaskId && routedSessionId);
+  const isTasksWorkspace = route === "backlog" && !isTaskThread;
   const detailAgent = useMemo(
     () => logicalAgents.find((agent) => agent.id === agentId) ?? null,
     [agentId, logicalAgents],
@@ -405,17 +407,18 @@ export function App() {
       : t("thread.new_thread");
 
   const skipLinkHref = useMemo(() => {
+    if (isTaskThread) return "#chat-panel";
     if (route === "projects" && showProjectOverview) return "#project-detail-panel";
     if (route === "main" || route === "projects") return mobileView === "threads" ? "#thread-panel" : "#chat-panel";
     if (route === "agents" && agentId) return "#agent-detail-panel";
     return `#${WORK_ROUTE_SKIP_IDS[route]}`;
-  }, [agentId, route, mobileView, showProjectOverview, showProjectDirectoryEmpty]);
+  }, [agentId, route, mobileView, showProjectOverview, showProjectDirectoryEmpty, isTaskThread]);
 
   const awaitingDecision = useMemo(() => isAwaitingFeedbackDecision(activeSession), [activeSession]);
 
   const threadChromeVisible = showThreadChrome(isTasksWorkspace || showProjectOverview || showProjectDirectoryEmpty);
   const spaceVisible = threadChromeVisible
-    && (route === "main" || route === "projects")
+    && (route === "main" || route === "projects" || isTaskThread)
     && space.open
     && Boolean(activeSession);
 
@@ -512,17 +515,46 @@ export function App() {
       navigateToRoute("main");
     }
   }, [navigateToRoute, route, user]);
-  function openThread(sessionId: string, replace = false) {
+  function openThread(sessionId: string, replace = false, parentTaskId?: string) {
     const session = myThreads.find((candidate) => candidate.id === sessionId);
+    const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id ?? parentTaskId ?? (route === "backlog" ? recordTaskId : null);
+    if (session?.projectId && !taskId) {
+      navigateToProject(session.projectId);
+      return;
+    }
     setComposingNew(false);
     setPendingUserMessage(null);
     setPendingThreadTeamId(null);
     setSelectedSessionId(sessionId);
     setActiveSessionId(sessionId);
-    syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId);
+    syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId,
+      taskId);
   }
 
+  // Old project thread links resolve to their task; standalone project rooms
+  // no longer have a conversation surface.
+  useEffect(() => {
+    const projectId = routedProjectId ?? activeSession?.projectId;
+    if ((route !== "projects" && route !== "main") || !projectId) return;
+    if (route === "projects" && composingNew) {
+      void navigateToAppPath(`/backlog?project=${encodeURIComponent(projectId)}`, { replace: true });
+    } else if (tasksStatus === "ready" && !composingNew && activeSession
+      && (routedSessionId === activeSession.id || (route === "main" && !routedSessionId))) {
+      const sessionId = activeSession.id;
+      const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
+      const path = taskId
+        ? `/backlog/${encodeURIComponent(taskId)}/threads/${encodeURIComponent(sessionId)}?project=${encodeURIComponent(projectId)}`
+        : `/projects/${encodeURIComponent(projectId)}`;
+      void navigateToAppPath(path, { replace: true });
+    }
+  }, [route, routedProjectId, routedSessionId, activeSession, composingNew, tasks, tasksStatus]);
+
   function startNewThread(projectId: string | null = null) {
+    if (projectId) {
+      taskCreateIntent()?.queue();
+      void navigateToAppPath(`/backlog?project=${encodeURIComponent(projectId)}`);
+      return;
+    }
     setComposingNew(true);
     setPendingUserMessage(null);
     setSelectedSessionId(undefined);
@@ -659,6 +691,7 @@ export function App() {
     <AppShell
       route={route}
       taskWorkspace={isTasksWorkspace}
+      taskThread={isTaskThread}
       settingsSection={settingsSection}
       onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
@@ -678,7 +711,7 @@ export function App() {
       threadSpaceOpen={spaceVisible}
       threadSpaceWidth={panels.spaceWidth}
       threadSpaceResizing={spaceResizing}
-      threadListHidden={space.threadListHidden}
+      threadListHidden={isTaskThread || space.threadListHidden}
       threadListWidth={panels.threadListWidth}
       threadListResizing={threadListResizing}
       mobileChatChrome={threadChromeVisible ? {
@@ -724,7 +757,7 @@ export function App() {
             currentUser={user}
             isRefreshing={isRefreshing}
             onRefresh={() => refresh()}
-            onOpenThread={openThread}
+            onOpenThread={(sessionId, taskId) => openThread(sessionId, false, taskId)}
           />
         ) : route === "routine" ? (
           <RoutinesPage
@@ -768,6 +801,7 @@ export function App() {
           />
         ) : (
           <ThreadsView
+            taskId={isTaskThread ? recordTaskId : null}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}
             teams={teams}
@@ -808,7 +842,7 @@ export function App() {
             spaceOpen={spaceVisible}
             spaceArtifactId={space.artifactId}
             spaceWidth={panels.spaceWidth}
-            threadListHidden={space.threadListHidden}
+            threadListHidden={isTaskThread || space.threadListHidden}
             threadListWidth={panels.threadListWidth}
             onThreadListResize={panels.resizeThreadList}
             onThreadListResizeActive={setThreadListResizing}

@@ -137,3 +137,46 @@ test("creating the first project preserves a global task draft", async ({ page }
   await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
   await expect(page.locator("#backlog-panel").getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
 });
+
+for (const mobile of [false, true]) {
+  test(`task thread stays in Tasks (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const stamp = "2026-09-01T00:00:00Z";
+    const project = { id: "p", name: "Launch", ownerEmployeeId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
+    const session = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerEmployeeId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
+    const task = { id: "t", title: "Release notes", projectId: "p", status: "done", workflowStage: "done", description: "", priority: "normal", isRoutine: false, linkedSessionIds: ["s"], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] };
+    await page.route("**/api/**", async route => {
+      const path = new URL(route.request().url()).pathname;
+      let body: unknown = { sessions: [session], tasks: [task], projects: [project], agents: [], teams: [], nodes: [], sandboxes: [], skills: [] };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+      if (path.endsWith("/threads/s")) body = session;
+      if (path.endsWith("/tasks/t")) body = task;
+      if (path.endsWith("/events")) body = { events: [] };
+      if (path.endsWith("/runs")) body = { runs: [{ ...task, taskId: "t", latestSessionId: "s", startedAt: stamp, endedAt: stamp, artifactCount: 0 }] };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.goto("/projects/p/threads/s");
+    await expect(page).toHaveURL(/\/backlog\/t\/threads\/s\?project=p$/);
+    await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
+    await expect(page.locator("#chat-panel")).toBeVisible();
+    await expect(mobile ? page.locator(".mobile-topbar-title") : page.getByRole("heading", { name: "Release discussion" })).toHaveText("Release discussion");
+    await expect(page.locator("#thread-panel")).toHaveCount(0);
+    const back = page.getByRole(mobile ? "button" : "link", { name: "Back to task", exact: true });
+    if (!mobile) await expect(back).toHaveAttribute("href", "/backlog/t?project=p");
+    await page.reload();
+    await expect(back).toBeVisible();
+    expect((await page.locator("#chat-panel > .record-band").boundingBox())!.height).toBeLessThan(120);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/task-thread-${mobile ? "mobile" : "desktop"}.png` });
+    await back.click();
+    await expect(page).toHaveURL(/\/backlog\/t\?project=p$/);
+    await expect(page.getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "Open thread", exact: true }).click();
+    await expect(page).toHaveURL(/\/backlog\/t\/threads\/s/);
+    await expect(mobile ? page.locator(".mobile-topbar-title") : page.getByRole("heading", { name: "Release discussion" })).toHaveText("Release discussion");
+    await page.goto("/threads/s");
+    await expect(page).toHaveURL(/\/backlog\/t\/threads\/s\?project=p$/);
+    await page.goto("/projects/p/new");
+    await expect(page).toHaveURL(/\/backlog\?project=p$/);
+  });
+}

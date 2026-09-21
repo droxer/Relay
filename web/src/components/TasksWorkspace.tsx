@@ -19,7 +19,7 @@ export function TasksWorkspace({ projects, projectsStatus, tasks, sessions, node
   currentUser: CurrentUser;
   recordTaskId: string | null;
   onOpenRecord: (id: string | null) => void;
-  onOpenThread: (id: string) => void;
+  onOpenThread: (id: string, taskId?: string) => void;
   isRefreshing: boolean;
   onRefresh: () => Promise<void>;
 }) {

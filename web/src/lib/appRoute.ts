@@ -89,6 +89,9 @@ export function parseAppPath(pathname: string, _search = ""): AppLocationState {
   if (head === "projects" && second && rest[0] === "threads" && rest[1] && rest.length === 2) {
     return { route: "projects", ...base, projectId: decodeSegment(second), sessionId: decodeSegment(rest[1]) };
   }
+  if (head === "backlog" && second && rest[0] === "threads" && rest[1] && rest.length === 2) {
+    return { route: "backlog", ...base, taskId: decodeSegment(second), sessionId: decodeSegment(rest[1]) };
+  }
   if (head === "backlog" && second && rest.length === 0) {
     return { route: "backlog", ...base, taskId: decodeSegment(second) };
   }
@@ -141,7 +144,10 @@ export function pathForAppState({
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
-  if (route === "backlog" && taskId) return `/backlog/${encodeURIComponent(taskId)}`;
+  if (route === "backlog" && taskId) {
+    const taskPath = `/backlog/${encodeURIComponent(taskId)}`;
+    return sessionId ? `${taskPath}/threads/${encodeURIComponent(sessionId)}` : taskPath;
+  }
   if (route === "routine" && taskId) {
     const routinePath = `/routines/${encodeURIComponent(taskId)}`;
     return runId ? `${routinePath}/runs/${encodeURIComponent(runId)}` : routinePath;
@@ -350,7 +356,8 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     if (code && /^[A-Za-z0-9_-]{32}$/.test(code)) target.set("connect", code);
     if (head === "settings") copyPageParams(head, source, target);
   } else if (
-    (head === "threads" && entityId !== "new" && rest.length === 0)
+    (head === "backlog" && Boolean(entityId) && rest[0] === "threads" && Boolean(rest[1]) && rest.length === 2)
+    || (head === "threads" && entityId !== "new" && rest.length === 0)
     || (head === "projects" && Boolean(entityId) && rest[0] === "threads" && Boolean(rest[1]) && rest.length === 2)
   ) {
     // The thread space panel is URL-driven (?space=1&artifact=<id>) so an open
@@ -370,6 +377,11 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
          advertises itself. */
       const spaceTab = source.get("spaceTab");
       if (spaceTab === "project") target.set("spaceTab", spaceTab);
+    }
+    if (head === "backlog") {
+      copyFilterParams(head, source, target);
+      copySortParams(head, source, target);
+      copyPageParams(head, source, target);
     }
   } else if (head === "projects" && entityId && rest.length === 0) {
     const requestedTab = source.get("tab") || "tasks";

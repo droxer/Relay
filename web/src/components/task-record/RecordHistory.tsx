@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { listTaskEvents } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
-import { hrefForRoute } from "../../lib/appRoute";
+import { pathForAppState } from "../../lib/appRoute";
 import { taskHistoryEntries } from "../../lib/taskHistory";
 import { historyEntryLabel, historyTime, type HistoryNameResolver } from "./taskHistoryLabel";
 import type { RelayTaskEvent } from "../../types";
@@ -76,7 +76,7 @@ export function RecordHistory({
               {sessionId ? (
                 <a
                   className="record-inline-action"
-                  href={hrefForRoute("main", sessionId)}
+                  href={pathForAppState({ route: "backlog", mobileView: "chat", taskId, sessionId })}
                   onClick={(event) => {
                     if (!onOpenThread) return;
                     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;

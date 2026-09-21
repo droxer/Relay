@@ -38,6 +38,7 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
 
 export type ThreadsViewProps = {
+  taskId?: string | null;
   directoryMode: "threads" | "projects";
   /** The shell's task list — the project board reads its lanes from it
    *  rather than opening a second observer on the same query. */
@@ -126,6 +127,7 @@ export type ThreadsViewProps = {
 };
 
 export function ThreadsView({
+  taskId,
   directoryMode,
   tasks,
   teams,
@@ -248,7 +250,7 @@ export function ThreadsView({
 
   return (
     <>
-      <ThreadListPanel
+      {!taskId && <ThreadListPanel
         directoryMode={directoryMode}
         threads={filteredThreads}
         projects={projects}
@@ -275,7 +277,7 @@ export function ThreadsView({
         width={threadListWidth}
         onResize={onThreadListResize}
         onResizeActive={onThreadListResizeActive}
-      />
+      />}
 
       {projectOverviewState === "ready" && selectedProject ? (
         <ProjectWorkspacePage
@@ -356,6 +358,7 @@ export function ThreadsView({
       ) : (
       <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
         <ThreadHeader
+          taskId={taskId}
           activeSession={activeSession}
           projectId={selectedProjectId}
           participants={threadParticipants}

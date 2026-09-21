@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import {
   ICON,
   NavPreferences,
+  NavBack,
   NavThreads,
 } from "./icons";
 import type { Theme } from "@/lib/appStorage";
@@ -59,6 +60,7 @@ export type MobileChatChrome = {
 
 type AppShellProps = {
   taskWorkspace?: boolean;
+  taskThread?: boolean;
   onNewTask?: () => void;
   /** The open settings section, so the mobile topbar can name it the way it
    *  names the control panel's — both are rail-and-content surfaces. */
@@ -121,6 +123,7 @@ function SettingsButton({ route, href, onNavigate }: { route: AppRoute; href: st
 
 export function AppShell({
   taskWorkspace = false,
+  taskThread = false,
   onNewTask,
   route,
   settingsSection,
@@ -222,8 +225,8 @@ export function AppShell({
     [isAdmin, t],
   );
 
-  const isThreadRoute = route === "main" || (route === "projects" && !taskWorkspace);
-  const directoryLabel = route === "projects" ? t("project.projects") : t("nav.threads");
+  const isThreadRoute = taskThread || route === "main" || (route === "projects" && !taskWorkspace);
+  const directoryLabel = taskThread ? t("thread.back_to_task") : route === "projects" ? t("project.projects") : t("nav.threads");
   /* A rail-and-content surface names its SECTION here — the strip under the
      topbar is the only other place the section appears, and the route name is
      already the eyebrow. Both consumers of the rail read the same way. */
@@ -241,6 +244,7 @@ export function AppShell({
       className="messenger-shell"
       data-mobile-view={mobileView}
       data-route={route}
+      data-task-thread={taskThread || undefined}
       data-task-workspace={taskWorkspace || undefined}
       data-sidenav={sidenavExpanded ? "open" : "closed"}
       data-space={threadSpaceOpen ? "open" : undefined}
@@ -269,7 +273,7 @@ export function AppShell({
                 aria-label={directoryLabel}
                 onClick={() => onMobileViewChange("threads")}
               >
-                <NavThreads size={ICON.md} />
+                {taskThread ? <NavBack size={ICON.md} /> : <NavThreads size={ICON.md} />}
               </Button>
               <div className="mobile-topbar-chat-title" title={activeThreadLabel}>
                 <span className="mobile-topbar-title">{activeThreadLabel}</span>

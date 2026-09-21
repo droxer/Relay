@@ -138,7 +138,7 @@
     "search_label": "Search projects",
     "search_placeholder": "Search projects…",
     "no_projects": "No projects yet.",
-    "shared_workspace": "Project room · shared workspace",
+    "shared_workspace": "Project workspace",
     "page_kicker": "Project",
     "page_label": "{{project}} project",
     "page_subtitle_one": "{{count}} agent",
@@ -209,6 +209,7 @@
     "no_tasks": "No tasks yet"
   },
   "thread": {
+    "back_to_task": "Back to task",
     "back_to_project_activities": "Back to project activities",
     "search_placeholder": "Search threads…",
     "search_label": "Search threads",
