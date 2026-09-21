@@ -50,3 +50,9 @@ describe("project edit reconciliation", () => {
     expect(() => rebaseProjectEdit(base, input(), latest(change))).toThrow("project.edit_closed");
   });
 });
+
+it("identifies a conflicting lead change with a translated field and member names", () => {
+  const c = { ...a, agentId: "c", functionTitle: "C" };
+  const result = rebaseProjectEdit(base, input({ leadAgentId: "b" }), latest({ members: [a, b, c], leadAgentId: "c" }));
+  expect(result.conflicts).toEqual([{ field: "member_make_lead", member: undefined, saved: "C", draft: "B" }]);
+});
