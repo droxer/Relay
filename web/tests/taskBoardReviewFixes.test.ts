@@ -18,12 +18,12 @@ const recordStyles = source("styles/task-record.css");
 
 describe("task board review regressions", () => {
   it("hydrates persisted views after the deterministic first render", () => {
-    assert.match(backlogPage, /useState<BacklogView>\("board"\)/);
+    assert.match(backlogPage, /useState<BacklogView>\("list"\)/);
     assert.match(backlogPage, /useEffect\(\(\) => \{\s*setView\(parseBacklogView\(null\)\)/);
   });
 
-  it("limits backlog selection to records rendered on current lane pages", () => {
-    assert.match(backlogPage, /const visibleTasks = TASK_FLOW_STAGES\.flatMap\(\(status\) => pagedLanes\[status\]\.items\)/);
+  it("limits backlog selection to records rendered on the current list or lane pages", () => {
+    assert.match(backlogPage, /const visibleTasks = view === "list" \? listPage\.items : TASK_FLOW_STAGES\.flatMap\(\(status\) => pagedLanes\[status\]\.items\)/);
     assert.doesNotMatch(backlogPage, /const visibleTasks = view === "list"[\s\S]{0,120}: filteredTasks/);
   });
 

@@ -23,8 +23,8 @@ import { recordVariant } from "./recordVocabulary";
  * `onEdit` back to them rather than growing a second copy of the form.
  *
  * Two presentations: without `drawer` the record takes the whole route (the
- * backlog board); with it the record renders inside the shared Drawer over
- * the board (the routines board), and this wrapper lends the drawer its
+ * standalone caller); with it the record renders inside the shared Drawer over
+ * the task or routine list, and this wrapper lends the drawer its
  * header — the record's title, and the routine breadcrumb for a run.
  */
 export function TaskRecordView({

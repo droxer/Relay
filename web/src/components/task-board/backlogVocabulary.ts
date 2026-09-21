@@ -33,6 +33,8 @@ export const initialFilters: BacklogFilters = {
   status: "all",
   priority: "all",
   agent: "all",
+  team: "all",
+  assignment: "all",
   assignee: "",
   due: "all",
   source: "all",
@@ -46,8 +48,10 @@ export const BACKLOG_FILTER_SPEC: FilterSpec<BacklogFilters> = {
   status: { param: "status", allowed: TASK_STATUSES },
   priority: { param: "priority", allowed: TASK_PRIORITIES },
   agent: { param: "agent" },
+  team: { param: "team" },
+  assignment: { param: "assignment", allowed: ["assigned", "unassigned"] },
   assignee: { param: "assignee" },
-  due: { param: "due", allowed: ["overdue", "today", "unscheduled"] },
+  due: { param: "due", allowed: ["overdue", "today", "next_week", "unscheduled"] },
   source: { param: "source", allowed: ["direct", "routine"] },
 };
 
@@ -59,7 +63,7 @@ export const BACKLOG_VIEWS: readonly BacklogView[] = ["board", "list"];
 export function parseBacklogView(value: string | null): BacklogView {
   return BACKLOG_VIEWS.includes(value as BacklogView)
     ? value as BacklogView
-    : readViewPreference(VIEW_STORAGE_KEY, "board", BACKLOG_VIEWS);
+    : readViewPreference(VIEW_STORAGE_KEY, "list", BACKLOG_VIEWS);
 }
 
 export function activeFilterCount(filters: BacklogFilters): number {
@@ -67,6 +71,8 @@ export function activeFilterCount(filters: BacklogFilters): number {
   if (filters.status !== "all") count += 1;
   if (filters.priority !== "all") count += 1;
   if (filters.agent !== "all") count += 1;
+  if (filters.team !== "all") count += 1;
+  if (filters.assignment !== "all") count += 1;
   if (filters.assignee.trim()) count += 1;
   if (filters.due !== "all") count += 1;
   if (filters.source !== "all") count += 1;

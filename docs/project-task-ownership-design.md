@@ -107,8 +107,17 @@ Task details show a Project → Task breadcrumb and the required project identit
 Keep existing stable task URLs so bookmarks survive. From All tasks, opening and
 closing a task preserves the originating filters and scroll position.
 
-All tasks supports project, status, agent, priority, and due-date filters. Every
-row/card names its project; grouping by project is available. It operates on the
+All tasks supports project, status, agent, team, assignment, assignee, priority,
+source, and due-date filters, including the next seven days. Project, Priority,
+and Due stay visible in a compact row; More filters reveals additional controls
+and remembers the reader’s collapse preference. The list stays flat. The second sidebar
+uses the same section navigation as Routines: All tasks and each task status,
+with counts scoped by the other filters. Status is selected only in this sidebar;
+the main list never repeats status groups.
+List rows show task identity, project, due date, and assignee; execution controls and additional
+metadata live in the drawer. The optional board groups by workflow stage and names the
+project on each card. Task records open in a drawer over the current list or
+board, retaining project scope, search, sort, and pagination. It operates on the
 same records as project boards. Archived projects are excluded by default and
 available through an explicit filter.
 

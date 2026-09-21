@@ -4,7 +4,7 @@ const port = process.env.RELAY_E2E_PORT ?? "5124";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: ["projectTasks.spec.ts", "computerConnection.spec.ts", "executionRecovery.spec.ts", "frontendRecovery.spec.ts", "taskKanban.spec.ts", "surfaceLayout.spec.ts", "performance.spec.ts", "teamCollaboration.spec.ts"],
+  testMatch: ["tasksWorkspace.spec.ts", "projectTasks.spec.ts", "computerConnection.spec.ts", "executionRecovery.spec.ts", "frontendRecovery.spec.ts", "taskKanban.spec.ts", "surfaceLayout.spec.ts", "performance.spec.ts", "teamCollaboration.spec.ts"],
   fullyParallel: true,
   use: {
     baseURL: `http://127.0.0.1:${port}`,

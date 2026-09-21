@@ -146,6 +146,7 @@
 
 /* The row's flex gap is --sp-4 but the dot used to sit inside the lead cell
    with a --sp-3 gap; pull it 4px closer so the title keeps its old offset. */
+.backlog-rows-head-dot,
 .backlog-row-dot-cell { margin-right: calc(var(--sp-3) - var(--sp-4)); }
 
 .backlog-row {
@@ -493,7 +494,10 @@
    line 1 = title (wraps to 2), line 2 = priority · status · due · assignee,
    line 3 = actions. Column headers are meaningless here, so hide them. */
 @media (max-width: 820px) {
-  .backlog-rows { padding-inline: var(--sp-4); }
+  .backlog-rows {
+    --list-head-h: 0px;
+    padding-inline: var(--sp-4);
+  }
 
   /* Column headers name cells the stacked card no longer has. The band stays:
      it is the only thing that still says which group a card is in. */

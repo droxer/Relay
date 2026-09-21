@@ -31,6 +31,10 @@ interface FiltersBarProps {
    * that replaced the column headers.
    */
   trailing?: ReactNode;
+  defaultExpanded?: boolean;
+  /** Compact controls that stay visible when additional filters are collapsed. */
+  quickFilters?: ReactNode;
+  expandLabel?: string;
 }
 
 export function FiltersBar({
@@ -43,17 +47,50 @@ export function FiltersBar({
   onClear,
   children,
   trailing,
+  defaultExpanded = false,
+  quickFilters,
+  expandLabel,
 }: FiltersBarProps) {
   const { t } = useTranslation();
   // Remembered per page. Read in the initializer: the bar lives inside the
   // authenticated shell, which is never prerendered, so there is no hydration
   // pass to mismatch — and reading late would flash the filters shut.
-  const [expanded, setExpanded] = useState(() => readFiltersExpanded(searchName));
+  const [expanded, setExpanded] = useState(() => readFiltersExpanded(searchName, defaultExpanded));
   const toggleExpanded = useCallback(() => {
     const next = !expanded;
     setExpanded(next);
     writeFiltersExpanded(searchName, next);
   }, [expanded, searchName]);
+
+  const actions = (
+    <div className="backlog-filter-actions">
+      {quickFilters ? null : trailing}
+      <Button
+        variant="secondary"
+        size="sm"
+        type="button"
+        className="backlog-filter-chip"
+        data-active={expanded ? "true" : "false"}
+        data-applied={activeCount > 0 ? "true" : "false"}
+        aria-expanded={expanded}
+        onClick={toggleExpanded}
+      >
+        {expanded ? t("backlog.hide_filters") : (expandLabel ?? t("backlog.show_filters"))}
+        {activeCount > 0 ? (
+          <span className="backlog-filter-count" aria-hidden="true">{activeCount}</span>
+        ) : null}
+      </Button>
+      {activeCount > 0 ? (
+        <Button variant="ghost"
+          type="button"
+          className="backlog-filter-clear"
+          onClick={onClear}
+        >
+          {t("backlog.clear_filters")}
+        </Button>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="backlog-filter-bar" role="group" aria-label={ariaLabel}>
@@ -68,34 +105,12 @@ export function FiltersBar({
           placeholder={searchLabel}
           onChange={(event) => onQueryChange(event.target.value)}
         />
-        <div className="backlog-filter-actions">
-          {trailing}
-          <Button
-            variant="secondary"
-            size="sm"
-            type="button"
-            className="backlog-filter-chip"
-            data-active={expanded ? "true" : "false"}
-            data-applied={activeCount > 0 ? "true" : "false"}
-            aria-expanded={expanded}
-            onClick={toggleExpanded}
-          >
-            {expanded ? t("backlog.hide_filters") : t("backlog.show_filters")}
-            {activeCount > 0 ? (
-              <span className="backlog-filter-count" aria-hidden="true">{activeCount}</span>
-            ) : null}
-          </Button>
-          {activeCount > 0 ? (
-            <Button variant="ghost"
-              type="button"
-              className="backlog-filter-clear"
-              onClick={onClear}
-            >
-              {t("backlog.clear_filters")}
-            </Button>
-          ) : null}
-        </div>
+        {quickFilters ? trailing : actions}
       </div>
+      {quickFilters ? <div className="backlog-filter-quick">
+        {quickFilters}
+        {actions}
+      </div> : null}
       {expanded ? (
         <div className="backlog-filter-secondary">{children}</div>
       ) : null}

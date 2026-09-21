@@ -266,8 +266,10 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
     status: new Set(["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"]),
     priority: new Set(["high", "normal", "low"]),
     agent: null,
+    team: null,
+    assignment: new Set(["assigned", "unassigned"]),
     assignee: null,
-    due: new Set(["overdue", "today", "unscheduled"]),
+    due: new Set(["overdue", "today", "next_week", "unscheduled"]),
     source: new Set(["direct", "routine"]),
   },
   routines: {
