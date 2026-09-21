@@ -99,10 +99,9 @@
     "members": "项目智能体",
     "member_count": "{{count}} 个智能体",
     "role": "项目角色",
-    "function_title": "项目职能",
     "responsibilities": "职责",
     "instructions": "项目指令（可选）",
-    "member_fields_required": "每个项目智能体都必须填写职能与职责。",
+    "member_fields_required": "每个项目智能体都必须填写职责。",
     "roles": {
       "implementer": "实现",
       "reviewer": "审查",

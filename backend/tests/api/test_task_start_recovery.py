@@ -30,7 +30,6 @@ def setup(tmp_path, monkeypatch):
                 {
                     "agentId": agent["id"],
                     "role": "implementer",
-                    "functionTitle": "Builder",
                     "responsibilities": "Deliver work",
                 }
             ],

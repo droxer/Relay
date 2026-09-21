@@ -245,7 +245,6 @@ POST /api/v1/projects
   "members": [{
     "agentId": "agent-id",
     "role": "planner",
-    "functionTitle": "Technical lead",
     "responsibilities": "Plan and accept delivery",
     "instructions": "Optional project-only instructions"
   }]

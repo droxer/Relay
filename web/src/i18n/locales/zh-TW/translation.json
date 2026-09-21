@@ -92,10 +92,9 @@
     "members": "專案智能體",
     "member_count": "{{count}} 個智能體",
     "role": "專案角色",
-    "function_title": "專案職能",
     "responsibilities": "職責",
     "instructions": "專案指令（選填）",
-    "member_fields_required": "每個專案智能體都必須填寫職能與職責。",
+    "member_fields_required": "每個專案智能體都必須填寫職責。",
     "roles": {
       "implementer": "實作",
       "reviewer": "審查",

@@ -589,7 +589,6 @@ describe("project mutations", () => {
         members: [{
           agentId: "agent-1",
           role: "planner",
-          functionTitle: "Lead",
           responsibilities: "Ship",
         }],
       });
@@ -607,7 +606,6 @@ describe("project mutations", () => {
         members: [{
           agentId: "agent-1",
           role: "planner",
-          functionTitle: "Lead",
           responsibilities: "Ship",
         }],
       },

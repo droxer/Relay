@@ -19,7 +19,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { RosterAgentItem, RosterTriggerValue } from "./roster/RosterOption";
@@ -32,7 +31,6 @@ import {
 type MemberDraft = {
   agentId: string;
   role: AgentRole;
-  functionTitle: string;
   responsibilities: string;
   instructions: string;
   enabled: boolean;
@@ -42,7 +40,6 @@ type MemberDraft = {
 const EMPTY_DRAFT: MemberDraft = {
   agentId: "",
   role: "implementer",
-  functionTitle: "",
   responsibilities: "",
   instructions: "",
   enabled: true,
@@ -59,7 +56,6 @@ function rosterPayload(project: ProjectRecord) {
   return project.members.map((member) => ({
     agentId: member.agentId,
     role: member.role,
-    functionTitle: member.functionTitle,
     responsibilities: member.responsibilities,
     ...(member.instructions ? { instructions: member.instructions } : {}),
     enabled: member.enabled,
@@ -87,10 +83,8 @@ export function ProjectMemberEditor({
   const { updateProjectMutation } = useRelayMutations();
   const [draft, setDraft] = useState<MemberDraft>(EMPTY_DRAFT);
   const [agentError, setAgentError] = useState<string | null>(null);
-  const [functionTitleError, setFunctionTitleError] = useState<string | null>(null);
   const [responsibilitiesError, setResponsibilitiesError] = useState<string | null>(null);
   const agentTriggerRef = useRef<HTMLButtonElement>(null);
-  const functionTitleRef = useRef<HTMLInputElement>(null);
   const responsibilitiesRef = useRef<HTMLTextAreaElement>(null);
   const initializedKeyRef = useRef<string | null>(null);
   const initialVersionRef = useRef(project.version);
@@ -137,7 +131,6 @@ export function ProjectMemberEditor({
       ? {
           agentId: member.agentId,
           role: member.role,
-          functionTitle: member.functionTitle,
           responsibilities: member.responsibilities,
           instructions: member.instructions ?? "",
           enabled: member.enabled,
@@ -146,7 +139,6 @@ export function ProjectMemberEditor({
       : EMPTY_DRAFT;
     setDraft(initial);
     setAgentError(null);
-    setFunctionTitleError(null);
     setResponsibilitiesError(null);
     initialDraftKeyRef.current = draftKey(initial);
   }, [open, member, project.id, project.version, project.leadAgentId]);
@@ -157,7 +149,6 @@ export function ProjectMemberEditor({
   function patch(patchDraft: Partial<MemberDraft>) {
     setDraft((current) => ({ ...current, ...patchDraft }));
     setAgentError(null);
-    setFunctionTitleError(null);
     setResponsibilitiesError(null);
   }
 
@@ -165,7 +156,7 @@ export function ProjectMemberEditor({
     const agent = agents.find((candidate) => candidate.id === agentId);
     patch({
       agentId: agentId ?? "",
-      ...(agent ? { role: agent.defaultRole ?? "implementer", functionTitle: agent.displayName } : {}),
+      ...(agent ? { role: agent.defaultRole ?? "implementer" } : {}),
     });
   }
 
@@ -181,11 +172,6 @@ export function ProjectMemberEditor({
       agentTriggerRef.current?.focus();
       return;
     }
-    if (!draft.functionTitle.trim()) {
-      setFunctionTitleError(t("project.member_fields_required"));
-      functionTitleRef.current?.focus();
-      return;
-    }
     if (!draft.responsibilities.trim()) {
       setResponsibilitiesError(t("project.member_fields_required"));
       responsibilitiesRef.current?.focus();
@@ -194,7 +180,6 @@ export function ProjectMemberEditor({
     const payload = {
       agentId: draft.agentId,
       role: draft.role,
-      functionTitle: draft.functionTitle.trim(),
       responsibilities: draft.responsibilities.trim(),
       ...(draft.instructions.trim() ? { instructions: draft.instructions.trim() } : {}),
       enabled: draft.enabled,
@@ -310,18 +295,6 @@ export function ProjectMemberEditor({
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-            <Field label={t("project.function_title")} error={functionTitleError ?? undefined} errorId="project-member-function-title-error">
-              <Input
-                ref={functionTitleRef}
-                name="function-title"
-                autoComplete="off"
-                maxLength={120}
-                value={draft.functionTitle}
-                onChange={(event) => patch({ functionTitle: event.target.value })}
-                aria-invalid={Boolean(functionTitleError) || undefined}
-                aria-describedby={functionTitleError ? "project-member-function-title-error" : undefined}
-              />
             </Field>
             <Field label={t("project.responsibilities")} error={responsibilitiesError ?? undefined} errorId="project-member-responsibilities-error">
               <Textarea

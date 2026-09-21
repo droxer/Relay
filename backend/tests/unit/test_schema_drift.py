@@ -152,6 +152,7 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
     config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
     with pytest.raises(RuntimeError, match="assign their lead agents first"):
         command.downgrade(config, "20260908_0066")
+    command.upgrade(config, "head")
     assert store.get_project(project["id"]) == project
 
     agent = DatabaseAgentStore(url).create_agent(owner, {
@@ -160,7 +161,7 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
     populated = store.update_project(project["id"], {
         "leadAgentId": agent["id"],
         "members": [{
-            "agentId": agent["id"], "role": "planner", "functionTitle": "Lead",
+            "agentId": agent["id"], "role": "planner",
             "responsibilities": "Plan",
         }],
     }, expected_version=1)

@@ -81,10 +81,6 @@ function ProjectMemberLane({
   const { t } = useTranslation();
   const { available, enabled, availability } = projectMemberState(member, agent);
   const name = agent?.displayName || t("project.member_unavailable");
-  const functionTitle = member.functionTitle.trim();
-  /* The title only earns its own words when it says something the name does
-     not — otherwise the lane would print the same fact twice. */
-  const showFunctionTitle = functionTitle.length > 0 && functionTitle !== name.trim();
 
   return (
     <article
@@ -116,12 +112,6 @@ function ProjectMemberLane({
 
       <div className="project-member-tile-body">
         <p className="project-member-tile-responsibilities">
-          {showFunctionTitle ? (
-            <>
-              <strong>{functionTitle}</strong>
-              {" — "}
-            </>
-          ) : null}
           {member.responsibilities}
         </p>
         {member.instructions ? (
