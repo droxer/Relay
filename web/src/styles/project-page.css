@@ -431,17 +431,34 @@
 .project-task-card {
   display: grid;
   justify-items: start;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
   overflow-wrap: anywhere;
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.project-task-card:hover {
+  border-color: var(--line-strong);
+}
+
+/* Title and priority share the card's head row: the title clamps to two
+   lines so a long name cannot starve the badge. */
+.project-task-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  width: 100%;
+  min-width: 0;
 }
 
 /* The record opens over the project, so the title is a button, not a link
    out of here. It still reads as the card's one destination. */
 .project-task-title {
+  flex: 1;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: none;
@@ -451,6 +468,15 @@
   text-align: left;
   text-decoration: none;
   cursor: pointer;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.project-task-card-head .priority-badge {
+  flex: none;
+  margin-top: 1px;
 }
 
 .project-task-title:hover {
@@ -460,10 +486,26 @@
 .project-task-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-2);
   justify-content: space-between;
   width: 100%;
 }
+
+/* The assignee is the meta row's subject — one ink rung up from the dates. */
+.project-task-assignee {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.project-task-due {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.project-task-due.warn { color: var(--warn); }
+.project-task-due.bad { color: var(--err); }
 
 /* A failed action, reported on the card that raised it. Distinct from the
    blocker reason above, which is the task's own state, not an error. */
