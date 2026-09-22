@@ -33,3 +33,17 @@ it("offers a task breadcrumb without a project conversation link", async () => {
   expect(screen.getByRole("link", { name: "thread.back_to_task" }).getAttribute("href")).toBe("/backlog/task?project=p");
   expect(screen.queryByRole("link", { name: "thread.back_to_project_activities" })).toBeNull();
 });
+
+it("opens a project task conversation in Threads and returns to the thread list", async () => {
+  window.history.replaceState({}, "", "/backlog/task?project=p");
+  const options = { composingNew: false, activeSessionId: "thread", selectedSessionId: "thread", activeSession: undefined, onApplySessionFromPath: vi.fn(), onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };
+  const { result } = renderHook(() => useAppRouter(options));
+  await act(async () => result.current.syncThreadUrl("thread", false, "p", "task"));
+  expect(window.location.pathname).toBe("/threads/thread");
+  expect(result.current.route).toBe("main");
+  expect(result.current.recordTaskId).toBeNull();
+  await act(async () => result.current.syncThreadUrl("thread", true, "p"));
+  expect(window.location.pathname).toBe("/threads/thread");
+  await act(async () => result.current.navigateToMobileView("threads"));
+  expect(window.location.pathname).toBe("/threads");
+});
