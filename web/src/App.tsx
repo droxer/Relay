@@ -27,7 +27,6 @@ import { useAuthSession } from "./hooks/useAuthSession";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
 import { useTranscriptPin } from "./hooks/useTranscriptPin";
-import { THREAD_FILTERS_NONE, type ThreadFilters } from "./lib/threadFilters";
 import { useThreadDirectory } from "./hooks/useThreadDirectory";
 import { useThreadTargets } from "./hooks/useThreadTargets";
 import { useUserPreferences } from "./hooks/useUserPreferences";
@@ -117,11 +116,6 @@ export function App() {
   // in the composer narrows the round to them until the roster is picked again.
   const [projectRoomTarget, setProjectRoomTarget] = useState(true);
   const [threadQuery, setThreadQuery] = useState("");
-  // The rail's quick filters sit beside the search query, not inside the panel:
-  // ThreadListPanel unmounts whenever a task thread takes the pane, and filters
-  // that die on that remount while the search box survives read as the list
-  // silently re-widening. See lib/threadFilters.ts.
-  const [threadFilters, setThreadFilters] = useState<ThreadFilters>(THREAD_FILTERS_NONE);
   const [sidenavResizing, setSidenavResizing] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [spaceResizing, setSpaceResizing] = useState(false);
@@ -827,8 +821,6 @@ export function App() {
             showProjectDirectoryEmpty={showProjectDirectoryEmpty}
             threadQuery={threadQuery}
             setThreadQuery={setThreadQuery}
-            threadFilters={threadFilters}
-            setThreadFilters={setThreadFilters}
             activeSession={activeSession}
             pendingUserMessage={pendingUserMessage}
             displayMessages={displayMessages}

@@ -31,8 +31,8 @@ type ThreadRowProps = {
   onRename?: (session: RelaySession) => void;
   onClose?: (sessionId: string) => void;
   /** The row's attention tone, from the same groupThreads partition either
-      mode runs. Full rows speak it as a status line; nested rows (no group
-      headers above them) carry it as their own pip. */
+      mode runs. Every row draws it as a pip leading the title; rows with
+      something more specific to say also spell it out on the meta line. */
   tone: ThreadTone;
   /** "full" — the threads rail's two-line row: title + stamp over a status /
       agent meta line. "nested" — a project folder's single-line sub-row:
@@ -197,11 +197,12 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       >
         <span className="conversation-copy">
           <span className="conversation-topline">
-            {/* Nested rows have no group header above them, so each carries
-                its own state pip; full rows speak state in the meta line. */}
-            {layout === "nested" ? (
-              <StateMark {...PIP[tone]} />
-            ) : null}
+            {/* Every row leads with its state, in the same column whatever
+                the row goes on to say. A settled thread says nothing in
+                words — it is the majority of the rail and used to be the one
+                row with no state at all — and the rail no longer offers a
+                filter to ask the question for you. */}
+            <StateMark {...PIP[tone]} />
             <span className="conversation-name">
               <strong>{label}</strong>
               {/* The offline badge rides the title in both layouts: it is a
@@ -223,9 +224,11 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
           {subline ? (
             <span className="conversation-subline">
               {projectBadge}
+              {/* Words only: the tone is drawn once, by the title's pip. Two
+                  pips a line apart said the same thing twice — the mistake
+                  the group labels already dropped their own pip over. */}
               {status ? (
                 <span className="conversation-status" data-tone={status.tone}>
-                  <StateMark {...PIP[status.tone]} />
                   <span>{status.text}</span>
                 </span>
               ) : null}

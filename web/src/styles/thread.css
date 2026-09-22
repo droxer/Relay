@@ -50,51 +50,6 @@
    shared .page-header-icon-action (shell.css), the same ghost plus every
    list page carries. */
 
-/* Quick-filter chips — plain ghost text buttons (variant="ghost" size="dense"
-   from the Button), not the boxed fleet-chip recipe: in a rail this narrow,
-   four bordered pills outweighed the list they filter. Resting state is a
-   quiet ink-3 label; active is only ink plus the faintest surface wash, so
-   the selection reads without drawing four boxes. The band keeps the same
-   hairline the search strip wears. */
-.thread-quick-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--sp-1);
-  padding: 0 var(--sp-3) var(--sp-1);
-  border-bottom: 0.5px solid var(--line-1);
-}
-
-.thread-quick-filter {
-  gap: var(--sp-1);
-  padding-inline: var(--sp-2);
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-.thread-quick-filter[data-active="true"] {
-  color: var(--ink-1);
-  background: var(--surface-2);
-}
-
-.thread-quick-filter-count {
-  font: var(--type-micro);
-  color: var(--ink-4);
-  text-transform: none;
-  letter-spacing: var(--type-micro-track);
-}
-
-.thread-quick-filter[data-active="true"] .thread-quick-filter-count {
-  color: var(--ink-2);
-}
-
-/* Project chips follow the attention chips in the same flow; a breath of
-   extra space, not a drawn divider, marks the dimension change. */
-.thread-quick-filter-project {
-  margin-inline-start: var(--sp-2);
-}
-
 .conversation-list {
   /* The rail carries data-density="compact" for TYPE (13px names, 12px meta)
      and takes its row rhythm straight from that scope. It used to restate
@@ -468,9 +423,9 @@
 }
 
 /* The full row's second line: status, agent marks, offline badge. One
-   13px label-voiced line, hue carried only by the status pip — a status
-   word in warn ink would read as running text (design-system.md status
-   fill rules). */
+   13px label-voiced line, and no hue at all — the tone is drawn once, by the
+   pip leading the title above it, and a status word in warn ink would read
+   as running text anyway (design-system.md status fill rules). */
 .conversation-subline {
   display: flex;
   align-items: center;
@@ -618,19 +573,17 @@
   color: var(--err);
 }
 
-/* The state pip, in two homes: on a nested row it leads the title (the flat
-   in-project list has no group headers to carry state); on a full row it sits
-   in the meta line's status cluster. Both are .state-mark now — the shape
-   grammar it enforces is what this rule used to get wrong, spending the
-   hollow ring on `idle` while the ring meant "failed" everywhere else. The
-   tone -> shape table lives in ThreadRow. */
+/* The state pip leads every row's title, nested or full, so the marks line up
+   in one scannable column down the rail and a settled thread — which says
+   nothing in words — still answers "what is this doing?". It is .state-mark,
+   whose shape grammar this rule used to get wrong, spending the hollow ring
+   on `idle` while the ring meant "failed" everywhere else. The tone -> shape
+   table lives in ThreadRow. */
 
-/* The live pip breathes in place instead of wearing the shared halo. That
-   halo rides 5px proud of the dot, and both homes clip it: the meta line is
-   overflow: hidden, which sliced it into a crescent beside "working", and a
-   nested row's title line leaves it no room. Pulsing the dot's own opacity
-   says "working" in its own 8px box. Reduced motion is settled by a11y.css —
-   the one-shot animation ends back at full opacity. */
+/* The live pip breathes in place instead of wearing the shared halo, which
+   rides 5px proud of the dot and has no room on a title line. Pulsing the
+   dot's own opacity says "working" in its own 8px box. Reduced motion is
+   settled by a11y.css — the one-shot animation ends back at full opacity. */
 .conversation-row .state-mark[data-shape="live"]::after {
   content: none;
 }

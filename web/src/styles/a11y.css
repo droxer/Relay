@@ -161,8 +161,7 @@
     min-width: var(--touch-target);
   }
 
-  .adm-fleet-chip,
-  .thread-quick-filter {
+  .adm-fleet-chip {
     min-width: var(--touch-target);
     padding-inline: var(--sp-3);
   }

@@ -15,14 +15,6 @@ import { limitThreadGroups, railLimitFor, RAIL_PAGE_SIZE } from "../lib/threads"
 import { useStableCallback } from "@/hooks/useStableCallback";
 import { projectThreadBuckets } from "../lib/threads";
 import {
-  resolveProjectFilter,
-  THREAD_FILTERS_NONE,
-  threadFiltersActive,
-  withThreadFilter,
-  type AttentionFilter,
-  type ThreadFilters,
-} from "../lib/threadFilters";
-import {
   projectDirectoryState,
   projectFolderSelection,
 } from "../lib/projectDirectory";
@@ -40,19 +32,6 @@ import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 
-// Quick filters: attention state (the same partition the group headers
-// announce) and project. Both narrow the list the search query already
-// produced, and every chip's count previews what clicking it would actually
-// yield — each dimension counted inside the other's current scope, in BOTH
-// directions. Counting projects globally while counting attention per-project
-// made a chip read "12" and then show two rows.
-const ATTENTION_FILTERS: readonly { id: AttentionFilter; labelKey: string }[] = [
-  { id: "all", labelKey: "thread.filter_all" },
-  { id: "needsYou", labelKey: "thread.group_needs_you" },
-  { id: "running", labelKey: "thread.group_running" },
-  { id: "idle", labelKey: "thread.group_idle" },
-];
-
 // The logged-in employee's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current employee's
 // work. “New thread” starts a fresh thread without archiving the rest.
@@ -66,8 +45,6 @@ export function ThreadListPanel({
   computers,
   query,
   setQuery,
-  filters,
-  setFilters,
   selectedSessionId,
   selectedProjectId,
   onSelectThread,
@@ -92,9 +69,6 @@ export function ThreadListPanel({
   computers: DaemonNodeMonitorRecord[];
   query: string;
   setQuery: Dispatch<SetStateAction<string>>;
-  /** Owned by the rail's owner, beside `query` — see lib/threadFilters.ts. */
-  filters: ThreadFilters;
-  setFilters: (filters: ThreadFilters) => void;
   selectedSessionId: string | undefined;
   selectedProjectId: string | null;
   onSelectThread: (sessionId: string) => void;
@@ -135,35 +109,7 @@ export function ThreadListPanel({
     hasQuery: query.trim().length > 0,
   });
 
-  const { attention } = filters;
-  const activeProjectFilter = resolveProjectFilter(filters.projectId, projects.map((project) => project.id));
-  const projectScoped = useMemo(
-    () => (activeProjectFilter === "all" ? threads : threads.filter((item) => item.session.projectId === activeProjectFilter)),
-    [threads, activeProjectFilter],
-  );
-  const scopedGroups = useMemo(() => groupThreads(projectScoped), [projectScoped]);
-  const visibleThreads = attention === "all" ? projectScoped : scopedGroups[attention];
-  // Which projects get a chip at all: any project with threads, ignoring the
-  // attention filter. The SET stays put as attention moves — chips that appear
-  // and vanish under the pointer are unclickable — while the COUNT below is
-  // scoped, so a chip may honestly read 0.
-  const projectChips = useMemo(() => {
-    const seen = new Set<string>();
-    for (const item of threads) if (item.session.projectId) seen.add(item.session.projectId);
-    return projects.filter((project) => seen.has(project.id));
-  }, [projects, threads]);
-  // Counted inside the attention filter, so the number is what the chip yields.
-  const projectCounts = useMemo(() => {
-    const counted = attention === "all" ? threads : groupThreads(threads)[attention];
-    const counts = new Map<string, number>();
-    for (const item of counted) {
-      if (item.session.projectId) counts.set(item.session.projectId, (counts.get(item.session.projectId) ?? 0) + 1);
-    }
-    return counts;
-  }, [threads, attention]);
-  const filtersActive = threadFiltersActive({ attention, projectId: activeProjectFilter });
-
-  const railWindow = useRailWindow(directoryMode === "threads" ? visibleThreads : hierarchy.unclassified, selectedSessionId, `${query} ${attention} ${activeProjectFilter}`);
+  const railWindow = useRailWindow(directoryMode === "threads" ? threads : hierarchy.unclassified, selectedSessionId, query);
 
   const renderThreads = () => {
     const { groups: limited, sentinelRef, limit } = railWindow;
@@ -240,40 +186,6 @@ export function ThreadListPanel({
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      {directoryMode === "threads" ? (
-        <div className="thread-quick-filters" role="group" aria-label={t("thread.filter_label")}>
-          {ATTENTION_FILTERS.map(({ id, labelKey }) => (
-            <Button
-              variant="ghost"
-              size="dense"
-              key={id}
-              type="button"
-              className="thread-quick-filter"
-              data-active={attention === id ? "true" : "false"}
-              aria-pressed={attention === id}
-              onClick={() => setFilters(withThreadFilter(filters, { attention: id }))}
-            >
-              <span>{t(labelKey)}</span>
-              <span className="thread-quick-filter-count tnum">{id === "all" ? projectScoped.length : scopedGroups[id].length}</span>
-            </Button>
-          ))}
-          {projectChips.map((project) => (
-            <Button
-              variant="ghost"
-              size="dense"
-              key={project.id}
-              type="button"
-              className="thread-quick-filter thread-quick-filter-project"
-              data-active={activeProjectFilter === project.id ? "true" : "false"}
-              aria-pressed={activeProjectFilter === project.id}
-              onClick={() => setFilters(withThreadFilter(filters, { projectId: activeProjectFilter === project.id ? "all" : project.id }))}
-            >
-              <span>{project.name}</span>
-              <span className="thread-quick-filter-count tnum">{projectCounts.get(project.id) ?? 0}</span>
-            </Button>
-          ))}
-        </div>
-      ) : null}
       <section
         // project-directory widens the row gap for folder blocks; in threads
         // mode the list must keep conversation-list's tight single-line gap.
@@ -355,20 +267,11 @@ export function ThreadListPanel({
               )}
             />
           ) : null
-        ) : visibleThreads.length === 0 ? (
+        ) : threads.length === 0 ? (
           <RelayEmptyState
             className="conversation-empty"
-            title={filtersActive ? t("thread.no_filter_matches") : query.trim() ? t("thread.no_matches") : t("thread.no_threads")}
-            /* Creating a thread does not answer the question a filter or a
-               query asked — but undoing the filter does, and it is the only
-               way back short of hunting each active chip down. A query is the
-               reader's own words in a box they can see and clear; filters are
-               chips further up a scrolled rail, so only they earn an undo. */
-            actions={filtersActive ? (
-              <Button type="button" variant="outline" onClick={() => setFilters(THREAD_FILTERS_NONE)}>
-                {t("thread.clear_filters")}
-              </Button>
-            ) : query.trim() ? undefined : (
+            title={query.trim() ? t("thread.no_matches") : t("thread.no_threads")}
+            actions={query.trim() ? undefined : (
               <Button type="button" onClick={() => onNewThread(null)}>
                 {t("thread.new_thread")}
               </Button>
