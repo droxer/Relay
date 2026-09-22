@@ -13,13 +13,17 @@ import {
 } from "../lib/projectTasks";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { projectReadOnly } from "../lib/projectPage";
+import { dueTone } from "../lib/backlog";
 import { taskStartMutationInput } from "../lib/taskBoardForm";
+import { compactDueDate } from "../lib/workspaceFormat";
+import { cn } from "@/lib/utils";
 import type { AgentTeam, EmployeeAgent, ProjectRecord, RelayTaskListItem } from "../types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ActionCalendar, ICON } from "./icons";
+import { PriorityBadge } from "./PriorityBadge";
 import { StateMark } from "./StateMark";
 import { TASK_STATUS_SHAPE } from "./task-board/backlogVocabulary";
-import { recordDate } from "./task-record/recordBandFacts";
 
 /** The words for an assignee the roster could not resolve — never its raw id. */
 function assigneeLabel(
@@ -145,25 +149,40 @@ export function ProjectTasks({ project, tasks, agents, teams, locale, onOpenReco
               const assignee = assigneeLabel(projectTaskAssignee(task, agents, teams), t);
               return (
                 <article className="project-task-card" key={task.id}>
-                  {/* The record opens over the project, not by leaving for the
-                      backlog board — the project stays the reader's place. */}
-                  <button
-                    type="button"
-                    className="project-task-title"
-                    onClick={() => onOpenRecord(task.id)}
-                  >
-                    {task.title}
-                  </button>
+                  {/* Priority sits on the title line as the signal-bar badge,
+                      not as a third word in the meta row — rank deserves the
+                      card's strongest slot. */}
+                  <div className="project-task-card-head">
+                    {/* The record opens over the project, not by leaving for the
+                        backlog board — the project stays the reader's place. */}
+                    <button
+                      type="button"
+                      className="project-task-title"
+                      title={task.title}
+                      onClick={() => onOpenRecord(task.id)}
+                    >
+                      {task.title}
+                    </button>
+                    <PriorityBadge priority={task.priority} />
+                  </div>
                   {exception ? (
                     <span className="project-task-exception">
                       <StateMark shape={TASK_STATUS_SHAPE[exception]} />
                       {t(`backlog.statuses.${exception}`)}
                     </span>
                   ) : null}
-                  <div className="project-task-meta"><span>{assignee}</span><span>{t(`backlog.priorities.${task.priority}`)}</span></div>
-                  {task.dueDate ? (
-                    <time dateTime={task.dueDate}>{t("project.tasks_due", { date: recordDate(task.dueDate, locale) })}</time>
-                  ) : null}
+                  <div className="project-task-meta">
+                    <span className="project-task-assignee">{assignee}</span>
+                    {task.dueDate ? (
+                      <time
+                        className={cn("project-task-due", dueTone(task) !== "neutral" && dueTone(task))}
+                        dateTime={task.dueDate}
+                      >
+                        <ActionCalendar size={ICON.sm} aria-hidden="true" />
+                        {t("project.tasks_due", { date: compactDueDate(task.dueDate, locale) })}
+                      </time>
+                    ) : null}
+                  </div>
                   {task.blockerReason ? <p className="project-task-blocker">{task.blockerReason}</p> : null}
                   {!readOnly && (task.status === "backlog" || task.status === "assigned") ? (
                     <Button type="button" variant="outline" size="dense"
