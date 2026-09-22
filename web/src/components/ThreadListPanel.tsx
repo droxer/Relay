@@ -223,7 +223,7 @@ export function ThreadListPanel({
         <div className="thread-quick-filters" role="group" aria-label={t("thread.filter_label")}>
           {ATTENTION_FILTERS.map(({ id, labelKey }) => (
             <Button
-              variant="outline"
+              variant="ghost"
               size="dense"
               key={id}
               type="button"
@@ -236,26 +236,21 @@ export function ThreadListPanel({
               <span className="thread-quick-filter-count tnum">{id === "all" ? projectScoped.length : scopedGroups[id].length}</span>
             </Button>
           ))}
-          {projectChips.length > 0 ? (
-            <>
-              <span className="thread-quick-filter-divider" aria-hidden="true" />
-              {projectChips.map((project) => (
-                <Button
-                  variant="outline"
-                  size="dense"
-                  key={project.id}
-                  type="button"
-                  className="thread-quick-filter"
-                  data-active={activeProjectFilter === project.id ? "true" : "false"}
-                  aria-pressed={activeProjectFilter === project.id}
-                  onClick={() => setProjectFilter(activeProjectFilter === project.id ? "all" : project.id)}
-                >
-                  <span>{project.name}</span>
-                  <span className="thread-quick-filter-count tnum">{projectCounts.get(project.id)}</span>
-                </Button>
-              ))}
-            </>
-          ) : null}
+          {projectChips.map((project) => (
+            <Button
+              variant="ghost"
+              size="dense"
+              key={project.id}
+              type="button"
+              className="thread-quick-filter thread-quick-filter-project"
+              data-active={activeProjectFilter === project.id ? "true" : "false"}
+              aria-pressed={activeProjectFilter === project.id}
+              onClick={() => setProjectFilter(activeProjectFilter === project.id ? "all" : project.id)}
+            >
+              <span>{project.name}</span>
+              <span className="thread-quick-filter-count tnum">{projectCounts.get(project.id)}</span>
+            </Button>
+          ))}
         </div>
       ) : null}
       <section
