@@ -40,3 +40,24 @@ Final desktop and 390px mobile browser checks passed (2 tests). Screenshots were
 inspected; the mobile task back action is in the topbar and the context band stays
 compact. TypeScript, CSS lint, and `git diff --check` passed. No data migration or
 remote action is required.
+
+## Threads directory and project badges
+
+Follow-up requirement: task conversations also belong in the Threads page/list,
+with their project visible as a badge. Opening from Threads retains `/threads/s`;
+opening from Tasks retains `/backlog/t/threads/s`. Both share the same session.
+
+`npm run test:react -w web -- taskThreadList.test.tsx` initially failed because
+project task threads were filtered out and sending from Threads changed the URL
+to Projects. RED checkpoint: `70fceac9`. The four final tests cover listing,
+project badges, project-name search/rename, loading fallback, independent threads,
+and sending/mobile Back in Threads. Together with task navigation tests, 7 pass.
+
+Desktop and 390px mobile browser journeys pass (2 tests), including task-context
+navigation, Threads listing, accessible project labels, clicking through,
+reload, and mobile return to the list. Screenshots were inspected on both sizes.
+The production build/typecheck, CSS lint, and diff check pass. Full frontend
+suites pass: 1,688 Node tests and 276 React tests.
+
+The follow-up `npm test` run also passed all 1,805 Python tests (581 warnings,
+276.48 seconds). The complete build, Node, React, and Python command exited 0.

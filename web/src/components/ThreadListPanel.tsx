@@ -109,7 +109,7 @@ export function ThreadListPanel({
     hasQuery: query.trim().length > 0,
   });
 
-  const railWindow = useRailWindow(hierarchy.unclassified, selectedSessionId, query);
+  const railWindow = useRailWindow(directoryMode === "threads" ? threads : hierarchy.unclassified, selectedSessionId, query);
 
   const renderThreads = () => {
     const { groups: limited, sentinelRef, limit } = railWindow;

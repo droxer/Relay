@@ -212,6 +212,7 @@
     "edit_member_added": "編輯期間該智能體已被新增。草稿已保留；請開啟現有成員進行編輯。"
   },
   "thread": {
+    "project_indicator": "專案：{{name}}",
     "back_to_task": "返回任務",
     "back_to_project_activities": "返回專案動態",
     "search_placeholder": "搜尋對話…",

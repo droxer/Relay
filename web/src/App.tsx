@@ -331,6 +331,7 @@ export function App() {
     && !routedProjectId
     && !routedSessionId
     && !composingNew;
+  const activeThreadTaskId = tasks.find(task => task.linkedSessionIds.includes(activeSession?.id ?? ""))?.id;
   const isTaskThread = route === "backlog" && Boolean(recordTaskId && routedSessionId);
   const isTasksWorkspace = route === "backlog" && !isTaskThread;
   const detailAgent = useMemo(
@@ -517,8 +518,9 @@ export function App() {
   }, [navigateToRoute, route, user]);
   function openThread(sessionId: string, replace = false, parentTaskId?: string) {
     const session = myThreads.find((candidate) => candidate.id === sessionId);
-    const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id ?? parentTaskId ?? (route === "backlog" ? recordTaskId : null);
-    if (session?.projectId && !taskId) {
+    const ownerTaskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
+    const taskId = parentTaskId ?? (route === "main" ? null : ownerTaskId ?? (route === "backlog" ? recordTaskId : null));
+    if (session?.projectId && !ownerTaskId && !taskId) {
       navigateToProject(session.projectId);
       return;
     }
@@ -542,6 +544,7 @@ export function App() {
       && (routedSessionId === activeSession.id || (route === "main" && !routedSessionId))) {
       const sessionId = activeSession.id;
       const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
+      if (route === "main" && taskId) return;
       const path = taskId
         ? `/backlog/${encodeURIComponent(taskId)}/threads/${encodeURIComponent(sessionId)}?project=${encodeURIComponent(projectId)}`
         : `/projects/${encodeURIComponent(projectId)}`;
@@ -801,7 +804,8 @@ export function App() {
           />
         ) : (
           <ThreadsView
-            taskId={isTaskThread ? recordTaskId : null}
+            taskId={isTaskThread ? recordTaskId : activeThreadTaskId}
+            taskThread={isTaskThread}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}
             teams={teams}
