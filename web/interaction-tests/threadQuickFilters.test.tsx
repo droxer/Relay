@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import { ThreadListPanel } from "../src/components/ThreadListPanel";
+import { THREAD_FILTERS_NONE, type ThreadFilters } from "../src/lib/threadFilters";
 import type { ProjectRecord, RelaySession } from "../src/types";
 import type { ThreadItem } from "../src/lib/threads";
 
@@ -20,8 +22,11 @@ const projects = [
   { id: "p2", name: "Ledger" } as ProjectRecord,
 ];
 
-function renderPanel(threads: ThreadItem[]) {
-  render(
+/* The panel is controlled: the filters live with the owner, beside the search
+   query, so they outlive a remount. The harness stands in for App. */
+function Harness({ threads, onFilters }: { threads: ThreadItem[]; onFilters?: (filters: ThreadFilters) => void }) {
+  const [filters, setFilters] = useState<ThreadFilters>(THREAD_FILTERS_NONE);
+  return (
     <ThreadListPanel
       directoryMode="threads"
       threads={threads}
@@ -32,6 +37,11 @@ function renderPanel(threads: ThreadItem[]) {
       computers={[]}
       query=""
       setQuery={vi.fn()}
+      filters={filters}
+      setFilters={(next) => {
+        setFilters(next);
+        onFilters?.(next);
+      }}
       selectedSessionId={undefined}
       selectedProjectId={null}
       onSelectThread={vi.fn()}
@@ -43,8 +53,12 @@ function renderPanel(threads: ThreadItem[]) {
       width={280}
       onResize={vi.fn()}
       onResizeActive={vi.fn()}
-    />,
+    />
   );
+}
+
+function renderPanel(threads: ThreadItem[], onFilters?: (filters: ThreadFilters) => void) {
+  render(<Harness threads={threads} onFilters={onFilters} />);
   return screen.getByRole("group", { name: "thread.filter_label" });
 }
 
@@ -129,4 +143,53 @@ it("says so when a filter leaves no threads", () => {
   const filters = renderPanel([{ session: session("a", "completed") }]);
   fireEvent.click(within(filters).getByRole("button", { name: /thread\.group_running/ }));
   expect(screen.getByText("thread.no_filter_matches")).toBeTruthy();
+});
+
+it("scopes project counts to the selected attention filter", () => {
+  const filters = renderPanel([
+    { session: session("a", "running", "p1") },
+    { session: session("b", "completed", "p1") },
+    { session: session("c", "running", "p2") },
+  ]);
+
+  fireEvent.click(within(filters).getByRole("button", { name: /thread\.group_running/ }));
+  // The chip SET is stable — it tracks which projects have threads at all, so
+  // chips do not appear and vanish as the attention filter moves — but each
+  // count previews what clicking that chip would actually yield.
+  expect(within(filters).getAllByRole("button").map((chip) => chip.textContent)).toEqual([
+    "thread.filter_all3",
+    "thread.group_needs_you0",
+    "thread.group_running2",
+    "thread.group_idle1",
+    "Launch1",
+    "Ledger1",
+  ]);
+});
+
+it("clears every filter from the empty state", () => {
+  const filters = renderPanel([
+    { session: session("a", "completed", "p1") },
+    { session: session("b", "running") },
+  ]);
+
+  fireEvent.click(within(filters).getByRole("button", { name: /Launch/ }));
+  fireEvent.click(within(filters).getByRole("button", { name: /thread\.group_running/ }));
+  expect(screen.getByText("thread.no_filter_matches")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "thread.clear_filters" }));
+  expect(screen.getByText("Thread a")).toBeTruthy();
+  expect(screen.getByText("Thread b")).toBeTruthy();
+  expect(screen.queryByText("thread.no_filter_matches")).toBeNull();
+});
+
+it("reports filter changes to its owner, so they outlive a remount", () => {
+  const seen: ThreadFilters[] = [];
+  const filters = renderPanel([{ session: session("a", "running", "p1") }], (next) => seen.push(next));
+
+  fireEvent.click(within(filters).getByRole("button", { name: /thread\.group_running/ }));
+  fireEvent.click(within(filters).getByRole("button", { name: /Launch/ }));
+  expect(seen).toEqual([
+    { attention: "running", projectId: "all" },
+    { attention: "running", projectId: "p1" },
+  ]);
 });

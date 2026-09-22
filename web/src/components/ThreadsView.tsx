@@ -19,6 +19,7 @@ import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
+import type { ThreadFilters } from "../lib/threadFilters";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadBand } from "./ThreadBand";
@@ -56,6 +57,8 @@ export type ThreadsViewProps = {
   showProjectDirectoryEmpty: boolean;
   threadQuery: string;
   setThreadQuery: Dispatch<SetStateAction<string>>;
+  threadFilters: ThreadFilters;
+  setThreadFilters: (filters: ThreadFilters) => void;
   activeSession: RelaySession | undefined;
   pendingUserMessage: { id: string; text: string } | null;
   displayMessages: DerivedMessage[];
@@ -144,6 +147,8 @@ export function ThreadsView({
   showProjectDirectoryEmpty,
   threadQuery,
   setThreadQuery,
+  threadFilters,
+  setThreadFilters,
   activeSession,
   pendingUserMessage,
   displayMessages,
@@ -262,6 +267,8 @@ export function ThreadsView({
         computers={runtimeNodes}
         query={threadQuery}
         setQuery={setThreadQuery}
+        filters={threadFilters}
+        setFilters={setThreadFilters}
         /* No thread is on screen while a project overview or a route state
            occupies the pane, so no thread row may claim selection — the
            active session outlives the route that opened it. */

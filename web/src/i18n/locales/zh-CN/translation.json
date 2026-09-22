@@ -240,6 +240,7 @@
     "agent_disabled_option": "{{agent}}（已禁用）",
     "no_threads": "尚无对话。",
     "no_matches": "没有匹配的对话。",
+    "clear_filters": "清除筛选",
     "no_filter_matches": "没有符合筛选的对话。",
     "filter_label": "筛选对话",
     "filter_all": "全部",

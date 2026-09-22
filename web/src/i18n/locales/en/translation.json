@@ -244,6 +244,7 @@
     "agent_disabled_option": "{{agent}} (disabled)",
     "no_threads": "No threads yet.",
     "no_matches": "No threads match your search.",
+    "clear_filters": "Clear filters",
     "no_filter_matches": "No threads match these filters.",
     "filter_label": "Filter threads",
     "filter_all": "All",
