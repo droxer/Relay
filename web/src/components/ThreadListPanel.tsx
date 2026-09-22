@@ -316,11 +316,12 @@ function useMinuteClock(): number {
  * a sentinel as it scrolls into view. 400 threads used to mount 400 rows and
  * ~20k DOM nodes. The window always reaches the selected thread, so opening
  * one from a link still shows it highlighted in the rail. It restarts at one
- * page when the query changes, since a filter is a new list.
+ * page when the reset key changes (search query, quick filters), since a
+ * filter is a new list.
  */
-function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, query: string) {
+function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, resetKey: string) {
   const [pages, setPages] = useState(1);
-  useEffect(() => setPages(1), [query]);
+  useEffect(() => setPages(1), [resetKey]);
 
   const groups = useMemo(() => groupThreads(items), [items]);
   const selectedIndex = useMemo(() => {

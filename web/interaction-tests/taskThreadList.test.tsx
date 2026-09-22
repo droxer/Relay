@@ -23,6 +23,23 @@ it("lists task threads in Threads with their project badge and updates renamed p
   expect(hook.result.current.directoryThreads).toHaveLength(1);
 });
 
+it("draws the room agents' faces instead of runtime marks", () => {
+  const agent = { id: "ag1", displayName: "Ada", profileImageUrl: null, placements: [] };
+  const room = { ...session, participantAgentIds: ["ag1"], currentAgent: "claude" } as unknown as RelaySession;
+  const options = { route: "main", myThreads: [room], projects: [project], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [agent] };
+  const { result } = renderHook((props) => useThreadDirectory(props), { initialProps: options });
+  const { container } = render(<ThreadRow item={result.current.directoryThreads[0]} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
+  expect(container.querySelector(".conversation-agent-face")?.getAttribute("title")).toBe("Ada");
+  expect(container.querySelector(".identity-mark")).toBeTruthy();
+  expect(container.querySelector(".conversation-agents > svg:not(.identity-mark)")).toBeNull();
+});
+
+it("falls back to runtime marks when the room has no resolvable agents", () => {
+  const { container } = render(<ThreadRow item={{ session: { ...session, currentAgent: "claude" } }} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
+  expect(container.querySelector(".conversation-agent-face")).toBeNull();
+  expect(container.querySelector(".conversation-agents > svg")).toBeTruthy();
+});
+
 it("keeps a task conversation in Threads when sending from Threads", async () => {
   window.history.replaceState({}, "", "/threads/s");
   const options = { composingNew: false, activeSessionId: "s", selectedSessionId: "s", activeSession: session, onApplySessionFromPath: vi.fn(), onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };

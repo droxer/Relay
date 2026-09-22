@@ -423,9 +423,9 @@
 }
 
 /* The full row's second line: status, agent marks, offline badge. One
-   13px label-voiced line, hue carried only by the status pip — a status
-   word in warn ink would read as running text (design-system.md status
-   fill rules). */
+   13px label-voiced line, and no hue at all — the tone is drawn once, by the
+   pip leading the title above it, and a status word in warn ink would read
+   as running text anyway (design-system.md status fill rules). */
 .conversation-subline {
   display: flex;
   align-items: center;
@@ -474,6 +474,26 @@
 
 .conversation-agents > svg {
   display: block;
+}
+
+/* One room agent's face inside the cluster. Same square-ish agent shape as
+   the avatar stack's faces (r-2, not the round human-avatar language), at the
+   mark cluster's 16px. */
+.conversation-agent-face {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-2);
+  background: var(--surface-3);
+  color: var(--ink-2);
+  overflow: hidden;
+}
+
+.conversation-agent-face > .profile-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
 }
 
 .conversation-topline {
@@ -553,19 +573,17 @@
   color: var(--err);
 }
 
-/* The state pip, in two homes: on a nested row it leads the title (the flat
-   in-project list has no group headers to carry state); on a full row it sits
-   in the meta line's status cluster. Both are .state-mark now — the shape
-   grammar it enforces is what this rule used to get wrong, spending the
-   hollow ring on `idle` while the ring meant "failed" everywhere else. The
-   tone -> shape table lives in ThreadRow. */
+/* The state pip leads every row's title, nested or full, so the marks line up
+   in one scannable column down the rail and a settled thread — which says
+   nothing in words — still answers "what is this doing?". It is .state-mark,
+   whose shape grammar this rule used to get wrong, spending the hollow ring
+   on `idle` while the ring meant "failed" everywhere else. The tone -> shape
+   table lives in ThreadRow. */
 
-/* The live pip breathes in place instead of wearing the shared halo. That
-   halo rides 5px proud of the dot, and both homes clip it: the meta line is
-   overflow: hidden, which sliced it into a crescent beside "working", and a
-   nested row's title line leaves it no room. Pulsing the dot's own opacity
-   says "working" in its own 8px box. Reduced motion is settled by a11y.css —
-   the one-shot animation ends back at full opacity. */
+/* The live pip breathes in place instead of wearing the shared halo, which
+   rides 5px proud of the dot and has no room on a title line. Pulsing the
+   dot's own opacity says "working" in its own 8px box. Reduced motion is
+   settled by a11y.css — the one-shot animation ends back at full opacity. */
 .conversation-row .state-mark[data-shape="live"]::after {
   content: none;
 }
