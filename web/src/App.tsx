@@ -529,6 +529,7 @@ export function App() {
     setPendingThreadTeamId(null);
     setSelectedSessionId(sessionId);
     setActiveSessionId(sessionId);
+    if (taskId) space.setThreadListHidden(false);
     syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId,
       taskId);
   }

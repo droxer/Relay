@@ -159,3 +159,14 @@ it("sends editing back to the board's drawer instead of growing a form", async (
   await user.click(await screen.findByRole("button", { name: /record\.edit/ }));
   expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "R-42" }));
 });
+
+it("links a project task result to Threads and opens the same conversation on click", async () => {
+  getTask.mockResolvedValue({ ...ROUTINE, id: "T-2270", isRoutine: false, projectId: "p", status: "done" });
+  listTaskRuns.mockResolvedValue({ taskId: "T-2270", runs: [RUNS[1]] });
+  const onOpenThread = vi.fn();
+  renderRecord({ taskId: "T-2270", onOpenThread });
+  const link = await screen.findByRole("link", { name: "backlog.open_thread" });
+  expect(link.getAttribute("href")).toBe("/threads/s-1");
+  await userEvent.setup().click(link);
+  expect(onOpenThread).toHaveBeenCalledWith("s-1");
+});

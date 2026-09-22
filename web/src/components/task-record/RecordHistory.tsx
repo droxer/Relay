@@ -76,7 +76,7 @@ export function RecordHistory({
               {sessionId ? (
                 <a
                   className="record-inline-action"
-                  href={pathForAppState({ route: "backlog", mobileView: "chat", taskId, sessionId })}
+                  href={pathForAppState({ route: "main", mobileView: "chat", sessionId })}
                   onClick={(event) => {
                     if (!onOpenThread) return;
                     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;

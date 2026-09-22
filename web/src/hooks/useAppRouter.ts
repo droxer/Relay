@@ -113,7 +113,10 @@ export function useAppRouter({
   const hrefForSideNavRoute = useCallback((nextRoute: AppRoute) => buildHrefForRoute(nextRoute), []);
 
   const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, taskId?: string | null) => {
-    const parentTaskId = taskId ?? (locationState.route === "backlog" ? locationState.taskId : null);
+    // An explicit task opens its conversation in Threads. Only an in-place
+    // update of an existing nested deep link retains the legacy task route.
+    const parentTaskId = taskId === undefined && locationState.route === "backlog"
+      ? locationState.taskId : null;
     const state: AppLocationState = {
       route: sessionId && parentTaskId ? "backlog" : sessionId ? "main" : projectId ? "projects" : "main",
       taskId: sessionId ? parentTaskId : null,

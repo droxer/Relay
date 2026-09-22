@@ -76,7 +76,7 @@ export function RecordResultLine({
       {run.latestSessionId ? (
         <a
           className="record-inline-action task-result-thread"
-          href={pathForAppState({ route: "backlog", mobileView: "chat", taskId, sessionId: run.latestSessionId })}
+          href={pathForAppState({ route: "main", mobileView: "chat", sessionId: run.latestSessionId })}
           onClick={(event) => {
             if (!onOpenThread) return;
             if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
