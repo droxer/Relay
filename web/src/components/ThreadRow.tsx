@@ -17,6 +17,8 @@ import { agentLabel } from "../lib/plan";
 import { AgentMark } from "./AgentMark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IdentityMark } from "./IdentityMark";
+import { ProfileImage } from "./ProfileImagePicker";
 
 export type { ThreadItem };
 
@@ -74,11 +76,15 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       : tone === "run"
         ? t("thread.group_running")
         : t("thread.group_idle");
-  const originLabel = item.origin
-    ? t(item.origin.kind === "routine" ? "thread.origin_routine" : "thread.origin_backlog", { title: item.origin.title })
-    : "";
   const projectName = item.projectName ?? session.projectId;
   const projectLabel = projectName ? t("thread.project_indicator", { name: projectName }) : "";
+  // A backlog task's thread inside a project already carries the project
+  // indicator; a "Backlog" badge would only restate where it lives, so the
+  // origin shows only for standalone tasks and routines.
+  const showOrigin = Boolean(item.origin) && !(item.origin?.kind === "backlog" && projectName);
+  const originLabel = item.origin && showOrigin
+    ? t(item.origin.kind === "routine" ? "thread.origin_routine" : "thread.origin_backlog", { title: item.origin.title })
+    : "";
   const rowLabel = [label, projectLabel, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
 
@@ -107,21 +113,36 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             ? { tone: "idle", text: t("thread.statuses.cancelled") }
             : null;
 
-  // Who has worked the thread, as a mark cluster — the row's only identity
-  // beyond its title. The cluster is decorative: the running agent is named
-  // in the status text, and the full set reads from the title tooltip.
-  const agents = sessionAgents(session);
-  const agentsTitle = agents.map(agentLabel).join(", ");
+  // Who is in the thread's room, drawn as faces — the same fact the header's
+  // participant stack shows. Threads whose room never resolved (older
+  // sessions, deleted agents) fall back to the runtime marks that used to be
+  // the row's only identity. Either way the cluster is decorative: the
+  // running agent is named in the status text and the full set reads from
+  // the title tooltip.
+  const participants = item.participants ?? [];
+  const runtimeAgents = sessionAgents(session);
+  const agentsTitle = (participants.length > 0
+    ? participants.map((agent) => agent.displayName)
+    : runtimeAgents.map(agentLabel)
+  ).join(", ");
   // Where the cluster goes, and whether the row earns a second line at all.
   const { subline, inlineAgents } = threadRowMeta({
     layout,
     hasStatus: Boolean(status),
     hasOrigin: Boolean(item.origin || projectName),
-    agentCount: agents.length,
+    agentCount: participants.length || runtimeAgents.length,
   });
-  const agentCluster = agents.length > 0 ? (
+  const agentCluster = participants.length > 0 ? (
     <span className="conversation-agents" title={agentsTitle} aria-hidden="true">
-      {agents.map((agent) => (
+      {participants.map((agent) => (
+        <span key={agent.id} className="conversation-agent-face" title={agent.displayName}>
+          <ProfileImage src={agent.profileImageUrl} alt="" fallback={<IdentityMark kind="agent" />} />
+        </span>
+      ))}
+    </span>
+  ) : runtimeAgents.length > 0 ? (
+    <span className="conversation-agents" title={agentsTitle} aria-hidden="true">
+      {runtimeAgents.map((agent) => (
         <AgentMark key={agent} agent={agent} size={ICON.xs} />
       ))}
     </span>
@@ -145,9 +166,10 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   // Which backlog task or routine started the thread, in words: a kind badge
   // ("Backlog" / "Routine") and, on full rows, the source's name beside it.
   // Nested rows are single-line, so they carry the badge alone and the name
-  // reads from its tooltip. The row's aria-label already speaks both.
+  // reads from its tooltip. The row's aria-label already speaks both. A
+  // project task's thread skips this — its project badge says it instead.
   const OriginGlyph = item.origin?.kind === "routine" ? NavRoutine : NavBacklog;
-  const originBadge = item.origin ? (
+  const originBadge = item.origin && showOrigin ? (
     <Badge className="conversation-origin-kind" data-kind={item.origin.kind} title={originLabel} aria-hidden="true">
       <OriginGlyph size={ICON.xs} />
       {t(item.origin.kind === "routine" ? "thread.origin_kind_routine" : "thread.origin_kind_backlog")}
@@ -207,7 +229,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
                   <span>{status.text}</span>
                 </span>
               ) : null}
-              {item.origin ? (
+              {item.origin && showOrigin ? (
                 <span className="conversation-origin" data-kind={item.origin.kind}>
                   {originBadge}
                   <span className="conversation-origin-name">{item.origin.title}</span>

@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import type { ProjectRecord } from "../types";
-import { matchesThreadQuery, reuseThreadItems, threadOriginIndex, threadsForDirectory, type ThreadItem } from "../lib/threads";
+import { matchesThreadQuery, reuseThreadItems, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
 
 /**
@@ -17,6 +17,10 @@ import { threadNodeOffline } from "../lib/threadRuntime";
    threadsForDirectory groups on the full record, so a narrower shape here
    would only be a second, weaker spelling of the same model. */
 type DirectoryNode = { activeRuns: readonly { sessionId: string; agent: ThreadItem["runningAgent"] }[] };
+
+/** The rail draws each room's faces, so an agent entry carries a name and an
+   image on top of what threadNodeOffline reads. */
+type DirectoryAgent = NonNullable<Parameters<typeof threadNodeOffline>[1]>[number] & ThreadParticipant;
 
 export interface ThreadDirectory {
   /** Every thread with its running agent and node-offline flag resolved. */
@@ -39,7 +43,7 @@ export interface ThreadDirectoryInput {
   tasks: Parameters<typeof threadOriginIndex>[0];
   visibleNodes: readonly DirectoryNode[];
   runtimeNodes: Parameters<typeof threadNodeOffline>[2];
-  logicalAgents: Parameters<typeof threadNodeOffline>[1];
+  logicalAgents: readonly DirectoryAgent[];
 }
 
 export function useThreadDirectory({
@@ -64,12 +68,19 @@ export function useThreadDirectory({
       visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run.agent] as const)),
     );
     const projectNames = new Map(projects.map(project => [project.id, project.name]));
+    const agentsById = new Map(logicalAgents.map((agent) => [agent.id, agent]));
     const next = reuseThreadItems(previousItems.current, myThreads.map((session) => ({
       session,
       runningAgent: runningBy.get(session.id),
       nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
       origin: origins.get(session.id),
       projectName: session.projectId ? projectNames.get(session.projectId) ?? session.projectId : undefined,
+      // Resolved against the logical agent list, not stored on the session:
+      // a renamed or re-imaged agent must not need a session rewrite for the
+      // rail to draw its current face.
+      participants: (session.participantAgentIds ?? [])
+        .map((agentId) => agentsById.get(agentId))
+        .filter((agent): agent is DirectoryAgent => Boolean(agent)),
     })));
     previousItems.current = next;
     return next;

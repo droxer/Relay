@@ -14,6 +14,16 @@ export type ThreadItem = {
   origin?: ThreadOrigin;
   /** Display name for the owning project; falls back to its ID while loading. */
   projectName?: string;
+  /** The room's agents, in join order. The row draws their faces; runtime
+      glyphs are the fallback for threads with no resolvable room. */
+  participants?: ThreadParticipant[];
+};
+
+/** What a thread row needs of a room agent to draw its face. */
+export type ThreadParticipant = {
+  id: string;
+  displayName: string;
+  profileImageUrl?: string | null;
 };
 
 /** The task or routine that owns a conversation, alongside its project badge. */
@@ -220,6 +230,12 @@ function sameOrigin(a: ThreadOrigin | undefined, b: ThreadOrigin | undefined): b
   return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.title === b.title);
 }
 
+function sameParticipants(a: readonly ThreadParticipant[] | undefined, b: readonly ThreadParticipant[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((agent, index) => agent === b[index]);
+}
+
 /** Carry each unchanged item's previous object forward, so a memoized row
  *  keyed on it skips rendering. Returns `previous` itself when nothing moved. */
 export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadItem[]): ThreadItem[] {
@@ -232,7 +248,8 @@ export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadIt
       && prior.runningAgent === item.runningAgent
       && prior.nodeOffline === item.nodeOffline
       && sameOrigin(prior.origin, item.origin)
-      && prior.projectName === item.projectName;
+      && prior.projectName === item.projectName
+      && sameParticipants(prior.participants, item.participants);
     const result = keep ? prior : item;
     if (result !== previous[index]) changed = true;
     return result;

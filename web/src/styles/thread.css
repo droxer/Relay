@@ -50,6 +50,52 @@
    shared .page-header-icon-action (shell.css), the same ghost plus every
    list page carries. */
 
+/* Quick-filter chips — the segmented-control recipe the admin fleet chips use
+   (variant="outline" size="dense" from the Button, recessed active state
+   here), scoped to the rail: a wrapping band under the search strip, closed
+   by the same hairline the search band wears. */
+.thread-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 0.5px solid var(--line-1);
+}
+
+.thread-quick-filter {
+  gap: var(--sp-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.thread-quick-filter[data-active="true"] {
+  color: var(--ink-1);
+  border-color: var(--line-1);
+  background: var(--surface-0);
+  box-shadow: inset 0 0 0 0.5px var(--line-1);
+}
+
+.thread-quick-filter-count {
+  font: var(--type-micro);
+  color: var(--ink-3);
+  text-transform: none;
+  letter-spacing: var(--type-micro-track);
+}
+
+.thread-quick-filter[data-active="true"] .thread-quick-filter-count {
+  color: var(--ink-1);
+}
+
+/* Splits the attention chips from the project chips in one wrapping band —
+   two dimensions, one row when the rail is wide enough. */
+.thread-quick-filter-divider {
+  width: 0.5px;
+  align-self: stretch;
+  margin-block: var(--sp-1);
+  background: var(--line-1);
+}
+
 .conversation-list {
   /* The rail carries data-density="compact" for TYPE (13px names, 12px meta)
      and takes its row rhythm straight from that scope. It used to restate
@@ -474,6 +520,26 @@
 
 .conversation-agents > svg {
   display: block;
+}
+
+/* One room agent's face inside the cluster. Same square-ish agent shape as
+   the avatar stack's faces (r-2, not the round human-avatar language), at the
+   mark cluster's 16px. */
+.conversation-agent-face {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-2);
+  background: var(--surface-3);
+  color: var(--ink-2);
+  overflow: hidden;
+}
+
+.conversation-agent-face > .profile-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
 }
 
 .conversation-topline {

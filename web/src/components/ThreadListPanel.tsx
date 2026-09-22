@@ -32,6 +32,18 @@ import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 
+// Quick filters: attention state (the same partition the group headers
+// announce) and project. Both narrow the list the search query already
+// produced, and each chip's count previews its own dimension inside the
+// other's current scope.
+const ATTENTION_FILTERS = [
+  { id: "all", labelKey: "thread.filter_all" },
+  { id: "needsYou", labelKey: "thread.group_needs_you" },
+  { id: "running", labelKey: "thread.group_running" },
+  { id: "idle", labelKey: "thread.group_idle" },
+] as const;
+type AttentionFilter = (typeof ATTENTION_FILTERS)[number]["id"];
+
 // The logged-in employee's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current employee's
 // work. “New thread” starts a fresh thread without archiving the rest.
@@ -109,7 +121,28 @@ export function ThreadListPanel({
     hasQuery: query.trim().length > 0,
   });
 
-  const railWindow = useRailWindow(directoryMode === "threads" ? threads : hierarchy.unclassified, selectedSessionId, query);
+  const [attention, setAttention] = useState<AttentionFilter>("all");
+  const [projectFilter, setProjectFilter] = useState<string>("all");
+  // A filter naming a project that has fallen out of the list (deleted, or a
+  // failed refetch) reads as "all" rather than hiding every row.
+  const activeProjectFilter = projects.some((project) => project.id === projectFilter) ? projectFilter : "all";
+  const projectScoped = useMemo(
+    () => (activeProjectFilter === "all" ? threads : threads.filter((item) => item.session.projectId === activeProjectFilter)),
+    [threads, activeProjectFilter],
+  );
+  const scopedGroups = useMemo(() => groupThreads(projectScoped), [projectScoped]);
+  const visibleThreads = attention === "all" ? projectScoped : scopedGroups[attention];
+  const projectCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of threads) {
+      if (item.session.projectId) counts.set(item.session.projectId, (counts.get(item.session.projectId) ?? 0) + 1);
+    }
+    return counts;
+  }, [threads]);
+  const projectChips = projects.filter((project) => (projectCounts.get(project.id) ?? 0) > 0);
+  const filtersActive = attention !== "all" || activeProjectFilter !== "all";
+
+  const railWindow = useRailWindow(directoryMode === "threads" ? visibleThreads : hierarchy.unclassified, selectedSessionId, `${query} ${attention} ${activeProjectFilter}`);
 
   const renderThreads = () => {
     const { groups: limited, sentinelRef, limit } = railWindow;
@@ -186,6 +219,45 @@ export function ThreadListPanel({
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
+      {directoryMode === "threads" ? (
+        <div className="thread-quick-filters" role="group" aria-label={t("thread.filter_label")}>
+          {ATTENTION_FILTERS.map(({ id, labelKey }) => (
+            <Button
+              variant="outline"
+              size="dense"
+              key={id}
+              type="button"
+              className="thread-quick-filter"
+              data-active={attention === id ? "true" : "false"}
+              aria-pressed={attention === id}
+              onClick={() => setAttention(id)}
+            >
+              <span>{t(labelKey)}</span>
+              <span className="thread-quick-filter-count tnum">{id === "all" ? projectScoped.length : scopedGroups[id].length}</span>
+            </Button>
+          ))}
+          {projectChips.length > 0 ? (
+            <>
+              <span className="thread-quick-filter-divider" aria-hidden="true" />
+              {projectChips.map((project) => (
+                <Button
+                  variant="outline"
+                  size="dense"
+                  key={project.id}
+                  type="button"
+                  className="thread-quick-filter"
+                  data-active={activeProjectFilter === project.id ? "true" : "false"}
+                  aria-pressed={activeProjectFilter === project.id}
+                  onClick={() => setProjectFilter(activeProjectFilter === project.id ? "all" : project.id)}
+                >
+                  <span>{project.name}</span>
+                  <span className="thread-quick-filter-count tnum">{projectCounts.get(project.id)}</span>
+                </Button>
+              ))}
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <section
         // project-directory widens the row gap for folder blocks; in threads
         // mode the list must keep conversation-list's tight single-line gap.
@@ -267,11 +339,11 @@ export function ThreadListPanel({
               )}
             />
           ) : null
-        ) : threads.length === 0 ? (
+        ) : visibleThreads.length === 0 ? (
           <RelayEmptyState
             className="conversation-empty"
-            title={query.trim() ? t("thread.no_matches") : t("thread.no_threads")}
-            actions={query.trim() ? undefined : (
+            title={filtersActive ? t("thread.no_filter_matches") : query.trim() ? t("thread.no_matches") : t("thread.no_threads")}
+            actions={filtersActive || query.trim() ? undefined : (
               <Button type="button" onClick={() => onNewThread(null)}>
                 {t("thread.new_thread")}
               </Button>
@@ -316,11 +388,12 @@ function useMinuteClock(): number {
  * a sentinel as it scrolls into view. 400 threads used to mount 400 rows and
  * ~20k DOM nodes. The window always reaches the selected thread, so opening
  * one from a link still shows it highlighted in the rail. It restarts at one
- * page when the query changes, since a filter is a new list.
+ * page when the reset key changes (search query, quick filters), since a
+ * filter is a new list.
  */
-function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, query: string) {
+function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, resetKey: string) {
   const [pages, setPages] = useState(1);
-  useEffect(() => setPages(1), [query]);
+  useEffect(() => setPages(1), [resetKey]);
 
   const groups = useMemo(() => groupThreads(items), [items]);
   const selectedIndex = useMemo(() => {
