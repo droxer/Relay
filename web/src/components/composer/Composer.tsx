@@ -177,10 +177,18 @@ const ComposerView = forwardRef<ComposerHandle, {
   // itself here instead of offering a machine; a thread that has started names
   // the computer it was pinned to; only a thread still being staged gets a
   // picker.
+  //
+  // A started thread's answer is a fact, not a choice, and the thread header
+  // now states it as a mark — so the readouts stand down wherever that header
+  // is on screen (`--header-fact`, hidden above the phone breakpoint) rather
+  // than printing the same computer or project twice on one screen. Only the
+  // picker, the one slot that can still be acted on, always shows.
+  const headerStatesIt = !initializingThread ? "composer-context--header-fact" : undefined;
   const computerSlot = projectName ? (
     // Same readout shape as the pinned computer, different words: a project
     // thread's settled fact is its shared workspace, not a machine.
     <ComposerContextLine
+      className={headerStatesIt}
       label={t("thread.runs_in")}
       mark={<NavProjects size={ICON.sm} aria-hidden="true" />}
       name={projectName}
@@ -195,7 +203,11 @@ const ComposerView = forwardRef<ComposerHandle, {
       onValueChange={onRuntimeNodeChange}
     />
   ) : (
-    <ThreadRuntimeReadout node={activeRuntimeNode} nodeId={runtimeNodeId} />
+    <ThreadRuntimeReadout
+      className={headerStatesIt}
+      node={activeRuntimeNode}
+      nodeId={runtimeNodeId}
+    />
   );
 
   return (

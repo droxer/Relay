@@ -214,7 +214,6 @@
   "thread": {
     "project_indicator": "项目：{{name}}",
     "back_to_task": "返回任务",
-    "back_to_project_activities": "返回项目动态",
     "search_placeholder": "搜索对话…",
     "search_label": "搜索对话",
     "resize_label": "调整对话列表宽度",

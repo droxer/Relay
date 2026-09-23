@@ -436,9 +436,10 @@
 }
 
 /* Team work contracts — the per-member responsibility editor shared by the
-   admin TeamDrawer and the team workspace profile. It sits between the member
-   picker and the lead select in both forms, so it borrows `.team-member-*`
-   anatomy: hairline-separated rows in one bordered well, not `py-3` air. */
+   admin TeamDrawer and the team workspace profile. Each member is a card in
+   the project crew tile grammar (.project-member-tile): opaque --surface-1,
+   hairline edge, avatar + name + meta head, the contract fields as the body.
+   auto-fill lays one column in the drawer and two or three on the page. */
 .team-work-fieldset {
   display: flex;
   flex-direction: column;
@@ -464,36 +465,75 @@
 
 .team-work-members {
   display: grid;
-  gap: var(--sp-hairline);
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: var(--sp-3);
   margin-bottom: var(--sp-4);
-  overflow: hidden;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--line-1);
 }
 
 .team-work-member {
   display: grid;
+  align-content: start;
   gap: var(--sp-3);
-  padding: var(--sp-3);
-  background: var(--surface-0);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  transition: border-color var(--t-fast) var(--ease);
 }
 
+.team-work-member:hover,
+.team-work-member:focus-within {
+  border-color: var(--line-strong);
+}
+
+.team-work-member-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--sp-3);
+  min-width: 0;
+  padding-bottom: var(--sp-3);
+  border-bottom: 0.5px solid var(--line-2);
+}
+
+.team-work-member .agent-state {
+  width: var(--avatar-md);
+  height: var(--avatar-md);
+}
+
+.team-work-member-identity {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+/* Badges ride the name line, as on the crew tiles. */
 .team-work-member-name {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sp-2);
-  margin: 0;
-  color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  min-width: 0;
 }
 
-.team-work-member-lead {
-  color: var(--ink-3);
+.team-work-member-name > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-work-member-meta {
+  overflow: hidden;
+  color: var(--ink-4);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .team-work-flags {

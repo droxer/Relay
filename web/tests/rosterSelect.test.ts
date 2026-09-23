@@ -10,6 +10,7 @@ const SURFACES = [
   "web/src/components/composer/AgentSelect.tsx",
   "web/src/components/ProjectMemberEditor.tsx",
   "web/src/components/admin/TeamDrawer.tsx",
+  "web/src/components/TeamWorkspacePage.tsx",
   "web/src/components/admin/ChannelDetail.tsx",
 ];
 

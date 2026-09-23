@@ -93,6 +93,22 @@
   white-space: nowrap;
 }
 
+/* A fact the thread header already states as a mark. The rail keeps it only
+   where that header is not on screen — phone widths, where the mobile top
+   bar replaces the in-panel chat header (see responsive.css). Printing the
+   same computer or project in both places is the duplication this row was
+   asked to stop; the picker, being the one slot you can still act on, is
+   never marked this way. */
+.composer-context--header-fact {
+  display: none;
+}
+
+@media (max-width: 820px) {
+  .composer-context--header-fact {
+    display: inline-flex;
+  }
+}
+
 /* An offline computer recedes another step, matching the fleet cards — the
    name stays readable, the row stops looking live. */
 .composer-context[data-online="false"],
