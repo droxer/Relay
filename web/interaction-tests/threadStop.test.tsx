@@ -1,9 +1,22 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useThreadDispatch, type ThreadDispatchDeps } from "../src/hooks/useThreadDispatch";
+import { useComposerTargetStore } from "../src/lib/composerTargetStore";
+import { useHandoffStore } from "../src/lib/handoffStore";
+import { useRelayStore } from "../src/lib/store";
+import { useThreadSendStore } from "../src/lib/threadSendStore";
 import type { RelaySession } from "../src/types";
 
 function setup(existing = false) {
+  // Who is addressed and whether a thread is being staged live in stores now;
+  // start every case from a clean slate so no pick leaks between tests.
+  useHandoffStore.setState(useHandoffStore.getInitialState(), true);
+  useThreadSendStore.setState(useThreadSendStore.getInitialState(), true);
+  useComposerTargetStore.setState({
+    ...useComposerTargetStore.getInitialState(),
+    projectRoomTarget: false, activeAgent: "codex", activeLogicalAgentId: "agent-1",
+  }, true);
+  useRelayStore.setState({ ...useRelayStore.getInitialState(), composingNew: !existing }, true);
   let accept!: (session: RelaySession) => void;
   let reject!: (error: Error) => void;
   const response = new Promise<RelaySession>((resolve, fail) => { accept = resolve; reject = fail; });
@@ -14,20 +27,16 @@ function setup(existing = false) {
     activeSession: existing ? session : undefined,
     activeProject: null, activeRun: undefined, activeRunOwner: null, activeRuntimeNode: null,
     threadRunning: false, requiresRuntimeSelection: false, projectDispatchDisabled: false,
-    projectRoomTarget: false, activeAgent: "codex", activeLogicalAgentId: "agent-1",
     effectiveSelectableLogicalAgents: [],
     threadMentionCandidates: [{ id: "agent-1", name: "Codex", eligible: true }],
-    composerTeams: [], pendingThreadTeamId: null, handoffAgentId: "", handoffNote: "",
+    composerTeams: [],
     selectedEmployee: "alice", selectedSandbox: undefined, selectedThreadNodeId: "node-1",
-    selectedToken: undefined, tokens: {}, composingNew: !existing,
+    selectedToken: undefined, tokens: {},
     composerRef: { current: { getText: () => "do work", clear: vi.fn(), setText: vi.fn() } },
     transcript: { pinToBottom: vi.fn() },
     messageOperationIdsRef: { current: new Map() }, recoveryOperationIdsRef: { current: new Map() },
     submitThreadMessageMutation: { mutateAsync: dispatch }, runLogicalAgentsMutation: { mutateAsync: dispatch },
     cancelRunMutation: { mutateAsync: cancel },
-    setActiveAgent: vi.fn(), setActiveLogicalAgentId: vi.fn(), setActiveSessionId: vi.fn(),
-    setSelectedSessionId: vi.fn(), setComposingNew: vi.fn(), setPendingThreadTeamId: vi.fn(),
-    setPendingUserMessage: vi.fn(), setIsRunning: vi.fn(), setHandoffNote: vi.fn(), setHandoffOpen: vi.fn(),
     syncThreadUrl: vi.fn(), navigateToRoute: vi.fn(), reportMutationError: vi.fn(), t: (key: string) => key,
   } as unknown as ThreadDispatchDeps;
   return { deps, accept, reject, cancel, dispatch, session };
@@ -72,7 +81,7 @@ it("clears a pending stop when dispatch fails", async () => {
   });
   expect(cancel).not.toHaveBeenCalled();
   expect(deps.reportMutationError).toHaveBeenCalled();
-  expect(deps.setIsRunning).toHaveBeenLastCalledWith(false);
+  expect(useThreadSendStore.getState()).toMatchObject({ dispatching: false, pendingUserMessage: null });
   dispatch.mockResolvedValue({ ...session, status: "running" });
   await act(async () => { await result.current.sendMessage(); });
   expect(cancel).not.toHaveBeenCalled();
@@ -103,7 +112,7 @@ it.each(["retry", "handoff"] as const)("retains Stop while a %s is being dispatc
   deps.effectiveSelectableLogicalAgents = [{
     id: "agent-1", executorKind: "codex", enabled: true, availability: "ready",
   }] as ThreadDispatchDeps["effectiveSelectableLogicalAgents"];
-  deps.handoffAgentId = "agent-1";
+  useHandoffStore.setState({ agentId: "agent-1", open: true, note: "take it from here" });
   deps.requestThreadRecoveryMutation = { mutateAsync: dispatch } as ThreadDispatchDeps["requestThreadRecoveryMutation"];
   const { result, rerender } = renderHook((props) => useThreadDispatch(props), { initialProps: deps });
   let sending!: Promise<void>;
@@ -118,4 +127,10 @@ it.each(["retry", "handoff"] as const)("retains Stop while a %s is being dispatc
   await act(async () => { accept({ ...session, status: "running" }); await sending; });
   expect(cancel).toHaveBeenCalledOnce();
   expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+  if (kind === "handoff") {
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      input: expect.objectContaining({ targetAgentId: "agent-1", note: "take it from here" }),
+    }));
+    expect(useHandoffStore.getState()).toMatchObject({ open: false, note: "", agentId: "agent-1" });
+  }
 });

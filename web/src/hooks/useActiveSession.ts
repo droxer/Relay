@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { activeSessionStorageKey, useRelayStore } from "../lib/store.ts";
 
 type SessionLike = { id: string; archived?: boolean; createdAt?: string; updatedAt?: string };
-
-const STORAGE_PREFIX = "relay.activeSession.";
 
 export function pickInitialActiveSessionId(
   stored: string | null,
@@ -35,15 +34,19 @@ export function shouldDeriveActiveSession(input: {
   return input.sessionCount > 0;
 }
 
+// Picks the thread an employee sees on arrival, once per employee. The value
+// itself lives in the relay store (next to selectedSessionId and composingNew)
+// so the thread-selection actions there can move all three together.
 export function useActiveSession(employeeId: string, sessions: readonly SessionLike[]) {
-  const key = STORAGE_PREFIX + employeeId;
-  const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null);
+  const activeSessionId = useRelayStore((s) => s.activeSessionId);
+  const setActiveSessionId = useRelayStore((s) => s.setActiveSessionId);
+  const adoptActiveSessionId = useRelayStore((s) => s.adoptActiveSessionId);
   const derivedForRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!employeeId) {
       derivedForRef.current = null;
-      setActiveSessionIdState(null);
+      adoptActiveSessionId(null);
       return;
     }
     if (!shouldDeriveActiveSession({
@@ -52,19 +55,11 @@ export function useActiveSession(employeeId: string, sessions: readonly SessionL
       sessionCount: sessions.length,
     })) return;
     derivedForRef.current = employeeId;
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
-    setActiveSessionIdState(pickInitialActiveSessionId(stored, sessions));
-  }, [employeeId, sessions, key]);
-
-  const setActiveSessionId = useCallback(
-    (id: string | null) => {
-      setActiveSessionIdState(id);
-      if (typeof window === "undefined" || !employeeId) return;
-      if (id) window.localStorage.setItem(key, id);
-      else window.localStorage.removeItem(key);
-    },
-    [employeeId, key],
-  );
+    const stored = typeof window !== "undefined"
+      ? window.localStorage.getItem(activeSessionStorageKey(employeeId))
+      : null;
+    adoptActiveSessionId(pickInitialActiveSessionId(stored, sessions));
+  }, [adoptActiveSessionId, employeeId, sessions]);
 
   return { activeSessionId, setActiveSessionId };
 }

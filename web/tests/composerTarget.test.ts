@@ -168,8 +168,13 @@ describe("composer agent selection", () => {
     // Room target means "no default agent", which the backend expands to the
     // whole roster; a picked member routes the round to them alone.
     assert.match(dispatch, /const projectRoomRound = Boolean\(activeProject\) && projectRoomTarget/);
-    assert.match(app, /handleProjectRoomPicked[\s\S]*?setProjectRoomTarget\(true\)/);
-    assert.match(app, /handleLogicalAgentPicked[\s\S]*?setProjectRoomTarget\(false\)/);
+    // The pick itself lives in the composer target store; App only wires the
+    // composer's handlers to it (the store's own tests pin the flag values).
+    const targetStore = await readFile(resolve("web/src/lib/composerTargetStore.ts"), "utf8");
+    assert.match(app, /handleProjectRoomPicked = useStableEvent\(\(\) => pickRoom\(\)\)/);
+    assert.match(app, /handleLogicalAgentPicked = useStableEvent\([^)]*\) => pickAgent\(agent\)\)/);
+    assert.match(targetStore, /pickRoom: \(\) => set\(\{ projectRoomTarget: true \}\)/);
+    assert.match(targetStore, /pickAgent: \(agent\) => set\(\{[\s\S]*?projectRoomTarget: false/);
     // A new project thread carries the narrowed roster as assignments.
     assert.match(
       dispatch,
