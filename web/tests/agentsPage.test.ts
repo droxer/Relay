@@ -32,7 +32,8 @@ describe("agent meta line", () => {
   it("is the one component every agent-bearing surface renders", async () => {
     for (const path of [
       "src/components/AgentsPage.tsx",
-      "src/components/TeamWorkspacePage.tsx",
+      // The team record draws its members through the shared member card.
+      "src/components/TeamMemberCard.tsx",
       "src/components/TeamMemberOption.tsx",
     ]) {
       const source = await read(path);

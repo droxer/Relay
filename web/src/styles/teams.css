@@ -238,85 +238,6 @@
   letter-spacing: var(--track-0);
 }
 
-.team-profile-members {
-  display: flex;
-  margin: 0;
-  padding: 0;
-  flex-direction: column;
-  list-style: none;
-}
-
-.team-profile-member {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) 0;
-  border-bottom: 0.5px solid var(--line-2);
-}
-
-.team-profile-member-state {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-self: end;
-}
-
-.team-profile-member:last-child {
-  border-bottom: 0;
-}
-
-.team-profile-member-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--sp-0-5);
-}
-
-.team-profile-member-copy strong,
-.team-profile-member-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.team-profile-member-title {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: var(--sp-2);
-}
-
-.team-profile-member-title strong {
-  color: var(--ink-1);
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
-}
-
-/* Lead rides the name as a quiet micro-caps marker — a bordered chip in a
-   trailing column read as a button and orphaned the row. */
-.team-profile-member-lead {
-  flex: none;
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-}
-
-.team-profile-member-copy small {
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-/* Same meta voice as the picker row: kind · home computer on one quiet
-   mono line, generated middot separator. */
-/* The meta line under a member's name is <AgentMetaLine> (.agent-meta in
-   agents.css) — this surface used to draw its own glyph-less, --fs-2 copy. */
-.team-profile-member .agent-meta {
-  flex-wrap: nowrap;
-}
-
 .team-profile-member-fieldset {
   min-width: 0;
   margin: var(--sp-3) 0 0;
@@ -487,9 +408,15 @@
   border-color: var(--line-strong);
 }
 
+/* The card open for inline edit takes the action edge, so it reads as the
+   one live form among summaries. */
+.team-work-member[data-editing] {
+  border-color: var(--action);
+}
+
 .team-work-member-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--sp-3);
   min-width: 0;
@@ -517,6 +444,11 @@
   min-width: 0;
 }
 
+.team-work-member-identity .agent-meta {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
 .team-work-member-name > strong {
   min-width: 0;
   overflow: hidden;
@@ -527,13 +459,77 @@
   white-space: nowrap;
 }
 
-.team-work-member-meta {
-  overflow: hidden;
+/* The pencil rides the head's trailing column, as on the crew tiles. */
+.team-work-member-edit {
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: var(--control-h-2xs);
+  padding: 0;
+  border-radius: var(--r-1);
+  color: var(--ink-3);
+}
+
+.team-work-member-edit:hover {
+  color: var(--ink-1);
+  background: var(--surface-2);
+}
+
+
+/* Read card body: what the member owns, then how they take part. */
+.team-work-member-body {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.team-work-member-responsibility {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.team-work-member-responsibility.is-empty {
   color: var(--ink-4);
+}
+
+.team-work-member-outputs {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.team-work-member-outputs > span {
+  color: var(--ink-4);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-transform: uppercase;
+}
+
+.team-work-member-outputs ul {
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.team-work-member-participation {
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: 0.5px solid var(--line-2);
+  color: var(--ink-3);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.team-work-member-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
 }
 
 .team-work-flags {

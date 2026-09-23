@@ -92,7 +92,6 @@
     "cleanup_queued": "工作區檔案清理已排入佇列，將在專案電腦連線後執行。",
     "delete_active": "請先停止專案中所有正在執行的工作，再刪除專案。",
     "delete_unavailable": "請重新連接專案電腦，然後刪除此專案。",
-
     "projects": "專案",
     "create": "建立專案",
     "name": "專案名稱",
@@ -1922,7 +1921,10 @@
     "message_answer": "回答",
     "message_blocker": "阻礙",
     "message_handoff": "交接",
-    "message_decision": "決策"
+    "message_decision": "決策",
+    "edit_member": "編輯 {{name}}",
+    "save_member": "儲存",
+    "no_responsibility": "尚未設定職責範圍。"
   },
   "recovery": {
     "title": "後續操作",

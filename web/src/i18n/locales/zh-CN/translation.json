@@ -92,7 +92,6 @@
     "cleanup_queued": "工作区文件清理已排队，将在项目电脑连接后执行。",
     "delete_active": "请先停止项目中所有正在运行的工作，再删除项目。",
     "delete_unavailable": "请重新连接项目电脑，然后删除此项目。",
-
     "projects": "项目",
     "create": "创建项目",
     "edit": "项目设置",
@@ -1922,7 +1921,10 @@
     "message_answer": "回答",
     "message_blocker": "阻碍",
     "message_handoff": "交接",
-    "message_decision": "决策"
+    "message_decision": "决策",
+    "edit_member": "编辑 {{name}}",
+    "save_member": "保存",
+    "no_responsibility": "尚未设置职责范围。"
   },
   "recovery": {
     "title": "后续操作",
