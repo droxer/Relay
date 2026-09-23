@@ -20,11 +20,10 @@ import {
   AdminDelete,
   ICON,
 } from "./icons";
-import { AgentMetaLine } from "./AgentMetaLine";
-import { AgentStateBadge } from "./AgentStateBadge";
 import { PageHeader } from "./PageHeader";
 import { IdentityMark } from "./IdentityMark";
 import { TeamMemberOption } from "./TeamMemberOption";
+import { TeamMemberCard } from "./TeamMemberCard";
 import { ProfileImage, ProfileImagePicker } from "./ProfileImagePicker";
 import { ActivitiesSkeleton, WorkspaceActivities, WorkspaceError } from "./workspace/WorkspacePrimitives";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -76,6 +75,8 @@ function TeamProfile({
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
   const [imageSaving, setImageSaving] = useState(false);
+  // The one member card open for inline edit; the others lock until it closes.
+  const [cardEditingId, setCardEditingId] = useState<string | null>(null);
   // The lead must be one of the team's own members — the same single-roster
   // picker the TeamDrawer draws, so the strip stays hidden.
   const leadCandidates = useMemo(
@@ -101,7 +102,9 @@ function TeamProfile({
     || leadId !== (team.leadAgentId ?? "")
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
-  const confirmDiscardChanges = useUnsavedChangesGuard(editing && draftDirty && !busy);
+  const confirmDiscardChanges = useUnsavedChangesGuard(
+    ((editing && draftDirty) || cardEditingId !== null) && !busy,
+  );
 
   function applyTeamUpdate(updated: AgentTeam) {
     queryClient.setQueriesData<{ teams: AgentTeam[] }>(
@@ -233,6 +236,28 @@ function TeamProfile({
     }
   }
 
+  /** Inline save from one member card: only that member's contract changes;
+   *  membership, lead and criteria go back exactly as stored. */
+  async function saveMemberConfig(agentId: string, next: TeamMemberConfig): Promise<boolean> {
+    try {
+      await updateTeamMutation.mutateAsync({
+        teamId: team.id,
+        input: teamMutationInput({
+          name: team.name,
+          memberAgentIds: team.memberAgentIds,
+          leadAgentId: team.leadAgentId ?? "",
+          enabled: team.enabled,
+          memberConfigs: { ...(team.memberConfigs ?? {}), [agentId]: next },
+          acceptanceCriteria: team.acceptanceCriteria ?? [],
+        }),
+      });
+      return true;
+    } catch {
+      // The shared mutation handler announces the error; the card stays open.
+      return false;
+    }
+  }
+
   async function remove() {
     if (!(await confirm({
       title: t("teams.delete_title", { name: team.name }),
@@ -272,7 +297,7 @@ function TeamProfile({
                   <span className="tnum">{editing ? memberIds.length : team.members.length}</span>
                 </h2>
                 <span className="team-profile-section-head-side">
-                  {!editing ? (
+                  {!editing && cardEditingId === null ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -319,62 +344,22 @@ function TeamProfile({
                   ) : null}
                 </fieldset>
               ) : (
-                <ul className="team-profile-members">
-                  {team.members.map((member) => {
-                    const ready = member.enabled && member.availability === "ready";
-                    // TeamMemberSummary carries no placements; the roster's
-                    // full agent record knows the member's computers.
-                    const placements = agents.find((agent) => agent.id === member.id)?.placements ?? [];
-                    return (
-                      <li key={member.id} className="team-profile-member">
-                        <AgentStateBadge
-                          agent={member.executorKind}
-                          ready={ready}
-                          availability={member.enabled ? member.availability : undefined}
-                          imageUrl={member.profileImageUrl}
-                          name={member.displayName}
-                        />
-                        <span className="team-profile-member-copy">
-                          <span className="team-profile-member-title">
-                            <strong>{member.displayName}</strong>
-                            {member.id === team.leadAgentId ? (
-                              <span className="team-profile-member-lead">{t("teams.lead_badge")}</span>
-                            ) : null}
-                          </span>
-                          {/* Role and scope ride the copy stack's supporting
-                              rung (<small> is what this stack clamps and
-                              quiets); a bare <span> read louder than the name's
-                              own meta line and never truncated, so a long
-                              responsibility blew the row open. */}
-                          {(team.memberConfigs?.[member.id]?.role ?? member.defaultRole) ? (
-                            <small>
-                              {t(`team_work.role_${team.memberConfigs?.[member.id]?.role ?? member.defaultRole}`)}
-                            </small>
-                          ) : null}
-                          {team.memberConfigs?.[member.id]?.responsibility ? (
-                            <small title={team.memberConfigs[member.id].responsibility}>
-                              {team.memberConfigs[member.id].responsibility}
-                            </small>
-                          ) : null}
-                          <AgentMetaLine
-                            executorKind={member.executorKind}
-                            placements={placements}
-                            className="team-profile-member-meta"
-                          />
-                        </span>
-                        {/* Per-member readiness, not the team's — the band
-                            carries the team's own availability. */}
-                        <span className="team-profile-member-state">
-                          {!member.enabled
-                            ? <TonePill tone="neutral" label={t("teams.disabled")} />
-                            : member.availability !== "ready"
-                              ? <StatusPill value={member.availability} />
-                              : null}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="team-work-members team-profile-member-cards">
+                  {team.members.map((member) => (
+                    <TeamMemberCard
+                      key={member.id}
+                      // TeamMemberSummary carries no placements; the roster's
+                      // full agent record knows the member's computers.
+                      member={{ ...member, placements: agents.find((agent) => agent.id === member.id)?.placements }}
+                      config={team.memberConfigs?.[member.id] ?? {}}
+                      lead={member.id === team.leadAgentId}
+                      canEdit={!busy && (cardEditingId === null || cardEditingId === member.id)}
+                      saving={updateTeamMutation.isPending && cardEditingId === member.id}
+                      onEditingChange={(open) => setCardEditingId(open ? member.id : null)}
+                      onSave={(next) => saveMemberConfig(member.id, next)}
+                    />
+                  ))}
+                </div>
               )}
             </section>
 

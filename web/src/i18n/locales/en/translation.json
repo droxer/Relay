@@ -92,7 +92,6 @@
     "cleanup_queued": "Workspace file cleanup is queued and will run when the project computer connects.",
     "delete_active": "Stop all running project work before deleting the project.",
     "delete_unavailable": "Reconnect the project computer before deleting this project.",
-
     "projects": "Projects",
     "create": "Create project",
     "edit": "Project settings",
@@ -1941,7 +1940,10 @@
     "message_answer": "Answer",
     "message_blocker": "Blocker",
     "message_handoff": "Handoff",
-    "message_decision": "Decision"
+    "message_decision": "Decision",
+    "edit_member": "Edit {{name}}",
+    "save_member": "Save",
+    "no_responsibility": "No responsibility set yet."
   },
   "recovery": {
     "title": "Next steps",

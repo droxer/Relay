@@ -6,17 +6,29 @@ import { describe, it } from "node:test";
 const read = (path: string) => readFile(resolve(path), "utf8");
 
 describe("team member responsibility cards", () => {
-  it("draws each member as an identity card: avatar, name, lead pill, runtime · role", async () => {
-    const source = await read("web/src/components/TeamResponsibilities.tsx");
-    assert.match(source, /<article className="team-work-member"[^>]*role="group"/);
+  it("draws each member as an identity card: avatar, name, lead + role pills, meta line", async () => {
+    const source = await read("web/src/components/TeamMemberCard.tsx");
+    assert.match(source, /<article className="team-work-member" role="group"/);
     assert.match(source, /<header className="team-work-member-head">\s*<AgentStateBadge/);
     assert.match(source, /imageUrl=\{member\.profileImageUrl\}/);
     assert.match(source, /<TonePill tone="info" label=\{t\("project\.lead_badge"\)\} \/>/);
-    // The meta line shows the role the member will actually play, so an
+    // The role pill shows the role the member will actually play, so an
     // inherited default is visible without opening the select.
-    assert.match(source, /agentLabel\(member\.executorKind\)[\s\S]*?team_work\.role_\$\{effectiveRole\}/);
+    assert.match(source, /const role = effectiveRoleOf\(member, config\)/);
+    assert.match(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_\$\{role\}`\)\} \/>/);
+    assert.match(source, /<AgentMetaLine executorKind=\{member\.executorKind\} placements=\{member\.placements \?\? \[\]\} \/>/);
     // A responsibility is a sentence or two, not a single-line value.
     assert.match(source, /<Textarea\s+rows=\{2\}\s+value=\{config\.responsibility/);
+  });
+
+  it("shares one card anatomy between the edit forms and the team record", async () => {
+    const responsibilities = await read("web/src/components/TeamResponsibilities.tsx");
+    const page = await read("web/src/components/TeamWorkspacePage.tsx");
+    assert.match(responsibilities, /<TeamMemberEditCard/);
+    assert.doesNotMatch(responsibilities, /<AgentStateBadge|<Select\b/);
+    // The read view is the card grid with inline edit, not the old row list.
+    assert.match(page, /<TeamMemberCard\b/);
+    assert.doesNotMatch(page, /className="team-profile-members"/);
   });
 
   it("lays the cards out in the crew-tile card grammar", async () => {

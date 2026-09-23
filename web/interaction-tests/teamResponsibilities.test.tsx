@@ -2,6 +2,7 @@ import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { TeamResponsibilities } from "../src/components/TeamResponsibilities";
+import { TeamMemberCard } from "../src/components/TeamMemberCard";
 import { CollaborationWork } from "../src/components/CollaborationWork";
 import { teamMutationInput } from "../src/lib/teamForm";
 import type { RelaySession, TeamMemberConfig } from "../src/types";
@@ -49,11 +50,78 @@ it("renders each member as an identity card with the lead pill and effective rol
   expect(cards[0].querySelector(".team-work-member-head .agent-state")).toBeTruthy();
   expect(cards[0].textContent).toContain("project.lead_badge");
   expect(cards[1].textContent).not.toContain("project.lead_badge");
-  // The inherited default role shows on the meta line without opening the select.
-  expect(cards[1].querySelector(".team-work-member-meta")?.textContent).toBe("Codex · team_work.role_reviewer");
+  // The inherited default role shows beside the name without opening the select.
+  expect(cards[1].querySelector(".team-work-member-name")?.textContent).toContain("team_work.role_reviewer");
+  expect(cards[1].querySelector(".team-work-member-identity .agent-meta")?.textContent).toContain("Codex");
   // The lead has no participation flags; everyone else does.
   expect(cards[0].querySelector(".team-work-flags")).toBeNull();
   expect(cards[1].querySelector(".team-work-flags")).toBeTruthy();
+});
+
+// The setup's Button mock drops `tooltip` (the real one turns it into the
+// aria-label), so the icon-only pencil is addressed by its class.
+const pencil = () => document.querySelector<HTMLButtonElement>(".team-work-member-edit")!;
+
+it("reads as a summary and edits one member in place", async () => {
+  const saved: TeamMemberConfig[] = [];
+  render(
+    <TeamMemberCard
+      member={{ id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", availability: "ready" }}
+      config={{ responsibility: "Review the diff", expectedOutputs: ["Findings list"] }}
+      lead={false}
+      canEdit
+      onSave={async (next) => { saved.push(next); return true; }}
+    />,
+  );
+  // Read mode: the summary, no form controls.
+  expect(screen.getByText("Review the diff")).toBeTruthy();
+  expect(screen.getByText("Findings list")).toBeTruthy();
+  // A reviewer is required by default.
+  expect(screen.getByText("team_work.required")).toBeTruthy();
+  expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
+
+  fireEvent.click(pencil());
+  fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Review auth changes" } });
+  fireEvent.click(screen.getByRole("button", { name: "team_work.save_member" }));
+  await screen.findByText("Review auth changes");
+  expect(saved).toEqual([{ responsibility: "Review auth changes", expectedOutputs: ["Findings list"] }]);
+  expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
+});
+
+it("discards the draft on cancel and stays open when the save fails", async () => {
+  render(
+    <TeamMemberCard
+      member={{ id: "b", displayName: "Builder", executorKind: "claude" }}
+      config={{}}
+      lead
+      canEdit
+      onSave={async () => false}
+    />,
+  );
+  expect(screen.getByText("team_work.no_responsibility")).toBeTruthy();
+  fireEvent.click(pencil());
+  // The lead has no participation flags.
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Plan" } });
+  fireEvent.click(screen.getByRole("button", { name: "team_work.save_member" }));
+  await Promise.resolve();
+  expect((screen.getByLabelText("team_work.responsibility") as HTMLTextAreaElement).value).toBe("Plan");
+  fireEvent.click(screen.getByRole("button", { name: "dialog.cancel" }));
+  expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
+  expect(screen.getByText("team_work.no_responsibility")).toBeTruthy();
+});
+
+it("locks the pencil while another card is open", () => {
+  render(
+    <TeamMemberCard
+      member={{ id: "b", displayName: "Builder", executorKind: "claude" }}
+      config={{}}
+      lead={false}
+      canEdit={false}
+      onSave={async () => true}
+    />,
+  );
+  expect(pencil().disabled).toBe(true);
 });
 
 it("shows acceptance evidence and attributed review findings without claiming acceptance", () => {
