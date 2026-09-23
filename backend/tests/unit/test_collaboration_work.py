@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import pytest
 
+from relay.collaboration.service import compile_assignment_work_graph, create_round_manifest
 from relay.collaboration.work import (
     WORK_RESULTS,
     completion_blockers,
@@ -195,6 +196,37 @@ def test_small_request_can_select_no_optional_specialists():
     items[2]["required"] = False
     compiled = compile_proposed_plan(items, [], "simple")
     assert [item["assignmentId"] for item in compiled] == ["lead", "final"]
+
+
+@pytest.mark.parametrize("select_builder", [False, True])
+def test_replanned_manifest_dependencies_only_reference_selected_work(select_builder):
+    items = assignments()
+    for item in items[1:-1]:
+        item["required"] = False
+    original = compile_assignment_work_graph(
+        items, purpose="accomplish", team_snapshot=None
+    )
+    before = deepcopy(original)
+    plan = [{
+        "agentId": "builder",
+        "objective": "Implement the endpoint",
+        "acceptanceCriteria": ["Regression tests pass"],
+        "expectedOutputs": ["Endpoint and tests"],
+    }] if select_builder else []
+    planned = compile_proposed_plan(original, plan, "round_1")
+    manifest = create_round_manifest(
+        source="lead_plan", purpose="accomplish", address={"kind": "room"},
+        assignments=planned, team_snapshot=None,
+    )
+    work = manifest["workGraph"]["items"]
+    assert [item["ownerAgentId"] for item in work] == (
+        ["lead", "builder", "lead"] if select_builder else ["lead", "lead"]
+    )
+    for index, item in enumerate(work):
+        assert item["dependsOnWorkItemIds"] == [
+            predecessor["workItemId"] for predecessor in work[:index]
+        ]
+    assert original == before
 
 
 def test_predecessor_context_is_bounded_and_marks_truncated_evidence():

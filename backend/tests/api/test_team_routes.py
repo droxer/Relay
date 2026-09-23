@@ -122,6 +122,79 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
             assert commands[0]["delivery"]["roundId"] == plans[0]["manifest"]["roundId"]
 
 
+@pytest.mark.parametrize("empty_plan", [False, True])
+@pytest.mark.parametrize("lead_first", [False, True])
+def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, empty_plan, lead_first):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex")
+        builder = _agent(client, "alice", "Builder", "claude")
+        reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
+        node_id = "test_node_alice"
+        app.state.registry.register({
+            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"],
+            "capabilities": ["thread-workspaces", "round-result", "work-results"], "status": "ready",
+        })
+        team = client.post("/api/v1/admin/teams", json={
+            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
+        }).json()["team"]
+        _login(client, "alice")
+        started = client.post("/api/v1/agent-runs", json={
+            "taskGoal": "Establish the thread", "teamId": team["id"],
+            "assignments": [{"agentId": lead["id"]}],
+        })
+        assert started.status_code == 202, started.text
+        session_id = started.json()["id"]
+        good = {"status": "done", "evidence": ["Acceptance checks passed"]}
+
+        def finish(command, work):
+            _mark_executing(app, node_id, command)
+            app.state.registry.handle_event(node_id, {
+                "type": "run.completed", "commandId": command["id"], "sessionId": session_id,
+                "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+                "roundResult": {"status": "done", "work": work},
+            }, "node_token")
+
+        [initial] = app.state.registry.take_commands(node_id, "node_token")
+        assert not initial["state"].get("team_plan_candidates")
+        finish(initial, good)
+        assert app.state.registry.take_commands(node_id, "node_token") == []
+        addressed = [lead["id"], builder["id"]] if lead_first else [builder["id"], lead["id"]]
+        response = client.post(f"/api/v1/threads/{session_id}/messages", json={
+            "text": "Implement this together", "addressAgentIds": addressed,
+        })
+        assert response.status_code == 202, response.text
+        [coordinator] = app.state.registry.take_commands(node_id, "node_token")
+        assert coordinator["logicalAgentId"] == lead["id"]
+        assert [item["agentId"] for item in coordinator["state"]["team_plan_candidates"]] == [builder["id"]]
+        plan = [] if empty_plan else [{
+            "agentId": builder["id"], "objective": "Implement POST /reset",
+            "acceptanceCriteria": ["Expired tokens rejected"], "expectedOutputs": ["API and tests"],
+        }]
+        finish(coordinator, {**good, "plan": plan})
+        planned_session = app.state.session_store.get_session(session_id)
+        manifest = planned_session["collaborationRounds"][-1]
+        assert manifest["source"] == "lead_plan", planned_session.get("finalOutcome")
+        work = manifest["workGraph"]["items"]
+        for index, item in enumerate(work):
+            assert item["dependsOnWorkItemIds"] == [p["workItemId"] for p in work[:index]]
+        for agent_id in ([lead["id"]] if empty_plan else [builder["id"], lead["id"]]):
+            [command] = app.state.registry.take_commands(node_id, "node_token")
+            assert command["logicalAgentId"] == agent_id
+            finish(command, good)
+        assert app.state.registry.take_commands(node_id, "node_token") == []
+        completed = app.state.session_store.get_session(session_id)
+        assert completed["status"] == "completed"
+        assert "Work needs attention" not in completed["finalOutcome"]
+
+
 def _agent(
     client: TestClient,
     employee_id: str,

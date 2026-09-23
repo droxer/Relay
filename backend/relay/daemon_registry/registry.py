@@ -3647,6 +3647,14 @@ class DaemonNodeRegistry:
                 or assignment.get("agent")
                 or "Agent"
             )
+            if self._send_back_for_repair(
+                run_request,
+                terminal_claim_id,
+                next_state,
+                event["error"],
+                agent_label,
+            ):
+                return
             if self._continue_after_non_action_failure(
                 run_request,
                 terminal_claim_id,
@@ -3866,8 +3874,8 @@ class DaemonNodeRegistry:
 
         A failed member used to end the whole run, discarding the work every
         earlier member already committed to the shared workspace. The lead owns
-        the task, so it gets a bounded chance to repair and let the pipeline
-        resume at the member that failed.
+        the task, so it gets a bounded chance to repair. Every member then
+        revalidates its contribution against the repaired workspace.
         """
         decision = decide_failure(
             run_request,

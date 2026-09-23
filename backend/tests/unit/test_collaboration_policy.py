@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from relay.collaboration.policy import (
     REPAIR_NOTE_STATE_KEY,
     REPAIR_RESUME_INDEX_STATE_KEY,
@@ -8,6 +10,7 @@ from relay.collaboration.policy import (
     decide_failure,
     validate_round_result,
 )
+from relay.collaboration.work import WORK_RESULTS, QUESTION_RESUME, QUESTION_TARGET, QUESTION_NOTE
 
 
 def _request(**overrides):
@@ -50,6 +53,29 @@ def test_taskless_failure_never_invents_coordinator_authority() -> None:
     )
 
     assert decision.kind == "fail"
+
+
+def test_coordinator_repair_discards_stale_evidence_and_restarts_member_work():
+    state = {
+        WORK_RESULTS: {key: {"status": "done", "evidence": ["Old checks"]} for key in ("lead", "build", "verify")},
+        "_relay_round_result": {"status": "done"},
+        "_relay_participant_failures": [{"assignmentId": "verify"}],
+        QUESTION_RESUME: 3, QUESTION_TARGET: 2, QUESTION_NOTE: "Old consultation",
+    }
+    before = deepcopy(state)
+    request = _request(currentIndex=3, assignments=[
+        {"assignmentId": "lead", "coordinator": True},
+        {"assignmentId": "build"}, {"assignmentId": "verify"}, {"assignmentId": "review"},
+    ])
+    decision = decide_failure(request, state, outcome="Review failed", agent_label="Reviewer", mode="review", max_repairs=1)
+    assert decision.kind == "repair"
+    assert not decision.state.get(WORK_RESULTS)
+    assert "_relay_round_result" not in decision.state
+    assert not decision.state.get("_relay_participant_failures")
+    assert not any(key in decision.state for key in (QUESTION_RESUME, QUESTION_TARGET, QUESTION_NOTE))
+    next_index, _ = advance_after_success({**request, "currentIndex": 0}, decision.state)
+    assert next_index == 1
+    assert state == before
 
 
 def test_discussion_failure_keeps_collecting_participants() -> None:
