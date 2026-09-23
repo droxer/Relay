@@ -1520,7 +1520,8 @@
     "close": "关闭"
   },
   "drawer": {
-    "close": "关闭抽屉"
+    "close": "关闭抽屉",
+    "resize_label": "调整面板宽度"
   },
   "cancel": {
     "reason": "从 Relay Web UI 取消。"

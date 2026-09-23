@@ -1,7 +1,10 @@
 "use client";
 
-import { useId, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
+import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import { readDrawerWidth, writeDrawerWidth } from "@/lib/appStorage";
 import {
   Dialog,
   DialogBackdrop,
@@ -16,14 +19,21 @@ import {
  *  sizing stays consistent across the app. `form` for single-column edit
  *  forms, `detail` for read/inspect panels, `wide` for preview panes. `task`
  *  and `routine` are the task-board drawer's two variants (routine needs room
- *  for its schedule fields). */
+ *  for its schedule fields). These are only the defaults: every named-width
+ *  drawer can be dragged wider and remembers the chosen width per role. */
 const DRAWER_WIDTHS = {
-  form: 460,
-  detail: 520,
-  task: 560,
-  routine: 600,
-  wide: 900,
+  form: 520,
+  detail: 600,
+  task: 680,
+  routine: 720,
+  wide: 1080,
 } as const;
+
+/** The resize gesture's floor, and a cap so a drag cannot bury the page
+ *  under the panel. The live ceiling (viewport) is measured at gesture
+ *  start, like the shell splitters. */
+const DRAWER_WIDTH_MIN = 380;
+const DRAWER_WIDTH_MAX = 1600;
 
 export type DrawerWidth = keyof typeof DRAWER_WIDTHS;
 
@@ -81,11 +91,29 @@ export function Drawer({
   layer = 0,
   onClosed,
 }: DrawerProps) {
+  const { t } = useTranslation();
   const titleId = useId();
   const subtitleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const resolvedWidth = typeof width === "number" ? width : DRAWER_WIDTHS[width];
+  /* Width is a role default until the user drags the edge; the dragged width
+     persists per role so e.g. every task record opens at the width the user
+     last chose. Read on open, not in the initializer — the portal content is
+     what mounts, and storage reads during prerender would mismatch. */
+  const widthRole = typeof width === "number" ? null : width;
+  const [draggedWidth, setDraggedWidth] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open || widthRole === null) return;
+    const stored = readDrawerWidth(widthRole);
+    setDraggedWidth(stored === null ? null : Math.min(Math.max(stored, DRAWER_WIDTH_MIN), DRAWER_WIDTH_MAX));
+  }, [open, widthRole]);
+  const onResize = useCallback((next: number, commit: boolean) => {
+    setDraggedWidth(next);
+    if (commit && widthRole !== null) writeDrawerWidth(widthRole, next);
+  }, [widthRole]);
+
+  const resolvedWidth =
+    draggedWidth ?? (typeof width === "number" ? width : DRAWER_WIDTHS[width]);
   const resolvedAriaLabel = ariaLabel ?? (typeof title === "string" ? title : undefined);
 
   return (
@@ -128,6 +156,28 @@ export function Drawer({
                 : panelRef.current?.querySelector<HTMLElement>("[data-modal-initial-focus]") ?? true
             }
           >
+            {/* The left edge doubles as a splitter: the drawer sits at the
+                viewport's inline-end, so it grows inline-start. Numeric
+                widths are one-off layouts and stay fixed. Hidden by CSS at
+                the mobile breakpoint, where the drawer takes full width.
+                The ceiling mirrors the 92vw cap in .adm-drawer
+                (admin-v2-drawers.css) — a wider value than the CSS cap
+                would drag dead. */}
+            {widthRole !== null ? (
+              <ResizeHandle
+                className="adm-drawer-resize"
+                label={t("drawer.resize_label")}
+                width={resolvedWidth}
+                min={DRAWER_WIDTH_MIN}
+                max={DRAWER_WIDTH_MAX}
+                defaultWidth={DRAWER_WIDTHS[widthRole]}
+                grows="inline-start"
+                clamp={(next, limit) => Math.min(Math.max(next, DRAWER_WIDTH_MIN), Math.min(limit, DRAWER_WIDTH_MAX))}
+                ceiling={() => Math.floor(window.innerWidth * 0.92)}
+                onResize={onResize}
+                onResizeActive={() => {}}
+              />
+            ) : null}
             <header className="adm-drawer-head">
               <div className="adm-drawer-head-text">
                 {kicker ? <p className="adm-drawer-kicker">{kicker}</p> : null}

@@ -11,6 +11,7 @@
 .adm-drawer {
   width: min(var(--adm-drawer-w, 520px), 92vw);
   max-width: 100vw;
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -25,6 +26,38 @@
     opacity var(--t-fast) var(--ease);
 }
 
+
+/* ── Resize separator ────────────────────────────────────────────────
+   Same geometry and affordance as .sidenav-resize, anchored to the
+   drawer's left (inline-start) edge, where a drag widens the panel.
+   Inside the panel's bounds because .adm-drawer clips overflow. */
+.adm-drawer-resize {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sp-1-5);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.adm-drawer-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.adm-drawer-resize:hover::after,
+.adm-drawer-resize:active::after,
+.adm-drawer-resize:focus-visible::after {
+  background: var(--line-strong);
+}
 /* Recessed while a drawer is open above it. `data-nested-dialog-open` is the
    primitive's own signal, replacing the stack bookkeeping the app used to do
    to work out which panel was on top. */
