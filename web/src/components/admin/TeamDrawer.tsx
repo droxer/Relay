@@ -229,7 +229,6 @@ export function TeamDrawer({
             <FieldError id="team-members-error">{t("teams.members_required")}</FieldError>
           ) : null}
         </fieldset>
-        <TeamResponsibilities members={leadCandidates} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
         <Field
           label={t("teams.lead")}
           labelId={leadLabelId}
@@ -273,6 +272,7 @@ export function TeamDrawer({
             </SelectContent>
           </Select>
         </Field>
+        <TeamResponsibilities members={leadCandidates} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
         <div className="adm-form-actions">
           {team ? <Button size="cta" type="button" variant="destructive" className="adm-form-actions-leading" onClick={() => void remove()} disabled={busy} loading={deleteTeamMutation.isPending}>{t("teams.delete")}</Button> : null}
           <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={busy}>{t("dialog.cancel")}</Button>

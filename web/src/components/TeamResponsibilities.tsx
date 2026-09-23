@@ -2,10 +2,12 @@
 
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import type { TeamMemberConfig } from "../types";
+import type { AgentName, LogicalAgentAvailability, TeamMemberConfig } from "../types";
+import { agentLabel } from "../lib/plan";
+import { AgentStateBadge } from "./AgentStateBadge";
+import { TonePill } from "./StatusPill";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -18,10 +20,20 @@ const ROLES = ["inherit", "planner", "implementer", "tester", "reviewer", "fixer
    primitive for the same reason TeamMemberOption uses it: a native checkbox is
    OS chrome with no theme and no shared focus ring.
 
-   Each member is a labelled group rather than a <strong> and a stack, so the
-   member's name actually scopes its controls for a screen reader. */
+   Each member is a card with the same charter grammar as the project crew
+   tiles — who they are (avatar, name, runtime · effective role) in the head,
+   what they own in the body — and a labelled group, so the member's name
+   actually scopes its controls for a screen reader. */
 export function TeamResponsibilities({ members, leadId, configs, criteria, onConfigs, onCriteria, disabled }: {
-  members: Array<{ id: string; displayName: string; defaultRole?: string }>;
+  members: Array<{
+    id: string;
+    displayName: string;
+    executorKind: AgentName;
+    profileImageUrl?: string | null;
+    enabled?: boolean;
+    availability?: LogicalAgentAvailability;
+    defaultRole?: string;
+  }>;
   leadId: string;
   configs: Record<string, TeamMemberConfig>;
   criteria: string[];
@@ -47,16 +59,33 @@ export function TeamResponsibilities({ members, leadId, configs, criteria, onCon
           const config = configs[member.id] ?? {};
           const base = `${id}-${member.id}`;
           const onRequest = config.participation === "on_request";
+          const effectiveRole = config.role ?? member.defaultRole;
+          const availability = member.enabled === false ? "offline" : member.availability;
           const requiredByDefault = !onRequest
-            && ["tester", "reviewer"].includes(config.role ?? member.defaultRole ?? "");
+            && ["tester", "reviewer"].includes(effectiveRole ?? "");
           return (
-            <div className="team-work-member" key={member.id} role="group" aria-labelledby={`${base}-name`}>
-              <p className="team-work-member-name" id={`${base}-name`}>
-                {member.displayName}
-                {member.id === leadId ? (
-                  <span className="team-work-member-lead">{t("teams.lead")}</span>
-                ) : null}
-              </p>
+            <article className="team-work-member" key={member.id} role="group" aria-labelledby={`${base}-name`}>
+              <header className="team-work-member-head">
+                <AgentStateBadge
+                  agent={member.executorKind}
+                  ready={availability === "ready"}
+                  availability={availability}
+                  imageUrl={member.profileImageUrl}
+                  name={member.displayName}
+                />
+                <span className="team-work-member-identity">
+                  <span className="team-work-member-name">
+                    <strong id={`${base}-name`}>{member.displayName}</strong>
+                    {member.id === leadId ? <TonePill tone="info" label={t("project.lead_badge")} /> : null}
+                  </span>
+                  {/* Runtime · the role the member will actually play, so an
+                      inherited role is visible without opening the select. */}
+                  <span className="team-work-member-meta">
+                    {agentLabel(member.executorKind)}
+                    {effectiveRole ? ` · ${t(`team_work.role_${effectiveRole}`)}` : null}
+                  </span>
+                </span>
+              </header>
               <Field label={t("team_work.role")} labelId={`${base}-role`} wrapper="div">
                 <Select
                   value={config.role ?? "inherit"}
@@ -84,7 +113,8 @@ export function TeamResponsibilities({ members, leadId, configs, criteria, onCon
                 </Select>
               </Field>
               <Field label={t("team_work.responsibility")}>
-                <Input
+                <Textarea
+                  rows={2}
                   value={config.responsibility ?? ""}
                   maxLength={4000}
                   placeholder={t("team_work.scope_example")}
@@ -127,7 +157,7 @@ export function TeamResponsibilities({ members, leadId, configs, criteria, onCon
                   </label>
                 </div>
               ) : null}
-            </div>
+            </article>
           );
         })}
       </div>

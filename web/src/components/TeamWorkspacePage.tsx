@@ -36,7 +36,9 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RosterAgentItem, RosterTriggerValue } from "./roster/RosterOption";
+import { rosterLabel, useRosterTabs, type RosterTab } from "./roster/RosterTabs";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -74,6 +76,16 @@ function TeamProfile({
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
   const [imageSaving, setImageSaving] = useState(false);
+  // The lead must be one of the team's own members — the same single-roster
+  // picker the TeamDrawer draws, so the strip stays hidden.
+  const leadCandidates = useMemo(
+    () => agents.filter((agent) => memberIds.includes(agent.id)),
+    [agents, memberIds],
+  );
+  const rosterTabs: RosterTab<"members">[] = [
+    { id: "members", label: t("teams.members"), count: leadCandidates.length },
+  ];
+  const roster = useRosterTabs({ tabs: rosterTabs, activeTab: "members", label: t("teams.lead") });
   const [validationError, setValidationError] = useState<
     "members" | "lead" | null
   >(null);
@@ -368,7 +380,6 @@ function TeamProfile({
 
             {editing ? (
               <>
-                <TeamResponsibilities members={agents.filter(agent => memberIds.includes(agent.id))} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
                 <Field
                   label={t("teams.lead")}
                   labelId={leadLabelId}
@@ -377,10 +388,15 @@ function TeamProfile({
                   error={validationError === "lead" ? t("teams.lead_required") : undefined}
                   errorId="team-profile-lead-error"
                 >
-                  <Select value={leadId} disabled={busy || memberIds.length === 0} onValueChange={(value) => {
-                    if (value) setLeadId(value);
-                    setValidationError(null);
-                  }}>
+                  <Select
+                    value={leadId}
+                    disabled={busy || memberIds.length === 0}
+                    onValueChange={(value) => {
+                      if (value) setLeadId(value);
+                      setValidationError(null);
+                    }}
+                    onOpenChange={(open) => { if (open) roster.resetTab(); }}
+                  >
                     <SelectTrigger
                       ref={leadRef}
                       className="w-full"
@@ -389,16 +405,26 @@ function TeamProfile({
                       aria-describedby={validationError === "lead" ? "team-profile-lead-error" : undefined}
                     >
                       <SelectValue>
-                        {(value: string) => agents.find((agent) => agent.id === value)?.displayName ?? value}
+                        {(value: string) => {
+                          const lead = agents.find((agent) => agent.id === value);
+                          return lead ? <RosterTriggerValue agent={lead} /> : value;
+                        }}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
-                      {agents.filter((agent) => memberIds.includes(agent.id)).map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>
-                      ))}
+                    <SelectContent
+                      alignItemWithTrigger={false}
+                      onKeyDownCapture={roster.onKeyDownCapture}
+                      header={roster.header}
+                    >
+                      <SelectGroup aria-label={rosterLabel(rosterTabs, roster.tab)}>
+                        {leadCandidates.map((agent) => (
+                          <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />
+                        ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                 </Field>
+                <TeamResponsibilities members={leadCandidates} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
                 <div className="team-profile-inline-actions">
                   <span className="team-profile-inline-actions-spacer" />
                   <Button type="button" variant="ghost" onClick={() => void cancelEditing()} disabled={busy}>
