@@ -348,12 +348,16 @@ class CollaborationConductor:
             team_snapshot = team_runtime_snapshot(team, members)
             # Addressing chooses participants, not their specialization. Keep
             # caller ordering and explicit overrides, but fill in team briefs
-            # and roles without turning an addressed lead into a room synthesizer.
+            # and roles. A lead-first accomplish group also needs the final
+            # synthesis turn required by its bounded planning contract.
+            member_assignments = team_member_assignments(
+                members, team=team, include_on_request=True
+            )
             member_defaults = {
                 item["agentId"]: {
                     key: item[key] for key in ("role", "brief", "required", "acceptanceCriteria", "expectedOutputs") if key in item
                 }
-                for item in team_member_assignments(members, team=team, include_on_request=True)
+                for item in member_assignments
                 if not item.get("synthesizer") or item.get("coordinator")
             }
             raw_assignments = [
@@ -362,6 +366,24 @@ class CollaborationConductor:
                 else item
                 for item in raw_assignments
             ]
+            if (
+                not is_recovery
+                and intent.purpose == "accomplish"
+                and len(raw_assignments) > 1
+                and isinstance(raw_assignments[0], dict)
+                and raw_assignments[0].get("agentId") == team.get("leadAgentId")
+                and _mode(raw_assignments[0].get("mode")) == "action"
+                and not any(
+                    isinstance(item, dict) and item.get("synthesizer") is True
+                    for item in raw_assignments
+                )
+            ):
+                synthesis = next(
+                    (item for item in member_assignments if item.get("synthesizer")),
+                    None,
+                )
+                if synthesis:
+                    raw_assignments.append(synthesis)
         elif session and not raw_assignments:
             # A bare message goes to the whole room: every agent the thread has
             # accumulated, not just the one it started with.
@@ -935,13 +957,10 @@ def compile_assignment_work_graph(
     Delivery may remain sequential, but the immutable graph records the actual
     ownership and prerequisites independently of that transport choice.
 
-    Compiling is idempotent by construction, because the conductor compiles for
-    dispatch and ``create_round_manifest`` compiles again for the record. Taking
-    the already-compiled roster straight back keeps that second pass from
-    depending on the objective decoration being re-entrant.
+    Recompute dependencies from the current roster, including when a lead plan
+    removes every specialist from an already-compiled round. Reuse the captured
+    objectives so compiling the same roster again remains idempotent.
     """
-    if assignments and all(_is_compiled_work_assignment(assignment) for assignment in assignments):
-        return [dict(assignment) for assignment in assignments]
     work_item_ids = [assignment["assignmentId"] for assignment in assignments]
     compiled: list[dict[str, Any]] = []
     for index, assignment in enumerate(assignments):
@@ -976,19 +995,6 @@ def compile_assignment_work_graph(
             }
         )
     return compiled
-
-
-def _is_compiled_work_assignment(assignment: dict[str, Any]) -> bool:
-    return all(
-        assignment.get(field) is not None
-        for field in (
-            "workItemId",
-            "workOwnerAgentId",
-            "workKind",
-            "workObjective",
-            "dependsOnWorkItemIds",
-        )
-    )
 
 
 def _work_owner_agent_id(assignment: dict[str, Any]) -> str:
