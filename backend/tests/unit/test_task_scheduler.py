@@ -1089,7 +1089,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex", "claude"],
-                    "capabilities": ["task-workspaces", "thread-workspaces"],
+                    "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                     "status": "ready",
                     "maxConcurrentRuns": 2,
                 },
@@ -1166,6 +1166,11 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                     "sessionId": lead_command["sessionId"],
                     "runId": lead_command["runId"],
                     "agent": "codex",
+                    "roundResult": {"status": "continue", "work": {
+                        "status": "done", "evidence": ["Delegated implementation"],
+                        "plan": [{"agentId": support["id"], "objective": "Implement the feature",
+                                  "acceptanceCriteria": ["Feature validated"], "expectedOutputs": ["Implementation and tests"]}],
+                    }},
                     "exitCode": 0,
                     "agentLog": "done",
                 },
@@ -1182,6 +1187,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                     "sessionId": support_command["sessionId"],
                     "runId": support_command["runId"],
                     "agent": "claude",
+                    "roundResult": {"status": "continue", "work": {"status": "done", "evidence": ["Implementation tests passed"]}},
                     "exitCode": 0,
                     "agentLog": "reviewed",
                 },
@@ -1193,6 +1199,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             registry.handle_event("sbx_alice", {
                 "type": "run.completed", "commandId": synthesis["id"], "sessionId": synthesis["sessionId"],
                 "runId": synthesis["runId"], "agent": synthesis["agent"], "exitCode": 0, "agentLog": "Final synthesis",
+                "roundResult": {"status": "done", "work": {"status": "done", "evidence": ["Reviewed implementation and tests"]}},
             }, "node_token")
             agent_store.update_agent(lead["id"], {"enabled": False})
             second = task_store.create_task(
@@ -1235,7 +1242,7 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread() -> None:
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex", "claude"],
-                    "capabilities": ["task-workspaces", "thread-workspaces"],
+                    "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                     "status": "ready",
                 },
                 "ui_token",
@@ -1317,6 +1324,11 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread() -> None:
                     "sessionId": lead_command["sessionId"],
                     "runId": lead_command["runId"],
                     "agent": "codex",
+                    "roundResult": {"status": "continue", "work": {
+                        "status": "done", "evidence": ["Delegated implementation"],
+                        "plan": [{"agentId": support["id"], "objective": "Implement the feature",
+                                  "acceptanceCriteria": ["Feature validated"], "expectedOutputs": ["Implementation and tests"]}],
+                    }},
                     "exitCode": 0,
                     "agentLog": "lead result",
                 },

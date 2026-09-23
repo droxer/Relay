@@ -54,12 +54,26 @@ def _mark_executing(app, node_id: str, command: dict) -> None:
     )
 
 
+def _successful_work_report(command):
+    if not command.get("state", {}).get("work_result_required"):
+        return {}
+    work = {"status": "done", "evidence": ["Assigned contribution validated"]}
+    candidates = command["state"].get("team_plan_candidates")
+    if candidates:
+        work["plan"] = [{
+            "agentId": item["agentId"], "objective": item.get("responsibility") or "Implement assigned contribution",
+            "acceptanceCriteria": ["Contribution satisfies task goal"], "expectedOutputs": ["Validated contribution"],
+        } for item in candidates]
+    return {"roundResult": {"status": "done", "work": work}}
+
+
 def _finish_synthesis(app, node_id="node_alice") -> None:
     [command] = app.state.registry.take_commands(node_id, "node_token")
     _mark_executing(app, node_id, command)
     app.state.registry.handle_event(node_id, {
         "type": "run.completed", "commandId": command["id"], "sessionId": command["sessionId"],
         "runId": command["runId"], "agent": command["agent"], "exitCode": 0, "agentLog": "Team synthesis",
+        **_successful_work_report(command),
     }, "node_token")
 
 
@@ -144,6 +158,7 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
         team = client.post("/api/v1/admin/teams", json={
             "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
+            "memberConfigs": {builder["id"]: {"required": False}},
         }).json()["team"]
         _login(client, "alice")
         started = client.post("/api/v1/agent-runs", json={
@@ -852,7 +867,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -919,6 +934,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
                 "runId": lead_command["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(lead_command),
                 "agentLog": "lead result",
             },
             "node_token",
@@ -943,7 +959,7 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -990,6 +1006,7 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
                 "runId": lead_command["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(lead_command),
                 "agentLog": "support review",
             },
             "node_token",
@@ -1079,7 +1096,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
                 "sandboxMode": "boxlite",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             },
         )
@@ -1118,7 +1135,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1169,6 +1186,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "runId": lead_command["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(lead_command),
                 "agentLog": "built it",
             },
             "node_token",
@@ -1189,6 +1207,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "runId": review_command["runId"],
                 "agent": "claude",
                 "exitCode": 0,
+                **_successful_work_report(review_command),
                 "agentLog": "looks fine",
             },
             "node_token",
@@ -1225,7 +1244,7 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex", "claude"],
-                    "capabilities": ["task-workspaces", "thread-workspaces"],
+                    "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                     "status": "ready",
                 }
             )
@@ -1289,7 +1308,7 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1499,7 +1518,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1658,7 +1677,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1715,6 +1734,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "runId": first["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(first),
                 "agentLog": "lead result",
             },
             "node_token",
@@ -1729,6 +1749,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "runId": second["runId"],
                 "agent": "claude",
                 "exitCode": 0,
+                **_successful_work_report(second),
                 "agentLog": "support result",
             },
             "node_token",
@@ -1763,7 +1784,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
         assert request["assignments"][0]["phase"] == "execution"
         assert request["assignments"][0]["brief"]
         assert request["assignments"][0]["teamSnapshot"] == {
-            "teamId": team["id"],
+            "workContractVersion": 1,            "teamId": team["id"],
             "teamRevision": team["updatedAt"],
             "memberAgentIds": [lead["id"], support["id"]],
             "leadAgentId": lead["id"],
@@ -1832,7 +1853,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1874,6 +1895,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
                 "runId": command["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(command),
                 "agentLog": "done",
             },
             "node_token",
@@ -1906,7 +1928,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1948,6 +1970,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
                 "runId": command["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(command),
                 "agentLog": "done",
             },
             "node_token",
@@ -2023,7 +2046,7 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2094,7 +2117,7 @@ def test_agent_runs_rejects_a_team_id_that_does_not_match_the_thread(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2152,7 +2175,7 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2196,6 +2219,7 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
                 "runId": command["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(command),
                 "agentLog": "done",
             },
             "node_token",
@@ -2229,7 +2253,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2274,6 +2298,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                     "runId": command["runId"],
                     "agent": executor,
                     "exitCode": 0,
+                    **_successful_work_report(command),
                     "agentLog": "done",
                 },
                 "node_token",
@@ -2337,7 +2362,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2381,6 +2406,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
                 "runId": first["runId"],
                 "agent": "codex",
                 "exitCode": 0,
+                **_successful_work_report(first),
                 "agentLog": "lead result",
             },
             "node_token",
@@ -2395,6 +2421,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
                 "runId": second["runId"],
                 "agent": "claude",
                 "exitCode": 0,
+                **_successful_work_report(second),
                 "agentLog": "support result",
             },
             "node_token",
@@ -2443,7 +2470,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2488,6 +2515,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
                     "runId": command["runId"],
                     "agent": executor,
                     "exitCode": 0,
+                    **_successful_work_report(command),
                     "agentLog": "done",
                 },
                 "node_token",
@@ -2770,6 +2798,7 @@ def test_message_and_its_recovery_do_not_inherit_task_ownership(recovery_team_th
                 "runId": command["runId"],
                 "agent": command["agent"],
                 "exitCode": 0,
+                **_successful_work_report(command),
                 "agentLog": "Explanation",
             },
             "node_token",
@@ -3137,3 +3166,76 @@ def test_recovery_cannot_take_a_task_reserved_by_another_thread(recovery_team_th
     assert client.app.state.session_store.get_session(session["id"])["events"] == before["events"]
     assert task_store.get_task(task["id"])["status"] == "blocked"
     assert registry.take_commands("test_node_alice", "node_token") == []
+
+
+@pytest.mark.parametrize("source", ["thread", "task"])
+@pytest.mark.parametrize("omit_member", [False, True])
+def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, source, omit_member):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex")
+        members = [_agent(client, "alice", name, "claude") for name in ("API", "UI")]
+        node_id = "test_node_alice"
+        app.state.registry.update_status(node_id, {
+            "status": "ready", "capabilities": ["thread-workspaces", "task-workspaces", "round-result", "work-results"],
+        })
+        team = client.post("/api/v1/admin/teams", json={
+            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], *[member["id"] for member in members]],
+        }).json()["team"]
+        _login(client, "alice")
+        task = None
+        if source == "task":
+            task = client.post("/api/v1/tasks", json={
+                "title": "Deliver feature", "assigneeEmployeeId": "alice",
+                "assignedTeamId": team["id"], "acceptancePolicy": "automatic",
+            }).json()
+            started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        else:
+            started = client.post("/api/v1/agent-runs", json={"taskGoal": "Deliver feature", "teamId": team["id"]})
+        assert started.status_code == 202, started.text
+        [coordinator] = app.state.registry.take_commands(node_id, "node_token")
+        session_id = coordinator["sessionId"]
+        assert coordinator["logicalAgentId"] == lead["id"]
+        assert all(item["required"] for item in coordinator["state"]["team_plan_candidates"])
+
+        def finish(command, work):
+            _mark_executing(app, node_id, command)
+            app.state.registry.handle_event(node_id, {
+                "type": "run.completed", "commandId": command["id"], "sessionId": session_id,
+                "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+                "roundResult": {"status": "done", "work": work},
+            }, "node_token")
+
+        good = {"status": "done", "evidence": ["Focused validation passed"]}
+        selected = members[:1] if omit_member else members
+        finish(coordinator, {**good, "plan": [{
+            "agentId": member["id"], "objective": f"Implement {member['displayName']}",
+            "acceptanceCriteria": ["Feature works"], "expectedOutputs": ["Implementation and tests"],
+        } for member in selected]})
+        if omit_member:
+            assert app.state.registry.take_commands(node_id, "node_token") == []
+            assert "omitted a required" in app.state.session_store.get_session(session_id)["finalOutcome"]
+            if task:
+                assert app.state.task_store.get_task(task["id"])["status"] != "done"
+            return
+        for member in members:
+            [command] = app.state.registry.take_commands(node_id, "node_token")
+            assert command["logicalAgentId"] == member["id"]
+            assert command["state"]["assignment_brief"].startswith(f"Implement {member['displayName']}")
+            finish(command, good)
+        [final] = app.state.registry.take_commands(node_id, "node_token")
+        assert final["logicalAgentId"] == lead["id"]
+        assert "Review every delegated contribution" in final["state"]["assignment_brief"]
+        assert len(final["state"]["work_predecessor_results"]) == 3
+        if task:
+            assert app.state.task_store.get_task(task["id"])["status"] != "done"
+        finish(final, good)
+        assert app.state.registry.take_commands(node_id, "node_token") == []
+        assert app.state.session_store.get_session(session_id)["status"] == "completed"
+        if task:
+            assert app.state.task_store.get_task(task["id"])["status"] == "done"

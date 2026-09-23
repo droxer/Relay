@@ -17,6 +17,7 @@ it("edits responsibilities and makes on-request participation optional in the sa
     </>;
   }
   render(<Editor />);
+  expect(screen.getByRole("checkbox", { name: "team_work.required" }).getAttribute("aria-checked")).toBe("true");
   fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Own the reset API" } });
   fireEvent.change(screen.getByLabelText(/team_work\.criteria/), { target: { value: "No reusable reset token\n" } });
   // <Checkbox> is the base-ui primitive: a role=checkbox element plus a

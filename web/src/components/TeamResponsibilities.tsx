@@ -61,8 +61,7 @@ export function TeamResponsibilities({ members, leadId, configs, criteria, onCon
           const onRequest = config.participation === "on_request";
           const effectiveRole = config.role ?? member.defaultRole;
           const availability = member.enabled === false ? "offline" : member.availability;
-          const requiredByDefault = !onRequest
-            && ["tester", "reviewer"].includes(effectiveRole ?? "");
+          const requiredByDefault = !onRequest;
           return (
             <article className="team-work-member" key={member.id} role="group" aria-labelledby={`${base}-name`}>
               <header className="team-work-member-head">
@@ -141,7 +140,7 @@ export function TeamResponsibilities({ members, leadId, configs, criteria, onCon
                       onCheckedChange={(value) => update(member.id, {
                         participation: value === true ? "on_request" : "always",
                         // Clearing it (rather than pinning false) hands the row
-                        // back to the role default when the flag is unset.
+                        // back to the team default when the flag is unset.
                         required: value === true ? false : undefined,
                       })}
                     />
