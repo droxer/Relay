@@ -4633,6 +4633,62 @@ def test_single_agent_protocol_is_frozen_across_capability_changes(mode, require
             assert not command["state"].get("work_result_required")
 
 
+@pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
+def test_team_work_contract_survives_backend_restart(daemon_store_factory):
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions = LocalSessionStore(root)
+            daemon = daemon_store_factory(root)
+            registry = DaemonNodeRegistry(sessions, daemon)
+            registry.register({
+                "sandboxId": "sbx_alice", "employeeId": "alice",
+                "token": "node_token", "workspacePath": "/workspace/alice",
+                "protocolVersion": 1, "supportedAgents": ["codex", "claude"],
+                "capabilities": ["thread-workspaces", "round-result", "work-results"],
+                "status": "ready",
+            }, "ui_token")
+            recovered = DaemonNodeRegistry(sessions, daemon)
+            # Polling revives the computer before its next full registration.
+            assert recovered.take_commands("sbx_alice", "node_token") == []
+            assert recovered.is_live("sbx_alice")
+            from relay.services.team_dispatch import team_member_assignments
+
+            assignments = team_member_assignments(
+                [{"id": "lead", "executorKind": "codex"},
+                 {"id": "builder", "executorKind": "claude"}],
+                team={"id": "team", "leadAgentId": "lead"},
+            )
+            for assignment in assignments:
+                assignment.pop("agentId", None)  # Logical authorization is covered by API tests.
+            session = await ServerDaemonNodeBackend(recovered).run("sbx_alice", {
+                "taskGoal": "Deliver with required evidence", "assignments": assignments,
+            })
+            assert session["status"] == "running"
+            assert recovered.take_commands("sbx_alice", "node_token")
+    asyncio.run(flow())
+
+
+@pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
+def test_daemon_capability_changes_reach_other_backend_replicas(daemon_store_factory):
+    with TemporaryDirectory() as root:
+        sessions = LocalSessionStore(root)
+        daemon = daemon_store_factory(root)
+        first = DaemonNodeRegistry(sessions, daemon)
+        second = DaemonNodeRegistry(sessions, daemon)
+        payload = {
+            "sandboxId": "sbx_alice", "employeeId": "alice",
+            "token": "node_token", "workspacePath": "/workspace/alice",
+            "protocolVersion": 1, "supportedAgents": ["codex"],
+            "capabilities": ["thread-workspaces", "work-results"], "status": "ready",
+        }
+        first.register(payload, "ui_token")
+        assert "work-results" in second.get("sbx_alice")["capabilities"]
+        # An older daemon replacing this process must revoke cached support too.
+        first.register({**payload, "capabilities": []}, "ui_token")
+        second.list_ready()
+        assert not second.get("sbx_alice").get("capabilities")
+
+
 @pytest.mark.parametrize("failure_type", ["run.completed", "run.failed"])
 @pytest.mark.parametrize("verification_status", ["done", "blocked"])
 def test_coordinator_repair_revalidates_all_work_before_task_acceptance(failure_type, verification_status):

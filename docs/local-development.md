@@ -165,6 +165,15 @@ inside the repository workspace.
 
 ### Personal-computer setup troubleshooting
 
+An online computer can still lack the capabilities required for team dispatch.
+If a current daemon reports a `work-results` upgrade error after a backend
+restart, apply database migrations (`make backend-migrate`) and restart the
+backend with the current code. Migration `20260924_0080` makes daemon capabilities
+durable. Existing computers populate the new field on their next full
+registration (normally within five idle minutes); restarting the daemon when it
+has no active work triggers registration immediately. Older daemons that do not
+advertise `work-results` still need to be upgraded.
+
 Use the installation command from **Connect this computer** and enter the node
 token when prompted. Successful setup prints **Connected to Relay**; the service
 runs in the background without a PATH change or another manual daemon command.

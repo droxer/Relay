@@ -629,7 +629,7 @@ class DaemonNodeRegistry:
                 if (existing or {}).get("nodeLocation") or authorized_node_location
                 else {}
             ),
-            **({"capabilities": capabilities} if capabilities else {}),
+            "capabilities": capabilities,
             "status": "stopped"
             if retired_at
             else "running"

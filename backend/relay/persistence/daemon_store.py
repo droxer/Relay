@@ -1515,6 +1515,7 @@ class DatabaseDaemonStore:
         Column("credential_version", Integer, nullable=False, default=1),
         Column("retired_at", DateTime(timezone=True), nullable=True),
         Column("status", Text, nullable=False),
+        Column("capabilities", json_type(), nullable=True),
         Column("max_concurrent_runs", Integer, nullable=False, default=1),
         Column("ui_token_hash", Text, nullable=True),
         Column("node_token_hash", Text, nullable=True),
@@ -3464,6 +3465,7 @@ def node_to_row(
         "credential_version": int(node.get("credentialVersion") or 1),
         "retired_at": _parse_iso(node.get("retiredAt")),
         "status": node["status"],
+        "capabilities": node.get("capabilities") or [],
         # The per-agent maps live in daemon_node_agents; see node_agent_rows.
         "max_concurrent_runs": int(node.get("maxConcurrentRuns") or 1),
         # Hashes authenticate; the secret (control-panel nodes only) lets the
@@ -3591,6 +3593,7 @@ def row_to_node(row: Any) -> dict[str, Any]:
             else {}
         ),
         "status": row["status"],
+        "capabilities": list(row.get("capabilities") or []),
         "maxConcurrentRuns": int(row.get("max_concurrent_runs") or 1),
         # `agents` and the other per-agent keys are merged in by
         # `apply_node_agents` from the daemon_node_agents rows.
