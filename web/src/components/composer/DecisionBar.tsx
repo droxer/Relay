@@ -21,18 +21,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useDialogs } from "@/components/ui/DialogProvider";
+import { useHandoffStore } from "@/lib/handoffStore";
 
 type DecisionAction = "approve" | "reject" | "rerun" | "mark_done" | "handoff";
 
-export function DecisionBar({ logicalAgents, sendDecision, handoffOpen, setHandoffOpen, handoffAgentId, setHandoffAgentId, handoffNote, setHandoffNote, sendHandoff }: {
+export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
   logicalAgents: EmployeeAgent[];
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
-  handoffOpen: boolean; setHandoffOpen: (v: boolean) => void;
-  handoffAgentId: string; setHandoffAgentId: (id: string) => void;
-  handoffNote: string; setHandoffNote: (v: string) => void;
   sendHandoff: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const handoffOpen = useHandoffStore((s) => s.open);
+  const setHandoffOpen = useHandoffStore((s) => s.setOpen);
+  const handoffAgentId = useHandoffStore((s) => s.agentId);
+  const setHandoffAgentId = useHandoffStore((s) => s.setAgentId);
+  const handoffNote = useHandoffStore((s) => s.note);
+  const setHandoffNote = useHandoffStore((s) => s.setNote);
   const { confirm } = useDialogs();
   const approveRef = useRef<HTMLButtonElement>(null);
   const [pendingAction, setPendingAction] = useState<DecisionAction | null>(null);

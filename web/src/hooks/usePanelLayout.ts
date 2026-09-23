@@ -31,7 +31,13 @@ export interface PanelLayout {
   sidenavWidth: number;
   threadListWidth: number;
   spaceWidth: number;
+  sidenavResizing: boolean;
+  threadListResizing: boolean;
+  spaceResizing: boolean;
   setSidenavExpanded: (expanded: boolean) => void;
+  setSidenavResizing: (active: boolean) => void;
+  setThreadListResizing: (active: boolean) => void;
+  setSpaceResizing: (active: boolean) => void;
   resizeSidenav: (width: number, commit: boolean) => void;
   resizeThreadList: (width: number, commit: boolean) => void;
   resizeSpace: (width: number, commit: boolean) => void;
@@ -42,6 +48,10 @@ export function usePanelLayout(mounted: boolean): PanelLayout {
   const [sidenavWidth, setSidenavWidth] = useState(SIDENAV_WIDTH_DEFAULT);
   const [threadListWidth, setThreadListWidth] = useState(THREAD_LIST_WIDTH_DEFAULT);
   const [spaceWidth, setSpaceWidth] = useState(SPACE_WIDTH_DEFAULT);
+  // True while that divider is being dragged.
+  const [sidenavResizing, setSidenavResizing] = useState(false);
+  const [threadListResizing, setThreadListResizing] = useState(false);
+  const [spaceResizing, setSpaceResizing] = useState(false);
 
   useEffect(() => {
     // Read after mount, not in the initializer: the export is prerendered, so
@@ -84,7 +94,13 @@ export function usePanelLayout(mounted: boolean): PanelLayout {
     sidenavWidth,
     threadListWidth,
     spaceWidth,
+    sidenavResizing,
+    threadListResizing,
+    spaceResizing,
     setSidenavExpanded,
+    setSidenavResizing,
+    setThreadListResizing,
+    setSpaceResizing,
     resizeSidenav,
     resizeThreadList,
     resizeSpace,

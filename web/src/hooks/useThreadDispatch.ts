@@ -12,6 +12,10 @@ import { resolveThreadMessageAddress, threadMessageInput, threadMessageOperation
 import { formatDispatchError } from "../lib/agentReadiness";
 import { rerunAssignmentForSession } from "../lib/workflow";
 import { isEmployeeAgentRoutable } from "../lib/agentDisplayNames";
+import { useHandoffStore } from "../lib/handoffStore";
+import { useComposerTargetStore } from "../lib/composerTargetStore";
+import { useRelayStore } from "../lib/store";
+import { useThreadSendStore } from "../lib/threadSendStore";
 
 type Mutations = ReturnType<typeof useRelayMutations>;
 type Transcript = ReturnType<typeof useTranscriptPin>;
@@ -42,17 +46,11 @@ export interface ThreadDispatchDeps {
   threadRunning: boolean;
   requiresRuntimeSelection: boolean;
   projectDispatchDisabled: boolean;
-  projectRoomTarget: boolean;
 
-  /* --- who is being addressed ------------------------------------------ */
-  activeAgent: AgentName;
-  activeLogicalAgentId: string | null;
+  /* --- who can be addressed (the pick itself is in useComposerTargetStore) */
   effectiveSelectableLogicalAgents: EmployeeAgent[];
   threadMentionCandidates: Parameters<typeof resolveThreadMessageAddress>[0]["candidates"];
   composerTeams: AgentTeam[];
-  pendingThreadTeamId: string | null;
-  handoffAgentId: string;
-  handoffNote: string;
 
   /* --- where it runs ---------------------------------------------------- */
   selectedEmployee: string;
@@ -64,7 +62,6 @@ export interface ThreadDispatchDeps {
   /* --- the composer + transcript surfaces ------------------------------- */
   composerRef: MutableRefObject<ComposerHandle | null>;
   transcript: Transcript;
-  composingNew: boolean;
 
   /* --- idempotency bookkeeping ------------------------------------------ */
   messageOperationIdsRef: MutableRefObject<Map<string, string>>;
@@ -77,17 +74,8 @@ export interface ThreadDispatchDeps {
   recordDecisionMutation: Mutations["recordDecisionMutation"];
   cancelRunMutation: Mutations["cancelRunMutation"];
 
-  /* --- state the dispatch writes back ----------------------------------- */
-  setActiveAgent: (agent: AgentName) => void;
-  setActiveLogicalAgentId: (id: string | null) => void;
-  setActiveSessionId: (id: string | null) => void;
-  setSelectedSessionId: (id: string | undefined) => void;
-  setComposingNew: (value: boolean) => void;
-  setPendingThreadTeamId: (id: string | null) => void;
-  setPendingUserMessage: (message: { id: string; text: string } | null) => void;
-  setIsRunning: (value: boolean) => void;
-  setHandoffNote: (note: string) => void;
-  setHandoffOpen: (open: boolean) => void;
+  /* --- navigation (thread selection, composer target and send state are
+         written straight to their stores) ------------------------------- */
   syncThreadUrl: (sessionId: string | null, replace?: boolean, projectId?: string | null) => void;
   navigateToRoute: (route: AppRoute) => void;
 
@@ -100,17 +88,15 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   const pendingDispatch = useRef<{ sessionId: string | undefined; stopRequested: boolean } | null>(null);
   const {
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
-    threadRunning, requiresRuntimeSelection, projectDispatchDisabled, projectRoomTarget,
-    activeAgent, activeLogicalAgentId, effectiveSelectableLogicalAgents,
-    threadMentionCandidates, composerTeams, pendingThreadTeamId, handoffAgentId, handoffNote,
+    threadRunning, requiresRuntimeSelection, projectDispatchDisabled,
+    effectiveSelectableLogicalAgents,
+    threadMentionCandidates, composerTeams,
     selectedEmployee, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
-    composerRef, transcript, composingNew,
+    composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
     recordDecisionMutation, cancelRunMutation,
-    setActiveAgent, setActiveLogicalAgentId, setActiveSessionId, setSelectedSessionId,
-    setComposingNew, setPendingThreadTeamId, setPendingUserMessage, setIsRunning,
-    setHandoffNote, setHandoffOpen, syncThreadUrl, navigateToRoute,
+    syncThreadUrl, navigateToRoute,
     reportMutationError, t,
   } = deps;
 
@@ -124,6 +110,11 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       reportMutationError("Computer required", null, t("errors.thread_computer_required"));
       return;
     }
+    // Read at send time: who the composer addresses and whether a new thread
+    // is being staged live in their stores, not in this hook's props.
+    const { activeAgent, activeLogicalAgentId, pendingThreadTeamId, projectRoomTarget } =
+      useComposerTargetStore.getState();
+    const { composingNew } = useRelayStore.getState();
     // When staging a new thread, always create; otherwise continue the
     // open one. composingNew forces a fresh owner-scoped session here.
     const action = composingNew ? { kind: "create" as const } : chooseSendAction({ activeSessionId: activeSession?.id ?? null, session: activeSession });
@@ -184,7 +175,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     }
     // While creating a fresh thread, keep suppressing the previous active
     // thread so the optimistic user turn does not appear in the wrong transcript.
-    if (!creatingSession) setComposingNew(false);
+    if (!creatingSession) useRelayStore.getState().setComposingNew(false);
     // Route synchronization clears any pending message when it reapplies an
     // existing session from the URL. Navigate before adding this optimistic
     // turn so that cleanup cannot erase the message in the same render batch.
@@ -194,8 +185,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     // composingNew and rendered the new turn inside the previously active
     // thread until the create resolved and snapped the view back.
     syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id);
-    setPendingUserMessage({ id: userMessageId, text: goal });
-    setIsRunning(true);
+    useThreadSendStore.getState().beginSend({ id: userMessageId, text: goal });
     const dispatch = { sessionId, stopRequested: false };
     pendingDispatch.current = dispatch;
     composerRef.current?.clear();
@@ -224,10 +214,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
                   assignments: newThreadAgentIds!.map((agentId) => ({ agentId })),
                 }),
           });
-      setPendingThreadTeamId(null);
-      setActiveSessionId(done.id);
-      setSelectedSessionId(done.id);
-      setComposingNew(false);
+      useComposerTargetStore.getState().clearPendingTeam();
+      useRelayStore.getState().openSession(done.id);
       syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id);
       if (messageOperationKey) {
         messageOperationIdsRef.current.delete(messageOperationKey);
@@ -238,7 +226,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         await cancelSessionRun(done.id, done.projectId);
       }
     } catch (error) {
-      setPendingUserMessage(null);
+      useThreadSendStore.getState().dropPendingMessage();
       // The composer was cleared optimistically; a rejected dispatch (busy
       // node, offline runtime) is retryable, so hand the text back — exactly
       // as typed, mention included — instead of making the author retype it.
@@ -250,7 +238,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       );
     } finally {
       if (pendingDispatch.current === dispatch) pendingDispatch.current = null;
-      setIsRunning(false);
+      useThreadSendStore.getState().endDispatch();
     }
   }
 
@@ -276,7 +264,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         token: (cancelNodeId ? tokens[cancelNodeId] : undefined) ?? selectedToken,
         reason: t("cancel.reason"),
       });
-      setSelectedSessionId(session.id);
+      useRelayStore.getState().setSelectedSessionId(session.id);
       syncThreadUrl(session.id, true, session.projectId ?? projectId);
     } catch {
       // mutation onError surfaces a toast.
@@ -341,17 +329,16 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       );
       return;
     }
-    setIsRunning(true);
+    useThreadSendStore.getState().beginDispatch();
     const dispatch = { sessionId: activeSession.id, stopRequested: false };
     pendingDispatch.current = dispatch;
     try {
-      setActiveAgent(logicalAgent.executorKind);
-      setActiveLogicalAgentId(logicalAgent.id);
+      useComposerTargetStore.getState().setActiveTarget(logicalAgent);
       // A handoff is issued from the thread you are already reading, so it
       // does not navigate or re-pin; rerun and retry can both be triggered
       // from elsewhere and have to bring the thread into view first.
       if (kind === "rerun") {
-        setSelectedSessionId(activeSession.id);
+        useRelayStore.getState().setSelectedSessionId(activeSession.id);
         navigateToRoute("main");
         transcript.pinToBottom();
       }
@@ -368,11 +355,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         },
       });
       recoveryOperationIdsRef.current.delete(recoveryKey);
-      setSelectedSessionId(done.id);
-      if (kind === "handoff") {
-        setHandoffNote("");
-        setHandoffOpen(false);
-      }
+      useRelayStore.getState().setSelectedSessionId(done.id);
+      if (kind === "handoff") useHandoffStore.getState().finishSend();
       syncThreadUrl(done.id, true, done.projectId ?? activeSession.projectId);
       if (dispatch.stopRequested) await cancelSessionRun(done.id, done.projectId);
     } catch (error) {
@@ -383,14 +367,14 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       );
     } finally {
       if (pendingDispatch.current === dispatch) pendingDispatch.current = null;
-      setIsRunning(false);
+      useThreadSendStore.getState().endDispatch();
     }
   }
 
   async function sendDecision(kind: "approve" | "reject" | "rerun" | "mark_done") {
     if (!activeSession) return;
     if (kind === "rerun") {
-      const assignment = rerunAssignmentForSession(activeSession, activeAgent);
+      const assignment = rerunAssignmentForSession(activeSession, useComposerTargetStore.getState().activeAgent);
       await dispatchRecovery({
         prefer: assignment.agentId,
         fallback: assignment.agent,
@@ -406,7 +390,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         kind,
         token: selectedToken,
       });
-      setSelectedSessionId(session.id);
+      useRelayStore.getState().setSelectedSessionId(session.id);
       syncThreadUrl(session.id, true, session.projectId ?? activeSession.projectId);
     } catch {
       // mutation onError surfaces a toast.
@@ -424,10 +408,12 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   }
 
   async function sendHandoff() {
+    // Read at send time: the draft lives in the handoff store, not in props.
+    const { agentId, note } = useHandoffStore.getState();
     await dispatchRecovery({
-      prefer: handoffAgentId,
+      prefer: agentId,
       kind: "handoff",
-      note: handoffNote.trim() || undefined,
+      note: note.trim() || undefined,
       failureLabel: "Failed to send handoff",
       failureMessageKey: "errors.send_handoff",
     });

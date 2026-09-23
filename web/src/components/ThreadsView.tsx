@@ -112,12 +112,6 @@ export type ThreadsViewProps = {
   /** Agents in the thread's room, resolved for the header strip. */
   threadParticipants: EmployeeAgent[];
   onRuntimeNodeChange: (nodeId: string) => void;
-  handoffOpen: boolean;
-  setHandoffOpen: Dispatch<SetStateAction<boolean>>;
-  handoffAgentId: string;
-  setHandoffAgentId: Dispatch<SetStateAction<string>>;
-  handoffNote: string;
-  setHandoffNote: Dispatch<SetStateAction<string>>;
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
   onSend: () => void;
@@ -197,12 +191,6 @@ export function ThreadsView({
   mentionCandidates,
   threadParticipants,
   onRuntimeNodeChange,
-  handoffOpen,
-  setHandoffOpen,
-  handoffAgentId,
-  setHandoffAgentId,
-  handoffNote,
-  setHandoffNote,
   sendDecision,
   sendHandoff,
   onSend,
@@ -448,12 +436,6 @@ export function ThreadsView({
                   <DecisionBar
                     logicalAgents={selectableLogicalAgents}
                     sendDecision={sendDecision}
-                    handoffOpen={handoffOpen}
-                    setHandoffOpen={setHandoffOpen}
-                    handoffAgentId={handoffAgentId}
-                    setHandoffAgentId={setHandoffAgentId}
-                    handoffNote={handoffNote}
-                    setHandoffNote={setHandoffNote}
                     sendHandoff={sendHandoff}
                   />
                 ) : null}

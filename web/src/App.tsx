@@ -23,6 +23,9 @@ import { applyTheme, readTokens, selectedEmployeeKey } from "./lib/appStorage";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
+import { useHandoffStore } from "./lib/handoffStore";
+import { useComposerTargetStore } from "./lib/composerTargetStore";
+import { useThreadSendStore } from "./lib/threadSendStore";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
@@ -107,32 +110,36 @@ export function App() {
   const tokens = useRelayStore((s) => s.tokens);
   const setTokens = useRelayStore((s) => s.setTokens);
   const [hydrated, setHydrated] = useState(false);
-  const [activeAgent, setActiveAgent] = useState<AgentName>("claude");
-  const [activeLogicalAgentId, setActiveLogicalAgentId] = useState<string | null>(null);
-  // Team picked in the composer while staging a brand-new thread; cleared the
-  // moment an existing thread opens or the pick is sent.
-  const [pendingThreadTeamId, setPendingThreadTeamId] = useState<string | null>(null);
-  // A project thread talks to the whole roster by default; picking one member
-  // in the composer narrows the round to them until the roster is picked again.
-  const [projectRoomTarget, setProjectRoomTarget] = useState(true);
-  const [threadQuery, setThreadQuery] = useState("");
-  const [sidenavResizing, setSidenavResizing] = useState(false);
-  const [handoffOpen, setHandoffOpen] = useState(false);
-  const [spaceResizing, setSpaceResizing] = useState(false);
-  const [threadListResizing, setThreadListResizing] = useState(false);
-  const [handoffAgentId, setHandoffAgentId] = useState<string>("");
-  const [handoffNote, setHandoffNote] = useState("");
-  const [isRunning, setIsRunning] = useState(false);
-  const [newThreadNodeId, setNewThreadNodeId] = useState<string | null>(null);
+  const openSession = useRelayStore((s) => s.openSession);
+  const startComposing = useRelayStore((s) => s.startComposing);
+  const clearSelection = useRelayStore((s) => s.clearSelection);
   // True while the composer is staging a brand-new thread: suppresses the
   // fall-back to the most-recent session so the transcript shows the empty state
   // and the next send creates a fresh owner-scoped session.
-  const [composingNew, setComposingNew] = useState(false);
+  const composingNew = useRelayStore((s) => s.composingNew);
+  const setComposingNew = useRelayStore((s) => s.setComposingNew);
+  // Who the composer addresses. A team picked while staging a brand-new thread
+  // is cleared the moment an existing thread opens or the pick is sent; a
+  // project thread talks to the whole roster until one member is picked.
+  const activeAgent = useComposerTargetStore((s) => s.activeAgent);
+  const activeLogicalAgentId = useComposerTargetStore((s) => s.activeLogicalAgentId);
+  const pendingThreadTeamId = useComposerTargetStore((s) => s.pendingThreadTeamId);
+  const projectRoomTarget = useComposerTargetStore((s) => s.projectRoomTarget);
+  const newThreadNodeId = useComposerTargetStore((s) => s.newThreadNodeId);
+  const setNewThreadNodeId = useComposerTargetStore((s) => s.setNewThreadNodeId);
+  const setActiveTarget = useComposerTargetStore((s) => s.setActiveTarget);
+  const pickAgent = useComposerTargetStore((s) => s.pickAgent);
+  const pickTeam = useComposerTargetStore((s) => s.pickTeam);
+  const pickRoom = useComposerTargetStore((s) => s.pickRoom);
+  const clearPendingTeam = useComposerTargetStore((s) => s.clearPendingTeam);
   // Optimistic echo of the just-sent turn: shown immediately so the user sees
   // their message without waiting for the provision + run round-trip. It is
   // hidden once the persisted turn arrives (matched by id for a continued
   // session, or by text for the goal of a freshly created one).
-  const [pendingUserMessage, setPendingUserMessage] = useState<{ id: string; text: string } | null>(null);
+  const pendingUserMessage = useThreadSendStore((s) => s.pendingUserMessage);
+  const isRunning = useThreadSendStore((s) => s.dispatching);
+  const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
+  const [threadQuery, setThreadQuery] = useState("");
   const { user, authChecked, setUser } = useAuthSession();
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
@@ -182,7 +189,7 @@ export function App() {
     () => myThreadSessions(sessions, selectedEmployee),
     [sessions, selectedEmployee],
   );
-  const { activeSessionId, setActiveSessionId } = useActiveSession(selectedEmployee, myThreads);
+  const { activeSessionId } = useActiveSession(selectedEmployee, myThreads);
   const activeSession = useMemo(
     () => pickActiveThreadSession({
       threads: myThreads,
@@ -217,38 +224,25 @@ export function App() {
 
   useEffect(() => {
     if (!initializingThread) return;
-    setNewThreadNodeId((previous) => {
-      const next = resolveNewThreadComputer(previous, threadComputers, assignableComputers);
-      return next === previous ? previous : next;
-    });
-  }, [assignableComputers, initializingThread, threadComputers]);
+    setNewThreadNodeId((previous) => resolveNewThreadComputer(previous, threadComputers, assignableComputers));
+  }, [assignableComputers, initializingThread, setNewThreadNodeId, threadComputers]);
 
   // A team picked while staging only holds while the picked computer hosts
   // the whole roster; switching computers drops the pick back to an agent.
   useEffect(() => {
     if (!pendingThreadTeamId) return;
-    if (!composerTeams.some((team) => team.id === pendingThreadTeamId)) {
-      setPendingThreadTeamId(null);
-    }
-  }, [composerTeams, pendingThreadTeamId]);
+    if (!composerTeams.some((team) => team.id === pendingThreadTeamId)) clearPendingTeam();
+  }, [clearPendingTeam, composerTeams, pendingThreadTeamId]);
 
   const applySessionFromHash = useCallback((sessionId: string) => {
-    setComposingNew(false);
-    setPendingThreadTeamId(null);
-    setSelectedSessionId(sessionId);
-    setActiveSessionId(sessionId);
-  }, [setActiveSessionId, setSelectedSessionId]);
+    clearPendingTeam();
+    openSession(sessionId);
+  }, [clearPendingTeam, openSession]);
 
   const setComposingNewFromPath = useCallback((next: boolean) => {
-    setComposingNew(next);
-    if (!next) return;
-    setSelectedSessionId(undefined);
-    setActiveSessionId(null);
-  }, [setActiveSessionId, setSelectedSessionId]);
-
-  const clearPendingMessage = useCallback(() => {
-    setPendingUserMessage(null);
-  }, []);
+    if (next) startComposing();
+    else setComposingNew(false);
+  }, [setComposingNew, startComposing]);
 
   const {
     route,
@@ -282,7 +276,7 @@ export function App() {
     activeSession,
     onApplySessionFromPath: applySessionFromHash,
     onSetComposingNewFromPath: setComposingNewFromPath,
-    onClearPendingMessage: clearPendingMessage,
+    onClearPendingMessage: dropPendingMessage,
   });
   const activeProject = useMemo(() => {
     const id = routedProjectId ?? activeSession?.projectId;
@@ -294,8 +288,8 @@ export function App() {
   // Narrowing a round to one member is a per-thread choice, not a standing
   // preference: opening another thread (or another project) starts at the room.
   useEffect(() => {
-    setProjectRoomTarget(true);
-  }, [activeProject?.id, activeSession?.id]);
+    pickRoom();
+  }, [activeProject?.id, activeSession?.id, pickRoom]);
   // A thread that belongs to a team answers only its members, exactly as a
   // project thread answers only its own. Both rosters narrow the same lists —
   // the `@` popup and the handoff picker — so neither surface can offer a
@@ -398,8 +392,8 @@ export function App() {
     const present = messages.some(
       (m) => m.kind === "user" && (m.id === pendingUserMessage.id || m.text === pendingUserMessage.text),
     );
-    if (present) setPendingUserMessage(null);
-  }, [messages, pendingUserMessage]);
+    if (present) dropPendingMessage();
+  }, [dropPendingMessage, messages, pendingUserMessage]);
 
   const activeThreadLabel = showProjectOverview && activeProject
     ? activeProject.name
@@ -500,17 +494,18 @@ export function App() {
     }
   }, [selectedEmployee, hydrated]);
   useEffect(() => {
-    if (effectiveSelectableLogicalAgents.length === 0) {
-      setActiveLogicalAgentId(null);
-      return;
-    }
-    const selected = preferredRoutableAgent(effectiveSelectableLogicalAgents, activeLogicalAgentId);
-    setActiveLogicalAgentId(selected?.id ?? null);
-    if (selected) setActiveAgent(selected.executorKind);
-    if (!effectiveSelectableLogicalAgents.some((agent) => agent.id === handoffAgentId && isEmployeeAgentRoutable(agent))) {
-      setHandoffAgentId(effectiveSelectableLogicalAgents.find(isEmployeeAgentRoutable)?.id ?? "");
-    }
-  }, [activeLogicalAgentId, effectiveSelectableLogicalAgents, handoffAgentId]);
+    const selected = effectiveSelectableLogicalAgents.length === 0
+      ? undefined
+      : preferredRoutableAgent(effectiveSelectableLogicalAgents, activeLogicalAgentId);
+    setActiveTarget(selected ?? null);
+  }, [activeLogicalAgentId, effectiveSelectableLogicalAgents, setActiveTarget]);
+  // Keep the handoff target routable as the thread's roster changes.
+  useEffect(() => {
+    if (effectiveSelectableLogicalAgents.length === 0) return;
+    const { agentId, setAgentId } = useHandoffStore.getState();
+    if (effectiveSelectableLogicalAgents.some((agent) => agent.id === agentId && isEmployeeAgentRoutable(agent))) return;
+    setAgentId(effectiveSelectableLogicalAgents.find(isEmployeeAgentRoutable)?.id ?? "");
+  }, [effectiveSelectableLogicalAgents]);
   useEffect(() => {
     if ((route === "admin" || route === "channels") && user && user.role !== "admin") {
       navigateToRoute("main");
@@ -524,11 +519,9 @@ export function App() {
       navigateToProject(session.projectId);
       return;
     }
-    setComposingNew(false);
-    setPendingUserMessage(null);
-    setPendingThreadTeamId(null);
-    setSelectedSessionId(sessionId);
-    setActiveSessionId(sessionId);
+    dropPendingMessage();
+    clearPendingTeam();
+    openSession(sessionId);
     if (taskId) space.setThreadListHidden(false);
     syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId,
       taskId);
@@ -559,10 +552,8 @@ export function App() {
       void navigateToAppPath(`/backlog?project=${encodeURIComponent(projectId)}`);
       return;
     }
-    setComposingNew(true);
-    setPendingUserMessage(null);
-    setSelectedSessionId(undefined);
-    setActiveSessionId(null);
+    startComposing();
+    dropPendingMessage();
     // Same rule as the staging effect: a pick survives a heartbeat flap, and
     // only a machine that is no longer this employee's drops it.
     setNewThreadNodeId((current) => resolveNewThreadComputer(current, threadComputers, assignableComputers));
@@ -573,9 +564,8 @@ export function App() {
 
   function selectProject(projectId: string | null) {
     setComposingNew(false);
-    setPendingUserMessage(null);
-    setSelectedSessionId(undefined);
-    setActiveSessionId(null);
+    dropPendingMessage();
+    clearSelection();
     navigateToProject(projectId);
   }
 
@@ -612,8 +602,7 @@ export function App() {
     try {
       const pending = await deleteSessionMutation.mutateAsync({ sessionId, token: selectedToken });
       if (!pending && activeSession?.id === sessionId) {
-        setSelectedSessionId(undefined);
-        setActiveSessionId(null);
+        clearSelection();
         navigateToRoute("main");
       }
     } catch {
@@ -629,17 +618,15 @@ export function App() {
     sendHandoff,
   } = useThreadDispatch({
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
-    threadRunning, requiresRuntimeSelection, projectDispatchDisabled, projectRoomTarget,
-    activeAgent, activeLogicalAgentId, effectiveSelectableLogicalAgents,
-    threadMentionCandidates, composerTeams, pendingThreadTeamId, handoffAgentId, handoffNote,
+    threadRunning, requiresRuntimeSelection, projectDispatchDisabled,
+    effectiveSelectableLogicalAgents,
+    threadMentionCandidates, composerTeams,
     selectedEmployee, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
-    composerRef, transcript, composingNew,
+    composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
     recordDecisionMutation, cancelRunMutation,
-    setActiveAgent, setActiveLogicalAgentId, setActiveSessionId, setSelectedSessionId,
-    setComposingNew, setPendingThreadTeamId, setPendingUserMessage, setIsRunning,
-    setHandoffNote, setHandoffOpen, syncThreadUrl, navigateToRoute,
+    syncThreadUrl, navigateToRoute,
     reportMutationError, t,
   });
 
@@ -647,18 +634,10 @@ export function App() {
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
-  const handleProjectRoomPicked = useStableEvent(() => {
-    setProjectRoomTarget(true);
-  });
-  const handleLogicalAgentPicked = useStableEvent((agent: EmployeeAgent) => {
-    setPendingThreadTeamId(null);
-    setProjectRoomTarget(false);
-    setActiveLogicalAgentId(agent.id);
-    setActiveAgent(agent.executorKind);
-  });
-  const handleTeamPicked = useStableEvent((team: AgentTeam) => {
-    setPendingThreadTeamId(team.id);
-  });
+  const handleProjectRoomPicked = useStableEvent(() => pickRoom());
+  // Picking one member narrows a project round to them and drops a staged team.
+  const handleLogicalAgentPicked = useStableEvent((agent: EmployeeAgent) => pickAgent(agent));
+  const handleTeamPicked = useStableEvent((team: AgentTeam) => pickTeam(team.id));
 
 
   async function handleLogout() {
@@ -707,17 +686,17 @@ export function App() {
       sidenavExpanded={panels.sidenavExpanded}
       setSidenavExpanded={panels.setSidenavExpanded}
       sidenavWidth={panels.sidenavWidth}
-      sidenavResizing={sidenavResizing}
+      sidenavResizing={panels.sidenavResizing}
       onSidenavResize={panels.resizeSidenav}
-      onSidenavResizeActive={setSidenavResizing}
+      onSidenavResizeActive={panels.setSidenavResizing}
       skipLinkHref={skipLinkHref}
       activeThreadLabel={activeThreadLabel}
       threadSpaceOpen={spaceVisible}
       threadSpaceWidth={panels.spaceWidth}
-      threadSpaceResizing={spaceResizing}
+      threadSpaceResizing={panels.spaceResizing}
       threadListHidden={isTaskThread || space.threadListHidden}
       threadListWidth={panels.threadListWidth}
-      threadListResizing={threadListResizing}
+      threadListResizing={panels.threadListResizing}
       mobileChatChrome={threadChromeVisible ? {
         artifactCount: visibleArtifacts.length,
         inProject: Boolean(activeSession?.projectId),
@@ -850,13 +829,13 @@ export function App() {
             threadListHidden={isTaskThread || space.threadListHidden}
             threadListWidth={panels.threadListWidth}
             onThreadListResize={panels.resizeThreadList}
-            onThreadListResizeActive={setThreadListResizing}
+            onThreadListResizeActive={panels.setThreadListResizing}
             onOpenArtifacts={handleOpenThreadSpace}
             onToggleSpace={space.toggleSpace}
             onCloseSpace={space.closeSpace}
             onSelectSpaceArtifact={space.selectArtifact}
             onSpaceResize={panels.resizeSpace}
-            onSpaceResizeActive={setSpaceResizing}
+            onSpaceResizeActive={panels.setSpaceResizing}
             onToggleThreadList={() => space.setThreadListHidden(!space.threadListHidden)}
             onBackToThreads={() => navigateToMobileView("threads")}
             selectedEmployee={selectedEmployee}
@@ -873,12 +852,6 @@ export function App() {
             mentionCandidates={threadMentionCandidates}
             threadParticipants={threadParticipants}
             onRuntimeNodeChange={setNewThreadNodeId}
-            handoffOpen={handoffOpen}
-            setHandoffOpen={setHandoffOpen}
-            handoffAgentId={handoffAgentId}
-            setHandoffAgentId={setHandoffAgentId}
-            handoffNote={handoffNote}
-            setHandoffNote={setHandoffNote}
             sendDecision={sendDecision}
             sendHandoff={sendHandoff}
             onSend={handleComposerSend}
