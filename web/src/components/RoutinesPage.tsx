@@ -30,10 +30,7 @@ import {
   RoutineFiltersBar,
   RoutineStateNav,
 } from "./task-board/RoutineChrome";
-import {
-  RoutineRow,
-  RoutineRowsHead,
-} from "./task-board/RoutineRecords";
+import { RoutineTable } from "./task-board/RoutineRecords";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
 import {
   EMPTY_TASK_SELECTION,
@@ -47,7 +44,6 @@ import {
 import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
-import { Table } from "@/components/ui/table";
 import { taskRef } from "../lib/taskRef";
 
 interface RoutinesPageProps {
@@ -392,47 +388,28 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           />
         ) : (
           /* One table, one header, no bands: the rail beside this list has
-             already said which schedule state is on screen.
-
-             `data-density="compact"` is the same scope the backlog list opts
-             into. The two lists are one record grammar (see RoutineRecords),
-             and this one was running at the root rhythm while the backlog ran
-             compact — a 77px routine row against a 52px task row for the same
-             kind of record. */
+             already said which schedule state is on screen. Sorting and
+             pagination stay outside it — the table receives the already
+             ordered, already paged rows. */
           <>
-            <div className="backlog-rows routine-rows" data-density="compact">
-              <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
-                <RoutineRowsHead
-                  sort={sort}
-                  onSort={toggleSort}
-                  selectAll={
-                    <TaskSelectAllCheckbox
-                      state={selectionCheckState(visibleSelection, visibleIds)}
-                      label={t("routine.select_all_routines")}
-                      onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                    />
-                  }
+            <RoutineTable
+              rows={pagedTasks.items}
+              sort={sort}
+              onSort={toggleSort}
+              ariaLabel={sectionLabel}
+              selectAll={
+                <TaskSelectAllCheckbox
+                  state={selectionCheckState(visibleSelection, visibleIds)}
+                  label={t("routine.select_all_routines")}
+                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
                 />
-              </Table>
-              <Table className="routine-rows-body" aria-label={sectionLabel}>
-                {pagedTasks.items.map((task) => {
-                  const assignment = taskAssignmentDisplay(task);
-                  return (
-                    <RoutineRow
-                      key={task.id}
-                      task={task}
-                      selected={visibleSelection.has(task.id)}
-                      onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                      state={routineState(task, runningIds)}
-                      agentDisplayName={assignment.name}
-                      agentImageUrl={assignment.imageUrl}
-                      ready={assignment.ready}
-                      {...routineHandlers(task)}
-                    />
-                  );
-                })}
-              </Table>
-            </div>
+              }
+              selection={visibleSelection}
+              onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+              stateFor={(task) => routineState(task, runningIds)}
+              assignmentFor={taskAssignmentDisplay}
+              handlersFor={routineHandlers}
+            />
             <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
           </>
         )}

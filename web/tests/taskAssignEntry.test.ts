@@ -61,15 +61,10 @@ describe("Task assignment discoverability", () => {
     assert.match(pickerSource, /data-modal-initial-focus=\{autoFocus \? "" : undefined\}/);
   });
 
-  it("exposes a quick-assign action on backlog and routine cards and rows", async () => {
+  it("exposes a quick-assign action on the routine row and focuses assignment from both boards", async () => {
     const backlogSource = await readFile(resolve("web/src/components/BacklogPage.tsx"), "utf8");
     const routinesSource = await readFile(resolve("web/src/components/RoutinesPage.tsx"), "utf8");
-    // The card and row renderers moved to task-board/{Backlog,Routine}Records
-    // when the two pages were split; each page still owns the handler they call.
-    const [backlogRecords, routineRecords] = await Promise.all([
-      readFile(resolve("web/src/components/task-board/BacklogRecords.tsx"), "utf8"),
-      readFile(resolve("web/src/components/task-board/RoutineRecords.tsx"), "utf8"),
-    ]);
+    const routineRecords = await readFile(resolve("web/src/components/task-board/RoutineRecords.tsx"), "utf8");
 
     /* The backlog form is a shared controller now, so the focus intent lives
        there rather than on the page that mounts it. */
@@ -77,17 +72,15 @@ describe("Task assignment discoverability", () => {
     assert.match(backlogForm, /setAssignmentFocus\(true\)/);
     assert.match(routinesSource, /setAssignmentFocus\(true\)/);
 
+    // The backlog board's card and compact list row are tiles with no action
+    // bar: assignment there happens through the record's Edit, so only the
+    // assignment-focus intent is asserted on that page.
+    assert.match(routinesSource, /onAssign: \(\) => assignTask\(task\)/);
     for (const source of [backlogSource, routinesSource]) {
-      assert.match(source, /onAssign: \(\) => assignTask\(task\)/);
       assert.match(source, /initialFocus=\{(taskForm\.)?assignmentFocus \? "assignment" : "title"\}/);
     }
-    for (const records of [backlogRecords, routineRecords]) {
-      assert.match(records, /onAssign: \(\) => void/);
-      assert.match(records, /backlog\.assign_task/);
-    }
-    // The board card is a tile now, so its quick-assign went with the peek
-    // drawer into the record's Edit; the list row keeps its own button.
-    assert.equal(backlogRecords.match(/<NavAgents size=\{ICON\.sm\} \/>/g)?.length, 1);
+    assert.match(routineRecords, /onAssign: \(\) => void/);
+    assert.match(routineRecords, /backlog\.assign_task/);
     // The routine board is a list only, so its one row carries the button.
     assert.equal(routineRecords.match(/<RoutineAssignButton onAssign=\{onAssign\} \/>/g)?.length, 1);
   });

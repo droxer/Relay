@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { BacklogTaskCard, BacklogTaskRow } from "../src/components/task-board/BacklogRecords";
-import { RoutineRow } from "../src/components/task-board/RoutineRecords";
+import { BacklogTaskCard, BacklogTaskList } from "../src/components/task-board/BacklogRecords";
+import { RoutineTable } from "../src/components/task-board/RoutineRecords";
 import type { RelayTaskListItem } from "../src/types";
 
 for (const view of ["card", "row"] as const) {
@@ -23,8 +23,10 @@ for (const view of ["card", "row"] as const) {
       onToggleSelect: vi.fn(), onOpen: vi.fn() };
     const { container } = render(view === "card"
       ? <BacklogTaskCard {...props} dragging={false} onDragStart={vi.fn()} onDragEnd={vi.fn()} onTouchStart={vi.fn()} />
-      : <table><tbody><BacklogTaskRow {...props} canDiscuss={false} starting={false} onStart={vi.fn()}
-          onEdit={vi.fn()} onAssign={vi.fn()} onToggleBlock={vi.fn()} onDone={vi.fn()} /></tbody></table>);
+      : <BacklogTaskList tasks={[task]} sort={null} onSort={vi.fn()} selectAll={null}
+          selectedIds={new Set()} onToggleSelect={vi.fn()}
+          contextFor={() => ({ ready: props.ready, agentDisplayName: props.agentDisplayName })}
+          onOpenTask={vi.fn()} />);
     const label = container.querySelector(".task-assignee-name");
     expect(label?.textContent).toBe(expected);
     expect(label?.closest(".sr-only")).toBeNull();
@@ -61,9 +63,14 @@ for (const view of ["card", "row", "routine"] as const) {
     const { container } = render(view === "card"
       ? <BacklogTaskCard {...props} dragging={false} onDragStart={vi.fn()} onDragEnd={vi.fn()} onTouchStart={vi.fn()} />
       : view === "routine"
-        ? <table><tbody><RoutineRow {...props} state="paused" /></tbody></table>
-        : <table><tbody><BacklogTaskRow {...props} canDiscuss={false}
-            onToggleBlock={vi.fn()} onDone={vi.fn()} /></tbody></table>);
+        ? <RoutineTable rows={[task]} sort={null} onSort={vi.fn()} ariaLabel="Routines" selectAll={null}
+            selection={new Set()} onToggleSelect={vi.fn()} stateFor={() => "paused"}
+            assignmentFor={() => ({ name: "Atlas", imageUrl: props.agentImageUrl, ready: true })}
+            handlersFor={() => ({ starting: false, onOpen: vi.fn(), onEdit: vi.fn(), onAssign: vi.fn(), onStart: vi.fn() })} />
+        : <BacklogTaskList tasks={[task]} sort={null} onSort={vi.fn()} selectAll={null}
+            selectedIds={new Set()} onToggleSelect={vi.fn()}
+            contextFor={() => ({ ready: props.ready, agentDisplayName: props.agentDisplayName, agentImageUrl: props.agentImageUrl })}
+            onOpenTask={vi.fn()} />);
     expect(container.querySelector(".task-assignee img")?.getAttribute("src")).toBe(props.agentImageUrl);
     expect(container.querySelector(".task-assignee-name")?.textContent).toBe("Atlas");
   });

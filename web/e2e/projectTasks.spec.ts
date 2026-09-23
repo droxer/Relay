@@ -49,7 +49,6 @@ for (const mobile of [false, true]) {
     await finalCard.scrollIntoViewIfNeeded();
     await expect(finalCard).toBeInViewport();
     await panel.evaluate((el) => { el.scrollTop = 0; });
-    await page.locator(".project-task-board").evaluate((el) => { el.scrollLeft = 0; });
     await page.screenshot({ path: `/tmp/relay-project-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     await page.getByRole("tab", { name: "Agents", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Agents", exact: true })).toHaveAttribute("aria-selected", "true");

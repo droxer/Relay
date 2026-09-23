@@ -343,18 +343,12 @@
 }
 
 .project-task-summary p,
-.project-task-lane-empty,
-.project-task-meta,
-.project-task-card time,
 .project-task-blocker {
   color: var(--ink-3);
   font: var(--type-body-sm);
 }
 
-/* Status marks, same grammar as the backlog list and the record band — the
-   lane's own header carries the stage, so these only appear for a status the
-   lane cannot show. */
-.project-task-exception,
+/* Status marks, same grammar as the backlog list and the record band. */
 .project-task-attention {
   display: inline-flex;
   align-items: center;
@@ -364,7 +358,6 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-.project-task-exception > svg,
 .project-task-attention > svg {
   flex: none;
 }
@@ -399,65 +392,28 @@
   flex: 1;
 }
 
-.project-task-board {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(180px, 1fr));
-  gap: var(--sp-3);
-  align-items: start;
-  overflow-x: auto;
-  padding-bottom: var(--sp-4);
-}
-
-.project-task-lane {
-  display: grid;
-  align-content: start;
-  gap: var(--sp-3);
+/* The shadcn table's scroll container is a grid child here; without the
+   zero minimum its content width would stretch the panel instead of
+   scrolling inside itself. */
+.project-tasks [data-slot="table-container"] {
   min-width: 0;
 }
 
-.project-task-lane h3 {
+/* Title and status word share the cell's first line: the title clamps to
+   two lines so a long name cannot starve the status chip. */
+.project-task-lead {
   display: flex;
-  justify-content: space-between;
-  padding: var(--sp-2) var(--sp-1);
-  border-bottom: 1px solid var(--line-1);
-  font: var(--type-body-sm);
-  font-weight: 500;
-}
-
-.project-task-lane h3 > span:last-child {
-  color: var(--ink-4);
-}
-
-.project-task-card {
-  display: grid;
-  justify-items: start;
+  align-items: baseline;
   gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
-  overflow-wrap: anywhere;
-  transition: border-color var(--t-fast) var(--ease);
-}
-
-.project-task-card:hover {
-  border-color: var(--line-strong);
-}
-
-/* Title and priority share the card's head row: the title clamps to two
-   lines so a long name cannot starve the badge. */
-.project-task-card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sp-2);
-  width: 100%;
   min-width: 0;
 }
 
 /* The record opens over the project, so the title is a button, not a link
-   out of here. It still reads as the card's one destination. */
+   out of here. It still reads as the row's one destination. It shrinks and
+   clamps but does not grow — the status chip belongs against the title's
+   end, not adrift at the cell's far edge. */
 .project-task-title {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -474,40 +430,11 @@
   overflow: hidden;
 }
 
-.project-task-card-head .priority-badge {
-  flex: none;
-  margin-top: 1px;
-}
-
 .project-task-title:hover {
   text-decoration: underline;
 }
 
-.project-task-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2);
-  justify-content: space-between;
-  width: 100%;
-}
-
-/* The assignee is the meta row's subject — one ink rung up from the dates. */
-.project-task-assignee {
-  color: var(--ink-2);
-  font-weight: 500;
-}
-
-.project-task-due {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-}
-
-.project-task-due.warn { color: var(--warn); }
-.project-task-due.bad { color: var(--err); }
-
-/* A failed action, reported on the card that raised it. Distinct from the
+/* A failed action, reported on the row that raised it. Distinct from the
    blocker reason above, which is the task's own state, not an error. */
 .project-task-failure {
   color: var(--err);
@@ -517,9 +444,5 @@
 
 @media (max-width: 640px) {
   .project-task-summary { grid-template-columns: 1fr; gap: var(--sp-3); }
-  /* The lanes stay lanes. Stacking them to one column discarded the only
-     thing a board is for and left one very long scroll in its place, so the
-     board keeps its columns and scrolls sideways instead. */
-  .project-task-board { grid-auto-columns: 78vw; grid-auto-flow: column; grid-template-columns: none; }
   .project-task-create { flex-wrap: wrap; }
 }

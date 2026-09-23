@@ -345,7 +345,6 @@ export function ProjectWorkspacePage({
             tasks={tasks}
             agents={agents}
             teams={teams}
-            locale={i18n.language}
             onOpenRecord={(taskId) => void navigateToAppPath(projectTasksHref(project.id, taskId))}
           />
         </TabsContent>

@@ -19,7 +19,7 @@ import { Field, FieldError } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem, RadioGroupChoice } from "@/components/ui/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableRowGroup, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Pagination } from "@/components/ui/Pagination";
 import {
@@ -253,21 +253,21 @@ export function DesignSystemSpecimen() {
 
     {/* ---- Data ---- */}
     <Section title="Table">
-      <Table className="flex w-full min-w-0 flex-col" aria-label="Example table">
-        <TableRowGroup>
-          <TableRow className="flex gap-4 border-b border-hairline pb-2">
-            <TableHead className="flex-1 text-micro text-muted-foreground uppercase">Name</TableHead>
-            <TableHead className="flex-1 text-micro text-muted-foreground uppercase">Status</TableHead>
+      <Table aria-label="Example table">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Name</TableHead>
+            <TableHead>Status</TableHead>
           </TableRow>
-        </TableRowGroup>
-        <TableRowGroup>
+        </TableHeader>
+        <TableBody>
           {["First", "Second"].map((name) => (
-            <TableRow key={name} className="flex gap-4 border-b border-hairline-soft py-2">
-              <TableCell className="flex-1 text-xs text-ink">{name}</TableCell>
-              <TableCell className="flex-1"><StatusPill value="ready" /></TableCell>
+            <TableRow key={name}>
+              <TableCell>{name}</TableCell>
+              <TableCell><StatusPill value="ready" /></TableCell>
             </TableRow>
           ))}
-        </TableRowGroup>
+        </TableBody>
       </Table>
     </Section>
 

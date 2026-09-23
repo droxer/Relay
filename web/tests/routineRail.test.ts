@@ -77,7 +77,7 @@ describe("routine section rail", () => {
     // dot in its state cell — a mark, not a second copy of the section word.
     assert.doesNotMatch(page, /showState/);
     assert.doesNotMatch(records, /<RoutineStateBadge state=\{state\} \/>/);
-    assert.match(records, /backlog-row-dot-cell[\s\S]{0,160}ROUTINE_STATE_SHAPE\[state\]/);
+    assert.match(records, /<StateMark shape=\{ROUTINE_STATE_SHAPE\[state\]\} \/>/);
   });
 
   it("keeps the rail out of the shell's own grid", async () => {

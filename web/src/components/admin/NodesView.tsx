@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { Button } from "@/components/ui/button";
 import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../../types";
@@ -22,20 +29,21 @@ import {
   type NodeQuickFilter,
   type NodeSortKey,
 } from "../../lib/adminHelpers";
-import { applySort, type SortState } from "../../lib/listSort";
+import { applySort, sortIndicator, type SortDirection, type SortState } from "../../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../../lib/pagination";
 import { useLanePagination, usePagination } from "../../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../../hooks/useListSort";
-import { SortableColumnHeader } from "@/components/ui/SortableColumnHeader";
+import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
 import { SortMenu } from "@/components/ui/SortMenu";
-import type { StoredNodeTokenMap } from "./helpers";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { isNodeOnline, type StoredNodeTokenMap } from "./helpers";
 import { NodeCard } from "./NodeCard";
-import { NodeRow } from "./NodeRow";
+import { NodeActionsCell, NodeEmployeeCell, NodeIdentityCell, NodeRuntimesCell } from "./NodeRow";
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
 import { ListGroup } from "../ListGroup";
 import type { StateTone } from "../StateMark";
-import { Table, TableHead, TableRow, TableRowGroup } from "@/components/ui/table";
 
 interface NodesViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
@@ -76,43 +84,82 @@ function nodeBandTone(status: string): StateTone {
   return statusTone(status);
 }
 
-/** The column header row, repeated once per band — see `EmployeeCols`. */
-function NodeCols({
+/** Per-column element classes, carried through TanStack's open `meta` slot.
+    The pixel minimums port the div grid's tracks (admin-v2-nodes.css:
+    `minmax(200px, 1.4fr) minmax(120px, 1fr) minmax(0, 1.6fr) 11rem`). */
+type ColumnChrome = { headClass?: string; cellClass?: string };
+
+/** One band of the grouped fleet list as a real table. The bands page
+    independently, so each gets its own `useReactTable` over the rows already
+    paged for it; sorting stays manual — the rows arrive pre-ordered by
+    `applySort` and the URL-backed `useListSort` state in NodesView. */
+function NodeBandTable({
+  rows,
+  columns,
+  sorting,
   sort,
-  onSort,
-  t,
+  highlightedNodeId,
+  ariaLabel,
 }: {
+  rows: ControlPanelDaemonNodeRecord[];
+  columns: ColumnDef<ControlPanelDaemonNodeRecord>[];
+  sorting: SortingState;
   sort: SortState<NodeSortKey> | null;
-  onSort: (key: NodeSortKey) => void;
-  t: TFunction;
+  highlightedNodeId?: string | null;
+  ariaLabel: string;
 }) {
+  const { t } = useTranslation();
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    manualSorting: true,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (node) => node.id,
+  });
   return (
-    <TableRow className="adm-node-cols">
-      <SortableColumnHeader
-        className="adm-col-label"
-        label={t("admin.v2.col_node")}
-        sortKey="node"
-        sort={sort}
-        onSort={onSort}
-      />
-      <SortableColumnHeader
-        className="adm-col-label"
-        label={t("admin.v2.col_employee")}
-        sortKey="employee"
-        sort={sort}
-        onSort={onSort}
-      />
-      <SortableColumnHeader
-        className="adm-col-label"
-        label={t("admin.v2.node_runtimes")}
-        sortKey="runtimes"
-        sort={sort}
-        onSort={onSort}
-        defaultDirection="desc"
-      />
-      {/* Actions is not a column of data — there is nothing to order by. */}
-      <TableHead className="adm-col-label adm-col-label--metrics">{t("admin.v2.col_actions")}</TableHead>
-    </TableRow>
+    <Table data-density="compact" aria-label={ariaLabel}>
+      <TableHeader>
+        {table.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id} className="hover:bg-transparent">
+            {headerGroup.headers.map((header) => (
+              <TableHead
+                key={header.id}
+                className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
+                aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as NodeSortKey).ariaSort : undefined}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {table.getRowModel().rows.map((row) => {
+          const node = row.original;
+          return (
+            <TableRow
+              key={row.id}
+              className={cn("group", node.id === highlightedNodeId && "is-pulse")}
+              data-node={node.id}
+              data-online={isNodeOnline(node) ? "true" : "false"}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell
+                  key={cell.id}
+                  className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}
+                  {...(cell.column.id === "runtimes"
+                    ? { "aria-label": t("admin.v2.node_runtimes"), title: t("admin.v2.node_runtimes") }
+                    : {})}
+                >
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -154,6 +201,85 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
   // so a bare `sort` would have the two tables fighting over one key.
   const { sort, toggleSort, setSort } = useListSort(sortColumns, "nodeSort");
   const { page, setPage } = usePagination("nodePage");
+  /* flexRender mounts a column's cell function AS a component, so a column
+     def that closed over render-volatile values — `t`, the caller's inline
+     callbacks, the employee lookup — would unmount and remount every cell
+     subtree (and its `useNodeDelete` state) on each parent render. The
+     column defs below therefore stay stable and read those values through
+     this ref at render time. */
+  const cellState = useRef({ t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode });
+  cellState.current = { t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode };
+  /* `useListSort` owns the sort (it persists in the URL); TanStack's
+     SortingState is a read-only projection of it. Header clicks go back
+     through `toggleSort`, never through the table. */
+  const sorting = useMemo<SortingState>(
+    () => (sort ? [{ id: sort.key, desc: sort.direction === "desc" }] : []),
+    [sort],
+  );
+
+  const columns = useMemo<ColumnDef<ControlPanelDaemonNodeRecord>[]>(() => {
+    const sortHead = (key: NodeSortKey, label: string, defaultDirection?: SortDirection) => {
+      const { active, direction } = sortIndicator(sort, key);
+      return (
+        <SortColumnButton
+          label={label}
+          sortKey={key}
+          onSort={toggleSort}
+          align="start"
+          defaultDirection={defaultDirection}
+          active={active}
+          direction={direction}
+        />
+      );
+    };
+    return [
+      {
+        id: "node",
+        meta: { headClass: "adm-node-col-identity", cellClass: "adm-node-col-identity" } satisfies ColumnChrome,
+        header: () => sortHead("node", cellState.current.t("admin.v2.col_node")),
+        cell: ({ row }) => (
+          <NodeIdentityCell
+            node={row.original}
+            storedTokens={cellState.current.storedTokens}
+            colocated={cellState.current.colocated}
+            t={cellState.current.t}
+          />
+        ),
+      },
+      {
+        id: "employee",
+        meta: { headClass: "adm-node-col-employee" } satisfies ColumnChrome,
+        header: () => sortHead("employee", cellState.current.t("admin.v2.col_employee")),
+        cell: ({ row }) => {
+          const node = row.original;
+          const employee = node.employeeId ? cellState.current.employeeById.get(node.employeeId) : undefined;
+          return <NodeEmployeeCell employeeName={employee?.displayName} />;
+        },
+      },
+      {
+        id: "runtimes",
+        header: () => sortHead("runtimes", cellState.current.t("admin.v2.node_runtimes"), "desc"),
+        cell: ({ row }) => <NodeRuntimesCell node={row.original} t={cellState.current.t} />,
+      },
+      {
+        /* Actions is not a column of data — there is nothing to order by. */
+        id: "actions",
+        meta: { headClass: "adm-node-col-actions text-right", cellClass: "text-right" } satisfies ColumnChrome,
+        header: () => cellState.current.t("admin.v2.col_actions"),
+        cell: ({ row }) => (
+          <NodeActionsCell
+            node={row.original}
+            onReveal={cellState.current.onRevealCredentials}
+            onRename={cellState.current.onRenameNode}
+            onManageExecutors={cellState.current.onManageExecutors}
+            onDelete={cellState.current.onDeleteNode}
+            t={cellState.current.t}
+          />
+        ),
+      },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort, toggleSort]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -297,29 +423,14 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
                 count={groupNodes.length}
                 tone={nodeBandTone(status)}
               >
-                <Table className="list-group-rows" data-density="compact" aria-label={label}>
-                  <NodeCols sort={sort} onSort={toggleSort} t={t} />
-                  <TableRowGroup className="adm-node-list" render={<ul />}>
-                    {groupPage.items.map((node) => {
-                      const employee = node.employeeId ? employeeById.get(node.employeeId) : undefined;
-                      return (
-                        <NodeRow
-                          key={node.id}
-                          node={node}
-                          employeeName={employee?.displayName}
-                          storedTokens={storedTokens}
-                          colocated={colocated}
-                          onReveal={onRevealCredentials}
-                          onRename={onRenameNode}
-                          onManageExecutors={onManageExecutors}
-                          onDelete={onDeleteNode}
-                          highlight={node.id === highlightedNodeId}
-                          t={t}
-                        />
-                      );
-                    })}
-                  </TableRowGroup>
-                </Table>
+                <NodeBandTable
+                  rows={groupPage.items}
+                  columns={columns}
+                  sorting={sorting}
+                  sort={sort}
+                  highlightedNodeId={highlightedNodeId}
+                  ariaLabel={label}
+                />
                 <Pagination
                   compact
                   className="list-group-pager"

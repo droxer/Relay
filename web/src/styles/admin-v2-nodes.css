@@ -10,41 +10,14 @@
    to. One cohesive 860-line sheet beats two sheets that each own half of the
    node card, so this rung of the split stops here on purpose. */
 
-/* ── Node list (list view) — row geometry mirrors the employee list so
-   both views share one table language. ────────────────────────────────── */
-.adm-node-cols,
-.adm-node-row {
-  display: grid;
-  /* The trailing actions track is pinned rather than `auto` for the same
-     reason as .adm-emp-cols: the header and the rows are separate grid
-     containers, so a content-sized track resolves per-container and the
-     column headers drift off the cells beneath them. */
-  grid-template-columns: minmax(200px, 1.4fr) minmax(120px, 1fr) minmax(0, 1.6fr) 11rem;
-  gap: var(--sp-6);
-}
+/* ── Node list (list view) — a TanStack-driven shadcn table now; what
+   remains here are the inner cell vocabularies. ─────────────────────── */
 
-.adm-node-cols {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface-0);
-  padding: 0 0 var(--sp-3);
-  border-bottom: 0.5px solid var(--line-1);
-}
-
-.adm-node-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.adm-node-row {
-  align-items: center;
-  padding: var(--sp-3) 0;
-  border-bottom: 0.5px solid var(--line-2);
-  position: relative;
-  transition: background var(--t-fast) var(--ease);
-}
+/* Column tracks for the per-band node tables. Lengths, not scale steps —
+   the design grid bans arbitrary bracket values in component classes. */
+.adm-node-col-identity { min-width: 200px; }
+.adm-node-col-employee { min-width: 120px; }
+.adm-node-col-actions { width: 11rem; }
 
 .adm-node-row-id {
   display: flex;
@@ -156,22 +129,6 @@
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-@media (max-width: 820px) {
-  .adm-node-cols {
-    display: none;
-  }
-
-  .adm-node-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-3);
-    padding: var(--sp-4) 0;
-  }
-
-  .adm-node-row-actions {
-    justify-content: flex-start;
-  }
 }
 
 /* One height for every card in the fleet grid. A computer with four runtimes

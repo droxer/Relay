@@ -142,7 +142,7 @@ describe("the backlog card stays a tile", () => {
   const source = readFileSync("web/src/components/task-board/BacklogRecords.tsx", "utf8");
   const card = source.slice(
     source.indexOf("export function BacklogTaskCard"),
-    source.indexOf("export function BacklogRowsHead"),
+    source.indexOf("export function BacklogTaskList"),
   );
 
   it("renders no action buttons", () => {
