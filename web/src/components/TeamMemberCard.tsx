@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { AgentName, AgentPlacement, LogicalAgentAvailability, TeamMemberConfig } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
+import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
 import { ActionEdit, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ function isRequired(config: TeamMemberConfig) {
 
 /* Who the member is: avatar with readiness pip; name with the role they will
    actually play (so an inherited role is visible without opening the select)
-   and the Lead pill; then the shared <AgentMetaLine> — runtime glyph and the
+   and the lead star; then the shared <AgentMetaLine> — runtime glyph and the
    computers it runs on, the one meta line every agent surface renders. Same
    head grammar as the project crew tiles. */
 function TeamMemberCardHead({ member, config, lead, nameId, side }: {
@@ -64,7 +65,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
       <span className="team-work-member-identity">
         <span className="team-work-member-name">
           <strong id={nameId}>{member.displayName}</strong>
-          {lead ? <TonePill tone="info" label={t("project.lead_badge")} /> : null}
+          {lead ? <LeadBadge /> : null}
           {role ? <TonePill tone="neutral" label={t(`team_work.role_${role}`)} /> : null}
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
         </span>

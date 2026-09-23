@@ -6,12 +6,17 @@ import { describe, it } from "node:test";
 const read = (path: string) => readFile(resolve(path), "utf8");
 
 describe("team member responsibility cards", () => {
-  it("draws each member as an identity card: avatar, name, lead + role pills, meta line", async () => {
+  it("draws each member as an identity card: avatar, name, lead mark + role pill, meta line", async () => {
     const source = await read("web/src/components/TeamMemberCard.tsx");
     assert.match(source, /<article\s+className="team-work-member"[^>]*?role="group"/);
     assert.match(source, /<header className="team-work-member-head">\s*<AgentStateBadge/);
     assert.match(source, /imageUrl=\{member\.profileImageUrl\}/);
-    assert.match(source, /<TonePill tone="info" label=\{t\("project\.lead_badge"\)\} \/>/);
+    // The lead is a mark, not a word: a star badge carrying its name only to
+    // assistive tech and a hovering pointer.
+    assert.match(source, /\{lead \? <LeadBadge \/> : null\}/);
+    const badge = await read("web/src/components/LeadBadge.tsx");
+    assert.match(badge, /<MarkLead className="fill-current" aria-hidden="true" \/>/);
+    assert.match(badge, /aria-label=\{label\} title=\{label\}/);
     // The role pill shows the role the member will actually play, so an
     // inherited default is visible without opening the select.
     assert.match(source, /const role = effectiveRoleOf\(member, config\)/);

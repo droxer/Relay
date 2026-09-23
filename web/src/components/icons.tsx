@@ -70,6 +70,7 @@ import {
   Search,
   Settings,
   Square,
+  Star,
   Settings2,
   ShieldCheck,
   SquarePen,
@@ -389,6 +390,12 @@ export const StreamAttachment = withStandardStroke(Paperclip, "StreamAttachment"
 // every chrome control that reveals a panel is drawn the same way, and the
 // filled edge points at the side the panel appears on.
 export const ThreadSpaceToggle = withStandardStroke(PanelRight, "ThreadSpaceToggle");
+
+// The team/project lead. A star marks one member of a roster as first among
+// equals without spending a word on it — a crown would read as ownership of
+// the people rather than of the work, and the roster already spends its
+// horizontal room on the role pill.
+export const MarkLead = withStandardStroke(Star, "MarkLead");
 
 // Identity and metrics inside a transcript.
 export const IdentityUser = withStandardStroke(UserRound, "IdentityUser");

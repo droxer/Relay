@@ -41,6 +41,7 @@ import {
   WorkspaceEmpty,
 } from "./workspace/WorkspacePrimitives";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
+import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 
@@ -98,7 +99,7 @@ function ProjectMemberLane({
         <span className="project-member-tile-identity">
           <span className="project-member-tile-name">
             <strong>{name}</strong>
-            {lead ? <TonePill tone="info" label={t("project.lead_badge")} /> : null}
+            {lead ? <LeadBadge /> : null}
             {!member.enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null}
             {!available ? <TonePill tone="warn" label={t("project.member_missing")} /> : null}
           </span>
