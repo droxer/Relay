@@ -213,7 +213,6 @@
   "thread": {
     "project_indicator": "專案：{{name}}",
     "back_to_task": "返回任務",
-    "back_to_project_activities": "返回專案動態",
     "search_placeholder": "搜尋對話…",
     "search_label": "搜尋對話",
     "resize_label": "調整對話清單寬度",

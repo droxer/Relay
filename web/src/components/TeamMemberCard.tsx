@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const ROLES = ["inherit", "planner", "implementer", "tester", "reviewer", "fixer"] as const;
-const REVIEW_ROLES = ["tester", "reviewer"];
 
 export type TeamCardMember = {
   id: string;
@@ -31,11 +30,11 @@ function effectiveRoleOf(member: TeamCardMember, config: TeamMemberConfig) {
   return config.role ?? member.defaultRole;
 }
 
-/** Required unless on-request; an unset flag falls back to the role default
- *  (testers and reviewers gate completion). */
-function isRequired(member: TeamCardMember, config: TeamMemberConfig) {
+/** Required unless on-request; an unset flag falls back to the team default,
+ *  where every always-participating member's contribution gates completion. */
+function isRequired(config: TeamMemberConfig) {
   if (config.participation === "on_request") return false;
-  return config.required ?? REVIEW_ROLES.includes(effectiveRoleOf(member, config) ?? "");
+  return config.required ?? true;
 }
 
 /* Who the member is: avatar with readiness pip; name with the role they will
@@ -141,7 +140,7 @@ function TeamMemberContractFields({ member, config, lead, idBase, disabled, onCh
               onCheckedChange={(value) => update({
                 participation: value === true ? "on_request" : "always",
                 // Clearing it (rather than pinning false) hands the member
-                // back to the role default when the flag is unset.
+                // back to the team default when the flag is unset.
                 required: value === true ? false : undefined,
               })}
             />
@@ -149,7 +148,7 @@ function TeamMemberContractFields({ member, config, lead, idBase, disabled, onCh
           </label>
           <label className="team-work-flag">
             <Checkbox
-              checked={isRequired(member, config)}
+              checked={isRequired(config)}
               disabled={onRequest || disabled}
               onCheckedChange={(value) => update({ required: value === true })}
             />
@@ -198,7 +197,7 @@ function TeamMemberSummary({ member, config, lead }: {
     ? null
     : config.participation === "on_request"
       ? t("team_work.on_request")
-      : isRequired(member, config)
+      : isRequired(config)
         ? t("team_work.required")
         : t("team_work.optional");
   return (

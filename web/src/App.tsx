@@ -325,7 +325,6 @@ export function App() {
     && !routedProjectId
     && !routedSessionId
     && !composingNew;
-  const activeThreadTaskId = tasks.find(task => task.linkedSessionIds.includes(activeSession?.id ?? ""))?.id;
   const isTaskThread = route === "backlog" && Boolean(recordTaskId && routedSessionId);
   const isTasksWorkspace = route === "backlog" && !isTaskThread;
   const detailAgent = useMemo(
@@ -784,7 +783,6 @@ export function App() {
           />
         ) : (
           <ThreadsView
-            taskId={isTaskThread ? recordTaskId : activeThreadTaskId}
             taskThread={isTaskThread}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}

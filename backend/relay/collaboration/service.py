@@ -445,6 +445,15 @@ class CollaborationConductor:
                 required_node_id,
                 daemon_nodes,
             )
+        # New team work must use validated delegation even without custom roles.
+        # Single-member recovery retains the admitted legacy compatibility path.
+        if (
+            team_snapshot
+            and intent.purpose == "accomplish"
+            and not is_recovery
+            and len(raw_assignments) > 1
+        ):
+            team_snapshot = {**team_snapshot, "workContractVersion": 1}
         assignments = self._compile_assignments(
             raw_assignments, team_id, team_member_ids, team_snapshot
         )

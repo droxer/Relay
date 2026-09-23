@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
  * The interactive answer keeps its Select trigger: chrome is what separates
  * the one slot you can act on from the ones you cannot.
  */
-export function ComposerContextLine({ label, mark, name, online = true, title, srDetail }: {
+export function ComposerContextLine({ label, mark, name, online = true, title, srDetail, className }: {
   /** The quiet lead-in word — what kind of fact this is. */
   label: string;
   /** Presence dot, workspace glyph — whatever identifies the value's kind. */
@@ -25,10 +25,11 @@ export function ComposerContextLine({ label, mark, name, online = true, title, s
   title?: string;
   /** Detail carried visually by the mark or the tooltip, spelled out for AT. */
   srDetail?: string;
+  className?: string;
 }) {
   return (
     <span
-      className="composer-context"
+      className={className ? `composer-context ${className}` : "composer-context"}
       data-online={online ? "true" : "false"}
       title={title}
     >

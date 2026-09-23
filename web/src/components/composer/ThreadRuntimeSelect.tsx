@@ -36,7 +36,7 @@ function runtimeLabel(node: DaemonNodeMonitorRecord): string {
  * shape the project room uses. The agent is the choice; the computer is a fact
  * the thread was born with.
  */
-export function ThreadRuntimeReadout({ node, nodeId }: {
+export function ThreadRuntimeReadout({ node, nodeId, className }: {
   node: DaemonNodeMonitorRecord | null;
   /**
    * The computer the thread is pinned to, even when the fleet no longer lists
@@ -46,12 +46,16 @@ export function ThreadRuntimeReadout({ node, nodeId }: {
    * loud. The fact survives its record: the id is named, offline.
    */
   nodeId?: string | null;
+  /** Lets the caller mark the readout as one the thread header already
+   *  states, so it can stand down where that header is on screen. */
+  className?: string;
 }) {
   const { t } = useTranslation();
   if (!node) {
     if (!nodeId) return null;
     return (
       <ComposerContextLine
+        className={className}
         label={t("thread.runs_on")}
         mark={<span className="adm-presence" data-online="false" aria-hidden="true" />}
         name={nodeId}
@@ -70,6 +74,7 @@ export function ThreadRuntimeReadout({ node, nodeId }: {
   // tooltip also says the pin out loud.
   return (
     <ComposerContextLine
+      className={className}
       label={t("thread.runs_on")}
       mark={<span className="adm-presence" data-online={online ? "true" : "false"} aria-hidden="true" />}
       name={name}
