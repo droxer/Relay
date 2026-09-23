@@ -57,6 +57,12 @@ round back to that owner. All downstream evidence is invalidated. The owner
 repairs; subsequent participants revalidate within their own roles. Reviewers
 are not instructed to perform the implementation owner's repair.
 
+A runtime failure reported through either `run.failed` or a nonzero
+`run.completed` follows the same bounded coordinator repair policy. A granted
+coordinator repair can change the shared workspace, so it invalidates prior
+work acceptance and restarts the member sequence. Every member revalidates
+before the task can finish; the repair and consultation budgets are retained.
+
 Messages are typed as question, answer, blocker, handoff, or decision and are
 attributed to an assignment. They are delivered at assignment boundaries.
 A blocked/unfinished participant may ask an earlier work item a question; the
