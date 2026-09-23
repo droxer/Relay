@@ -22,7 +22,7 @@ import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { ThreadHeader } from "./ThreadHeader";
-import { ThreadBand } from "./ThreadBand";
+import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { phaseDividerLabel } from "../lib/projectMessages";
@@ -39,7 +39,6 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
 
 export type ThreadsViewProps = {
-  taskId?: string | null;
   taskThread?: boolean;
   directoryMode: "threads" | "projects";
   /** The shell's task list — the project board reads its lanes from it
@@ -123,7 +122,6 @@ export type ThreadsViewProps = {
 };
 
 export function ThreadsView({
-  taskId,
   taskThread = false,
   directoryMode,
   tasks,
@@ -355,11 +353,22 @@ export function ThreadsView({
       ) : (
       <section id="chat-panel" className="chat-panel" aria-label={t("nav.threads")} tabIndex={-1}>
         <ThreadHeader
-          taskId={taskId}
           taskThread={taskThread}
           activeSession={activeSession}
-          projectId={selectedProjectId}
-          participants={threadParticipants}
+          /* The thread's coordinates ride the header row as marks — the room,
+             the machine, the project, the last movement. They used to claim a
+             band row of their own under the header (that row came out of the
+             transcript), with the room drawn a second time beside it as a
+             bare face stack. */
+          facts={activeSession ? (
+            <ThreadMeta
+              session={activeSession}
+              agentName={bandAgentName}
+              participants={threadParticipants}
+              computers={runtimeNodes}
+              onOpenProject={onSelectProject}
+            />
+          ) : null}
           artifactCount={artifactCount}
           spaceOpen={spaceOpen}
           threadListHidden={threadListHidden}
@@ -367,18 +376,6 @@ export function ThreadsView({
           onToggleThreadList={onToggleThreadList}
           onBackToThreads={onBackToThreads}
         />
-
-        {/* The thread's coordinates, in the same band every other record
-            surface prints — the project above all, which the thread knew
-            about and never showed. */}
-        {activeSession ? (
-          <ThreadBand
-            session={activeSession}
-            agentName={bandAgentName}
-            computers={runtimeNodes}
-            onOpenProject={onSelectProject}
-          />
-        ) : null}
 
         {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
 

@@ -1,27 +1,24 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { EmployeeAgent, RelaySession } from "../types";
+import type { RelaySession } from "../types";
 import {
   ICON,
-  NavBack,
   NavThreads,
 } from "./icons";
 import { ArtifactNavButton } from "./ArtifactNavButton";
-import { AvatarStack } from "./AvatarStack";
-import { IdentityMark } from "./IdentityMark";
-import { ProfileImage } from "./ProfileImagePicker";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { canonicalBrowserUrl, navigateToAppPath, pathForAppState } from "../lib/appRoute";
+import { Button } from "@/components/ui/button";
 
-export function ThreadHeader({ taskId, taskThread = false, activeSession, projectId, participants, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
-  taskId?: string | null;
+export function ThreadHeader({ taskThread = false, activeSession, facts, artifactCount, spaceOpen, threadListHidden, onToggleSpace, onToggleThreadList, onBackToThreads }: {
+  /** A thread opened from a backlog task or a routine run. */
   taskThread?: boolean;
   activeSession: RelaySession | undefined;
-  projectId?: string | null;
-  /** Agents in the room, in join order. Shown only once a thread has more
-   *  than one — a solo thread already names its agent in the composer. Drawn
-   *  as a face stack: the header is a row the title has first claim on, so
-   *  the roster costs a fixed width and keeps its names in tooltips. */
-  participants?: EmployeeAgent[];
+  /** The thread's coordinates — the room, the machine, the project, the last
+   *  movement — drawn as marks by `ThreadMeta`. They ride the header's own
+   *  row rather than a band beneath it: a record page can spend a row on its
+   *  facts, a conversation cannot, and the row it used to spend came out of
+   *  the transcript. The room used to be drawn here too, as a second bare
+   *  face stack beside the facts; it is part of the marks now. */
+  facts?: ReactNode;
   artifactCount: number;
   spaceOpen: boolean;
   threadListHidden: boolean;
@@ -30,34 +27,19 @@ export function ThreadHeader({ taskId, taskThread = false, activeSession, projec
   onBackToThreads: () => void;
 }) {
   const { t } = useTranslation();
-  const parentProjectId = projectId ?? activeSession?.projectId;
-  const projectActivitiesHref = taskId
-    ? canonicalBrowserUrl(`/backlog/${encodeURIComponent(taskId)}`, typeof window !== "undefined" ? window.location.search : "")
-    : parentProjectId
-    ? `${pathForAppState({ route: "projects", mobileView: "chat", sessionId: null, projectId: parentProjectId })}?tab=activities`
-    : null;
+  /* No way back lives in this row anymore. The project fact in `ThreadMeta`
+     is a link to the project, which is the only place the reader was ever
+     going — and it is the project's NAME, not a nameless "back" arrow that
+     had to be read to find out where it led. A task thread gets nothing
+     either: its task is one browser-back away and named in the thread's own
+     origin line. What stays is the phone-only return to the thread list,
+     which the mobile top bar needs because the rail is off screen there. */
   return (
     <header className="chat-header">
       <div className="chat-title">
-        {projectActivitiesHref ? (
-          <a
-            className={buttonVariants({ variant: "ghost" })}
-            href={projectActivitiesHref}
-            aria-label={t(taskId ? "thread.back_to_task" : "thread.back_to_project_activities")}
-            title={t(taskId ? "thread.back_to_task" : "thread.back_to_project_activities")}
-            onClick={(event) => {
-              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-              event.preventDefault();
-              void navigateToAppPath(projectActivitiesHref);
-            }}
-          >
-            <NavBack size={ICON.md} /><span>{t(taskId ? "thread.back_to_task" : "workspace.tab_activities")}</span>
-          </a>
-        ) : (
-          <Button variant="ghost" className="mobile-back-button" type="button" aria-label={t("nav.threads")} onClick={onBackToThreads}>
-            <NavThreads size={ICON.md} /><span>{t("nav.threads")}</span>
-          </Button>
-        )}
+        <Button variant="ghost" className="mobile-back-button" type="button" aria-label={t("nav.threads")} onClick={onBackToThreads}>
+          <NavThreads size={ICON.md} /><span>{t("nav.threads")}</span>
+        </Button>
         <div className="chat-title-text">
           <h2 title={activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : undefined}>{activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : t("thread.new_thread")}</h2>
         {activeSession?.execution && activeSession.execution.phase !== "terminal" ? (
@@ -65,23 +47,7 @@ export function ThreadHeader({ taskId, taskThread = false, activeSession, projec
         ) : null}
         </div>
       </div>
-      {participants && participants.length > 1 ? (
-        <AvatarStack
-          className="chat-participants"
-          label={t("thread.participants")}
-          items={participants.map((participant) => ({
-            id: participant.id,
-            name: participant.displayName,
-            mark: (
-              <ProfileImage
-                src={participant.profileImageUrl}
-                alt=""
-                fallback={<IdentityMark kind="agent" />}
-              />
-            ),
-          }))}
-        />
-      ) : null}
+      {facts ? <div className="chat-meta">{facts}</div> : null}
       <div className="chat-tools">
         {spaceOpen && !taskThread ? (
           <Button

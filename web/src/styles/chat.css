@@ -84,20 +84,6 @@
   white-space: nowrap;
 }
 
-/* Room roster: who is in this thread, shown only once it has more than one
-   agent. Sits between the title and the tools so a thread that grew reads
-   differently at a glance from one that never did.
-
-   The stack itself (.avatar-stack) owns the geometry; the header only says
-   where it sits and what it sits on. It used to render each name inline,
-   which put a variable-width list in the middle of the row: the title
-   ellipsed early to pay for it, and the last name still clipped mid-word
-   against the tools. Faces are fixed width and the names moved to tooltips. */
-.chat-participants {
-  --stack-ground: var(--surface-0);
-  margin-inline-start: auto;
-}
-
 .chat-tools {
   display: flex;
   align-items: center;
@@ -614,54 +600,124 @@
   .chat-header { padding-inline: var(--sp-4); }
 }
 
-/* ── Thread facts band ────────────────────────────────────────────────
-   The same `.record-band` the agent, team, task, and project records print
-   under their headers. The panel is a grid with named rows, so — like the
-   recovery notice above it — the band has to be given a row of its own or
-   the transcript auto-places into a fixed track and the composer stretches
-   into the flexible one. */
+/* ── Thread facts ─────────────────────────────────────────────────────
+   The thread's coordinates as MARKS, on the header's own row: a face for the
+   room, an ownership glyph with a presence dot for the computer, the project
+   glyph for the project, and the time it last moved.
 
-.chat-panel:has(> .record-band) {
-  grid-template-rows: var(--header-h) auto minmax(0, 1fr) auto;
+   It replaces an eyebrow-and-value band under the header, which cost a whole
+   row of transcript on every thread and needed a grid track of its own — and
+   which drew the room twice, once as "AGENT Analyst" and again as a bare
+   face stack beside it. Every mark here is one the app already draws
+   somewhere else (.profile-image, .adm-presence, the ownership and project
+   glyphs); nothing in this row is a new picture. */
+
+.chat-meta {
+  /* Never shrinks. Sharing the squeeze with the title clipped BOTH — the
+     facts lost their last word mid-character ("7 minute") while the title
+     ellipsed anyway. The title is the long, variable string, so it gives up
+     the width; the facts drop whole, by the rules at the end of this block. */
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
 }
 
-.chat-panel:has(> .record-band):has(> .recovery-panel) {
-  grid-template-rows: var(--header-h) auto auto minmax(0, 1fr) auto;
+.thread-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
 }
 
-/* The project fact is the one that leads somewhere: a thread knew its
-   project all along and offered no way back to it. */
-.thread-band-link {
-  color: inherit;
+/* One coordinate: its mark, then its name. No plate and no border — these
+   are facts in a chrome row, and a bordered pill beside the real controls at
+   the end of the row would read as a third control that lost its chevron. */
+.thread-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  min-width: 0;
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.thread-meta-chip > svg {
+  flex: none;
+  color: var(--ink-4);
+}
+
+.thread-meta-name {
+  overflow: hidden;
+  /* Long enough for a real machine or project name, short enough that two
+     of them cannot push the tools off the row. */
+  max-width: 18ch;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The agent's own avatar, at the face size the stack beside it uses — so a
+   one-agent thread and a three-agent thread read as the same kind of fact. */
+.thread-meta-face {
+  display: inline-flex;
+  flex: none;
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+}
+
+.thread-meta-face .profile-image {
+  width: 100%;
+  height: 100%;
+}
+
+.thread-meta-room {
+  --stack-ground: var(--surface-0);
+}
+
+/* The project is the one coordinate that leads somewhere, so it is the one
+   that answers to the pointer. */
+.thread-meta-project {
   text-decoration: none;
 }
 
-.thread-band-link:hover {
+.thread-meta-project:hover {
   color: var(--ink-1);
+}
+
+.thread-meta-project:hover .thread-meta-name {
   text-decoration: underline;
 }
 
-@media (max-width: 820px) {
-  /* The mobile header is hidden here, so its track goes too. */
-  .messenger-shell[data-mobile-view="chat"] .chat-panel:has(> .record-band) {
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
+/* An offline computer recedes a step, the same way the composer's readout
+   and the fleet cards do. The dot carries why; the name stays readable. */
+.thread-meta-computer:has(.adm-presence[data-online="false"]) {
+  color: var(--ink-3);
+}
 
-  .messenger-shell[data-mobile-view="chat"] .chat-panel:has(> .record-band):has(> .recovery-panel) {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-  }
+.thread-meta-time {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  white-space: nowrap;
+}
 
-  /* A record page can spend two rows on its coordinates; a conversation
-     cannot — that is 100px taken off the transcript. One row that scrolls
-     sideways instead. */
-  .chat-panel > .record-band {
-    display: flex;
-    overflow-x: auto;
+/* Whole facts drop as the panel narrows — the thread list and the space
+   panel each take their share of this row — in reverse order of what a
+   reader checks mid-conversation. The computer goes first, then the room:
+   both are a glance away on the composer's targets rail. What survives to
+   the narrowest panel is the project (the only fact that leads somewhere)
+   and when the thread last moved. */
+@media (max-width: 1400px) {
+  .thread-meta-computer {
+    display: none;
   }
+}
 
-  .chat-panel > .record-band .record-band-cell {
-    flex: 0 0 auto;
-    border-bottom: 0;
-    border-right: 0.5px solid var(--line-1);
+@media (max-width: 1100px) {
+  .thread-meta-room,
+  .thread-meta .thread-meta-chip:not(.thread-meta-project):not(.thread-meta-computer) {
+    display: none;
   }
 }
