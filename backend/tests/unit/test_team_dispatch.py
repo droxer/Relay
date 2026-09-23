@@ -239,3 +239,29 @@ def test_team_member_assignments_carry_the_round_mode() -> None:
     for mode in ("action", "ask", "review"):
         assignments = team_member_assignments(agents, mode=mode, team=team)
         assert all(item["mode"] == mode for item in assignments), mode
+
+
+@pytest.mark.parametrize("role", [None, "planner", "implementer", "fixer", "tester", "reviewer"])
+def test_regular_team_members_are_required_by_default(role):
+    assignments = team_member_assignments(
+        [_agent("lead", "codex"), _agent("support", "claude", defaultRole=role)],
+        team=_team(),
+    )
+    assert all(item["required"] for item in assignments)
+    assert all(item["teamSnapshot"]["workContractVersion"] == 1 for item in assignments)
+
+
+def test_explicit_optional_contribution_is_preserved():
+    assignments = team_member_assignments(
+        [_agent("lead", "codex"), _agent("support", "claude")],
+        team=_team(memberConfigs={"support": {"required": False}}),
+    )
+    assert assignments[1]["required"] is False
+
+
+def test_lead_final_turn_reviews_before_delivering_result():
+    assignments = team_member_assignments(
+        [_agent("lead", "codex"), _agent("support", "claude")], team=_team(),
+    )
+    assert "Review" in assignments[-1]["brief"]
+    assert "acceptance criteria" in assignments[-1]["brief"]
