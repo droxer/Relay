@@ -24,6 +24,11 @@
     animation: rise var(--t-slow) var(--ease);
   }
 
+  /* Full-viewport drawers have no edge to drag against. */
+  .adm-drawer-resize {
+    display: none;
+  }
+
   @keyframes adm-drawer-mobile-out {
     from { transform: translateY(0); opacity: 1; }
     to { transform: translateY(8px); opacity: 0; }

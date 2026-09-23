@@ -1535,7 +1535,8 @@
     "close": "Close"
   },
   "drawer": {
-    "close": "Close drawer"
+    "close": "Close drawer",
+    "resize_label": "Resize panel"
   },
   "cancel": {
     "reason": "Cancelled from Relay web UI."

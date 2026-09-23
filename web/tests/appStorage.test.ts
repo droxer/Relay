@@ -3,6 +3,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 
 import {
   applyTheme,
+  readDrawerWidth,
   readFiltersExpanded,
   readSidenavExpanded,
   readSidenavWidth,
@@ -11,6 +12,7 @@ import {
   readThreadListWidth,
   readThreadSpaceWidth,
   SUPPORTED_THEMES,
+  writeDrawerWidth,
   writeFiltersExpanded,
   writeSidenavExpanded,
   writeSidenavWidth,
@@ -192,6 +194,15 @@ describe("Relay web layout storage", () => {
     assert.equal(readThreadListWidth(), null);
     storage.set("relay-web.threadSpaceWidth", "-4");
     assert.equal(readThreadSpaceWidth(), null);
+  });
+
+  it("remembers drawer widths per role and rejects junk", () => {
+    assert.equal(readDrawerWidth("wide"), null);
+    writeDrawerWidth("wide", 1200);
+    assert.equal(readDrawerWidth("wide"), 1200);
+    assert.equal(readDrawerWidth("form"), null);
+    storage.set("relay-web.drawerWidth.wide", "wide");
+    assert.equal(readDrawerWidth("wide"), null);
   });
 
   it("falls back to defaults when storage throws", () => {

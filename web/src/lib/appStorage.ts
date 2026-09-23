@@ -19,6 +19,7 @@ export const sidenavWidthKey = "relay-web.sidenavWidth";
 export const sidenavExpandedKey = "relay-web.sidenavExpanded";
 export const threadListBesideSpaceKey = "relay-web.threadListBesideSpace";
 export const filtersExpandedKeyPrefix = "relay-web.filtersExpanded.";
+export const drawerWidthKeyPrefix = "relay-web.drawerWidth.";
 
 export function readTokens(): TokenMap {
   if (typeof window === "undefined") return {};
@@ -146,6 +147,17 @@ export function readThreadListWidth(): number | null {
 
 export function writeThreadListWidth(width: number): void {
   writeLayoutValue(threadListWidthKey, String(width));
+}
+
+/** Dragged drawer width in px, keyed by the drawer's width role so all
+ *  drawers sharing a role (every task record, every form) open at the width
+ *  the user last chose. Null when that role was never resized. */
+export function readDrawerWidth(role: string): number | null {
+  return readLayoutWidth(drawerWidthKeyPrefix + role);
+}
+
+export function writeDrawerWidth(role: string, width: number): void {
+  writeLayoutValue(drawerWidthKeyPrefix + role, String(width));
 }
 
 /** Resolve the OS color-scheme preference; defaults to light off-DOM. */
