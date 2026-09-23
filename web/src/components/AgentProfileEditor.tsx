@@ -200,8 +200,12 @@ export function AgentProfileEditor({
         </article>
       ) : (
         <div className="agent-personality-empty">
-          <p className="agent-personality-empty-lede">{t("agents_page.personality_empty")}</p>
-          <span>{t("agents_page.personality_empty_help")}</span>
+          {/* One line. The pill above already says "Default" and the section
+              help already says what a personality is, so a heading repeating
+              the pill and a paragraph repeating the help made this section
+              state one fact four times. What is left is the only part the
+              reader cannot get anywhere else: what to do about it. */}
+          <p className="agent-personality-empty-lede">{t("agents_page.personality_empty_help")}</p>
         </div>
       )}
     </section>

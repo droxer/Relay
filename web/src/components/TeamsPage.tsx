@@ -89,7 +89,7 @@ export function TeamsPage({
             <Button
               variant="ghost"
               type="button"
-              className="page-header-icon-action"
+              className="page-header-icon-action page-header-icon-action--primary"
               tooltip={t("teams.add")}
               onClick={() => setAddTeam(true)}
             >

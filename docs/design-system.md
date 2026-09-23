@@ -299,7 +299,7 @@ introduces visual rest.
 | `--type-body-sm` | 400 13/1.43 | `--track-body-sm` | dense prose, captions |
 | `--type-label` | 500 13/1.43 | `--track-body-sm` | chrome labels, nav, metadata |
 | `--type-label-strong` | 700 13/1.43 | `--track-body-sm` | bold chrome, button and pill-tab labels |
-| `--type-micro` | 700 12/1.33 | `--track-caps` (0) | structural group labels (+ uppercase), badges |
+| `--type-micro` | 500 12/1.33 | `--track-caps` (0) | structural group labels (+ uppercase), badges — separated from `--type-label` by case and size, not weight |
 | `--type-number` | 500 24/1.28 | `--track-display` (0) | metrics |
 | `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
 

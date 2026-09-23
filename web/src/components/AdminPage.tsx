@@ -515,11 +515,15 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
               ) : null}
               {/* No manual refresh: the view polls on its own (useAdminNodes),
                   so the button was chrome for a job already done. */}
+              {/* One primary per fold: the section's own create action wears
+                  the cobalt fill and anything beside it steps down to an
+                  outline. Two ghost buttons side by side named no primary at
+                  all, which is how a page ends up with no focal point. */}
               {view === "dashboard" ? (
                 <>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     className="adm-create-action"
                     onClick={() => setAddNodeOpen(true)}
                     tooltip={t("admin.v2.add_node_cta")}
@@ -529,7 +533,6 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   </Button>
                   <Button
                     type="button"
-                    variant="ghost"
                     className="adm-create-action"
                     onClick={() => setAddEmployeeOpen(true)}
                     tooltip={t("admin.v2.add_employee_cta")}
@@ -542,7 +545,6 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
               {view === "employees" ? (
                 <Button
                   type="button"
-                  variant="ghost"
                   className="adm-create-action"
                   onClick={() => setAddEmployeeOpen(true)}
                   tooltip={t("admin.v2.add_employee_cta")}
@@ -554,7 +556,6 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
               {view === "computers" ? (
                 <Button
                   type="button"
-                  variant="ghost"
                   className="adm-create-action"
                   onClick={() => setAddNodeOpen(true)}
                   tooltip={t("admin.v2.add_node_cta")}

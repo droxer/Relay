@@ -110,12 +110,13 @@ export function ComputerPage({
 
   const connectCta = (size: "default" | "sm", variant: "default" | "ghost" = "default") => (
     <div className="computer-connect-cta">
-      {/* The header CTA takes the ghost tier — the same one the control
-          panel's header actions take, because this header is the other half
-          of one rail-and-content grammar (section-rail.css). The cobalt fill
-          is reserved for the empty state, where connecting is the page's one
-          move. The usage readout (2/3) and limit reason stay attached to the
-          action either way. */}
+      {/* Connecting a computer is what this page is for, so the CTA carries
+          the cobalt in both places it appears — the header and the empty
+          state. It used to take the ghost tier in the header to match the
+          control panel's, but the control panel's header actions are cobalt
+          now too: one primary per fold, and this is that one. The usage
+          readout (2/3) and limit reason stay attached to the action either
+          way. */}
       <Button
         type="button"
         size={size}
@@ -200,7 +201,7 @@ export function ComputerPage({
         title={t("computer.title")}
         count={t("computer.count", { count: myNodes.length })}
         titleVariant="display"
-        actions={connectCta("sm", "ghost")}
+        actions={connectCta("sm")}
       />
       {/* The shell clips its children, so the roster needs its own scroll
           container — see computer.css. */}

@@ -32,10 +32,12 @@ function formatTime(value: string, locale: string | undefined): string {
   // A malformed event timestamp must not throw mid-render and take the whole
   // transcript down with it.
   if (Number.isNaN(date.getTime())) return "";
+  // Minutes, not seconds: a turn is a unit of conversation, and the second
+  // hand adds three characters of noise to every row without ever being the
+  // thing a reader wants. The full instant stays on the <time dateTime>.
   return new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   }).format(date);
 }
 

@@ -45,14 +45,26 @@
   }
 }
 
+/* A status screen is one centred stack, not one centred row per child. A grid
+   with `place-items: center` gives every child a row of its own, so in a pane
+   that stretches, a title / body / button trio spreads itself down the whole
+   viewport instead of sitting together. Column flex centres the group. */
 .route-loading {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
   min-height: 12rem;
   padding: var(--sp-7);
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--track-0);
+  text-align: center;
+}
+
+.route-loading > * {
+  max-width: var(--measure-tight);
 }
 
 /* Task conversations keep the Tasks destination and omit the thread directory. */

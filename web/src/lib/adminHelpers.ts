@@ -111,12 +111,14 @@ export function isNodeOnline(node: ControlPanelDaemonNodeRecord): boolean {
 }
 
 // Canonical semantics (lib/statusTone.ts): active work → info, queued/paused
-// → warn, ready → good, failures/unreachable → bad, unknown → neutral.
+// → warn, ready → good, failure → bad, absence/unknown → neutral. `stale` is
+// degraded rather than broken, so it takes the same amber the fleet readout
+// on the dashboard already draws it with.
 export function statusTone(status: string): Tone {
   if (status === "ready") return "good";
   if (status === "running" || status === "busy" || status === "provisioning") return "info";
-  if (status === "pending" || status === "stopped") return "warn";
-  if (status === "failed" || status === "stale") return "bad";
+  if (status === "pending" || status === "stopped" || status === "stale") return "warn";
+  if (status === "failed") return "bad";
   return "neutral";
 }
 
@@ -124,8 +126,10 @@ export function agentAvailabilityTone(availability: LogicalAgentAvailability): T
   if (availability === "ready") return "good";
   if (availability === "busy") return "info";
   if (availability === "pending") return "warn";
-  // Offline is the loud tier — same severity reading as the node presence dot.
-  return "bad";
+  // Offline is absence, not failure — see lib/statusTone.ts. Most of a roster
+  // is disconnected most of the time; red there makes an idle workforce read
+  // as an incident and leaves nothing louder for an agent that actually broke.
+  return "neutral";
 }
 
 /** Runtime-mark tone for a node's agent. Unknown ("no signal yet") falls
@@ -254,7 +258,15 @@ export function employeeSummaryStatus(
 ): { tone: EmployeeSummaryTone; key: EmployeeSummaryStatusKey } {
   if (member.runningCount > 0) return { tone: "info", key: "running" };
   if (member.readyCount > 0) return { tone: "good", key: "ready" };
-  if (member.failedCount > 0) return { tone: "bad", key: "failed" };
+  // One bucket ("Failed / stale" — the machines that need attention), two
+  // severities. Its tone follows the worst machine in it: a failure is bad,
+  // but a computer that has only stopped checking in is degraded, the same
+  // amber `statusTone("stale")` gives it everywhere else. The whole bucket
+  // painted red made an employee with one quiet laptop look like an incident.
+  if (member.failedCount > 0) {
+    const anyFailed = member.nodes.some((node) => visualStatus(node) === "failed");
+    return { tone: anyFailed ? "bad" : "warn", key: "failed" };
+  }
   if (member.nodeCount > 0) return { tone: "neutral", key: "idle" };
   return { tone: "neutral", key: "no_nodes" };
 }
@@ -604,8 +616,22 @@ export async function copyText(value: string): Promise<void> {
   document.body.removeChild(textarea);
 }
 
-export function truncateId(id: string, head = 4, tail = 4): string {
-  if (id.length <= head + tail + 1) return id;
+/**
+ * Shorten an id that is too long to print, and leave every other id alone.
+ *
+ * The elision is for Relay's generated ids — `task_<base36>_<rand>`, 25+
+ * characters of nothing a reader can hold in their head. A named id like
+ * `agent-builder` is already short and already meaningful, and cutting it to
+ * `agen…lder` costs the reader the whole word while saving four characters in
+ * a cell that had room for forty. So the floor is the length at which an id
+ * stops being readable, not the length at which it stops being tiny — and
+ * below that floor the id prints whole, which is also the only form anyone can
+ * paste back into a search field.
+ */
+export const ID_ELISION_FLOOR = 24;
+
+export function truncateId(id: string, head = 8, tail = 8): string {
+  if (id.length <= Math.max(head + tail + 1, ID_ELISION_FLOOR)) return id;
   return `${id.slice(0, head)}…${id.slice(-tail)}`;
 }
 

@@ -98,9 +98,16 @@
   overflow: hidden;
 }
 
+/* The hero wraps, and identity claims a readable line before the action row
+   is allowed to share it. With identity free to shrink to nothing, five
+   labelled buttons squeezed the name column to ~340px and broke the context
+   line across two — which is how the "·" separators ended up orphaned at a
+   line edge. Actions dropping to their own row is the better trade: the
+   buttons stay legible and the machine's context stays on one line. */
 .computer-card-hero {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-4);
   border-bottom: 0.5px solid var(--line-1);
@@ -121,7 +128,7 @@
 .computer-card-identity {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 26rem;
   flex-direction: column;
   gap: var(--sp-1);
 }
@@ -150,18 +157,26 @@
 
 /* Ownership, isolation, and heartbeat on one quiet line. These were three
    separate chips on the admin tile; here they are context, not status. */
+/* A wrapping text line, not a flex row. A flex row breaks between children,
+   so a "·" of its own lands orphaned at the end of a line and a "·" glued to
+   the front of an item lands orphaned at the start of the next one. Inline
+   items separated by real whitespace break where text breaks — between the
+   items — and each item is `nowrap`, so its leading separator can never be
+   split away from the words it introduces. */
 .computer-card-sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2);
   margin: 0;
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
 
-.computer-card-sep {
+.computer-card-sub > span {
+  display: inline;
+  white-space: nowrap;
+}
+
+.computer-card-sub > span + span::before {
+  content: "· ";
   color: var(--ink-4);
 }
 
@@ -170,6 +185,7 @@
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: var(--sp-2);
+  margin-inline-start: auto;
 }
 
 /* ---- sections -------------------------------------------------------- */
@@ -269,8 +285,13 @@ button.computer-run-open:hover {
 
 /* The one place the live purple belongs on this surface: a counter that is
    moving because an agent is working right now. */
+/* Ink, not --live. The pulsing mark at the head of the row is the liveness
+   signal; the elapsed time is the text channel that accompanies it, so colour
+   is never the only encoding (WCAG 1.4.1). A static purple timer was the one
+   place in the app where --live appeared without --t-pulse, which the scope
+   rule forbids: purple always moves. */
 .computer-run-elapsed {
-  color: var(--live);
+  color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -437,8 +458,13 @@ button.computer-run-open:hover {
     padding: var(--sp-4);
   }
 
-  /* Actions drop below the identity rather than squeezing it: two labelled
-     buttons and a name do not share a 390pt row. */
+  /* Actions drop below the identity rather than squeezing it, and wrap among
+     themselves. The card carries five labelled actions now, not the two this
+     rule was written for: `flex: 1` (a zero basis) split one 358px line into
+     five equal ~60px boxes, and every label ran out of its box over the next
+     one — "RenaManage agents". Sizing each button to its label and letting
+     the row wrap gives whole labels on as many lines as they need, each line
+     stretched edge to edge. */
   .computer-card-hero {
     flex-wrap: wrap;
   }
@@ -448,17 +474,7 @@ button.computer-run-open:hover {
   }
 
   .computer-card-actions > * {
-    flex: 1;
-  }
-
-  /* The meta line wraps at this width, which left a dangling "·" at the end
-     of the first line. Space carries the separation instead. */
-  .computer-card-sep {
-    display: none;
-  }
-
-  .computer-card-sub {
-    column-gap: var(--sp-3);
+    flex: 1 1 auto;
   }
 }
 

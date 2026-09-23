@@ -337,12 +337,12 @@ export function ChannelsView({
           </span>
         </div>
         {showToolbarCreate ? (
-          // The shared list-header create affordance — a ghost plus, same as
-          // every other list page (see .page-header-icon-action, shell.css).
+          // The shared list-header create affordance, same as every other
+          // list page (see .page-header-icon-action, shell.css).
           <Button
             type="button"
             variant="ghost"
-            className="page-header-icon-action"
+            className="page-header-icon-action page-header-icon-action--primary"
             tooltip={t("admin.v2.chat_create")}
             onClick={() => setCreateOpen(true)}
             disabled={busy !== null}

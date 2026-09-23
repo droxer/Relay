@@ -109,11 +109,14 @@ export function ComputerCard({
               />
             ) : null}
           </div>
+          {/* The separators are drawn by CSS on each item after the first, and each
+              item is nowrap: a wrapping flex row breaks between children, so
+              a separator ends up orphaned at the end of one line or the start
+              of the next. As inline text the break can only fall between
+              items. */}
           <p className="computer-card-sub">
-            <span>{t(`admin.v2.node_ownership_${ownership}`)}</span>
-            <span className="computer-card-sep" aria-hidden="true">·</span>
-            <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>
-            <span className="computer-card-sep" aria-hidden="true">·</span>
+            <span>{t(`admin.v2.node_ownership_${ownership}`)}</span>{" "}
+            <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>{" "}
             <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span>
           </p>
         </div>
@@ -137,7 +140,12 @@ export function ComputerCard({
           {/* Removal is the counterpart to self-service enrollment, but
               managed-computer lifecycle belongs to the admin control plane. */}
           {node.managedNodeId ? null : (
-            <Button type="button" variant="ghost" size="dense" onClick={() => onDisconnect(node)}>
+            // The destructive tier, like every other irreversible action in
+            // the app: a hairline ring and --err ink that invert on hover. As
+            // a ghost it was the fourth identical-looking button in a row of
+            // four, with nothing to say it was the one that unenrolls the
+            // machine.
+            <Button type="button" variant="destructive" size="dense" onClick={() => onDisconnect(node)}>
               <ActionRemove size={ICON.sm} aria-hidden="true" />
               {t("computer.disconnect")}
             </Button>

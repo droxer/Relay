@@ -191,11 +191,18 @@
   gap: var(--sp-2);
 }
 
-/* The list pages' one create affordance — a ghost icon button, never a text
-   CTA: the header already says what the list is, so a labelled "New X" plate
-   restates it at cobalt volume. Born as the project rail's add button; now
-   shared by threads, backlog, routines, agents, and teams so "new" looks
-   identical on every list. Icon is always ActionAdd at 16px. */
+/* The list pages' icon-button family — never a text CTA: the header already
+   says what the list is, so a labelled "New X" plate only restates it. Born as
+   the project rail's add button; now shared by threads, backlog, routines,
+   agents, and teams so a header action looks identical on every list. Icon is
+   always 16px.
+
+   The base is the quiet tier, for anything that is not the point of the page
+   (refresh). `--primary` is the one create affordance, and it is the only
+   cobalt on the surface: dropping the text label was right, but making the
+   create a ghost too left every list page with no primary action at all — a
+   flat field of equal-weight controls with nothing leading. Staying icon-only
+   keeps the fill scarce enough to mean something. */
 .page-header-icon-action {
   display: grid;
   place-items: center;
@@ -221,6 +228,18 @@
 
 .page-header-icon-action:active {
   transform: translateY(0.5px);
+}
+
+.page-header-icon-action--primary {
+  color: var(--on-action);
+  background: var(--action);
+  border-color: var(--action);
+}
+
+.page-header-icon-action--primary:hover {
+  color: var(--on-action);
+  background: var(--action-hover);
+  border-color: var(--action-hover);
 }
 
 .page-header-actions--stacked {

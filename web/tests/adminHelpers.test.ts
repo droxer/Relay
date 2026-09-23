@@ -18,6 +18,7 @@ import {
   nodeAgentPresence,
   stableNodeOrder,
   statusTone,
+  agentAvailabilityTone,
   truncateId,
   visualStatus,
 } from "../src/lib/adminHelpers.js";
@@ -128,10 +129,30 @@ describe("statusTone", () => {
     assert.equal(statusTone("busy"), "info");
     assert.equal(statusTone("provisioning"), "info");
     assert.equal(statusTone("failed"), "bad");
-    assert.equal(statusTone("stale"), "bad");
     assert.equal(statusTone("pending"), "warn");
     assert.equal(statusTone("stopped"), "warn");
     assert.equal(statusTone("anything-else"), "neutral");
+  });
+  it("keeps the critical tone for failure and spends nothing on absence", () => {
+    // A computer that has not checked in lately is degraded, not broken, and
+    // takes the same amber the control panel's fleet readout already draws it
+    // with; a computer that is simply not connected is a resting state. Red is
+    // reserved for something that actually went wrong.
+    assert.equal(statusTone("stale"), "warn");
+    assert.equal(statusTone("offline"), "neutral");
+    assert.equal(statusTone("failed"), "bad");
+  });
+});
+
+describe("agentAvailabilityTone", () => {
+  it("does not paint an unconnected agent as a failure", () => {
+    // Most of a roster is offline most of the time. Spending --err there makes
+    // an idle workforce read as an incident and leaves nothing louder for an
+    // agent that actually broke.
+    assert.equal(agentAvailabilityTone("offline"), "neutral");
+    assert.equal(agentAvailabilityTone("ready"), "good");
+    assert.equal(agentAvailabilityTone("busy"), "info");
+    assert.equal(agentAvailabilityTone("pending"), "warn");
   });
 });
 
@@ -139,8 +160,18 @@ describe("truncateId", () => {
   it("returns short ids verbatim", () => {
     assert.equal(truncateId("short"), "short");
   });
-  it("truncates long ids with an ellipsis", () => {
-    assert.equal(truncateId("sandbox-abcdef-1234", 4, 4), "sand…1234");
+  it("leaves a readable named id whole rather than eliding four characters", () => {
+    // The regression this guards: `agent-builder` rendered as `agen…lder` in
+    // a record band wide enough for the whole thing.
+    assert.equal(truncateId("agent-builder"), "agent-builder");
+    assert.equal(truncateId("sandbox-abcdef-1234"), "sandbox-abcdef-1234");
+  });
+  it("truncates a generated id with an ellipsis", () => {
+    assert.equal(truncateId("task_m1k2j3h4_a1b2c3"), "task_m1k2j3h4_a1b2c3");
+    assert.equal(truncateId("task_m1k2j3h4g5f6_a1b2c3d4e5"), "task_m1k…b2c3d4e5");
+  });
+  it("honours an explicit head/tail once the id is long enough to elide", () => {
+    assert.equal(truncateId("task_m1k2j3h4g5f6_a1b2c3d4e5", 4, 4), "task…d4e5");
   });
 });
 
@@ -180,6 +211,17 @@ describe("buildEmployeeSummaries", () => {
     assert.equal(alice.runningCount, 0);
     assert.equal(matchesEmployeeQuickFilter(alice, "failed"), true);
     assert.deepEqual(employeeSummaryStatus(alice), { tone: "bad", key: "failed" });
+  });
+
+  it("reads a fleet whose only problem is a quiet computer as degraded, not failed", () => {
+    // Same "Failed / stale" bucket for filtering and sorting, but the tone
+    // follows the worst machine in it: a lapsed heartbeat is amber everywhere
+    // else in the app, so it must not turn the employee's card red.
+    const nodes = [node({ id: "n1", employeeId: "bob", stale: true, status: "ready" })];
+    const bob = buildEmployeeSummaries([employee({ id: "bob" })], nodes).find((s) => s.id === "bob");
+    assert.ok(bob, "bob summary missing");
+    assert.equal(bob.failedCount, 1);
+    assert.deepEqual(employeeSummaryStatus(bob), { tone: "warn", key: "failed" });
   });
 
   it("includes employees that have no nodes", () => {

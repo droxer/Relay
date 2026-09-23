@@ -13,7 +13,6 @@ import {
   employeeSummaryStatus,
   isOverLocalComputerLimit,
   localComputerUsageLabel,
-  nodeOwnershipProfile,
   type EmployeeNodeSummary,
 } from "./helpers";
 import { EmployeeComputers } from "./EmployeeComputers";
@@ -75,10 +74,11 @@ export function EmployeeCard({
           <p className="adm-emp-card-email code ink-dim" translate="no">{member.email}</p>
         ) : null}
         <div className="adm-agents adm-emp-nodes">
-          <EmployeeComputers
-            nodes={member.nodes.filter((node) => nodeOwnershipProfile(node) === "local")}
-            t={t}
-          />
+          {/* Every computer the employee has, cloud and local alike — the same
+              set the list row shows and the READY x/y footer below counts.
+              Filtering to local machines made a card with only a cloud
+              computer say "No computer assigned." beside READY 0/1. */}
+          <EmployeeComputers nodes={member.nodes} t={t} />
         </div>
       </div>
 

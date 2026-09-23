@@ -91,12 +91,14 @@ export function ProviderAvatar({ provider, size }: { provider: ChatProvider; siz
 }
 
 // Canonical tone semantics (see lib/statusTone.ts): a healthy integration is
-// good, a degraded one is warn (queued/impaired), a disabled one is bad
-// (unreachable), anything else falls through to neutral.
+// good, a degraded one is warn (queued/impaired), and anything else — a draft,
+// or one an operator switched off — is neutral. Disabled is a decision, not a
+// fault: painting it --err made a deliberately paused channel read as broken,
+// and a real fault already has its own channel in `health` (the "Bot token
+// rejected" line under the name).
 export function statusTone(status: ChatIntegration["status"]): Tone {
   if (status === "active") return "good";
   if (status === "degraded") return "warn";
-  if (status === "disabled") return "bad";
   return "neutral";
 }
 

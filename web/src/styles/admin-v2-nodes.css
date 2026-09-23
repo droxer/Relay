@@ -454,8 +454,12 @@
    breathing halo — motion, not brightness, carries "alive". Offline = a
    static, bright hollow ring (--err, the loud tier) reading as "dark / no
    signal". Status tone lives on the dot only, never as a fill. */
+/* Offline is absence, not failure (see lib/statusTone.ts): the hollow ring
+   already says "not here" by shape, the way the runtime marks draw "No
+   signal". Painting it --err made every dark machine in the fleet look like
+   an incident, and disagreed with the pill's own neutral label beside it. */
 .adm-presence {
-  --presence: var(--err);
+  --presence: var(--ink-4);
   position: relative;
   display: inline-flex;
   flex: none;
@@ -490,22 +494,25 @@
 }
 
 /* Labeled presence pill — the explicit online/offline readout on the fleet
-   card. The same dot (hue + breathing halo when online) now sits beside an
-   uppercase label on a quiet hairline pill, so liveness is readable at a
+   card. The same dot (hue + breathing halo when online) now sits beside a
+   sentence-case label on a quiet hairline pill, so liveness is readable at a
    glance without decoding the corner dot. Semantic hue stays on the dot;
    the label is ink, muted when offline. */
 /* Geometry and the hairline are the neutral Badge variant's — this rule used
    to restate all of it. The badge is already on the CONTROL corner (--r-2, not
    a lozenge: see badge.tsx), so the note that used to live here is upstream
-   now. What stays is the presence readout's own voice: uppercase micro caps,
+   now. What stays is the presence readout's own voice: the micro tracking,
    a wider gap for the dot, and the fixed 20px the node rows align on. */
+/* Sentence case, like every other status pill in the app (Ready, Busy,
+   Failed). Shouting one state in caps makes presence read as the loudest
+   fact on a computer card when it is the most ordinary one, and it left this
+   pill as the only capitalised one in the product. */
 .adm-presence-pill {
   letter-spacing: var(--type-micro-track);
   gap: var(--sp-1-5);
   flex: none;
   height: 20px;
   background: transparent;
-  text-transform: uppercase;
 }
 
 .adm-presence-pill[data-online="false"] {
@@ -547,6 +554,15 @@
      empty whenever the chips fit, so a card with room to spare shows no fade
      at all — `black` is the mask's alpha carrier, not a palette colour. */
   mask-image: linear-gradient(to bottom, black calc(100% - var(--sp-3)), transparent 100%);
+}
+
+/* The region clips; its rows never shrink. They are flex items, so without
+   this a card that gained a status pill squeezed every row to fit instead of
+   letting the last one run under the fade — the email line came out 10px tall
+   with the bottom half of its glyphs cut off, which is exactly the half-drawn
+   glyph the mask above exists to prevent. */
+.adm-node-card-body > * {
+  flex-shrink: 0;
 }
 
 /* ── Card footer + actions ─────────────────────────────────────────────

@@ -102,9 +102,16 @@ it("marks the editor's required fields and gates Save on them", async () => {
   expect(field("Revision note").textContent).not.toContain("*");
 
   const save = () => screen.getByRole("button", { name: "Save details" }) as HTMLButtonElement;
-  expect(save().disabled).toBe(false);
+  // Nothing to save at rest: an enabled Save here was a live cobalt button
+  // beside "Share" with no work to do.
+  expect(save().disabled).toBe(true);
+  // A required field emptied cannot be saved either.
   await user.clear(screen.getByLabelText(/^Display name/));
   expect(save().disabled).toBe(true);
+  // Typed back to the saved value is no change at all.
   await user.type(screen.getByLabelText(/^Display name/), "Release notes");
+  expect(save().disabled).toBe(true);
+  // A real, valid edit is what Save is for.
+  await user.type(screen.getByLabelText(/^Display name/), " v2");
   expect(save().disabled).toBe(false);
 });

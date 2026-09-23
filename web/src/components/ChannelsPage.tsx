@@ -36,7 +36,7 @@ export function ChannelsPage() {
             <Button
               type="button"
               variant="ghost"
-              className="page-header-icon-action"
+              className="page-header-icon-action page-header-icon-action--primary"
               tooltip={t("admin.v2.chat_create")}
               onClick={() => setCreateOpen(true)}
             >
