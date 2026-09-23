@@ -17,7 +17,7 @@ const task = (id: string, overrides: Partial<RelayTaskListItem> = {}): RelayTask
 });
 const show = (tasks: RelayTaskListItem[] = [], override: Partial<ProjectRecord> = {}) => render(
   <ProjectTasks project={{ ...project, ...override }} tasks={tasks} agents={[]} teams={[]}
-    locale="en" onOpenRecord={mocks.open} />,
+    onOpenRecord={mocks.open} />,
 );
 beforeEach(() => { vi.clearAllMocks(); mocks.create.mockResolvedValue({}); mocks.update.mockResolvedValue({}); mocks.start.mockResolvedValue({}); });
 it("scopes work and progress to live project tasks, including routine occurrences", () => {
@@ -37,25 +37,25 @@ it("creates a task owned by the project and clears a successful draft", async ()
   fireEvent.change(screen.getByRole("textbox", { name: "backlog.new_task" }), { target: { value: " Ship it " } });
   fireEvent.click(screen.getByRole("button", { name: "backlog.new_task" }));
   await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({ title: "Ship it", projectId: "p", status: "backlog" }));
-  await waitFor(() => expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe(""));
+  await waitFor(() => expect((screen.getByRole("textbox", { name: "backlog.new_task" }) as HTMLInputElement).value).toBe(""));
 });
 it("preserves failed drafts and reports the error", async () => {
   mocks.create.mockRejectedValue(new Error("Offline")); show();
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Keep me" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "backlog.new_task" }), { target: { value: "Keep me" } });
   fireEvent.click(screen.getByRole("button", { name: "backlog.new_task" }));
   expect(await screen.findByRole("alert")).toBeTruthy();
-  expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("Keep me");
+  expect((screen.getByRole("textbox", { name: "backlog.new_task" }) as HTMLInputElement).value).toBe("Keep me");
 });
 it("keeps disabled and archived projects read-only but still readable", () => {
   const view = show([task("Ready")], { enabled: false });
-  expect(screen.queryByRole("textbox")).toBeNull();
+  expect(screen.queryByRole("textbox", { name: "backlog.new_task" })).toBeNull();
   expect(screen.queryByRole("button", { name: "backlog.new_task" })).toBeNull();
   expect(screen.queryByRole("button", { name: "project.tasks_start" })).toBeNull();
   // The record is still reachable — read-only is not unreadable.
   expect(screen.getByRole("button", { name: "Ready" })).toBeTruthy();
   view.rerender(<ProjectTasks project={{ ...project, archivedAt: "today" }} tasks={[task("Ready")]}
-    agents={[]} teams={[]} locale="en" onOpenRecord={mocks.open} />);
-  expect(screen.queryByRole("textbox")).toBeNull();
+    agents={[]} teams={[]} onOpenRecord={mocks.open} />);
+  expect(screen.queryByRole("textbox", { name: "backlog.new_task" })).toBeNull();
   expect(screen.queryByRole("button", { name: "project.tasks_start" })).toBeNull();
 });
 it("uses real dispatch for starting work and permits acceptance only from review", async () => {
@@ -76,7 +76,6 @@ it("names an assignee the roster cannot resolve instead of leaking its id", () =
       ]}
       agents={[]}
       teams={[]}
-      locale="en"
       onOpenRecord={mocks.open}
     />,
   );
@@ -92,8 +91,8 @@ it("keeps concurrent task actions locked independently until each settles", asyn
     .mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }))
     .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { failSecond = reject; }));
   show([task("First"), task("Second")], { members: [{ agentId: "a", enabled: true } as any] });
-  const firstCard = screen.getByRole("button", { name: "First" }).closest("article")!;
-  const secondCard = screen.getByRole("button", { name: "Second" }).closest("article")!;
+  const firstCard = screen.getByRole("button", { name: "First" }).closest("tr")!;
+  const secondCard = screen.getByRole("button", { name: "Second" }).closest("tr")!;
   const first = within(firstCard).getByRole("button", { name: "project.tasks_start" }) as HTMLButtonElement;
   const second = within(secondCard).getByRole("button", { name: "project.tasks_start" }) as HTMLButtonElement;
   fireEvent.click(first);

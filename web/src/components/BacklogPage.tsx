@@ -15,7 +15,7 @@ import {
   ActionAdd,
   ICON,
 } from "./icons";
-import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, canDiscussTask, discussionAgentsForTask, filterTasks, isTaskStatus, tasksByStatus } from "../lib/backlog";
+import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, filterTasks, isTaskStatus, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
 import { useLanePagination, usePagination } from "../hooks/usePagination";
@@ -70,7 +70,7 @@ import {
   type BacklogView,
 } from "./task-board/backlogVocabulary";
 import { TaskStatusNav, BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
-import { BacklogRowsHead, BacklogTaskCard, BacklogTaskRow } from "./task-board/BacklogRecords";
+import { BacklogTaskCard, BacklogTaskList } from "./task-board/BacklogRecords";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
 import {
   EMPTY_TASK_SELECTION,
@@ -81,7 +81,7 @@ import {
   toggleSelected,
   type TaskSelection,
 } from "../lib/taskSelection";
-import { Table } from "@/components/ui/table";
+
 
 
 
@@ -105,7 +105,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const { t } = useTranslation();
-  const { announce, confirm, prompt } = useDialogs();
+  const { announce, confirm } = useDialogs();
   const {
     startTaskMutation,
     updateTaskMutation,
@@ -127,7 +127,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     deleting,
     openForm: openTaskForm,
     editTask,
-    assignTask,
+
     release: releaseTaskForm,
     requestClose: closeTaskForm,
     submit: submitTask,
@@ -142,7 +142,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
   const drawerRecordId = recordMirror.record;
   const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
   const boardRef = useRef<HTMLDivElement | null>(null);
-  const startInFlight = useRef<string | null>(null);
+
   const touchDrag = useTouchTaskDrag({
     onStart: (taskId) => setDraggedTaskId(taskId),
     onMove: (point) => {
@@ -157,12 +157,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     onCancel: endTaskDrag,
   });
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
-  /* Routine definitions travel in the same list as their occurrences, so the
-     board can name a task's parent routine without another request. */
-  const routineTitles = useMemo(
-    () => new Map(tasks.filter((task) => task.isRoutine).map((task) => [task.id, task.title])),
-    [tasks],
-  );
+
   /* Sort is applied AFTER filtering, over the one list both views read — the
      board keeps its lanes and reorders WITHIN them, which is the only degree
      of freedom a grouped view has. With no column chosen `applySort` is the
@@ -200,7 +195,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     ])) as Record<TaskStatus, number>;
   }, [backlogTasks, filters]);
   const { page, setPage } = usePagination();
-  const listPage = paginate(filteredTasks, page);
+  const listPage = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
   const visibleTasks = view === "list" ? listPage.items : TASK_FLOW_STAGES.flatMap((status) => pagedLanes[status].items);
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks]);
   // Derived, not stored: a task hidden by a filter (or deleted elsewhere) drops
@@ -263,10 +258,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     }
   }
 
-  function linkedSession(task: RelayTaskListItem): RelaySession | undefined {
-    const latest = task.linkedSessionIds?.at(-1);
-    return latest ? sessions.find((session) => session.id === latest) : undefined;
-  }
+
 
   function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; imageUrl?: string | null; ready: boolean } {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
@@ -378,41 +370,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
   }
 
 
-  function taskHandlers(task: RelayTaskListItem) {
-    const discussionAssignments = logicalAgents
-      .filter((agent) => agent.enabled && agent.availability === "ready")
-      .map((agent) => ({ agentId: agent.id, agent: agent.executorKind }));
-    return {
-      starting: startTaskMutation.isPending && startTaskMutation.variables?.taskId === task.id,
-      onOpen: () => onOpenRecord(task.id),
-      onEdit: () => editTask(task),
-      onAssign: () => assignTask(task),
-      onStart: () => {
-        if (startInFlight.current) return;
-        if (["review", "waiting_for_human"].includes(task.status)) {
-          updateTaskMutation.mutate({ taskId: task.id, input: { status: "assigned" } });
-          return;
-        }
-        startInFlight.current = task.id;
-        startTaskMutation.mutate(taskStartMutationInput(task, discussionAssignments), {
-          onSuccess: (result) => {
-            if (!task.assignedAgentId && !task.assignedTeamId && result.session) onOpenThread(result.session.id, task.id);
-          },
-          onSettled: () => { startInFlight.current = null; },
-        });
-      },
-      onToggleBlock: () => {
-        if (task.status === "blocked") {
-          updateTaskMutation.mutate({ taskId: task.id, input: { action: "unblock" } });
-          return;
-        }
-        void prompt({ title: t("backlog.block_reason"), message: t("backlog.block_reason_hint") }).then((reason) => {
-          if (reason?.trim()) updateTaskMutation.mutate({ taskId: task.id, input: { status: "blocked", blockerReason: reason.trim() } });
-        });
-      },
-      onDone: () => void updateTaskMutation.mutate({ taskId: task.id, input: { status: "done" } }),
-    };
-  }
+
 
   return (
     <section id="backlog-panel" className="backlog-page sec-shell" data-view={view} aria-label={t("backlog.title")} tabIndex={-1}>
@@ -497,43 +455,30 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
       ) : view === "list" ? (
         /* The sidebar owns status; the content stays one flat, sorted list. */
         <div className="backlog-rows" data-density="compact">
-          <Table className="backlog-rows-headwrap" aria-label={t("backlog.columns")}>
-            <BacklogRowsHead
-              compact
-              sort={sort}
-              onSort={toggleSort}
-              selectAll={
-                <TaskSelectAllCheckbox
-                  state={selectionCheckState(visibleSelection, visibleIds)}
-                  label={t("backlog.select_all_tasks")}
-                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                />
-              }
-            />
-          </Table>
-          <Table className="routine-rows-body" aria-label={t("backlog.title")}>
-            {listPage.items.map((task) => {
-              const discussionAgents = discussionAgentsForTask(task, nodes, logicalAgents);
+          <BacklogTaskList
+            tasks={listPage.items}
+            sort={sort}
+            onSort={toggleSort}
+            selectAll={
+              <TaskSelectAllCheckbox
+                state={selectionCheckState(visibleSelection, visibleIds)}
+                label={t("backlog.select_all_tasks")}
+                onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+              />
+            }
+            selectedIds={visibleSelection}
+            onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+            contextFor={(task) => {
               const assignment = taskAssignmentDisplay(task);
-              return (
-                <BacklogTaskRow
-                  key={task.id}
-                  task={task}
-                  projectName={projects.find((project) => project.id === task.projectId)?.name}
-                  compact
-                  session={linkedSession(task)}
-                  routineTitle={task.sourceRoutineId ? routineTitles.get(task.sourceRoutineId) : undefined}
-                  selected={visibleSelection.has(task.id)}
-                  onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                  agentDisplayName={assignment.name}
-                  agentImageUrl={assignment.imageUrl}
-                  ready={assignment.ready}
-                  canDiscuss={canDiscussTask(task) && discussionAgents.length > 0}
-                  {...taskHandlers(task)}
-                />
-              );
-            })}
-          </Table>
+              return {
+                projectName: projects.find((project) => project.id === task.projectId)?.name,
+                ready: assignment.ready,
+                agentDisplayName: assignment.name,
+                agentImageUrl: assignment.imageUrl,
+              };
+            }}
+            onOpenTask={onOpenRecord}
+          />
           <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />
         </div>
       ) : (

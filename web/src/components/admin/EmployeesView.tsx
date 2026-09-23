@@ -21,7 +21,7 @@ import { useListSort } from "../../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { ListGroup } from "../ListGroup";
 import { employeeSortColumns } from "../../lib/adminHelpers";
-import { EmployeeCols, EmployeeRow } from "./EmployeeRow";
+import { EmployeeGroupTable } from "./EmployeeRow";
 import {
   buildEmployeeSummaries,
   employeeEmptyStateTranslationKey,
@@ -35,7 +35,6 @@ import {
 import { EmployeeCard } from "./EmployeeCard";
 import type { StateTone } from "../StateMark";
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
-import { Table, TableRowGroup } from "@/components/ui/table";
 import { Alert } from "@/components/ui/alert";
 
 interface EmployeesViewProps {
@@ -285,25 +284,19 @@ export function EmployeesView({
                 count={group.length}
                 tone={EMPLOYEE_STATUS_BAND_TONE[key]}
               >
-                <Table className="list-group-rows" data-density="compact" aria-label={label}>
-                  <EmployeeCols sort={sort} onSort={toggleSort} t={t} />
-                  <TableRowGroup className="adm-emp-list" render={<ul />}>
-                    {groupPage.items.map((member) => (
-                      <EmployeeRow
-                        key={member.id}
-                        member={member}
-                        highlight={highlightedEmployeeId === member.id}
-                        deletePending={pendingDelete !== null}
-                        onEdit={onEditEmployee ? (id) => {
-                          const employee = employeesById.get(id);
-                          if (employee) onEditEmployee(employee);
-                        } : undefined}
-                        onDelete={onDeleteEmployee ? (id) => void handleDeleteEmployee(id) : undefined}
-                        t={t}
-                      />
-                    ))}
-                  </TableRowGroup>
-                </Table>
+                <EmployeeGroupTable
+                  label={label}
+                  members={groupPage.items}
+                  sort={sort}
+                  onSort={toggleSort}
+                  highlightedId={highlightedEmployeeId}
+                  deletePending={pendingDelete !== null}
+                  onEdit={onEditEmployee ? (id) => {
+                    const employee = employeesById.get(id);
+                    if (employee) onEditEmployee(employee);
+                  } : undefined}
+                  onDelete={onDeleteEmployee ? (id) => void handleDeleteEmployee(id) : undefined}
+                />
                 <Pagination
                   compact
                   className="list-group-pager"

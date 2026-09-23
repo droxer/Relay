@@ -1,7 +1,9 @@
-/* Task board — the LIST view and its neighbours: the board/list toggle, list
-   rows, routine rows, the assignee identity chip, the mobile rebuild of the
-   row, the routine page variant, and inline creation. Split out of a
-   1886-line backlog.css; the board (cards, lanes, drag) stays there. */
+/* Task board — the LIST view and its neighbours: the board/list toggle, the
+   assignee identity chip, row selection, the routine page variant, and inline
+   creation. Split out of a 1886-line backlog.css; the board (cards, lanes,
+   drag) stays there. The list itself is a TanStack-driven shadcn table now
+   (ui/table.tsx) — borders, hover, and horizontal overflow on small screens
+   come from there; what remains here is the vocabulary layered on top. */
 
 /* ── View toggle (board / list) ────────────────────────────────────── */
 
@@ -40,170 +42,50 @@
   box-shadow: inset 0 0 0 0.5px var(--line-1);
 }
 
-/* ── List view — Vercel-style rows ──────────────────────────────────── */
+/* ── List view ─────────────────────────────────────────────────────── */
 
 .backlog-rows {
-  /* Two sticky layers, one number. The hoisted column header pins at 0 and
-     each group band pins directly beneath it, so the band's offset IS the
-     header's height — declared once here and enforced on both sides (the
-     header takes it as a fixed height, the band as its `top`) rather than
-     measured off whatever the header's contents happen to make it. A
-     checkbox or a caret growing a few pixels cannot slide the bands under
-     the header any more. */
-  --list-head-h: 40px;
-  --list-band-top: var(--list-head-h);
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  /* Band separation — --sp-7, the scale's section rung. This gap is the only
-     thing dividing one status band from the next (the band header is sticky,
-     so it travels), so it has to out-measure the gap between rows inside a
-     band by enough that the boundary is legible while scrolling. --sp-5
-     against a 12px row rhythm was not that margin. It matters more now that
-     the band is a rule rather than a filled slab.
-
-     Expressed as a sibling margin rather than the container's `gap` because
-     the hoisted column header is now a child of this box too, and a gap
-     would push the first band a section-rung away from the header that
-     names it. */
-  gap: 0;
   padding: 0 var(--page-gutter) var(--sp-8);
 }
 
-.backlog-rows > .list-group + .list-group { margin-top: var(--sp-7); }
+/* Column tracks, declared once for every task table (backlog list, routine
+   list, project task list — one record grammar, one track set). These are
+   lengths, not scale steps: the design grid bans arbitrary bracket values in
+   component classes, so the tracks live here where column geometry always
+   lived. */
+.task-col-ref { width: 68px; }
+.task-col-priority { width: 104px; }
+.task-col-due { width: 150px; }
+.task-col-assignee { width: 172px; }
+.task-col-actions { width: 176px; text-align: right; }
 
-.list-group[data-status="backlog"],
-.backlog-row[data-status="backlog"] { --row-accent: var(--ink-4); }
-.list-group[data-status="assigned"],
-.backlog-row[data-status="assigned"] { --row-accent: var(--info); }
-.list-group[data-status="running"],
-.backlog-row[data-status="running"] { --row-accent: var(--live); }
-.list-group[data-status="waiting_for_human"],
-.backlog-row[data-status="waiting_for_human"] { --row-accent: var(--warn); }
-.list-group[data-status="review"],
-.backlog-row[data-status="review"] { --row-accent: var(--info); }
-.list-group[data-status="blocked"],
-.backlog-row[data-status="blocked"] { --row-accent: var(--err); }
-.list-group[data-status="done"],
-.backlog-row[data-status="done"] { --row-accent: var(--ok); }
-
-/* The header is rendered once for the whole list now, so it has to travel
-   with the scroll to keep naming the row under the reader's eye — the one
-   thing the old per-group copy did better. It sits on --surface-0 rather
-   than transparent because rows scroll underneath it. */
-.backlog-rows-headwrap {
+/* The hoisted column header travels with the scroll so it keeps naming the
+   row under the reader's eye. `th`, not the row: sticky positioning on <tr>
+   is unreliable across engines, on the cell it is the standard pattern. */
+.backlog-rows-head > th {
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--surface-0);
 }
 
-.backlog-rows-head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  /* Height, not block padding — see --list-head-h above. */
-  height: var(--list-head-h);
-  padding: 0 var(--sp-3);
-  border-bottom: 0.5px solid var(--line-2);
-}
+.backlog-row { --row-accent: var(--ink-4); }
+.backlog-row[data-status="assigned"] { --row-accent: var(--info); }
+.backlog-row[data-status="running"] { --row-accent: var(--live); }
+.backlog-row[data-status="waiting_for_human"] { --row-accent: var(--warn); }
+.backlog-row[data-status="review"] { --row-accent: var(--info); }
+.backlog-row[data-status="blocked"] { --row-accent: var(--err); }
+.backlog-row[data-status="done"] { --row-accent: var(--ok); }
 
-.backlog-rows-head-cell {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-/* Column widths are declared ONCE, shared by the header cell and the row cell
-   — drift between the two silently misaligns the header from the data. The
-   status dot gets its own fixed cell so the lead column aligns without
-   padding compensation. */
-.backlog-rows-head-dot,
-.backlog-row-dot-cell { flex: none; width: 8px; }
-
-.backlog-rows-head-ref,
-.backlog-row-ref { flex: none; width: 68px; }
-
-.backlog-rows-head-tags,
-.backlog-row-tags { flex: none; width: 104px; }
-
-.backlog-rows-head-assignee,
-.backlog-row-assignee { flex: none; width: 172px; }
-
-/* 116 → 150: the file count that used to sit in a RESULT column of its own
-   now trails the date inside this cell. */
-.backlog-rows-head-due,
-.backlog-row-due { flex: none; width: 150px; }
-
-.backlog-rows-head-actions,
-.backlog-row-actions { flex: none; width: 176px; }
-
-.backlog-rows-head-lead { flex: 1 1 auto; min-width: 0; }
-.backlog-rows-head-actions { text-align: right; }
-
-/* The row's flex gap is --sp-4 but the dot used to sit inside the lead cell
-   with a --sp-3 gap; pull it 4px closer so the title keeps its old offset. */
-.backlog-rows-head-dot,
-.backlog-row-dot-cell { margin-right: calc(var(--sp-3) - var(--sp-4)); }
-
-.backlog-row {
-  --row-accent: var(--ink-4);
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  /* 52px. The 44 this row settled on came from stripping it back to one line
-     of facts — that reasoning still holds, and the row still prints one line.
-     What changed is the ask: 4px of block padding made the row a rule with
-     text in it rather than an object with edges, and a band of them read as a
-     ledger. 52 is the same one-line row with room around the line; a band
-     still fits ~11 rows in a 640px pane, so scanning down a band did not
-     become a scrolling exercise.
-
-     The block padding is --sp-row so the row rhythm is decided by the density
-     scope this list opts into (compact → 12px), not restated here. It sits
-     under the 52px floor, which is what actually sets a single-line row's
-     height; it takes over once a row wraps. */
-  min-height: 52px;
-  padding: var(--sp-row) var(--sp-3);
-  border-bottom: 0.5px solid var(--line-2);
-  transition: background var(--t-fast) var(--ease);
-}
-
-/* Note: .backlog-row deliberately does NOT use content-visibility. The task
-   list is bounded, so off-screen render-skipping saves little, and its size
-   estimate + paint containment clamps/clips the taller mobile stacked card
-   (and can't be re-enabled to `visible` there — the minifier drops that
-   initial-value declaration). Keep rows sized purely by content. */
-
-.backlog-row-tags {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: var(--sp-1);
-  overflow: hidden;
-}
-
-.backlog-row:hover {
-  background: var(--row-hover);
-}
-
-/* Two lines: the title (with its project tag) on top, the exception line —
-   blocked reason, age, recovery state — underneath. They used to share one
-   line, so a long title and a blocked reason truncated each other into
-   unreadability and the reason bled toward the priority column. */
-.backlog-row-lead {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-}
+/* The leading rail is a .state-mark; the row owns the accent so the mark and
+   the status column below cannot drift apart. `live` supplies its own --live
+   accent, which is why running is excluded here rather than mapped. */
+.backlog-row .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
 
 .backlog-row-lead-main {
   display: flex;
@@ -212,11 +94,6 @@
   min-width: 0;
   max-width: 100%;
 }
-
-/* The leading rail is a .state-mark; the row owns the accent so the mark and
-   the status column below cannot drift apart. `live` supplies its own --live
-   accent, which is why running is excluded here rather than mapped. */
-.backlog-row .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
 
 .backlog-row-title {
   min-width: 0;
@@ -248,50 +125,25 @@
   text-underline-offset: 2px;
 }
 
-/* The short reference (see lib/taskRef). It is an address, not a fact about
-   the work, so it sits at the dimmest text tier and in the mono face — the
-   reader scans past it until they need it, and then it is exactly where a
-   reference always is. */
-.backlog-row-ref {
-  overflow: hidden;
-  color: var(--ink-4);
-  /* Family, features, and tracking come from the `.code` utility the cell
-     carries; only the size and tier are this column's business. */
-  font-size: var(--fs-1);
-  line-height: var(--leading-snug);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ── Routine rows — schedule health, not board lifecycle ─────────────────
    Routine definitions never advance through the board, so their rows key off
-   data-routine-state. Accents mirror the .routine-state pill. */
-.list-group[data-routine-state="running"],
-.backlog-row[data-routine-state="running"] { --row-accent: var(--live); }
-.list-group[data-routine-state="overdue"],
-.backlog-row[data-routine-state="overdue"] { --row-accent: var(--err); }
-.list-group[data-routine-state="due"],
-.backlog-row[data-routine-state="due"] { --row-accent: var(--warn); }
-.list-group[data-routine-state="scheduled"],
-.backlog-row[data-routine-state="scheduled"] { --row-accent: var(--ink-3); }
-.list-group[data-routine-state="unscheduled"],
-.list-group[data-routine-state="paused"],
-.backlog-row[data-routine-state="unscheduled"],
-.backlog-row[data-routine-state="paused"] { --row-accent: var(--ink-4); }
+   data-routine-state. Accents mirror the .routine-state pill. Routine rows
+   carry no .backlog-row class — these selectors are attribute-only. */
+tr[data-routine-state="running"] { --row-accent: var(--live); }
+tr[data-routine-state="overdue"] { --row-accent: var(--err); }
+tr[data-routine-state="due"] { --row-accent: var(--warn); }
+tr[data-routine-state="scheduled"] { --row-accent: var(--ink-3); }
+tr[data-routine-state="unscheduled"],
+tr[data-routine-state="paused"] { --row-accent: var(--ink-4); }
+
+tr[data-routine-state] .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
 
 /* Out of play: a paused routine and a finished task recede so a scan lands on
    the rows that still need something. Titles only — the actions stay at full
    contrast because they are how you bring the row back. */
-.backlog-row[data-routine-state="paused"] .backlog-row-title,
+tr[data-routine-state="paused"] .backlog-row-title,
 .backlog-row[data-status="done"] .backlog-row-title {
   color: var(--ink-2);
-}
-
-.backlog-row-assignee {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  overflow: hidden;
 }
 
 /* ── Assignee identity chip (avatar monogram + handle + agent glyph) ── */
@@ -340,12 +192,6 @@
   color: var(--ink-3);
 }
 
-.backlog-row-due {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-
 .backlog-due-value {
   display: inline-flex;
   align-items: center;
@@ -359,16 +205,6 @@
 
 .backlog-due-value.warn { color: var(--warn); }
 .backlog-due-value.bad { color: var(--err); }
-
-/* A footnote to the date, not a peer of it: dimmest tier, and it never
-   competes for the cell when the date itself is the overdue one. */
-.backlog-row-files {
-  margin-inline-start: var(--sp-2);
-  color: var(--ink-4);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  white-space: nowrap;
-}
 
 /* An unset date is an offer, not a value: it opens the record where the date
    is set. It stays a ghost until the row is under the pointer so a screenful
@@ -393,222 +229,6 @@
 .backlog-row:hover .backlog-due-empty { color: var(--ink-3); }
 .backlog-due-empty:hover { background: var(--control-fill-hover); color: var(--ink-1); }
 
-/* Quick-action column — always visible, right-aligned icon toolbar so every
-   row exposes its actions without a hover reveal. Shorter action sets (no
-   linked thread / non-blockable) simply leave space on the leading edge.
-
-   What changed is the PRIMARY's weight, not its presence. The start button
-   carried the filled --action variant here, which put a saturated rectangle
-   on every startable row — twelve of them stacked, the loudest thing on a
-   page whose content is text. The row now uses the same tinted icon the
-   routine list always used: --action on an --action-soft plate, which still
-   reads as the one action that does something and still clears 1.4.11,
-   without a column of solid blue. The board CARD keeps the fill — there is
-   one per card there, and a card is an object that can carry a call to
-   action. Dimming the group at rest was the other option and was rejected:
-   an --opacity-ghost control fails non-text contrast. */
-.backlog-row-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--sp-1);
-}
-
-/* Routine rows carry only the Start action, but the list shares the backlog
-   header/columns. Reserve the width of backlog's Block+Done state group (two
-   28px icons + their gap + the divider) so the play button lands in the same
-   column position on both lists. Keep in sync with `.backlog-action-group +
-   .backlog-action-group` (margin --sp-1 + padding --sp-2+--sp-1 + 1px border)
-   and the row gap (--sp-1). */
-.routine-page .backlog-row-actions {
-  padding-right: calc(2 * 28px + 4 * var(--sp-1) + var(--sp-2) + var(--sp-hairline));
-}
-
-/* GEOMETRY ONLY — see the matching note in task-status.css. Paint declared
-   here outranks the call site's Button variant by LAYER ORDER (`@layer relay`
-   is declared after Tailwind's `utilities`), so it silently defeats it rather
-   than losing a specificity contest. The neutral actions carry their chip look
-   on variant="outline". */
-.backlog-row-actions button:not([data-variant="icon"]) {
-  min-height: var(--control-h-xs);
-  /* Square the icon buttons (width is pinned to 28px) instead of stretching to
-     the 40px control height — a lone action (routine) looked tall/narrow. */
-  height: var(--control-h-xs);
-
-  border-radius: var(--r-2);
-  padding: 0 var(--sp-2);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-/* Disabled comes from the button base — see the action rules in
-   task-status.css. */
-
-/* In the LIST the primary is an --action GLYPH, not an --action plate. The
-   filled `default` variant put a saturated rectangle on every startable row,
-   twelve deep — see the note on .backlog-row-actions. The hue moves to the
-   icon, which is what `tinted` was already doing on hover and now holds at
-   rest too, so the start action is still the one coloured thing in the group
-   without the column of blue. Contrast is on the glyph against the row, the
-   same relationship a link has with its paragraph — not an --opacity-ghost
-   control, which would fail 1.4.11. */
-/* The row's start action rests in ink and reaches for the action colour only
-   under the pointer. A cobalt glyph on every row is not a scarce accent — it
-   is a column of them, competing with the one cobalt control the header
-   carries — and the list reads calmer when the bright state belongs to the
-   row you are actually pointing at. */
-.backlog-row-actions .backlog-action-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  color: var(--ink-2);
-}
-
-.backlog-row-actions .backlog-action-primary:hover:not(:disabled),
-.backlog-row-actions .backlog-action-primary:focus-visible:not(:disabled) {
-  color: var(--action);
-}
-
-/* A start that cannot run has nothing to call attention to, so it drops back
-   to the group's neutral ink rather than sitting there as a bright control
-   that does nothing. */
-.backlog-row-actions .backlog-action-primary:disabled {
-  color: var(--ink-4);
-}
-
-/* Filled only while actionable; a disabled start recedes to a ghost icon. The
-   fill comes from the `default` variant the call site selects — see the note
-   on the shared action-icon rules in task-status.css. */
-
-/* The reference is the first thing a narrow viewport can lose: it addresses
-   the row, it does not describe it. */
-@media (max-width: 1100px) {
-  .backlog-row-ref,
-  .backlog-rows-head-ref { display: none; }
-}
-
-
-@media (max-width: 900px) {
-  /* Keep the assigned agent visible at tablet widths too. */
-  .backlog-row-assignee,
-  .backlog-rows-head-assignee { width: 140px; }
-  /* The row's dot still carries the outcome without the file count. */
-  .backlog-row-files { display: none; }
-}
-
-/* ── Mobile: rebuild the flex table row (≈640px of fixed cells, can't fit a
-   phone) as a stacked card. A flex-wrap layout (not grid) sidesteps track
-   collapse from the overflow:hidden cells. This block sits AFTER the
-   reference/file-count hides above so it wins the cascade where needed —
-   the card has room for the full record:
-   line 1 = title (wraps to 2), line 2 = priority · status · due · assignee,
-   line 3 = actions. Column headers are meaningless here, so hide them. */
-@media (max-width: 820px) {
-  .backlog-rows {
-    --list-head-h: 0px;
-    padding-inline: var(--sp-4);
-  }
-
-  /* Column headers name cells the stacked card no longer has. The band stays:
-     it is the only thing that still says which group a card is in. */
-  .backlog-rows-head { display: none; }
-
-  .backlog-row-ref { display: none; }
-
-  .backlog-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--sp-2) var(--sp-3);
-    /* .backlog-rows is a fixed-height flex column; without this the rows
-       flex-shrink to fit it and clip the taller card. Keep natural height and
-       let the container scroll. */
-    flex-shrink: 0;
-    min-height: 0;
-    padding: var(--sp-4) var(--sp-3);
-  }
-
-  .backlog-row > * { min-width: 0; }
-
-  /* Line 1: checkbox + dot + title, wrapping to two lines. `1 1 100%` put
-     the lead on a line of its OWN — the checkbox and the status dot sat
-     alone above it with nothing to read, which is not what the comment
-     above describes. `1 1 0` lets the title take the rest of line 1 and
-     wrap inside it. */
-  .backlog-row-lead { flex: 1 1 0; min-width: 60%; align-items: flex-start; }
-
-  .backlog-row-title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    line-height: var(--leading-snug);
-  }
-
-  /* Line 2: priority · status · due, with the assignee chip pushed right. */
-  .backlog-row-tags     { flex: 0 0 auto; width: auto; }
-  .backlog-row-due      { flex: 0 0 auto; width: auto; }
-  /* On desktop an empty due date is a "—" under a DUE column header, which
-     reads as "no due date". The phone layout drops the header, so the same
-     dash is a stray mark on the end of the row with nothing to say what it
-     stands for. Absent here, it simply is not drawn. */
-  .backlog-row-due[data-empty] { display: none; }
-  .backlog-row-files    { display: inline; }
-  /* The agent readiness pip is absolutely positioned 3px past the badge's
-     right edge; without clearance it kisses the card boundary. Nudge the whole
-     assignee cell in so the pip has room to breathe. */
-  .backlog-row-assignee { flex: 0 0 auto; display: inline-flex; width: auto; max-width: 100%; margin-left: auto; padding-inline-end: var(--sp-1); }
-
-  /* Line 3: actions on their own row, left-aligned with comfortable targets. */
-  .backlog-row-actions {
-    flex: 1 1 100%;
-    width: auto;
-    justify-content: flex-start;
-  }
-
-  .backlog-row-actions button:not([data-variant="icon"]),
-  .backlog-row-actions .backlog-action-icon:not([data-variant="icon"]) {
-    min-height: var(--control-h-xs);
-    min-width: 36px;
-    border-radius: var(--r-2);
-  }
-
-  .backlog-row-actions [data-variant="icon"] {
-    width: 36px;
-    height: var(--control-h-sm);
-  }
-
-  /* The secondary actions used to need a --surface-1 chip here: they were
-     ghost buttons wearing a --line-1 hairline, which measures 1.36:1 light /
-     1.60:1 dark and "all but vanished" on the canvas. They now carry
-     variant="outline", whose --control-border boundary clears WCAG 1.4.11 on
-     every plane (5.57:1 / 8.25:1) over a translucent --control-fill, so the
-     chip is no longer a mobile-only patch — and the primary no longer has to
-     be excluded from one. */
-
-  /* The inter-group vertical hairlines read as arbitrary noise once the row
-     wraps onto its own line; even spacing separates the actions cleanly. */
-  .backlog-row-actions .backlog-action-group + .backlog-action-group {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .backlog-row-actions .backlog-action-group {
-    gap: var(--sp-2);
-  }
-
-  .backlog-row-actions {
-    gap: var(--sp-2);
-  }
-
-  /* Disabled actions stay visible as a muted chip rather than fading out. */
-  .backlog-row-actions button:disabled {
-    opacity: var(--opacity-disabled);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   /* Pulse rings live on pseudos now — hide them outright under reduced
      motion (animation: none alone would leave the ring at full opacity). */
@@ -623,15 +243,6 @@
 .routine-page {
   /* Flat canvas — no top wash; the list reads as a single plane. */
   background: var(--surface-0);
-}
-
-/* The routine list is one flat table now: the section rail beside it names
-   the schedule state, so the bands that used to divide these rows would only
-   repeat what the rail has already said. Same box the group tables were —
-   see .list-group-rows. */
-.routine-rows-body {
-  display: flex;
-  flex-direction: column;
 }
 
 /* The enabled switch is its own full-width row beneath the field grid — a
@@ -708,49 +319,26 @@
   color: var(--ink-3);
 }
 
-
-/* List view: the field spans the title column's row box so the eye does not
-   re-anchor between the row being typed and the rows that will surround it. */
-.backlog-inline-create-row {
-  display: flex;
-  align-items: center;
-  padding: var(--sp-1) var(--sp-3);
-  border-bottom: 0.5px solid var(--line-2);
-}
-
 /* ── Batch selection ───────────────────────────────────────────────── */
-
-/* Declared once for the header cell and the row cell, like every other column
-   above — the box is 16px, the checkbox's own size. */
-.backlog-rows-head-select,
-.backlog-row-select-cell {
-  flex: none;
-  width: 16px;
-  display: flex;
-  align-items: center;
-}
 
 /* The checkbox always holds its column so nothing shifts when a selection
    starts, and it stays visible — a hidden control is an undiscoverable one. */
 
 /* Selection is --action-soft plus the leading accent bar, the same grammar
    .rail-row carries on the thread / agent / team rails (tokens/base.css). It
-   used to be --row-hover — byte-identical to the hover rule directly above —
-   so a selected row was indistinguishable from a hovered one, and hovering an
-   unselected row made it look selected. The checkbox was doing all the work. */
-.backlog-row[data-selected="true"] {
+   used to be --row-hover — byte-identical to the hover rule — so a selected
+   row was indistinguishable from a hovered one, and hovering an unselected
+   row made it look selected. The checkbox was doing all the work. Attribute
+   selector, not .backlog-row: routine rows carry data-selected too. */
+tr[data-selected="true"] {
   background: var(--action-soft);
 }
 
-.backlog-row[data-selected="true"]::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: var(--accent-bar-inset);
-  bottom: var(--accent-bar-inset);
-  width: var(--accent-bar-w);
-  border-radius: calc(var(--r-1) / 2);
-  background: var(--action);
+/* The accent bar used to be an ::after on a position:relative flex row; a
+   <tr> is not a reliable positioning context, so the bar is an inset shadow
+   on the leading cell instead — same stripe, same inset. */
+tr[data-selected="true"] > td:first-child {
+  box-shadow: inset var(--accent-bar-w) 0 0 var(--action);
 }
 
 /* The card floats on the lane rather than sitting in a table, so its selected

@@ -1,74 +1,112 @@
-"use client"
-
-import { mergeProps } from "@base-ui/react/merge-props"
-import { useRender } from "@base-ui/react/use-render"
+import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-/* Table — the ARIA grid roles for this app's list surfaces, in one place.
-   Five of them (the backlog, routines, and the admin nodes and employees
-   views) each wrote `role="table"`, `role="row"`, `role="columnheader"`, and
-   `role="cell"` by hand: 25 cells and 13 column headers of hand-typed ARIA,
-   which is the kind of thing that goes wrong silently — a row that renders
-   correctly with a cell missing its role reads as a row with fewer columns,
-   and nothing on screen says so.
+/* Table — the canonical shadcn/ui table: a real <table> for surfaces that
+   read as one grid at every width. Lists that restack their rows into cards
+   below a breakpoint cannot use table layout at all; those stay on the
+   role-based div grid in ui/role-table.tsx. Tokens come from the shadcn
+   bridge (tokens/shadcn-bridge.css), so `text-muted-foreground` here is the
+   same ink the rest of the app reads. */
 
-   These are DIVS, deliberately, not an HTML `<table>`. Every one of these
-   lists restacks its rows into cards below a breakpoint and hides the header
-   row entirely, which table layout cannot do — the roles are how the grid
-   semantics survive the CSS that makes that restacking possible. Each part
-   takes `render` so a surface can keep the element it already used (a `span`
-   cell, an `article` row) without arguing about tag names.
-
-   No chrome ships here on purpose. These lists are dense, virtualized, and
-   individually laid out; a default padding or border would be overridden at
-   every call site on its first day. */
-
-function Table({ className, render, ...props }: useRender.ComponentProps<"div">) {
-  return useRender({
-    defaultTagName: "div",
-    props: mergeProps<"div">({ role: "table", className: cn(className) }, props),
-    render,
-    state: { slot: "table" },
-  })
+function Table({ className, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+      <table
+        data-slot="table"
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
 }
 
-/** Only needed where a surface groups rows into a head and a body; these
- *  lists mostly repeat one header row per group instead. */
-function TableRowGroup({ className, render, ...props }: useRender.ComponentProps<"div">) {
-  return useRender({
-    defaultTagName: "div",
-    props: mergeProps<"div">({ role: "rowgroup", className: cn(className) }, props),
-    render,
-    state: { slot: "table-row-group" },
-  })
+function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn("[&_tr]:border-b", className)}
+      {...props}
+    />
+  )
 }
 
-function TableRow({ className, render, ...props }: useRender.ComponentProps<"div">) {
-  return useRender({
-    defaultTagName: "div",
-    props: mergeProps<"div">({ role: "row", className: cn(className) }, props),
-    render,
-    state: { slot: "table-row" },
-  })
+function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
+  return (
+    <tbody
+      data-slot="table-body"
+      className={cn("[&_tr:last-child]:border-0", className)}
+      {...props}
+    />
+  )
 }
 
-function TableHead({ className, render, ...props }: useRender.ComponentProps<"span">) {
-  return useRender({
-    defaultTagName: "span",
-    props: mergeProps<"span">({ role: "columnheader", className: cn(className) }, props),
-    render,
-    state: { slot: "table-head" },
-  })
+function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
+  return (
+    <tfoot
+      data-slot="table-footer"
+      className={cn("border-t bg-muted/50 font-medium [&>tr]:last:border-b-0", className)}
+      {...props}
+    />
+  )
 }
 
-function TableCell({ className, render, ...props }: useRender.ComponentProps<"span">) {
-  return useRender({
-    defaultTagName: "span",
-    props: mergeProps<"span">({ role: "cell", className: cn(className) }, props),
-    render,
-    state: { slot: "table-cell" },
-  })
+function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+  return (
+    <tr
+      data-slot="table-row"
+      className={cn(
+        "border-b transition-colors hover:bg-row-hover data-[state=selected]:bg-muted",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
-export { Table, TableRowGroup, TableRow, TableHead, TableCell }
+function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+  return (
+    <th
+      data-slot="table-head"
+      className={cn(
+        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+  return (
+    <td
+      data-slot="table-cell"
+      className={cn(
+        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function TableCaption({ className, ...props }: React.ComponentProps<"caption">) {
+  return (
+    <caption
+      data-slot="table-caption"
+      className={cn("mt-4 text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+}

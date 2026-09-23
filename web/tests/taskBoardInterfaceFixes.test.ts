@@ -10,7 +10,7 @@ const backlogPage = source("components/BacklogPage.tsx");
 const routinesPage = source("components/RoutinesPage.tsx");
 const backlogChrome = source("components/task-board/BacklogChrome.tsx");
 const routineChrome = source("components/task-board/RoutineChrome.tsx");
-const backlogRecords = source("components/task-board/BacklogRecords.tsx");
+
 const routineRecords = source("components/task-board/RoutineRecords.tsx");
 const taskDrawer = source("components/task-board/TaskDrawer.tsx");
 
@@ -33,10 +33,10 @@ describe("task board interface review fixes", () => {
   });
 
   it("exposes the action-group labels through a group role", () => {
-    for (const src of [backlogRecords, routineRecords]) {
-      assert.doesNotMatch(src, /<div className="backlog-action-group" aria-label/);
-      assert.match(src, /<div className="backlog-action-group" role="group" aria-label/);
-    }
+    // The backlog list's compact rows are tiles with no action bar; the
+    // routine list is the board that still carries row actions.
+    assert.doesNotMatch(routineRecords, /<div className="backlog-action-group" aria-label/);
+    assert.match(routineRecords, /<div className="backlog-action-group" role="group" aria-label/);
   });
 
   it("exposes the stats-bar label through a group role", () => {

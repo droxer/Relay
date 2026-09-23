@@ -9,7 +9,7 @@ function source(path: string): string {
 const backlogPage = source("components/BacklogPage.tsx");
 const routinesPage = source("components/RoutinesPage.tsx");
 const routineChrome = source("components/task-board/RoutineChrome.tsx");
-const backlogRecords = source("components/task-board/BacklogRecords.tsx");
+
 const routineRecords = source("components/task-board/RoutineRecords.tsx");
 const taskDrawer = source("components/task-board/TaskDrawer.tsx");
 const taskDrawerStyles = source("styles/task-drawer.css");
@@ -56,12 +56,12 @@ describe("task board review regressions", () => {
   });
 
   it("shows pending feedback and blocks duplicate starts", () => {
-    for (const page of [backlogPage, routinesPage]) {
-      assert.match(page, /startTaskMutation\.isPending/);
-      assert.match(page, /startTaskMutation\.variables\?\.taskId/);
-      assert.match(page, /if \(startInFlight\.current\) return/);
-    }
-    assert.match(backlogRecords, /loading=\{starting\}/);
+    // The backlog list's compact rows carry no start button — starts there
+    // happen from the record drawer or a lane drop — so the pending-feedback
+    // guarantee is asserted on the routine board, which keeps row actions.
+    assert.match(routinesPage, /startTaskMutation\.isPending/);
+    assert.match(routinesPage, /startTaskMutation\.variables\?\.taskId/);
+    assert.match(routinesPage, /if \(startInFlight\.current\) return/);
     assert.match(routineRecords, /loading=\{starting\}/);
   });
 

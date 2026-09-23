@@ -103,71 +103,25 @@
 }
 
 /* ── Employees view ───────────────────────────────────────────────── */
-.adm-emp-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
 
-/* Column geometry is declared ONCE per table, shared by the header row and
-   the data rows — drift here is what silently misaligns headers from cells. */
-.adm-emp-cols,
-.adm-emp-row {
-  /* Render-skip, row tier. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 96px;
-  display: grid;
-  /* identity / computers / limit / running / ready / actions.
-     The four trailing tracks are PINNED, not `auto`. The header and each row
-     are separate grid containers, so a content-sized track resolves against
-     whatever that one container holds: the caps labels sized the header's
-     tracks and the numerals sized the rows', putting LIMIT ~90px right of the
-     value under it. Sharing this declaration is not enough — only tracks that
-     resolve without reading content give the two grids the same columns. */
-  /* The three metric tracks are sized to their own CAPS HEADERS, not to the
-     numerals under them: "LOCAL LIMIT" and "RUNNING" were clipped to "LIM…"
-     and "RUNN…" at 3.5/4.5rem, and a truncated column header names nothing.
-     Repeating the header once per band made it five times as loud. */
-  grid-template-columns: minmax(220px, 1.2fr) minmax(0, 2fr) 5rem 5.5rem 5rem 4.5rem;
-  gap: var(--sp-6);
-}
 
-.adm-emp-cols {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface-0);
-  padding: 0 0 var(--sp-3);
-  border-bottom: 0.5px solid var(--line-1);
-}
-
-.adm-col-label {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-.adm-col-label--metrics {
-  text-align: right;
-}
-
-.adm-emp-row {
-  align-items: center;
-  padding: var(--sp-3) 0;
-  border-bottom: 0.5px solid var(--line-2);
+/* Column tracks for the per-band employee tables. Lengths, not scale steps —
+   the design grid bans arbitrary bracket values in component classes. */
+.adm-emp-col-identity { min-width: 220px; }
+.adm-emp-col-running { width: 5.5rem; }
+.adm-emp-col-actions { width: 4.5rem; }
+/* A one-shot 'recently updated' marker, not live work — ink, drawn once on
+   the --t-draw cadence (--live purple + the pulse cadences are reserved for
+   live work). Rows are <tr> now, and a <tr> is not a reliable positioning
+   context, so the marker is a pseudo on the leading cell. */
+tr.is-pulse > td:first-child {
   position: relative;
-  transition: background var(--t-fast) var(--ease);
 }
 
-.adm-emp-row.is-pulse::after,
-.adm-node-row.is-pulse::after {
-  /* A one-shot 'recently updated' marker, not live work — ink, drawn once on
-     the --t-draw cadence (--live purple + the pulse cadences are reserved for
-     live work). */
+tr.is-pulse > td:first-child::after {
   content: "";
   position: absolute;
-  left: calc(-1 * var(--sp-4));
+  left: 0;
   top: 0;
   bottom: 0;
   width: 2px;
@@ -269,13 +223,6 @@
   color: var(--ink-4);
 }
 
-.adm-emp-metrics {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--sp-4);
-}
 
 .adm-emp-metric {
   display: inline-flex;
@@ -285,8 +232,8 @@
   min-width: 3.5rem;
 }
 
-/* Card-only. The list view carries these as real column headers now — see
-   .adm-emp-cols — so this label must not come back to the table. */
+/* Card-only. The list view carries these as real column headers now, so this
+   label must not come back to the table. */
 .adm-emp-metric-label {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -304,38 +251,6 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-/* Dedicated actions cell — mirrors the Nodes list ACTIONS column: a quiet
-   neutral icon button that tints red only on hover, not a red-at-rest glyph. */
-.adm-emp-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-@media (max-width: 820px) {
-  /* Employee rows: the 3-column grid (minmax(220px,…)) can't fit a phone, so
-     stack identity → agents → metrics. The column-label header is meaningless
-     stacked, so hide it. */
-  .adm-emp-cols {
-    display: none;
-  }
-
-  .adm-emp-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-3);
-    padding: var(--sp-4) 0;
-  }
-
-  .adm-emp-metrics {
-    justify-self: start;
-    text-align: left;
-  }
-
-  .adm-emp-actions {
-    justify-self: start;
-    justify-content: flex-start;
-  }
-}
 
 /* There used to be a `:where(.admin-console) .tone-*` block here that painted
    `color` for six tone names. It was the second contract on the `.tone-`

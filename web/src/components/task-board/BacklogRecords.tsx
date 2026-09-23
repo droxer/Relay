@@ -1,43 +1,34 @@
 "use client";
 
-import { type DragEvent, type ReactNode, type TouchEvent } from "react";
+import { useMemo, useRef, type DragEvent, type ReactNode, type TouchEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { PriorityBadge } from "../PriorityBadge";
 import { cn } from "@/lib/utils";
 import { type RelaySession, type RelayTaskListItem } from "../../types";
+import { ActionCalendar, ICON } from "../icons";
 import {
-  ActionApprove,
-  ActionCalendar,
-  ActionStart,
-  ActionStop,
-  ICON,
-  NavAgents,
-  NavRefresh,
-} from "../icons";
-import { dueTone } from "../../lib/backlog";
-import { taskResultLine } from "../../lib/taskResult";
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
+import { dueTone, type BacklogSortKey } from "../../lib/backlog";
 import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
-import { RoutineOriginBadge } from "./RoutineOriginBadge";
-import { taskRef } from "../../lib/taskRef";
 import { pathForAppState } from "../../lib/appRoute";
 
 export function hrefForTaskRecord(taskId: string): string {
   return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
 }
 import { TaskAssignee } from "../TaskAssignee";
-import { Button } from "@/components/ui/button";
 import { StateMark } from "../StateMark";
-import { SortableColumnHeader } from "@/components/ui/SortableColumnHeader";
-import type { SortState } from "../../lib/listSort";
-
-/** The columns the backlog list can order by. Mirrors `backlogSortColumns`. */
-export type BacklogSortKey = "title" | "status" | "priority" | "assignee" | "due";
+import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
+import { sortIndicator, type SortState } from "../../lib/listSort";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
 import { formatDueDate } from "./BacklogChrome";
-import { TaskDueCell } from "./TaskDueCell";
-import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 
 /**
  * The two ways a task renders: as a card on the board and as a row in the
@@ -137,244 +128,219 @@ export function BacklogTaskCard({
     </article>
   );
 }
-/**
- * The column header row — rendered ONCE, above every group.
- *
- * It used to repeat per group, on the reasoning that a band interrupts the
- * columns and a header six bands up stops naming the row under the eye. What
- * that reasoning missed is the cost at the density these lists actually run
- * at: four routine groups meant four band slabs and four identical header
- * rows for six records, so the page read as four small tables rather than
- * one list, and the furniture outweighed the content. One header, made
- * sticky so it stays over the rows it names, answers the original concern
- * without spending a row of chrome per group. The bands go quiet to match
- * (see .list-group-band) — they name the group, they no longer restart it.
- */
-export function BacklogRowsHead({
-  compact = false,
-  sort,
-  onSort,
-  selectAll,
-}: {
-  compact?: boolean;
-  sort: SortState<BacklogSortKey> | null;
-  onSort: (key: BacklogSortKey) => void;
-  selectAll: ReactNode;
-}) {
-  const { t } = useTranslation();
-  return (
-    <TableRow className="backlog-rows-head">
-      <TableHead className="backlog-rows-head-cell backlog-rows-head-select">{selectAll}</TableHead>
-      {/* Named, not blank: a columnheader with no accessible name leaves the
-          cells under it reading as a column of nothing. */}
-      <TableHead className="backlog-rows-head-cell backlog-rows-head-dot">
-        <span className="sr-only">{t("backlog.status")}</span>
-      </TableHead>
-      {!compact ? <TableHead className="backlog-rows-head-cell backlog-rows-head-ref">{t("backlog.col_ref")}</TableHead> : null}
-      <SortableColumnHeader
-        className="backlog-rows-head-cell backlog-rows-head-lead"
-        label={t("backlog.col_task")}
-        sortKey="title"
-        sort={sort}
-        onSort={onSort}
-      />
-      {!compact ? <SortableColumnHeader
-        className="backlog-rows-head-cell backlog-rows-head-tags"
-        label={t("backlog.priority")}
-        sortKey="priority"
-        sort={sort}
-        onSort={onSort}
-      /> : null}
-      <SortableColumnHeader
-        className="backlog-rows-head-cell backlog-rows-head-due"
-        label={t("backlog.due")}
-        sortKey="due"
-        sort={sort}
-        onSort={onSort}
-      />
-      <SortableColumnHeader
-        className="backlog-rows-head-cell backlog-rows-head-assignee"
-        label={t("backlog.assignee")}
-        sortKey="assignee"
-        sort={sort}
-        onSort={onSort}
-      />
-      {/* Actions is not a column of data — there is nothing to order by. */}
-      {!compact ? <TableHead className="backlog-rows-head-cell backlog-rows-head-actions">{t("backlog.actions")}</TableHead> : null}
-    </TableRow>
-  );
-}
+/** Per-column element classes, carried through TanStack's open `meta` slot. */
+type ColumnChrome = { headClass?: string; cellClass?: string };
 
-export function BacklogTaskRow({
-  task,
-  compact = false,
-  projectName,
-  showStatus = false,
-  session,
-  routineTitle,
-  ready,
-  agentDisplayName,
-  agentImageUrl,
-  canDiscuss,
-  selected,
-  onToggleSelect,
-  onOpen,
-  onEdit,
-  onAssign,
-  onStart,
-  starting,
-  onToggleBlock,
-  onDone,
-}: {
-  task: RelayTaskListItem;
-  compact?: boolean;
+/** What a row needs beyond the task itself, resolved by the page per record. */
+export interface BacklogRowContext {
   projectName?: string;
-  showStatus?: boolean;
-  session?: RelaySession;
-  /** Title of the routine this task was promoted from, when it was. */
-  routineTitle?: string;
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;
-  canDiscuss: boolean;
-  selected: boolean;
-  onToggleSelect: () => void;
+}
+
+/**
+ * The backlog's flat list: one table over the already-filtered, sorted, and
+ * paged records the page hands down. The column header renders ONCE, above
+ * every row — it used to repeat per group, and at the density these lists
+ * run at four bands meant four identical header rows for six records, so the
+ * furniture outweighed the content.
+ *
+ * Sorting stays manual and URL-backed: the page owns the state
+ * (`useListSort`) and the ordering (`applySort`); the table only projects
+ * that state onto TanStack's `SortingState` and routes header clicks back
+ * through the same `nextSortState` cycle the other lists speak.
+ */
+export function BacklogTaskList({
+  tasks,
+  sort,
+  onSort,
+  selectAll,
+  selectedIds,
+  onToggleSelect,
+  contextFor,
+  onOpenTask,
+}: {
+  /** The current page of records, in display order. */
+  tasks: RelayTaskListItem[];
+  sort: SortState<BacklogSortKey> | null;
+  onSort: (key: BacklogSortKey) => void;
+  selectAll: ReactNode;
+  selectedIds: ReadonlySet<string>;
+  onToggleSelect: (taskId: string) => void;
+  contextFor: (task: RelayTaskListItem) => BacklogRowContext;
   /** Opens the task's record. The title is a destination now, not a form. */
-  onOpen: () => void;
-  onEdit: () => void;
-  onAssign: () => void;
-  onStart: () => void;
-  starting: boolean;
-  onToggleBlock: () => void;
-  onDone: () => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   const { t } = useTranslation();
-  const tone = dueTone(task);
-  const result = taskResultLine(task, session);
-  // Nothing is assigned yet: the empty dashed slot said so with a glyph that
-  // named nobody, on the one lane where unassigned is the normal condition.
-  // The assign action is two icons away.
-  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
-  const startDisabled =
-    (!task.assignedAgentId && !task.assignedTeamId && !canDiscuss) ||
-    task.status === "running" ||
-    task.status === "done";
+  /* flexRender mounts a column's cell function AS a component, so a column
+     def that closed over render-volatile values — `t`, the caller's inline
+     `contextFor`, the selection set on every toggle — would unmount and
+     remount every cell subtree each time. The defs below stay stable across
+     those values and read them through this ref at render time. */
+  const state = useRef({ t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask });
+  state.current = { t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask };
+  /* TanStack's controlled sorting state is a projection of the page's
+     URL-backed SortState; nothing inside the table writes it back (header
+     clicks go through `onSort`), which is what `manualSorting` licenses. */
+  const sorting = useMemo<SortingState>(
+    () => (sort ? [{ id: sort.key, desc: sort.direction === "desc" }] : []),
+    [sort],
+  );
+
+  function sortHead(key: BacklogSortKey, label: string): ReactNode {
+    const { active, direction } = sortIndicator(sort, key);
+    return (
+      <SortColumnButton
+        label={label}
+        sortKey={key}
+        onSort={(next) => state.current.onSort(next)}
+        align="start"
+        active={active}
+        direction={direction}
+      />
+    );
+  }
+
+  const columns = useMemo<ColumnDef<RelayTaskListItem>[]>(() => [
+    {
+      id: "select",
+      meta: { headClass: "w-4", cellClass: "w-4" } satisfies ColumnChrome,
+      header: () => state.current.selectAll,
+      cell: ({ row }) => {
+        const task = row.original;
+        const current = state.current;
+        return (
+          <TaskSelectCheckbox
+            className="backlog-select-box"
+            checked={current.selectedIds.has(task.id)}
+            label={current.t("backlog.select_task", { title: task.title })}
+            onCheckedChange={() => current.onToggleSelect(task.id)}
+          />
+        );
+      },
+    },
+    {
+      id: "status",
+      meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
+      /* Named, not blank: a columnheader with no accessible name leaves the
+         cells under it reading as a column of nothing. */
+      header: () => <span className="sr-only">{state.current.t("backlog.status")}</span>,
+      /* The dot-plus-sr-only grammar AgentStateBadge uses: the shape carries
+         a word for anyone who cannot see it. */
+      cell: ({ row }) => (
+        <>
+          <StateMark shape={TASK_STATUS_SHAPE[row.original.status]} />
+          <span className="sr-only">{state.current.t(`backlog.statuses.${row.original.status}`)}</span>
+        </>
+      ),
+    },
+    {
+      id: "title",
+      meta: { cellClass: "max-w-md whitespace-normal" } satisfies ColumnChrome,
+      header: () => sortHead("title", state.current.t("backlog.col_task")),
+      cell: ({ row }) => {
+        const task = row.original;
+        const current = state.current;
+        const { projectName } = current.contextFor(task);
+        return (
+          <div className="backlog-row-lead-main">
+            {/* A real href, so a task can be opened in a new tab or copied;
+                a plain click opens the record in place. */}
+            <a
+              className="backlog-row-title"
+              href={hrefForTaskRecord(task.id)}
+              onClick={(event) => {
+                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+                event.preventDefault();
+                current.onOpenTask(task.id);
+              }}
+            >{task.title}</a>
+            {projectName ? <span className="task-project-label">{projectName}</span> : null}
+          </div>
+        );
+      },
+    },
+    {
+      id: "due",
+      meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
+      header: () => sortHead("due", state.current.t("backlog.due")),
+      cell: ({ row }) => {
+        const task = row.original;
+        const tone = dueTone(task);
+        return (
+          <span className={cn(tone !== "neutral" && tone)} data-empty={!task.dueDate || undefined}>
+            {task.dueDate ? formatDueDate(task.dueDate) : "—"}
+          </span>
+        );
+      },
+    },
+    {
+      id: "assignee",
+      meta: { headClass: "task-col-assignee", cellClass: "task-col-assignee" } satisfies ColumnChrome,
+      header: () => sortHead("assignee", state.current.t("backlog.assignee")),
+      cell: ({ row }) => {
+        const task = row.original;
+        const context = state.current.contextFor(task);
+        return (
+          <TaskAssignee
+            task={task}
+            ready={context.ready}
+            agentDisplayName={context.agentDisplayName}
+            agentImageUrl={context.agentImageUrl}
+          />
+        );
+      },
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [sort]);
+  const table = useReactTable({
+    data: tasks,
+    columns,
+    state: { sorting },
+    manualSorting: true,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (task) => task.id,
+  });
 
   return (
-    <TableRow render={<article />} className="backlog-row group" data-compact={compact || undefined} data-status={task.status} data-priority={task.priority} data-selected={selected ? "true" : undefined}>
-      <TableCell className="backlog-row-select-cell">
-        <TaskSelectCheckbox
-          className="backlog-select-box"
-          checked={selected}
-          label={t("backlog.select_task", { title: task.title })}
-          onCheckedChange={onToggleSelect}
-        />
-      </TableCell>
-      {/* A cell, so the row has exactly as many cells as the header has
-          columns, and the shape carries a word for anyone who cannot see it —
-          the same dot-plus-sr-only grammar AgentStateBadge uses. */}
-      <TableCell className="backlog-row-dot-cell">
-        <StateMark shape={TASK_STATUS_SHAPE[task.status]} />
-        <span className="sr-only">{t(`backlog.statuses.${task.status}`)}</span>
-      </TableCell>
-      {!compact ? <TableCell className="backlog-row-ref code">{taskRef(task.id)}</TableCell> : null}
-      <TableCell render={<div />} className="backlog-row-lead">
-        <div className="backlog-row-lead-main">
-          <a
-            className="backlog-row-title"
-            href={hrefForTaskRecord(task.id)}
-            onClick={(event) => {
-              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-              event.preventDefault();
-              onOpen();
-            }}
-          >{task.title}</a>
-          {projectName ? <span className="task-project-label">{projectName}</span> : null}
-          {showStatus ? <span className="task-project-label">{t(`backlog.statuses.${task.status}`)}</span> : null}
-        </div>
-        {!compact ? <>
-          <TaskFlowDetails task={task} execution={session?.execution} />
-          <RoutineOriginBadge task={task} routineTitle={routineTitle} />
-        </> : null}
-      </TableCell>
-      {!compact ? <TableCell render={<div />} className="backlog-row-tags">
-        <PriorityBadge priority={task.priority} />
-      </TableCell> : null}
-      <TableCell className="backlog-row-due" data-empty={!task.dueDate || undefined}>
-        {compact ? <span className={cn(tone !== "neutral" && tone)}>{task.dueDate ? formatDueDate(task.dueDate) : "—"}</span> : <TaskDueCell
-          date={task.dueDate}
-          tone={tone}
-          format={formatDueDate}
-          emptyLabel={t("backlog.add_due")}
-          onEdit={onEdit}
-        />}
-        {/* Files rode in a labelled RESULT column of their own, which stood
-            empty on nearly every row — a named column for a fact most rows
-            do not have. The count is a footnote to the date the run finished
-            against, so it trails it instead. */}
-        {!compact && result?.hasFiles ? (
-          <span className="backlog-row-files tnum">
-            {t("backlog.result_files", { count: result.fileCount })}
-          </span>
-        ) : null}
-      </TableCell>
-      <TableCell className="backlog-row-assignee">
-        <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
-      </TableCell>
-      {!compact ? <TableCell render={<div />} className="backlog-row-actions" aria-label={t("backlog.actions")}>
-        <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_dispatch")}>
-          <Button variant="outline"
-            type="button"
-            className="backlog-action-icon"
-            onClick={onAssign}
-            disabled={task.status === "running" || task.status === "done"}
-            aria-label={t("backlog.assign_task")}
-            title={t("backlog.assign_task")}
+    <Table aria-label={t("backlog.title")}>
+      <TableHeader>
+        {table.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id} className="backlog-rows-head hover:bg-transparent">
+            {headerGroup.headers.map((header) => (
+              <TableHead
+                key={header.id}
+                className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
+                aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as BacklogSortKey).ariaSort : undefined}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {table.getRowModel().rows.map((row) => (
+          <TableRow
+            key={row.id}
+            className="backlog-row group"
+            data-status={row.original.status}
+            data-priority={row.original.priority}
+            data-selected={selectedIds.has(row.id) ? "true" : undefined}
           >
-            <NavAgents size={ICON.sm} />
-          </Button>
-          {/* The tinted icon, not the filled default the card uses — see the
-              note on .backlog-row-actions. */}
-          <Button variant="icon"
-            size="icon-dense"
-            tinted
-            type="button"
-            className="backlog-action-primary backlog-action-icon"
-            onClick={onStart}
-            disabled={startDisabled}
-            loading={starting}
-            aria-label={task.status === "blocked" ? t("backlog.retry") : ["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-            title={task.status === "blocked" ? t("backlog.retry") : ["review", "waiting_for_human"].includes(task.status) ? t("backlog.rework") : (task.assignedAgentId || task.assignedTeamId) ? t("backlog.start") : t("backlog.start_team")}
-          >
-            <ActionStart size={ICON.sm} />
-          </Button>
-        </div>
-        <div className="backlog-action-group" role="group" aria-label={t("backlog.actions_state")}>
-          <Button variant="outline"
-            type="button"
-            className={cn("backlog-action-icon", task.status !== "blocked" && "backlog-action-block")}
-            onClick={onToggleBlock}
-            disabled={task.status === "running" || task.status === "done"}
-            aria-label={task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
-            title={task.status === "blocked" ? t("backlog.unblock") : t("backlog.block")}
-          >
-            {task.status === "blocked" ? <NavRefresh size={ICON.sm} /> : <ActionStop size={ICON.sm} />}
-          </Button>
-          <Button variant="outline"
-            type="button"
-            className="backlog-action-icon backlog-action-done"
-            onClick={onDone}
-            disabled={task.status !== "review"}
-            aria-label={t("backlog.done")}
-            title={t("backlog.done")}
-          >
-            <ActionApprove size={ICON.sm} />
-          </Button>
-        </div>
-      </TableCell> : null}
-    </TableRow>
+            {row.getVisibleCells().map((cell) => (
+              <TableCell key={cell.id} className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
+
 
 /**
  * The exception line: why this task is not simply moving. The derivation is

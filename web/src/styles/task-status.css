@@ -402,8 +402,9 @@
    pointer-events-none means the element receives no hover to style. */
 
 
-/* Icon-only action — square button, glyph centered, label in the tooltip. */
-.backlog-row-actions .backlog-action-icon {
+/* Icon-only action — square button, glyph centered, label in the tooltip.
+   Unscoped now: the only emitter left is the routine list's action group. */
+.backlog-action-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -420,25 +421,10 @@
   transform: translateX(0.5px);
   transition: transform var(--t-fast) var(--ease);
 }
-
 .backlog-action-primary.backlog-action-icon:hover:not(:disabled) svg {
   transform: translateX(1.5px);
 }
 
-/* Secondary actions carry meaning on hover — completing (success) and
-   blocking (caution) read differently from neutral navigation. The tone rides
-   the icon/text only; status hues never fill, so the wash stays the neutral
-   row hover. Reopen reuses the neutral hover since reopening is
-   constructive. */
-.backlog-row-actions .backlog-action-done:hover:not(:disabled) {
-  background: var(--row-hover);
-  color: var(--ok);
-}
-
-.backlog-row-actions .backlog-action-block:hover:not(:disabled) {
-  background: var(--row-hover);
-  color: var(--err);
-}
 
 .backlog-empty {
   margin: 0;

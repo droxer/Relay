@@ -83,10 +83,6 @@
 
 .list-group-add:hover { color: var(--ink-1); }
 
-.list-group-rows {
-  display: flex;
-  flex-direction: column;
-}
 
 /* The band already carries the group's own bottom edge; the pager sits under
    the rows it pages, inside the band it belongs to. */
@@ -122,16 +118,6 @@
      two bands is the same kind of separation on either surface. */
   gap: var(--sp-7);
   min-height: 0;
-}
-
-/* Inside a band, the band is what sticks — not the column header. Both were
-   `top: 0`, so scrolling stacked five identical header rows on one another;
-   and of the two, the group name is what a reader scrolling a long band
-   actually needs to keep. The headers keep their hairline and their
-   background, they just travel with their rows. */
-.adm-grouped-list .adm-emp-cols,
-.adm-grouped-list .adm-node-cols {
-  position: static;
 }
 
 /* The band paints over the rows that scroll under it, so it cannot be
