@@ -4544,6 +4544,66 @@ def _pipeline_registry(root: str, *, work_results: bool = False) -> tuple[Any, A
     return session_store, daemon_store, registry
 
 
+@pytest.mark.parametrize("failure_type", ["run.completed", "run.failed"])
+@pytest.mark.parametrize("verification_status", ["done", "blocked"])
+def test_coordinator_repair_revalidates_all_work_before_task_acceptance(failure_type, verification_status):
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, daemon, registry = _pipeline_registry(root, work_results=True)
+            task = registry.task_store.create_task({"title": "Repair and revalidate", "acceptancePolicy": "automatic"})
+            assignments = [
+                {"assignmentId": "lead", "agent": "codex", "coordinator": True},
+                {"assignmentId": "build", "agent": "codex", "workKind": "implementation"},
+                {"assignmentId": "verify", "agent": "claude", "mode": "review", "workKind": "verification"},
+                {"assignmentId": "review", "agent": "claude", "mode": "review", "workKind": "review"},
+                {"assignmentId": "final", "agent": "codex", "synthesizer": True},
+            ]
+            for item in assignments:
+                item.update(required=True, teamSnapshot={"teamId": "team"})
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Repair and revalidate", "taskId": task["id"], "assignments": assignments,
+            })
+
+            def take(expected):
+                [command] = registry.take_commands("sbx_alice", "node_token")
+                assert command["assignmentId"] == expected
+                return command
+
+            def finish(command, *, failure=False, status="done"):
+                _start_run(registry, command)
+                event = {
+                    "type": failure_type if failure else "run.completed",
+                    "commandId": command["id"], "sessionId": session["id"],
+                    "runId": command["runId"], "agent": command["agent"], "exitCode": 1 if failure else 0,
+                }
+                if failure and failure_type == "run.failed":
+                    event["error"] = "Reviewer runtime failed"
+                elif not failure:
+                    event["roundResult"] = {"status": "done", "work": {"status": status, "evidence": ["Current attempt checks"]}}
+                registry.handle_event("sbx_alice", event, "node_token")
+
+            for expected in ("lead", "build", "verify"):
+                finish(take(expected))
+            finish(take("review"), failure=True)
+            repair = take("lead")
+            assert repair["state"]["repair_note"]
+            request = daemon.active_run_request_for_session_any_node(session["id"])
+            assert not request["state"].get("_relay_work_results")
+            finish(repair)
+            finish(take("build"))
+            finish(take("verify"), status=verification_status)
+            if verification_status == "done":
+                finish(take("review"))
+                finish(take("final"))
+            assert registry.take_commands("sbx_alice", "node_token") == []
+            assert registry.task_store.get_task(task["id"])["status"] == (
+                "done" if verification_status == "done" else "waiting_for_human"
+            )
+            runs = sessions.get_session(session["id"])["agentRuns"]
+            assert sum(run["assignmentId"] == "verify" for run in runs) == 2
+    asyncio.run(flow())
+
+
 def test_required_review_failure_cannot_be_closed_by_later_success() -> None:
     async def flow():
         with TemporaryDirectory() as root:

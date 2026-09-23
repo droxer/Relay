@@ -123,7 +123,8 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
 
 
 @pytest.mark.parametrize("empty_plan", [False, True])
-def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, empty_plan):
+@pytest.mark.parametrize("lead_first", [False, True])
+def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, empty_plan, lead_first):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -165,11 +166,13 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
         assert not initial["state"].get("team_plan_candidates")
         finish(initial, good)
         assert app.state.registry.take_commands(node_id, "node_token") == []
+        addressed = [lead["id"], builder["id"]] if lead_first else [builder["id"], lead["id"]]
         response = client.post(f"/api/v1/threads/{session_id}/messages", json={
-            "text": "Implement this together", "addressAgentIds": [lead["id"], builder["id"]],
+            "text": "Implement this together", "addressAgentIds": addressed,
         })
         assert response.status_code == 202, response.text
         [coordinator] = app.state.registry.take_commands(node_id, "node_token")
+        assert coordinator["logicalAgentId"] == lead["id"]
         assert [item["agentId"] for item in coordinator["state"]["team_plan_candidates"]] == [builder["id"]]
         plan = [] if empty_plan else [{
             "agentId": builder["id"], "objective": "Implement POST /reset",
