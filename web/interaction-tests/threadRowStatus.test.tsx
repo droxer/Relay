@@ -65,6 +65,20 @@ it("spends the ring on a thread whose computer gave out, not on a settled one", 
   expect(mark?.getAttribute("data-tone")).toBe("bad");
 });
 
+it("rings a failed thread even though it files under Idle", () => {
+  // A failed thread is not running and needs no decision, so the rail groups
+  // it with the settled ones. The group tone drew it with the same grey muted
+  // pip as a clean finish, leaving the word "Failed" as the only difference.
+  const failed = renderRow({ session: session("f", "failed") }, "idle").querySelector(".state-mark");
+  expect(failed?.getAttribute("data-shape")).toBe("ring");
+  expect(failed?.getAttribute("data-tone")).toBe("bad");
+
+  // A cancel was the user's own call, not a fault: it keeps the settled pip.
+  const cancelled = renderRow({ session: session("c", "cancelled") }, "idle").querySelector(".state-mark");
+  expect(cancelled?.getAttribute("data-shape")).toBe("muted");
+  expect(cancelled?.getAttribute("data-tone")).toBe("neutral");
+});
+
 it("never draws the state twice on one row", () => {
   // A running row still names its agent in words; the pip above is the only
   // place the tone is drawn.

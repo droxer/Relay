@@ -160,13 +160,13 @@ export function ThreadListPanel({
         count={directoryMode === "projects" ? hierarchy.projects.length : threads.length}
         titleVariant="display"
         actions={(() => {
-          // One ghost plus for both modes — the shared list-header create
-          // affordance (.page-header-icon-action, shell.css).
+          // One plus for both modes — the shared list-header create
+          // affordance, in its primary tier (.page-header-icon-action, shell.css).
           const createLabel = directoryMode === "projects" ? t("project.create") : t("thread.new_thread");
           return (
             <Button variant="ghost"
               type="button"
-              className="page-header-icon-action"
+              className="page-header-icon-action page-header-icon-action--primary"
               tooltip={createLabel}
               onClick={directoryMode === "projects" ? onCreateProject : () => onNewThread(null)}
             >
@@ -224,7 +224,16 @@ export function ThreadListPanel({
                   <NavProjects size={ICON.sm} aria-hidden="true" />
                 </span>
                 <span className="project-folder-name">{project.name}</span>
-                <span className="project-folder-count">{t(project.archivedAt ? "project.state_archived" : project.enabled ? "project.state_active" : "project.state_disabled")}</span>
+                {/* State only when it adds something. Active is the resting
+                    state of nearly every project, so printing it on every row
+                    made a column that reads identically all the way down and
+                    repeats what the record band says. Same rule the agents
+                    roster follows for "ready". */}
+                {project.archivedAt || !project.enabled ? (
+                  <span className="project-folder-count">
+                    {t(project.archivedAt ? "project.state_archived" : "project.state_disabled")}
+                  </span>
+                ) : null}
               </Button>
             </div>
           </section>

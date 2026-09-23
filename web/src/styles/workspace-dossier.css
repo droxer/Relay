@@ -113,22 +113,13 @@
   border-top: 0.5px solid var(--line-2);
 }
 
-.agent-personality-empty > p,
-.agent-personality-empty > span {
+/* One line, and it is a sentence rather than a heading: the bold tier used to
+   belong to a restatement of the "Default" pill above it, which no longer
+   renders. */
+.agent-personality-empty-lede {
   display: block;
   max-width: var(--measure);
   margin: 0;
-}
-
-.agent-personality-empty-lede {
-  color: var(--ink-1);
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
-  text-wrap: balance;
-}
-
-.agent-personality-empty > span {
-  margin-top: var(--sp-2);
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);

@@ -452,10 +452,20 @@
    without the column of blue. Contrast is on the glyph against the row, the
    same relationship a link has with its paragraph — not an --opacity-ghost
    control, which would fail 1.4.11. */
+/* The row's start action rests in ink and reaches for the action colour only
+   under the pointer. A cobalt glyph on every row is not a scarce accent — it
+   is a column of them, competing with the one cobalt control the header
+   carries — and the list reads calmer when the bright state belongs to the
+   row you are actually pointing at. */
 .backlog-row-actions .backlog-action-primary {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
+  color: var(--ink-2);
+}
+
+.backlog-row-actions .backlog-action-primary:hover:not(:disabled),
+.backlog-row-actions .backlog-action-primary:focus-visible:not(:disabled) {
   color: var(--action);
 }
 
@@ -539,6 +549,11 @@
   /* Line 2: priority · status · due, with the assignee chip pushed right. */
   .backlog-row-tags     { flex: 0 0 auto; width: auto; }
   .backlog-row-due      { flex: 0 0 auto; width: auto; }
+  /* On desktop an empty due date is a "—" under a DUE column header, which
+     reads as "no due date". The phone layout drops the header, so the same
+     dash is a stray mark on the end of the row with nothing to say what it
+     stands for. Absent here, it simply is not drawn. */
+  .backlog-row-due[data-empty] { display: none; }
   .backlog-row-files    { display: inline; }
   /* The agent readiness pip is absolutely positioned 3px past the badge's
      right edge; without clearance it kisses the card boundary. Nudge the whole

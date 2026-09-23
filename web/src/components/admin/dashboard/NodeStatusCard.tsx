@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardDescription,
@@ -14,6 +15,10 @@ import type { ControlPanelDaemonNodeRecord } from "../../../types";
 
 interface NodeStatusCardProps {
   nodes: ControlPanelDaemonNodeRecord[];
+  /** Commands waiting for a computer to pick them up. Not a node state, so it
+   *  rides the footer beside the total rather than the state grid. */
+  queued: number;
+  onManageNodes: () => void;
   className?: string;
 }
 
@@ -39,7 +44,7 @@ const ORDER: Array<{ key: string; tone: Tone }> = [
   { key: "unknown", tone: "neutral" },
 ];
 
-export function NodeStatusCard({ nodes, className }: NodeStatusCardProps) {
+export function NodeStatusCard({ nodes, queued, onManageNodes, className }: NodeStatusCardProps) {
   const { t } = useTranslation();
 
   const { slots, total } = useMemo(() => {
@@ -101,8 +106,26 @@ export function NodeStatusCard({ nodes, className }: NodeStatusCardProps) {
         ))}
       </dl>
 
-      <CardFooter className="border-t">
-        <CardDescription render={<span />}>{t("admin.v2.dash_health_total", { count: total })}</CardDescription>
+      {/* This card is the dashboard's only fleet readout. A band above the
+          KPIs used to repeat four of these numbers and a KPI hint repeated two
+          more, so one fact arrived three times in three shapes; the deep link
+          and the queue depth were the only things the band owned, and they
+          live here now. */}
+      <CardFooter className="border-t adm-dash-health-footer">
+        <CardDescription render={<span />}>
+          {t("admin.v2.dash_health_total", { count: total })}
+          {/* The separator rides with the clause it introduces, so a wrap
+              cannot leave a "·" stranded at the end of the first line. */}
+          {queued > 0 ? (
+            <span className="adm-dash-health-queued">
+              {` · ${t("admin.control_panel.queued")} ${queued}`}
+            </span>
+          ) : null}
+        </CardDescription>
+        <Button variant="ghost" size="dense" onClick={onManageNodes}>
+          {t("admin.control_panel.manage_fleet")}
+          <span aria-hidden="true">↗</span>
+        </Button>
       </CardFooter>
     </Card>
   );

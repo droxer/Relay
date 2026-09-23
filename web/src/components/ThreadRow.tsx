@@ -113,6 +113,14 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             ? { tone: "idle", text: t("thread.statuses.cancelled") }
             : null;
 
+  // The pip follows the row's own status, not only the group it sorts into.
+  // A failed thread files under "Idle" — it is not running and needs no
+  // decision — so the group tone alone drew it with the same grey muted pip
+  // as a thread that finished cleanly, and only the word "Failed" set them
+  // apart. Failure takes the ring (see PIP); everything else keeps the group
+  // tone, including an unresponsive run, which `tone` already marks as err.
+  const pipTone = tone === "err" || status?.tone === "err" ? "err" : tone;
+
   // Who is in the thread's room, drawn as faces — the same fact the header's
   // participant stack shows. Threads whose room never resolved (older
   // sessions, deleted agents) fall back to the runtime marks that used to be
@@ -202,7 +210,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
                 words — it is the majority of the rail and used to be the one
                 row with no state at all — and the rail no longer offers a
                 filter to ask the question for you. */}
-            <StateMark {...PIP[tone]} />
+            <StateMark {...PIP[pipTone]} />
             <span className="conversation-name">
               <strong>{label}</strong>
               {/* The offline badge rides the title in both layouts: it is a

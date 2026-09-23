@@ -203,6 +203,11 @@
 
 .project-folder-select > .project-folder-name {
   min-width: 0;
+  /* The name claims the row, so the leading edge is fixed whether or not the
+     trailing state renders. Without this the row inherits the Button's
+     centring the moment a project is in its resting state and has nothing to
+     say on the right. */
+  flex: 1;
   overflow: hidden;
   color: var(--ink-1);
   /* Same 13px/700 list-rail identity as the thread rows it contains. */
@@ -656,11 +661,25 @@
 }
 
 /* No hover on touch — the row actions stay visible instead of hiding
-   behind a hover state that never fires. */
+   behind a hover state that never fires. The swap cannot stay a swap, though:
+   the actions are anchored over the timestamp so that hover trades one for
+   the other, and pinning them visible without hiding the stamp drew the
+   pencil and the cross straight on top of "17h ago" on every row. On touch
+   they leave the overlay and take their own slot at the end of the row, so
+   the timestamp and the actions are both legible and both reachable. */
 @media (hover: none) {
   .conversation-rename-btn,
   .conversation-remove-btn {
     opacity: 1;
+  }
+
+  .conversation-row-actions,
+  .conversation-row.nested .conversation-row-actions {
+    position: static;
+    flex: none;
+    align-self: center;
+    transform: none;
+    padding-inline-end: var(--sp-1);
   }
 }
 

@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "./PageHeader";
 import { SearchInput } from "@/components/ui/search-input";
 import { RelayEmptyState } from "./RelayEmptyState";
+import { compactDate } from "../lib/workspaceFormat";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
@@ -173,6 +174,15 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       setBusy(false);
     }
   }
+  // Save waits for something to save, like every other settings form here
+  // (the control panel's organization Save is disabled until its field is
+  // dirty). Enabled at rest, it sat on the page as a live cobalt button beside
+  // "Share" — a second primary with nothing to do.
+  const metadataChanged = Boolean(skill) && (
+    displayName !== skill?.displayName
+    || description !== skill?.description
+    || visibility !== skill?.visibility
+  );
   async function saveMetadata() {
     if (!skill) return;
     setBusy(true);
@@ -255,7 +265,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             <Button
               variant="ghost"
               type="button"
-              className="page-header-icon-action"
+              className="page-header-icon-action page-header-icon-action--primary"
               tooltip={t("skills.publish_skill")}
               onClick={openCreate}
             >
@@ -402,8 +412,11 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                   <li key={revision.id}>
                     <strong>v{revision.revision}</strong>
                     <span>{revision.note || t("skills.published_bundle")}</span>
-                    <time>
-                      {new Date(revision.createdAt).toLocaleDateString(i18n.language)}
+                    {/* The shared instant format ("Sep 23, 01:30 AM"), not a raw
+                        numeric date: every other timestamp in the app reads
+                        this way, and a bundle can take several revisions a day. */}
+                    <time className="tnum" dateTime={revision.createdAt}>
+                      {compactDate(revision.createdAt, i18n.language)}
                     </time>
                   </li>
                 ))}
@@ -528,7 +541,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                     </Button>
                   )}
                   <Button
-                    disabled={busy || !displayName.trim() || !description.trim()}
+                    disabled={busy || !metadataChanged || !displayName.trim() || !description.trim()}
                     onClick={() => void saveMetadata()}
                   >
                     {t("skills.save_details")}

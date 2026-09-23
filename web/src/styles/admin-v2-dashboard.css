@@ -169,6 +169,16 @@
   overflow: hidden;
 }
 
+/* Total on the left, the deep link on the right: the card absorbed the fleet
+   band's only two unique parts when the band came out. */
+.adm-dash-health-footer > :last-child {
+  margin-inline-start: auto;
+}
+
+.adm-dash-health-queued {
+  white-space: nowrap;
+}
+
 .adm-dash-panel .adm-dash-top-list,
 .adm-dash-panel .adm-dash-stat-grid {
   flex: 1;
@@ -572,64 +582,4 @@
     padding: var(--sp-4);
     gap: var(--sp-3);
   }
-}
-
-.adm-control-fleet {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-5);
-  padding: var(--sp-4) var(--sp-5);
-  border: 1px solid var(--line-1);
-  border-left: 3px solid var(--ink-2);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-}
-
-.adm-control-fleet-label {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  color: var(--ink-2);
-  font: var(--type-label);
-  white-space: nowrap;
-}
-
-.adm-control-readings {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  flex: 1;
-  gap: var(--sp-4);
-  margin: 0;
-}
-
-.adm-control-readings > div {
-  border-left: 1px solid var(--line-1);
-  padding-left: var(--sp-4);
-}
-
-.adm-control-readings dt {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1-5);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-}
-
-.adm-control-readings dd {
-  margin: var(--sp-2) 0 0;
-  color: var(--ink-1);
-  font-family: var(--font-display);
-  font-size: var(--fs-5);
-  letter-spacing: var(--track-display);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 1200px) {
-  .adm-control-fleet { flex-wrap: wrap; }
-  .adm-control-readings { flex-basis: 65%; }
-}
-
-@media (max-width: 640px) {
-  .adm-control-fleet { padding: var(--sp-4); gap: var(--sp-4); }
-  .adm-control-readings { flex-basis: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

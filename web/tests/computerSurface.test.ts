@@ -196,8 +196,12 @@ describe("My Computer record card", () => {
   });
 
   it("spends the --live accent only on work that is running right now", async () => {
-    // Phosphor's single chromatic role means "an agent is working". An idle
-    // computer must carry none of it, so the idle branch may not reach for a
+    // --live means "an agent is working right now", and it is legal exactly
+    // where --t-pulse is (docs/design-system.md, the accent scope rule): a
+    // static purple surface never means running. So the pulsing run mark
+    // carries it and the elapsed timer beside it stays ink — the timer is the
+    // text channel that accompanies the pulse, not a second purple surface.
+    // An idle computer carries none of it: the idle branch may not reach for a
     // live mark or the elapsed counter.
     const [card, styles] = await Promise.all([
       read("web/src/components/computer/ComputerCard.tsx"),
@@ -206,8 +210,8 @@ describe("My Computer record card", () => {
     const liveRules = [...styles.matchAll(/([.\w-]+)\s*\{[^}]*var\(--live\)[^}]*\}/g)].map((m) => m[1]);
     assert.deepEqual(
       liveRules.sort(),
-      [".computer-run-elapsed", ".computer-run-mark"],
-      "--live belongs to the running-run mark and its elapsed timer, nothing else",
+      [".computer-run-mark"],
+      "--live belongs to the pulsing run mark, nothing else — not even the static timer beside it",
     );
     const idleBranch = (card.match(/activeRuns\.length === 0 \?([\s\S]*?)\) : \(/)?.[1] ?? "")
       // Drop comments, or prose *about* the rule reads as a violation of it.

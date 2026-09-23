@@ -15,6 +15,7 @@ import {
   displayNameForExecutor,
 } from "../lib/agentDisplayNames";
 import { preloadMarkdown } from "./LazyMarkdown";
+import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
@@ -232,6 +233,12 @@ export function ThreadsView({
     () => activeLogicalAgent?.displayName ?? displayNameForExecutor(activeAgent, logicalAgents),
     [activeAgent, activeLogicalAgent, logicalAgents],
   );
+  const bandAgentName = useMemo(
+    () => activeSession
+      ? threadAgentName(activeSession, activeAgentDisplayName, logicalAgentNames, agentDisplayNames)
+      : activeAgentDisplayName,
+    [activeSession, activeAgentDisplayName, logicalAgentNames, agentDisplayNames],
+  );
   const spaceItems = useMemo(
     () => buildSpaceItems(visibleArtifacts, activeSession?.agentRuns, logicalAgentNames, agentDisplayNames),
     [visibleArtifacts, activeSession?.agentRuns, logicalAgentNames, agentDisplayNames],
@@ -379,7 +386,7 @@ export function ThreadsView({
         {activeSession ? (
           <ThreadBand
             session={activeSession}
-            agentName={activeAgentDisplayName}
+            agentName={bandAgentName}
             computers={runtimeNodes}
             onOpenProject={onSelectProject}
           />

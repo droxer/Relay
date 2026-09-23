@@ -16,7 +16,7 @@ import { FiltersBar, FilterSelect } from "../FiltersBar";
 import { Input } from "@/components/ui/input";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
-import { StateMark } from "../StateMark";
+import { StateMark, shapeForCount } from "../StateMark";
 
 import { activeFilterCount, initialFilters, type BacklogView } from "./backlogVocabulary";
 
@@ -241,7 +241,7 @@ export function TaskStatusNav({ value, counts, onChange }: {
     ...TASK_STATUSES.map((status) => ({
       id: status,
       label: t(`backlog.statuses.${status}`),
-      mark: <StateMark shape={TASK_STATUS_SHAPE[status]} />,
+      mark: <StateMark shape={shapeForCount(TASK_STATUS_SHAPE[status], counts[status])} />,
       count: counts[status],
     })),
   ];

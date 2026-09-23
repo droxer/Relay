@@ -3,7 +3,7 @@
 import { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { StateMark } from "../StateMark";
+import { StateMark, shapeForCount } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, FilterSelect } from "../FiltersBar";
@@ -156,7 +156,7 @@ export function RoutineStateNav({
     ...ROUTINE_STATE_ORDER.map((state) => ({
       id: state,
       label: t(`routine.states.${state}`),
-      mark: <StateMark shape={ROUTINE_STATE_SHAPE[state]} />,
+      mark: <StateMark shape={shapeForCount(ROUTINE_STATE_SHAPE[state], counts[state] ?? 0)} />,
       count: counts[state] ?? 0,
     })),
   ];

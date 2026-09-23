@@ -9,9 +9,6 @@ import { ActivityChart } from "./ActivityChart";
 import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
 import { TokenUsageChart } from "./TokenUsageChart";
-import { Button } from "@/components/ui/button";
-import { AdminNode, ICON } from "../../icons";
-import { StateMark } from "../../StateMark";
 import { TopEmployees } from "./TopEmployees";
 
 interface DashboardViewProps {
@@ -41,32 +38,6 @@ export function DashboardView({
 
   return (
     <div className="adm-dash">
-      <section className="adm-control-fleet" aria-label={t("admin.control_panel.fleet")}>
-        <div className="adm-control-fleet-label">
-          <AdminNode size={ICON.md} aria-hidden="true" />
-          <span>{t("admin.control_panel.fleet")}</span>
-        </div>
-        <dl className="adm-control-readings">
-          {([
-            ["ready", metrics.ready, "good"],
-            ["running", metrics.running, "live"],
-            ["attention", metrics.failed, "bad"],
-            ["queued", metrics.queued, "neutral"],
-          ] as const).map(([label, count, tone]) => (
-            <div key={label}>
-              <dt>
-                <StateMark tone={count > 0 ? tone : "neutral"} />
-                {t(`admin.control_panel.${label}`)}
-              </dt>
-              <dd>{nodesReady ? new Intl.NumberFormat(i18n.language).format(count) : dash}</dd>
-            </div>
-          ))}
-        </dl>
-        <Button variant="ghost" onClick={onManageNodes}>
-          {t("admin.control_panel.manage_fleet")}
-          <span aria-hidden="true">↗</span>
-        </Button>
-      </section>
       <div className="adm-dash-kpis-wrap">
         <section
           className={`adm-dash-kpis${showTokens ? "" : " adm-dash-kpis--lean"}`}
@@ -89,21 +60,21 @@ export function DashboardView({
                 : undefined
             }
           />
+          {/* Count only. The ready/failed split is the fleet card's job in the
+              rail beside this row, and saying it here made three widgets
+              report one fact. */}
           <KpiTile
             slot="nodes"
             eyebrow={t("admin.v2.dash_kpi_nodes")}
             value={nodesReady ? formatCompact(metrics.total, i18n.language) : dash}
-            hint={
-              nodesReady
-                ? t("admin.v2.dash_kpi_nodes_hint", { ready: metrics.ready, failed: metrics.failed })
-                : undefined
-            }
           />
+          {/* No hint: it printed employees.length, which IS the value above
+              whenever there are employees ("3" over "3 employees"), and
+              contradicted it when there were none. */}
           <KpiTile
             slot="employees"
             eyebrow={t("admin.v2.dash_kpi_employees")}
             value={nodesReady ? formatCompact(metrics.employeeTotal, i18n.language) : dash}
-            hint={nodesReady ? t("admin.v2.dash_kpi_employees_hint", { count: employees.length }) : undefined}
           />
           {showTokens ? (
             <KpiTile
@@ -134,7 +105,12 @@ export function DashboardView({
           {/* Both rail panels take the fixed instrument frame: their contents
               arrive and re-rank live, and a panel that resized with them
               would move the other one under the reader's eye. */}
-          <NodeStatusCard nodes={nodes} className="adm-dash-panel" />
+          <NodeStatusCard
+            nodes={nodes}
+            queued={metrics.queued}
+            onManageNodes={onManageNodes}
+            className="adm-dash-panel"
+          />
           <TopEmployees
             className="adm-dash-panel"
             employees={employees}

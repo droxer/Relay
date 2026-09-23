@@ -105,13 +105,22 @@
   height: var(--control-h-2xs);
   border: 3px solid var(--surface-0);
   border-radius: var(--r-full);
-  background: var(--action);
-  color: var(--on-action);
-  transition: transform var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  /* Neutral at rest, cobalt under the pointer — the same grammar as the
+     remove badge below, which rests in ink and takes its tone on hover. A
+     cobalt disc on every avatar was a second primary on the agent page,
+     beside the rail's create action, for what is a secondary edit. */
+  background: var(--surface-2);
+  color: var(--ink-2);
+  transition:
+    transform var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
-.profile-image-picker-trigger:hover .profile-image-picker-action {
-  background: var(--action-hover);
+.profile-image-picker-trigger:hover .profile-image-picker-action,
+.profile-image-picker-trigger:focus-visible .profile-image-picker-action {
+  background: var(--action);
+  color: var(--on-action);
   transform: translateY(-1px);
 }
 

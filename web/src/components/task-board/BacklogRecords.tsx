@@ -300,7 +300,7 @@ export function BacklogTaskRow({
       {!compact ? <TableCell render={<div />} className="backlog-row-tags">
         <PriorityBadge priority={task.priority} />
       </TableCell> : null}
-      <TableCell className="backlog-row-due">
+      <TableCell className="backlog-row-due" data-empty={!task.dueDate || undefined}>
         {compact ? <span className={cn(tone !== "neutral" && tone)}>{task.dueDate ? formatDueDate(task.dueDate) : "—"}</span> : <TaskDueCell
           date={task.dueDate}
           tone={tone}

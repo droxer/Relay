@@ -250,12 +250,12 @@ export function AgentsPage({
           layout="stacked"
           actions={
             currentUser.employeeId ? (
-              // The shared list-header create affordance — a ghost plus, same
-              // as the projects/threads rail.
+              // The shared list-header create affordance, same as the
+              // projects/threads rail.
               <Button
                 variant="ghost"
                 type="button"
-                className="page-header-icon-action"
+                className="page-header-icon-action page-header-icon-action--primary"
                 tooltip={t("agents_page.create_action")}
                 onClick={() => setCreateOpen(true)}
               >

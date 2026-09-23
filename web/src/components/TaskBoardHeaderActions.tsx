@@ -42,10 +42,10 @@ export function TaskBoardHeaderActions({
       <Button
         type="button"
         variant="ghost"
-        // The shared list-header create affordance: a ghost plus, same as the
+        // The shared list-header create affordance, same as the
         // projects/threads rail — no text label, the header already names the
         // list. aria-label carries the action for the accessibility tree.
-        className="page-header-icon-action"
+        className="page-header-icon-action page-header-icon-action--primary"
         tooltip={createLabel}
         onClick={onCreate}
       >
