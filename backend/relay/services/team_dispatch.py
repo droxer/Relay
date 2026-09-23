@@ -167,10 +167,16 @@ def team_member_assignments(
         )
         for index, agent in enumerate(ordered_agents)
     ]
+    if snapshot and mode == "action" and len(assignments) > 1:
+        snapshot["workContractVersion"] = 1
     for assignment in assignments:
         config = configs.get(assignment["agentId"], {})
         if team:
-            assignment["required"] = True if assignment.get("coordinator") else config.get("required", assignment.get("role") in ("tester", "reviewer"))
+            assignment["required"] = (
+                True if assignment.get("coordinator") else config.get(
+                    "required", config.get("participation") != "on_request"
+                )
+            )
             assignment["acceptanceCriteria"] = list(team.get("acceptanceCriteria", []))
             assignment["expectedOutputs"] = list(config.get("expectedOutputs", []))
         if config.get("responsibility"):
@@ -259,14 +265,21 @@ def _team_member_assignment(
         **({"role": role} if role else {}),
         **({"coordinator": True} if coordinator else {}),
         **({"synthesizer": True} if synthesizer else {}),
-        "brief": _member_brief(role, coordinator, synthesizer),
+        "brief": _member_brief(role, coordinator, synthesizer, mode=mode),
         **({"teamSnapshot": team_snapshot} if team_snapshot else {}),
     }
 
 
 def _member_brief(
-    role: str | None, coordinator: bool, synthesizer: bool = False
+    role: str | None, coordinator: bool, synthesizer: bool = False, *, mode: str = "action"
 ) -> str:
+    if synthesizer and mode == "action":
+        return (
+            "Review every delegated contribution and its evidence against the task goal and "
+            "acceptance criteria. Request repairs for unresolved defects; do not declare completion "
+            "while required work remains. Then generate one coherent final result for the user, "
+            "including delivered changes, validation results, and any remaining limitations."
+        )
     if synthesizer:
         return (
             "Synthesize the room's evidence into one coherent final response, "

@@ -47,8 +47,7 @@ export function TeamResponsibilities({ members, leadId, configs, criteria, onCon
           const config = configs[member.id] ?? {};
           const base = `${id}-${member.id}`;
           const onRequest = config.participation === "on_request";
-          const requiredByDefault = !onRequest
-            && ["tester", "reviewer"].includes(config.role ?? member.defaultRole ?? "");
+          const requiredByDefault = !onRequest;
           return (
             <div className="team-work-member" key={member.id} role="group" aria-labelledby={`${base}-name`}>
               <p className="team-work-member-name" id={`${base}-name`}>

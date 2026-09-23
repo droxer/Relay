@@ -159,6 +159,7 @@ def test_team_member_assignments_freezes_the_roster_for_the_round() -> None:
     expected = {
         "teamId": "team_1",
         "teamRevision": "2026-08-08T00:00:00Z",
+        "workContractVersion": 1,
         "memberAgentIds": ["lead", "support"],
         "leadAgentId": "lead",
     }

@@ -18,8 +18,9 @@ and tool-policy checks still apply.
 The lead coordinates first and explicitly synthesizes last for accomplish work.
 Review and discussion retain lead-last synthesis. Each turn has its own stable
 assignment identity, even when the same logical agent owns several turns.
-Verification and review are required by default; other specialists may be
-selected by the lead. Explicit membership settings override those defaults.
+Every regular member is required by default, so the lead must delegate a
+bounded contribution to each member before reviewing and delivering the result.
+Explicit membership settings override those defaults.
 On-request members participate only when addressed and do not block normal
 dispatch merely because they are offline or disabled.
 
@@ -79,11 +80,14 @@ sandbox boundaries.
 
 ## Compatibility and UI
 
-Teams with explicit membership configuration or acceptance criteria carry
-`teamSnapshot.workContractVersion: 1` and require `work-results` support.
-Unsupported daemons are rejected with an upgrade message. Existing unconfigured
-teams remain usable with older daemons through the legacy verdict path; their
-historical runs are shown as unverified rather than retrospectively accepted.
+Multi-member accomplish rounds, including teams without custom configuration,
+carry `teamSnapshot.workContractVersion: 1` and require `work-results` support.
+Teams with explicit membership configuration or acceptance criteria also require
+this contract.
+Unsupported daemons are rejected with an upgrade message. Unconfigured
+single-member, discussion, review, and recovery rounds retain the legacy verdict
+path on older daemons. Historical runs are shown as
+unverified rather than retrospectively accepted.
 Protocol selection is frozen in the admitted request and cannot silently
 downgrade during retry.
 

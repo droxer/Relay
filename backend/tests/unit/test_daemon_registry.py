@@ -4628,14 +4628,21 @@ def test_required_review_failure_cannot_be_closed_by_later_success() -> None:
     asyncio.run(flow())
 
 
-def test_configured_work_contract_refuses_a_daemon_without_evidence_support():
+@pytest.mark.parametrize("configured", [False, True])
+def test_team_work_contract_refuses_a_daemon_without_evidence_support(configured):
     async def flow():
         with TemporaryDirectory() as root:
             _, _, registry = _pipeline_registry(root)
+            from relay.services.team_dispatch import team_member_assignments
+
+            assignments = team_member_assignments(
+                [{"id": "lead", "executorKind": "codex"}, {"id": "builder", "executorKind": "claude"}],
+                team={"id": "team", "leadAgentId": "lead", **({"acceptanceCriteria": ["Tests pass"]} if configured else {})},
+            )
             with pytest.raises(ValueError, match="work-results"):
                 await ServerDaemonNodeBackend(registry).run("sbx_alice", {
                     "taskGoal": "Deliver with required evidence",
-                    "assignments": [{"agent": "codex", "teamSnapshot": {"teamId": "team", "workContractVersion": 1}}],
+                    "assignments": assignments,
                 })
     asyncio.run(flow())
 
