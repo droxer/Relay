@@ -11,7 +11,7 @@ it("edits responsibilities and makes on-request participation optional in the sa
     const [configs, setConfigs] = useState<Record<string, TeamMemberConfig>>({});
     const [criteria, setCriteria] = useState<string[]>([]);
     return <>
-      <TeamResponsibilities members={[{ id: "builder", displayName: "Builder" }]} leadId="lead"
+      <TeamResponsibilities members={[{ id: "builder", displayName: "Builder", executorKind: "codex" }]} leadId="lead"
         configs={configs} criteria={criteria} onConfigs={setConfigs} onCriteria={setCriteria} />
       <output data-testid="payload">{JSON.stringify(teamMutationInput({ name: "Team", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], enabled: true, memberConfigs: configs, acceptanceCriteria: criteria }))}</output>
     </>;
@@ -28,6 +28,32 @@ it("edits responsibilities and makes on-request participation optional in the sa
   const payload = JSON.parse(screen.getByTestId("payload").textContent!);
   expect(payload.memberConfigs.builder).toEqual({ responsibility: "Own the reset API", participation: "on_request", required: false });
   expect(payload.acceptanceCriteria).toEqual(["No reusable reset token"]);
+});
+
+it("renders each member as an identity card with the lead pill and effective role", () => {
+  render(
+    <TeamResponsibilities
+      members={[
+        { id: "lead", displayName: "Planner", executorKind: "claude", availability: "ready" },
+        { id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", availability: "ready" },
+      ]}
+      leadId="lead"
+      configs={{}}
+      criteria={[]}
+      onConfigs={() => {}}
+      onCriteria={() => {}}
+    />,
+  );
+  const cards = screen.getAllByRole("group").filter((node) => node.tagName === "ARTICLE");
+  expect(cards).toHaveLength(2);
+  expect(cards[0].querySelector(".team-work-member-head .agent-state")).toBeTruthy();
+  expect(cards[0].textContent).toContain("project.lead_badge");
+  expect(cards[1].textContent).not.toContain("project.lead_badge");
+  // The inherited default role shows on the meta line without opening the select.
+  expect(cards[1].querySelector(".team-work-member-meta")?.textContent).toBe("Codex · team_work.role_reviewer");
+  // The lead has no participation flags; everyone else does.
+  expect(cards[0].querySelector(".team-work-flags")).toBeNull();
+  expect(cards[1].querySelector(".team-work-flags")).toBeTruthy();
 });
 
 it("shows acceptance evidence and attributed review findings without claiming acceptance", () => {
