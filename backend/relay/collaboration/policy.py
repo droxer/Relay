@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .work import (
+    QUESTION_NOTE,
+    QUESTION_RESUME,
+    QUESTION_TARGET,
+    WORK_REPAIR_NOTE,
+    WORK_REPAIR_TARGET,
+    WORK_RESULTS,
+)
+
 REPAIR_COUNT_STATE_KEY = "_relay_repair_count"
 REPAIR_RESUME_INDEX_STATE_KEY = "_relay_repair_resume_index"
 REPAIR_NOTE_STATE_KEY = "_relay_repair_note"
@@ -43,10 +52,27 @@ def decide_failure(
     )
     if can_repair:
         state[REPAIR_COUNT_STATE_KEY] = repairs + 1
-        state[REPAIR_RESUME_INDEX_STATE_KEY] = index
+        # The coordinator can modify the shared workspace. No earlier member
+        # report can certify those new contents; rerun the full member sequence.
+        state[REPAIR_RESUME_INDEX_STATE_KEY] = 1
+        state[WORK_RESULTS] = {}
+        for key in (
+            ROUND_RESULT_STATE_KEY,
+            PARTICIPANT_FAILURES_STATE_KEY,
+            QUESTION_RESUME,
+            QUESTION_TARGET,
+            QUESTION_NOTE,
+        ):
+            state.pop(key, None)
+        state[WORK_REPAIR_TARGET] = assignments[0]["assignmentId"]
+        state[WORK_REPAIR_NOTE] = (
+            "The coordinator repaired a runtime failure and may have changed "
+            "the workspace. Revalidate your contribution against its current contents."
+        )
         state[REPAIR_NOTE_STATE_KEY] = (
             f"{outcome} You are the coordinator on this task: fix the cause so "
-            f"{agent_label} can run again. Do not repeat its work yourself."
+            f"{agent_label} can run again. Do not repeat its work yourself. "
+            "All member contributions will be rerun after this repair."
         )
         return FailureDecision("repair", 0, state)
     if mode in ("ask", "review"):

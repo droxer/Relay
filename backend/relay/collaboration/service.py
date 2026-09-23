@@ -347,9 +347,9 @@ class CollaborationConductor:
                 team_member_ids = {agent["id"] for agent in members}
             team_snapshot = team_runtime_snapshot(team, members)
             # Addressing chooses participants, not their specialization. Keep
-            # caller ordering and explicit overrides, but fill in team briefs
-            # and roles. A lead-first accomplish group also needs the final
-            # synthesis turn required by its bounded planning contract.
+            # explicit overrides, but fill in team briefs and roles. In an
+            # accomplish group the addressed lead coordinates first regardless
+            # of mention order, then owns the final synthesis turn.
             member_assignments = team_member_assignments(
                 members, team=team, include_on_request=True
             )
@@ -370,20 +370,29 @@ class CollaborationConductor:
                 not is_recovery
                 and intent.purpose == "accomplish"
                 and len(raw_assignments) > 1
-                and isinstance(raw_assignments[0], dict)
-                and raw_assignments[0].get("agentId") == team.get("leadAgentId")
-                and _mode(raw_assignments[0].get("mode")) == "action"
-                and not any(
-                    isinstance(item, dict) and item.get("synthesizer") is True
-                    for item in raw_assignments
-                )
             ):
-                synthesis = next(
-                    (item for item in member_assignments if item.get("synthesizer")),
+                lead_index = next(
+                    (
+                        index for index, item in enumerate(raw_assignments)
+                        if isinstance(item, dict)
+                        and item.get("agentId") == team.get("leadAgentId")
+                        and _mode(item.get("mode")) == "action"
+                        and not item.get("synthesizer")
+                    ),
                     None,
                 )
-                if synthesis:
-                    raw_assignments.append(synthesis)
+                if lead_index is not None:
+                    raw_assignments.insert(0, raw_assignments.pop(lead_index))
+                    if not any(
+                        isinstance(item, dict) and item.get("synthesizer") is True
+                        for item in raw_assignments
+                    ):
+                        synthesis = next(
+                            (item for item in member_assignments if item.get("synthesizer")),
+                            None,
+                        )
+                        if synthesis:
+                            raw_assignments.append(synthesis)
         elif session and not raw_assignments:
             # A bare message goes to the whole room: every agent the thread has
             # accumulated, not just the one it started with.
