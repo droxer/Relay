@@ -9,10 +9,13 @@ const SURFACES = [
   "web/src/components/assignment/AssignmentField.tsx",
   "web/src/components/composer/AgentSelect.tsx",
   "web/src/components/ProjectMemberEditor.tsx",
-  "web/src/components/admin/TeamDrawer.tsx",
-  "web/src/components/TeamWorkspacePage.tsx",
+  "web/src/components/TeamMemberPicker.tsx",
   "web/src/components/admin/ChannelDetail.tsx",
 ];
+
+// Pickers that add an entity rather than hold one: the closed trigger is
+// always the "Add …" placeholder, so there is no chosen value to render.
+const ADD_ONLY_SURFACES = new Set(["web/src/components/TeamMemberPicker.tsx"]);
 
 describe("shared roster picker", () => {
   it("is the one picker every agent/team surface opens", async () => {
@@ -35,7 +38,9 @@ describe("shared roster picker", () => {
     for (const path of SURFACES) {
       const source = await read(path);
       assert.match(source, /Roster(Agent|Team)Item|RosterOption/, `${path} hand-rolls its option rows`);
-      assert.match(source, /RosterTriggerValue/, `${path} hand-rolls its closed trigger`);
+      if (!ADD_ONLY_SURFACES.has(path)) {
+        assert.match(source, /RosterTriggerValue/, `${path} hand-rolls its closed trigger`);
+      }
     }
   });
 
@@ -54,7 +59,7 @@ describe("shared roster picker", () => {
     // a lone tab.
     for (const path of [
       "web/src/components/ProjectMemberEditor.tsx",
-      "web/src/components/admin/TeamDrawer.tsx",
+      "web/src/components/TeamMemberPicker.tsx",
       "web/src/components/admin/ChannelDetail.tsx",
     ]) {
       const source = await read(path);

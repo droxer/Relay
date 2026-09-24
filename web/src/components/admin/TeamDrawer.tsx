@@ -7,17 +7,14 @@ import { useRelayMutations } from "../../hooks/useRelayMutations";
 import { teamContractChanged, teamMutationInput } from "../../lib/teamForm";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
 import { PresetAvatarGrid } from "../PresetAvatarGrid";
-import { TeamResponsibilities } from "../TeamResponsibilities";
 import type { AgentTeam, TeamMemberConfig } from "../../types";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RosterAgentItem, RosterTriggerValue } from "../roster/RosterOption";
-import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
-import { TeamMemberOption } from "../TeamMemberOption";
+import { TeamMemberPicker, type TeamMembership } from "../TeamMemberPicker";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export function TeamDrawer({
@@ -32,7 +29,6 @@ export function TeamDrawer({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const leadLabelId = useId();
   const avatarLabelId = useId();
   const { confirm } = useDialogs();
   const { createTeamMutation, updateTeamMutation, deleteTeamMutation } = useRelayMutations();
@@ -42,13 +38,9 @@ export function TeamDrawer({
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>([]);
   const [leadId, setLeadId] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("teams"));
-  const [validationError, setValidationError] = useState<
-    "name" | "members" | "lead" | null
-  >(null);
+  const [validationError, setValidationError] = useState<"name" | "members" | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const membersRef = useRef<HTMLFieldSetElement>(null);
-  const leadRef = useRef<HTMLButtonElement>(null);
-  const membersError = validationError === "members";
 
   useEffect(() => {
     if (!open) return;
@@ -66,16 +58,6 @@ export function TeamDrawer({
     () => employeeAgents.filter((agent) => !agent.deletedAt),
     [employeeAgents],
   );
-  // The lead must be one of the team's own members, so this picker has a
-  // single roster and the shared picker draws no tab strip for it.
-  const leadCandidates = useMemo(
-    () => agents.filter((agent) => memberIds.includes(agent.id)),
-    [agents, memberIds],
-  );
-  const rosterTabs: RosterTab<"members">[] = [
-    { id: "members", label: t("teams.members"), count: leadCandidates.length },
-  ];
-  const roster = useRosterTabs({ tabs: rosterTabs, activeTab: "members", label: t("teams.lead") });
   const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
   const saving = createTeamMutation.isPending || updateTeamMutation.isPending;
   const hasUnsavedChanges = open && (
@@ -92,18 +74,10 @@ export function TeamDrawer({
     if (await confirmDiscardChanges()) onClose();
   }
 
-  function toggleMember(agentId: string) {
+  function changeMembership(next: TeamMembership) {
     setValidationError(null);
-    setMemberIds((current) => {
-      if (current.includes(agentId)) {
-        const next = current.filter((id) => id !== agentId);
-        if (leadId === agentId) setLeadId(next[0] ?? "");
-        return next;
-      }
-      const next = [...current, agentId];
-      if (!leadId) setLeadId(agentId);
-      return next;
-    });
+    setMemberIds(next.memberIds);
+    setLeadId(next.leadId);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -116,11 +90,6 @@ export function TeamDrawer({
     if (memberIds.length === 0) {
       setValidationError("members");
       membersRef.current?.focus();
-      return;
-    }
-    if (!leadId) {
-      setValidationError("lead");
-      leadRef.current?.focus();
       return;
     }
     setValidationError(null);
@@ -200,79 +169,23 @@ export function TeamDrawer({
             />
           </Field>
         )}
-        <fieldset
+        <TeamMemberPicker
           ref={membersRef}
-          className="team-member-fieldset"
-          tabIndex={-1}
-          aria-invalid={membersError || undefined}
-          aria-describedby={membersError ? "team-members-error" : undefined}
-        >
-          <legend>{t("teams.members")}</legend>
-          <div className="team-member-options">
-            {agents.map((agent) => {
-              const selected = memberIds.includes(agent.id);
-              return (
-                <TeamMemberOption
-                  key={agent.id}
-                  agentId={agent.id}
-                  displayName={agent.displayName}
-                  executorKind={agent.executorKind}
-                  placements={agent.placements}
-                  selected={selected}
-                  onToggle={toggleMember}
-                />
-              );
-            })}
-          </div>
-          {agents.length === 0 ? <span className="adm-form-hint">{t("teams.no_agents")}</span> : null}
-          {membersError ? (
-            <FieldError id="team-members-error">{t("teams.members_required")}</FieldError>
-          ) : null}
-        </fieldset>
-        <Field
-          label={t("teams.lead")}
-          labelId={leadLabelId}
-          wrapper="div"
-          error={validationError === "lead" ? t("teams.lead_required") : undefined}
-          errorId="team-lead-error"
-        >
-          <Select
-            value={leadId}
-            disabled={memberIds.length === 0}
-            onValueChange={(value) => {
-              if (value) setLeadId(value);
-              setValidationError(null);
-            }}
-            onOpenChange={(open) => { if (open) roster.resetTab(); }}
-          >
-            <SelectTrigger
-              ref={leadRef}
-              className="w-full"
-              aria-labelledby={leadLabelId}
-              aria-invalid={validationError === "lead" || undefined}
-              aria-describedby={validationError === "lead" ? "team-lead-error" : undefined}
-            >
-              <SelectValue>
-                {(value: string) => {
-                  const lead = agents.find((agent) => agent.id === value);
-                  return lead ? <RosterTriggerValue agent={lead} /> : value;
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent
-              alignItemWithTrigger={false}
-              onKeyDownCapture={roster.onKeyDownCapture}
-              header={roster.header}
-            >
-              <SelectGroup aria-label={rosterLabel(rosterTabs, roster.tab)}>
-                {leadCandidates.map((agent) => (
-                  <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          agents={agents}
+          value={{ memberIds, leadId }}
+          onChange={changeMembership}
+          disabled={busy}
+          error={validationError === "members" ? t("teams.members_required") : undefined}
+          errorId="team-members-error"
+        />
+        <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
+          <Textarea
+            rows={3}
+            value={acceptanceCriteria.join("\n")}
+            disabled={busy}
+            onChange={(event) => setAcceptanceCriteria(event.target.value.split("\n"))}
+          />
         </Field>
-        <TeamResponsibilities members={leadCandidates} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
         <div className="adm-form-actions">
           {team ? <Button size="cta" type="button" variant="destructive" className="adm-form-actions-leading" onClick={() => void remove()} disabled={busy} loading={deleteTeamMutation.isPending}>{t("teams.delete")}</Button> : null}
           <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={busy}>{t("dialog.cancel")}</Button>

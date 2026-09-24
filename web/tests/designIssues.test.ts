@@ -142,11 +142,9 @@ describe("reviewed design regressions", () => {
 
   it("associates reviewed select triggers with their visible labels", () => {
     const taskDrawer = readWeb("src/components/task-board/TaskDrawer.tsx");
-    const teamDrawer = readWeb("src/components/admin/TeamDrawer.tsx");
     const employeeDrawer = readWeb("src/components/admin/AddEmployeeDrawer.tsx");
 
     assert.match(taskDrawer, /labelId=\{priorityLabelId\}[\s\S]*?aria-labelledby=\{priorityLabelId\}/);
-    assert.match(teamDrawer, /labelId=\{leadLabelId\}[\s\S]*?aria-labelledby=\{leadLabelId\}/);
     assert.match(employeeDrawer, /labelId=\{nodeLabelId\}[\s\S]*?aria-labelledby=\{nodeLabelId\}/);
   });
 

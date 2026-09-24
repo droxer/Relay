@@ -433,7 +433,7 @@
   background: var(--surface-0);
   border: 0.5px solid var(--line-1);
   /* List-row container, not a chip: the 6px container rung, matching
-     .team-member-options / .task-assignment-summary / .pref-option-list. */
+     .team-member-rows / .task-assignment-summary / .pref-option-list. */
   border-radius: var(--r-2);
   cursor: pointer;
   text-align: left;

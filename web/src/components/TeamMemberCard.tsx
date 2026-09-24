@@ -75,8 +75,8 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
   );
 }
 
-/* The contract controls. Every control is a <Field> so the label voice matches
-   the surrounding form; the flags are the <Checkbox> primitive, never a native
+/* The contract controls, shown when a card opens for inline edit. Every
+   control is a <Field> so the label voice matches the surrounding form; the flags are the <Checkbox> primitive, never a native
    checkbox. The wrapping <label> is the whole accessible name on each flag:
    base-ui already points the control's aria-labelledby at it, so an aria-label
    repeating the same copy would announce twice. */
@@ -157,31 +157,6 @@ function TeamMemberContractFields({ member, config, lead, idBase, disabled, onCh
         </div>
       )}
     </>
-  );
-}
-
-/** An always-editable member card — the create/edit forms, where the whole
- *  team contract is one draft. */
-export function TeamMemberEditCard({ member, config, lead, disabled, onChange }: {
-  member: TeamCardMember;
-  config: TeamMemberConfig;
-  lead: boolean;
-  disabled?: boolean;
-  onChange: (next: TeamMemberConfig) => void;
-}) {
-  const idBase = useId();
-  return (
-    <article className="team-work-member" role="group" aria-labelledby={`${idBase}-name`}>
-      <TeamMemberCardHead member={member} config={config} lead={lead} nameId={`${idBase}-name`} />
-      <TeamMemberContractFields
-        member={member}
-        config={config}
-        lead={lead}
-        idBase={idBase}
-        disabled={disabled}
-        onChange={onChange}
-      />
-    </article>
   );
 }
 

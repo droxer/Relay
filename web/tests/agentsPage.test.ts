@@ -34,7 +34,7 @@ describe("agent meta line", () => {
       "src/components/AgentsPage.tsx",
       // The team record draws its members through the shared member card.
       "src/components/TeamMemberCard.tsx",
-      "src/components/TeamMemberOption.tsx",
+      "src/components/TeamMemberPicker.tsx",
     ]) {
       const source = await read(path);
       assert.match(source, /<AgentMetaLine\b/, path);

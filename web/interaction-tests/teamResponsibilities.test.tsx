@@ -1,62 +1,83 @@
 import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
-import { TeamResponsibilities } from "../src/components/TeamResponsibilities";
+import { TeamMemberPicker, addTeamMember, removeTeamMember, type TeamMembership } from "../src/components/TeamMemberPicker";
 import { TeamMemberCard } from "../src/components/TeamMemberCard";
 import { CollaborationWork } from "../src/components/CollaborationWork";
 import { teamMutationInput } from "../src/lib/teamForm";
-import type { RelaySession, TeamMemberConfig } from "../src/types";
+import type { EmployeeAgent, RelaySession, TeamMemberConfig } from "../src/types";
 
-it("edits responsibilities and makes on-request participation optional in the saved payload", () => {
-  function Editor() {
-    const [configs, setConfigs] = useState<Record<string, TeamMemberConfig>>({});
-    const [criteria, setCriteria] = useState<string[]>([]);
-    return <>
-      <TeamResponsibilities members={[{ id: "builder", displayName: "Builder", executorKind: "codex" }]} leadId="lead"
-        configs={configs} criteria={criteria} onConfigs={setConfigs} onCriteria={setCriteria} />
-      <output data-testid="payload">{JSON.stringify(teamMutationInput({ name: "Team", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], enabled: true, memberConfigs: configs, acceptanceCriteria: criteria }))}</output>
-    </>;
-  }
-  render(<Editor />);
+const agent = (id: string, displayName: string, executorKind: EmployeeAgent["executorKind"] = "codex") => ({
+  id, displayName, executorKind, enabled: true, availability: "ready", placements: [], deletedAt: null,
+}) as unknown as EmployeeAgent;
+
+const ROSTER = [agent("lead", "Planner", "claude"), agent("builder", "Builder"), agent("qa", "Checker")];
+
+function PickerHarness({ initial }: { initial: TeamMembership }) {
+  const [value, setValue] = useState(initial);
+  return <>
+    <TeamMemberPicker agents={ROSTER} value={value} onChange={setValue} />
+    <output data-testid="membership">{JSON.stringify(value)}</output>
+  </>;
+}
+
+const membership = () => JSON.parse(screen.getByTestId("membership").textContent!);
+
+it("lists only the team's members, with the lead marked on its own row", () => {
+  render(<PickerHarness initial={{ memberIds: ["lead", "builder"], leadId: "lead" }} />);
+  const rows = document.querySelectorAll(".team-member-row");
+  expect(rows).toHaveLength(2);
+  expect(rows[0].textContent).toContain("Planner");
+  expect(rows[0].textContent).toContain("project.lead_badge");
+  expect(rows[1].textContent).not.toContain("project.lead_badge");
+  // Checker is not on the team, so it is not drawn as a row.
+  expect(screen.queryByText("Checker")).toBeNull();
+  expect(screen.getByLabelText("teams.add_member")).toBeTruthy();
+});
+
+it("moves the lead from the row and hands it on when the lead is removed", () => {
+  render(<PickerHarness initial={{ memberIds: ["lead", "builder"], leadId: "lead" }} />);
+  fireEvent.click(screen.getByRole("button", { name: "teams.make_lead_named" }));
+  expect(membership()).toEqual({ memberIds: ["lead", "builder"], leadId: "builder" });
+  const removeBuilder = document.querySelectorAll<HTMLButtonElement>(".team-member-row-remove")[1];
+  fireEvent.click(removeBuilder);
+  expect(membership()).toEqual({ memberIds: ["lead"], leadId: "lead" });
+});
+
+it("makes the first added member the lead", () => {
+  expect(addTeamMember({ memberIds: [], leadId: "" }, "qa")).toEqual({ memberIds: ["qa"], leadId: "qa" });
+  expect(addTeamMember({ memberIds: ["qa"], leadId: "qa" }, "builder")).toEqual({ memberIds: ["qa", "builder"], leadId: "qa" });
+  expect(removeTeamMember({ memberIds: ["qa"], leadId: "qa" }, "qa")).toEqual({ memberIds: [], leadId: "" });
+});
+
+it("makes on-request participation optional in the saved payload", async () => {
+  const saved: TeamMemberConfig[] = [];
+  render(
+    <TeamMemberCard
+      member={{ id: "builder", displayName: "Builder", executorKind: "codex" }}
+      config={{}}
+      lead={false}
+      canEdit
+      onSave={async (next) => { saved.push(next); return true; }}
+    />,
+  );
+  fireEvent.click(document.querySelector<HTMLButtonElement>(".team-work-member-edit")!);
   expect(screen.getByRole("checkbox", { name: "team_work.required" }).getAttribute("aria-checked")).toBe("true");
   fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Own the reset API" } });
-  fireEvent.change(screen.getByLabelText(/team_work\.criteria/), { target: { value: "No reusable reset token\n" } });
   // <Checkbox> is the base-ui primitive: a role=checkbox element plus a
   // visually hidden native input, so the control is addressed by role, and
   // disablement reads off the primitive's own state attribute.
   fireEvent.click(screen.getByRole("checkbox", { name: "team_work.on_request" }));
   expect(screen.getByRole("checkbox", { name: "team_work.required" })
     .hasAttribute("data-disabled")).toBe(true);
-  const payload = JSON.parse(screen.getByTestId("payload").textContent!);
-  expect(payload.memberConfigs.builder).toEqual({ responsibility: "Own the reset API", participation: "on_request", required: false });
+  fireEvent.click(screen.getByRole("button", { name: "team_work.save_member" }));
+  await screen.findByText("Own the reset API");
+  const payload = teamMutationInput({
+    name: "Team", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], enabled: true,
+    memberConfigs: { builder: saved[0] }, acceptanceCriteria: ["No reusable reset token", ""],
+  });
+  expect(payload.memberConfigs?.builder).toEqual({ responsibility: "Own the reset API", participation: "on_request", required: false });
   expect(payload.acceptanceCriteria).toEqual(["No reusable reset token"]);
-});
-
-it("renders each member as an identity card with the lead pill and effective role", () => {
-  render(
-    <TeamResponsibilities
-      members={[
-        { id: "lead", displayName: "Planner", executorKind: "claude", availability: "ready" },
-        { id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", availability: "ready" },
-      ]}
-      leadId="lead"
-      configs={{}}
-      criteria={[]}
-      onConfigs={() => {}}
-      onCriteria={() => {}}
-    />,
-  );
-  const cards = screen.getAllByRole("group").filter((node) => node.tagName === "ARTICLE");
-  expect(cards).toHaveLength(2);
-  expect(cards[0].querySelector(".team-work-member-head .agent-state")).toBeTruthy();
-  expect(cards[0].textContent).toContain("project.lead_badge");
-  expect(cards[1].textContent).not.toContain("project.lead_badge");
-  // The inherited default role shows beside the name without opening the select.
-  expect(cards[1].querySelector(".team-work-member-name")?.textContent).toContain("team_work.role_reviewer");
-  expect(cards[1].querySelector(".team-work-member-identity .agent-meta")?.textContent).toContain("Codex");
-  // The lead has no participation flags; everyone else does.
-  expect(cards[0].querySelector(".team-work-flags")).toBeNull();
-  expect(cards[1].querySelector(".team-work-flags")).toBeTruthy();
 });
 
 // The setup's Button mock drops `tooltip` (the real one turns it into the

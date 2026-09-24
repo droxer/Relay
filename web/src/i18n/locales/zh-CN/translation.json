@@ -677,7 +677,12 @@
     "search_placeholder": "搜索团队…",
     "edit_members": "编辑成员",
     "rename": "重命名团队",
-    "avatar": "头像"
+    "avatar": "头像",
+    "add_member": "添加成员",
+    "make_lead": "设为负责人",
+    "make_lead_named": "将 {{name}} 设为负责人",
+    "remove_member": "移除 {{name}}",
+    "all_agents_added": "你的所有智能体都已在此团队中。"
   },
   "computer": {
     "device_setup_intro": "运行安装程序，在本机选择目录，然后在浏览器中确认。",

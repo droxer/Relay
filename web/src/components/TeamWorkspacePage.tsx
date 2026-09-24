@@ -1,9 +1,8 @@
 "use client";
 
-import { TeamResponsibilities } from "./TeamResponsibilities";
 import type { TeamMemberConfig } from "../types";
 
-import { useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { deleteTeamProfileImage, getWorkspaceBrief, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
@@ -22,7 +21,7 @@ import {
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { IdentityMark } from "./IdentityMark";
-import { TeamMemberOption } from "./TeamMemberOption";
+import { TeamMemberPicker, type TeamMembership } from "./TeamMemberPicker";
 import { TeamMemberCard } from "./TeamMemberCard";
 import { ProfileImage, ProfileImagePicker } from "./ProfileImagePicker";
 import { ActivitiesSkeleton, WorkspaceActivities, WorkspaceError } from "./workspace/WorkspacePrimitives";
@@ -35,9 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RosterAgentItem, RosterTriggerValue } from "./roster/RosterOption";
-import { rosterLabel, useRosterTabs, type RosterTab } from "./roster/RosterTabs";
+import { Textarea } from "@/components/ui/textarea";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -58,7 +55,6 @@ function TeamProfile({
   onDeleted: () => void;
 }) {
   const { t } = useTranslation();
-  const leadLabelId = useId();
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
   const { updateTeamMutation, deleteTeamMutation } = useRelayMutations();
@@ -77,21 +73,8 @@ function TeamProfile({
   const [imageSaving, setImageSaving] = useState(false);
   // The one member card open for inline edit; the others lock until it closes.
   const [cardEditingId, setCardEditingId] = useState<string | null>(null);
-  // The lead must be one of the team's own members — the same single-roster
-  // picker the TeamDrawer draws, so the strip stays hidden.
-  const leadCandidates = useMemo(
-    () => agents.filter((agent) => memberIds.includes(agent.id)),
-    [agents, memberIds],
-  );
-  const rosterTabs: RosterTab<"members">[] = [
-    { id: "members", label: t("teams.members"), count: leadCandidates.length },
-  ];
-  const roster = useRosterTabs({ tabs: rosterTabs, activeTab: "members", label: t("teams.lead") });
-  const [validationError, setValidationError] = useState<
-    "members" | "lead" | null
-  >(null);
+  const [validationError, setValidationError] = useState<"members" | null>(null);
   const membersRef = useRef<HTMLFieldSetElement>(null);
-  const leadRef = useRef<HTMLButtonElement>(null);
   const busy = updateTeamMutation.isPending || deleteTeamMutation.isPending
     || imageSaving;
   const draftDirty = teamContractChanged(
@@ -192,18 +175,10 @@ function TeamProfile({
     setEditing(false);
   }
 
-  function toggleMember(agentId: string) {
+  function changeMembership(next: TeamMembership) {
     setValidationError(null);
-    setMemberIds((current) => {
-      if (current.includes(agentId)) {
-        const next = current.filter((id) => id !== agentId);
-        if (leadId === agentId) setLeadId(next[0] ?? "");
-        return next;
-      }
-      const next = [...current, agentId];
-      if (!leadId) setLeadId(agentId);
-      return next;
-    });
+    setMemberIds(next.memberIds);
+    setLeadId(next.leadId);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -211,11 +186,6 @@ function TeamProfile({
     if (memberIds.length === 0) {
       setValidationError("members");
       membersRef.current?.focus();
-      return;
-    }
-    if (!leadId) {
-      setValidationError("lead");
-      leadRef.current?.focus();
       return;
     }
     setValidationError(null);
@@ -311,38 +281,16 @@ function TeamProfile({
                 </span>
               </div>
               {editing ? (
-                <fieldset
+                <TeamMemberPicker
                   ref={membersRef}
-                  className="team-profile-member-fieldset"
-                  aria-label={t("teams.members")}
-                  tabIndex={-1}
-                  aria-invalid={validationError && validationError !== "lead" ? true : undefined}
-                  aria-describedby={validationError && validationError !== "lead" ? "team-profile-members-error" : undefined}
-                >
-                  <div className="team-member-options team-profile-member-options">
-                    {agents.map((agent) => {
-                      const selected = memberIds.includes(agent.id);
-                      return (
-                        <TeamMemberOption
-                          key={agent.id}
-                          agentId={agent.id}
-                          displayName={agent.displayName}
-                          executorKind={agent.executorKind}
-                          placements={agent.placements}
-                          selected={selected}
-                          disabled={busy}
-                          onToggle={toggleMember}
-                        />
-                      );
-                    })}
-                  </div>
-                  {agents.length === 0 ? <span className="adm-form-hint">{t("teams.no_agents")}</span> : null}
-                  {validationError && validationError !== "lead" ? (
-                    <span id="team-profile-members-error" className="text-sm text-danger" role="alert">
-                      {t("teams.members_required")}
-                    </span>
-                  ) : null}
-                </fieldset>
+                  agents={agents}
+                  value={{ memberIds, leadId }}
+                  onChange={changeMembership}
+                  disabled={busy}
+                  legendHidden
+                  error={validationError ? t("teams.members_required") : undefined}
+                  errorId="team-profile-members-error"
+                />
               ) : (
                 <div className="team-work-members team-profile-member-cards">
                   {team.members.map((member) => (
@@ -365,51 +313,14 @@ function TeamProfile({
 
             {editing ? (
               <>
-                <Field
-                  label={t("teams.lead")}
-                  labelId={leadLabelId}
-                  wrapper="div"
-                  className="team-profile-lead-field"
-                  error={validationError === "lead" ? t("teams.lead_required") : undefined}
-                  errorId="team-profile-lead-error"
-                >
-                  <Select
-                    value={leadId}
-                    disabled={busy || memberIds.length === 0}
-                    onValueChange={(value) => {
-                      if (value) setLeadId(value);
-                      setValidationError(null);
-                    }}
-                    onOpenChange={(open) => { if (open) roster.resetTab(); }}
-                  >
-                    <SelectTrigger
-                      ref={leadRef}
-                      className="w-full"
-                      aria-labelledby={leadLabelId}
-                      aria-invalid={validationError === "lead" || undefined}
-                      aria-describedby={validationError === "lead" ? "team-profile-lead-error" : undefined}
-                    >
-                      <SelectValue>
-                        {(value: string) => {
-                          const lead = agents.find((agent) => agent.id === value);
-                          return lead ? <RosterTriggerValue agent={lead} /> : value;
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent
-                      alignItemWithTrigger={false}
-                      onKeyDownCapture={roster.onKeyDownCapture}
-                      header={roster.header}
-                    >
-                      <SelectGroup aria-label={rosterLabel(rosterTabs, roster.tab)}>
-                        {leadCandidates.map((agent) => (
-                          <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+                <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
+                  <Textarea
+                    rows={3}
+                    value={acceptanceCriteria.join("\n")}
+                    disabled={busy}
+                    onChange={(event) => setAcceptanceCriteria(event.target.value.split("\n"))}
+                  />
                 </Field>
-                <TeamResponsibilities members={leadCandidates} leadId={leadId} configs={memberConfigs} criteria={acceptanceCriteria} onConfigs={setMemberConfigs} onCriteria={setAcceptanceCriteria} disabled={busy} />
                 <div className="team-profile-inline-actions">
                   <span className="team-profile-inline-actions-spacer" />
                   <Button type="button" variant="ghost" onClick={() => void cancelEditing()} disabled={busy}>
