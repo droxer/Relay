@@ -340,6 +340,54 @@ def test_admin_and_employee_manage_teams(monkeypatch) -> None:
         assert renamed.json()["team"]["name"] == "Delivery crew"
 
 
+def test_team_collaboration_style_round_trips_through_the_api(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex")
+        support = _agent(client, "alice", "Support", "claude")
+
+        assert client.post("/api/v1/auth/logout").status_code == 200
+        assert (
+            client.post(
+                "/api/v1/auth/login", json={"username": "alice", "password": "userpass"}
+            ).status_code
+            == 200
+        )
+
+        created = client.post(
+            "/api/v1/teams",
+            json={
+                "name": "Delivery",
+                "leadAgentId": lead["id"],
+                "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "solo",
+            },
+        )
+        assert created.status_code == 201
+        team = created.json()["team"]
+        assert team["collaborationStyle"] == "solo"
+
+        rejected = client.patch(
+            f"/api/v1/teams/{team['id']}",
+            json={"collaborationStyle": "debate"},
+        )
+        assert rejected.status_code == 400
+        assert (
+            "collaborationStyle must be one of: solo, build_review, pipeline, lead_led."
+            in rejected.text
+        )
+
+        cleared = client.patch(
+            f"/api/v1/teams/{team['id']}",
+            json={"collaborationStyle": None},
+        )
+        assert cleared.status_code == 200
+        assert "collaborationStyle" not in cleared.json()["team"]
+
+
 def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

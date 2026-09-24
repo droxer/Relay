@@ -24,6 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ..collaboration.contracts import member_configs, text_list
+from ..collaboration.styles import validate_collaboration_style
 from ..core.ids import new_database_id, now_iso
 from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
@@ -142,6 +143,8 @@ class LocalTeamStore:
                     exclude_id=team_id,
                 )
             updated = {**current, **normalized, "updatedAt": now_iso()}
+            if updated.get("collaborationStyle") is None:
+                updated = {key: value for key, value in updated.items() if key != "collaborationStyle"}
             self._append(
                 team_id,
                 "team.updated",
@@ -369,6 +372,8 @@ class DatabaseTeamStore:
         ) -> tuple[dict[str, Any], dict[str, Any]]:
             normalized = _normalize_team_patch(patch, current=current)
             updated = {**current, **normalized, "updatedAt": now_iso()}
+            if updated.get("collaborationStyle") is None:
+                updated = {key: value for key, value in updated.items() if key != "collaborationStyle"}
             return updated, {"patch": normalized, "team": updated}
 
         return self._mutate(team_id, "team.updated", update_snapshot)
@@ -566,6 +571,11 @@ def _new_team(
         "memberAgentIds": list(members),
         "memberConfigs": member_configs(payload.get("memberConfigs", {}), members),
         "acceptanceCriteria": text_list(payload.get("acceptanceCriteria", []), "acceptanceCriteria"),
+        **(
+            {"collaborationStyle": validate_collaboration_style(payload["collaborationStyle"])}
+            if payload.get("collaborationStyle") is not None
+            else {}
+        ),
         "enabled": payload.get("enabled") is not False,
         "createdAt": timestamp,
         "updatedAt": timestamp,
@@ -593,7 +603,7 @@ def _normalized_team_snapshot(
 def _normalize_team_patch(
     patch: dict[str, Any], *, current: dict[str, Any]
 ) -> dict[str, Any]:
-    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "enabled", "memberConfigs", "acceptanceCriteria"}
+    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "enabled", "memberConfigs", "acceptanceCriteria", "collaborationStyle"}
     unknown = set(patch) - allowed
     if unknown:
         raise ValueError(f"Unsupported team field(s): {', '.join(sorted(unknown))}.")
@@ -626,6 +636,11 @@ def _normalize_team_patch(
         normalized["memberConfigs"] = member_configs(configs, members)
     if "acceptanceCriteria" in patch:
         normalized["acceptanceCriteria"] = text_list(patch["acceptanceCriteria"], "acceptanceCriteria")
+    if "collaborationStyle" in patch:
+        value = patch["collaborationStyle"]
+        normalized["collaborationStyle"] = (
+            None if value is None else validate_collaboration_style(value)
+        )
     if lead not in members:
         raise TeamValidationError("team_lead_not_member")
     if "enabled" in patch:

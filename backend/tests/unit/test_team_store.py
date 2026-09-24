@@ -49,6 +49,33 @@ def team_store(request: pytest.FixtureRequest, tmp_path: Path):
     return LocalTeamStore(tmp_path)
 
 
+def test_team_collaboration_style_is_stored_updated_and_cleared(team_store) -> None:
+    team = team_store.create_team("alice", {
+        "name": "Delivery", "leadAgentId": "lead", "memberAgentIds": ["lead"],
+        "collaborationStyle": "pipeline",
+    })
+    assert team["collaborationStyle"] == "pipeline"
+    updated = team_store.update_team(team["id"], {"collaborationStyle": "lead_led"})
+    assert updated["collaborationStyle"] == "lead_led"
+    renamed = team_store.update_team(team["id"], {"name": "Delivery 2"})
+    assert renamed["collaborationStyle"] == "lead_led"
+    cleared = team_store.update_team(team["id"], {"collaborationStyle": None})
+    assert "collaborationStyle" not in cleared
+
+
+def test_team_without_a_style_has_no_field(team_store) -> None:
+    team = team_store.create_team("alice", {"name": "D", "leadAgentId": "lead", "memberAgentIds": ["lead"]})
+    assert "collaborationStyle" not in team
+
+
+@pytest.mark.parametrize("value", ["debate", "", 1])
+def test_team_rejects_an_unknown_collaboration_style(team_store, value) -> None:
+    with pytest.raises(ValueError, match="collaborationStyle must be one of"):
+        team_store.create_team("alice", {
+            "name": "D", "leadAgentId": "lead", "memberAgentIds": ["lead"], "collaborationStyle": value,
+        })
+
+
 def test_team_store_crud_and_events(team_store) -> None:
     created = team_store.create_team(
         "alice",
