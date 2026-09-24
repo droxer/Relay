@@ -1143,3 +1143,56 @@ def test_task_without_a_style_inherits(database: bool) -> None:
         )
         task = store.create_task({"title": "Ship it"})
         assert "collaborationStyle" not in task
+
+
+@pytest.mark.parametrize("database", [False, True])
+def test_routine_occurrence_inherits_collaboration_style(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        routine = store.create_task(
+            {
+                "title": "Routine",
+                "isRoutine": True,
+                "routineEnabled": True,
+                "routineCadence": "weekly",
+                "routineNextRunDate": "2026-06-25",
+                "assignedAgent": "codex",
+                "ownerEmployeeId": "alice",
+                "assigneeEmployeeId": "alice",
+                "collaborationStyle": "solo",
+            }
+        )
+
+        occurrence = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
+
+        assert occurrence["collaborationStyle"] == "solo"
+
+
+@pytest.mark.parametrize("database", [False, True])
+def test_routine_occurrence_without_a_style_inherits_nothing(database: bool) -> None:
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/tasks.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        routine = store.create_task(
+            {
+                "title": "Routine",
+                "isRoutine": True,
+                "routineEnabled": True,
+                "routineCadence": "weekly",
+                "routineNextRunDate": "2026-06-25",
+                "assignedAgent": "codex",
+                "ownerEmployeeId": "alice",
+                "assigneeEmployeeId": "alice",
+            }
+        )
+
+        occurrence = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
+
+        assert "collaborationStyle" not in occurrence

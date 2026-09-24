@@ -2173,6 +2173,11 @@ def routine_occurrence_events(
                 "sourceRoutineId": routine["id"],
                 "scheduledFor": occurrence_date,
                 **(
+                    {"collaborationStyle": routine["collaborationStyle"]}
+                    if routine.get("collaborationStyle")
+                    else {}
+                ),
+                **(
                     {"ownerEmployeeId": routine["ownerEmployeeId"]}
                     if routine.get("ownerEmployeeId")
                     else {}
