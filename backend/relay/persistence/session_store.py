@@ -1416,6 +1416,7 @@ class DatabaseSessionStore:
             "title",
             "taskGoal",
             "status",
+            "workOutcome",
             "phase",
             "createdAt",
             "updatedAt",

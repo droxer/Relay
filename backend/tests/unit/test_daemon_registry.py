@@ -4605,6 +4605,34 @@ def test_work_outcome_preserves_legacy_and_human_acceptance(work_results, accept
     asyncio.run(flow())
 
 
+@pytest.mark.parametrize("mode, required", [("action", True), ("ask", False), ("review", False)])
+def test_single_agent_protocol_is_frozen_across_capability_changes(mode, required):
+    with TemporaryDirectory() as root:
+        sessions, _, registry = _pipeline_registry(root, work_results=True)
+        session = sessions.create_session({"workspacePath": "/workspace/alice", "taskGoal": "Resolve"})
+        assignments = [{"executorKind": "codex", "mode": mode}]
+        request = registry.prepare_run_request("sbx_alice", session["id"], "Resolve", assignments, {})
+        assert request["state"]["_relay_work_protocol"] is required
+        registry.register({
+            "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"], "status": "ready",
+            "capabilities": ["thread-workspaces", "task-workspaces", "round-result"],
+        }, "ui_token")
+        replay = registry.prepare_run_request(
+            "sbx_alice", session["id"], "Resolve", assignments, {}, request_id=request["id"],
+        )
+        assert replay["state"]["_relay_work_protocol"] is required
+        registry.activate_run_request(request["id"])
+        if required:
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
+            assert "work-results" in sessions.get_session(session["id"])["finalOutcome"]
+            assert registry.take_commands("sbx_alice", "node_token") == []
+        else:
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            assert not command["state"].get("work_result_required")
+
+
 @pytest.mark.parametrize("failure_type", ["run.completed", "run.failed"])
 @pytest.mark.parametrize("verification_status", ["done", "blocked"])
 def test_coordinator_repair_revalidates_all_work_before_task_acceptance(failure_type, verification_status):

@@ -63,6 +63,7 @@ export interface SessionsResponse {
 }
 
 export interface SessionSummary {
+  workOutcome?: RelaySession["workOutcome"] | null;
   execution?: RelaySession["execution"];
   deletionRequestedAt?: string;
   id: string;

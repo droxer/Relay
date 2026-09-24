@@ -205,17 +205,21 @@ class SessionController:
         )
 
     def complete_session(
-        self, session_id: str, outcome: str, task_status: str = "done"
+        self, session_id: str, outcome: str, task_status: str = "done",
+        *, work_outcome: str = "unverified",
     ) -> dict[str, Any]:
         with self._transaction():
-            return self._complete_session(session_id, outcome, task_status)
+            return self._complete_session(session_id, outcome, task_status, work_outcome)
 
     def _complete_session(
-        self, session_id: str, outcome: str, task_status: str = "done"
+        self, session_id: str, outcome: str, task_status: str = "done",
+        work_outcome: str = "unverified",
     ) -> dict[str, Any]:
         session = self._append(
             session_id,
-            relay_event("session.completed", session_id, {"outcome": outcome}),
+            relay_event("session.completed", session_id, {
+                "outcome": outcome, "workOutcome": work_outcome,
+            }),
         )
         self._update_task_status(task_status, outcome, {"sessionId": session_id})
         logger.info("Session completed", session_id=session_id, outcome=outcome)
@@ -384,7 +388,8 @@ class SessionController:
             )
         if kind == "mark_done":
             return self.complete_session(
-                session_id, note or "Marked done from Relay API."
+                session_id, note or "Marked done from Relay API.",
+                work_outcome="accepted",
             )
         if kind == "rerun":
             return self._append(

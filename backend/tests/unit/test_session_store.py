@@ -27,6 +27,8 @@ def test_work_outcome_survives_replay_and_clears_on_new_execution(outcome):
     assert materialize_events([created, completed, failed])["workOutcome"] == "blocked"
     legacy = relay_event("session.completed", "ses_work", {"outcome": "Old run"})
     assert materialize_events([created, completed, legacy])["workOutcome"] == "unverified"
+    cancelled = relay_event("human.decision", "ses_work", {"decision": {"kind": "cancel"}})
+    assert "workOutcome" not in materialize_events([created, completed, cancelled])
 
 
 def test_work_outcome_survives_database_snapshot_and_summary():

@@ -4,6 +4,10 @@ import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
 export type AgentRole = "implementer" | "reviewer" | "planner" | "tester" | "fixer";
 export type SessionStatus = "running" | "waiting_for_human" | "completed" | "failed" | "cancelled";
+
+/** Goal outcome, independent of whether the execution process has ended.
+ * Agent reports are claims; only an explicit human decision is accepted. */
+export type WorkOutcome = "reported_done" | "unfinished" | "blocked" | "needs_review" | "unverified" | "accepted";
 export type RelayArtifactKind = "plan" | "diff" | "review" | "test_output" | "command_log" | "summary" | "agent_output" | "workspace_file";
 export type HumanDecisionKind = "approve" | "reject" | "cancel" | "rerun" | "handoff" | "mark_done";
 export type WorkspaceLayout = "node-root" | "thread" | "project" | "task";
@@ -256,6 +260,7 @@ export interface RelaySession {
   activeRoundId?: string;
   events: RelayEvent[];
   finalOutcome?: string;
+  workOutcome?: WorkOutcome;
   archived?: boolean;
   tokenUsage?: TokenUsage;
 }
@@ -422,6 +427,7 @@ export type RelayEvent =
       sessionId: string;
       timestamp: string;
       outcome: string;
+      workOutcome?: WorkOutcome;
     }
   | {
       id: string;
@@ -515,7 +521,10 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.phase = event.phase;
       session.pendingDecision = event.pendingDecision;
       if (!event.pendingDecision) delete session.pendingDecision;
-      if (event.status !== "completed" && event.status !== "failed") delete session.finalOutcome;
+      if (event.status !== "completed" && event.status !== "failed") {
+        delete session.finalOutcome;
+        delete session.workOutcome;
+      }
     } else if (event.type === "collaboration.round.started") {
       if (!session.collaborationRounds.some((round) => round.roundId === event.manifest.roundId)) {
         session.collaborationRounds.push(event.manifest);
@@ -524,6 +533,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.activeCollaborationId = event.manifest.collaborationId;
       session.activeRoundId = event.manifest.roundId;
     } else if (event.type === "agent.started") {
+      delete session.workOutcome;
       // Threads created before node pinning adopt the computer their first
       // stamped run executed on.
       if (event.daemonNodeId && !session.daemonNodeId) session.daemonNodeId = event.daemonNodeId;
@@ -584,18 +594,21 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       if (event.decision.kind === "cancel") {
         session.status = "cancelled";
         session.phase = "cancelled";
+        delete session.workOutcome;
         delete session.pendingDecision;
       }
     } else if (event.type === "session.completed") {
       session.status = "completed";
       session.phase = "completed";
       session.finalOutcome = event.outcome;
+      session.workOutcome = event.workOutcome ?? "unverified";
       session.currentAgent = undefined;
       delete session.pendingDecision;
     } else if (event.type === "session.failed") {
       session.status = "failed";
       session.phase = "failed";
       session.finalOutcome = event.outcome;
+      session.workOutcome = "blocked";
       session.currentAgent = undefined;
       delete session.pendingDecision;
     } else if (event.type === "session.archived") {

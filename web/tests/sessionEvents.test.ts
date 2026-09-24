@@ -41,6 +41,9 @@ describe("applySessionEvent", () => {
     const legacy = relayEvent("session.completed", "work", { outcome: "Historical run" });
     assert.equal(Reflect.get(materializeEvents([created, completed, legacy]), "workOutcome"), "unverified");
     assert.equal(Reflect.get(applySessionEvent(incremental, legacy), "workOutcome"), "unverified");
+    const cancelled = relayEvent("human.decision", "work", { decision: { id: "cancel", kind: "cancel", createdAt: "now" } });
+    assert.equal(Reflect.get(materializeEvents([created, completed, cancelled]), "workOutcome"), undefined);
+    assert.equal(Reflect.get(applySessionEvent(incremental, cancelled), "workOutcome"), undefined);
   });
   it("keeps work acceptance evidence identical in full replay and SSE", () => {
     const created = relayEvent("session.created", "work", { workspacePath: "/workspace", taskGoal: "Deliver", participants: ["human", "codex"] });

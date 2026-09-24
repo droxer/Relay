@@ -1917,7 +1917,7 @@
     "required": "完成前必须通过",
     "optional": "可选贡献",
     "criteria": "验收标准",
-    "work": "团队工作",
+    "work": "工作贡献",
     "depends_on": "依赖",
     "finding": "审查发现",
     "status_pending": "待处理",
@@ -1934,7 +1934,14 @@
     "message_decision": "决策",
     "edit_member": "编辑 {{name}}",
     "save_member": "保存",
-    "no_responsibility": "尚未设置职责范围。"
+    "no_responsibility": "尚未设置职责范围。",
+    "status_reported_done": "已报告完成",
+    "outcome_reported_done": "已报告完成 · 智能体提供证据",
+    "outcome_unfinished": "仍有工作待完成",
+    "outcome_blocked": "需要处理",
+    "outcome_needs_review": "等待人工审核",
+    "outcome_unverified": "执行已结束 · 结果未验证",
+    "outcome_accepted": "已由人工确认"
   },
   "recovery": {
     "title": "后续操作",

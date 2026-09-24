@@ -21,3 +21,4 @@ sync with [`docs/implementation-plan.md`](../implementation-plan.md).
 | [ADR-017](017-computer-bound-project-workspaces.md) | Computer-bound project workspaces |
 | [ADR-018](018-durable-task-workspace-bindings.md) | Durable task workspace bindings, visible waits, and retained artifact versions |
 | [ADR-019](019-team-work-acceptance.md) | Team responsibilities, bounded delegation, and evidence-based work acceptance |
+| [ADR-020](020-work-outcomes.md) | Unified single-agent work reports and explicit outcomes independent of execution completion |

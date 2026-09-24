@@ -578,8 +578,8 @@ existing name, lead, roster, and enabled fields:
 Configuration keys must name roster members. Roles use the existing agent-role
 vocabulary; `tester` is presented as Verifier in the UI. An omitted role inherits
 the agent default. Participation is `always` (eligible for automatic work) or
-`on_request` (only when addressed). Verification and review are required by
-default; other specialists are optional for plan selection. The lead always
+`on_request` (only when addressed). Regular members are required by default;
+explicit membership configuration can make a specialist optional. The lead always
 coordinates and owns final synthesis. An on-request membership cannot also be
 required. Once a proposed plan selects work, that work is required to finish.
 
@@ -589,7 +589,10 @@ supplied configuration map; omitted maps remain unchanged. Removing a member
 prunes its configuration. The API rejects capability/tool-policy fields in these
 configs; roles and work scopes never grant permissions.
 
-Configured teams require a daemon advertising `work-results`. Its run-bound
+Configured teams and multi-member accomplish teams require a daemon advertising
+`work-results`. Single-agent action runs also use this contract when the daemon
+supports it; older daemons retain the legacy path. Protocol selection is frozen
+when the run request is admitted. Its run-bound
 `.relay/round-result.json` may contain a `work` object alongside the existing
 aggregate `status` and `runId`:
 
@@ -611,6 +614,20 @@ cannot contain unresolved findings. Reports are attributed agent claims. The
 backend validates them and records `agent.completed.workResult`; an exit code
 alone does not establish work acceptance. Required failures and missing evidence
 prevent task completion. Final human acceptance remains independent.
+
+Execution completion and work outcome are separate. `session.completed` carries
+an optional `workOutcome`, projected on full threads and thread summaries:
+`reported_done`, `unfinished`, `blocked`, `needs_review`, `unverified`, or
+`accepted`. `reported_done` is supported by attributed agent reports, not an
+independent certificate. `accepted` represents an explicit human thread decision
+and does not itself modify a linked task. Historical completion events without
+the field replay as `unverified`. New execution clears the previous outcome;
+summaries may return `null` while no outcome exists.
+
+A valid `continue` report without unresolved findings can return a task to its
+existing bounded continuation queue. Missing reports and required blockers
+still need attention. A thread-only run records unfinished work for its next
+turn; it does not automatically become a scheduled task.
 
 A coordinator can include `work.plan`, a list of up to 16 items containing only
 `agentId`, `objective`, `acceptanceCriteria`, and `expectedOutputs`. The backend

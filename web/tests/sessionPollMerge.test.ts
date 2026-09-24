@@ -42,6 +42,15 @@ function summary(partial: Partial<SessionSummary> = {}): SessionSummary {
 }
 
 describe("session poll merging", () => {
+  it("retains newer streamed outcomes and clears the old outcome when execution resumes", () => {
+    const current = session({ status: "completed", workOutcome: "blocked", finalOutcome: "Old blocker", events: [
+      { id: "ended", type: "session.completed", sessionId: "ses_1", timestamp: "now", outcome: "Needs input", workOutcome: "blocked" },
+    ] });
+    assert.equal(mergeSessionSummaries([current], [summary({ eventCount: 0 })])[0].workOutcome, "blocked");
+    assert.equal(mergeSessionSummaries([current], [summary({ eventCount: 2, workOutcome: null })])[0].workOutcome, undefined);
+    assert.equal(mergeSessionSummaries([], [summary({ status: "completed", workOutcome: "unfinished" })])[0].workOutcome, "unfinished");
+    assert.equal(mergeSessionSummaries([current], [summary({ eventCount: 2, status: "completed", workOutcome: "reported_done" })])[0].finalOutcome, undefined);
+  });
   it("updates summary fields without replacing streamed event history", () => {
     const output = {
       id: "evt_output",

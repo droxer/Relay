@@ -1935,7 +1935,7 @@
     "required": "Required for completion",
     "optional": "Optional contribution",
     "criteria": "Acceptance criteria",
-    "work": "Team work",
+    "work": "Work contributions",
     "depends_on": "Depends on",
     "finding": "Finding",
     "status_pending": "Pending",
@@ -1952,7 +1952,14 @@
     "message_decision": "Decision",
     "edit_member": "Edit {{name}}",
     "save_member": "Save",
-    "no_responsibility": "No responsibility set yet."
+    "no_responsibility": "No responsibility set yet.",
+    "status_reported_done": "Reported complete",
+    "outcome_reported_done": "Reported complete · agent evidence",
+    "outcome_unfinished": "Work remains",
+    "outcome_blocked": "Needs attention",
+    "outcome_needs_review": "Awaiting human review",
+    "outcome_unverified": "Execution ended · outcome unverified",
+    "outcome_accepted": "Accepted by a person"
   },
   "recovery": {
     "title": "Next steps",

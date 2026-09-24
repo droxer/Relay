@@ -237,6 +237,7 @@ export {
   type ExecutionStatus,
   type WorkspaceLayout,
   type SessionStatus,
+  type WorkOutcome,
 } from "./session-store.js";
 
 export {

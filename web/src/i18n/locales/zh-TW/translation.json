@@ -1917,7 +1917,7 @@
     "required": "完成前必須通過",
     "optional": "可選貢獻",
     "criteria": "驗收標準",
-    "work": "團隊工作",
+    "work": "工作貢獻",
     "depends_on": "依賴",
     "finding": "審查發現",
     "status_pending": "待處理",
@@ -1934,7 +1934,14 @@
     "message_decision": "決策",
     "edit_member": "編輯 {{name}}",
     "save_member": "儲存",
-    "no_responsibility": "尚未設定職責範圍。"
+    "no_responsibility": "尚未設定職責範圍。",
+    "status_reported_done": "已回報完成",
+    "outcome_reported_done": "已回報完成 · 智慧體提供證據",
+    "outcome_unfinished": "仍有工作待完成",
+    "outcome_blocked": "需要處理",
+    "outcome_needs_review": "等待人工審核",
+    "outcome_unverified": "執行已結束 · 結果未驗證",
+    "outcome_accepted": "已由人工確認"
   },
   "recovery": {
     "title": "後續操作",

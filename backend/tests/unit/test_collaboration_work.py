@@ -58,6 +58,18 @@ def test_successful_execution_is_not_acceptance():
     assert completion_blockers([items[1]], state, require_evidence=True) == []
 
 
+@pytest.mark.parametrize("report, blocked", [
+    ({"status": "continue", "evidence": []}, False),
+    ({"status": "continue", "evidence": [], "findings": [{"workItemId": "unknown", "note": "Unresolved defect"}]}, True),
+    ({"status": "blocked", "evidence": []}, True),
+    (None, True),
+])
+def test_continuation_never_bypasses_unresolved_findings_or_missing_work(report, blocked):
+    item = assignments()[1]
+    state = record_work_result({}, item, report)
+    assert bool(completion_blockers([item], state, require_evidence=True, allow_unfinished=True)) is blocked
+
+
 def test_required_failure_blocks_legacy_completion_but_optional_does_not():
     items = assignments()
     state = {

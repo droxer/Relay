@@ -23,6 +23,12 @@ function PickerHarness({ initial }: { initial: TeamMembership }) {
 
 const membership = () => JSON.parse(screen.getByTestId("membership").textContent!);
 
+it("shows old completed snapshots as unverified without inventing acceptance", () => {
+  const session = { status: "completed", agentRuns: [] } as unknown as RelaySession;
+  render(<CollaborationWork session={session} agents={[]} />);
+  expect(screen.getByRole("status").textContent).toContain("team_work.outcome_unverified");
+});
+
 it.each(["reported_done", "unfinished", "blocked", "needs_review", "unverified", "accepted"] as const)(
   "shows %s work outcome even when a single agent has no team graph", (workOutcome) => {
     const session = { status: "completed", workOutcome, finalOutcome: "A concrete next step", agentRuns: [] } as unknown as RelaySession;
@@ -171,4 +177,43 @@ it("shows acceptance evidence and attributed review findings without claiming ac
   expect(screen.getByText(/→ api: Reject used tokens/)).toBeTruthy();
   expect(screen.getByText("team_work.finding")).toBeTruthy();
   expect(screen.queryByText("team_work.status_accepted")).toBeNull();
+});
+
+it("distinguishes reported work, missing evidence, failures and stale downstream reviews", () => {
+  const item = (id: string, extra = {}) => ({ workItemId: id, assignmentId: id, ownerAgentId: "builder", objective: id, required: true, dependsOnWorkItemIds: [], ...extra });
+  const session = {
+    collaborationRounds: [{ workGraph: { items: [
+      item("build", { acceptanceCriteria: ["Handles empty input"], expectedOutputs: ["Regression test"] }),
+      item("review", { dependsOnWorkItemIds: ["build"] }),
+      item("pending", { required: false }), item("missing"), item("failed"), item("blocked"),
+    ] } }],
+    agentRuns: [
+      { id: "review", assignmentId: "review", status: "completed", workResult: { status: "done", evidence: ["Old review"] } },
+      { id: "build", assignmentId: "build", status: "completed", workResult: {
+        status: "done", evidence: ["Regression passed"], note: "Fixed empty input", messages: [
+          { kind: "handoff", toWorkItemId: "review", text: "Please revalidate" },
+          { kind: "decision", text: "Keep the public API" },
+        ],
+      } },
+      { id: "answer", assignmentId: "build", consultation: true, status: "completed", workResult: { status: "done", evidence: ["Answered"] } },
+      { id: "missing", assignmentId: "missing", status: "completed" },
+      { id: "failed", assignmentId: "failed", status: "failed" },
+      { id: "blocked", assignmentId: "blocked", status: "completed", workResult: { status: "blocked", evidence: [] } },
+    ],
+  } as unknown as RelaySession;
+  const { rerender } = render(<CollaborationWork session={session} agents={ROSTER} />);
+  expect(screen.getByText("team_work.status_reported_done")).toBeTruthy();
+  expect(screen.queryByText("team_work.status_accepted")).toBeNull();
+  expect(screen.getByText("team_work.status_stale")).toBeTruthy();
+  expect(screen.getByText("team_work.status_pending")).toBeTruthy();
+  expect(screen.getByText("team_work.status_unverified")).toBeTruthy();
+  expect(screen.getAllByText("team_work.status_blocked")).toHaveLength(2);
+  expect(screen.getByText("Fixed empty input")).toBeTruthy();
+  expect(screen.getByText(/Handles empty input/)).toBeTruthy();
+  expect(screen.getByText(/Regression test/)).toBeTruthy();
+  expect(screen.getByText(/→ review: Please revalidate/)).toBeTruthy();
+  expect(screen.getByText(/Keep the public API/)).toBeTruthy();
+  const running = { ...session, agentRuns: [{ id: "now", assignmentId: "build", status: "running" }] } as RelaySession;
+  rerender(<CollaborationWork session={running} agents={ROSTER} />);
+  expect(screen.getByText("team_work.status_running")).toBeTruthy();
 });
