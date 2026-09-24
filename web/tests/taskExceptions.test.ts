@@ -167,7 +167,9 @@ describe("the backlog card stays a tile", () => {
 
   it("keeps selection and drag intact", () => {
     assert.ok(card.includes("TaskSelectCheckbox"));
-    assert.ok(card.includes("onDragStart"));
-    assert.ok(card.includes("onTouchStart"));
+    // Drag arrives from the board's KanbanItem as props on the card's root.
+    assert.ok(card.includes("{...dragProps}"), "the card must apply the kanban item's drag wiring");
+    // A native HTML5 drag would fight dnd-kit's pointer sensors.
+    assert.ok(!/\bdraggable\b/.test(card), "the card must not be natively draggable");
   });
 });

@@ -66,6 +66,21 @@
   padding: var(--sp-2) var(--sp-3);
 }
 
+/* A rail band that also carries filter chips (FiltersBar variant="rail"):
+   search keeps the first line, chips wrap onto a line of their own. */
+.list-filter-bar[data-chips="true"] {
+  flex-wrap: wrap;
+}
+
+.list-filter-chips {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
 .list-filter-search {
   display: flex;
   flex: 1;

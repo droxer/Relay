@@ -19,8 +19,7 @@ import { AgentDetailPage } from "./AgentDetailPage";
 import { PageHeader } from "./PageHeader";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
-import { FilterSelect } from "./FiltersBar";
-import { SearchInput } from "@/components/ui/search-input";
+import { FiltersBar, type FilterBarField } from "./FiltersBar";
 import { CreateAgentDialog } from "./agents/CreateAgentDialog";
 
 interface AgentsPageProps {
@@ -71,29 +70,28 @@ function RosterFilterBar({
 }) {
   const { t } = useTranslation();
 
+  const fields = useMemo<FilterBarField[]>(() => [{
+    id: "availability",
+    label: t("agents_page.availability"),
+    kind: "select",
+    options: AVAILABILITY_FILTERS.filter((filter) => filter !== "all")
+      .map((filter) => ({ value: filter, label: t(`agents_page.filter_${filter}`) })),
+  }], [t]);
+
   return (
-    <div className="list-filter-bar" role="group" aria-label={t("agents_page.filters")}>
-      <SearchInput
-        className="list-filter-search"
-        iconSize={ICON.sm}
-        label={t("agents_page.search_label")}
-        name="agents-query"
-        value={query}
-        placeholder={t("agents_page.search_placeholder")}
-        onChange={(event) => onQueryChange(event.target.value)}
-      />
-      <FilterSelect
-        className="agents-roster-select"
-        name="agents-availability-filter"
-        label={t("agents_page.filter_availability")}
-        value={availability}
-        onValueChange={onAvailabilityChange}
-        options={AVAILABILITY_FILTERS.map((filter) => ({
-          value: filter,
-          label: t(`agents_page.filter_${filter}`),
-        }))}
-      />
-    </div>
+    <FiltersBar
+      variant="rail"
+      ariaLabel={t("agents_page.filters")}
+      searchName="agents-query"
+      searchLabel={t("agents_page.search_label")}
+      searchPlaceholder={t("agents_page.search_placeholder")}
+      query={query}
+      onQueryChange={onQueryChange}
+      fields={fields}
+      selections={{ availability: availability === "all" ? "" : availability }}
+      onSelectionsChange={(next) => onAvailabilityChange(parseAvailabilityFilter(next.availability || "all"))}
+      onClear={() => onAvailabilityChange("all")}
+    />
   );
 }
 

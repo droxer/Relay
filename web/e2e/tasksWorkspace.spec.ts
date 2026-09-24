@@ -28,35 +28,31 @@ for (const mobile of [false, true]) {
     await expect(rows.getByRole("link", { name: "Ship the release" })).toBeVisible();
     await expect(rows.getByRole("link", { name: "Answer customers" })).toBeVisible();
     await expect(panel.locator(".list-group-band")).toHaveCount(0);
-    await expect(panel.getByRole("combobox", { name: "Priority", exact: true })).toBeVisible();
-    await expect(panel.getByRole("combobox", { name: "Assignment", exact: true })).toHaveCount(0);
-    await panel.getByRole("button", { name: "More filters", exact: true }).click();
-    const assignment = panel.getByRole("combobox", { name: "Assignment", exact: true });
-    await expect(assignment).toBeVisible();
-    await assignment.click();
-    await page.getByRole("listbox").getByRole("option", { name: "Unassigned", exact: true }).click();
+    // Filters are chips: "Add filter" → field → value (one condition, so no
+    // condition step). The page's filter state still lives in the URL.
+    const addFilter = async (field: string, value: string) => {
+      await panel.getByRole("button", { name: "Add filter", exact: true }).click();
+      await page.getByRole("option", { name: new RegExp(`^${field}`) }).click();
+      await page.getByRole("option", { name: value, exact: true }).click();
+    };
+    await addFilter("Assignment", "Unassigned");
     await expect(rows.getByRole("link", { name: "Ship the release" })).toHaveCount(0);
     await expect(rows.getByRole("link", { name: "Answer customers" })).toBeVisible();
     await panel.getByRole("button", { name: "Clear", exact: true }).click();
-    const team = panel.getByRole("combobox", { name: "Team", exact: true });
-    await team.click();
-    await page.getByRole("listbox").getByRole("option", { name: "Launch team", exact: true }).click();
+    await addFilter("Team", "Launch team");
     await expect(rows.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     await expect(page).toHaveURL((url) => url.searchParams.get("team") === "team-a");
     await panel.getByRole("button", { name: "Clear", exact: true }).click();
-    await panel.getByRole("button", { name: "Hide filters", exact: true }).click();
     const statusNav = panel.getByRole("navigation", { name: "Status", exact: true });
     await statusNav.getByRole("button", { name: "Review 1", exact: true }).click();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     await expect(statusNav.getByRole("button", { name: "In progress 1", exact: true })).toBeVisible();
     await statusNav.getByRole("button", { name: "All tasks 2", exact: true }).click();
-    const filter = panel.getByRole("combobox", { name: "Projects", exact: true });
-    await filter.click();
-    await page.getByRole("listbox").getByRole("option", { name: "Empty", exact: true }).click();
+    await addFilter("Projects", "Empty");
     await expect(panel.getByRole("link", { name: "Ship the release" })).toHaveCount(0);
-    await expect(filter).toBeVisible();
-    await filter.click();
-    await page.getByRole("listbox").getByRole("option", { name: "All projects", exact: true }).click();
+    // The project chip survives an empty project; removing it returns to all projects.
+    await panel.getByRole("button", { name: "Projects filter options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Remove", exact: true }).click();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toBeVisible();
     const taskLink = panel.getByRole("link", { name: "Ship the release", exact: true });
     await taskLink.scrollIntoViewIfNeeded();

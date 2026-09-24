@@ -11,6 +11,7 @@ import type {
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { NumberInput } from "@/components/ui/number-input";
 import { Input } from "@/components/ui/input";
 import {
   MAX_LOCAL_COMPUTERS_CEILING,
@@ -343,18 +344,18 @@ export function AddEmployeeDrawer({
               hint={t("admin.v2.emp_limit_hint")}
               error={fieldErrors.maxLocalComputers}
               errorId="add-emp-limit-error"
+              wrapper="div"
+              htmlFor="add-emp-limit-input"
             >
-              <Input
-                ref={limitRef}
+              <NumberInput
+                id="add-emp-limit-input"
+                inputRef={limitRef}
                 name="max-local-computers"
-                type="number"
-                inputMode="numeric"
                 min={MIN_LOCAL_COMPUTERS}
                 max={MAX_LOCAL_COMPUTERS_CEILING}
-                step={1}
                 value={maxLocalComputers}
-                onChange={(event) => {
-                  setMaxLocalComputers(event.target.value);
+                onValueChange={(next) => {
+                  setMaxLocalComputers(next);
                   clearFieldError("maxLocalComputers");
                 }}
                 placeholder={
@@ -362,8 +363,8 @@ export function AddEmployeeDrawer({
                     ? t("admin.v2.emp_limit_placeholder", { count: defaultMaxLocalComputers })
                     : undefined
                 }
-                aria-invalid={Boolean(fieldErrors.maxLocalComputers) || undefined}
-                aria-describedby={fieldErrors.maxLocalComputers ? "add-emp-limit-error" : undefined}
+                invalid={Boolean(fieldErrors.maxLocalComputers)}
+                describedBy={fieldErrors.maxLocalComputers ? "add-emp-limit-error" : undefined}
               />
             </Field>
           </section>

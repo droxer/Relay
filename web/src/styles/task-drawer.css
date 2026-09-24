@@ -176,12 +176,6 @@
    hint one step larger than every other field hint in the app. Field hints now
    come through <Field hint> at the shared 13px. */
 
-@media (max-width: 1100px) {
-  .backlog-filter-secondary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 820px) {
   /* The mobile topbar already names the page, so the in-page header is a pure
      toolbar spanning the row: a compact segmented view-toggle sits on the left,
@@ -225,7 +219,7 @@
   }
 
   .backlog-filter-primary,
-  .backlog-filter-secondary {
+  .backlog-filter-chips {
     padding-inline: var(--sp-4);
   }
 
@@ -235,10 +229,6 @@
 
   .backlog-filter-search-wrap {
     flex: 1 1 100%;
-  }
-
-  .backlog-filter-secondary {
-    grid-template-columns: 1fr 1fr;
   }
 
   .backlog-page {

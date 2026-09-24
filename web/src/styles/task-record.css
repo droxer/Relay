@@ -404,46 +404,61 @@
 }
 
 /* Each entry hangs off a marker on a rail, so the list reads as one timeline
-   rather than a run of plain text lines. */
+   rather than a run of plain text lines. The row, marker and rail are ReUI
+   Timeline parts; its Tailwind defaults (a 2rem inset step list with ringed
+   16px indicators) sit in a lower layer, so every property they set is
+   restated here — including `translate`, which is its own property in
+   Tailwind v4, not part of `transform`. */
 .record-timeline-entry {
   position: relative;
   display: flex;
+  flex: none;
+  flex-direction: row;
   align-items: baseline;
   gap: var(--sp-3);
   min-width: 0;
-  padding-left: var(--sp-5);
+  margin: 0;
+  padding: 0 0 0 var(--sp-5);
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
 
-.record-timeline-entry::before {
-  content: "";
+.record-timeline-marker {
   position: absolute;
   left: 2px;
   top: 0.42em;
   width: 5px;
   height: 5px;
+  border: 0;
   border-radius: 50%;
   background: var(--ink-4);
+  translate: none;
 }
 
-.record-timeline-entry:not(:last-child)::after {
-  content: "";
+/* The rail runs from under this entry's marker to the next entry's; the last
+   entry's rail is hidden by the component. */
+.record-timeline-rail {
   position: absolute;
   left: 4px;
   top: calc(0.42em + 7px);
   bottom: calc(-1 * var(--sp-2));
   width: 0.5px;
+  height: auto;
   background: var(--line-2);
+  translate: none;
 }
 
 /* The time column reads vertically down the rail, so it keeps a fixed
    measure; entries from another day carry their date (see historyTime). */
 .record-timeline-time {
+  display: block;
   flex: none;
   width: 7.5rem;
+  margin: 0;
   color: var(--ink-3);
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 /* A label wraps instead of truncating — a blocked reason or failure message

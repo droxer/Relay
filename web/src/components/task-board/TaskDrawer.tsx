@@ -1,5 +1,6 @@
 "use client";
 
+import { DatePicker } from "@/components/ui/date-picker";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ type TaskDrawerProps = {
 function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
   const { t } = useTranslation();
   const statusLabelId = useId();
+  const dueLabelId = useId();
   return (
     <>
       <Field label={t("backlog.status")} labelId={statusLabelId} hint={t("backlog.ready_policy")} wrapper="div">
@@ -82,12 +84,12 @@ function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChang
           </SelectContent>
         </Select>
       </Field>
-      <Field label={t("backlog.due")}>
-        <Input
+      <Field label={t("backlog.due")} wrapper="div" labelId={dueLabelId}>
+        <DatePicker
+          labelId={dueLabelId}
           name="backlog-due-date"
-          type="date"
           value={form.dueDate}
-          onChange={(event) => onChange({ ...form, dueDate: event.target.value })}
+          onValueChange={(dueDate) => onChange({ ...form, dueDate })}
         />
       </Field>
     </>
@@ -98,6 +100,7 @@ function RoutineFields({ form, onChange }: { form: RoutineTaskFormState; onChang
   const { t } = useTranslation();
   const typeLabelId = useId();
   const cadenceLabelId = useId();
+  const nextRunLabelId = useId();
   return (
     <>
       <Field label={t("routine.type")} labelId={typeLabelId} wrapper="div">
@@ -147,15 +150,17 @@ function RoutineFields({ form, onChange }: { form: RoutineTaskFormState; onChang
         label={t("routine.next_run")}
         hint={t("routine.next_run_hint")}
         className="task-drawer-next-run"
+        wrapper="div"
+        labelId={nextRunLabelId}
       >
-        <Input
+        <DatePicker
+          labelId={nextRunLabelId}
           name={`${form.variant}-next-run-date`}
-          type="date"
           min={isoToday()}
           required={form.routineCadence === "custom" && form.routineEnabled}
           value={form.routineNextRunDate}
           readOnly={form.routineCadence !== "custom"}
-          onChange={(event) => onChange({ ...form, routineNextRunDate: event.target.value })}
+          onValueChange={(routineNextRunDate) => onChange({ ...form, routineNextRunDate })}
         />
       </Field>
     </>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Timeline, TimelineDate, TimelineIndicator, TimelineItem, TimelineSeparator } from "@/components/reui/timeline";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskEvents } from "../../api";
@@ -64,12 +65,18 @@ export function RecordHistory({
       ) : entries.length === 0 ? (
         <p className="record-panel-note">{t("backlog.history_empty")}</p>
       ) : (
-        <ol className="record-timeline-list">
-          {entries.map((entry) => {
+        /* Every entry has happened, so every step is complete: the timeline's
+           step state carries no meaning here and is not styled. */
+        <Timeline render={<ol />} className="record-timeline-list" value={entries.length}>
+          {entries.map((entry, index) => {
             const sessionId = entry.sessionId;
             return (
-            <li key={entry.id} className="record-timeline-entry">
-              <span className="record-timeline-time tnum">{historyTime(entry.timestamp, i18n.language)}</span>
+            <TimelineItem key={entry.id} step={index + 1} render={<li />} className="record-timeline-entry">
+              <TimelineIndicator className="record-timeline-marker" />
+              <TimelineSeparator className="record-timeline-rail" />
+              <TimelineDate className="record-timeline-time tnum" dateTime={entry.timestamp}>
+                {historyTime(entry.timestamp, i18n.language)}
+              </TimelineDate>
               <span className="record-timeline-label">
                 {historyEntryLabel(entry, t, names)}
               </span>
@@ -87,10 +94,10 @@ export function RecordHistory({
                   {t("backlog.open_thread")}
                 </a>
               ) : null}
-            </li>
+            </TimelineItem>
             );
           })}
-        </ol>
+        </Timeline>
       )}
     </section>
   );

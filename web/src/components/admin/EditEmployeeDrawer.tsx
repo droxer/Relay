@@ -8,6 +8,7 @@ import { employeeHandleOf } from "../../lib/employeeHandle";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { NumberInput } from "@/components/ui/number-input";
 import { Input } from "@/components/ui/input";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
@@ -186,18 +187,18 @@ export function EditEmployeeDrawer({
             hint={t("admin.v2.emp_limit_hint")}
             error={limitError ?? undefined}
             errorId="edit-emp-limit-error"
+            wrapper="div"
+            htmlFor="edit-emp-limit-input"
           >
-            <Input
-              ref={limitRef}
+            <NumberInput
+              id="edit-emp-limit-input"
+              inputRef={limitRef}
               name="max-local-computers"
-              type="number"
-              inputMode="numeric"
               min={MIN_LOCAL_COMPUTERS}
               max={MAX_LOCAL_COMPUTERS_CEILING}
-              step={1}
               value={maxLocalComputers}
-              onChange={(event) => {
-                setMaxLocalComputers(event.target.value);
+              onValueChange={(next) => {
+                setMaxLocalComputers(next);
                 setLimitError(null);
               }}
               placeholder={
@@ -205,8 +206,8 @@ export function EditEmployeeDrawer({
                   ? t("admin.v2.emp_limit_placeholder", { count: defaultMaxLocalComputers })
                   : undefined
               }
-              aria-invalid={Boolean(limitError) || undefined}
-              aria-describedby={limitError ? "edit-emp-limit-error" : undefined}
+              invalid={Boolean(limitError)}
+              describedBy={limitError ? "edit-emp-limit-error" : undefined}
             />
           </Field>
 

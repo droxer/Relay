@@ -37,7 +37,6 @@ import { TaskAssignee } from "./TaskAssignee";
 import { BoardEmpty } from "./BoardEmpty";
 import { BacklogFiltersBar, formatDueDate } from "./task-board/BacklogChrome";
 import { activeFilterCount, initialFilters, TASK_STATUS_SHAPE } from "./task-board/backlogVocabulary";
-import { FilterSelect } from "./FiltersBar";
 
 /** Per-column element classes, carried through TanStack's open `meta` slot. */
 type ColumnChrome = { headClass?: string; cellClass?: string };
@@ -80,6 +79,17 @@ export function ProjectTasks({ project, tasks, agents, teams, onOpenRecord }: {
   const [sorting, setSorting] = useState<SortingState>([]);
   const readOnly = projectReadOnly(project);
   const work = useMemo(() => projectTaskQueue(tasks, project.id), [tasks, project.id]);
+  /* A project's tasks have no status rail, so status is a chip in the bar. */
+  const statusFilter = useMemo(() => ({
+    field: {
+      id: "status",
+      label: t("backlog.status"),
+      kind: "select" as const,
+      options: TASK_STATUSES.map((status) => ({ value: status, label: t(`backlog.statuses.${status}`) })),
+    },
+    value: filters.status === "all" ? "" : filters.status,
+    onChange: (status: string) => setFilters((current) => ({ ...current, status: (status || "all") as BacklogFilters["status"] })),
+  }), [filters.status, t]);
   const progress = projectTaskProgress(work);
   const canStart = project.members.some((member) => member.enabled);
   /* flexRender mounts a column's cell function AS a component, so a column
@@ -336,21 +346,7 @@ export function ProjectTasks({ project, tasks, agents, teams, onOpenRecord }: {
           agents={agents}
           teams={teams}
           onChange={setFilters}
-          projectFilter={
-            <FilterSelect size="sm" className="backlog-quick-select"
-              name="project-task-status-filter"
-              label={t("backlog.status")}
-              value={filters.status}
-              onValueChange={(status) => setFilters({ ...filters, status: status as BacklogFilters["status"] })}
-              options={[
-                { value: "all" as const, label: t("backlog.all_statuses") },
-                ...TASK_STATUSES.map((status) => ({
-                  value: status,
-                  label: t(`backlog.statuses.${status}`),
-                })),
-              ]}
-            />
-          }
+          extraField={statusFilter}
         />
       ) : null}
       {rows.length === 0 ? (

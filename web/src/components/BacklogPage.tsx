@@ -1,9 +1,9 @@
 "use client";
 
 
-import { TASK_FLOW_STAGES } from "../lib/taskFlow";
+import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
@@ -11,18 +11,14 @@ import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import {
-  ActionAdd,
-  ICON,
-} from "./icons";
-import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, filterTasks, isTaskStatus, tasksByStatus } from "../lib/backlog";
+import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, filterTasks, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
 import { LANE_PAGE_SIZE, paginate } from "../lib/pagination";
 import { useLanePagination, usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { readDraggedTaskId, TASK_DRAG_MEDIA_TYPE, taskDropRejection } from "../lib/taskDrag";
+import { taskDropRejection } from "../lib/taskDrag";
 import { emptyBacklogForm, taskStartMutationInput } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
@@ -32,13 +28,8 @@ import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem, type TaskStatus } from "../types";
-import { useEdgeAutoScroll } from "../hooks/useEdgeAutoScroll";
 import { useUrlFilters } from "../hooks/useUrlFilters";
-import { useTouchTaskDrag } from "../hooks/useTouchTaskDrag";
-import { laneStatusAtPoint, type DragPoint } from "../lib/touchDrag";
 import { writeViewPreference } from "../lib/viewPreference";
-import { Button } from "@/components/ui/button";
-import { FilterSelect } from "./FiltersBar";
 import { taskRef } from "../lib/taskRef";
 
 
@@ -70,7 +61,8 @@ import {
   type BacklogView,
 } from "./task-board/backlogVocabulary";
 import { TaskStatusNav, BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
-import { BacklogTaskCard, BacklogTaskList } from "./task-board/BacklogRecords";
+import { BacklogTaskList } from "./task-board/BacklogRecords";
+import { BacklogBoard } from "./task-board/BacklogBoard";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
 import {
   EMPTY_TASK_SELECTION,
@@ -85,20 +77,6 @@ import {
 
 
 
-
-
-// Half the drag chip's max width. The chip is centred on the finger and sits
-// above it, so its centre has to stay this far from either screen edge — the
-// right edge is exactly where a drag lingers to auto-scroll the board.
-const DRAG_GHOST_HALF_WIDTH_PX = 104;
-
-function dragGhostStyle(point: DragPoint): CSSProperties {
-  const rightLimit = typeof window === "undefined"
-    ? point.x
-    : Math.max(window.innerWidth - DRAG_GHOST_HALF_WIDTH_PX, DRAG_GHOST_HALF_WIDTH_PX);
-  const x = Math.min(Math.max(point.x, DRAG_GHOST_HALF_WIDTH_PX), rightLimit);
-  return { transform: `translate3d(calc(${x}px - 50%), calc(${point.y}px - 220%), 0)` };
-}
 
 
 export function BacklogPage({ projectId, projectNotice, onSelectProject, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
@@ -135,27 +113,9 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
   } = useBacklogTaskForm({ currentUser, seed: { projectId } });
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [dropLane, setDropLane] = useState<TaskStatus | null>(null);
   // Retain the execution record until the drawer has finished closing.
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
   const drawerRecordId = recordMirror.record;
-  const { track: trackBoardEdge, stop: stopBoardScroll } = useEdgeAutoScroll();
-  const boardRef = useRef<HTMLDivElement | null>(null);
-
-  const touchDrag = useTouchTaskDrag({
-    onStart: (taskId) => setDraggedTaskId(taskId),
-    onMove: (point) => {
-      if (boardRef.current) trackBoardEdge(boardRef.current, point.x);
-      const status = laneStatusAtPoint(document, point);
-      setDropLane(isTaskStatus(status) ? status : null);
-    },
-    onDrop: () => {
-      moveTaskToLane(draggedTaskId, dropLane);
-      endTaskDrag();
-    },
-    onCancel: endTaskDrag,
-  });
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
 
   /* Sort is applied AFTER filtering, over the one list both views read — the
@@ -203,10 +163,20 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
   // record the board is no longer showing.
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
   const selectedCount = visibleSelection.size;
-  const draggedTask = useMemo(
-    () => (draggedTaskId ? backlogTasks.find((task) => task.id === draggedTaskId) ?? null : null),
-    [backlogTasks, draggedTaskId],
-  );
+
+  /* The project is a chip in the bar like any other filter, but choosing one
+     navigates: a project's backlog is its own route, not a query param. */
+  const projectFilter = useMemo(() => onSelectProject ? {
+    field: {
+      id: "project",
+      label: t("project.projects"),
+      kind: "select" as const,
+      options: projects.filter((project) => !project.archivedAt || project.id === projectId)
+        .map((project) => ({ value: project.id, label: project.name })),
+    },
+    value: projectId ?? "",
+    onChange: (id: string) => onSelectProject(id || null),
+  } : undefined, [onSelectProject, projects, projectId, t]);
 
   // Keep the server and first client render deterministic, then restore the
   // browser-only preference once hydration has completed.
@@ -281,69 +251,9 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     writeViewPreference(VIEW_STORAGE_KEY, next);
   }
 
-  function beginTaskDrag(task: RelayTaskListItem, event: DragEvent<HTMLElement>) {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData(TASK_DRAG_MEDIA_TYPE, task.id);
-    event.dataTransfer.setData("text/plain", task.title);
-    setDraggedTaskId(task.id);
-  }
-
-  function endTaskDrag() {
-    stopBoardScroll();
-    setDraggedTaskId(null);
-    setDropLane(null);
-  }
-
-  // The board hides its rightmost lanes on a laptop-width window and the
-  // browser does not auto-scroll an overflow container mid-drag, so a card
-  // dragged to the edge pulls the board along itself.
-  function boardDragOver(event: DragEvent<HTMLDivElement>) {
-    if (!draggedTask) return;
-    trackBoardEdge(event.currentTarget, event.clientX);
-  }
-
-  function boardDragLeave(event: DragEvent<HTMLDivElement>) {
-    // Crossing into a lane or a card also raises dragleave on the board; only
-    // a pointer that has left the board entirely should halt the scroll.
-    const next = event.relatedTarget;
-    if (next instanceof Node && event.currentTarget.contains(next)) return;
-    stopBoardScroll();
-  }
-
-  // The lane a drop would land in, and whether it would be refused. Only the
-  // hovered lane is decorated; a task's own lane stays neutral so hovering
-  // back over the origin does not read as an error.
-  function laneDropState(status: TaskStatus): "active" | "blocked" | undefined {
-    if (!draggedTask || dropLane !== status) return undefined;
-    const rejection = taskDropRejection(draggedTask, status);
-    if (!rejection) return "active";
-    return rejection === "needs_assignment" ? "blocked" : undefined;
-  }
-
-  function laneDragOver(status: TaskStatus, event: DragEvent<HTMLElement>) {
-    // Without preventDefault the browser never fires `drop` on this element.
-    if (!draggedTask) return;
-    event.preventDefault();
-    // The cursor must agree with the drop: a lane that refuses the drop (own
-    // lane, or any rejection) reports "none", never a move it won't honour.
-    const refused = draggedTask.status === status || Boolean(taskDropRejection(draggedTask, status));
-    event.dataTransfer.dropEffect = refused ? "none" : "move";
-    if (dropLane !== status) setDropLane(status);
-  }
-
-  function laneDragLeave(event: DragEvent<HTMLElement>) {
-    // dragleave also fires when the pointer crosses into a child card, so keep
-    // the lane highlighted until the pointer truly leaves it.
-    const next = event.relatedTarget;
-    if (next instanceof Node && event.currentTarget.contains(next)) return;
-    setDropLane(null);
-  }
-
-  // The single commit path for both input methods: HTML5 drops from a mouse
-  // and press-and-hold drags from a finger.
-  function moveTaskToLane(taskId: string | null, status: TaskStatus | null) {
-    const task = taskId && status ? backlogTasks.find((candidate) => candidate.id === taskId) : undefined;
-    if (!task || !status) return;
+  // The single commit path for a board drop — mouse, touch and keyboard all
+  // arrive here through the kanban's onMove.
+  function moveTaskToLane(task: RelayTaskListItem, status: TaskStatus) {
     const rejection = taskDropRejection(task, status);
     if (rejection === "needs_assignment") {
       announce({ message: t("backlog.drop_needs_assignment"), tone: "error" });
@@ -361,16 +271,6 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
       }),
     });
   }
-
-  function dropTaskInLane(status: TaskStatus, event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    const taskId = readDraggedTaskId(event.dataTransfer) ?? draggedTaskId;
-    endTaskDrag();
-    moveTaskToLane(taskId, status);
-  }
-
-
-
 
   return (
     <section id="backlog-panel" className="backlog-page sec-shell" data-view={view} aria-label={t("backlog.title")} tabIndex={-1}>
@@ -404,19 +304,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
           {view === "board" ? <BacklogStats tasks={backlogTasks} /> : null}
           <BacklogFiltersBar
             filters={filters}
-            projectFilter={onSelectProject ? <FilterSelect
-              size="sm"
-              className="backlog-quick-select"
-              name="task-project-filter"
-              label={t("project.projects")}
-              value={projectId ?? ""}
-              onValueChange={(id) => onSelectProject(id || null)}
-              options={[
-                { value: "", label: t("project.all_projects") },
-                ...projects.filter((project) => !project.archivedAt || project.id === projectId)
-                  .map((project) => ({ value: project.id, label: project.name })),
-              ]}
-            /> : undefined}
+            extraField={projectFilter}
             agents={logicalAgents}
             teams={teams}
             onChange={setFilters}
@@ -482,84 +370,27 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
           <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />
         </div>
       ) : (
-        <div
-          ref={boardRef}
-          className="backlog-board"
-          data-dragging={draggedTask ? "true" : undefined}
-          onDragOver={boardDragOver}
-          onDragLeave={boardDragLeave}
-        >
-          {TASK_FLOW_STAGES.map((status) => (
-            <section
-              key={status}
-              className="backlog-lane"
-              data-status={status}
-              data-drop={laneDropState(status)}
-              aria-label={t(`backlog.statuses.${status}`)}
-              onDragOver={(event) => laneDragOver(status, event)}
-              onDragLeave={laneDragLeave}
-              onDrop={(event) => dropTaskInLane(status, event)}
-            >
-              <header className="backlog-lane-head">
-                <span className="backlog-lane-label">{t(`backlog.statuses.${status}`)}</span>
-                <span className="backlog-lane-count tnum">{grouped[status].length}</span>
-              </header>
-              <div className="backlog-task-list">
-                {grouped[status].length === 0 ? (
-                  <p className="backlog-empty">{t("backlog.empty_lane")}</p>
-                ) : pagedLanes[status].items.map((task) => {
-                  const assignment = taskAssignmentDisplay(task);
-                  return (
-                    <BacklogTaskCard
-                      key={task.id}
-                      task={task}
-                      projectName={projects.find((project) => project.id === task.projectId)?.name}
-                      selected={visibleSelection.has(task.id)}
-                      onToggleSelect={() => setSelection((current) => toggleSelected(current, task.id))}
-                      agentDisplayName={assignment.name}
-                      agentImageUrl={assignment.imageUrl}
-                      ready={assignment.ready}
-                      dragging={draggedTaskId === task.id}
-                      onDragStart={(event) => beginTaskDrag(task, event)}
-                      onDragEnd={endTaskDrag}
-                      onTouchStart={(event) => touchDrag.onTouchStart(task.id, event)}
-                      onOpen={() => onOpenRecord(task.id)}
-                    />
-                  );
-                })}
-                {(status === "backlog" || status === "assigned") ? (
-                  <Button
-                    variant="ghost"
-                    type="button"
-                    className="backlog-lane-add"
-                    onClick={() => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
-                  >
-                    <ActionAdd size={ICON.sm} />
-                    <span>{t("backlog.new_task")}</span>
-                  </Button>
-                ) : null}
-              </div>
-              {/* Inside the lane, under its cards — the cursor belongs to this
-                  lane and nothing about it is true of the board. */}
-              <Pagination
-                compact
-                className="backlog-lane-pager"
-                page={pagedLanes[status]}
-                onPageChange={(next) => setLanePage(status, next)}
-                label={t(`backlog.statuses.${status}`)}
-              />
-            </section>
-          ))}
-        </div>
+        <BacklogBoard
+          lanes={pagedLanes}
+          laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, grouped[status].length])) as Record<TaskWorkflowStage, number>}
+          cardProps={(task) => {
+            const assignment = taskAssignmentDisplay(task);
+            return {
+              task,
+              projectName: projects.find((project) => project.id === task.projectId)?.name,
+              selected: visibleSelection.has(task.id),
+              onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
+              agentDisplayName: assignment.name,
+              agentImageUrl: assignment.imageUrl,
+              ready: assignment.ready,
+              onOpen: () => onOpenRecord(task.id),
+            };
+          }}
+          onMoveTask={moveTaskToLane}
+          onCreateInLane={(status) => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
+          onLanePageChange={setLanePage}
+        />
       )}
-
-      {/* A touch drag has no browser-drawn drag image, so the card's identity
-          has to follow the finger explicitly. */}
-      {touchDrag.point && draggedTask ? (
-        <span className="backlog-drag-ghost" aria-hidden="true" style={dragGhostStyle(touchDrag.point)}>
-          {draggedTask.title}
-        </span>
-      ) : null}
 
       <TaskSelectionBar
         count={selectedCount}

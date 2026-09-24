@@ -22,7 +22,7 @@ for (const view of ["card", "row"] as const) {
     const props = { task, ready: false, agentDisplayName: name, selected: false,
       onToggleSelect: vi.fn(), onOpen: vi.fn() };
     const { container } = render(view === "card"
-      ? <BacklogTaskCard {...props} dragging={false} onDragStart={vi.fn()} onDragEnd={vi.fn()} onTouchStart={vi.fn()} />
+      ? <BacklogTaskCard {...props} />
       : <BacklogTaskList tasks={[task]} sort={null} onSort={vi.fn()} selectAll={null}
           selectedIds={new Set()} onToggleSelect={vi.fn()}
           contextFor={() => ({ ready: props.ready, agentDisplayName: props.agentDisplayName })}
@@ -61,7 +61,7 @@ for (const view of ["card", "row", "routine"] as const) {
       onToggleSelect: vi.fn(), onOpen: vi.fn(), onEdit: vi.fn(), onAssign: vi.fn(),
       onStart: vi.fn(), starting: false };
     const { container } = render(view === "card"
-      ? <BacklogTaskCard {...props} dragging={false} onDragStart={vi.fn()} onDragEnd={vi.fn()} onTouchStart={vi.fn()} />
+      ? <BacklogTaskCard {...props} />
       : view === "routine"
         ? <RoutineTable rows={[task]} sort={null} onSort={vi.fn()} ariaLabel="Routines" selectAll={null}
             selection={new Set()} onToggleSelect={vi.fn()} stateFor={() => "paused"}

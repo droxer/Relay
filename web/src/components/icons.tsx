@@ -49,6 +49,18 @@ import {
   PanelRight,
   Paperclip,
   Pencil,
+  Minus,
+  ArrowLeftRight,
+  CornerDownRight,
+  EllipsisVertical,
+  FolderPlus,
+  GripVertical,
+  ListFilter,
+  ListFilterPlus,
+  LoaderCircle,
+  RotateCw,
+  SlidersHorizontal,
+  Ungroup,
   Plus,
   Power,
   RefreshCw,
@@ -426,6 +438,7 @@ export const PageNext = withStandardStroke(LucideChevronRight, "PageNext");
 
 // Generic actions not covered above.
 export const ActionAdd = withStandardStroke(Plus, "ActionAdd");
+export const ActionSubtract = withStandardStroke(Minus, "ActionSubtract");
 export const ActionEdit = withStandardStroke(Pencil, "ActionEdit");
 export const ActionToggle = withStandardStroke(Power, "ActionToggle");
 
@@ -446,3 +459,32 @@ export const AdminChannel = withStandardStroke(Hash, "AdminChannel");
 export const AdminVerified = withStandardStroke(ShieldCheck, "AdminVerified");
 export const AdminInbox = withStandardStroke(Inbox, "AdminInbox");
 export const AdminSettings = withStandardStroke(Settings, "AdminSettings");
+
+// ReUI component glyphs. The vendored ReUI components (components/reui/)
+// name their icons by lucide name through `IconPlaceholder`
+// (components/reui/icon-placeholder.tsx); this table is where each name gets
+// the product's stroke, so a vendored component cannot draw an off-weight glyph.
+export const REUI_GLYPHS = {
+  ArrowLeftRightIcon: withStandardStroke(ArrowLeftRight, "ReuiArrowLeftRight"),
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon: PagePrevious,
+  ChevronRightIcon: PageNext,
+  CircleAlertIcon: withStandardStroke(CircleAlert, "ReuiCircleAlert"),
+  CopyIcon: ActionCopy,
+  CornerDownRightIcon: withStandardStroke(CornerDownRight, "ReuiCornerDownRight"),
+  EllipsisVerticalIcon: withStandardStroke(EllipsisVertical, "ReuiEllipsisVertical"),
+  FolderPlusIcon: withStandardStroke(FolderPlus, "ReuiFolderPlus"),
+  GripVerticalIcon: withStandardStroke(GripVertical, "ReuiGripVertical"),
+  LayersIcon: withStandardStroke(Layers, "ReuiLayers"),
+  ListFilterIcon: withStandardStroke(ListFilter, "ReuiListFilter"),
+  ListFilterPlusIcon: withStandardStroke(ListFilterPlus, "ReuiListFilterPlus"),
+  LoaderCircleIcon: withStandardStroke(LoaderCircle, "ReuiLoaderCircle"),
+  MinusIcon: ActionSubtract,
+  PlusIcon: ActionAdd,
+  RefreshCwIcon: withStandardStroke(RefreshCw, "ReuiRefreshCw"),
+  RotateCwIcon: withStandardStroke(RotateCw, "ReuiRotateCw"),
+  SlidersHorizontalIcon: withStandardStroke(SlidersHorizontal, "ReuiSlidersHorizontal"),
+  UngroupIcon: withStandardStroke(Ungroup, "ReuiUngroup"),
+  XIcon: ActionRemove,
+} as const;

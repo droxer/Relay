@@ -5,12 +5,26 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { TasksWorkspace } from "../src/components/TasksWorkspace";
 import type { CurrentUser, ProjectRecord, RelayTaskListItem } from "../src/types";
 
-// Exercise URL/filter behavior here; browser coverage uses the real popup.
-vi.mock("../src/components/FiltersBar", async (original) => ({
-  ...await original<typeof import("../src/components/FiltersBar")>(),
-  FilterSelect: ({ label, value, onValueChange, options }: any) => <select aria-label={label} value={value} onChange={(event) => onValueChange(event.target.value)}>
-    {options.map((option: any) => <option key={option.value} value={option.value}>{option.label}</option>)}
-  </select>,
+// Exercise URL/filter behavior here; browser coverage (e2e) drives the real
+// chips. The stub stands in for ReUI's <Filters>: one plain control per field,
+// writing the same query tree the chips write, so the page's adapter
+// (FiltersBar ↔ lib/filterSelections ↔ the URL) is what runs.
+vi.mock("@/components/reui/filters/filters", () => ({
+  Filters: ({ fields, query, onQueryChange }: any) => <div>
+    {fields.map((field: any) => {
+      const value = query.rules.find((rule: any) => rule.path[0] === field.id)?.value ?? "";
+      const set = (next: string) => onQueryChange({ ...query, rules: [
+        ...query.rules.filter((rule: any) => rule.path[0] !== field.id),
+        ...(next ? [{ id: `stub-${field.id}`, type: "rule", path: [field.id], operator: field.defaultOperator, value: next }] : []),
+      ] });
+      return field.type === "text"
+        ? <input key={field.id} aria-label={field.label} value={value} onChange={(event) => set(event.target.value)} />
+        : <select key={field.id} aria-label={field.label} value={value} onChange={(event) => set(event.target.value)}>
+            <option value="">—</option>
+            {field.options.map((option: any) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>;
+    })}
+  </div>,
 }));
 vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
@@ -134,14 +148,13 @@ it("keeps project loading failures visible after replacing the project rail", ()
   expect(screen.getByRole("button", { name: "project.retry" })).toBeTruthy();
 });
 
-it("keeps common filters visible and reveals additional filters on demand", () => {
+it("offers every task filter in the chip bar and applies a chosen one to the list and URL", () => {
   show(undefined, [task("Unassigned", "p"), { ...task("Agent", "p"), assignedAgentId: "a" },
     { ...task("Team", "p"), assignedTeamId: "team-a" }, { ...task("Legacy", "p"), assignedAgent: "codex" }]);
-  for (const name of ["backlog.priority", "backlog.due"]) {
+  for (const name of ["project.projects", "backlog.priority", "backlog.due", "backlog.agent", "backlog.team_filter", "backlog.assignment_filter", "backlog.source"]) {
     expect(screen.getByRole("combobox", { name })).toBeTruthy();
   }
-  expect(screen.queryByRole("combobox", { name: "backlog.agent" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "backlog.more_filters" }));
+  expect(screen.getByRole("textbox", { name: "backlog.assignee_filter" })).toBeTruthy();
   fireEvent.change(screen.getByRole("combobox", { name: "backlog.assignment_filter" }), { target: { value: "unassigned" } });
   const rows = screen.getByRole("table", { name: "backlog.title" });
   expect(within(rows).getAllByRole("link").map((link) => link.textContent)).toEqual(["Unassigned"]);
@@ -153,12 +166,11 @@ it("restores combined team and assignment filters from the URL", () => {
     { ...task("Team B", "p"), assignedTeamId: "team-b" }]);
   expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Team A"]);
 });
-it("remembers when the task filters are collapsed", () => {
-  const first = show();
-  fireEvent.click(screen.getByRole("button", { name: "backlog.more_filters" }));
-  fireEvent.click(screen.getByRole("button", { name: "backlog.hide_filters" }));
-  first.unmount();
+it("draws a filter restored from the URL as a chip, and removing it clears the URL", () => {
+  window.history.replaceState({}, "", "/backlog?priority=high");
   show();
-  expect(screen.queryByRole("combobox", { name: "backlog.agent" })).toBeNull();
-  expect(screen.getByRole("button", { name: "backlog.more_filters" })).toBeTruthy();
+  const priority = screen.getByRole("combobox", { name: "backlog.priority" }) as HTMLSelectElement;
+  expect(priority.value).toBe("high");
+  fireEvent.change(priority, { target: { value: "" } });
+  expect(new URL(window.location.href).searchParams.has("priority")).toBe(false);
 });

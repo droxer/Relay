@@ -139,7 +139,8 @@ test("composer agent picker fits its content at phone width", async ({ browser }
 for (const touch of [false, true]) {
   test(`filter bar controls share one height${touch ? " on touch" : ""}`, async ({ browser }) => {
     const page = await openPage(browser, "/routines", touch);
-    const controls = [".backlog-filter-search-wrap", ".list-sort-menu", ".backlog-filter-chip"];
+    // The chip row's "Add filter" trigger sits on the same rung as the search and sort.
+    const controls = [".backlog-filter-search-wrap", ".list-sort-menu", '.backlog-filter-chips [data-slot="popover-trigger"]'];
     for (const selector of controls) await expect(page.locator(selector).first()).toBeVisible();
     const heights = await Promise.all(controls.map((selector) =>
       page.locator(selector).first().evaluate((element) => element.getBoundingClientRect().height)));
