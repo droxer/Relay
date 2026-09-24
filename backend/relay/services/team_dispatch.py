@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..collaboration.styles import LEAD_LED, fill_build_review_slots, pipeline_order
 from .agent_routing import resolve_agent_assignments
 
 TEAM_UNAVAILABLE_MESSAGE = "The agent team is not currently available."
@@ -138,9 +139,15 @@ def team_member_assignments(
     mode: str = "action",
     team: dict[str, Any] | None = None,
     include_on_request: bool = False,
+    style: str = LEAD_LED,
 ) -> list[dict[str, Any]]:
+    roster = agents
     lead_agent_id = team.get("leadAgentId") if team else None
-    snapshot = team_runtime_snapshot(team, agents) if team else None
+    snapshot = (
+        team_runtime_snapshot(team, roster, style=LEAD_LED if mode == "action" else None)
+        if team
+        else None
+    )
     configs = (team or {}).get("memberConfigs", {})
     agents = [
         {**agent, "defaultRole": configs.get(agent["id"], {}).get("role", agent.get("defaultRole"))}
@@ -148,6 +155,8 @@ def team_member_assignments(
         if include_on_request or agent["id"] == lead_agent_id
         or configs.get(agent["id"], {}).get("participation") != "on_request"
     ]
+    if team and mode == "action" and style != LEAD_LED:
+        return _styled_assignments(agents, roster=roster, team=team, style=style, configs=configs)
     synthesis_round = mode in ("ask", "review")
     ordered_agents = (
         [
@@ -196,6 +205,97 @@ def team_member_assignments(
     return assignments
 
 
+_STYLE_BRIEFS = {
+    "solo": "Complete the shared goal yourself and report the delivered result to the user.",
+    "builder": (
+        "Implement the shared goal. A teammate reviews your work next; if it reports "
+        "findings you will be asked to repair them."
+    ),
+    "reviewer": (
+        "Review the builder's changes against the goal and acceptance criteria. Report "
+        "findings on the builder's work item to request changes. Report done with "
+        "evidence only when the result is acceptable, then summarize what was delivered "
+        "for the user."
+    ),
+}
+
+
+def _styled_assignments(
+    agents: list[dict[str, Any]],
+    *,
+    roster: list[dict[str, Any]],
+    team: dict[str, Any],
+    style: str,
+    configs: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Compile one accomplish round for a non-Lead-led style.
+
+    No assignment is a coordinator: that role means lead planning plus runtime
+    repair authority, which only Lead-led grants.
+    """
+    fallback_from: str | None = None
+    slots = fill_build_review_slots(agents, team.get("leadAgentId"))
+    if style == "build_review" and slots.reviewer is None:
+        style, fallback_from = "solo", "build_review"
+    if style == "solo":
+        turns = [(slots.builder, "implementer", "action", True, _STYLE_BRIEFS["solo"])]
+    elif style == "build_review":
+        turns = [
+            (slots.builder, "implementer", "action", False, _STYLE_BRIEFS["builder"]),
+            (slots.reviewer, "reviewer", "review", True, _STYLE_BRIEFS["reviewer"]),
+        ]
+    else:
+        ordered = pipeline_order(agents)
+        last = len(ordered) - 1
+        turns = [
+            (
+                agent,
+                agent.get("defaultRole") or "implementer",
+                "action",
+                index == last,
+                _member_brief(agent.get("defaultRole"), False, index == last),
+            )
+            for index, agent in enumerate(ordered)
+        ]
+    base_snapshot = team_runtime_snapshot(
+        team, roster, style=style, style_fallback_from=fallback_from
+    )
+    snapshot = (
+        {**base_snapshot, "workContractVersion": 1} if len(turns) > 1 else base_snapshot
+    )
+    return [
+        _styled_assignment(agent, role, mode, synthesizer, brief, team, snapshot, configs)
+        for agent, role, mode, synthesizer, brief in turns
+    ]
+
+
+def _styled_assignment(
+    agent: dict[str, Any],
+    role: str,
+    mode: str,
+    synthesizer: bool,
+    brief: str,
+    team: dict[str, Any],
+    snapshot: dict[str, Any],
+    configs: dict[str, Any],
+) -> dict[str, Any]:
+    config = configs.get(agent["id"], {})
+    base = _team_member_assignment(
+        {**agent, "defaultRole": role},
+        mode=mode,
+        synthesizer=synthesizer,
+        team_snapshot=snapshot,
+    )
+    responsibility = config.get("responsibility")
+    return {
+        **base,
+        "brief": f"{brief} Responsibility: {responsibility}" if responsibility else brief,
+        "required": True,
+        "acceptanceCriteria": list(team.get("acceptanceCriteria", [])),
+        "expectedOutputs": list(config.get("expectedOutputs", [])),
+    }
+
+
 def _ordered_accomplish_agents(
     agents: list[dict[str, Any]], lead_agent_id: str | None
 ) -> list[dict[str, Any]]:
@@ -224,15 +324,21 @@ def _ordered_accomplish_agents(
 
 
 def team_runtime_snapshot(
-    team: dict[str, Any], members: list[dict[str, Any]]
+    team: dict[str, Any],
+    members: list[dict[str, Any]],
+    *,
+    style: str | None = None,
+    style_fallback_from: str | None = None,
 ) -> dict[str, Any]:
-    """Capture the roster and revision that a round actually used."""
+    """Capture the roster, revision, and collaboration style a round used."""
     return {
         "teamId": team["id"],
         **({"workContractVersion": 1} if team.get("memberConfigs") or team.get("acceptanceCriteria") else {}),
         "teamRevision": team.get("updatedAt") or team.get("createdAt"),
         "memberAgentIds": [member["id"] for member in members],
         "leadAgentId": team.get("leadAgentId"),
+        **({"collaborationStyle": style} if style else {}),
+        **({"styleFallbackFrom": style_fallback_from} if style_fallback_from else {}),
     }
 
 
