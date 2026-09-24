@@ -165,6 +165,7 @@ def create_control_panel_team(
                 "enabled": body.get("enabled", True),
                 "memberConfigs": body.get("memberConfigs", {}),
                 "acceptanceCriteria": body.get("acceptanceCriteria", []),
+                "collaborationStyle": body.get("collaborationStyle"),
                 "leadAgentId": lead,
                 "memberAgentIds": members,
             },
