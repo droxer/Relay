@@ -6,11 +6,14 @@ Accepted. Extends ADR-016 and ADR-019.
 
 ## Decision
 
-Team work requests support `solo`, `build_review` (default), `pipeline`, and
+Team work requests support `build_review` (default), `pipeline`, and
 `lead_led`. `resolve_collaboration_style` in `collaboration/styles.py` resolves
 explicit message style, task override, team setting, then the default. Task
 dispatch supplies the task; thread messages resolve from message and team.
 New team threads accept a first-message override through `/agent-runs`.
+Solo is not a selectable team mode. It remains only an internal single-member
+fallback and a historical round value. Previously saved Solo settings resolve
+to Build → Review on future dispatch, without rewriting event history.
 
 Role-based slot filling chooses one builder and a distinct reviewer for
 Build → Review. Membership roles override agent defaults. A team without a
@@ -34,6 +37,8 @@ The backend never executes agents; no daemon protocol or SQL migration changes.
 ## UI and rollout
 
 One shared selector serves team settings, task/routine forms, and the composer.
+Three labeled glyph badges identify styles across the team roster, team details,
+task records, and selectors. Role previews show numbered execution steps.
 Team settings preview role-based slots. Task overrides can return to team
 inheritance. Composer overrides reset after successful send and survive failed
 dispatch. Retry keys distinguish styles while preserving legacy unstyled keys.

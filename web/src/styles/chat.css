@@ -512,6 +512,75 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
+/* Team style is identity, not health: use ink/surface tokens, never live,
+   warning or success colors. Glyphs stay consistent from roster to composer. */
+.collab-style-badge {
+  max-width: 100%;
+  color: var(--ink-2);
+  background: var(--surface-2);
+}
+
+.collab-style-badge[data-style="pipeline"] {
+  border-style: dashed;
+  background: var(--surface-1);
+}
+
+.collab-style-badge[data-style="lead_led"] {
+  color: var(--ink-1);
+  border-color: var(--ink-4);
+}
+
+.collab-style-option {
+  padding-block: var(--sp-3);
+}
+
+.collab-style-icon {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: var(--sp-2);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
+.collab-style-preview {
+  display: grid;
+  gap: var(--sp-2);
+  padding-block: var(--sp-2);
+}
+
+.collab-style-sequence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--type-body-sm);
+}
+
+.collab-style-sequence li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+  overflow-wrap: anywhere;
+}
+
+.collab-style-step {
+  flex-shrink: 0;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
 .msg-turn-foot {
   display: flex;
   align-items: center;

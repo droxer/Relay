@@ -108,7 +108,7 @@ export function useBacklogTaskForm({
         priority: form.priority,
         ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
         acceptancePolicy: form.acceptancePolicy ?? "human",
-        collaborationStyle: form.assignedTeamId ? form.collaborationStyle ?? "" : "",
+        collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         dueDate: form.dueDate,
         ...taskAssignmentMutationFields(form),
       };

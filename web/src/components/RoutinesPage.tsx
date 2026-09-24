@@ -185,7 +185,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
         acceptancePolicy: form.acceptancePolicy ?? "human",
-        collaborationStyle: form.assignedTeamId ? form.collaborationStyle ?? "" : "",
+        collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         description: form.description,
         priority: form.priority,
         isRoutine: true,

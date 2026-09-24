@@ -235,12 +235,17 @@ def test_task_collaboration_style_is_validated(monkeypatch) -> None:
             json={
                 "title": "Good style",
                 "ownerEmployeeId": "alice",
-                "collaborationStyle": "solo",
+                "collaborationStyle": "build_review",
             },
         )
         assert created.status_code == 201
         task = created.json()
-        assert task["collaborationStyle"] == "solo"
+        assert task["collaborationStyle"] == "build_review"
+
+        rejected_solo = client.patch(
+            f"/api/v1/tasks/{task['id']}", json={"collaborationStyle": "solo"},
+        )
+        assert rejected_solo.status_code == 400
 
         cleared = client.patch(
             f"/api/v1/tasks/{task['id']}",

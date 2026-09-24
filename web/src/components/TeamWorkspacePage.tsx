@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CollaborationStyleSelect, CollaborationSlotPreview } from "./CollaborationStyleSelect";
 import { effectiveStyle } from "../lib/collaborationStyle";
+import { CollaborationStyleBadge } from "./CollaborationStyleBadge";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -345,7 +346,7 @@ function TeamProfile({
                 </div>
               </>
             ) : <Field label={t("collab_style.label")} wrapper="div" hint={t(`collab_style.${effectiveStyle(team)}_hint`)}>
-              <span>{t(`collab_style.${effectiveStyle(team)}`)}</span>
+              <CollaborationStyleBadge style={effectiveStyle(team)} />
               <CollaborationSlotPreview members={team.members.map((member) => ({
                 id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
                 onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",

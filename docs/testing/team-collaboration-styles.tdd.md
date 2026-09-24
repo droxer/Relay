@@ -126,3 +126,50 @@ credentials, or new dependencies. No deployment or external mutation performed.
 The remaining acceptance gap is Task 14's integrated backend + stub-daemon
 browser sequence. Build/test results above must not be described as a fully
 green repository suite or live-agent acceptance.
+
+## User revision: three team styles and visual polish — 2026-09-25
+
+The user removed explicit Solo mode from agent teams. Selectable styles are now
+Build → Review, Pipeline, and Lead-led in team settings, task/routine overrides,
+and the composer. APIs reject explicit Solo; previously stored Solo settings
+resolve to Build → Review for future work. Internal single-member fallback and
+frozen historical runs remain unchanged.
+
+The visual follow-up adds a shared labeled glyph badge on team roster rows,
+team details and task records; descriptive icon-led selector options; and
+numbered, wrapping role previews. Existing neutral theme tokens distinguish
+style identity from health/status. Keyboard/focus behavior stays with Base UI.
+
+- RED: two backend tests and one frontend test failed because Solo was still
+  selectable and legacy settings still resolved to Solo (`b2bc541b`).
+- GREEN: the same three regressions passed after the mode restriction and
+  compatibility normalization (`78cde4cb`).
+- The visual tests first failed at import resolution for the not-yet-created
+  badge component, then passed with labeled decorative glyphs and ordered
+  previews. This was a missing-component signal, not a runtime assertion RED.
+- Backend focused suite: **340 passed** across collaboration styles, conductor,
+  dispatch, project runtime, scheduler, team/task stores, and team/task APIs.
+  After adding explicit Solo rejection cases, the three affected API tests
+  were rerun: **3 passed**, 137 deselected.
+- `cd web && npx vitest run interaction-tests/collaborationStyle.test.tsx
+  interaction-tests/teamResponsibilities.test.tsx --coverage
+  --coverage.include=src/lib/collaborationStyle.ts
+  --coverage.include=src/components/CollaborationStyleBadge.tsx`:
+  **29 passed**, **100%** statement/branch/function/line coverage for those two
+  included modules (not whole-app coverage).
+- `cd web && npx playwright test --config=playwright.recovery.config.ts
+  e2e/collaborationStyles.spec.ts --workers=1`: **7 passed**. Desktop/mobile save,
+  task inheritance, composer retries, all three selectors excluding Solo, and
+  light/dark 375px keyboard/focus checks with reduced motion. Screenshots were
+  inspected in both themes. API responses remain mocked.
+- `npm test`: production package/web builds passed; **1,734 Node tests passed,
+  2 failed**, the same composerTarget/designGrid baseline failures. An initial
+  runs caught Base UI positioning variables in the global CSS token scan and
+  a prohibited arbitrary width utility. Positioning now uses standard width
+  and component-level runtime-variable utilities, and the
+  39 palette tests pass. Full React/Python suites were not rerun this revision.
+- TypeScript, full CSS stylelint, and `git diff --check`: passed.
+- `npm audit --registry=https://registry.npmjs.org`: **0 vulnerabilities**.
+
+No database migration, dependency addition, credentials change, or live model
+execution. The earlier integrated backend + stub-daemon acceptance gap remains.

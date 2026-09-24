@@ -80,7 +80,7 @@ def test_disabled_project_is_a_transient_dispatch_failure() -> None:
 
 @pytest.mark.parametrize("task_style, expected", [
     (None, ["lead", "builder", "reviewer"]),
-    ("solo", ["builder"]),
+    ("pipeline", ["lead", "builder", "reviewer"]),
     ("build_review", ["builder", "reviewer"]),
 ])
 def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style, expected):

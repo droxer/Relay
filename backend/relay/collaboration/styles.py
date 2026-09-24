@@ -8,7 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-COLLABORATION_STYLES: tuple[str, ...] = ("solo", "build_review", "pipeline", "lead_led")
+# Solo is an internal one-member fallback, never a selectable team style.
+COLLABORATION_STYLES: tuple[str, ...] = ("build_review", "pipeline", "lead_led")
 DEFAULT_COLLABORATION_STYLE = "build_review"
 LEAD_LED = "lead_led"
 STYLE_POLICIES: dict[str, str] = {
@@ -44,12 +45,16 @@ def resolve_collaboration_style(
     requested: str | None,
 ) -> str:
     """Message beats task beats team beats the default."""
+    if requested is not None:
+        return validate_collaboration_style(requested)
     for candidate in (
-        requested,
         (task or {}).get("collaborationStyle"),
         (team or {}).get("collaborationStyle"),
     ):
         if candidate is not None:
+            # Preserve stored history, but retire explicit Solo for future work.
+            if candidate == "solo":
+                return DEFAULT_COLLABORATION_STYLE
             return validate_collaboration_style(candidate)
     return DEFAULT_COLLABORATION_STYLE
 
