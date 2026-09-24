@@ -23,13 +23,24 @@ function PickerHarness({ initial }: { initial: TeamMembership }) {
 
 const membership = () => JSON.parse(screen.getByTestId("membership").textContent!);
 
-it("shows old completed snapshots as unverified without inventing acceptance", () => {
-  const session = { status: "completed", agentRuns: [] } as unknown as RelaySession;
-  render(<CollaborationWork session={session} agents={[]} />);
+it("stays silent on an unverified outcome when there is no work graph to verify", () => {
+  const legacy = { status: "completed", agentRuns: [] } as unknown as RelaySession;
+  const { container, rerender } = render(<CollaborationWork session={legacy} agents={[]} />);
+  expect(container.innerHTML).toBe("");
+  rerender(<CollaborationWork session={{ ...legacy, workOutcome: "unverified" }} agents={[]} />);
+  expect(container.innerHTML).toBe("");
+});
+
+it("keeps the unverified outcome beside a team work graph", () => {
+  const session = {
+    status: "completed", workOutcome: "unverified", agentRuns: [],
+    collaborationRounds: [{ workGraph: { items: [{ workItemId: "w1", assignmentId: "a1", ownerAgentId: "builder", objective: "Build it", required: true, dependsOnWorkItemIds: [] }] } }],
+  } as unknown as RelaySession;
+  render(<CollaborationWork session={session} agents={ROSTER} />);
   expect(screen.getByRole("status").textContent).toContain("team_work.outcome_unverified");
 });
 
-it.each(["reported_done", "unfinished", "blocked", "needs_review", "unverified", "accepted"] as const)(
+it.each(["reported_done", "unfinished", "blocked", "needs_review", "accepted"] as const)(
   "shows %s work outcome even when a single agent has no team graph", (workOutcome) => {
     const session = { status: "completed", workOutcome, finalOutcome: "A concrete next step", agentRuns: [] } as unknown as RelaySession;
     const { rerender } = render(<CollaborationWork session={session} agents={[]} />);

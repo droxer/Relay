@@ -33,7 +33,11 @@ const OUTCOME_TONE: Record<NonNullable<RelaySession["workOutcome"]>, Tone> = {
 export function CollaborationWork({ session, agents }: { session?: RelaySession; agents: EmployeeAgent[] }) {
   const { t } = useTranslation();
   const items = deriveCollaborationWork(session);
-  const outcome = session?.workOutcome ?? (session?.status === "completed" ? "unverified" : undefined);
+  const reportedOutcome = session?.workOutcome ?? (session?.status === "completed" ? "unverified" : undefined);
+  /* "Unverified" only says no work report exists. Beside a work graph that
+     absence is a signal; on a plain conversation turn it is every turn's
+     default, so the pill would repeat under each reply and mean nothing. */
+  const outcome = reportedOutcome === "unverified" && !items.length ? undefined : reportedOutcome;
   if (!items.length && !outcome) return null;
   const name = (id: string) => agents.find((agent) => agent.id === id)?.displayName ?? id;
   const workName = (id: string) => items.find((item) => item.workItemId === id)?.objective ?? id;
