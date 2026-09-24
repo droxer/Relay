@@ -16,8 +16,17 @@ def _agent(agent_id: str, role: str | None = None) -> dict:
     return {"id": agent_id, "executorKind": "codex", **({"defaultRole": role} if role else {})}
 
 
-def test_styles_are_the_four_named_values() -> None:
-    assert COLLABORATION_STYLES == ("solo", "build_review", "pipeline", "lead_led")
+def test_team_styles_exclude_solo() -> None:
+    assert COLLABORATION_STYLES == ("build_review", "pipeline", "lead_led")
+    with pytest.raises(CollaborationStyleError):
+        validate_collaboration_style("solo")
+    with pytest.raises(CollaborationStyleError):
+        resolve_collaboration_style(None, None, "solo")
+
+
+def test_legacy_solo_settings_use_build_review_for_new_rounds() -> None:
+    assert resolve_collaboration_style({"collaborationStyle": "solo"}, None, None) == "build_review"
+    assert resolve_collaboration_style(None, {"collaborationStyle": "solo"}, None) == "build_review"
 
 
 @pytest.mark.parametrize(

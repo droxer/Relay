@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { effectiveStyle, previewSlots, turnSlot, styleForRun, reviewCycle, reviewBudgetExhausted } from "../src/lib/collaborationStyle";
+import { COLLABORATION_STYLES, effectiveStyle, previewSlots, turnSlot, styleForRun, reviewCycle, reviewBudgetExhausted } from "../src/lib/collaborationStyle";
 import { CollaborationStyleSelect, CollaborationSlotPreview } from "../src/components/CollaborationStyleSelect";
 import { threadMessageInput, threadMessageOperationKey } from "../src/lib/messageRouting";
 import { teamMutationInput } from "../src/lib/teamForm";
@@ -10,6 +10,14 @@ import { TaskRecordDefinition } from "../src/components/task-record/TaskRecordDe
 import { MessageBlock } from "../src/components/MessageBlock";
 import { taskBoardFormsEqual } from "../src/lib/taskBoardForm";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
+
+it("offers only team styles and normalizes legacy Solo settings", () => {
+  expect(COLLABORATION_STYLES).toEqual(["build_review", "pipeline", "lead_led"]);
+  expect(effectiveStyle({ collaborationStyle: "solo" })).toBe("build_review");
+  expect(effectiveStyle(undefined, "solo")).toBe("build_review");
+  // Frozen historical runs still describe what actually ran.
+  expect(styleForRun({ teamSnapshot: { collaborationStyle: "solo" } } as never)).toBe("solo");
+});
 
 it("mirrors role-based slot filling and excludes on-request specialists", () => {
   expect(effectiveStyle({ collaborationStyle: "pipeline" }, "solo")).toBe("solo");
