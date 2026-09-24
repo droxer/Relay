@@ -716,6 +716,35 @@ describe("thread collaboration messages", () => {
     }]);
   });
 
+  it("addresses another team on the thread's computer", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), body: JSON.parse(String(init?.body ?? "{}")) });
+      return new Response(JSON.stringify({ id: "ses_1" }), {
+        status: 202,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      await submitThreadMessage("ses_1", {
+        text: "crew, take it",
+        intent: "accomplish",
+        addressTeamId: "team_b",
+        userMessageId: "evt_1",
+      });
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    assert.deepEqual(calls[0]?.body, {
+      text: "crew, take it",
+      intent: "accomplish",
+      addressTeamId: "team_b",
+      userMessageId: "evt_1",
+    });
+  });
+
   it("requests recovery without sending assignments or executor details", async () => {
     const calls: Array<{ url: string; body: unknown }> = [];
     const original = globalThis.fetch;

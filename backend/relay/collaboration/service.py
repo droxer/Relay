@@ -72,6 +72,7 @@ class _PreparedRound:
     raw_assignments: list[dict[str, Any]] | None
     mode: str
     requested_team_id: str | None
+    address_team_id: str | None
     requested_project_id: str | None
     requested_node_id: str | None
     idempotency_key: str | None
@@ -161,6 +162,8 @@ class CollaborationConductor:
             address = (
                 {"kind": "members", "agentIds": addressed_ids}
                 if addressed_ids
+                else {"kind": "team", "teamId": intent.address_team_id}
+                if intent.address_team_id
                 else {"kind": "room"}
             )
             return _PreparedRound(
@@ -169,6 +172,7 @@ class CollaborationConductor:
                 raw_assignments=raw_assignments,
                 mode=purpose_modes[intent.purpose],
                 requested_team_id=None,
+                address_team_id=intent.address_team_id,
                 requested_project_id=None,
                 requested_node_id=None,
                 idempotency_key=intent.idempotency_key or intent.user_message_id,
@@ -186,6 +190,7 @@ class CollaborationConductor:
                 raw_assignments=[{"agentId": intent.target_agent_id, "mode": mode}],
                 mode=mode,
                 requested_team_id=None,
+                address_team_id=None,
                 requested_project_id=None,
                 requested_node_id=None,
                 idempotency_key=intent.idempotency_key,
@@ -214,6 +219,7 @@ class CollaborationConductor:
             raw_assignments=raw_assignments,
             mode=_mode(intent.mode),
             requested_team_id=intent.requested_team_id,
+            address_team_id=None,
             requested_project_id=intent.requested_project_id,
             requested_node_id=intent.requested_node_id,
             idempotency_key=intent.idempotency_key,
@@ -268,7 +274,7 @@ class CollaborationConductor:
                 status=400,
             )
         project_id = session_project_id or intent.requested_project_id
-        if team_id and project_id:
+        if (team_id or intent.address_team_id) and project_id:
             raise CollaborationError("project_team_conflict", status=400)
         team_member_ids: set[str] = set()
         team_snapshot: dict[str, Any] | None = None
@@ -276,6 +282,12 @@ class CollaborationConductor:
         is_recovery = isinstance(intent.decision, dict) and intent.decision.get(
             "kind"
         ) in ("rerun", "handoff")
+        round_team_id = self._round_team_id(
+            team_id,
+            intent.address_team_id,
+            raw_assignments,
+            retargetable=intent.source == "message",
+        )
         project: dict[str, Any] | None = None
         project_snapshot: dict[str, Any] | None = None
         if project_id:
@@ -314,14 +326,14 @@ class CollaborationConductor:
                 )
             except ProjectDispatchError as error:
                 raise CollaborationError(error.code, status=400) from error
-        elif team_id and not raw_assignments:
-            team, members = self._team_for_round(team_id, session, actor)
+        elif round_team_id and not raw_assignments:
+            team, members = self._team_for_round(round_team_id, session, actor)
             team_member_ids = {agent["id"] for agent in members}
             team_snapshot = team_runtime_snapshot(team, members)
             raw_assignments = team_member_assignments(
                 members, mode=intent.mode, team=team
             )
-        elif team_id and raw_assignments:
+        elif round_team_id and raw_assignments:
             if is_recovery:
                 # Recovery deliberately skips `team_agents`. A rerun or handoff
                 # is how a stuck thread gets rescued, so it must still work
@@ -343,7 +355,7 @@ class CollaborationConductor:
                 ]
                 members = [member for member in members if member]
             else:
-                team, members = self._team_for_round(team_id, session, actor)
+                team, members = self._team_for_round(round_team_id, session, actor)
                 team_member_ids = {agent["id"] for agent in members}
             team_snapshot = team_runtime_snapshot(team, members)
             # Addressing chooses participants, not their specialization. Keep
@@ -455,7 +467,7 @@ class CollaborationConductor:
         ):
             team_snapshot = {**team_snapshot, "workContractVersion": 1}
         assignments = self._compile_assignments(
-            raw_assignments, team_id, team_member_ids, team_snapshot
+            raw_assignments, round_team_id, team_member_ids, team_snapshot
         )
         resolved = resolve_agent_assignments(
             assignments,
@@ -725,6 +737,34 @@ class CollaborationConductor:
         if actor["isAdmin"] and session:
             return session.get("ownerEmployeeId") or actor["employeeId"]
         return actor["employeeId"]
+
+    def _round_team_id(
+        self,
+        thread_team_id: str | None,
+        address_team_id: str | None,
+        raw_assignments: list[dict[str, Any]] | None,
+        *,
+        retargetable: bool,
+    ) -> str | None:
+        """Which team, if any, runs this round.
+
+        A thread is pinned to a computer, not to a roster: any agent or team on
+        that computer shares its workspace. So a message may hand the round to
+        another team, and a team thread may address an agent outside its team —
+        that round simply runs without the team's contract. Recovery and the
+        legacy assignment path keep the strict roster: a rerun or handoff
+        repairs the team's own work.
+        """
+        if address_team_id:
+            return address_team_id
+        if not thread_team_id or not raw_assignments or not retargetable:
+            return thread_team_id
+        team = self.ctx.team_store.get_team(thread_team_id) or {}
+        roster = set(team.get("memberAgentIds") or [])
+        addressed = {
+            item.get("agentId") for item in raw_assignments if isinstance(item, dict)
+        }
+        return thread_team_id if addressed <= roster else None
 
     def _team_for_round(
         self, team_id: str, session: dict[str, Any] | None, actor: dict[str, Any]

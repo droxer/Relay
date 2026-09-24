@@ -23,7 +23,7 @@ describe("composer team targeting", () => {
     assert.equal(isTeamRoutable({ enabled: true, members: [] }), false);
   });
 
-  it("offers teams in the composer picker and keeps a started team thread locked", async () => {
+  it("offers teams in the composer picker and lets a started thread retarget them", async () => {
     const select = await readFile(resolve("web/src/components/composer/AgentSelect.tsx"), "utf8");
     const app = await readFile(resolve("web/src/App.tsx"), "utf8");
     // The composer-send path moved into hooks/useThreadDispatch when App.tsx
@@ -48,8 +48,13 @@ describe("composer team targeting", () => {
     );
     assert.doesNotMatch(select, /activeLogicalAgentId && isEmployeeAgentRoutable/);
     assert.match(select, /disabled=\{!isRoutable\}/);
-    // A team thread keeps its roster for life, so the picker locks onto it.
-    assert.match(app, /teamLocked=\{Boolean\(activeSession\?\.teamId\)\}/);
+    // A thread is pinned to a computer, not a roster: a started thread can
+    // hand its next round to any team there, so nothing locks the picker.
+    assert.doesNotMatch(app, /teamLocked/);
+    assert.doesNotMatch(select, /teamLocked/);
+    assert.match(app, /activeTeamId=\{roundTeamId\}/);
+    // Another team is named on the wire; the thread's own team is the room.
+    assert.match(dispatch, /addressTeamId: addressedTeamId/);
     // Team dispatch goes through teamId — the backend expands the roster.
     assert.match(dispatch, /teamId: pendingTeam\.id/);
   });
@@ -60,15 +65,16 @@ describe("composer agent selection", () => {
     const app = await readFile(resolve("web/src/App.tsx"), "utf8");
     // The placement-derived list moved into useThreadTargets when App.tsx was
     // broken up; the assertion follows it rather than pinning the file it
-    // used to live in. Both surfaces still read ONE effective list — ordinary
-    // threads use placements, while project and team threads narrow that list
-    // to their fixed roster — which is the property under test.
+    // used to live in. Both surfaces still read ONE list — every agent on the
+    // thread's computer, or a project's fixed roster — which is the property
+    // under test. Recovery keeps a team thread's roster separately.
     const targets = await readFile(resolve("web/src/hooks/useThreadTargets.ts"), "utf8");
     assert.match(targets, /agentsForThreadNode\(logicalAgents,\s*selectedThreadNodeId\)/);
-    assert.match(app, /mentionCandidates\(effectiveSelectableLogicalAgents\)/);
+    assert.match(app, /mentionCandidates\(composerLogicalAgents\)/);
+    assert.match(app, /logicalAgents=\{composerLogicalAgents\}|composerLogicalAgents=\{composerLogicalAgents\}/);
     assert.match(app, /effectiveSelectableLogicalAgents = useMemo/);
-    // Both rosters narrow through the same seam, so neither surface can offer
-    // a target its own round would refuse with `agent_forbidden`.
+    // Recovery narrows through the same seam, so the handoff picker cannot
+    // offer a target the rerun would refuse with `agent_forbidden`.
     assert.match(app, /activeProject[\s\S]{0,400}addressableThreadAgents/);
     assert.match(app, /activeTeam[\s\S]{0,400}addressableThreadAgents/);
   });
@@ -98,7 +104,7 @@ describe("composer agent selection", () => {
     const app = await readFile(resolve("web/src/hooks/useThreadDispatch.ts"), "utf8");
     assert.match(
       app,
-      /resolveThreadMessageAddress\(\{[\s\S]*?defaultAgentId: projectRoomRound \|\| pendingTeam \|\| activeSession\?\.teamId[\s\S]*?: activeLogicalAgentId/,
+      /resolveThreadMessageAddress\(\{[\s\S]*?defaultAgentId: projectRoomRound \|\| pendingTeam \|\| roundTeam\.teamId[\s\S]*?: activeLogicalAgentId/,
     );
     assert.match(app, /addressAgentIds: messageAddress\.addressAgentIds/);
     assert.match(app, /projectId: activeProject\.id/);
@@ -154,7 +160,7 @@ describe("composer agent selection", () => {
     assert.match(select, /onRoomPicked/);
     assert.match(composer, /room=\{projectName \? projectRoom : null\}/);
     // A project room has no team of its own, so team options stay out of it.
-    assert.match(composer, /teamOptionsEnabled=\{initializingThread && !projectName\}/);
+    assert.match(composer, /teamOptionsEnabled=\{!projectName\}/);
   });
 
   it("narrows a project round to the picked member and widens it back", async () => {

@@ -59,3 +59,24 @@ it("requires a project for routines as well", () => {
   expect(save).not.toHaveBeenCalled();
   expect(screen.getByText("project.required")).toBeTruthy();
 });
+
+it("offers every agent and team on the project's computer, not just its roster", () => {
+  const on = (computerId: string) => [{ computerId, desiredState: "active" }];
+  const onComputer = [{ id: "pc", name: "On computer", enabled: true, computerId: "pc-1", members: [{ agentId: "a", enabled: true }] }] as unknown as ProjectRecord[];
+  function Placed() {
+    const [form, setForm] = useState<TaskBoardFormState>({ ...emptyBacklogForm(user), title: "Ship", projectId: "pc" });
+    return <TaskDrawer open form={form} onChange={setForm} onSubmit={vi.fn()} onClose={vi.fn()}
+      saving={false} title="New" subtitle="Task" projects={onComputer}
+      logicalAgents={[
+        { id: "a", displayName: "Member", supervisorEmployeeId: "u", placements: on("pc-1") },
+        { id: "b", displayName: "Neighbour", supervisorEmployeeId: "u", placements: on("pc-1") },
+        { id: "c", displayName: "Far", supervisorEmployeeId: "u", placements: on("pc-2") },
+      ] as any}
+      teams={[
+        { id: "near", name: "Near team", ownerEmployeeId: "u", memberAgentIds: ["a", "b"] },
+        { id: "split", name: "Split team", ownerEmployeeId: "u", memberAgentIds: ["a", "c"] },
+      ] as any} />;
+  }
+  render(<Placed />);
+  expect(screen.getByTestId("assignment-options").textContent).toBe("Member,NeighbourNear team");
+});

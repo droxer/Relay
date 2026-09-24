@@ -28,6 +28,9 @@ class MessageIntent:
     # round; agents that are not yet participants join the thread by being
     # addressed.
     address_agent_ids: tuple[str, ...] = ()
+    # A team on the thread's computer that runs this round instead. Exclusive
+    # with `address_agent_ids`; the thread keeps its own team (if any).
+    address_team_id: str | None = None
     idempotency_key: str | None = None
     user_message_id: str | None = None
 

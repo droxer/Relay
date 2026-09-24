@@ -352,6 +352,7 @@ class TaskDispatcher:
                         self.ctx.session_store,
                     ),
                     session_store=self.ctx.session_store,
+                    team_store=self.ctx.team_store,
                 )
             )
             self.project_assignment_resolved = True
@@ -386,7 +387,9 @@ class TaskDispatcher:
             return self._routing_error_result(error)
 
     def _resolve_team_assignments(self) -> DispatchResult | None:
-        if not self.task.get("assignedTeamId"):
+        # A project task's team was already resolved inside the project, pinned
+        # to its computer and workspace; resolving it again would drop both.
+        if not self.task.get("assignedTeamId") or self.project_assignment_resolved:
             return None
         try:
             self.run_assignments = resolve_team_task_assignments(
@@ -672,7 +675,9 @@ class TaskDispatcher:
         }
         if self.agent_first:
             request["agentFirst"] = True
-        if self.task.get("assignedTeamId"):
+        # A project thread belongs to its project room; the team only chose who
+        # runs this task, so it never becomes the thread's team.
+        if self.task.get("assignedTeamId") and not self.project_snapshot:
             request["teamId"] = self.task["assignedTeamId"]
         # Resolved against the node `_dispatch` already holds, not
         # re-derived from run_assignments[0]["daemonNodeId"]: the legacy

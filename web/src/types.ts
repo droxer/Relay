@@ -767,6 +767,9 @@ export interface ThreadMessageInput {
   intent: "accomplish" | "discuss" | "review";
   /** Agents this message addresses. Empty or absent means the whole room. */
   addressAgentIds?: string[];
+  /** A team on the thread's computer that runs this round instead. Exclusive
+   *  with `addressAgentIds`; the thread keeps its own team, if it has one. */
+  addressTeamId?: string;
   userMessageId?: string;
   idempotencyKey?: string;
 }

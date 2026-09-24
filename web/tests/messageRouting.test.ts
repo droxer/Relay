@@ -6,6 +6,7 @@ import {
   routeComposerMessage,
   threadMessageInput,
   threadMessageOperationKey,
+  threadRoundTeam,
 } from "../src/lib/messageRouting.js";
 import type { MentionCandidate } from "../src/lib/mentions.js";
 
@@ -155,5 +156,60 @@ describe("thread message operation identity", () => {
     });
 
     assert.equal(first, second);
+  });
+});
+
+describe("thread round team", () => {
+  it("runs a team thread's own team while the room is the target", () => {
+    assert.deepEqual(
+      threadRoundTeam({ threadTeamId: "team_a", pickedTeamId: null, roomTarget: true }),
+      { teamId: "team_a", addressTeamId: null },
+    );
+  });
+
+  it("lets a team thread hand a round to one agent", () => {
+    assert.deepEqual(
+      threadRoundTeam({ threadTeamId: "team_a", pickedTeamId: null, roomTarget: false }),
+      { teamId: null, addressTeamId: null },
+    );
+  });
+
+  it("addresses another team on the same computer explicitly", () => {
+    assert.deepEqual(
+      threadRoundTeam({ threadTeamId: "team_a", pickedTeamId: "team_b", roomTarget: true }),
+      { teamId: "team_b", addressTeamId: "team_b" },
+    );
+    assert.deepEqual(
+      threadRoundTeam({ threadTeamId: null, pickedTeamId: "team_b", roomTarget: true }),
+      { teamId: "team_b", addressTeamId: "team_b" },
+    );
+  });
+
+  it("sends a re-pick of the thread's own team as a room message", () => {
+    assert.deepEqual(
+      threadRoundTeam({ threadTeamId: "team_a", pickedTeamId: "team_a", roomTarget: false }),
+      { teamId: "team_a", addressTeamId: null },
+    );
+  });
+
+  it("names no team for an agent thread with nothing picked", () => {
+    assert.deepEqual(
+      threadRoundTeam({ threadTeamId: null, pickedTeamId: null, roomTarget: true }),
+      { teamId: null, addressTeamId: null },
+    );
+  });
+});
+
+describe("thread message input with a team", () => {
+  it("carries the addressed team instead of agents", () => {
+    const input = threadMessageInput({
+      text: "crew, take it",
+      addressAgentIds: [],
+      addressTeamId: "team_b",
+      userMessageId: "evt_1",
+    });
+
+    assert.equal(input.addressTeamId, "team_b");
+    assert.equal(input.addressAgentIds, undefined);
   });
 });

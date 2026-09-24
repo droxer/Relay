@@ -4,6 +4,7 @@ from typing import Any
 
 from ..core.computer_identity import computer_id
 from .agent_routing import resolve_agent_assignments
+from .team_dispatch import TeamDispatchError, team_agents, team_member_assignments
 
 
 class ProjectDispatchError(ValueError):
@@ -22,6 +23,59 @@ def project_work_error(project: dict[str, Any] | None) -> str | None:
     return None
 
 
+def project_member_ids(project: dict[str, Any]) -> set[str]:
+    return {
+        member["agentId"]
+        for member in project.get("members", [])
+        if member.get("enabled", True)
+    }
+
+
+def project_listed_agent_ids(project: dict[str, Any]) -> set[str]:
+    """Every agent the roster names, enabled or not."""
+    return {member["agentId"] for member in project.get("members", [])}
+
+
+def agent_on_project_computer(
+    project: dict[str, Any], agent_id: str, placement_store: Any
+) -> bool:
+    """True when the agent lives on the project's computer.
+
+    A project owns a computer, and every agent on that computer shares its
+    workspace root, so a task in the project may be handed to any of them — the
+    roster names who answers the project room, not who may ever touch it.
+    """
+    return any(
+        placement.get("desiredState") != "removed"
+        and placement.get("computerId") == project.get("computerId")
+        for placement in placement_store.list_placements(agent_id=agent_id)
+    )
+
+
+def project_task_assignment_error(
+    project: dict[str, Any],
+    *,
+    agent_id: str | None,
+    team: dict[str, Any] | None,
+    placement_store: Any,
+) -> str | None:
+    """The one admission rule for who a project task may be assigned to.
+
+    A member the project disabled stays refused: that is a deliberate project
+    decision, not an agent the roster simply never listed.
+    """
+    if agent_id and agent_id in project_listed_agent_ids(project):
+        return None if agent_id in project_member_ids(project) else "project_agent_not_member"
+    if agent_id and not agent_on_project_computer(project, agent_id, placement_store):
+        return "project_agent_off_computer"
+    if team and not all(
+        agent_on_project_computer(project, member_id, placement_store)
+        for member_id in team.get("memberAgentIds") or []
+    ):
+        return "project_team_off_computer"
+    return None
+
+
 def resolve_project_task_assignments(
     task: dict[str, Any],
     *,
@@ -30,6 +84,7 @@ def resolve_project_task_assignments(
     placement_store: Any,
     daemon_nodes: list[dict[str, Any]],
     session_store: Any | None = None,
+    team_store: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     project = project_store.get_project(task.get("projectId"))
     if code := project_work_error(project):
@@ -48,11 +103,8 @@ def resolve_project_task_assignments(
     if node is None:
         raise ProjectDispatchError("project_computer_offline")
     snapshot = project_runtime_snapshot(project)
-    assigned_agent_id = task.get("assignedAgentId")
-    assignments = project_member_assignments(
-        project,
-        selected_agent_ids=[assigned_agent_id] if assigned_agent_id else None,
-        snapshot=snapshot,
+    assignments = _project_task_assignments(
+        task, project, snapshot, agent_store=agent_store, team_store=team_store
     )
     return (
         resolve_agent_assignments(
@@ -66,6 +118,58 @@ def resolve_project_task_assignments(
             session_store=session_store,
         ),
         snapshot,
+    )
+
+
+def _project_task_assignments(
+    task: dict[str, Any],
+    project: dict[str, Any],
+    snapshot: dict[str, Any],
+    *,
+    agent_store: Any,
+    team_store: Any | None,
+) -> list[dict[str, Any]]:
+    """Who runs a project task: its team, its agent, or the project roster.
+
+    A team or a non-member agent runs inside the project workspace exactly as a
+    member would; `resolve_agent_assignments` pins every one of them to the
+    project's node, so a placement that moved away fails the round instead of
+    running it somewhere without the project's files.
+    """
+    team_id = task.get("assignedTeamId")
+    if team_id:
+        try:
+            team, agents = team_agents(
+                team_id,
+                project["ownerEmployeeId"],
+                team_store=team_store,
+                agent_store=agent_store,
+            )
+        except TeamDispatchError as error:
+            raise ProjectDispatchError(error.code, permanent=error.permanent) from error
+        return [
+            {**assignment, "projectSnapshot": snapshot}
+            for assignment in team_member_assignments(agents, team=team)
+        ]
+    assigned_agent_id = task.get("assignedAgentId")
+    if assigned_agent_id and assigned_agent_id not in project_listed_agent_ids(project):
+        agent = agent_store.get_agent(assigned_agent_id) or {}
+        role = agent.get("defaultRole") or "implementer"
+        return [
+            {
+                "agentId": assigned_agent_id,
+                "role": role,
+                "mode": "action",
+                "phase": _phase(role),
+                "coordinator": True,
+                "brief": "Complete this project task in the shared project workspace.",
+                "projectSnapshot": snapshot,
+            }
+        ]
+    return project_member_assignments(
+        project,
+        selected_agent_ids=[assigned_agent_id] if assigned_agent_id else None,
+        snapshot=snapshot,
     )
 
 

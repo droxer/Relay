@@ -36,13 +36,11 @@ const ComposerView = forwardRef<ComposerHandle, {
   logicalAgents: EmployeeAgent[];
   activeLogicalAgentId: string | null;
   onLogicalAgentPicked: (agent: EmployeeAgent) => void;
-  /** Teams offered while staging a new thread; empty for a started one. */
+  /** Teams whose whole roster lives on the thread's computer. */
   teams?: AgentTeam[];
-  /** The picked team, or the team a started thread belongs to. */
+  /** The team this round runs: the pick, or a team thread's own team. */
   activeTeamId?: string | null;
   onTeamPicked?: (team: AgentTeam) => void;
-  /** A started team thread keeps its team for life — the picker locks. */
-  teamLocked?: boolean;
   activeAgentDisplayName: string;
   selectedEmployee: string;
   initializingThread: boolean;
@@ -68,7 +66,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   mentionCandidates?: MentionCandidate[];
   onSend: () => void;
   onCancelRun: () => void;
-}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, teamLocked, activeAgentDisplayName, selectedEmployee, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun }, ref) {
+}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedEmployee, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun }, ref) {
   const { t } = useTranslation();
   const composer = useComposer();
   const {
@@ -82,10 +80,10 @@ const ComposerView = forwardRef<ComposerHandle, {
   );
   // A mention is a selection: while the draft addresses someone, the footer
   // names that agent rather than the picker's standing choice, so the composer
-  // gives one answer to "who runs this?" instead of two. A team thread is the
-  // exception — the round still runs the whole roster, so it keeps naming the
-  // team.
-  const addressedLogicalAgentId = activeTeamId
+  // gives one answer to "who runs this?" instead of two. Staging a new team
+  // thread is the exception — creation runs the whole roster, so it keeps
+  // naming the team. A started thread sends the mention, so it names the agent.
+  const addressedLogicalAgentId = activeTeamId && initializingThread
     ? null
     : parsed.addressAgentIds[0] ?? null;
   // A mention names one member, so it narrows a project round away from the
@@ -231,10 +229,9 @@ const ComposerView = forwardRef<ComposerHandle, {
           activeLogicalAgentId={addressedLogicalAgentId ?? activeLogicalAgentId}
           onLogicalAgentPicked={pickLogicalAgent}
           teams={projectName ? [] : teams}
-          activeTeamId={projectName ? null : activeTeamId}
+          activeTeamId={projectName || addressedLogicalAgentId ? null : activeTeamId}
           onTeamPicked={pickTeam}
-          teamLocked={teamLocked}
-          teamOptionsEnabled={initializingThread && !projectName}
+          teamOptionsEnabled={!projectName}
           room={projectName ? projectRoom : null}
           roomSelected={roomSelected}
           onRoomPicked={pickRoom}

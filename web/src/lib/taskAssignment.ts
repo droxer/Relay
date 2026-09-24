@@ -18,6 +18,56 @@ export function assignmentOptionVisible(
   return ownerEmployeeId === assigneeEmployeeId;
 }
 
+type ComputerPlaced = {
+  id: string;
+  placements: ReadonlyArray<{ computerId?: string; desiredState: string }>;
+};
+
+/** Computers the agent lives on — one, by invariant, but read defensively. */
+function agentComputerIds(agent: Pick<ComputerPlaced, "placements">): Set<string> {
+  // Read defensively: a partial record (a stale cache, a narrow fixture) may
+  // carry no placements at all, which simply means "on no computer".
+  return new Set(
+    (agent.placements ?? [])
+      .filter((placement) => placement.desiredState !== "removed" && placement.computerId)
+      .map((placement) => placement.computerId as string),
+  );
+}
+
+/** Mirrors `agent_on_project_computer` in `backend/relay/services/project_runtime.py`. */
+export function agentOnComputer(
+  agent: Pick<ComputerPlaced, "placements">,
+  computerId: string,
+): boolean {
+  return agentComputerIds(agent).has(computerId);
+}
+
+/** Every member is on the computer. A member the roster does not know fails. */
+export function teamOnComputer(
+  team: { memberAgentIds: readonly string[] },
+  agents: readonly ComputerPlaced[],
+  computerId: string,
+): boolean {
+  const memberAgentIds = team.memberAgentIds ?? [];
+  if (memberAgentIds.length === 0) return false;
+  const byId = new Map(agents.map((agent) => [agent.id, agent]));
+  return memberAgentIds.every((agentId) => {
+    const agent = byId.get(agentId);
+    return Boolean(agent && agentOnComputer(agent, computerId));
+  });
+}
+
+/** A round runs on one computer, so a team is only dispatchable when its
+ *  whole roster shares one — whichever that is. */
+export function teamSharesOneComputer(
+  team: { memberAgentIds: readonly string[] },
+  agents: readonly ComputerPlaced[],
+): boolean {
+  const first = agents.find((agent) => agent.id === team.memberAgentIds?.[0]);
+  if (!first) return false;
+  return [...agentComputerIds(first)].some((computerId) => teamOnComputer(team, agents, computerId));
+}
+
 export function teamReady(team: Pick<AgentTeam, "enabled" | "members" | "memberConfigs" | "leadAgentId">): boolean {
   return teamAvailability(team) === "ready";
 }
