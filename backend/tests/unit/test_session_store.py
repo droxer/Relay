@@ -14,6 +14,21 @@ from relay.sessions.controller import SessionController, SessionRunInFlightError
 from sqlalchemy import select, text
 
 
+@pytest.mark.parametrize("outcome", ["reported_done", "unfinished", "blocked", "needs_review", "unverified"])
+def test_work_outcome_survives_replay_and_clears_on_new_execution(outcome):
+    created = relay_event("session.created", "ses_work", {
+        "workspacePath": "/workspace", "taskGoal": "Resolve", "participants": ["human", "codex"],
+    })
+    completed = relay_event("session.completed", "ses_work", {"outcome": "Run ended", "workOutcome": outcome})
+    assert materialize_events([created, completed])["workOutcome"] == outcome
+    restarted = relay_event("session.status", "ses_work", {"status": "running", "phase": "execution"})
+    assert "workOutcome" not in materialize_events([created, completed, restarted])
+    failed = relay_event("session.failed", "ses_work", {"outcome": "Process failed"})
+    assert materialize_events([created, completed, failed])["workOutcome"] == "blocked"
+    legacy = relay_event("session.completed", "ses_work", {"outcome": "Old run"})
+    assert materialize_events([created, completed, legacy])["workOutcome"] == "unverified"
+
+
 def test_session_stores_create_uuid_thread_ids() -> None:
     with TemporaryDirectory() as root:
         stores = (

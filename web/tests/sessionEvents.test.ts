@@ -24,6 +24,24 @@ function session(partial: Partial<RelaySession> = {}): RelaySession {
 }
 
 describe("applySessionEvent", () => {
+  it("keeps work outcome separate from process completion in replay and SSE", () => {
+    const created = relayEvent("session.created", "work", { workspacePath: "/workspace", taskGoal: "Resolve", participants: ["human", "codex"] });
+    const completed = { ...relayEvent("session.completed", "work", { outcome: "Needs a fixture" }), workOutcome: "blocked" as const };
+    const replay = materializeEvents([created, completed]);
+    const incremental = applySessionEvent(materializeEvents([created]), completed);
+    assert.equal(replay.status, "completed");
+    assert.equal(Reflect.get(replay, "workOutcome"), "blocked");
+    assert.equal(Reflect.get(incremental, "workOutcome"), "blocked");
+    const resumed = relayEvent("session.status", "work", { status: "running", phase: "execution" });
+    assert.equal(Reflect.get(materializeEvents([created, completed, resumed]), "workOutcome"), undefined);
+    assert.equal(Reflect.get(applySessionEvent(incremental, resumed), "workOutcome"), undefined);
+    const failed = relayEvent("session.failed", "work", { outcome: "Runtime failed" });
+    assert.equal(Reflect.get(materializeEvents([created, completed, failed]), "workOutcome"), "blocked");
+    assert.equal(Reflect.get(applySessionEvent(incremental, failed), "workOutcome"), "blocked");
+    const legacy = relayEvent("session.completed", "work", { outcome: "Historical run" });
+    assert.equal(Reflect.get(materializeEvents([created, completed, legacy]), "workOutcome"), "unverified");
+    assert.equal(Reflect.get(applySessionEvent(incremental, legacy), "workOutcome"), "unverified");
+  });
   it("keeps work acceptance evidence identical in full replay and SSE", () => {
     const created = relayEvent("session.created", "work", { workspacePath: "/workspace", taskGoal: "Deliver", participants: ["human", "codex"] });
     const started = relayEvent("agent.started", "work", { runId: "run", agent: "codex", assignmentId: "assignment" });
