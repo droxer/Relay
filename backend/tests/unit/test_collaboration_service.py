@@ -1,3 +1,6 @@
+import hashlib
+import json
+from dataclasses import asdict
 from types import SimpleNamespace
 
 from relay.collaboration.models import MessageIntent
@@ -393,3 +396,75 @@ def test_partial_work_graph_metadata_is_completed_before_manifest_creation() -> 
             "required": True,
         }
     ]
+
+
+def _styled_manifest(style: str, **snapshot_extra):
+    roster = [
+        {"id": "lead", "executorKind": "codex", "defaultRole": "planner"},
+        {"id": "dev", "executorKind": "codex", "defaultRole": "implementer"},
+        {"id": "qa", "executorKind": "claude", "defaultRole": "reviewer"},
+    ]
+    team = {"id": "team_1", "leadAgentId": "lead", "memberAgentIds": ["lead", "dev", "qa"], "memberConfigs": {}}
+    assignments = [
+        {**item, "assignmentId": f"a{index}"}
+        for index, item in enumerate(team_member_assignments(roster, team=team, style=style))
+    ]
+    snapshot = {**assignments[0]["teamSnapshot"], **snapshot_extra}
+    return create_round_manifest(
+        source="message", purpose="accomplish", address={"kind": "room"},
+        assignments=compile_assignment_work_graph(assignments, purpose="accomplish", team_snapshot=snapshot),
+        team_snapshot=snapshot,
+    )
+
+
+def test_manifest_records_the_style_and_its_policy() -> None:
+    manifest = _styled_manifest("build_review")
+    assert manifest["style"] == "build_review"
+    assert manifest["workGraph"]["delegationPolicy"]["policy"] == "build-review-v1"
+    assert [item["kind"] for item in manifest["workGraph"]["items"]] == ["implementation", "synthesis"]
+
+
+def test_manifest_records_a_fallback() -> None:
+    manifest = _styled_manifest("solo", styleFallbackFrom="build_review")
+    assert manifest["style"] == "solo"
+    assert manifest["styleFallbackFrom"] == "build_review"
+    assert manifest["workGraph"]["delegationPolicy"]["policy"] == "solo-v1"
+
+
+def test_lead_led_manifest_keeps_its_policy() -> None:
+    manifest = _styled_manifest("lead_led")
+    assert manifest["style"] == "lead_led"
+    assert manifest["workGraph"]["delegationPolicy"]["policy"] == "sequential-role-delegation-v1"
+
+
+def test_manifest_without_a_team_has_no_style() -> None:
+    manifest = create_round_manifest(
+        source="message", purpose="accomplish", address={"kind": "room"},
+        assignments=[{"assignmentId": "a", "agentId": "x", "mode": "action"}], team_snapshot=None,
+    )
+    assert "style" not in manifest
+
+
+def test_lead_is_coordinator_only_in_lead_led_rounds() -> None:
+    conductor = CollaborationConductor(SimpleNamespace())
+    for style, expected in (("lead_led", True), ("build_review", False), ("pipeline", False)):
+        snapshot = {"teamId": "t", "leadAgentId": "lead", "collaborationStyle": style}
+        [compiled] = conductor._compile_assignments(
+            [{"agentId": "lead", "mode": "action", "role": "implementer"}], "t", {"lead"}, snapshot
+        )
+        assert bool(compiled.get("coordinator")) is expected, style
+    legacy = {"teamId": "t", "leadAgentId": "lead"}
+    [compiled] = conductor._compile_assignments([{"agentId": "lead", "mode": "action"}], "t", {"lead"}, legacy)
+    assert compiled["coordinator"] is True
+
+
+def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
+    plain = CollaborationConductor._prepare(MessageIntent(thread_id="t", text="hi"))
+    styled = CollaborationConductor._prepare(MessageIntent(thread_id="t", text="hi", style="solo"))
+    assert plain.style is None
+    assert _request_fingerprint(plain) != _request_fingerprint(styled)
+    legacy_payload = {k: v for k, v in asdict(plain).items() if k not in ("idempotency_key", "style")}
+    legacy = hashlib.sha256(
+        json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    ).hexdigest()
+    assert _request_fingerprint(plain) == legacy

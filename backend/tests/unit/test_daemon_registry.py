@@ -4850,6 +4850,74 @@ def test_team_work_evidence_repairs_owner_and_revalidates_before_completion(cons
     asyncio.run(flow())
 
 
+@pytest.mark.parametrize("exhaust_budget", [False, True])
+def test_build_review_repairs_findings_and_bounds_review_cycles(exhaust_budget) -> None:
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, _, registry = _pipeline_registry(root, work_results=True)
+            snapshot = {
+                "teamId": "team", "leadAgentId": "lead",
+                "memberAgentIds": ["lead", "builder", "reviewer", "unused"],
+                "collaborationStyle": "build_review", "workContractVersion": 1,
+            }
+            assignments = [
+                {"assignmentId": "build", "agent": "codex", "role": "implementer",
+                 "mode": "action", "workKind": "implementation"},
+                {"assignmentId": "review", "agent": "claude", "role": "reviewer",
+                 "mode": "review", "synthesizer": True, "workKind": "synthesis"},
+            ]
+            for assignment in assignments:
+                assignment.update(teamSnapshot=snapshot, required=True)
+            task = registry.task_store.create_task({
+                "title": "Fix empty input", "acceptancePolicy": "automatic",
+            })
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Fix empty input", "taskId": task["id"],
+                "assignments": assignments,
+            })
+
+            def take(expected):
+                [command] = registry.take_commands("sbx_alice", "node_token")
+                assert command["assignmentId"] == expected
+                assert not command["state"].get("team_plan_candidates")
+                return command
+
+            def finish(command, work):
+                _start_run(registry, command)
+                registry.handle_event("sbx_alice", {
+                    "type": "run.completed", "commandId": command["id"],
+                    "sessionId": session["id"], "runId": command["runId"],
+                    "agent": command["agent"], "exitCode": 0,
+                    "roundResult": {"status": work["status"], "work": work},
+                }, "node_token")
+
+            good = {"status": "done", "evidence": ["Acceptance checks passed"]}
+            findings = {
+                "status": "continue", "evidence": ["Empty input crashes"],
+                "findings": [{"workItemId": "build", "note": "Handle empty input"}],
+            }
+            cycles = 3 if exhaust_budget else 2
+            for cycle in range(cycles):
+                build = take("build")
+                if cycle:
+                    assert "Handle empty input" in build["state"]["repair_note"]
+                finish(build, good)
+                review = take("review")
+                if cycle:
+                    assert "revalidate" in review["state"]["work_revalidation_note"]
+                finish(review, findings if exhaust_budget or cycle == 0 else good)
+
+            assert registry.take_commands("sbx_alice", "node_token") == []
+            assert registry.task_store.get_task(task["id"])["status"] == (
+                "waiting_for_human" if exhaust_budget else "done"
+            )
+            completed = sessions.get_session(session["id"])
+            assert len(completed["agentRuns"]) == cycles * 2
+            assert completed["workOutcome"] == ("blocked" if exhaust_budget else "reported_done")
+
+    asyncio.run(flow())
+
+
 def _start_run(registry: Any, command: dict[str, Any]) -> None:
     if command.get("reportExecutionStarted"):
         registry.handle_event(

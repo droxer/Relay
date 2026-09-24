@@ -98,6 +98,7 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
             "memberAgentIds": [lead["id"], builder["id"]],
             "memberConfigs": {builder["id"]: {"role": "implementer", "responsibility": "API", "required": True}},
             "acceptanceCriteria": ["Existing clients remain compatible"],
+            "collaborationStyle": "lead_led",
         })
         assert response.status_code == 201
         team = response.json()["team"]
@@ -108,6 +109,11 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
         [command] = app.state.registry.take_commands("test_node_alice", "node_token")
         _mark_executing(app, "test_node_alice", command)
         assert command["state"]["team_plan_candidates"][0]["agentId"] == builder["id"]
+        # Editing the live team cannot change the admitted round or its plan.
+        changed = client.patch(f"/api/v1/teams/{team['id']}", json={
+            "collaborationStyle": "solo",
+        })
+        assert changed.status_code == 200, changed.text
         event = {
             "type": "run.completed", "commandId": command["id"], "sessionId": command["sessionId"],
             "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
@@ -129,6 +135,9 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
             assert "authorized specialist" in session["finalOutcome"]
         else:
             assert len(plans) == 1
+            assert plans[0]["manifest"]["style"] == "lead_led"
+            assert plans[0]["manifest"]["teamSnapshot"]["collaborationStyle"] == "lead_led"
+            assert plans[0]["manifest"]["workGraph"]["delegationPolicy"]["policy"] == "lead-plan-v1"
             assert len(commands) == 1
             assert commands[0]["logicalAgentId"] == builder["id"]
             assert "POST /reset" in commands[0]["state"]["assignment_brief"]
@@ -338,6 +347,54 @@ def test_admin_and_employee_manage_teams(monkeypatch) -> None:
         )
         assert renamed.status_code == 200
         assert renamed.json()["team"]["name"] == "Delivery crew"
+
+
+def test_team_collaboration_style_round_trips_through_the_api(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex")
+        support = _agent(client, "alice", "Support", "claude")
+
+        assert client.post("/api/v1/auth/logout").status_code == 200
+        assert (
+            client.post(
+                "/api/v1/auth/login", json={"username": "alice", "password": "userpass"}
+            ).status_code
+            == 200
+        )
+
+        created = client.post(
+            "/api/v1/teams",
+            json={
+                "name": "Delivery",
+                "leadAgentId": lead["id"],
+                "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "solo",
+            },
+        )
+        assert created.status_code == 201
+        team = created.json()["team"]
+        assert team["collaborationStyle"] == "solo"
+
+        rejected = client.patch(
+            f"/api/v1/teams/{team['id']}",
+            json={"collaborationStyle": "debate"},
+        )
+        assert rejected.status_code == 400
+        assert (
+            "collaborationStyle must be one of: solo, build_review, pipeline, lead_led."
+            in rejected.text
+        )
+
+        cleared = client.patch(
+            f"/api/v1/teams/{team['id']}",
+            json={"collaborationStyle": None},
+        )
+        assert cleared.status_code == 200
+        assert "collaborationStyle" not in cleared.json()["team"]
 
 
 def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> None:
@@ -1158,6 +1215,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], reviewer["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -1698,6 +1756,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -1788,6 +1847,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
             "teamRevision": team["updatedAt"],
             "memberAgentIds": [lead["id"], support["id"]],
             "leadAgentId": lead["id"],
+            "collaborationStyle": "lead_led",
         }
         round_events = [
             event
@@ -2066,6 +2126,7 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
                 "ownerEmployeeId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
+                "collaborationStyle": "lead_led",
                 "memberAgentIds": [lead["id"], support["id"]],
             },
         ).json()["team"]
@@ -2274,6 +2335,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -2381,6 +2443,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
             json={
                 "ownerEmployeeId": "alice",
                 "name": "Delivery",
+                "collaborationStyle": "lead_led",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
             },
@@ -2491,6 +2554,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -3186,6 +3250,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
         team = client.post("/api/v1/admin/teams", json={
             "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], *[member["id"] for member in members]],
+            "collaborationStyle": "lead_led",
         }).json()["team"]
         _login(client, "alice")
         task = None
@@ -3239,3 +3304,168 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
         assert app.state.session_store.get_session(session_id)["status"] == "completed"
         if task:
             assert app.state.task_store.get_task(task["id"])["status"] == "done"
+
+
+@pytest.mark.parametrize("new_thread", [False, True])
+def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
+    from relay.sessions.controller import SessionController
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex", role="planner")
+        builder = _agent(client, "alice", "Builder", "claude")
+        reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
+        node_id = "test_node_alice"
+        app.state.registry.register({
+            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"],
+            "capabilities": ["thread-workspaces", "round-result", "work-results"], "status": "ready",
+        })
+        team = client.post("/api/v1/admin/teams", json={
+            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
+        }).json()["team"]
+        controller = SessionController(
+            app.state.session_store,
+            owner_employee_id="alice",
+            owner_agent_id=lead["id"],
+            team_id=team["id"],
+            daemon_node_id=node_id,
+            workspace_layout="thread",
+        )
+        session = controller.create_session("Fix it")
+        _login(client, "alice")
+
+        response = client.post(
+            "/api/v1/agent-runs" if new_thread else f"/api/v1/threads/{session['id']}/messages",
+            json={"taskGoal": "Fix it", "teamId": team["id"], "style": "solo"}
+            if new_thread else {"text": "Fix it"},
+        )
+        assert response.status_code == 202, response.text
+        if new_thread:
+            session = response.json()
+            assert session["collaborationRounds"][-1]["style"] == "solo"
+        [implementer_command] = app.state.registry.take_commands(node_id, "node_token")
+        assert implementer_command["logicalAgentId"] == builder["id"]
+        _mark_executing(app, node_id, implementer_command)
+        app.state.registry.handle_event(
+            node_id,
+            {
+                "type": "run.completed",
+                "commandId": implementer_command["id"],
+                "sessionId": session["id"],
+                "runId": implementer_command["runId"],
+                "agent": implementer_command["agent"],
+                "exitCode": 0,
+                **_successful_work_report(implementer_command),
+            },
+            "node_token",
+        )
+        if new_thread:
+            assert app.state.registry.take_commands(node_id, "node_token") == []
+            return
+        [reviewer_command] = app.state.registry.take_commands(node_id, "node_token")
+        assert reviewer_command["logicalAgentId"] == reviewer["id"]
+        assert reviewer_command["state"]["team_phase"] == "review"
+        updated = app.state.session_store.get_session(session["id"])
+        assert updated["collaborationRounds"][-1]["style"] == "build_review"
+
+
+def test_message_style_is_validated(monkeypatch) -> None:
+    from relay.sessions.controller import SessionController
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex", role="planner")
+        builder = _agent(client, "alice", "Builder", "claude")
+        reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
+        node_id = "test_node_alice"
+        app.state.registry.register({
+            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"],
+            "capabilities": ["thread-workspaces", "round-result", "work-results"], "status": "ready",
+        })
+        team = client.post("/api/v1/admin/teams", json={
+            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
+        }).json()["team"]
+        team_session = SessionController(
+            app.state.session_store,
+            owner_employee_id="alice",
+            owner_agent_id=lead["id"],
+            team_id=team["id"],
+            daemon_node_id=node_id,
+            workspace_layout="thread",
+        ).create_session("Fix it")
+        solo_session = SessionController(
+            app.state.session_store,
+            owner_employee_id="alice",
+            owner_agent_id=builder["id"],
+            daemon_node_id=node_id,
+            workspace_layout="thread",
+        ).create_session("Fix it too")
+
+        invalid_style = client.post(
+            f"/api/v1/threads/{team_session['id']}/messages",
+            json={"text": "x", "style": "debate"},
+        )
+        assert invalid_style.status_code == 400
+        assert "style must be one of" in invalid_style.json()["detail"]["message"]
+        invalid_new_style = client.post("/api/v1/agent-runs", json={
+            "taskGoal": "x", "teamId": team["id"], "style": "debate",
+        })
+        assert invalid_new_style.status_code == 400
+        assert "style must be one of" in invalid_new_style.text
+        styled_single_agent = client.post("/api/v1/agent-runs", json={
+            "taskGoal": "x", "assignments": [{"agentId": builder["id"]}], "style": "solo",
+        })
+        assert styled_single_agent.status_code == 400
+        assert "Collaboration style applies to team work requests only." in styled_single_agent.text
+
+        discuss_with_style = client.post(
+            f"/api/v1/threads/{team_session['id']}/messages",
+            json={"text": "x", "intent": "discuss", "style": "solo"},
+        )
+        assert discuss_with_style.status_code == 400
+        assert (
+            "Collaboration style applies to team work requests only."
+            in discuss_with_style.json()["detail"]["message"]
+        )
+
+        addressed_with_style = client.post(
+            f"/api/v1/threads/{team_session['id']}/messages",
+            json={"text": "x", "addressAgentIds": [lead["id"]], "style": "solo"},
+        )
+        assert addressed_with_style.status_code == 400
+        assert (
+            "Collaboration style applies to team work requests only."
+            in addressed_with_style.json()["detail"]["message"]
+        )
+
+        solo_thread_with_style = client.post(
+            f"/api/v1/threads/{solo_session['id']}/messages",
+            json={"text": "x", "style": "solo"},
+        )
+        assert solo_thread_with_style.status_code == 400
+        assert (
+            "Collaboration style applies to team work requests only."
+            in solo_thread_with_style.json()["detail"]["message"]
+        )
+
+        lead_led = client.post(
+            f"/api/v1/threads/{team_session['id']}/messages",
+            json={"text": "x", "style": "lead_led"},
+        )
+        assert lead_led.status_code == 202, lead_led.text
+        [command] = app.state.registry.take_commands(node_id, "node_token")
+        assert command["logicalAgentId"] == lead["id"]

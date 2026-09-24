@@ -1,4 +1,5 @@
 import type {
+  CollaborationStyle,
   AgentName,
   AgentRole,
   ControlPanelDaemonNodeRecord,
@@ -24,6 +25,7 @@ import type {
 import type { Language, Theme } from "./lib/appStorage.js";
 
 export type {
+  CollaborationStyle,
   AgentName,
   AgentRole,
   ControlPanelDaemonNodeRecord,
@@ -707,6 +709,7 @@ export interface TeamMemberConfig {
 }
 
 export interface AgentTeam {
+  collaborationStyle?: CollaborationStyle;
   id: string;
   ownerEmployeeId: string;
   name: string;
@@ -728,6 +731,7 @@ export interface AgentTeamsResponse {
 }
 
 export interface TeamMutationInput {
+  collaborationStyle?: CollaborationStyle | null;
   memberConfigs?: Record<string, TeamMemberConfig>;
   acceptanceCriteria?: string[];
   name: string;
@@ -739,6 +743,7 @@ export interface TeamMutationInput {
 }
 
 export interface AgentRunInput {
+  style?: CollaborationStyle;
   taskGoal: string;
   /** Computer selected as the immutable runtime for a new thread. */
   daemonNodeId?: string;
@@ -764,6 +769,7 @@ export interface AgentRunInput {
 }
 
 export interface ThreadMessageInput {
+  style?: CollaborationStyle;
   text: string;
   intent: "accomplish" | "discuss" | "review";
   /** Agents this message addresses. Empty or absent means the whole room. */
@@ -818,6 +824,7 @@ export interface CreateSessionInput {
 }
 
 export interface TaskMutationInput {
+  collaborationStyle?: CollaborationStyle | "" | null;
   acceptancePolicy?: "human" | "automatic";
   blockerReason?: string;
   action?: "unblock";

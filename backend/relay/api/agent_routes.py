@@ -7,6 +7,7 @@ from loguru import logger
 
 from ..collaboration.models import RunIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
+from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.computer_identity import computer_id
 from ..persistence.agent_placement_store import create_node_placement, placement_status
 from ..security.auth import require_admin_session
@@ -277,6 +278,12 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
     if raw_assignments is not None and not isinstance(raw_assignments, list):
         raise HTTPException(400, "assignments must be a list.")
     decision = body.get("decision")
+    style = body.get("style")
+    if style is not None:
+        try:
+            style = validate_collaboration_style(style, "style")
+        except CollaborationStyleError as error:
+            raise HTTPException(400, str(error)) from error
     try:
         return await CollaborationConductor(ctx).submit(
             RunIntent(
@@ -302,6 +309,7 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
                 or string_field(body, "user_message_id")
                 or None,
                 decision=decision if isinstance(decision, dict) else None,
+                style=style,
             ),
             actor,
         )

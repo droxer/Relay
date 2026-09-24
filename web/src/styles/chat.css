@@ -498,6 +498,20 @@
   white-space: nowrap;
 }
 
+.msg-speaker-slot {
+  margin-inline-start: var(--sp-2);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.collab-status {
+  margin: var(--sp-2) 0 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
 .msg-turn-foot {
   display: flex;
   align-items: center;

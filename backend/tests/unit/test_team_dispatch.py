@@ -6,6 +6,8 @@ import pytest
 
 from relay.services.team_dispatch import (
     TeamDispatchError,
+    resolve_team_task_assignments,
+    task_thread_assignments,
     team_agents,
     team_member_assignments,
 )
@@ -40,13 +42,16 @@ def _agent(agent_id: str, executor: str, **overrides: Any) -> dict[str, Any]:
     }
 
 
-def _team(**overrides: Any) -> dict[str, Any]:
+def _team(style: str | None = None, **overrides: Any) -> dict[str, Any]:
     return {
         "id": "team_1",
         "ownerEmployeeId": "alice",
         "leadAgentId": "lead",
         "memberAgentIds": ["support", "lead"],
+        "memberConfigs": {},
+        "acceptanceCriteria": ["Tests pass"],
         "enabled": True,
+        **({"collaborationStyle": style} if style else {}),
         **overrides,
     }
 
@@ -162,6 +167,7 @@ def test_team_member_assignments_freezes_the_roster_for_the_round() -> None:
         "workContractVersion": 1,
         "memberAgentIds": ["lead", "support"],
         "leadAgentId": "lead",
+        "collaborationStyle": "lead_led",
     }
     assert [item["teamSnapshot"] for item in assignments] == [expected, expected, expected]
 
@@ -266,3 +272,157 @@ def test_lead_final_turn_reviews_before_delivering_result():
     )
     assert "Review" in assignments[-1]["brief"]
     assert "acceptance criteria" in assignments[-1]["brief"]
+
+
+def _roster() -> list[dict[str, Any]]:
+    return [
+        _agent("lead", "codex", defaultRole="planner"),
+        _agent("dev", "codex", defaultRole="implementer"),
+        _agent("qa", "claude", defaultRole="reviewer"),
+    ]
+
+
+def _shape(assignments: list[dict[str, Any]]) -> list[tuple]:
+    return [
+        (a["agentId"], a.get("role"), a["mode"], bool(a.get("coordinator")), bool(a.get("synthesizer")), a.get("required"))
+        for a in assignments
+    ]
+
+
+def test_build_review_runs_builder_then_reviewer_with_no_coordinator() -> None:
+    assignments = team_member_assignments(_roster(), team=_team(), style="build_review")
+    assert _shape(assignments) == [
+        ("dev", "implementer", "action", False, False, True),
+        ("qa", "reviewer", "review", False, True, True),
+    ]
+    snapshot = assignments[0]["teamSnapshot"]
+    assert snapshot["collaborationStyle"] == "build_review"
+    assert snapshot["workContractVersion"] == 1
+    assert "styleFallbackFrom" not in snapshot
+    assert all(a["acceptanceCriteria"] == ["Tests pass"] for a in assignments)
+
+
+def test_solo_runs_only_the_builder_as_its_own_synthesizer() -> None:
+    assignments = team_member_assignments(_roster(), team=_team(), style="solo")
+    assert _shape(assignments) == [("dev", "implementer", "action", False, True, True)]
+    assert assignments[0]["teamSnapshot"]["collaborationStyle"] == "solo"
+
+
+def test_pipeline_runs_members_in_role_order_and_last_synthesizes() -> None:
+    assignments = team_member_assignments(_roster(), team=_team(), style="pipeline")
+    assert _shape(assignments) == [
+        ("lead", "planner", "action", False, False, True),
+        ("dev", "implementer", "action", False, False, True),
+        ("qa", "reviewer", "action", False, True, True),
+    ]
+
+
+def test_one_member_build_review_falls_back_to_solo_and_records_it() -> None:
+    team = _team(memberAgentIds=["lead"])
+    assignments = team_member_assignments(
+        [_agent("lead", "codex", defaultRole="reviewer")], team=team, style="build_review"
+    )
+    assert _shape(assignments) == [("lead", "implementer", "action", False, True, True)]
+    snapshot = assignments[0]["teamSnapshot"]
+    assert snapshot["collaborationStyle"] == "solo"
+    assert snapshot["styleFallbackFrom"] == "build_review"
+
+
+def test_removing_the_only_reviewer_falls_back_instead_of_failing() -> None:
+    roster = [_agent("lead", "codex", defaultRole="implementer")]
+    team = _team(memberAgentIds=["lead"], collaborationStyle="build_review")
+    assignments = team_member_assignments(roster, team=team, style="build_review")
+    assert len(assignments) == 1
+    assert assignments[0]["teamSnapshot"]["styleFallbackFrom"] == "build_review"
+
+
+def test_membership_role_override_decides_the_slot() -> None:
+    team = _team(memberConfigs={"lead": {"role": "implementer"}, "dev": {"role": "tester"}})
+    assignments = team_member_assignments(_roster(), team=team, style="build_review")
+    assert [a["agentId"] for a in assignments] == ["lead", "qa"]
+
+
+def test_on_request_members_never_fill_a_slot() -> None:
+    team = _team(memberConfigs={"qa": {"participation": "on_request"}})
+    assignments = team_member_assignments(_roster(), team=team, style="build_review")
+    assert [a["agentId"] for a in assignments] == ["dev", "lead"]
+
+
+def test_non_action_rounds_ignore_the_style() -> None:
+    discuss = team_member_assignments(_roster(), mode="ask", team=_team(), style="build_review")
+    assert [a["agentId"] for a in discuss][-1] == "lead"
+    assert all("collaborationStyle" not in (a.get("teamSnapshot") or {}) for a in discuss)
+
+
+def test_lead_led_output_is_unchanged_apart_from_the_recorded_style() -> None:
+    default = team_member_assignments(_roster(), team=_team())
+    explicit = team_member_assignments(_roster(), team=_team(), style="lead_led")
+    assert explicit == default
+    assert [a["agentId"] for a in default] == ["lead", "dev", "qa", "lead"]
+    assert default[0]["coordinator"] is True and default[-1]["synthesizer"] is True
+    assert default[0]["teamSnapshot"]["collaborationStyle"] == "lead_led"
+
+
+def test_style_builders_do_not_mutate_the_roster() -> None:
+    roster = _roster()
+    before = [dict(agent) for agent in roster]
+    for style in ("solo", "build_review", "pipeline", "lead_led"):
+        team_member_assignments(roster, team=_team(), style=style)
+    assert roster == before
+
+
+def _task_stores(team: dict[str, Any]):
+    team = {
+        **team,
+        "ownerEmployeeId": "alice",
+        "enabled": True,
+        "memberAgentIds": [agent["id"] for agent in _roster()],
+    }
+    return FakeTeamStore(team), FakeAgentStore(_roster())
+
+
+def test_task_style_overrides_the_team_style_for_task_rounds() -> None:
+    team_store, agent_store = _task_stores(_team("pipeline"))
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice", "collaborationStyle": "solo"}
+    assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
+    assert [a["agentId"] for a in assignments] == ["dev"]
+    assert assignments[0]["teamSnapshot"]["collaborationStyle"] == "solo"
+
+
+def test_task_without_style_uses_the_team_style() -> None:
+    team_store, agent_store = _task_stores(_team("pipeline"))
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice"}
+    assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
+    assert [a["agentId"] for a in assignments] == ["lead", "dev", "qa"]
+
+
+def test_unstyled_team_task_defaults_to_build_review() -> None:
+    team_store, agent_store = _task_stores(_team())
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice"}
+    assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
+    assert [a["agentId"] for a in assignments] == ["dev", "qa"]
+
+
+@pytest.mark.parametrize("task_style, expected", [
+    (None, ["lead", "dev", "qa"]),
+    ("solo", ["dev"]),
+    ("build_review", ["dev", "qa"]),
+])
+def test_task_dispatch_resolves_style_before_placement(monkeypatch, task_style, expected):
+    team_store, agent_store = _task_stores(_team("pipeline"))
+
+    def resolve(assignments, **kwargs):
+        assert kwargs["employee_id"] == "alice"
+        assert kwargs["is_admin"] is False
+        return assignments
+
+    monkeypatch.setattr("relay.services.team_dispatch.resolve_agent_assignments", resolve)
+    assignments = resolve_team_task_assignments(
+        {"assignedTeamId": "team_1", "ownerEmployeeId": "requester",
+         "assigneeEmployeeId": "alice", "collaborationStyle": task_style},
+        team_store=team_store, agent_store=agent_store,
+        placement_store=None, daemon_nodes=[],
+    )
+    assert [item["agentId"] for item in assignments] == expected
+    assert all(item["teamSnapshot"]["collaborationStyle"] == (task_style or "pipeline")
+               for item in assignments)

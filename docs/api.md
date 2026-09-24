@@ -71,7 +71,7 @@ truncate either projection.
 ```text
 PATCH  /api/v1/threads/{id}                         { title } or { archived: true }
 POST   /api/v1/threads/{id}/cancellations
-POST   /api/v1/threads/{id}/messages               { text, intent, addressAgentId?, userMessageId?, idempotencyKey? }
+POST   /api/v1/threads/{id}/messages               { text, intent, addressAgentIds?, addressTeamId?, style?, userMessageId?, idempotencyKey? }
 POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey? }
 PUT    /api/v1/tasks/{id}/assignment
 POST   /api/v1/tasks/{id}/runs
@@ -557,6 +557,35 @@ recovery endpoint nor deletion treats that silence as termination.
 
 ## Team responsibilities and work acceptance
 
+### Collaboration styles
+
+Teams accept optional `collaborationStyle`: `solo`, `build_review`, `pipeline`,
+or `lead_led`. Absence defaults to `build_review`; PATCH with `null` clears the
+team setting. Tasks and routines accept the same optional field; PATCH with
+`""` clears a task override. Routine occurrences inherit their routine's override.
+
+Task dispatch resolves task override → team setting → `build_review`.
+Thread messages accept a one-message `style` override and resolve message →
+team → `build_review`; task settings do not override messages in their threads.
+`POST /agent-runs` also accepts `style` when creating an unaddressed team round,
+so a new thread's first message can choose a style. Both routes reject styles
+for non-team, addressed-member, discuss, and review requests with
+`Collaboration style applies to team work requests only.` Unknown values return
+400 and list `solo, build_review, pipeline, lead_led`.
+
+The resolved style is frozen in `teamSnapshot.collaborationStyle` and the round
+manifest's `style`. A one-member Build → Review round becomes Solo and records
+`styleFallbackFrom: "build_review"`. Legacy manifests without `style` remain
+Lead-led. Changing settings affects future rounds only. Message retry identity
+includes an explicit style; reusing an idempotency key with a changed style is
+a different semantic request and is rejected.
+
+Existing teams without a style use Build → Review on their next work request.
+Select Lead-led to retain lead planning and final synthesis. See
+[ADR-021](adr/021-team-collaboration-styles.md).
+
+### Responsibilities
+
 Team create/update requests accept these optional fields in addition to the
 existing name, lead, roster, and enabled fields:
 
@@ -579,8 +608,9 @@ Configuration keys must name roster members. Roles use the existing agent-role
 vocabulary; `tester` is presented as Verifier in the UI. An omitted role inherits
 the agent default. Participation is `always` (eligible for automatic work) or
 `on_request` (only when addressed). Regular members are required by default;
-explicit membership configuration can make a specialist optional. The lead always
-coordinates and owns final synthesis. An on-request membership cannot also be
+explicit membership configuration can make a specialist optional. In Lead-led
+rounds the lead coordinates and owns final synthesis. In other styles only the
+compiled slots are required. An on-request membership cannot also be
 required. Once a proposed plan selects work, that work is required to finish.
 
 Responsibilities are limited to 4000 characters. Criteria and output lists allow

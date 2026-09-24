@@ -1,6 +1,8 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { AgentTeam, DaemonNodeMonitorRecord, EmployeeAgent } from "../../types";
+import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, EmployeeAgent } from "../../types";
+import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
+import { effectiveStyle } from "../../lib/collaborationStyle";
 import { sendShortcutLabel } from "../../lib/sendShortcut";
 import {
   ActionSend,
@@ -64,11 +66,13 @@ const ComposerView = forwardRef<ComposerHandle, {
   /** Agents `@` may name in this thread — the ones on its computer. Empty
    *  while staging a new thread, where the footer picker chooses the target. */
   mentionCandidates?: MentionCandidate[];
-  onSend: () => void;
+  onSend: (style?: CollaborationStyle) => void | Promise<boolean | void>;
   onCancelRun: () => void;
 }>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedEmployee, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun }, ref) {
   const { t } = useTranslation();
   const composer = useComposer();
+  const [style, setStyle] = useState<CollaborationStyle | null>(null);
+  useEffect(() => setStyle(null), [activeTeamId]);
   const {
     composerText, setComposerText, textareaRef,
   } = composer;
@@ -149,7 +153,10 @@ const ComposerView = forwardRef<ComposerHandle, {
     // of the agent the author named, and one with no computer has nowhere to run.
     if (cannotSend) return;
     setSendPending(true);
-    onSend();
+    Promise.resolve(onSend(activeTeamId && !projectName && !addressedLogicalAgentId ? style ?? undefined : undefined))
+      .then((sent) => { if (sent !== false) setStyle(null); })
+      .catch(() => { /* Dispatch owns error reporting; preserve the override for retry. */ })
+      .finally(() => setSendPending(false));
   };
   useEffect(() => {
     if (!sendPending) return;
@@ -238,6 +245,11 @@ const ComposerView = forwardRef<ComposerHandle, {
           running={running}
         />
         {initializingThread ? null : computerSlot}
+        {activeTeamId && !projectName && !addressedLogicalAgentId ? (
+          <CollaborationStyleSelect compact aria-label={t("collab_style.composer_label")}
+            value={style} onChange={setStyle} disabled={running || sendPending || readOnly}
+            inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams?.find((team) => team.id === activeTeamId))}`) })} />
+        ) : null}
       </div>
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">

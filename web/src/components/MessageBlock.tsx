@@ -165,6 +165,8 @@ function ArtifactChip({ artifact, sessionId, allArtifacts, onOpenArtifact }: { a
 }
 
 type MessageBlockProps = {
+  slotLabel?: string;
+  styleFallback?: boolean;
   message: DerivedMessage;
   sessionId: string;
   grouped?: boolean;
@@ -181,6 +183,8 @@ type MessageBlockProps = {
 };
 
 export const MessageBlock = memo(function MessageBlock({
+  slotLabel,
+  styleFallback,
   message,
   sessionId,
   grouped = false,
@@ -230,7 +234,8 @@ export const MessageBlock = memo(function MessageBlock({
           {/* Who is speaking, beside its mark. A continuation from the same
               agent hides this (see .msg-agent.grouped in chat.css), so a run
               of turns reads as one speaker rather than a repeated name. */}
-          <header className="msg-speaker" translate="no">{agentName}</header>
+          <header className="msg-speaker" translate="no">{agentName}{slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}</header>
+          {styleFallback ? <p className="collab-status">{t("collab_style.ran_solo")}</p> : null}
           <AgentStream
             agent={message.agent}
             stdout={message.stdout}

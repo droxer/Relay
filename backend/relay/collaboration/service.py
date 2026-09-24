@@ -38,6 +38,7 @@ from .models import (
     RecoveryIntent,
     RunIntent,
 )
+from .styles import LEAD_LED, STYLE_POLICIES, resolve_collaboration_style
 
 ASSIGNMENT_BRIEF_MAX_CHARS = 4000
 VALID_MODES = frozenset({"action", "ask", "review"})
@@ -81,6 +82,7 @@ class _PreparedRound:
     source: str
     purpose: str
     address: dict[str, Any]
+    style: str | None = None
 
 
 class CollaborationConductor:
@@ -181,6 +183,7 @@ class CollaborationConductor:
                 source="message",
                 purpose=intent.purpose,
                 address=address,
+                style=intent.style,
             )
         if isinstance(intent, RecoveryIntent):
             mode = _mode(intent.mode)
@@ -226,6 +229,7 @@ class CollaborationConductor:
             user_message_id=intent.user_message_id,
             decision=intent.decision,
             source=intent.source,
+            style=intent.style,
             purpose=_purpose_for_mode(intent.mode),
             address=(
                 {"kind": "members", "agentIds": addressed}
@@ -288,6 +292,16 @@ class CollaborationConductor:
             raw_assignments,
             retargetable=intent.source == "message",
         )
+        if intent.style is not None and (
+            intent.purpose != "accomplish"
+            or intent.address.get("kind") == "members"
+            or not round_team_id
+        ):
+            raise CollaborationError(
+                "style_requires_team",
+                "Collaboration style applies to team work requests only.",
+                status=400,
+            )
         project: dict[str, Any] | None = None
         project_snapshot: dict[str, Any] | None = None
         if project_id:
@@ -329,10 +343,13 @@ class CollaborationConductor:
         elif round_team_id and not raw_assignments:
             team, members = self._team_for_round(round_team_id, session, actor)
             team_member_ids = {agent["id"] for agent in members}
-            team_snapshot = team_runtime_snapshot(team, members)
             raw_assignments = team_member_assignments(
-                members, mode=intent.mode, team=team
+                members,
+                mode=intent.mode,
+                team=team,
+                style=resolve_collaboration_style(team, None, intent.style),
             )
+            team_snapshot = raw_assignments[0].get("teamSnapshot") or team_runtime_snapshot(team, members)
         elif round_team_id and raw_assignments:
             if is_recovery:
                 # Recovery deliberately skips `team_agents`. A rerun or handoff
@@ -363,7 +380,7 @@ class CollaborationConductor:
             # accomplish group the addressed lead coordinates first regardless
             # of mention order, then owns the final synthesis turn.
             member_assignments = team_member_assignments(
-                members, team=team, include_on_request=True
+                members, team=team, include_on_request=True, style=LEAD_LED
             )
             member_defaults = {
                 item["agentId"]: {
@@ -803,7 +820,10 @@ class CollaborationConductor:
             mode = _mode(item.get("mode"))
             role = _role(item.get("role"))
             coordinator = item.get("coordinator") is True or bool(
-                team_snapshot and item["agentId"] == team_snapshot.get("leadAgentId") and not item.get("synthesizer")
+                team_snapshot
+                and team_snapshot.get("collaborationStyle", LEAD_LED) == LEAD_LED
+                and item["agentId"] == team_snapshot.get("leadAgentId")
+                and not item.get("synthesizer")
             )
             # Always derived, never trusted from the caller: only this seam
             # knows who the team lead is, and a lead never leaves a writable
@@ -851,6 +871,10 @@ def _scoped_idempotency_key(
 def _request_fingerprint(intent: _PreparedRound) -> str:
     payload = asdict(intent)
     payload.pop("idempotency_key", None)
+    # Unset style is omitted so fingerprints recorded before styles existed
+    # still match a retry of the same request.
+    if payload.get("style") is None:
+        payload.pop("style", None)
     # Addressing the same text to a different set of agents is a different
     # request; addressing the same set in a different order is not.
     address = payload.get("address")
@@ -952,6 +976,8 @@ def create_round_manifest(
     ]
     completion_kind = "synthesize" if strategy in ("room", "review") else "all_required"
     result_owner = _result_owner_work_item(compiled_assignments)
+    style = (team_snapshot or {}).get("collaborationStyle")
+    fallback_from = (team_snapshot or {}).get("styleFallbackFrom")
     return {
         "contract": {
             "name": "relay.collaboration.round",
@@ -963,6 +989,8 @@ def create_round_manifest(
         "workScope": {"kind": "thread"},
         "purpose": purpose,
         "strategy": strategy,
+        **({"style": style} if style else {}),
+        **({"styleFallbackFrom": fallback_from} if fallback_from else {}),
         "address": address,
         **({"teamSnapshot": team_snapshot} if team_snapshot else {}),
         **({"projectSnapshot": project_snapshot} if project_snapshot else {}),
@@ -998,7 +1026,8 @@ def create_round_manifest(
             },
             "delegationPolicy": {
                 "authority": "conductor",
-                "policy": "lead-plan-v1" if source == "lead_plan" else "sequential-role-delegation-v1",
+                "policy": STYLE_POLICIES.get(style or LEAD_LED)
+                or ("lead-plan-v1" if source == "lead_plan" else "sequential-role-delegation-v1"),
             },
         },
     }

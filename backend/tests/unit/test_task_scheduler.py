@@ -1127,6 +1127,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                     "name": "Delivery",
                     "leadAgentId": lead["id"],
                     "memberAgentIds": [lead["id"], support["id"]],
+                    "collaborationStyle": "lead_led",
                 },
             )
             first = task_store.create_task(
@@ -1226,7 +1227,8 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
     asyncio.run(run_flow())
 
 
-def test_scheduler_promotes_team_routine_into_team_owned_thread() -> None:
+@pytest.mark.parametrize("style", [None, "solo", "pipeline"])
+def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
@@ -1284,6 +1286,7 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread() -> None:
             routine = task_store.create_task(
                 {
                     "title": "Daily Team report",
+                    **({"collaborationStyle": style} if style else {}),
                     "ownerEmployeeId": "requester",
                     "assigneeEmployeeId": "alice",
                     "assignedTeamId": team["id"],
@@ -1309,13 +1312,19 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread() -> None:
             occurrence = task_store.get_task(occurrence_id)
             assert occurrence["assignedTeamId"] == team["id"]
             assert occurrence["sourceRoutineId"] == routine["id"]
+            assert occurrence.get("collaborationStyle") == style
             [session_id] = occurrence["linkedSessionIds"]
             session = session_store.get_session(session_id)
             assert session["teamId"] == team["id"]
             assert session["ownerEmployeeId"] == "alice"
             assert session["ownerAgentId"] == lead["id"]
+            [manifest] = session["collaborationRounds"]
+            assert manifest["style"] == (style or "build_review")
+            assert manifest["teamSnapshot"]["collaborationStyle"] == (style or "build_review")
+            assert len(manifest["assignments"]) == (1 if style == "solo" else 2)
             [lead_command] = registry.take_commands("sbx_alice", "node_token")
             assert lead_command["logicalAgentId"] == lead["id"]
+            assert not lead_command["state"].get("team_plan_candidates")
             registry.handle_event(
                 "sbx_alice",
                 {
@@ -1325,18 +1334,22 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread() -> None:
                     "runId": lead_command["runId"],
                     "agent": "codex",
                     "roundResult": {"status": "continue", "work": {
-                        "status": "done", "evidence": ["Delegated implementation"],
-                        "plan": [{"agentId": support["id"], "objective": "Implement the feature",
-                                  "acceptanceCriteria": ["Feature validated"], "expectedOutputs": ["Implementation and tests"]}],
+                        "status": "done", "evidence": ["Implementation tests passed"],
                     }},
                     "exitCode": 0,
                     "agentLog": "lead result",
                 },
                 "node_token",
             )
+            if style == "solo":
+                assert registry.take_commands("sbx_alice", "node_token") == []
+                return
             [support_command] = registry.take_commands("sbx_alice", "node_token")
             assert support_command["logicalAgentId"] == support["id"]
             assert support_command["agent"] == "claude"
+            assert support_command["state"]["team_phase"] == (
+                "execution" if style == "pipeline" else "review"
+            )
 
     asyncio.run(run_flow())
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { DatePicker } from "@/components/ui/date-picker";
+import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
+import { effectiveStyle } from "../../lib/collaborationStyle";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -335,6 +337,11 @@ export function TaskDrawer({
             </SelectContent>
           </Select>
         </Field>
+        {form.assignedTeamId ? <Field label={t("collab_style.task_label")} wrapper="div">
+          <CollaborationStyleSelect aria-label={t("collab_style.task_label")} value={form.collaborationStyle ?? null}
+            disabled={saving} onChange={(collaborationStyle) => onChange({ ...form, collaborationStyle })}
+            inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
+        </Field> : null}
         <Field label={t("backlog.description")}>
           <Textarea
             name={`${fieldPrefix}-description`}

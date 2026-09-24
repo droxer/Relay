@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..collaboration.models import MessageIntent, RecoveryIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
+from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from .deps import AppContextDep
 from .helpers import get_session_for_actor, json_body, request_actor, string_field
 
@@ -154,6 +155,12 @@ async def submit_thread_message(
                 "message": "A message addresses either a team or agents, not both.",
             },
         )
+    style = body.get("style")
+    if style is not None:
+        try:
+            style = validate_collaboration_style(style, "style")
+        except CollaborationStyleError as error:
+            raise HTTPException(400, {"code": "style_invalid", "message": str(error)}) from error
     try:
         return await CollaborationConductor(ctx).submit(
             MessageIntent(
@@ -164,6 +171,7 @@ async def submit_thread_message(
                 address_team_id=address_team_id,
                 idempotency_key=string_field(body, "idempotencyKey") or None,
                 user_message_id=string_field(body, "userMessageId") or None,
+                style=style,
             ),
             actor,
         )

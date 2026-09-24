@@ -35,6 +35,8 @@ import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { CollaborationStyleSelect, CollaborationSlotPreview } from "./CollaborationStyleSelect";
+import { effectiveStyle } from "../lib/collaborationStyle";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -70,6 +72,7 @@ function TeamProfile({
   const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
+  const [style, setStyle] = useState(effectiveStyle(team));
   const [imageSaving, setImageSaving] = useState(false);
   // The one member card open for inline edit; the others lock until it closes.
   const [cardEditingId, setCardEditingId] = useState<string | null>(null);
@@ -83,6 +86,7 @@ function TeamProfile({
     memberIds,
   )
     || leadId !== (team.leadAgentId ?? "")
+    || style !== effectiveStyle(team)
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
   const confirmDiscardChanges = useUnsavedChangesGuard(
@@ -131,6 +135,7 @@ function TeamProfile({
   function resetDraft() {
     setMemberIds(team.memberAgentIds);
     setLeadId(team.leadAgentId ?? "");
+    setStyle(effectiveStyle(team));
     setMemberConfigs(team.memberConfigs ?? {});
     setAcceptanceCriteria(team.acceptanceCriteria ?? []);
     setValidationError(null);
@@ -197,6 +202,7 @@ function TeamProfile({
           memberAgentIds: memberIds,
           memberConfigs, acceptanceCriteria,
           leadAgentId: leadId,
+          collaborationStyle: style,
           enabled: team.enabled,
         }),
       });
@@ -313,6 +319,13 @@ function TeamProfile({
 
             {editing ? (
               <>
+                <Field label={t("collab_style.label")} wrapper="div" htmlFor="team-collab-style" hint={t(`collab_style.${style}_hint`)}>
+                  <CollaborationStyleSelect id="team-collab-style" aria-label={t("collab_style.label")} value={style} onChange={(next) => next && setStyle(next)} disabled={busy} />
+                  <CollaborationSlotPreview members={memberIds.map((id) => ({
+                    id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
+                    onRequest: memberConfigs[id]?.participation === "on_request",
+                  }))} leadId={leadId} style={style} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
+                </Field>
                 <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
                   <Textarea
                     rows={3}
@@ -331,7 +344,13 @@ function TeamProfile({
                   </Button>
                 </div>
               </>
-            ) : null}
+            ) : <Field label={t("collab_style.label")} wrapper="div" hint={t(`collab_style.${effectiveStyle(team)}_hint`)}>
+              <span>{t(`collab_style.${effectiveStyle(team)}`)}</span>
+              <CollaborationSlotPreview members={team.members.map((member) => ({
+                id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
+                onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",
+              }))} leadId={team.leadAgentId ?? undefined} style={effectiveStyle(team)} nameOf={(id) => team.members.find((m) => m.id === id)?.displayName ?? id} />
+            </Field>}
           </form>
         </div>
 

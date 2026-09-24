@@ -58,13 +58,14 @@ export function resolveThreadMessageAddress({ text, candidates, defaultAgentId }
 }
 
 /** Stable retry identity for one semantic continued-thread request. */
-export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null }: {
+export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null, style }: {
   sessionId: string;
   text: string;
   intent: ThreadMessageInput["intent"];
   addressAgentIds: readonly string[];
   /** Aiming the same text at another team is a different request. */
   addressTeamId?: string | null;
+  style?: ThreadMessageInput["style"] | null;
 }): string {
   return JSON.stringify([
     sessionId,
@@ -72,6 +73,7 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
     intent,
     [...new Set(addressAgentIds)].sort(),
     ...(addressTeamId && addressAgentIds.length === 0 ? [addressTeamId] : []),
+    ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? [{ style }] : []),
   ]);
 }
 
@@ -80,19 +82,21 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
  *
  * Addressing is resolved and validated before this serialization boundary.
  */
-export function threadMessageInput({ text, addressAgentIds, addressTeamId = null, userMessageId }: {
+export function threadMessageInput({ text, addressAgentIds, addressTeamId = null, userMessageId, style }: {
   text: string;
   /** Empty intentionally addresses the whole room. */
   addressAgentIds: readonly string[];
   /** Another team on the thread's computer; ignored when agents are named. */
   addressTeamId?: string | null;
   userMessageId: string;
+  style?: ThreadMessageInput["style"] | null;
 }): ThreadMessageInput {
   return {
     text,
     intent: "accomplish",
     userMessageId,
     idempotencyKey: userMessageId,
+    ...(style && addressAgentIds.length === 0 ? { style } : {}),
     ...(addressAgentIds.length
       ? { addressAgentIds: [...addressAgentIds] }
       : addressTeamId

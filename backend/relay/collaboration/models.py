@@ -33,6 +33,8 @@ class MessageIntent:
     address_team_id: str | None = None
     idempotency_key: str | None = None
     user_message_id: str | None = None
+    # A collaboration style for this one round; None uses the team's style.
+    style: str | None = None
 
 
 @dataclass(frozen=True)
@@ -60,3 +62,4 @@ class RunIntent:
     user_message_id: str | None = None
     decision: dict[str, Any] | None = None
     source: str = "legacy"
+    style: str | None = None
