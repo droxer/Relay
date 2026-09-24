@@ -684,7 +684,12 @@
     "search_placeholder": "Search teams…",
     "edit_members": "Edit members",
     "rename": "Rename team",
-    "avatar": "Avatar"
+    "avatar": "Avatar",
+    "add_member": "Add member",
+    "make_lead": "Make lead",
+    "make_lead_named": "Make {{name}} the lead",
+    "remove_member": "Remove {{name}}",
+    "all_agents_added": "All your agents are on this team."
   },
   "computer": {
     "device_setup_intro": "Run the installer, choose a directory on your computer, then confirm in your browser.",

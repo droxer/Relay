@@ -33,67 +33,6 @@
   gap: var(--sp-7);
 }
 
-/* Was `.adm-field team-member-fieldset`, borrowing the field stack from a class
-   that is now the <Field> component. A <legend> is not a <Label>, so it carries
-   the label type role here rather than inheriting it from a descendant rule. */
-.team-member-fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1-5);
-  border: 0;
-  margin: 0;
-  padding: 0;
-}
-
-.team-member-fieldset legend {
-  margin-bottom: var(--sp-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  color: var(--ink-2);
-}
-
-.team-member-options {
-  display: grid;
-  gap: var(--sp-hairline);
-  overflow: hidden;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--line-1);
-}
-
-.team-member-option {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  background: var(--surface-0);
-  cursor: pointer;
-}
-
-.team-member-option:hover {
-  background: var(--row-hover);
-}
-
-.team-member-option-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--sp-0-5);
-}
-
-.team-member-option-name {
-  overflow: hidden;
-  max-width: 100%;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Meta line = runtime · computers, one quiet mono row — <AgentMetaLine>
-   (.agent-meta in agents.css). This surface used to draw its own copy with
-   no vendor glyph and a generated middot, which is why a picked agent looked
-   unlike the same agent on the roster. */
-
 .adm-employees-empty.relay-empty--fill {
   min-height: min(420px, 50vh);
 }

@@ -238,45 +238,125 @@
   letter-spacing: var(--track-0);
 }
 
-.team-profile-member-fieldset {
+/* Team membership editor (TeamMemberPicker): the crew as one short list —
+   only the agents on the team, the lead marked on its own row — and one
+   dashed "Add member" row that opens the roster for everyone else. */
+.team-member-picker {
+  display: grid;
+  gap: var(--sp-2);
   min-width: 0;
-  margin: var(--sp-3) 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
 }
 
-/* Chained with .team-member-options so the scroll override wins over the
-   base rule's `overflow: hidden` (admin-v2-employees.css) regardless of import
-   order — equal-specificity single classes would otherwise resolve by source
-   order, and admin-v2-employees.css loads after this file. */
-.team-member-options.team-profile-member-options {
-  max-height: 280px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* The list clips mid-row, so it needs a permanent scroll affordance: macOS
-     overlay scrollbars stay hidden until you scroll, and a half-drawn agent
-     with no track reads as a broken render rather than as more list. */
-  scrollbar-gutter: stable;
+.team-member-picker-legend {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  padding: 0;
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
-.team-member-options.team-profile-member-options::-webkit-scrollbar {
-  width: 8px;
+.team-member-picker-legend .tnum {
+  color: var(--ink-3);
 }
 
-.team-member-options.team-profile-member-options::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
+.team-member-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
-  background: var(--line-1);
-  background-clip: content-box;
+  background: var(--surface-0);
 }
 
-.team-member-options.team-profile-member-options::-webkit-scrollbar-thumb:hover {
-  background: var(--ink-4);
-  background-clip: content-box;
+.team-member-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
 }
 
-.team-profile-lead-field {
-  padding-top: var(--sp-1);
+.team-member-row + .team-member-row {
+  border-top: 0.5px solid var(--line-2);
+}
+
+.team-member-row-main {
+  display: grid;
+  gap: var(--sp-0-5);
+  min-width: 0;
+}
+
+.team-member-row-main .agent-meta {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.team-member-row-name {
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "Make lead" is a secondary action on every non-lead row: quiet until the
+   row is hovered or the control is focused, so the list reads as names. */
+.team-member-row-lead {
+  color: var(--ink-3);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.team-member-row:hover .team-member-row-lead,
+.team-member-row-lead:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .team-member-row-lead { opacity: 1; }
+}
+
+.team-member-row-remove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: var(--control-h-2xs);
+  padding: 0;
+  border-radius: var(--r-1);
+  color: var(--ink-3);
+}
+
+.team-member-row-remove:hover {
+  color: var(--ink-1);
+  background: var(--surface-2);
+}
+
+.team-member-add {
+  width: 100%;
+  border-style: dashed;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.team-member-add:hover {
+  border-color: var(--line-strong);
+  color: var(--ink-1);
+}
+
+.team-member-add-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: inherit;
 }
 
 .team-profile-inline-actions {
@@ -361,29 +441,6 @@
    the project crew tile grammar (.project-member-tile): opaque --surface-1,
    hairline edge, avatar + name + meta head, the contract fields as the body.
    auto-fill lays one column in the drawer and two or three on the page. */
-.team-work-fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1-5);
-  border: 0;
-  margin: 0;
-  padding: 0;
-}
-
-.team-work-fieldset legend {
-  margin-bottom: var(--sp-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  color: var(--ink-2);
-}
-
-.team-work-help {
-  margin: 0 0 var(--sp-2);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
 .team-work-members {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
@@ -549,5 +606,3 @@
   letter-spacing: var(--type-body-sm-track);
   cursor: pointer;
 }
-
-.team-work-fieldset:disabled .team-work-flag { cursor: default; }
