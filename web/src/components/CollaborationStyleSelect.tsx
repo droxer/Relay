@@ -2,7 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 import type { CollaborationStyle } from "../types";
-import { COLLABORATION_STYLES, previewSlots, type SlotMember } from "../lib/collaborationStyle";
+import { COLLABORATION_STYLES, effectiveStyle, previewSlots, type SlotMember } from "../lib/collaborationStyle";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 
 export function CollaborationStyleSelect({ value, onChange, inheritLabel, compact, disabled, id, "aria-label": label }: {
@@ -16,7 +16,7 @@ export function CollaborationStyleSelect({ value, onChange, inheritLabel, compac
 }) {
   const { t } = useTranslation();
   const text = (style: string) => style === "inherit" ? inheritLabel : t(`collab_style.${style}`);
-  return <Select value={value ?? "inherit"} disabled={disabled} onValueChange={(next) => {
+  return <Select value={value ? effectiveStyle(undefined, value) : "inherit"} disabled={disabled} onValueChange={(next) => {
     if (next === "inherit") onChange(null);
     else if (COLLABORATION_STYLES.includes(next as CollaborationStyle)) onChange(next as CollaborationStyle);
   }}>

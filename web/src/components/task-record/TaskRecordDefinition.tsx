@@ -58,7 +58,7 @@ export function TaskRecordDefinition({
   }
   if (task.assignedTeamId) rows.push({
     key: "collaboration", label: t("collab_style.task_label"),
-    value: task.collaborationStyle ? t(`collab_style.${task.collaborationStyle}`)
+    value: task.collaborationStyle ? t(`collab_style.${effectiveStyle(team, task.collaborationStyle)}`)
       : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) }),
   });
   rows.push(
