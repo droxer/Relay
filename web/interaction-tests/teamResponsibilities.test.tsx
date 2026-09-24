@@ -23,6 +23,18 @@ function PickerHarness({ initial }: { initial: TeamMembership }) {
 
 const membership = () => JSON.parse(screen.getByTestId("membership").textContent!);
 
+it.each(["reported_done", "unfinished", "blocked", "needs_review", "unverified", "accepted"] as const)(
+  "shows %s work outcome even when a single agent has no team graph", (workOutcome) => {
+    const session = { status: "completed", workOutcome, finalOutcome: "A concrete next step", agentRuns: [] } as unknown as RelaySession;
+    const { rerender } = render(<CollaborationWork session={session} agents={[]} />);
+    expect(screen.getByRole("status").textContent).toContain(`team_work.outcome_${workOutcome}`);
+    expect(screen.getByText("A concrete next step")).toBeTruthy();
+    const running = { ...session, status: "running" as const, workOutcome: undefined };
+    rerender(<CollaborationWork session={running} agents={[]} />);
+    expect(screen.queryByRole("status")).toBeNull();
+  },
+);
+
 it("lists only the team's members, with the lead marked on its own row", () => {
   render(<PickerHarness initial={{ memberIds: ["lead", "builder"], leadId: "lead" }} />);
   const rows = document.querySelectorAll(".team-member-row");

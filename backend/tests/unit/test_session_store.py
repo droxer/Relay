@@ -29,6 +29,21 @@ def test_work_outcome_survives_replay_and_clears_on_new_execution(outcome):
     assert materialize_events([created, completed, legacy])["workOutcome"] == "unverified"
 
 
+def test_work_outcome_survives_database_snapshot_and_summary():
+    from relay.api.session_routes import session_brief_item
+
+    with TemporaryDirectory() as root:
+        store = DatabaseSessionStore(f"sqlite:///{root}/relay.db", create_schema=True)
+        session = store.create_session({"workspacePath": "/workspace", "taskGoal": "Resolve"})
+        store.append_event(session["id"], relay_event("session.completed", session["id"], {
+            "outcome": "Still needs implementation", "workOutcome": "unfinished",
+        }))
+        assert store.get_session(session["id"])["workOutcome"] == "unfinished"
+        [summary] = store.list_session_summaries()
+        assert summary["workOutcome"] == "unfinished"
+        assert session_brief_item(summary)["workOutcome"] == "unfinished"
+
+
 def test_session_stores_create_uuid_thread_ids() -> None:
     with TemporaryDirectory() as root:
         stores = (
