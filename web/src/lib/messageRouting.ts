@@ -58,17 +58,20 @@ export function resolveThreadMessageAddress({ text, candidates, defaultAgentId }
 }
 
 /** Stable retry identity for one semantic continued-thread request. */
-export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds }: {
+export function threadMessageOperationKey({ sessionId, text, intent, addressAgentIds, addressTeamId = null }: {
   sessionId: string;
   text: string;
   intent: ThreadMessageInput["intent"];
   addressAgentIds: readonly string[];
+  /** Aiming the same text at another team is a different request. */
+  addressTeamId?: string | null;
 }): string {
   return JSON.stringify([
     sessionId,
     text,
     intent,
     [...new Set(addressAgentIds)].sort(),
+    ...(addressTeamId && addressAgentIds.length === 0 ? [addressTeamId] : []),
   ]);
 }
 
@@ -77,10 +80,12 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
  *
  * Addressing is resolved and validated before this serialization boundary.
  */
-export function threadMessageInput({ text, addressAgentIds, userMessageId }: {
+export function threadMessageInput({ text, addressAgentIds, addressTeamId = null, userMessageId }: {
   text: string;
   /** Empty intentionally addresses the whole room. */
   addressAgentIds: readonly string[];
+  /** Another team on the thread's computer; ignored when agents are named. */
+  addressTeamId?: string | null;
   userMessageId: string;
 }): ThreadMessageInput {
   return {
@@ -90,6 +95,26 @@ export function threadMessageInput({ text, addressAgentIds, userMessageId }: {
     idempotencyKey: userMessageId,
     ...(addressAgentIds.length
       ? { addressAgentIds: [...addressAgentIds] }
+      : addressTeamId
+      ? { addressTeamId }
       : {}),
   };
+}
+
+/**
+ * Which team, if any, runs a started thread's next round.
+ *
+ * A thread is pinned to its computer, not to a roster, so the composer may
+ * aim a round at any team on that computer — or, in a team thread, at one
+ * agent. `roomTarget` is the store's "whole room" flag: in a team thread the
+ * room *is* the team. Only a team other than the thread's own needs to be
+ * named on the wire; the thread's own team is simply the room.
+ */
+export function threadRoundTeam({ threadTeamId, pickedTeamId, roomTarget }: {
+  threadTeamId: string | null | undefined;
+  pickedTeamId: string | null;
+  roomTarget: boolean;
+}): { teamId: string | null; addressTeamId: string | null } {
+  const teamId = pickedTeamId ?? (threadTeamId && roomTarget ? threadTeamId : null);
+  return { teamId, addressTeamId: teamId && teamId !== threadTeamId ? teamId : null };
 }

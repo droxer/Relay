@@ -44,7 +44,7 @@ function register(codes: string[], key: string, destination?: RecoveryGuide["des
 }
 register(["agent_disabled", "agent_not_found", "agent_policy_unsupported", "executor_mismatch", "agent_mismatch", "task_not_assigned"], "assignment", "agents");
 register(["team_not_found", "team_disabled", "team_invalid", "team_unavailable"], "assignment", "teams");
-register(["project_not_found", "project_disabled", "project_roster_invalid", "project_agent_not_member"], "assignment", "projects");
+register(["project_not_found", "project_disabled", "project_roster_invalid", "project_agent_not_member", "project_agent_off_computer", "project_team_off_computer"], "assignment", "projects");
 register(["agent_forbidden", "team_forbidden", "project_forbidden"], "access");
 register(["agent_offline", "node_offline", "executor_not_ready", "project_computer_offline"], "offline", "computer");
 register(["configuration_pending", "agent_configuration_pending"], "provisioning", "computer");

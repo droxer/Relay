@@ -8,7 +8,7 @@ import type { useTranscriptPin } from "./useTranscriptPin";
 import type { useThreadTargets } from "./useThreadTargets";
 import { chooseSendAction, sendThreadSessionId, suppressActiveSessionDuringPendingSend } from "../lib/sendAction";
 import { canCancelThreadRun, threadCancelNodeId } from "../lib/threadRunning";
-import { resolveThreadMessageAddress, threadMessageInput, threadMessageOperationKey } from "../lib/messageRouting";
+import { resolveThreadMessageAddress, threadMessageInput, threadMessageOperationKey, threadRoundTeam } from "../lib/messageRouting";
 import { formatDispatchError } from "../lib/agentReadiness";
 import { rerunAssignmentForSession } from "../lib/workflow";
 import { isEmployeeAgentRoutable } from "../lib/agentDisplayNames";
@@ -125,6 +125,20 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     const pendingTeam = action.kind === "create" && pendingThreadTeamId
       ? composerTeams.find((team) => team.id === pendingThreadTeamId)
       : undefined;
+    // A started thread may hand this round to a team on its computer, or — in
+    // a team thread — to one agent. Only a team other than the thread's own is
+    // named on the wire; the thread's own team is the room.
+    const roundTeam = action.kind === "append" && !activeProject
+      ? threadRoundTeam({
+          threadTeamId: activeSession?.teamId,
+          pickedTeamId: pendingThreadTeamId,
+          roomTarget: projectRoomTarget,
+        })
+      : { teamId: null, addressTeamId: null };
+    const addressedTeamId = roundTeam.addressTeamId
+      && composerTeams.some((team) => team.id === roundTeam.addressTeamId)
+      ? roundTeam.addressTeamId
+      : null;
     let goal = raw;
     let newThreadAgentIds: string[] | undefined;
     // A project round addresses the whole roster unless the composer (or a
@@ -136,7 +150,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     const messageAddress = resolveThreadMessageAddress({
       text: raw,
       candidates: threadMentionCandidates,
-      defaultAgentId: projectRoomRound || pendingTeam || activeSession?.teamId
+      defaultAgentId: projectRoomRound || pendingTeam || roundTeam.teamId
         ? undefined
         : activeLogicalAgentId,
     });
@@ -164,6 +178,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
           text: goal,
           intent: "accomplish",
           addressAgentIds: messageAddress.addressAgentIds,
+          addressTeamId: addressedTeamId,
         })
       : null;
     const retainedMessageId = messageOperationKey
@@ -197,6 +212,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
             input: threadMessageInput({
               text: goal,
               addressAgentIds: messageAddress.addressAgentIds,
+              addressTeamId: addressedTeamId,
               userMessageId,
             }),
           })
@@ -214,7 +230,9 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
                   assignments: newThreadAgentIds!.map((agentId) => ({ agentId })),
                 }),
           });
-      useComposerTargetStore.getState().clearPendingTeam();
+      // A staged team became the new thread's own team; a team picked in a
+      // started thread stays the target for its next round too.
+      if (!sessionId) useComposerTargetStore.getState().clearPendingTeam();
       useRelayStore.getState().openSession(done.id);
       syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id);
       if (messageOperationKey) {

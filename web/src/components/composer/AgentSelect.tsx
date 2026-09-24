@@ -43,9 +43,9 @@ function RoomMark({ routable, label }: { routable: boolean; label: string }) {
 // one logical (employee) agent, a whole agent team, or — in a project room —
 // the project's whole roster. Non-routable entries stay listed (disabled) with
 // their availability spelled out so users can see why a target cannot take the
-// thread. A team thread keeps the team fixed for
-// its lifetime, so `teamLocked` renders the trigger read-only.
-export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams = [], activeTeamId = null, onTeamPicked, teamLocked = false, teamOptionsEnabled = false, room = null, roomSelected = false, onRoomPicked, running = false }: {
+// thread. A started thread may hand its next round to any agent or team on
+// its computer, so the picker stays live for the thread's whole life.
+export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams = [], activeTeamId = null, onTeamPicked, teamOptionsEnabled = false, room = null, roomSelected = false, onRoomPicked, running = false }: {
   logicalAgents: EmployeeAgent[];
   activeLogicalAgentId: string | null;
   onLogicalAgentPicked: (agent: EmployeeAgent) => void;
@@ -54,9 +54,9 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   teams?: AgentTeam[];
   activeTeamId?: string | null;
   onTeamPicked?: (team: AgentTeam) => void;
-  teamLocked?: boolean;
-  /** Teams are pickable only while staging a new thread — a started thread
-   *  keeps the participants it began with. */
+  /** Teams are pickable everywhere but a project room, whose targets are the
+   *  room and its own members. The caller passes only teams whose whole
+   *  roster lives on the thread's computer. */
   teamOptionsEnabled?: boolean;
   /** The project room's whole roster, offered as one target above its members.
    *  Absent outside a project thread. */
@@ -105,8 +105,8 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   // Agents and agent teams are two rosters, so the popup tabs between them
   // rather than stacking both into one scroll — the same picker the task
   // drawer uses. A project thread offers teams nowhere (its targets are the
-  // room and its own members) and a started thread offers no teams either, so
-  // in both cases there is one roster and the strip does not render.
+  // room and its own members), so there it is one roster and the strip does
+  // not render.
   const teamsOffered = teamOptionsEnabled && teams.length > 0;
   const tabs: RosterTab<"agents" | "teams">[] = teamsOffered
     ? [
@@ -131,7 +131,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
       <SelectTrigger
         size="sm"
         className="chat-agent-select"
-        disabled={teamLocked || (logicalAgents.length === 0 && (!teamOptionsEnabled || teams.length === 0))}
+        disabled={logicalAgents.length === 0 && (!teamOptionsEnabled || teams.length === 0)}
         data-availability={activeRoom
           ? (roomRoutable ? "ready" : "offline")
           : activeTeam

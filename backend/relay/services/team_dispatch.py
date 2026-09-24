@@ -36,7 +36,9 @@ def task_thread_ownership(
         ownership["owner_agent_id"] = assigned_agent_id
     team_id = task.get("assignedTeamId")
     if isinstance(team_id, str) and team_id:
-        ownership["team_id"] = team_id
+        # A project thread stays the project's room even when a team runs it.
+        if not task.get("projectId"):
+            ownership["team_id"] = team_id
         team, _agents = _task_team_agents(
             task, team_store=team_store, agent_store=agent_store
         )

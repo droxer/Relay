@@ -19,6 +19,7 @@ import { useLocalDaemonNodes } from "./hooks/useLocalDaemonNodes";
 import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "./lib/daemonNodes";
 import { isEmployeeAgentRoutable, preferredRoutableAgent } from "./lib/agentDisplayNames";
 import { mentionCandidates } from "./lib/mentions";
+import { threadRoundTeam } from "./lib/messageRouting";
 import { applyTheme, readTokens, selectedEmployeeKey } from "./lib/appStorage";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
@@ -290,10 +291,10 @@ export function App() {
   useEffect(() => {
     pickRoom();
   }, [activeProject?.id, activeSession?.id, pickRoom]);
-  // A thread that belongs to a team answers only its members, exactly as a
-  // project thread answers only its own. Both rosters narrow the same lists —
-  // the `@` popup and the handoff picker — so neither surface can offer a
-  // target the round would refuse.
+  // Recovery (rerun / handoff) repairs a team's own work, so in a team thread
+  // it answers only the team's members, exactly as a project thread answers
+  // only its own. A new round is different: the thread is pinned to a computer,
+  // not a roster, so the composer and `@` reach every agent on that computer.
   const activeTeamRoster = useMemo(
     () => teamRosterForThread(activeSession?.teamId, teams),
     [activeSession?.teamId, teams],
@@ -312,11 +313,26 @@ export function App() {
     }
     return selectableLogicalAgents;
   }, [activeProject, activeTeamRoster, logicalAgents, selectableLogicalAgents]);
+  const composerLogicalAgents = activeProject
+    ? effectiveSelectableLogicalAgents
+    : selectableLogicalAgents;
   const threadMentionCandidates = useMemo(
-    () => mentionCandidates(effectiveSelectableLogicalAgents),
-    [effectiveSelectableLogicalAgents],
+    () => mentionCandidates(composerLogicalAgents),
+    [composerLogicalAgents],
   );
   const requiresRuntimeSelection = initializingThread && !activeProject;
+  // The team this round runs, for the picker: a staged pick, another team
+  // picked in a started thread, or a team thread's own team while the whole
+  // room is the target.
+  const roundTeamId = activeProject
+    ? null
+    : requiresRuntimeSelection
+    ? pendingThreadTeamId
+    : threadRoundTeam({
+        threadTeamId: activeSession?.teamId,
+        pickedTeamId: pendingThreadTeamId,
+        roomTarget: projectRoomTarget,
+      }).teamId;
   const showProjectOverview = route === "projects"
     && Boolean(routedProjectId)
     && !routedSessionId
@@ -493,11 +509,11 @@ export function App() {
     }
   }, [selectedEmployee, hydrated]);
   useEffect(() => {
-    const selected = effectiveSelectableLogicalAgents.length === 0
+    const selected = composerLogicalAgents.length === 0
       ? undefined
-      : preferredRoutableAgent(effectiveSelectableLogicalAgents, activeLogicalAgentId);
+      : preferredRoutableAgent(composerLogicalAgents, activeLogicalAgentId);
     setActiveTarget(selected ?? null);
-  }, [activeLogicalAgentId, effectiveSelectableLogicalAgents, setActiveTarget]);
+  }, [activeLogicalAgentId, composerLogicalAgents, setActiveTarget]);
   // Keep the handoff target routable as the thread's roster changes.
   useEffect(() => {
     if (effectiveSelectableLogicalAgents.length === 0) return;
@@ -636,7 +652,15 @@ export function App() {
   const handleProjectRoomPicked = useStableEvent(() => pickRoom());
   // Picking one member narrows a project round to them and drops a staged team.
   const handleLogicalAgentPicked = useStableEvent((agent: EmployeeAgent) => pickAgent(agent));
-  const handleTeamPicked = useStableEvent((team: AgentTeam) => pickTeam(team.id));
+  // Re-picking a team thread's own team is picking its room, not naming it.
+  const handleTeamPicked = useStableEvent((team: AgentTeam) => {
+    if (!requiresRuntimeSelection && team.id === activeSession?.teamId) {
+      clearPendingTeam();
+      pickRoom();
+      return;
+    }
+    pickTeam(team.id);
+  });
 
 
   async function handleLogout() {
@@ -813,12 +837,12 @@ export function App() {
             activeAgent={activeAgent}
             logicalAgents={logicalAgents}
             selectableLogicalAgents={effectiveSelectableLogicalAgents}
+            composerLogicalAgents={composerLogicalAgents}
             activeLogicalAgentId={activeLogicalAgentId}
             onLogicalAgentPicked={handleLogicalAgentPicked}
             composerTeams={composerTeams}
-            activeTeamId={activeProject ? null : activeSession?.teamId ?? (requiresRuntimeSelection ? pendingThreadTeamId : null)}
+            activeTeamId={roundTeamId}
             onTeamPicked={handleTeamPicked}
-            teamLocked={Boolean(activeSession?.teamId)}
             artifactCount={visibleArtifacts.length}
             visibleArtifacts={visibleArtifacts}
             spaceOpen={spaceVisible}

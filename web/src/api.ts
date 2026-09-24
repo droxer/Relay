@@ -949,6 +949,8 @@ export function submitThreadMessage(
       intent: input.intent,
       ...(input.addressAgentIds?.length
         ? { addressAgentIds: input.addressAgentIds }
+        : input.addressTeamId
+        ? { addressTeamId: input.addressTeamId }
         : {}),
       ...(input.userMessageId ? { userMessageId: input.userMessageId } : {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),

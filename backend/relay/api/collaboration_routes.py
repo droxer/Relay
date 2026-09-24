@@ -145,6 +145,15 @@ async def submit_thread_message(
         ctx.agent_store.list_agents(supervisor_employee_id=mention_owner_id),
     )
     address_agent_ids = mentioned_agent_ids or supplied_address_agent_ids
+    address_team_id = string_field(body, "addressTeamId") or None
+    if address_team_id and address_agent_ids:
+        raise HTTPException(
+            400,
+            {
+                "code": "message_address_conflict",
+                "message": "A message addresses either a team or agents, not both.",
+            },
+        )
     try:
         return await CollaborationConductor(ctx).submit(
             MessageIntent(
@@ -152,6 +161,7 @@ async def submit_thread_message(
                 text=text,
                 purpose=purpose,  # type: ignore[arg-type]
                 address_agent_ids=address_agent_ids,
+                address_team_id=address_team_id,
                 idempotency_key=string_field(body, "idempotencyKey") or None,
                 user_message_id=string_field(body, "userMessageId") or None,
             ),

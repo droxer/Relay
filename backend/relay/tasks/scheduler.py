@@ -350,7 +350,9 @@ class TaskScheduler:
             if self._continuation_refused(task):
                 skipped += 1
                 continue
-            team_id = task.get("assignedTeamId")
+            # A project task's team runs inside the project room, so the thread
+            # it creates is the project's, never the team's.
+            team_id = None if task.get("projectId") else task.get("assignedTeamId")
             project_snapshot: dict[str, Any] | None = None
             agent = valid_agent(task.get("assignedAgent"))
             assignments: list[dict[str, Any]]
@@ -387,6 +389,7 @@ class TaskScheduler:
                         placement_store=self.backend.agent_placement_store,
                         daemon_nodes=daemon_nodes,
                         session_store=self.registry.store,
+                        team_store=self.team_store,
                     )
                     agent = assignments[0]["agent"]
                 elif team_id:

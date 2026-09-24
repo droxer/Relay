@@ -70,13 +70,15 @@ export type ThreadsViewProps = {
   onCloseThread: (sessionId: string) => void;
   activeAgent: AgentName;
   logicalAgents: EmployeeAgent[];
+  /** Who recovery (rerun / handoff) may reach — a team thread's own roster. */
   selectableLogicalAgents: EmployeeAgent[];
+  /** Who a new round may reach — every agent on the thread's computer. */
+  composerLogicalAgents: EmployeeAgent[];
   activeLogicalAgentId: string | null;
   onLogicalAgentPicked: (agent: EmployeeAgent) => void;
   composerTeams: AgentTeam[];
   activeTeamId: string | null;
   onTeamPicked: (team: AgentTeam) => void;
-  teamLocked: boolean;
   artifactCount: number;
   visibleArtifacts: RelayArtifact[];
   spaceOpen: boolean;
@@ -152,12 +154,12 @@ export function ThreadsView({
   activeAgent,
   logicalAgents,
   selectableLogicalAgents,
+  composerLogicalAgents,
   activeLogicalAgentId,
   onLogicalAgentPicked,
   composerTeams,
   activeTeamId,
   onTeamPicked,
-  teamLocked,
   artifactCount,
   visibleArtifacts,
   spaceOpen,
@@ -451,13 +453,12 @@ export function ThreadsView({
 
         <Composer
           ref={composerRef}
-          logicalAgents={selectableLogicalAgents}
+          logicalAgents={composerLogicalAgents}
           activeLogicalAgentId={activeLogicalAgentId}
           onLogicalAgentPicked={onLogicalAgentPicked}
           teams={composerTeams}
           activeTeamId={activeTeamId}
           onTeamPicked={onTeamPicked}
-          teamLocked={teamLocked}
           activeAgentDisplayName={activeAgentDisplayName}
           selectedEmployee={selectedEmployee}
           initializingThread={initializingThread}

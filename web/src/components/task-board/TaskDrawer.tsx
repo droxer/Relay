@@ -20,7 +20,7 @@ import type { AgentTeam, EmployeeAgent, ProjectRecord, TaskPriority, TaskRoutine
 import { TASK_PRIORITIES } from "../../lib/backlog";
 import { manualTaskStatuses } from "../../lib/taskFlow";
 import { TASK_ROUTINE_CADENCES, TASK_ROUTINE_TYPES, isoToday } from "../../lib/routine";
-import { assignmentOptionVisible } from "../../lib/taskAssignment";
+import { agentOnComputer, assignmentOptionVisible, teamOnComputer, teamSharesOneComputer } from "../../lib/taskAssignment";
 import {
   clearTaskAssignment,
   nextRoutineRunDate,
@@ -227,12 +227,23 @@ export function TaskDrawer({
     onSubmit(event);
   }
 
-  const agentOptions = logicalAgents.filter((agent) => (!form.projectId || project?.members.some((member) => member.agentId === agent.id && member.enabled) || agent.id === form.assignedAgentId) && assignmentOptionVisible(
+  // A project owns a computer and everyone on it shares the project
+  // workspace, so a project task offers every agent — and every team whose
+  // whole roster — lives there, not just the project's members. Outside a
+  // project a team still runs on one computer, so only a co-located roster is
+  // offered. The current pick always stays listed so the trigger can name it.
+  const agentOnTaskComputer = (agent: EmployeeAgent) => !project
+    || project.members.some((member) => member.agentId === agent.id && member.enabled)
+    || agentOnComputer(agent, project.computerId);
+  const teamOnTaskComputer = (team: AgentTeam) => project
+    ? teamOnComputer(team, logicalAgents, project.computerId)
+    : teamSharesOneComputer(team, logicalAgents);
+  const agentOptions = logicalAgents.filter((agent) => (agent.id === form.assignedAgentId || agentOnTaskComputer(agent)) && assignmentOptionVisible(
     agent.supervisorEmployeeId,
     form.assigneeEmployeeId,
     agent.id === form.assignedAgentId,
   ));
-  const teamOptions = teams.filter((team) => (!form.projectId || team.id === form.assignedTeamId) && assignmentOptionVisible(
+  const teamOptions = teams.filter((team) => (team.id === form.assignedTeamId || teamOnTaskComputer(team)) && assignmentOptionVisible(
     team.ownerEmployeeId,
     form.assigneeEmployeeId,
     team.id === form.assignedTeamId,

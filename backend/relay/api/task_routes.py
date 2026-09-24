@@ -19,6 +19,7 @@ from ..persistence.stores import (
 from ..persistence.task_lifecycle import validate_manual_transition, wip_limit
 from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
 from ..services.produced_files import file_currency, listing_directories, live_status
+from ..services.project_runtime import project_task_assignment_error
 from ..services.task_deletion import (
     TaskDeletionError,
     task_has_active_linked_session,
@@ -148,17 +149,35 @@ def validate_project_task_assignment(
     project_id = task.get("projectId")
     if not project_id:
         return
-    if assigned_team_id:
-        raise HTTPException(400, "project_team_assignment_unsupported")
-    if not assigned_agent_id:
-        return
     project = ctx.project_store.get_project(project_id)
     if not project:
         raise HTTPException(404, "Project not found.")
-    if assigned_agent_id not in {
-        member.get("agentId") for member in project.get("members", []) if member.get("enabled", True)
-    }:
-        raise HTTPException(400, "project_agent_not_member")
+    validate_project_assignment(
+        ctx,
+        project,
+        assigned_agent_id=assigned_agent_id,
+        assigned_team_id=assigned_team_id,
+    )
+
+
+def validate_project_assignment(
+    ctx: AppContextDep,
+    project: dict[str, Any],
+    *,
+    assigned_agent_id: str | None,
+    assigned_team_id: str | None,
+) -> None:
+    """A project task may go to anyone who shares the project's computer."""
+    team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
+    if assigned_team_id and (not team or team.get("deletedAt")):
+        raise HTTPException(404, "Team not found.")
+    if code := project_task_assignment_error(
+        project,
+        agent_id=assigned_agent_id,
+        team=team,
+        placement_store=ctx.agent_placement_store,
+    ):
+        raise HTTPException(400, code)
 
 
 def date_field(body: dict[str, Any], key: str) -> str | None:
@@ -399,15 +418,13 @@ def create_task(
     )
     if logical_agent:
         assignee = logical_agent["supervisorEmployeeId"]
-    if (
-        project
-        and assigned_agent_id
-        and assigned_agent_id
-        not in {member["agentId"] for member in project.get("members", []) if member.get("enabled", True)}
-    ):
-        raise HTTPException(400, "project_agent_not_member")
-    if project and assigned_team_id:
-        raise HTTPException(400, "project_team_assignment_unsupported")
+    if project:
+        validate_project_assignment(
+            ctx,
+            project,
+            assigned_agent_id=assigned_agent_id,
+            assigned_team_id=assigned_team_id,
+        )
     team_for_assignment(
         ctx,
         actor,

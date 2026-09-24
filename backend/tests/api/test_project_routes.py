@@ -675,35 +675,190 @@ def test_project_thread_and_task_reject_assignment_overrides(monkeypatch) -> Non
         assert task.json()["detail"] == "project_assignment_override_unsupported"
         assert app.state.task_store.list_tasks() == []
 
-        project_task = client.post(
+
+
+def _project(client: TestClient, computer: dict, lead: dict, name: str = "Shared") -> dict:
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "name": name,
+            "daemonNodeId": computer["id"],
+            "leadAgentId": lead["id"],
+            "members": [
+                {
+                    "agentId": lead["id"],
+                    "role": "planner",
+                    "responsibilities": "Plan",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["project"]
+
+
+def _team(client: TestClient, lead: dict, *members: dict, name: str = "Crew") -> dict:
+    response = client.post(
+        "/api/v1/teams",
+        json={
+            "name": name,
+            "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], *(member["id"] for member in members)],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["team"]
+
+
+def test_project_task_accepts_any_agent_or_team_on_the_project_computer(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_a", "machine-a")
+        lead = _agent(client, app, computer, "Lead", "codex")
+        neighbour = _agent(client, app, computer, "Neighbour", "claude")
+        _login_alice(client)
+        project = _project(client, computer, lead)
+        team = _team(client, neighbour, name="Neighbours")
+        task_id = client.post(
             "/api/v1/tasks",
-            json={"title": "Fixed roster task", "projectId": project["id"]},
+            json={"title": "Shared machine task", "projectId": project["id"]},
+        ).json()["id"]
+
+        patched = client.patch(
+            f"/api/v1/tasks/{task_id}", json={"assignedAgentId": neighbour["id"]}
         )
-        assert project_task.status_code == 201, project_task.text
-        patch_outsider = client.patch(
-            f"/api/v1/tasks/{project_task.json()['id']}",
-            json={"assignedAgentId": outsider["id"]},
+        assigned_team = client.put(
+            f"/api/v1/tasks/{task_id}/assignment", json={"teamId": team["id"]}
         )
-        assign_outsider = client.put(
-            f"/api/v1/tasks/{project_task.json()['id']}/assignment",
-            json={"agentId": outsider["id"]},
+        created_for_team = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Team on the project computer",
+                "projectId": project["id"],
+                "assignedTeamId": team["id"],
+            },
         )
-        patch_team = client.patch(
-            f"/api/v1/tasks/{project_task.json()['id']}",
-            json={"assignedTeamId": "not-a-project-roster"},
+
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["assignedAgentId"] == neighbour["id"]
+        assert assigned_team.status_code == 200, assigned_team.text
+        assert assigned_team.json()["assignedTeamId"] == team["id"]
+        assert created_for_team.status_code == 201, created_for_team.text
+        assert created_for_team.json()["assignedTeamId"] == team["id"]
+
+
+def test_project_task_rejects_agents_and_teams_on_another_computer(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer_a = _register_computer(app, "node_alice_a", "machine-a")
+        computer_b = _register_computer(app, "node_alice_b", "machine-b")
+        lead = _agent(client, app, computer_a, "Lead", "codex")
+        stranger = _agent(client, app, computer_b, "Stranger", "claude")
+        _login_alice(client)
+        project = _project(client, computer_a, lead)
+        split_team = _team(client, lead, stranger, name="Split")
+        task_id = client.post(
+            "/api/v1/tasks",
+            json={"title": "Pinned task", "projectId": project["id"]},
+        ).json()["id"]
+
+        patch_stranger = client.patch(
+            f"/api/v1/tasks/{task_id}", json={"assignedAgentId": stranger["id"]}
         )
-        assign_team = client.put(
-            f"/api/v1/tasks/{project_task.json()['id']}/assignment",
-            json={"teamId": "not-a-project-roster"},
+        assign_split = client.put(
+            f"/api/v1/tasks/{task_id}/assignment", json={"teamId": split_team["id"]}
         )
-        assert patch_outsider.status_code == 400
-        assert patch_outsider.json()["detail"] == "project_agent_not_member"
-        assert assign_outsider.status_code == 400
-        assert assign_outsider.json()["detail"] == "project_agent_not_member"
-        assert patch_team.status_code == 400
-        assert patch_team.json()["detail"] == "project_team_assignment_unsupported"
-        assert assign_team.status_code == 400
-        assert assign_team.json()["detail"] == "project_team_assignment_unsupported"
+        create_split = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Split team",
+                "projectId": project["id"],
+                "assignedTeamId": split_team["id"],
+            },
+        )
+
+        assert patch_stranger.status_code == 400
+        assert patch_stranger.json()["detail"] == "project_agent_off_computer"
+        assert assign_split.status_code == 400
+        assert assign_split.json()["detail"] == "project_team_off_computer"
+        assert create_split.status_code == 400
+        assert create_split.json()["detail"] == "project_team_off_computer"
+
+
+def test_project_task_assigned_to_a_team_dispatches_the_team_in_the_project_workspace(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_a", "machine-a")
+        lead = _agent(client, app, computer, "Lead", "codex")
+        neighbour = _agent(client, app, computer, "Neighbour", "claude")
+        _login_alice(client)
+        project = _project(client, computer, lead)
+        team = _team(client, neighbour, name="Solo")
+        task = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Team task",
+                "projectId": project["id"],
+                "assignedTeamId": team["id"],
+            },
+        ).json()
+
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+
+        assert started.status_code == 202, started.text
+        assert started.json()["dispatch"]["state"] == "started"
+        assert started.json()["session"]["projectId"] == project["id"]
+        # The thread stays the project's room; the team only ran this task.
+        assert started.json()["session"].get("teamId") is None
+        [command] = app.state.registry.take_commands(
+            computer["id"], f"token_{computer['id']}"
+        )
+        assert command["workspaceSubpath"] == project["workspaceSubpath"]
+        assert command["logicalAgentId"] == neighbour["id"]
+
+
+def test_project_task_assigned_to_a_non_member_dispatches_that_agent(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_a", "machine-a")
+        lead = _agent(client, app, computer, "Lead", "codex")
+        neighbour = _agent(client, app, computer, "Neighbour", "claude")
+        _login_alice(client)
+        project = _project(client, computer, lead)
+        task = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Neighbour task",
+                "projectId": project["id"],
+                "assignedAgentId": neighbour["id"],
+            },
+        ).json()
+
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+
+        assert started.status_code == 202, started.text
+        assert started.json()["dispatch"]["state"] == "started"
+        [command] = app.state.registry.take_commands(
+            computer["id"], f"token_{computer['id']}"
+        )
+        assert command["workspaceSubpath"] == project["workspaceSubpath"]
+        assert command["logicalAgentId"] == neighbour["id"]
 
 
 def test_project_thread_rejects_another_computer(monkeypatch) -> None:
