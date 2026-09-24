@@ -37,13 +37,22 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** Every .tsx under web/src, recursively. */
+/* Vendored upstream components (ReUI, copied from its registry). They are
+   kept close to their source so an upstream fix can be re-applied as a diff,
+   and they render inside Relay's `relay` layer, which restyles the surfaces
+   Relay shows. The class-scale checks below hold Relay's OWN components to the
+   grid; they do not rewrite a library. Relay's changes to these files are
+   marked "Relay addition" in the files themselves. */
+const VENDORED_COMPONENT_DIRS = new Set([path.join("components", "reui")]);
+
+/** Every .tsx under web/src, recursively, except vendored component code. */
 function componentSources(): { name: string; source: string }[] {
   const root = path.join(repoRoot, "web", "src");
   const out: { name: string; source: string }[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
+      if (entry.isDirectory() && VENDORED_COMPONENT_DIRS.has(path.relative(root, full))) continue;
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith(".tsx")) out.push({ name: path.relative(root, full), source: readFileSync(full, "utf8") });
     }

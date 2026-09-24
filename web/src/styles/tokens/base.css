@@ -414,3 +414,10 @@ summary:focus-visible,
   content-visibility: auto;
   contain-intrinsic-size: auto 72px;
 }
+
+/* The scroll-area viewport clips to its container's corners. Written here
+   rather than as `rounded-[inherit]` on the primitive: component classes stay
+   on the token scale (designGrid.test.ts), and `inherit` is not a scale value. */
+[data-slot="scroll-area-viewport"] {
+  border-radius: inherit;
+}

@@ -13,7 +13,7 @@ import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   MAX_LOCAL_COMPUTERS_CEILING,
   MAX_TASK_ROUNDS_CEILING,
@@ -259,22 +259,22 @@ function NumberSettingCard({
         hint={hint}
         error={error ?? undefined}
         errorId={errorId}
+        wrapper="div"
+        htmlFor={`${name}-input`}
       >
         <div className="adm-settings-control">
-          <Input
+          <NumberInput
+            id={`${name}-input`}
             name={name}
             className="adm-settings-input"
-            type="number"
-            inputMode="numeric"
             min={min}
             max={max}
-            step={1}
             value={value}
             disabled={isLoading || isBusy}
-            aria-invalid={value !== "" && !isValid}
-            aria-describedby={error ? errorId : undefined}
-            onChange={(event) => {
-              setValue(event.target.value);
+            invalid={value !== "" && !isValid}
+            describedBy={error ? errorId : undefined}
+            onValueChange={(next) => {
+              setValue(next);
               setError(null);
               setSavedAt(null);
             }}

@@ -1,12 +1,12 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Input } from "@/components/ui/input";
 import { StateMark, shapeForCount } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
-import { FiltersBar, FilterSelect } from "../FiltersBar";
+import { FiltersBar, type FilterBarField } from "../FiltersBar";
+import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import {
   ROUTINE_STATE_ORDER,
   type RoutineState,
@@ -72,8 +72,19 @@ export function formatNextRunDate(value: string): string {
   }).format(date);
 }
 
+const ROUTINE_BAR_KEYS = ["type", "cadence", "agent", "assignee"] as const;
+
 export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: EmployeeAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
+  const fields = useMemo<FilterBarField[]>(() => [
+    { id: "type", label: t("routine.type"), kind: "select",
+      options: TASK_ROUTINE_TYPES.map((type) => ({ value: type, label: t(`routine.types.${type}`) })) },
+    { id: "cadence", label: t("routine.cadence"), kind: "select",
+      options: TASK_ROUTINE_CADENCES.map((cadence) => ({ value: cadence, label: t(`routine.cadences.${cadence}`) })) },
+    { id: "agent", label: t("backlog.agent"), kind: "select",
+      options: agents.map((agent) => ({ value: agent.id, label: agent.displayName })) },
+    { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
+  ], [agents, t]);
 
   return (
     <FiltersBar
@@ -82,47 +93,14 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
       searchLabel={t("routine.search")}
       query={filters.query}
       onQueryChange={(query) => onChange({ ...filters, query })}
-      activeCount={activeRoutineFilterCount(filters)}
+      fields={fields}
+      selections={selectionsFromState(filters, ROUTINE_BAR_KEYS)}
+      onSelectionsChange={(next) => onChange({ ...filters, ...stateFromSelections(next, ROUTINE_BAR_KEYS, ["assignee"]) } as RoutineFilters)}
       /* The rail owns `state`, so clearing the BAR must not move the reader
          to another section — that control is not in this bar to be cleared. */
       onClear={() => onChange({ ...initialRoutineFilters, state: filters.state })}
       trailing={sortMenu}
-    >
-      <FilterSelect
-        name="routine-type-filter"
-        label={t("routine.type")}
-        value={filters.type}
-        onValueChange={(type) => onChange({ ...filters, type })}
-        options={[
-          { value: "all" as const, label: t("routine.all_types") },
-          ...TASK_ROUTINE_TYPES.map((type) => ({ value: type, label: t(`routine.types.${type}`) })),
-        ]}
-      />
-      <FilterSelect
-        name="routine-cadence-filter"
-        label={t("routine.cadence")}
-        value={filters.cadence}
-        onValueChange={(cadence) => onChange({ ...filters, cadence })}
-        options={[
-          { value: "all" as const, label: t("routine.all_cadences") },
-          ...TASK_ROUTINE_CADENCES.map((cadence) => ({
-            value: cadence,
-            label: t(`routine.cadences.${cadence}`),
-          })),
-        ]}
-      />
-      <FilterSelect
-        name="routine-agent-filter"
-        label={t("backlog.agent")}
-        value={filters.agent}
-        onValueChange={(agent) => onChange({ ...filters, agent })}
-        options={[
-          { value: "all", label: t("backlog.all_agents") },
-          ...agents.map((agent) => ({ value: agent.id, label: agent.displayName })),
-        ]}
-      />
-      <Input name="routine-assignee-filter" autoComplete="off" spellCheck={false} value={filters.assignee} placeholder={t("backlog.assignee_filter")} aria-label={t("backlog.assignee_filter")} onChange={(event) => onChange({ ...filters, assignee: event.target.value })} />
-    </FiltersBar>
+    />
   );
 }
 

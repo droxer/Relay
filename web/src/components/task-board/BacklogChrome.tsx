@@ -12,13 +12,13 @@ import {
 } from "../icons";
 import { dueTone, TASK_PRIORITIES, TASK_STATUSES, type BacklogFilters } from "../../lib/backlog";
 import { Button } from "@/components/ui/button";
-import { FiltersBar, FilterSelect } from "../FiltersBar";
-import { Input } from "@/components/ui/input";
+import { FiltersBar, type FilterBarField } from "../FiltersBar";
+import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
 import { StateMark, shapeForCount } from "../StateMark";
 
-import { activeFilterCount, initialFilters, type BacklogView } from "./backlogVocabulary";
+import { initialFilters, type BacklogView } from "./backlogVocabulary";
 
 /**
  * The board's chrome, as against its records: the inline stat bar, the filter
@@ -88,9 +88,20 @@ export function formatDueDate(value: string): string {
     day: "numeric",
   }).format(date);
 }
+/** A filter one page adds to the backlog bar — the project on the backlog, the status on a project. */
+export interface ExtraBacklogFilter {
+  field: FilterBarField;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+/* The bar's fields, as the page state names them. "all" is how the state
+   says "not filtering"; the chips say it by having no chip. */
+const BACKLOG_BAR_KEYS = ["priority", "due", "agent", "team", "assignment", "assignee", "source"] as const;
+
 export function BacklogFiltersBar({
   sortMenu,
-  projectFilter,
+  extraField,
   filters,
   agents,
   teams,
@@ -102,103 +113,58 @@ export function BacklogFiltersBar({
   onChange: (next: BacklogFilters) => void;
   /** The narrow-width sort control; see SortMenu. */
   sortMenu?: ReactNode;
-  projectFilter?: ReactNode;
+  extraField?: ExtraBacklogFilter;
 }) {
   const { t } = useTranslation();
+  const fields = useMemo<FilterBarField[]>(() => [
+    ...(extraField ? [extraField.field] : []),
+    { id: "priority", label: t("backlog.priority"), kind: "select",
+      options: TASK_PRIORITIES.map((priority) => ({ value: priority, label: t(`backlog.priorities.${priority}`) })) },
+    { id: "due", label: t("backlog.due"), kind: "select", options: [
+      { value: "overdue", label: t("backlog.overdue") },
+      { value: "today", label: t("backlog.today") },
+      { value: "next_week", label: t("backlog.next_week") },
+      { value: "unscheduled", label: t("backlog.unscheduled") },
+    ] },
+    { id: "agent", label: t("backlog.agent"), kind: "select",
+      options: agents.map((agent) => ({ value: agent.id, label: agent.displayName })) },
+    { id: "team", label: t("backlog.team_filter"), kind: "select",
+      options: teams.map((team) => ({ value: team.id, label: team.name })) },
+    { id: "assignment", label: t("backlog.assignment_filter"), kind: "select", options: [
+      { value: "assigned", label: t("backlog.with_assignment") },
+      { value: "unassigned", label: t("backlog.without_assignment") },
+    ] },
+    { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
+    { id: "source", label: t("backlog.source"), kind: "select", options: [
+      { value: "direct", label: t("backlog.source_direct") },
+      { value: "routine", label: t("backlog.source_routine") },
+    ] },
+  ], [agents, teams, t, extraField?.field]);
+  const selections = {
+    ...(extraField ? { [extraField.field.id]: extraField.value } : {}),
+    ...selectionsFromState(filters, BACKLOG_BAR_KEYS),
+  };
 
   return (
     <FiltersBar
       ariaLabel={t("backlog.filters")}
       searchName="backlog-query"
-      expandLabel={t("backlog.more_filters")}
       searchLabel={t("backlog.search")}
       query={filters.query}
       onQueryChange={(query) => onChange({ ...filters, query })}
-      activeCount={activeFilterCount({ ...filters, status: "all" })}
+      fields={fields}
+      selections={selections}
+      onSelectionsChange={(next) => {
+        if (extraField && next[extraField.field.id] !== extraField.value) extraField.onChange(next[extraField.field.id]);
+        const bar = stateFromSelections(next, BACKLOG_BAR_KEYS, ["assignee"]);
+        if (BACKLOG_BAR_KEYS.some((key) => bar[key] !== filters[key])) onChange({ ...filters, ...bar } as BacklogFilters);
+      }}
+      /* The extra field (the project, a project's status) is the page's, not
+         the bar's: Clear leaves it, as it always has. */
       onClear={() => onChange({ ...initialFilters, status: filters.status })}
+      clearableCount={BACKLOG_BAR_KEYS.filter((key) => filters[key] !== "all" && filters[key] !== "").length}
       trailing={sortMenu}
-      quickFilters={<>
-        {projectFilter}
-        <FilterSelect size="sm" className="backlog-quick-select"
-          name="backlog-priority-filter"
-          label={t("backlog.priority")}
-          value={filters.priority}
-          onValueChange={(priority) => onChange({ ...filters, priority })}
-          options={[
-            { value: "all" as const, label: t("backlog.all_priorities") },
-            ...TASK_PRIORITIES.map((priority) => ({
-              value: priority,
-              label: t(`backlog.priorities.${priority}`),
-            })),
-          ]}
-        />
-        <FilterSelect size="sm" className="backlog-quick-select"
-          name="backlog-due-filter"
-          label={t("backlog.due")}
-          value={filters.due}
-          onValueChange={(due) => onChange({ ...filters, due })}
-          options={[
-            { value: "all", label: t("backlog.all_due") },
-            { value: "overdue", label: t("backlog.overdue") },
-            { value: "today", label: t("backlog.today") },
-            { value: "next_week", label: t("backlog.next_week") },
-            { value: "unscheduled", label: t("backlog.unscheduled") },
-          ]}
-        />
-      </>}
-    >
-      <FilterSelect
-        name="backlog-agent-filter"
-        label={t("backlog.agent")}
-        value={filters.agent}
-        onValueChange={(agent) => onChange({ ...filters, agent })}
-        options={[
-          { value: "all", label: t("backlog.all_agents") },
-          ...agents.map((agent) => ({ value: agent.id, label: agent.displayName })),
-        ]}
-      />
-      <FilterSelect
-        name="backlog-team-filter"
-        label={t("backlog.team_filter")}
-        value={filters.team}
-        onValueChange={(team) => onChange({ ...filters, team })}
-        options={[
-          { value: "all", label: t("backlog.all_teams") },
-          ...teams.map((team) => ({ value: team.id, label: team.name })),
-        ]}
-      />
-      <FilterSelect
-        name="backlog-assignment-filter"
-        label={t("backlog.assignment_filter")}
-        value={filters.assignment}
-        onValueChange={(assignment) => onChange({ ...filters, assignment })}
-        options={[
-          { value: "all" as const, label: t("backlog.all_assignments") },
-          { value: "assigned" as const, label: t("backlog.with_assignment") },
-          { value: "unassigned" as const, label: t("backlog.without_assignment") },
-        ]}
-      />
-      <Input
-        name="backlog-assignee-filter"
-        autoComplete="off"
-        spellCheck={false}
-        value={filters.assignee}
-        placeholder={t("backlog.assignee_filter")}
-        aria-label={t("backlog.assignee_filter")}
-        onChange={(event) => onChange({ ...filters, assignee: event.target.value })}
-      />
-      <FilterSelect
-        name="backlog-source-filter"
-        label={t("backlog.source")}
-        value={filters.source}
-        onValueChange={(source) => onChange({ ...filters, source })}
-        options={[
-          { value: "all", label: t("backlog.all_sources") },
-          { value: "direct", label: t("backlog.source_direct") },
-          { value: "routine", label: t("backlog.source_routine") },
-        ]}
-      />
-    </FiltersBar>
+    />
   );
 }
 export function BacklogViewToggle({ view, onChange }: { view: BacklogView; onChange: (view: BacklogView) => void }) {

@@ -98,8 +98,8 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  /* A height, not a floor: it shares a row with the Filters chip and the sort
-     menu, which are exactly --control-h-sm. As a min-height the padded input
+  /* A height, not a floor: it shares a row with the sort menu, and the chip
+     row below it is on the same --control-h-sm rung. As a min-height the padded input
      plus the hairline border pushed the box to 40.5px, off its neighbours. */
   height: var(--control-h-sm);
   padding: 0 var(--sp-3);
@@ -129,46 +129,6 @@
   color: var(--ink-4);
 }
 
-.backlog-filter-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-shrink: 0;
-}
-
-/* button-secondary — toggles the filter panel; count uses badge-mono. */
-/* `variant="secondary"` at `size="sm"` is this control: the --control-fill
-   plate, the --control-h-sm height, the --r-2 corner, and the
-   --control-fill-hover wash the `:hover` rule below used to restate. The
-   Button underneath declared `ghost`, so the prop and the class disagreed and
-   the class won. Only the label tier and the gap are local. */
-.backlog-filter-chip {
-  gap: var(--sp-2);
-  font: var(--type-label);
-}
-
-.backlog-filter-chip[data-applied="true"],
-.backlog-filter-chip[data-active="true"] {
-  background: var(--action-soft);
-  border-color: var(--line-strong);
-}
-
-
-.backlog-filter-count {
-  display: inline-flex;
-  align-items: center;
-  min-width: 18px;
-  justify-content: center;
-  padding: var(--sp-0-5) var(--sp-2);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-}
-
 /* link-inline — a wayfinding anchor beside the filter button, so it takes the
    link hue; the underline stays, it is link grammar. */
 .backlog-filter-clear {
@@ -192,21 +152,15 @@
   border-radius: var(--r-2);
 }
 
-.backlog-filter-secondary {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+/* The chip row under the search: ReUI Filters ("Add filter" + one chip per
+   filter), then Clear. Chips wrap rather than scroll — a filter hidden past
+   the edge is a filter the reader forgets is applied. */
+.backlog-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-2);
-  padding: 0 var(--page-gutter) var(--sp-4);
-}
-
-/* Filters are <FilterSelect> (the shadcn Select) and <Input> now, so they carry
-   their own chrome. The rule they replaced bordered these fields with --line-1,
-   the *structural* hairline, where every other field in the app uses
-   --control-border — the role that roles.css requires to stay 3:1 against the
-   surface so an unfocused control is perceivable (WCAG 1.4.11). Only the grid
-   sizing belongs to this surface. */
-.backlog-filter-secondary > [data-slot="select-trigger"] {
-  width: 100%;
+  padding: 0 var(--page-gutter) var(--sp-3);
 }
 
 /* ── Pipeline board ──────────────────────────────────────────────────── */
@@ -265,31 +219,9 @@
   border-left: 0.5px solid var(--line-1);
 }
 
-/* Chip that trails the finger during a touch drag, standing in for the drag
-   image the browser draws for mouse drags. Offset off the fingertip so the
-   card title stays readable under the hand. */
-.backlog-drag-ghost {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: var(--z-float);
-  max-width: 200px;
-  overflow: hidden;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
-  box-shadow: var(--shadow-2);
-  padding: var(--sp-2) var(--sp-3);
-  color: var(--ink-1);
-  font: var(--type-body);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-
 /* Snapping re-snaps every small programmatic scrollLeft change back to the
-   current lane, which would cancel edge auto-scroll frame by frame. Suspend
-   it for the duration of a card drag. */
+   current lane, which would cancel dnd-kit's edge auto-scroll frame by frame.
+   Suspend it for the duration of a card drag. */
 .backlog-board[data-dragging="true"] {
   scroll-snap-type: none;
 }
@@ -410,6 +342,16 @@
   content-visibility: visible;
   opacity: var(--opacity-ghost);
   border-color: var(--line-drag);
+  cursor: grabbing;
+}
+
+/* The copy that follows the pointer or finger (the kanban's DragOverlay,
+   portaled to <body>). It is the one card lifted off the plane, so it alone
+   takes an elevation shadow. */
+.backlog-task[data-overlay="true"] {
+  content-visibility: visible;
+  border-color: var(--line-drag);
+  box-shadow: var(--shadow-2);
   cursor: grabbing;
 }
 

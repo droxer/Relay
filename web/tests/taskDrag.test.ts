@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { TASK_DRAG_MEDIA_TYPE, readDraggedTaskId, taskDropRejection } from "../src/lib/taskDrag.js";
+import { laneForDropTarget, taskDropRejection } from "../src/lib/taskDrag.js";
 import type { RelayTask } from "../src/types.js";
 
 function task(input: Partial<RelayTask> & { id: string }): RelayTask {
@@ -47,17 +47,23 @@ describe("taskDropRejection", () => {
   });
 });
 
-describe("readDraggedTaskId", () => {
-  function transfer(data: Record<string, string>): DataTransfer {
-    return { getData: (type: string) => data[type] ?? "" } as DataTransfer;
-  }
+describe("laneForDropTarget", () => {
+  const lanes = {
+    backlog: [task({ id: "task_1" })],
+    assigned: [],
+    running: [task({ id: "task_2", status: "running" })],
+  } as const;
 
-  it("reads the relay payload", () => {
-    assert.equal(readDraggedTaskId(transfer({ [TASK_DRAG_MEDIA_TYPE]: "task_1" })), "task_1");
+  it("resolves a lane dropped on directly, even when it is empty", () => {
+    assert.equal(laneForDropTarget("assigned", lanes), "assigned");
   });
 
-  it("ignores foreign drags that carry unrelated text", () => {
-    assert.equal(readDraggedTaskId(transfer({ "text/plain": "some dragged sentence" })), null);
-    assert.equal(readDraggedTaskId(transfer({})), null);
+  it("resolves a card to the lane that holds it", () => {
+    assert.equal(laneForDropTarget("task_2", lanes), "running");
+  });
+
+  it("returns null for nothing, or for an id no lane knows", () => {
+    assert.equal(laneForDropTarget(null, lanes), null);
+    assert.equal(laneForDropTarget("task_missing", lanes), null);
   });
 });

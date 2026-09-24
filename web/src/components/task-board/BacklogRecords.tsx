@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, type DragEvent, type ReactNode, type TouchEvent } from "react";
+import { useMemo, useRef, type ComponentProps, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { PriorityBadge } from "../PriorityBadge";
 import { cn } from "@/lib/utils";
@@ -48,11 +48,9 @@ export function BacklogTaskCard({
   agentImageUrl,
   selected,
   onToggleSelect,
-  dragging,
-  onDragStart,
-  onDragEnd,
-  onTouchStart,
   onOpen,
+  className,
+  ...dragProps
 }: {
   task: RelayTaskListItem;
   projectName?: string;
@@ -61,27 +59,23 @@ export function BacklogTaskCard({
   agentImageUrl?: string | null;
   selected: boolean;
   onToggleSelect: () => void;
-  dragging: boolean;
-  onDragStart: (event: DragEvent<HTMLElement>) => void;
-  onDragEnd: () => void;
-  onTouchStart: (event: TouchEvent<HTMLElement>) => void;
   /** Opens the record drawer. The title is a destination now, not a form. */
   onOpen: () => void;
-}) {
+  /* The board's KanbanItem renders the card and hands it the drag wiring —
+     ref, pointer/keyboard listeners, the sortable a11y attributes, the
+     transform style and `data-dragging`. The card applies them to its own
+     root rather than growing a wrapper element around it. */
+} & Omit<ComponentProps<"article">, "children">) {
   const { t } = useTranslation();
   const tone = dueTone(task);
   const age = taskWorkAgeDays(task);
 
   return (
     <article
-      className="backlog-task group list-virtual"
+      {...dragProps}
+      className={cn("backlog-task group list-virtual", className)}
       data-priority={task.priority}
       data-selected={selected ? "true" : undefined}
-      data-dragging={dragging ? "true" : undefined}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onTouchStart={onTouchStart}
     >
       {/* The card is a tile: a title and one facts line. Everything else the
           record carries — prose, exceptions, provenance, outcome, actions —

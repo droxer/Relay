@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,109 +11,206 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchInput } from "@/components/ui/search-input";
-import { readFiltersExpanded, writeFiltersExpanded } from "@/lib/appStorage";
+import { Filters } from "@/components/reui/filters/filters";
+import { FilterRuleMenuOptionsContext } from "@/components/reui/filters/filters-chip";
+import type { FilterField, FilterLabels, FilterQuery } from "@/components/reui/filters/filters-types";
+import {
+  EMPTY_FILTER_QUERY,
+  SELECTION_OPERATOR,
+  reconcileQuery,
+  selectionsFromQuery,
+  type FilterSelections,
+  type SelectionKind,
+  type SelectionQuery,
+} from "@/lib/filterSelections";
 import { ICON } from "./icons";
 
+/** One filter a page offers. `select` filters by one of `options`; `text` by a substring. */
+export interface FilterBarField {
+  id: string;
+  label: string;
+  kind: SelectionKind;
+  options?: readonly { value: string; label: string }[];
+}
+
 interface FiltersBarProps {
+  /** `band` spans a page above its list; `rail` is a list rail's header band
+   *  (.list-filter-bar), which the roster rails share. */
+  variant?: "band" | "rail";
   ariaLabel: string;
   searchName: string;
   searchLabel: string;
+  /** Defaults to the label. */
+  searchPlaceholder?: string;
   query: string;
   onQueryChange: (value: string) => void;
-  activeCount: number;
+  fields: readonly FilterBarField[];
+  /** The page's filter state, one value per field id ("" = not filtering). */
+  selections: FilterSelections;
+  onSelectionsChange: (next: Record<string, string>) => void;
+  /** Clears the bar's own filters and its search — not the section rail, nor a
+   *  page-level field (a project, a status) that only rides in the bar. */
   onClear: () => void;
-  /** Page-specific filter controls, revealed when the bar is expanded. */
-  children?: ReactNode;
-  /**
-   * Always-visible control alongside the Filters button. The narrow-width sort
-   * menu goes here rather than in `children`: on the widths where it is the
-   * only way to sort, burying it behind "Show filters" would hide the control
-   * that replaced the column headers.
-   */
+  /** How many filters Clear would clear; defaults to every filtered field. */
+  clearableCount?: number;
+  /** Always-visible control after the search: the narrow-width sort menu. */
   trailing?: ReactNode;
-  defaultExpanded?: boolean;
-  /** Compact controls that stay visible when additional filters are collapsed. */
-  quickFilters?: ReactNode;
-  expandLabel?: string;
 }
 
+// A flat, URL-backed filter store can hold neither a duplicated rule nor a
+// negated one, so the chip menu does not offer them.
+const RULE_MENU = { duplicate: false, negate: false } as const;
+
+function useFilterLabels(): Partial<FilterLabels> {
+  const { t } = useTranslation();
+  return useMemo(() => ({
+    addFilter: t("filters.add_filter"),
+    addCondition: t("filters.add_filter"),
+    searchFields: t("filters.search_fields"),
+    searchOperators: t("filters.search_operators"),
+    searchOptions: t("filters.search_options"),
+    back: t("filters.back"),
+    clear: t("filters.clear"),
+    apply: t("filters.apply"),
+    discard: t("filters.discard"),
+    empty: t("filters.empty"),
+    loading: t("filters.loading"),
+    loadingMore: t("filters.loading_more"),
+    loadMore: t("filters.load_more"),
+    error: t("filters.error"),
+    retry: t("filters.retry"),
+    where: t("filters.where"),
+    and: t("filters.and"),
+    remove: t("filters.remove"),
+    chipMenu: (field: string) => t("filters.chip_menu", { field }),
+    filtersLabel: t("filters.filters_label"),
+    clearAll: t("filters.clear_all"),
+    valuePlaceholder: t("filters.value_placeholder"),
+    selectPlaceholder: t("filters.select_placeholder"),
+    noValue: t("filters.no_value"),
+    selectCondition: t("filters.select_condition"),
+    incomplete: t("filters.incomplete"),
+    branchAffordance: t("filters.branch_affordance"),
+    fieldsLabel: t("filters.fields_label"),
+    actionsLabel: t("filters.actions_label"),
+    itemCount: (count: number) => t("filters.item_count", { count }),
+    resultsAnnouncement: (count: number) => t("filters.results", { count }),
+    stepAnnouncement: (step, label) => t(
+      step === "field" ? "filters.step_field" : step === "operator" ? "filters.step_operator" : "filters.step_value",
+      { label },
+    ),
+    countAnnouncement: (count: number) => t("filters.applied", { count }),
+    valueCount: (count: number) => t("filters.value_count", { count }),
+    valueDetail: (summary: string, values: string[]) => t("filters.value_detail", { summary, values: values.join(", ") }),
+    negated: (operator: string) => t("filters.negated", { operator }),
+    issueOperator: t("filters.issue_operator"),
+    issueValue: t("filters.issue_value"),
+    readOnly: t("filters.read_only"),
+  }), [t]);
+}
+
+/**
+ * Every list's filter band: a search box, then the filters as chips (ReUI
+ * Filters) — "Add filter" picks a field, then a value; a chip edits or
+ * removes it.
+ *
+ * The page keeps its filter state as before — one value per field, in the
+ * URL — and this bar translates at the edge (lib/filterSelections): a chip
+ * the reader is still building lives only here until it has a value, and a
+ * change made elsewhere (Clear, the section rail, a pasted link) redraws the
+ * chips from that state.
+ */
 export function FiltersBar({
+  variant = "band",
   ariaLabel,
   searchName,
   searchLabel,
+  searchPlaceholder,
   query,
   onQueryChange,
-  activeCount,
+  fields,
+  selections,
+  onSelectionsChange,
   onClear,
-  children,
+  clearableCount,
   trailing,
-  defaultExpanded = false,
-  quickFilters,
-  expandLabel,
 }: FiltersBarProps) {
   const { t } = useTranslation();
-  // Remembered per page. Read in the initializer: the bar lives inside the
-  // authenticated shell, which is never prerendered, so there is no hydration
-  // pass to mismatch — and reading late would flash the filters shut.
-  const [expanded, setExpanded] = useState(() => readFiltersExpanded(searchName, defaultExpanded));
-  const toggleExpanded = useCallback(() => {
-    const next = !expanded;
-    setExpanded(next);
-    writeFiltersExpanded(searchName, next);
-  }, [expanded, searchName]);
+  const labels = useFilterLabels();
+  const selectionFields = useMemo(() => fields.map(({ id, kind }) => ({ id, kind })), [fields]);
+  const filterFields = useMemo<FilterField<string>[]>(() => fields.map((field) => {
+    const operator = SELECTION_OPERATOR[field.kind];
+    return {
+      id: field.id,
+      label: field.label,
+      type: field.kind,
+      options: field.options?.map((option) => ({ value: option.value, label: option.label })),
+      operators: [{ value: operator, label: t(`filters.operator_${operator}`) }],
+      defaultOperator: operator,
+    };
+  }), [fields, t]);
+  const [draft, setDraft] = useState<SelectionQuery>(EMPTY_FILTER_QUERY);
+  // Derived every render, never synced in an effect: the chips are the draft
+  // corrected by the page's state, so outside changes land immediately.
+  const shown = reconcileQuery(draft, selections, selectionFields);
+  const activeCount = clearableCount ?? Object.values(selections).filter((value) => value !== "").length;
 
-  const actions = (
-    <div className="backlog-filter-actions">
-      {quickFilters ? null : trailing}
-      <Button
-        variant="secondary"
-        size="sm"
-        type="button"
-        className="backlog-filter-chip"
-        data-active={expanded ? "true" : "false"}
-        data-applied={activeCount > 0 ? "true" : "false"}
-        aria-expanded={expanded}
-        onClick={toggleExpanded}
-      >
-        {expanded ? t("backlog.hide_filters") : (expandLabel ?? t("backlog.show_filters"))}
-        {activeCount > 0 ? (
-          <span className="backlog-filter-count" aria-hidden="true">{activeCount}</span>
-        ) : null}
-      </Button>
+  function changeQuery(next: FilterQuery<string>) {
+    const nextQuery = next as unknown as SelectionQuery;
+    setDraft(nextQuery);
+    const nextSelections = selectionsFromQuery(nextQuery, selectionFields);
+    const changed = selectionFields.some((field) => (selections[field.id] ?? "") !== nextSelections[field.id]);
+    if (changed) onSelectionsChange(nextSelections);
+  }
+
+  const rail = variant === "rail";
+  const search = (
+    <SearchInput
+      className={rail ? "list-filter-search" : "backlog-filter-search-wrap"}
+      inputClassName={rail ? undefined : "backlog-filter-search"}
+      iconSize={ICON.sm}
+      label={searchLabel}
+      name={searchName}
+      value={query}
+      placeholder={searchPlaceholder ?? searchLabel}
+      onChange={(event) => onQueryChange(event.target.value)}
+    />
+  );
+  const chips = (
+    <div className={rail ? "list-filter-chips" : "backlog-filter-chips"}>
+      <FilterRuleMenuOptionsContext.Provider value={RULE_MENU}>
+        <Filters<string>
+          fields={filterFields}
+          query={shown as unknown as FilterQuery<string>}
+          onQueryChange={changeQuery}
+          labels={labels}
+          size="sm"
+        />
+      </FilterRuleMenuOptionsContext.Provider>
       {activeCount > 0 ? (
-        <Button variant="ghost"
-          type="button"
-          className="backlog-filter-clear"
-          onClick={onClear}
-        >
+        <Button variant="ghost" type="button" className="backlog-filter-clear" onClick={onClear}>
           {t("backlog.clear_filters")}
         </Button>
       ) : null}
     </div>
   );
 
+  if (rail) {
+    return (
+      <div className="list-filter-bar" data-chips="true" role="group" aria-label={ariaLabel}>
+        {search}
+        {trailing}
+        {chips}
+      </div>
+    );
+  }
   return (
     <div className="backlog-filter-bar" role="group" aria-label={ariaLabel}>
       <div className="backlog-filter-primary">
-        <SearchInput
-          className="backlog-filter-search-wrap"
-          inputClassName="backlog-filter-search"
-          iconSize={ICON.sm}
-          label={searchLabel}
-          name={searchName}
-          value={query}
-          placeholder={searchLabel}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-        {quickFilters ? trailing : actions}
+        {search}
+        {trailing}
       </div>
-      {quickFilters ? <div className="backlog-filter-quick">
-        {quickFilters}
-        {actions}
-      </div> : null}
-      {expanded ? (
-        <div className="backlog-filter-secondary">{children}</div>
-      ) : null}
+      {chips}
     </div>
   );
 }

@@ -31,22 +31,8 @@
 }
 
 /* The roster's filter band is .list-filter-bar / .list-filter-search
-   (inputs.css) — shared with the thread rail. Only the availability select
-   below is the roster's own control. */
-
-/* Now a <FilterSelect>; the primitive owns the border, radius, and focus ring.
-   This roster filter stays deliberately dense (28px on a --surface-2 fill) —
-   it sits in a list header, not a form row. */
-.agents-roster-select {
-  flex: none;
-  max-width: 108px;
-  min-height: var(--control-h-xs);
-  height: var(--control-h-xs);
-  background: var(--surface-2);
-  padding: 0 var(--sp-2);
-  color: var(--ink-2);
-  font: var(--type-label);
-}
+   (inputs.css) — shared with the thread rail — with FiltersBar's rail chips
+   (availability) wrapping beneath the search. */
 
 /* Same rhythm as .conversation-list: rounded rows separated by a 4px gutter
    and inset from the panel edge. This is what replaced the per-row hairline —

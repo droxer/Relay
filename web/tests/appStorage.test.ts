@@ -4,7 +4,6 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import {
   applyTheme,
   readDrawerWidth,
-  readFiltersExpanded,
   readSidenavExpanded,
   readSidenavWidth,
   readTheme,
@@ -13,7 +12,6 @@ import {
   readThreadSpaceWidth,
   SUPPORTED_THEMES,
   writeDrawerWidth,
-  writeFiltersExpanded,
   writeSidenavExpanded,
   writeSidenavWidth,
   writeThreadListBesideSpace,
@@ -180,13 +178,6 @@ describe("Relay web layout storage", () => {
     assert.equal(readThreadListBesideSpace(), false);
   });
 
-  it("remembers the filters bar per page", () => {
-    assert.equal(readFiltersExpanded("backlog-query"), false);
-    writeFiltersExpanded("backlog-query", true);
-    assert.equal(readFiltersExpanded("backlog-query"), true);
-    assert.equal(readFiltersExpanded("routine-query"), false);
-  });
-
   it("round-trips panel widths and rejects junk", () => {
     writeSidenavWidth(260);
     assert.equal(readSidenavWidth(), 260);
@@ -213,10 +204,8 @@ describe("Relay web layout storage", () => {
     assert.equal(readSidenavExpanded(), false);
     assert.equal(readSidenavWidth(), null);
     assert.equal(readThreadListBesideSpace(), false);
-    assert.equal(readFiltersExpanded("backlog-query"), false);
     assert.doesNotThrow(() => writeSidenavExpanded(true));
     assert.doesNotThrow(() => writeThreadListBesideSpace(true));
-    assert.doesNotThrow(() => writeFiltersExpanded("backlog-query", true));
     assert.doesNotThrow(() => writeSidenavWidth(200));
   });
 

@@ -1,14 +1,6 @@
 import { taskWorkflowStage } from "./taskFlow.ts";
 import type { RelayTaskListItem, TaskStatus } from "../types.js";
 
-/**
- * Board drags carry only the task id, under a Relay-specific media type so a
- * drag originating outside the board (a file, a text selection) never resolves
- * to a task. `text/plain` is set alongside it purely so the OS drag image and
- * cross-window drops degrade sensibly — it is not read back.
- */
-export const TASK_DRAG_MEDIA_TYPE = "application/x-relay-task-id";
-
 export type TaskDropRejection = "same_status" | "needs_assignment" | "invalid_transition";
 
 /**
@@ -29,7 +21,17 @@ export function taskDropRejection(task: RelayTaskListItem, status: TaskStatus): 
   return null;
 }
 
-export function readDraggedTaskId(transfer: DataTransfer | null): string | null {
-  const id = transfer?.getData(TASK_DRAG_MEDIA_TYPE)?.trim();
-  return id ? id : null;
+/**
+ * The lane a drag is over. The board reports either a lane (dropped on its
+ * empty space) or a card (dropped on a card), and a card stands for the lane
+ * that holds it. `null` when the pointer is over nothing the board knows.
+ */
+export function laneForDropTarget<S extends string>(
+  targetId: string | null,
+  lanes: Readonly<Record<S, readonly { id: string }[]>>,
+): S | null {
+  if (targetId === null) return null;
+  const statuses = Object.keys(lanes) as S[];
+  if (statuses.includes(targetId as S)) return targetId as S;
+  return statuses.find((status) => lanes[status].some((item) => item.id === targetId)) ?? null;
 }

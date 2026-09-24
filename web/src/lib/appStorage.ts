@@ -18,7 +18,6 @@ export const threadListWidthKey = "relay-web.threadListWidth";
 export const sidenavWidthKey = "relay-web.sidenavWidth";
 export const sidenavExpandedKey = "relay-web.sidenavExpanded";
 export const threadListBesideSpaceKey = "relay-web.threadListBesideSpace";
-export const filtersExpandedKeyPrefix = "relay-web.filtersExpanded.";
 export const drawerWidthKeyPrefix = "relay-web.drawerWidth.";
 
 export function readTokens(): TokenMap {
@@ -109,16 +108,6 @@ export function writeThreadListBesideSpace(visible: boolean): void {
   writeLayoutFlag(threadListBesideSpaceKey, visible);
 }
 
-/** Whether a page's filters bar was left expanded, keyed by the page's
- *  search field name so each page remembers its own. Defaults to collapsed. */
-export function readFiltersExpanded(scope: string, fallback = false): boolean {
-  const stored = readLayoutValue(filtersExpandedKeyPrefix + scope);
-  return stored === null ? fallback : stored === "true";
-}
-
-export function writeFiltersExpanded(scope: string, expanded: boolean): void {
-  writeLayoutFlag(filtersExpandedKeyPrefix + scope, expanded);
-}
 
 /** Dragged expanded-rail width in px, or null when never resized. Kept
  *  separate from the expanded flag: the rail remembers how wide the user
