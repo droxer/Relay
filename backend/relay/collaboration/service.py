@@ -229,6 +229,7 @@ class CollaborationConductor:
             user_message_id=intent.user_message_id,
             decision=intent.decision,
             source=intent.source,
+            style=intent.style,
             purpose=_purpose_for_mode(intent.mode),
             address=(
                 {"kind": "members", "agentIds": addressed}

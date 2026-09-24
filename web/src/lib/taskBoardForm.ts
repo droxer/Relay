@@ -1,4 +1,4 @@
-import type { AgentName, CurrentUser, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../types.js";
+import type { AgentName, CollaborationStyle, CurrentUser, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../types.js";
 
 export type TaskBoardFormBase = {
   id?: string;
@@ -11,6 +11,7 @@ export type TaskBoardFormBase = {
   assignedAgentId?: string;
   assignedTeamId?: string;
   acceptancePolicy?: "human" | "automatic";
+  collaborationStyle?: CollaborationStyle | null;
   startedAt?: string;
 };
 
@@ -91,6 +92,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     || a.assignedAgentId !== b.assignedAgentId
     || a.assignedTeamId !== b.assignedTeamId
     || a.acceptancePolicy !== b.acceptancePolicy
+    || (a.collaborationStyle ?? null) !== (b.collaborationStyle ?? null)
   ) {
     return false;
   }

@@ -6,6 +6,8 @@ import pytest
 
 from relay.services.team_dispatch import (
     TeamDispatchError,
+    resolve_team_task_assignments,
+    task_thread_assignments,
     team_agents,
     team_member_assignments,
 )
@@ -367,3 +369,60 @@ def test_style_builders_do_not_mutate_the_roster() -> None:
     for style in ("solo", "build_review", "pipeline", "lead_led"):
         team_member_assignments(roster, team=_team(), style=style)
     assert roster == before
+
+
+def _task_stores(team: dict[str, Any]):
+    team = {
+        **team,
+        "ownerEmployeeId": "alice",
+        "enabled": True,
+        "memberAgentIds": [agent["id"] for agent in _roster()],
+    }
+    return FakeTeamStore(team), FakeAgentStore(_roster())
+
+
+def test_task_style_overrides_the_team_style_for_task_rounds() -> None:
+    team_store, agent_store = _task_stores(_team("pipeline"))
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice", "collaborationStyle": "solo"}
+    assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
+    assert [a["agentId"] for a in assignments] == ["dev"]
+    assert assignments[0]["teamSnapshot"]["collaborationStyle"] == "solo"
+
+
+def test_task_without_style_uses_the_team_style() -> None:
+    team_store, agent_store = _task_stores(_team("pipeline"))
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice"}
+    assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
+    assert [a["agentId"] for a in assignments] == ["lead", "dev", "qa"]
+
+
+def test_unstyled_team_task_defaults_to_build_review() -> None:
+    team_store, agent_store = _task_stores(_team())
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice"}
+    assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
+    assert [a["agentId"] for a in assignments] == ["dev", "qa"]
+
+
+@pytest.mark.parametrize("task_style, expected", [
+    (None, ["lead", "dev", "qa"]),
+    ("solo", ["dev"]),
+    ("build_review", ["dev", "qa"]),
+])
+def test_task_dispatch_resolves_style_before_placement(monkeypatch, task_style, expected):
+    team_store, agent_store = _task_stores(_team("pipeline"))
+
+    def resolve(assignments, **kwargs):
+        assert kwargs["employee_id"] == "alice"
+        assert kwargs["is_admin"] is False
+        return assignments
+
+    monkeypatch.setattr("relay.services.team_dispatch.resolve_agent_assignments", resolve)
+    assignments = resolve_team_task_assignments(
+        {"assignedTeamId": "team_1", "ownerEmployeeId": "requester",
+         "assigneeEmployeeId": "alice", "collaborationStyle": task_style},
+        team_store=team_store, agent_store=agent_store,
+        placement_store=None, daemon_nodes=[],
+    )
+    assert [item["agentId"] for item in assignments] == expected
+    assert all(item["teamSnapshot"]["collaborationStyle"] == (task_style or "pipeline")
+               for item in assignments)

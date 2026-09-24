@@ -662,9 +662,10 @@ export function deleteProject(projectId: string, expectedVersion: number): Promi
 }
 
 export function createTask(input: CreateTaskInput): Promise<RelayTask> {
+  const { collaborationStyle, ...fields } = input;
   return apiJson<RelayTask>("/tasks", {
     method: "POST",
-    body: input,
+    body: { ...fields, ...(collaborationStyle ? { collaborationStyle } : {}) },
   });
 }
 
@@ -929,6 +930,7 @@ export function runLogicalAgents(input: AgentRunInput): Promise<RelaySession> {
       taskGoal: input.taskGoal,
       ...(input.daemonNodeId ? { daemonNodeId: input.daemonNodeId } : {}),
       ...(input.teamId ? { teamId: input.teamId } : {}),
+      ...(input.teamId && input.style && !input.assignments?.length ? { style: input.style } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),
       ...(input.assignments ? { assignments: input.assignments } : {}),
       sessionId: input.sessionId,
@@ -947,6 +949,7 @@ export function submitThreadMessage(
     body: {
       text: input.text,
       intent: input.intent,
+      ...(input.style && input.intent === "accomplish" && !input.addressAgentIds?.length ? { style: input.style } : {}),
       ...(input.addressAgentIds?.length
         ? { addressAgentIds: input.addressAgentIds }
         : input.addressTeamId

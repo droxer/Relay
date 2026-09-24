@@ -62,6 +62,7 @@ export function useBacklogTaskForm({
       priority: task.priority,
       status: task.status,
       acceptancePolicy: task.acceptancePolicy ?? "automatic",
+      collaborationStyle: task.collaborationStyle ?? null,
       startedAt: task.startedAt,
       dueDate: task.dueDate ?? "",
       assigneeEmployeeId:
@@ -101,12 +102,13 @@ export function useBacklogTaskForm({
     if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
     setSaving(true);
     try {
-      const payload = {
+      const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
         description: form.description,
         priority: form.priority,
         ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
         acceptancePolicy: form.acceptancePolicy ?? "human",
+        collaborationStyle: form.assignedTeamId ? form.collaborationStyle ?? "" : "",
         dueDate: form.dueDate,
         ...taskAssignmentMutationFields(form),
       };

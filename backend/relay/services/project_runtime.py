@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
 from .agent_routing import resolve_agent_assignments
 from .team_dispatch import TeamDispatchError, team_agents, team_member_assignments
@@ -149,7 +150,9 @@ def _project_task_assignments(
             raise ProjectDispatchError(error.code, permanent=error.permanent) from error
         return [
             {**assignment, "projectSnapshot": snapshot}
-            for assignment in team_member_assignments(agents, team=team)
+            for assignment in team_member_assignments(
+                agents, team=team, style=resolve_collaboration_style(team, task, None)
+            )
         ]
     assigned_agent_id = task.get("assignedAgentId")
     if assigned_agent_id and assigned_agent_id not in project_listed_agent_ids(project):

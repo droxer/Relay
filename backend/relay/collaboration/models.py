@@ -62,3 +62,4 @@ class RunIntent:
     user_message_id: str | None = None
     decision: dict[str, Any] | None = None
     source: str = "legacy"
+    style: str | None = None

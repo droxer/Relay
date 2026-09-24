@@ -244,7 +244,7 @@ export function TaskRecordPage({
           </TabsContent>
         )}
         <TabsContent value="definition">
-          <TaskRecordDefinition task={task} variant={variant} locale={i18n.language} />
+          <TaskRecordDefinition task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
         </TabsContent>
         <TabsContent value="files">
           {/* The durable record first, then what is in the workspace now. */}

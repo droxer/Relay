@@ -1,3 +1,4 @@
+export type { CollaborationStyle, CollaborationRoundManifest } from "./session-store.js";
 export {
   RELAY_API_PREFIX,
   RELAY_API_VERSION,

@@ -100,15 +100,12 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     reportMutationError, t,
   } = deps;
 
-  async function sendMessage() {
+  async function sendMessage(requestedStyle?: import("../types").CollaborationStyle) {
     const raw = composerRef.current?.getText().trim() ?? "";
-    if (!raw) return;
-    if (!selectedEmployee) return;
-    if (threadRunning) return;
-    if (projectDispatchDisabled) return;
+    if (!raw || !selectedEmployee || threadRunning || projectDispatchDisabled) return false;
     if (requiresRuntimeSelection && !selectedThreadNodeId) {
       reportMutationError("Computer required", null, t("errors.thread_computer_required"));
-      return;
+      return false;
     }
     // Read at send time: who the composer addresses and whether a new thread
     // is being staged live in their stores, not in this hook's props.
@@ -162,7 +159,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
           ? t("composer.mention_blocked")
           : t("errors.agent_not_ready", { agent: activeAgent }),
       );
-      return;
+      return false;
     }
     // Participant availability is a creation concern. Continued threads send
     // semantic intent to the conductor, which resolves the room against live
@@ -179,6 +176,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
           intent: "accomplish",
           addressAgentIds: messageAddress.addressAgentIds,
           addressTeamId: addressedTeamId,
+          style: roundTeam.teamId ? requestedStyle : undefined,
         })
       : null;
     const retainedMessageId = messageOperationKey
@@ -214,6 +212,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
               addressAgentIds: messageAddress.addressAgentIds,
               addressTeamId: addressedTeamId,
               userMessageId,
+              style: roundTeam.teamId ? requestedStyle : undefined,
             }),
           })
         : await runLogicalAgentsMutation.mutateAsync({
@@ -225,7 +224,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
                 ? { assignments: newThreadAgentIds!.map((agentId) => ({ agentId })) }
                 : {}
               : pendingTeam
-              ? { teamId: pendingTeam.id }
+              ? { teamId: pendingTeam.id, style: requestedStyle }
               : {
                   assignments: newThreadAgentIds!.map((agentId) => ({ agentId })),
                 }),
@@ -243,6 +242,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         // the previous turn (or have no thread ID at all).
         await cancelSessionRun(done.id, done.projectId);
       }
+      return true;
     } catch (error) {
       useThreadSendStore.getState().dropPendingMessage();
       // The composer was cleared optimistically; a rejected dispatch (busy
@@ -254,6 +254,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         error,
         formatDispatchError(error, t) ?? t("errors.send_message"),
       );
+      return false;
     } finally {
       if (pendingDispatch.current === dispatch) pendingDispatch.current = null;
       useThreadSendStore.getState().endDispatch();

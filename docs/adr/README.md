@@ -22,3 +22,4 @@ sync with [`docs/implementation-plan.md`](../implementation-plan.md).
 | [ADR-018](018-durable-task-workspace-bindings.md) | Durable task workspace bindings, visible waits, and retained artifact versions |
 | [ADR-019](019-team-work-acceptance.md) | Team responsibilities, bounded delegation, and evidence-based work acceptance |
 | [ADR-020](020-work-outcomes.md) | Unified single-agent work reports and explicit outcomes independent of execution completion |
+| [ADR-021](021-team-collaboration-styles.md) | Role-based collaboration styles, frozen round semantics, and team/task/message overrides |

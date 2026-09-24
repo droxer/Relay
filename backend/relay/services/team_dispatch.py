@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..collaboration.styles import LEAD_LED, fill_build_review_slots, pipeline_order
+from ..collaboration.styles import (
+    LEAD_LED,
+    fill_build_review_slots,
+    pipeline_order,
+    resolve_collaboration_style,
+)
 from .agent_routing import resolve_agent_assignments
 
 TEAM_UNAVAILABLE_MESSAGE = "The agent team is not currently available."
@@ -59,7 +64,9 @@ def task_thread_assignments(
         team, agents = _task_team_agents(
             task, team_store=team_store, agent_store=agent_store
         )
-        return team_member_assignments(agents, team=team)
+        return team_member_assignments(
+            agents, team=team, style=resolve_collaboration_style(team, task, None)
+        )
     assigned_agent_id = task.get("assignedAgentId")
     assigned_agent = task.get("assignedAgent")
     if assigned_agent_id and assigned_agent:
@@ -87,7 +94,9 @@ def resolve_team_task_assignments(
         agent_store=agent_store,
     )
     return resolve_agent_assignments(
-        team_member_assignments(agents, team=team),
+        team_member_assignments(
+            agents, team=team, style=resolve_collaboration_style(team, task, None)
+        ),
         employee_id=task_execution_employee_id(task),
         is_admin=False,
         agent_store=agent_store,

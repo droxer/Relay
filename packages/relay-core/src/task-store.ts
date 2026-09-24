@@ -1,4 +1,5 @@
 import { newRelayId, nowIso } from "./session-store.js";
+import type { CollaborationStyle } from "./session-store.js";
 import type { AgentName } from "./state.js";
 
 export type TaskPriority = "low" | "normal" | "high";
@@ -35,6 +36,7 @@ export interface TaskWorkspaceBinding {
 }
 
 export interface RelayTask {
+  collaborationStyle?: CollaborationStyle;
   acceptancePolicy?: "human" | "automatic";
   workflowStage?: "backlog" | "assigned" | "running" | "review" | "done";
   startedAt?: string;
@@ -132,6 +134,7 @@ export type RelayTaskEvent =
   | {
       id: string;
       type: "task.created";
+      collaborationStyle?: CollaborationStyle | null;
       taskId: string;
       timestamp: string;
       title: string;
@@ -153,6 +156,7 @@ export type RelayTaskEvent =
   | {
       id: string;
       type: "task.updated";
+      collaborationStyle?: CollaborationStyle | "" | null;
       taskId: string;
       timestamp: string;
       title?: string;
@@ -295,6 +299,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     status: "backlog",
     workflowStage: "backlog",
     acceptancePolicy: created.acceptancePolicy ?? "automatic",
+    ...(created.collaborationStyle ? { collaborationStyle: created.collaborationStyle } : {}),
     isRoutine: Boolean(created.isRoutine),
     routineEnabled: Boolean(created.routineEnabled),
     ...(created.sourceRoutineId ? { sourceRoutineId: created.sourceRoutineId } : {}),
@@ -312,6 +317,10 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     task.events.push(event);
     task.updatedAt = event.timestamp;
     if (event.type === "task.updated") {
+      if (event.collaborationStyle != null) {
+        if (event.collaborationStyle) task.collaborationStyle = event.collaborationStyle;
+        else delete task.collaborationStyle;
+      }
       if (event.acceptancePolicy != null) task.acceptancePolicy = event.acceptancePolicy;
       if (event.title !== undefined) task.title = event.title;
       if (event.description !== undefined) task.description = event.description;

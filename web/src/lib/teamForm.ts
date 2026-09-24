@@ -1,4 +1,4 @@
-import type { TeamMutationInput, TeamMemberConfig } from "../types.js";
+import type { CollaborationStyle, TeamMutationInput, TeamMemberConfig } from "../types.js";
 
 /** Drop members who are no longer on the team, and strip blank output lines. */
 export function normalizeMemberConfigs(
@@ -22,6 +22,7 @@ export function normalizeAcceptanceCriteria(criteria: string[]): string[] {
 }
 
 export function teamMutationInput(input: {
+  collaborationStyle?: CollaborationStyle | null;
   name: string;
   leadAgentId: string;
   memberAgentIds: string[];
@@ -34,6 +35,7 @@ export function teamMutationInput(input: {
     leadAgentId: input.leadAgentId,
     memberAgentIds: input.memberAgentIds,
     enabled: input.enabled,
+    ...(input.collaborationStyle !== undefined ? { collaborationStyle: input.collaborationStyle } : {}),
     ...(input.memberConfigs
       ? { memberConfigs: normalizeMemberConfigs(input.memberConfigs, input.memberAgentIds) }
       : {}),

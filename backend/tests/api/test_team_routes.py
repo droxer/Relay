@@ -109,6 +109,11 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
         [command] = app.state.registry.take_commands("test_node_alice", "node_token")
         _mark_executing(app, "test_node_alice", command)
         assert command["state"]["team_plan_candidates"][0]["agentId"] == builder["id"]
+        # Editing the live team cannot change the admitted round or its plan.
+        changed = client.patch(f"/api/v1/teams/{team['id']}", json={
+            "collaborationStyle": "solo",
+        })
+        assert changed.status_code == 200, changed.text
         event = {
             "type": "run.completed", "commandId": command["id"], "sessionId": command["sessionId"],
             "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
@@ -130,6 +135,9 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
             assert "authorized specialist" in session["finalOutcome"]
         else:
             assert len(plans) == 1
+            assert plans[0]["manifest"]["style"] == "lead_led"
+            assert plans[0]["manifest"]["teamSnapshot"]["collaborationStyle"] == "lead_led"
+            assert plans[0]["manifest"]["workGraph"]["delegationPolicy"]["policy"] == "lead-plan-v1"
             assert len(commands) == 1
             assert commands[0]["logicalAgentId"] == builder["id"]
             assert "POST /reset" in commands[0]["state"]["assignment_brief"]
@@ -1207,6 +1215,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], reviewer["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -2326,6 +2335,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -2544,6 +2554,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
+                "collaborationStyle": "lead_led",
             },
         ).json()["team"]
         task = client.post(
@@ -3295,7 +3306,8 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
             assert app.state.task_store.get_task(task["id"])["status"] == "done"
 
 
-def test_team_message_defaults_to_build_review(monkeypatch) -> None:
+@pytest.mark.parametrize("new_thread", [False, True])
+def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
     from relay.sessions.controller import SessionController
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3327,11 +3339,17 @@ def test_team_message_defaults_to_build_review(monkeypatch) -> None:
             workspace_layout="thread",
         )
         session = controller.create_session("Fix it")
+        _login(client, "alice")
 
         response = client.post(
-            f"/api/v1/threads/{session['id']}/messages", json={"text": "Fix it"}
+            "/api/v1/agent-runs" if new_thread else f"/api/v1/threads/{session['id']}/messages",
+            json={"taskGoal": "Fix it", "teamId": team["id"], "style": "solo"}
+            if new_thread else {"text": "Fix it"},
         )
         assert response.status_code == 202, response.text
+        if new_thread:
+            session = response.json()
+            assert session["collaborationRounds"][-1]["style"] == "solo"
         [implementer_command] = app.state.registry.take_commands(node_id, "node_token")
         assert implementer_command["logicalAgentId"] == builder["id"]
         _mark_executing(app, node_id, implementer_command)
@@ -3348,6 +3366,9 @@ def test_team_message_defaults_to_build_review(monkeypatch) -> None:
             },
             "node_token",
         )
+        if new_thread:
+            assert app.state.registry.take_commands(node_id, "node_token") == []
+            return
         [reviewer_command] = app.state.registry.take_commands(node_id, "node_token")
         assert reviewer_command["logicalAgentId"] == reviewer["id"]
         assert reviewer_command["state"]["team_phase"] == "review"
@@ -3400,6 +3421,16 @@ def test_message_style_is_validated(monkeypatch) -> None:
         )
         assert invalid_style.status_code == 400
         assert "style must be one of" in invalid_style.json()["detail"]["message"]
+        invalid_new_style = client.post("/api/v1/agent-runs", json={
+            "taskGoal": "x", "teamId": team["id"], "style": "debate",
+        })
+        assert invalid_new_style.status_code == 400
+        assert "style must be one of" in invalid_new_style.text
+        styled_single_agent = client.post("/api/v1/agent-runs", json={
+            "taskGoal": "x", "assignments": [{"agentId": builder["id"]}], "style": "solo",
+        })
+        assert styled_single_agent.status_code == 400
+        assert "Collaboration style applies to team work requests only." in styled_single_agent.text
 
         discuss_with_style = client.post(
             f"/api/v1/threads/{team_session['id']}/messages",

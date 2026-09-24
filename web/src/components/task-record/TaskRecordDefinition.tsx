@@ -2,7 +2,8 @@
 
 import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
-import type { RelayTaskListItem } from "../../types";
+import type { AgentTeam, RelayTaskListItem } from "../../types";
+import { effectiveStyle } from "../../lib/collaborationStyle";
 import type { RecordVariant } from "./recordVocabulary";
 
 /**
@@ -21,10 +22,12 @@ export function TaskRecordDefinition({
   task,
   variant,
   locale,
+  team,
 }: {
   task: RelayTaskListItem;
   variant: RecordVariant;
   locale: string;
+  team?: Pick<AgentTeam, "collaborationStyle">;
 }) {
   const { t } = useTranslation();
 
@@ -41,6 +44,7 @@ export function TaskRecordDefinition({
     },
   ];
   if (variant === "routine") {
+    // Routine settings use the same collaboration override as tasks.
     rows.unshift({
       key: "type",
       label: t("routine.type"),
@@ -52,6 +56,11 @@ export function TaskRecordDefinition({
       value: t(task.routineEnabled ? "record.enabled_yes" : "record.enabled_no"),
     });
   }
+  if (task.assignedTeamId) rows.push({
+    key: "collaboration", label: t("collab_style.task_label"),
+    value: task.collaborationStyle ? t(`collab_style.${task.collaborationStyle}`)
+      : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) }),
+  });
   rows.push(
     { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale) },
     { key: "updated", label: t("record.updated"), value: recordTimestamp(task.updatedAt, locale) },

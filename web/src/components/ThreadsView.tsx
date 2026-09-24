@@ -28,6 +28,8 @@ import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./Mess
 import { phaseDividerLabel } from "../lib/projectMessages";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
 import { HandoffStatus } from "./HandoffStatus";
+import { styleForRun, turnSlot } from "../lib/collaborationStyle";
+import { CollaborationStatus } from "./CollaborationStatus";
 import { DecisionBar } from "./composer/DecisionBar";
 import { Composer, type ComposerHandle } from "./composer/Composer";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
@@ -114,7 +116,7 @@ export type ThreadsViewProps = {
   onRuntimeNodeChange: (nodeId: string) => void;
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
-  onSend: () => void;
+  onSend: (style?: import("../types").CollaborationStyle) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
   onRetryExecutionRecovery?: () => Promise<void>;
@@ -200,6 +202,13 @@ export function ThreadsView({
   running,
 }: ThreadsViewProps) {
   const { t } = useTranslation();
+  const runSlots = useMemo(() => new Map((activeSession?.agentRuns ?? []).map((run) => [
+    run.id, turnSlot(run, styleForRun(run, activeSession?.collaborationRounds)),
+  ])), [activeSession?.agentRuns, activeSession?.collaborationRounds]);
+  const fallbackRuns = useMemo(() => new Set((activeSession?.collaborationRounds ?? [])
+    .filter((round) => round.styleFallbackFrom)
+    .map((round) => activeSession?.agentRuns.find((run) => run.assignmentId === round.assignments[0]?.assignmentId)?.id)),
+  [activeSession?.agentRuns, activeSession?.collaborationRounds]);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectRecord | null>(null);
   const transcriptWindow = useTranscriptWindow(activeSession?.id, displayMessages.length);
@@ -416,8 +425,10 @@ export function ThreadsView({
                       ) : null}
                       <MessageBlock
                         message={msg}
+                        slotLabel={msg.kind === "agent" && runSlots.get(msg.runId) ? `collab_style.turn_${runSlots.get(msg.runId)}` : undefined}
+                        styleFallback={msg.kind === "agent" && fallbackRuns.has(msg.runId)}
                         sessionId={activeSession?.id ?? ""}
-                        grouped={isGroupedContinuation(displayMessages, i)}
+                        grouped={isGroupedContinuation(displayMessages, i) && !(msg.kind === "agent" && runSlots.get(msg.runId))}
                         agentDisplayNames={agentDisplayNames}
                         logicalAgentNames={logicalAgentNames}
                         logicalAgentImages={logicalAgentImages}
@@ -429,6 +440,7 @@ export function ThreadsView({
                   );
                 })}
                 <HandoffStatus session={activeSession} />
+                <CollaborationStatus session={activeSession} />
                 {awaitingDecision ? (
                   <DecisionBar
                     logicalAgents={selectableLogicalAgents}

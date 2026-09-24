@@ -44,6 +44,8 @@ export interface AgentRun {
   synthesizer?: boolean;
   teamSnapshot?: {
     teamId: string;
+    collaborationStyle?: CollaborationStyle;
+    styleFallbackFrom?: CollaborationStyle;
     workContractVersion?: 1;
     teamRevision?: string;
     memberAgentIds: string[];
@@ -86,6 +88,7 @@ export interface HumanDecision {
 }
 
 export type CollaborationPurpose = "accomplish" | "discuss" | "review";
+export type CollaborationStyle = "solo" | "build_review" | "pipeline" | "lead_led";
 export type CollaborationStrategy = "direct" | "room" | "review" | "coordinate";
 export type CollaborationWorkKind = "coordination" | "discussion" | "planning" | "implementation" | "verification" | "review" | "repair" | "synthesis";
 
@@ -116,6 +119,9 @@ export interface CollaborationRoundManifest {
   source: string;
   purpose: CollaborationPurpose;
   strategy: CollaborationStrategy;
+  /** Legacy manifests without a style ran Lead-led. */
+  style?: CollaborationStyle;
+  styleFallbackFrom?: CollaborationStyle;
   address:
     | { kind: "room" }
     | { kind: "members"; agentIds: string[] };

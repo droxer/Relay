@@ -645,7 +645,7 @@ export function App() {
     reportMutationError, t,
   });
 
-  const handleComposerSend = useStableEvent(() => { void sendMessage(); });
+  const handleComposerSend = useStableEvent((style?: import("./types").CollaborationStyle) => sendMessage(style));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));

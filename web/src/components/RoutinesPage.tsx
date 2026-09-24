@@ -163,6 +163,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       projectId: task.projectId,
       title: task.title,
       acceptancePolicy: task.acceptancePolicy ?? "automatic",
+      collaborationStyle: task.collaborationStyle ?? null,
       description: task.description,
       priority: task.priority,
       assigneeEmployeeId: task.assigneeEmployeeId ?? task.ownerEmployeeId ?? currentUser.employeeId ?? currentUser.username,
@@ -181,9 +182,10 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
     if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
     setSaving(true);
     try {
-      const payload = {
+      const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
         acceptancePolicy: form.acceptancePolicy ?? "human",
+        collaborationStyle: form.assignedTeamId ? form.collaborationStyle ?? "" : "",
         description: form.description,
         priority: form.priority,
         isRoutine: true,
