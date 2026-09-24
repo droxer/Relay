@@ -111,7 +111,7 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
         assert command["state"]["team_plan_candidates"][0]["agentId"] == builder["id"]
         # Editing the live team cannot change the admitted round or its plan.
         changed = client.patch(f"/api/v1/teams/{team['id']}", json={
-            "collaborationStyle": "solo",
+            "collaborationStyle": "build_review",
         })
         assert changed.status_code == 200, changed.text
         event = {
@@ -372,12 +372,17 @@ def test_team_collaboration_style_round_trips_through_the_api(monkeypatch) -> No
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
-                "collaborationStyle": "solo",
+                "collaborationStyle": "build_review",
             },
         )
         assert created.status_code == 201
         team = created.json()["team"]
-        assert team["collaborationStyle"] == "solo"
+        assert team["collaborationStyle"] == "build_review"
+
+        solo_rejected = client.patch(
+            f"/api/v1/teams/{team['id']}", json={"collaborationStyle": "solo"},
+        )
+        assert solo_rejected.status_code == 400
 
         rejected = client.patch(
             f"/api/v1/teams/{team['id']}",
@@ -385,7 +390,7 @@ def test_team_collaboration_style_round_trips_through_the_api(monkeypatch) -> No
         )
         assert rejected.status_code == 400
         assert (
-            "collaborationStyle must be one of: solo, build_review, pipeline, lead_led."
+            "collaborationStyle must be one of: build_review, pipeline, lead_led."
             in rejected.text
         )
 
@@ -3343,13 +3348,13 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
 
         response = client.post(
             "/api/v1/agent-runs" if new_thread else f"/api/v1/threads/{session['id']}/messages",
-            json={"taskGoal": "Fix it", "teamId": team["id"], "style": "solo"}
+            json={"taskGoal": "Fix it", "teamId": team["id"], "style": "build_review"}
             if new_thread else {"text": "Fix it"},
         )
         assert response.status_code == 202, response.text
         if new_thread:
             session = response.json()
-            assert session["collaborationRounds"][-1]["style"] == "solo"
+            assert session["collaborationRounds"][-1]["style"] == "build_review"
         [implementer_command] = app.state.registry.take_commands(node_id, "node_token")
         assert implementer_command["logicalAgentId"] == builder["id"]
         _mark_executing(app, node_id, implementer_command)
@@ -3366,9 +3371,6 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
             },
             "node_token",
         )
-        if new_thread:
-            assert app.state.registry.take_commands(node_id, "node_token") == []
-            return
         [reviewer_command] = app.state.registry.take_commands(node_id, "node_token")
         assert reviewer_command["logicalAgentId"] == reviewer["id"]
         assert reviewer_command["state"]["team_phase"] == "review"
@@ -3426,15 +3428,22 @@ def test_message_style_is_validated(monkeypatch) -> None:
         })
         assert invalid_new_style.status_code == 400
         assert "style must be one of" in invalid_new_style.text
+        for url, payload in [
+            ("/api/v1/agent-runs", {"taskGoal": "x", "teamId": team["id"], "style": "solo"}),
+            (f"/api/v1/threads/{team_session['id']}/messages", {"text": "x", "style": "solo"}),
+        ]:
+            rejected_solo = client.post(url, json=payload)
+            assert rejected_solo.status_code == 400
+            assert "style must be one of" in rejected_solo.text
         styled_single_agent = client.post("/api/v1/agent-runs", json={
-            "taskGoal": "x", "assignments": [{"agentId": builder["id"]}], "style": "solo",
+            "taskGoal": "x", "assignments": [{"agentId": builder["id"]}], "style": "build_review",
         })
         assert styled_single_agent.status_code == 400
         assert "Collaboration style applies to team work requests only." in styled_single_agent.text
 
         discuss_with_style = client.post(
             f"/api/v1/threads/{team_session['id']}/messages",
-            json={"text": "x", "intent": "discuss", "style": "solo"},
+            json={"text": "x", "intent": "discuss", "style": "build_review"},
         )
         assert discuss_with_style.status_code == 400
         assert (
@@ -3444,7 +3453,7 @@ def test_message_style_is_validated(monkeypatch) -> None:
 
         addressed_with_style = client.post(
             f"/api/v1/threads/{team_session['id']}/messages",
-            json={"text": "x", "addressAgentIds": [lead["id"]], "style": "solo"},
+            json={"text": "x", "addressAgentIds": [lead["id"]], "style": "build_review"},
         )
         assert addressed_with_style.status_code == 400
         assert (
@@ -3454,7 +3463,7 @@ def test_message_style_is_validated(monkeypatch) -> None:
 
         solo_thread_with_style = client.post(
             f"/api/v1/threads/{solo_session['id']}/messages",
-            json={"text": "x", "style": "solo"},
+            json={"text": "x", "style": "build_review"},
         )
         assert solo_thread_with_style.status_code == 400
         assert (

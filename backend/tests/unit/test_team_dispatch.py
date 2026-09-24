@@ -383,10 +383,10 @@ def _task_stores(team: dict[str, Any]):
 
 def test_task_style_overrides_the_team_style_for_task_rounds() -> None:
     team_store, agent_store = _task_stores(_team("pipeline"))
-    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice", "collaborationStyle": "solo"}
+    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice", "collaborationStyle": "build_review"}
     assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
-    assert [a["agentId"] for a in assignments] == ["dev"]
-    assert assignments[0]["teamSnapshot"]["collaborationStyle"] == "solo"
+    assert [a["agentId"] for a in assignments] == ["dev", "qa"]
+    assert assignments[0]["teamSnapshot"]["collaborationStyle"] == "build_review"
 
 
 def test_task_without_style_uses_the_team_style() -> None:
@@ -405,7 +405,7 @@ def test_unstyled_team_task_defaults_to_build_review() -> None:
 
 @pytest.mark.parametrize("task_style, expected", [
     (None, ["lead", "dev", "qa"]),
-    ("solo", ["dev"]),
+    ("pipeline", ["lead", "dev", "qa"]),
     ("build_review", ["dev", "qa"]),
 ])
 def test_task_dispatch_resolves_style_before_placement(monkeypatch, task_style, expected):

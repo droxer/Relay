@@ -7,6 +7,7 @@ import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { selectedTeamForWorkspace } from "../lib/teamWorkspace";
 import { teamAvailability } from "../lib/taskAssignment";
 import { StatusPill, TonePill } from "./StatusPill";
+import { CollaborationStyleBadge } from "./CollaborationStyleBadge";
 import type { CurrentUser } from "../types";
 import {
   ActionAdd,
@@ -172,6 +173,7 @@ export function TeamsPage({
                         <span className="teams-list-identity">
                           <span className="teams-list-title">{team.name}</span>
                           <small className="teams-list-sub">{roster}</small>
+                          <CollaborationStyleBadge style={team.collaborationStyle} className="mt-1" />
                         </span>
                         <span className="teams-list-status">
                           {/* "ready" is the default healthy state and stays

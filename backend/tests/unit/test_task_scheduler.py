@@ -1227,7 +1227,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
     asyncio.run(run_flow())
 
 
-@pytest.mark.parametrize("style", [None, "solo", "pipeline"])
+@pytest.mark.parametrize("style", [None, "build_review", "pipeline"])
 def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
@@ -1321,7 +1321,7 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
             [manifest] = session["collaborationRounds"]
             assert manifest["style"] == (style or "build_review")
             assert manifest["teamSnapshot"]["collaborationStyle"] == (style or "build_review")
-            assert len(manifest["assignments"]) == (1 if style == "solo" else 2)
+            assert len(manifest["assignments"]) == 2
             [lead_command] = registry.take_commands("sbx_alice", "node_token")
             assert lead_command["logicalAgentId"] == lead["id"]
             assert not lead_command["state"].get("team_plan_candidates")
@@ -1341,9 +1341,6 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
                 },
                 "node_token",
             )
-            if style == "solo":
-                assert registry.take_commands("sbx_alice", "node_token") == []
-                return
             [support_command] = registry.take_commands("sbx_alice", "node_token")
             assert support_command["logicalAgentId"] == support["id"]
             assert support_command["agent"] == "claude"

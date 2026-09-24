@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
 import { effectiveStyle } from "../../lib/collaborationStyle";
+import { CollaborationStyleBadge } from "../CollaborationStyleBadge";
+import type { ReactNode } from "react";
 import type { RecordVariant } from "./recordVocabulary";
 
 /**
@@ -31,7 +33,7 @@ export function TaskRecordDefinition({
 }) {
   const { t } = useTranslation();
 
-  const rows: { key: string; label: string; value: string }[] = [
+  const rows: { key: string; label: string; value: ReactNode }[] = [
     {
       key: "priority",
       label: t("backlog.priority"),
@@ -58,8 +60,8 @@ export function TaskRecordDefinition({
   }
   if (task.assignedTeamId) rows.push({
     key: "collaboration", label: t("collab_style.task_label"),
-    value: task.collaborationStyle ? t(`collab_style.${effectiveStyle(team, task.collaborationStyle)}`)
-      : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) }),
+    value: <CollaborationStyleBadge style={effectiveStyle(team, task.collaborationStyle)}
+      label={task.collaborationStyle ? undefined : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) })} />,
   });
   rows.push(
     { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale) },

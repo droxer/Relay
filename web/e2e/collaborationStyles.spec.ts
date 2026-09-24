@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function fixture(page: Page, failFirstSend = false) {
+async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light") {
   const stamp = "2026-09-25T00:00:00Z";
   const computerId = "device:alice:host";
   const agents = ["lead", "qa"].map((id) => ({
@@ -31,7 +31,7 @@ async function fixture(page: Page, failFirstSend = false) {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
     let body: unknown = { sessions: [session], agents, teams: [team], tasks: [task], nodes: [node], projects: [project], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "alice", username: "alice", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "alice", username: "alice", role: "employee", theme, language: "en" } };
     if (path.endsWith("/teams/delivery") && method === "PATCH") {
       const patch = route.request().postDataJSON(); patches.push(patch); team = { ...team, ...patch }; body = { team };
     }
@@ -61,15 +61,17 @@ for (const mobile of [false, true]) {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const { patches } = await fixture(page);
     await page.goto("/teams/delivery");
-    await expect(page.getByText("Builder: Builder")).toBeVisible();
+    await expect(page.locator(".collab-style-sequence li").filter({ hasText: "Builder: Builder" })).toBeVisible();
     await page.getByRole("button", { name: "Edit members" }).click();
     await page.getByRole("combobox", { name: "How this team works" }).click();
-    await page.getByRole("option", { name: "Solo", exact: true }).click();
+    await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
+    await page.getByRole("option", { name: "Pipeline", exact: true }).click();
     await page.getByRole("button", { name: "Save team", exact: true }).click();
-    await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("solo");
+    await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("pipeline");
     await page.reload();
-    await expect(page.getByText("One member handles it alone.")).toBeVisible();
-    await page.getByText("One member handles it alone.").scrollIntoViewIfNeeded();
+    const badge = page.locator('.teams-detail .collab-style-badge[data-style="pipeline"]');
+    await expect(badge).toBeVisible();
+    await badge.scrollIntoViewIfNeeded();
     expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: `/tmp/relay-style-team-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
   });
@@ -81,6 +83,7 @@ test("task override can be saved and cleared to inherit", async ({ page }) => {
   await expect(page.getByText("Team default (Build → Review)")).toBeVisible();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Collaboration", exact: true }).click();
+  await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
   await page.getByRole("option", { name: "Pipeline", exact: true }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("pipeline");
@@ -91,17 +94,41 @@ test("task override can be saved and cleared to inherit", async ({ page }) => {
   await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("");
 });
 
+for (const theme of ["light", "dark"] as const) {
+  test(`style picker visual and keyboard check (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await fixture(page, false, theme);
+    await page.goto("/teams/delivery");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await page.getByRole("button", { name: "Edit members" }).click();
+    const select = page.getByRole("combobox", { name: "How this team works" });
+    await select.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("option")).toHaveCount(3);
+    await expect(page.getByText("Every member takes a turn in role order.")).toBeVisible();
+    const menu = page.getByRole("listbox");
+    const bounds = await menu.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    await page.screenshot({ path: `/tmp/relay-style-picker-${theme}.png`, fullPage: true });
+    await page.keyboard.press("Escape");
+    await expect(select).toBeFocused();
+  });
+}
+
 test("composer sends a one-message override then returns to team default", async ({ page }) => {
   const { sends } = await fixture(page);
   await page.goto("/threads/style-thread");
   const select = page.getByRole("combobox", { name: "Style for this message" });
   await select.click();
-  await page.getByRole("option", { name: "Solo", exact: true }).click();
+  await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
+  await page.getByRole("option", { name: "Lead-led", exact: true }).click();
   await page.locator('textarea[name="message"]').fill("Fix the API");
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await page.screenshot({ path: "/tmp/relay-style-composer.png", fullPage: true });
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect.poll(() => sends.at(-1)?.style).toBe("solo");
+  await expect.poll(() => sends.at(-1)?.style).toBe("lead_led");
   await expect(select).toContainText("Team default (Build → Review)");
 });
 

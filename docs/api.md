@@ -559,7 +559,7 @@ recovery endpoint nor deletion treats that silence as termination.
 
 ### Collaboration styles
 
-Teams accept optional `collaborationStyle`: `solo`, `build_review`, `pipeline`,
+Teams accept optional `collaborationStyle`: `build_review`, `pipeline`,
 or `lead_led`. Absence defaults to `build_review`; PATCH with `null` clears the
 team setting. Tasks and routines accept the same optional field; PATCH with
 `""` clears a task override. Routine occurrences inherit their routine's override.
@@ -571,7 +571,9 @@ team → `build_review`; task settings do not override messages in their threads
 so a new thread's first message can choose a style. Both routes reject styles
 for non-team, addressed-member, discuss, and review requests with
 `Collaboration style applies to team work requests only.` Unknown values return
-400 and list `solo, build_review, pipeline, lead_led`.
+400 and list `build_review, pipeline, lead_led`. Explicit `solo` requests are
+rejected. Legacy stored Solo settings resolve to Build → Review for new rounds;
+historical snapshots are not rewritten.
 
 The resolved style is frozen in `teamSnapshot.collaborationStyle` and the round
 manifest's `style`. A one-member Build → Review round becomes Solo and records

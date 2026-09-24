@@ -10,6 +10,22 @@ import { TaskRecordDefinition } from "../src/components/task-record/TaskRecordDe
 import { MessageBlock } from "../src/components/MessageBlock";
 import { taskBoardFormsEqual } from "../src/lib/taskBoardForm";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
+import { CollaborationStyleBadge } from "../src/components/CollaborationStyleBadge";
+
+it("gives every team style a labeled badge with a decorative glyph", () => {
+  const { container } = render(<>{COLLABORATION_STYLES.map((style) => <CollaborationStyleBadge key={style} style={style} />)}</>);
+  for (const style of COLLABORATION_STYLES) {
+    expect(screen.getByText(`collab_style.${style}`)).toBeTruthy();
+  }
+  expect(container.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(3);
+});
+
+it("presents the team sequence as an ordered, readable preview", () => {
+  render(<CollaborationSlotPreview members={[{ id: "a", role: "implementer" }, { id: "b", role: "reviewer" }]} leadId="a" style="build_review" nameOf={(id) => id} />);
+  expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+    expect.stringContaining("a"), expect.stringContaining("b"),
+  ]);
+});
 
 it("offers only team styles and normalizes legacy Solo settings", () => {
   expect(COLLABORATION_STYLES).toEqual(["build_review", "pipeline", "lead_led"]);
@@ -20,7 +36,7 @@ it("offers only team styles and normalizes legacy Solo settings", () => {
 });
 
 it("mirrors role-based slot filling and excludes on-request specialists", () => {
-  expect(effectiveStyle({ collaborationStyle: "pipeline" }, "solo")).toBe("solo");
+  expect(effectiveStyle({ collaborationStyle: "pipeline" }, "lead_led")).toBe("lead_led");
   expect(effectiveStyle()).toBe("build_review");
   const members = [{ id: "lead", role: "reviewer" }, { id: "dev", role: "implementer" }, { id: "qa", role: "reviewer", onRequest: true }];
   expect(previewSlots(members, "lead", "build_review").slots).toEqual([
@@ -35,7 +51,7 @@ it("renders the current style and supports a disabled control", () => {
   render(<CollaborationStyleSelect value="solo" disabled onChange={onChange} inheritLabel="Team default" aria-label="Style" />);
   const control = screen.getByRole("combobox", { name: "Style" }) as HTMLButtonElement;
   expect(control.disabled).toBe(true);
-  expect(control.textContent).toContain("collab_style.solo");
+  expect(control.textContent).toContain("collab_style.build_review");
 });
 
 it("explains a one-member fallback", () => {
@@ -155,7 +171,7 @@ it("serializes overrides and strips invalid message contexts", async () => {
 it("shows the task override only for team assignments", () => {
   const task = { id: "t", title: "T", description: "", assignedTeamId: "team", collaborationStyle: "solo" };
   const { rerender } = render(<TaskRecordDefinition task={task as never} variant="task" locale="en" />);
-  expect(screen.getByText("collab_style.solo")).toBeTruthy();
+  expect(screen.getByText("collab_style.build_review")).toBeTruthy();
   rerender(<TaskRecordDefinition task={{ ...task, assignedTeamId: undefined } as never} variant="task" locale="en" />);
   expect(screen.queryByText("collab_style.task_label")).toBeNull();
 });

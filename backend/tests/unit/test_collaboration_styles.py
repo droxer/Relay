@@ -34,7 +34,7 @@ def test_legacy_solo_settings_use_build_review_for_new_rounds() -> None:
     [
         (None, None, None, "build_review"),
         ({"collaborationStyle": "pipeline"}, None, None, "pipeline"),
-        ({"collaborationStyle": "pipeline"}, {"collaborationStyle": "solo"}, None, "solo"),
+        ({"collaborationStyle": "pipeline"}, {"collaborationStyle": "build_review"}, None, "build_review"),
         ({"collaborationStyle": "pipeline"}, {"collaborationStyle": "solo"}, "lead_led", "lead_led"),
         ({"collaborationStyle": "pipeline"}, {"collaborationStyle": None}, None, "pipeline"),
         ({}, {}, None, "build_review"),
@@ -46,7 +46,7 @@ def test_message_beats_task_beats_team_beats_default(team, task, requested, expe
 
 @pytest.mark.parametrize("value", ["", "Lead-Led", "discussion", 3, None])
 def test_invalid_style_is_rejected_with_the_allowed_list(value) -> None:
-    with pytest.raises(CollaborationStyleError, match="must be one of: solo, build_review, pipeline, lead_led"):
+    with pytest.raises(CollaborationStyleError, match="must be one of: build_review, pipeline, lead_led"):
         validate_collaboration_style(value)
 
 
