@@ -27,7 +27,6 @@ import { TranscriptEmpty } from "./TranscriptEmpty";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
 import { phaseDividerLabel } from "../lib/projectMessages";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
-import { CollaborationWork } from "./CollaborationWork";
 import { HandoffStatus } from "./HandoffStatus";
 import { DecisionBar } from "./composer/DecisionBar";
 import { Composer, type ComposerHandle } from "./composer/Composer";
@@ -430,7 +429,6 @@ export function ThreadsView({
                   );
                 })}
                 <HandoffStatus session={activeSession} />
-                <CollaborationWork session={activeSession} agents={logicalAgents} />
                 {awaitingDecision ? (
                   <DecisionBar
                     logicalAgents={selectableLogicalAgents}
