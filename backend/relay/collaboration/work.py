@@ -162,7 +162,8 @@ def predecessor_context(
 
 
 def completion_blockers(
-    assignments: list[dict[str, Any]], state: dict[str, Any], *, require_evidence: bool
+    assignments: list[dict[str, Any]], state: dict[str, Any], *, require_evidence: bool,
+    allow_unfinished: bool = False,
 ) -> list[str]:
     required = {
         item["assignmentId"]: item for item in assignments if item.get("required", True)
@@ -183,6 +184,14 @@ def completion_blockers(
                     )
         for assignment_id in required:
             result = (state.get(WORK_RESULTS) or {}).get(assignment_id) or {}
+            # A valid unfinished report may request another bounded task round.
+            # Findings, missing reports and blocked work still fail closed.
+            if (
+                allow_unfinished
+                and result.get("status") == "continue"
+                and not result.get("findings")
+            ):
+                continue
             if result.get("status") != "done" or not result.get("evidence"):
                 blockers.append(
                     f"Work {assignment_id} is not accepted: {result.get('note') or result.get('status') or 'missing evidence'}."

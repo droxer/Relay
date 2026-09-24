@@ -6,6 +6,7 @@ function inflateSessionSummary(summary: SessionSummary): RelaySession {
   const { artifactCount, eventCount: _eventCount, runCount: _runCount, ...fields } = summary;
   return {
     ...fields,
+    workOutcome: summary.workOutcome ?? undefined,
     participants: ["human"],
     agentRuns: [],
     // A summary carries the count but not the records — see the field's note
@@ -30,7 +31,15 @@ export function mergeSessionSummaries(
     // afterward. Never roll event-derived state backward in that race.
     if (summary.eventCount < existing.events.length) return existing;
     const { artifactCount, eventCount: _eventCount, runCount: _runCount, ...fields } = summary;
-    return { ...existing, ...fields, workspaceArtifactCount: artifactCount } as RelaySession;
+    return {
+      ...existing,
+      ...fields,
+      workOutcome: summary.workOutcome ?? undefined,
+      // A newer summary has no outcome text. Do not pair its new result with
+      // an earlier round's reason while the detailed event stream catches up.
+      finalOutcome: summary.eventCount > existing.events.length ? undefined : existing.finalOutcome,
+      workspaceArtifactCount: artifactCount,
+    } as RelaySession;
   });
 }
 

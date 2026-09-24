@@ -75,6 +75,7 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "title": session.get("title"),
         "taskGoal": session.get("taskGoal"),
         "status": session.get("status"),
+        "workOutcome": session.get("workOutcome"),
         "phase": session.get("phase"),
         "daemonNodeId": session.get("daemonNodeId"),
         "managedNodeId": session.get("managedNodeId"),

@@ -122,3 +122,4 @@ For the MVP, Relay should hold strict boundaries and focus on closed-loop value 
 - **[New ADR-010](adr/010-leased-agent-node-delivery.md)**: Use explicit, bounded command leases and at-least-once delivery between the control plane and daemon nodes. Only daemon-reported active commands renew ownership; cancellation remains retryable until the run is terminal.
 - **[ADR-012](adr/012-canonical-web-and-api-urls.md)**: Use clean browser paths and a canonical `/api/v1` JSON boundary without pre-release compatibility aliases.
 - **[ADR-013](adr/013-thread-scoped-workspaces.md)**: Give each thread an isolated directory beneath the employee-selected local or supervisor-provisioned cloud workspace root.
+- **[ADR-020](adr/020-work-outcomes.md)**: Keep execution completion separate from work outcomes, apply work-report gates to single-agent action runs on capable daemons, and distinguish reported completion from explicit human acceptance.

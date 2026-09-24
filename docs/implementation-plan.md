@@ -40,6 +40,7 @@ This implementation blueprint follows the current accepted ADRs:
 | [ADR-008: BoxLite-First Lightweight Execution](adr/008-boxlite-lightweight-execution.md) | BoxLite is the current lightweight execution implementation, but orchestration should depend on execution-plane interfaces rather than BoxLite directly. |
 | [ADR-009: Durable Control Plane Outside Sandbox](adr/009-control-plane-outside-sandbox.md) | Durable task/session state, permissions, approvals, memory, and workflow authority stay outside sandbox guest workers. |
 | [ADR-010: Explicit Leases for Agent-Node Delivery](adr/010-leased-agent-node-delivery.md) | Backend-to-daemon commands use bounded, explicit leases and at-least-once delivery; only daemon-reported active work renews ownership. |
+| [ADR-020: Work Outcomes](adr/020-work-outcomes.md) | Single-agent action runs use work reports on capable daemons; event-backed outcomes distinguish execution completion, agent claims, unfinished work, and human acceptance. Further verification and planning stages are listed in the ADR. |
 
 ## 0. Design Position
 

@@ -21,6 +21,7 @@ def test_local_controller_leaves_linked_task_without_explicit_task_id() -> None:
 
         assert tasks.get_task(task["id"])["status"] == task["status"]
         assert sessions.get_session(session["id"])["status"] == "completed"
+        assert sessions.get_session(session["id"])["workOutcome"] == "accepted"
 
 
 def test_session_controller_records_review_run() -> None:

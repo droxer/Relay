@@ -1897,7 +1897,10 @@ class DaemonNodeRegistry:
             state = {**state, WORK_PROTOCOL: bool((existing.get("state") or {}).get(WORK_PROTOCOL))}
         else:
             state = {**state, WORK_PROTOCOL: bool(
-                any(item.get("teamSnapshot") for item in assignments)
+                any(
+                    item.get("teamSnapshot") or item.get("mode", "action") == "action"
+                    for item in assignments
+                )
                 and "work-results" in ((self.sandboxes.get(sandbox_id) or {}).get("capabilities") or [])
             )}
         if task_id and self.task_store:
@@ -3169,7 +3172,7 @@ class DaemonNodeRegistry:
         request_state = run_request["state"] or {}
         if request_state.get(WORK_PROTOCOL):
             if "work-results" not in (sandbox.get("capabilities") or []):
-                self._fail_run_request(run_request, "This team round requires a daemon with work-results support.")
+                self._fail_run_request(run_request, "This work round requires a daemon with work-results support.")
                 return run_request
             state["work_result_required"] = True
             state["round_result_file"] = ROUND_RESULT_RELATIVE_PATH
@@ -4102,11 +4105,12 @@ class DaemonNodeRegistry:
                 task_status = "waiting_for_human"
                 outcome = (
                     "The round ended without its required aggregate verdict. "
-                    "Review the work before continuing or closing the task."
+                    "Review the work before continuing or accepting it."
                 )
         blockers = completion_blockers(
             run_request["assignments"], run_request.get("state") or {},
             require_evidence=bool((run_request.get("state") or {}).get(WORK_PROTOCOL)),
+            allow_unfinished=isinstance(round_result, dict) and round_result.get("status") == "continue",
         )
         if blockers:
             task_status = "waiting_for_human"
@@ -4117,6 +4121,15 @@ class DaemonNodeRegistry:
             task = self.task_store.get_task(run_request["taskId"])
             if task.get("acceptancePolicy", "automatic") == "human":
                 task_status = "review"
+        work_outcome = {
+            "waiting_for_human": "blocked",
+            "assigned": "unfinished",
+            "review": "needs_review",
+        }.get(task_status, "reported_done" if (
+            isinstance(round_result, dict)
+            and round_result.get("status") == "done"
+            and (run_request.get("state") or {}).get(WORK_PROTOCOL)
+        ) else "unverified")
         participant_failures = (run_request.get("state") or {}).get(
             PARTICIPANT_FAILURES_STATE_KEY
         )
@@ -4130,7 +4143,8 @@ class DaemonNodeRegistry:
             != "completed"
         ):
             controller.complete_session(
-                run_request["sessionId"], outcome, task_status=task_status
+                run_request["sessionId"], outcome, task_status=task_status,
+                work_outcome=work_outcome,
             )
         self.daemon_store.update_run_request(
             run_request["id"], {"status": "completed", "error": None}
@@ -4145,9 +4159,9 @@ class DaemonNodeRegistry:
     ) -> tuple[str, str]:
         """Let the round's own verdict decide whether the task is finished.
 
-        Only the agent knows whether the work is actually complete. An unfinished round
-        goes back to the queue for another one, and a blocked round stops for a
-        human — neither may close the task out as done.
+        This is an agent claim; required-work gates and human acceptance policy
+        still apply. An unfinished task round requests another bounded attempt,
+        and a blocked round requires attention. Neither closes the task as done.
         """
         status = round_result.get("status")
         note = round_result.get("note")
@@ -4188,6 +4202,11 @@ class DaemonNodeRegistry:
         )
 
     def _round_result_was_required(self, run_request: dict[str, Any]) -> bool:
+        if (run_request.get("state") or {}).get(WORK_PROTOCOL):
+            return any(
+                self._assignment_reports_round_result(run_request["assignments"], index)
+                for index in range(len(run_request["assignments"]))
+            )
         if not run_request.get("taskId") or not self.task_store:
             return False
         node = self.sandboxes.get(run_request["nodeId"]) or {}

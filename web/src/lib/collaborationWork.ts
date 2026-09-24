@@ -2,7 +2,7 @@ import type { RelaySession } from "../types.js";
 
 type WorkItem = NonNullable<NonNullable<RelaySession["collaborationRounds"]>[number]["workGraph"]>["items"][number];
 export type CollaborationWorkView = WorkItem & {
-  status: "stale" | "pending" | "running" | "blocked" | "unverified" | "accepted" | "needs_changes";
+  status: "stale" | "pending" | "running" | "blocked" | "unverified" | "reported_done" | "needs_changes";
   result: RelaySession["agentRuns"][number]["workResult"];
   messages: NonNullable<NonNullable<RelaySession["agentRuns"][number]["workResult"]>["messages"]>;
 };
@@ -24,7 +24,7 @@ export function deriveCollaborationWork(session: RelaySession | undefined): Coll
       : run.status === "running" ? "running"
       : run.status !== "completed" ? "blocked"
       : !run.workResult ? "unverified"
-      : run.workResult.status === "done" && run.workResult.evidence.length ? "accepted"
+      : run.workResult.status === "done" && run.workResult.evidence.length ? "reported_done"
       : run.workResult.status === "continue" ? "needs_changes" : "blocked";
     const messages = runs.filter(attempt => attempt.assignmentId === item.assignmentId)
       .flatMap(attempt => attempt.workResult?.messages ?? []).slice(-50);

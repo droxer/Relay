@@ -119,8 +119,8 @@ function promptPreludes(state: AgentState): string[] {
         ...(state.round_result_run_id
           ? [`Include "runId": ${JSON.stringify(state.round_result_run_id)} in that JSON; verdicts for other runs are rejected.`]
           : []),
-        '"done" means the task is complete, "continue" means real work remains, "blocked" means you cannot proceed without a human.',
-        "This file is how the task is closed out; without it the task waits for a person.",
+        '"done" means the requested work is complete, "continue" means real work remains, "blocked" means you cannot proceed without a human.',
+        "This file records the work outcome independently of process exit. Missing required reports need attention. Tasks may continue within their round budget; a thread-only run records unfinished work for the next turn.",
       ].join("\n"),
     );
   }

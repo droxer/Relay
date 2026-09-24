@@ -355,6 +355,7 @@ def _apply_session_status(session: dict[str, Any], event: dict[str, Any]) -> Non
         session.pop("pendingDecision", None)
     if event["status"] not in ("completed", "failed"):
         session.pop("finalOutcome", None)
+        session.pop("workOutcome", None)
 
 
 def _apply_collaboration_round_started(
@@ -377,6 +378,7 @@ def _apply_collaboration_round_started(
 def _apply_agent_started(session: dict[str, Any], event: dict[str, Any]) -> None:
     if any(run["id"] == event["runId"] for run in session["agentRuns"]):
         return
+    session.pop("workOutcome", None)
     if event.get("daemonNodeId"):
         session["daemonNodeId"] = event["daemonNodeId"]
     if event.get("managedNodeId") and not session.get("managedNodeId"):
@@ -462,6 +464,7 @@ def _apply_human_decision(session: dict[str, Any], event: dict[str, Any]) -> Non
     if decision["kind"] == "cancel":
         session["status"] = "cancelled"
         session["phase"] = "cancelled"
+        session.pop("workOutcome", None)
         session.pop("pendingDecision", None)
 
 
@@ -470,6 +473,9 @@ def _apply_session_terminal(session: dict[str, Any], event: dict[str, Any]) -> N
     session["status"] = status
     session["phase"] = status
     session["finalOutcome"] = event["outcome"]
+    session["workOutcome"] = (
+        event.get("workOutcome", "unverified") if status == "completed" else "blocked"
+    )
     session.pop("currentAgent", None)
     session.pop("pendingDecision", None)
 

@@ -77,10 +77,12 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         }
         if (event.status !== "completed" && event.status !== "failed") {
           delete updated.finalOutcome;
+          delete updated.workOutcome;
         }
         return updated;
       }
     case "agent.started": {
+      delete next.workOutcome;
       if (next.agentRuns.some((run) => run.id === event.runId)) {
         return { ...next, status: "running", phase: event.agent, currentAgent: event.agent };
       }
@@ -169,19 +171,22 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
           ...(event.decision.kind === "handoff" && event.decision.targetAgent ? { currentAgent: event.decision.targetAgent } : {}),
           ...(event.decision.kind === "cancel" ? { status: "cancelled" as const, phase: "cancelled" } : {}),
         };
-        if (event.decision.kind === "cancel") delete updated.pendingDecision;
+        if (event.decision.kind === "cancel") {
+          delete updated.pendingDecision;
+          delete updated.workOutcome;
+        }
         return updated;
       }
     case "session.completed":
       {
-        const updated: RelaySession = { ...next, status: "completed", phase: "completed", finalOutcome: event.outcome };
+        const updated: RelaySession = { ...next, status: "completed", phase: "completed", finalOutcome: event.outcome, workOutcome: event.workOutcome ?? "unverified" };
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return updated;
       }
     case "session.failed":
       {
-        const updated: RelaySession = { ...next, status: "failed", phase: "failed", finalOutcome: event.outcome };
+        const updated: RelaySession = { ...next, status: "failed", phase: "failed", finalOutcome: event.outcome, workOutcome: "blocked" };
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return updated;

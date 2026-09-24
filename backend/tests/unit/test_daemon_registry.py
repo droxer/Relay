@@ -4544,6 +4544,95 @@ def _pipeline_registry(root: str, *, work_results: bool = False) -> tuple[Any, A
     return session_store, daemon_store, registry
 
 
+@pytest.mark.parametrize("task_bound", [False, True])
+@pytest.mark.parametrize("report, expected, task_status", [
+    ({"status": "done", "work": {"status": "done", "evidence": ["Reproduction and regression checks passed"]}}, "reported_done", "done"),
+    ({"status": "done"}, "blocked", "waiting_for_human"),
+    (None, "blocked", "waiting_for_human"),
+    ({"status": "continue", "work": {"status": "continue", "note": "Implementation remains", "evidence": []}}, "unfinished", "assigned"),
+    ({"status": "blocked", "work": {"status": "blocked", "note": "Need a fixture", "evidence": []}}, "blocked", "waiting_for_human"),
+])
+def test_single_agent_work_outcome_is_independent_of_execution(task_bound, report, expected, task_status):
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, daemon, registry = _pipeline_registry(root, work_results=True)
+            task = registry.task_store.create_task({"title": "Resolve the failure", "acceptancePolicy": "automatic"}) if task_bound else None
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Resolve the failure", "assignments": [{"agent": "codex"}],
+                **({"taskId": task["id"]} if task else {}),
+            })
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            assert command["state"].get("work_result_required") is True
+            _start_run(registry, command)
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"], "sessionId": session["id"],
+                "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+                **({"roundResult": report} if report else {}),
+            }, "node_token")
+            finished = sessions.get_session(session["id"])
+            assert finished["status"] == "completed"
+            assert finished["workOutcome"] == expected
+            assert next(e for e in reversed(finished["events"]) if e["type"] == "session.completed")["workOutcome"] == expected
+            if task:
+                updated = registry.task_store.get_task(task["id"])
+                assert updated["status"] == task_status
+                if expected == "unfinished":
+                    assert updated["continuationSessionId"] == session["id"]
+    asyncio.run(flow())
+
+
+@pytest.mark.parametrize("work_results, acceptance, expected", [
+    (False, "automatic", "unverified"),
+    (True, "human", "needs_review"),
+])
+def test_work_outcome_preserves_legacy_and_human_acceptance(work_results, acceptance, expected):
+    async def flow():
+        with TemporaryDirectory() as root:
+            sessions, _, registry = _pipeline_registry(root, work_results=work_results)
+            task = registry.task_store.create_task({"title": "Deliver", "acceptancePolicy": acceptance})
+            session = await ServerDaemonNodeBackend(registry).run("sbx_alice", {
+                "taskGoal": "Deliver", "taskId": task["id"], "assignments": [{"agent": "codex"}],
+            })
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            _start_run(registry, command)
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"], "sessionId": session["id"],
+                "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
+                "roundResult": {"status": "done", "work": {"status": "done", "evidence": ["Checks passed"]}},
+            }, "node_token")
+            assert sessions.get_session(session["id"])["workOutcome"] == expected
+            assert registry.task_store.get_task(task["id"])["status"] == ("review" if acceptance == "human" else "done")
+    asyncio.run(flow())
+
+
+@pytest.mark.parametrize("mode, required", [("action", True), ("ask", False), ("review", False)])
+def test_single_agent_protocol_is_frozen_across_capability_changes(mode, required):
+    with TemporaryDirectory() as root:
+        sessions, _, registry = _pipeline_registry(root, work_results=True)
+        session = sessions.create_session({"workspacePath": "/workspace/alice", "taskGoal": "Resolve"})
+        assignments = [{"executorKind": "codex", "mode": mode}]
+        request = registry.prepare_run_request("sbx_alice", session["id"], "Resolve", assignments, {})
+        assert request["state"]["_relay_work_protocol"] is required
+        registry.register({
+            "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"], "status": "ready",
+            "capabilities": ["thread-workspaces", "task-workspaces", "round-result"],
+        }, "ui_token")
+        replay = registry.prepare_run_request(
+            "sbx_alice", session["id"], "Resolve", assignments, {}, request_id=request["id"],
+        )
+        assert replay["state"]["_relay_work_protocol"] is required
+        registry.activate_run_request(request["id"])
+        if required:
+            assert registry.daemon_store.get_run_request(request["id"])["status"] == "failed"
+            assert "work-results" in sessions.get_session(session["id"])["finalOutcome"]
+            assert registry.take_commands("sbx_alice", "node_token") == []
+        else:
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            assert not command["state"].get("work_result_required")
+
+
 @pytest.mark.parametrize("failure_type", ["run.completed", "run.failed"])
 @pytest.mark.parametrize("verification_status", ["done", "blocked"])
 def test_coordinator_repair_revalidates_all_work_before_task_acceptance(failure_type, verification_status):
