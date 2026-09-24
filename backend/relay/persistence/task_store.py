@@ -211,6 +211,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "routineNextRunDate",
         "sourceRoutineId",
         "scheduledFor",
+        "collaborationStyle",
     ):
         if payload.get(field):
             created_payload[field] = payload[field]
@@ -301,6 +302,7 @@ def task_update_events(
             "routineNextRunDate",
             "routineEnabled",
             "acceptancePolicy",
+            "collaborationStyle",
         )
     }
     for field in ("expectedStatus", "expectedExecutionRevision"):

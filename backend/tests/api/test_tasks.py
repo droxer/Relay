@@ -211,6 +211,45 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         )
 
 
+def test_task_collaboration_style_is_validated(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        _create_user(client, "alice", employee_id="alice")
+
+        invalid = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Bad style",
+                "ownerEmployeeId": "alice",
+                "collaborationStyle": "debate",
+            },
+        )
+        assert invalid.status_code == 400
+        assert "collaborationStyle must be one of" in invalid.json()["detail"]
+
+        created = client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Good style",
+                "ownerEmployeeId": "alice",
+                "collaborationStyle": "solo",
+            },
+        )
+        assert created.status_code == 201
+        task = created.json()
+        assert task["collaborationStyle"] == "solo"
+
+        cleared = client.patch(
+            f"/api/v1/tasks/{task['id']}",
+            json={"collaborationStyle": ""},
+        )
+        assert cleared.status_code == 200
+        assert "collaborationStyle" not in cleared.json()
+
+
 def test_task_list_summary_view_is_compact_and_keeps_default_contract(
     monkeypatch,
 ) -> None:

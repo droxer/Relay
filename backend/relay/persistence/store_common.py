@@ -575,6 +575,8 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["sourceRoutineId"] = created["sourceRoutineId"]
     if created.get("scheduledFor"):
         task["scheduledFor"] = created["scheduledFor"]
+    if created.get("collaborationStyle"):
+        task["collaborationStyle"] = created["collaborationStyle"]
     _apply_task_routine_fields(task, created)
     for event in events:
         task["events"].append(event)
@@ -603,10 +605,18 @@ def _apply_task_workspace_bound(task: dict[str, Any], event: dict[str, Any]) -> 
 
 
 def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
-    for key in ("title", "description", "priority", "assigneeEmployeeId", "dueDate", "acceptancePolicy"):
+    for key in (
+        "title",
+        "description",
+        "priority",
+        "assigneeEmployeeId",
+        "dueDate",
+        "acceptancePolicy",
+        "collaborationStyle",
+    ):
         if key not in event or event[key] is None:
             continue
-        if key in ("assigneeEmployeeId", "dueDate") and event[key] == "":
+        if key in ("assigneeEmployeeId", "dueDate", "collaborationStyle") and event[key] == "":
             task.pop(key, None)
         else:
             task[key] = event[key]

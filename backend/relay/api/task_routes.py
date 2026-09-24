@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
+from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
 from ..persistence.stores import (
     task_priority,
@@ -203,6 +204,18 @@ def bool_field(body: dict[str, Any], key: str) -> bool | None:
     if isinstance(raw, bool):
         return raw
     raise HTTPException(400, f"{key} must be a boolean.")
+
+
+def _task_collaboration_style(body: dict[str, Any], *, allow_clear: bool) -> str | None:
+    value = body.get("collaborationStyle")
+    if value is None:
+        return None
+    if allow_clear and value == "":
+        return ""
+    try:
+        return validate_collaboration_style(value)
+    except CollaborationStyleError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 def routine_fields(
@@ -436,6 +449,7 @@ def create_task(
     acceptance_policy = body.get("acceptancePolicy")
     if "acceptancePolicy" in body and acceptance_policy not in ("human", "automatic"):
         raise HTTPException(400, "acceptancePolicy must be human or automatic.")
+    collaboration_style = _task_collaboration_style(body, allow_clear=False)
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
     if status == "assigned" and not (project or assigned_agent_id or assigned_team_id):
@@ -480,6 +494,7 @@ def create_task(
             "dueDate": date_field(body, "dueDate"),
             "status": status,
             "acceptancePolicy": acceptance_policy or "human",
+            **({"collaborationStyle": collaboration_style} if collaboration_style else {}),
             **(
                 {
                     "assignedAgent": agent,
@@ -562,6 +577,7 @@ def update_task(
     acceptance_policy = body.get("acceptancePolicy")
     if "acceptancePolicy" in body and acceptance_policy not in ("human", "automatic"):
         raise HTTPException(400, "acceptancePolicy must be human or automatic.")
+    collaboration_style = _task_collaboration_style(body, allow_clear=True)
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
     unblock = body.get("action") == "unblock"
@@ -671,6 +687,7 @@ def update_task(
         and "assignedTeamId" not in body
         and not routine
         and acceptance_policy is None
+        and collaboration_style is None
     ):
         raise HTTPException(
             400,
@@ -736,6 +753,7 @@ def update_task(
         "priority": priority,
         "status": status,
         "acceptancePolicy": acceptance_policy,
+        "collaborationStyle": collaboration_style,
         "blockerReason": blocker_reason,
         "actorEmployeeId": actor["employeeId"],
         "expectedStatus": current["status"],
