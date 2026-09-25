@@ -63,13 +63,15 @@ for (const mobile of [false, true]) {
     await page.goto("/teams/delivery");
     await expect(page.locator(".collab-style-sequence li").filter({ hasText: "Builder: Builder" })).toBeVisible();
     await page.getByRole("button", { name: "Edit members" }).click();
-    await page.getByRole("combobox", { name: "How this team works" }).click();
-    await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
-    await page.getByRole("option", { name: "Pipeline", exact: true }).click();
+    const styles = page.getByRole("radiogroup", { name: "How this team works" });
+    await expect(styles.getByRole("radio")).toHaveCount(3);
+    await expect(styles.getByRole("radio", { name: "Solo", exact: true })).toHaveCount(0);
+    await styles.getByRole("radio", { name: "Pipeline", exact: true }).click();
+    await expect(styles.getByRole("radio", { name: "Pipeline", exact: true })).toBeChecked();
     await page.getByRole("button", { name: "Save team", exact: true }).click();
     await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("pipeline");
     await page.reload();
-    const badge = page.locator('.teams-detail .collab-style-badge[data-style="pipeline"]');
+    const badge = page.locator('.teams-detail .collab-style-summary[data-style="pipeline"]');
     await expect(badge).toBeVisible();
     await badge.scrollIntoViewIfNeeded();
     expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
@@ -102,18 +104,23 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/teams/delivery");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await page.getByRole("button", { name: "Edit members" }).click();
-    const select = page.getByRole("combobox", { name: "How this team works" });
-    await select.focus();
+    const styles = page.getByRole("radiogroup", { name: "How this team works" });
+    const current = styles.getByRole("radio", { name: "Build → Review", exact: true });
+    await current.focus();
+    await expect(current).toBeChecked();
+    // Arrow keys rove and select within the group, like any radio group.
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("option")).toHaveCount(3);
+    const pipeline = styles.getByRole("radio", { name: "Pipeline", exact: true });
+    await expect(pipeline).toBeFocused();
+    await expect(pipeline).toBeChecked();
     await expect(page.getByText("Every member takes a turn in role order.")).toBeVisible();
-    const menu = page.getByRole("listbox");
-    const bounds = await menu.boundingBox();
-    expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    for (const card of await styles.getByRole("radio").all()) {
+      const bounds = await card.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    }
+    expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: `/tmp/relay-style-picker-${theme}.png`, fullPage: true });
-    await page.keyboard.press("Escape");
-    await expect(select).toBeFocused();
   });
 }
 
@@ -129,7 +136,7 @@ test("composer sends a one-message override then returns to team default", async
   await page.screenshot({ path: "/tmp/relay-style-composer.png", fullPage: true });
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect.poll(() => sends.at(-1)?.style).toBe("lead_led");
-  await expect(select).toContainText("Team default (Build → Review)");
+  await expect(select).toContainText("Build → Review · team default");
 });
 
 test("failed sends retain the override and member mentions hide it", async ({ page }) => {
@@ -149,7 +156,7 @@ test("failed sends retain the override and member mentions hide it", async ({ pa
   await expect.poll(() => sends.length).toBe(2);
   expect(sends.map((send) => send.style)).toEqual(["pipeline", "pipeline"]);
   expect(sends[0].idempotencyKey).toBe(sends[1].idempotencyKey);
-  await expect(select).toContainText("Team default (Build → Review)");
+  await expect(select).toContainText("Build → Review · team default");
   await text.fill("@Builder fix the API");
   await expect(select).toHaveCount(0);
 });

@@ -35,9 +35,8 @@ import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CollaborationStyleSelect, CollaborationSlotPreview } from "./CollaborationStyleSelect";
+import { CollaborationStyleCards, CollaborationSlotPreview, CollaborationStyleSummary } from "./CollaborationStyleSelect";
 import { effectiveStyle } from "../lib/collaborationStyle";
-import { CollaborationStyleBadge } from "./CollaborationStyleBadge";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -320,13 +319,14 @@ function TeamProfile({
 
             {editing ? (
               <>
-                <Field label={t("collab_style.label")} wrapper="div" htmlFor="team-collab-style" hint={t(`collab_style.${style}_hint`)}>
-                  <CollaborationStyleSelect id="team-collab-style" aria-label={t("collab_style.label")} value={style} onChange={(next) => next && setStyle(next)} disabled={busy} />
+                <section className="collab-style-section" aria-labelledby="team-profile-style">
+                  <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("collab_style.label")}</h2>
+                  <CollaborationStyleCards aria-labelledby="team-profile-style" value={style} onChange={setStyle} disabled={busy} />
                   <CollaborationSlotPreview members={memberIds.map((id) => ({
                     id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
                     onRequest: memberConfigs[id]?.participation === "on_request",
                   }))} leadId={leadId} style={style} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
-                </Field>
+                </section>
                 <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
                   <Textarea
                     rows={3}
@@ -345,13 +345,16 @@ function TeamProfile({
                   </Button>
                 </div>
               </>
-            ) : <Field label={t("collab_style.label")} wrapper="div" hint={t(`collab_style.${effectiveStyle(team)}_hint`)}>
-              <CollaborationStyleBadge style={effectiveStyle(team)} />
+            ) : <section className="collab-style-section" aria-labelledby="team-profile-style">
+              {/* Same section grammar as Members: the style is part of the
+                  team's document, not a loose form field under it. */}
+              <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("collab_style.label")}</h2>
+              <CollaborationStyleSummary style={effectiveStyle(team)} />
               <CollaborationSlotPreview members={team.members.map((member) => ({
                 id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
                 onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",
               }))} leadId={team.leadAgentId ?? undefined} style={effectiveStyle(team)} nameOf={(id) => team.members.find((m) => m.id === id)?.displayName ?? id} />
-            </Field>}
+            </section>}
           </form>
         </div>
 

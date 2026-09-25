@@ -27,7 +27,11 @@
     "turn_lead_summary": "负责人 · 汇总",
     "review_cycle": "评审第 {{cycle}} 轮，共 {{max}} 轮",
     "waiting_for_you": "等待你处理：评审次数已用完",
-    "ran_solo": "单人执行：没有可用的评审者"
+    "ran_solo": "单人执行：没有可用的评审者",
+    "team_default_short": "团队默认",
+    "inherit_hint": "沿用团队的设置。",
+    "slot_lead_summary": "汇总",
+    "loop_until_approved": "修改会退回给 {{builder}}，直到 {{reviewer}} 批准。"
   },
   "app": {
     "title": "Relay"

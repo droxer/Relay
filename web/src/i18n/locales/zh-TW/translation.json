@@ -27,7 +27,11 @@
     "turn_lead_summary": "負責人 · 彙整",
     "review_cycle": "審查第 {{cycle}} 輪，共 {{max}} 輪",
     "waiting_for_you": "等待你處理：審查次數已用完",
-    "ran_solo": "單人執行：沒有可用的審查者"
+    "ran_solo": "單人執行：沒有可用的審查者",
+    "team_default_short": "團隊預設",
+    "inherit_hint": "沿用團隊的設定。",
+    "slot_lead_summary": "彙整",
+    "loop_until_approved": "修改會退回給 {{builder}}，直到 {{reviewer}} 核准。"
   },
   "app": {
     "title": "Relay"

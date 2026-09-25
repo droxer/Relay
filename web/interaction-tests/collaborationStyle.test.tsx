@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { COLLABORATION_STYLES, effectiveStyle, previewSlots, turnSlot, styleForRun, reviewCycle, reviewBudgetExhausted } from "../src/lib/collaborationStyle";
-import { CollaborationStyleSelect, CollaborationSlotPreview } from "../src/components/CollaborationStyleSelect";
+import { CollaborationStyleSelect, CollaborationSlotPreview, CollaborationStyleCards, CollaborationStyleSummary } from "../src/components/CollaborationStyleSelect";
+import { CollaborationStyleDiagram } from "../src/components/CollaborationStyleDiagram";
+import { fireEvent } from "@testing-library/react";
 import { threadMessageInput, threadMessageOperationKey } from "../src/lib/messageRouting";
 import { teamMutationInput } from "../src/lib/teamForm";
 import { materializeTaskEvents } from "../../packages/relay-core/src/task-store";
@@ -191,4 +193,53 @@ it("counts only active-round repairs and distinguishes budget exhaustion from ot
   expect(reviewBudgetExhausted({ ...session, workOutcome: "blocked" } as never)).toBe(false);
   const reviews = Array.from({ length: 3 }, () => ({ assignmentId: "r", workResult: { status: "continue", findings: [{ workItemId: "b" }] } }));
   expect(reviewBudgetExhausted({ ...session, status: "completed", workOutcome: "blocked", agentRuns: reviews } as never)).toBe(true);
+});
+
+it("names the resolved style on an inheriting trigger, with team default as a qualifier", () => {
+  render(<CollaborationStyleSelect value={null} onChange={vi.fn()} inheritLabel="Team default" inheritStyle="pipeline" aria-label="Style" />);
+  const control = screen.getByRole("combobox", { name: "Style" });
+  expect(control.textContent).toContain("collab_style.pipeline");
+  expect(control.textContent).toContain("collab_style.team_default_short");
+});
+
+it("shows the review loop and labels pipeline steps by role", () => {
+  const { unmount } = render(<CollaborationSlotPreview members={[{ id: "a", role: "implementer" }, { id: "b", role: "reviewer" }]} leadId="a" style="build_review" nameOf={(id) => id} />);
+  expect(screen.getByText("collab_style.loop_until_approved")).toBeTruthy();
+  unmount();
+  render(<CollaborationSlotPreview members={[{ id: "a", role: "planner" }, { id: "b", role: "reviewer" }]} style="pipeline" nameOf={(id) => id} />);
+  expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+    expect.stringContaining("team_work.role_planner"), expect.stringContaining("team_work.role_reviewer"),
+  ]);
+  expect(screen.queryByText("collab_style.loop_until_approved")).toBeNull();
+});
+
+it("names the lead's closing lead-led step for what it does", () => {
+  render(<CollaborationSlotPreview members={[{ id: "a" }, { id: "b" }]} leadId="a" style="lead_led" nameOf={(id) => id} />);
+  const items = screen.getAllByRole("listitem").map((item) => item.textContent);
+  expect(items[0]).toContain("collab_style.slot_lead");
+  expect(items.at(-1)).toContain("collab_style.slot_lead_summary");
+});
+
+it("offers team styles as radio cards and reports the pick", () => {
+  const onChange = vi.fn();
+  render(<CollaborationStyleCards value="build_review" onChange={onChange} />);
+  const radios = screen.getAllByRole("radio");
+  expect(radios.map((radio) => radio.getAttribute("aria-label"))).toEqual(COLLABORATION_STYLES.map((style) => `collab_style.${style}`));
+  expect(radios[0].getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(screen.getByRole("radio", { name: "collab_style.lead_led" }));
+  expect(onChange).toHaveBeenCalledWith("lead_led");
+});
+
+it("draws a decorative schematic per style, with the lead as the only filled node", () => {
+  const { container } = render(<>{COLLABORATION_STYLES.map((style) => <CollaborationStyleDiagram key={style} style={style} />)}</>);
+  const svgs = [...container.querySelectorAll("svg.collab-diagram")];
+  expect(svgs.map((svg) => svg.getAttribute("data-style"))).toEqual([...COLLABORATION_STYLES]);
+  expect(svgs.every((svg) => svg.getAttribute("aria-hidden") === "true")).toBe(true);
+  expect(svgs.map((svg) => svg.querySelectorAll(".collab-diagram-node-lead").length)).toEqual([0, 0, 2]);
+});
+
+it("summarizes a legacy Solo team as its normalized style", () => {
+  const { container } = render(<CollaborationStyleSummary style="solo" />);
+  expect(container.querySelector(".collab-style-summary")?.getAttribute("data-style")).toBe("build_review");
+  expect(screen.getByText("collab_style.build_review_hint")).toBeTruthy();
 });
