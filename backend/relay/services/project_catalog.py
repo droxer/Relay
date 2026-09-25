@@ -5,6 +5,7 @@ from typing import Any
 from ..core.computer_identity import computer_id
 from ..core.models import AGENT_ROLES
 from ..persistence.project_store import ProjectValidationError
+from .team_computer import placement_on_computer
 
 PROJECT_NAME_MAX_LENGTH = 120
 PROJECT_MEMBER_MAX_COUNT = 32
@@ -170,15 +171,7 @@ def validate_project_roster(
             raise ProjectValidationError("project_member_disabled")
         placements = placement_store.list_placements(agent_id=agent["id"])
         if not any(
-            placement.get("desiredState") == "active"
-            and (
-                placement.get("computerId") == target_computer_id
-                or (
-                    not placement.get("computerId")
-                    and target_node_id is not None
-                    and placement.get("daemonNodeId") == target_node_id
-                )
-            )
+            placement_on_computer(placement, target_computer_id, target_node_id)
             for placement in placements
         ):
             raise ProjectValidationError("project_member_computer_mismatch")

@@ -1105,15 +1105,16 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
             },
         )
         app.state.agent_placement_store.create_placement(lead, "test_node_alice")
-        team = client.post(
-            "/api/v1/admin/teams",
-            json={
-                "ownerEmployeeId": "alice",
+        # The team API pins a team to a computer; this phantom placement has
+        # none, so the legacy team goes straight to the store as well.
+        team = app.state.team_store.create_team(
+            "alice",
+            {
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
             },
-        ).json()["team"]
+        )
         task = client.post(
             "/api/v1/tasks",
             json={

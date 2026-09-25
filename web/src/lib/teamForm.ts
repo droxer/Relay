@@ -26,6 +26,7 @@ export function teamMutationInput(input: {
   name: string;
   leadAgentId: string;
   memberAgentIds: string[];
+  computerId?: string;
   enabled: boolean;
   memberConfigs?: Record<string, TeamMemberConfig>;
   acceptanceCriteria?: string[];
@@ -34,6 +35,7 @@ export function teamMutationInput(input: {
     name: input.name.trim(),
     leadAgentId: input.leadAgentId,
     memberAgentIds: input.memberAgentIds,
+    ...(input.computerId ? { computerId: input.computerId } : {}),
     enabled: input.enabled,
     ...(input.collaborationStyle !== undefined ? { collaborationStyle: input.collaborationStyle } : {}),
     ...(input.memberConfigs

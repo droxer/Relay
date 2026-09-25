@@ -716,6 +716,9 @@ export interface AgentTeam {
   profileImageUrl?: string | null;
   leadAgentId?: string | null;
   memberAgentIds: string[];
+  /** The computer the whole roster lives on. Absent on a team saved before
+   *  teams carried one; `teamComputerId` derives it from the roster. */
+  computerId?: string;
   memberConfigs?: Record<string, TeamMemberConfig>;
   acceptanceCriteria?: string[];
   enabled: boolean;
@@ -737,6 +740,8 @@ export interface TeamMutationInput {
   name: string;
   leadAgentId: string;
   memberAgentIds: string[];
+  /** Pins the team to one computer; every member must be placed on it. */
+  computerId?: string;
   enabled?: boolean;
   /** A preset from `lib/presetAvatars.ts`; only sent when creating a team. */
   profileImageUrl?: string;

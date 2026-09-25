@@ -49,7 +49,10 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
   legendHidden?: boolean;
   error?: string;
   errorId?: string;
-}>(function TeamMemberPicker({ agents, value, onChange, disabled = false, legendHidden = false, error, errorId }, ref) {
+  /** Replaces the generic "no agents" line — team setup says why the list is
+   *  empty (no computer picked yet, or nobody placed on it). */
+  emptyHint?: string;
+}>(function TeamMemberPicker({ agents, value, onChange, disabled = false, legendHidden = false, error, errorId, emptyHint }, ref) {
   const { t } = useTranslation();
   const members = useMemo(
     () => value.memberIds
@@ -129,7 +132,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
       ) : null}
 
       {agents.length === 0 ? (
-        <span className="adm-form-hint">{t("teams.no_agents")}</span>
+        <span className="adm-form-hint">{emptyHint ?? t("teams.no_agents")}</span>
       ) : candidates.length ? (
         <Select
           value={null}

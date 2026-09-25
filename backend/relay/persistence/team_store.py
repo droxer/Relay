@@ -569,6 +569,11 @@ def _new_team(
         **({"profileImageUrl": profile_image_url} if profile_image_url else {}),
         "leadAgentId": lead,
         "memberAgentIds": list(members),
+        **(
+            {"computerId": payload["computerId"]}
+            if isinstance(payload.get("computerId"), str) and payload["computerId"]
+            else {}
+        ),
         "memberConfigs": member_configs(payload.get("memberConfigs", {}), members),
         "acceptanceCriteria": text_list(payload.get("acceptanceCriteria", []), "acceptanceCriteria"),
         **(
@@ -603,7 +608,7 @@ def _normalized_team_snapshot(
 def _normalize_team_patch(
     patch: dict[str, Any], *, current: dict[str, Any]
 ) -> dict[str, Any]:
-    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "enabled", "memberConfigs", "acceptanceCriteria", "collaborationStyle"}
+    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled", "memberConfigs", "acceptanceCriteria", "collaborationStyle"}
     unknown = set(patch) - allowed
     if unknown:
         raise ValueError(f"Unsupported team field(s): {', '.join(sorted(unknown))}.")
@@ -624,6 +629,11 @@ def _normalize_team_patch(
         if len(set(members)) != len(members):
             raise TeamValidationError("team_members_duplicate")
         normalized["memberAgentIds"] = members
+    if "computerId" in patch:
+        computer = patch["computerId"]
+        if not isinstance(computer, str) or not computer.strip():
+            raise TeamValidationError("team_computer_required")
+        normalized["computerId"] = computer.strip()
     if "leadAgentId" in patch:
         lead = patch["leadAgentId"]
         if not isinstance(lead, str) or not lead.strip():

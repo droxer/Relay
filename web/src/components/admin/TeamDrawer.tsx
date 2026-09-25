@@ -3,6 +3,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
+import { useComputerOptions } from "../../hooks/useComputerOptions";
+import {
+  agentsForTeamComputer,
+  membersOffComputer,
+  pruneMembershipToComputer,
+  teamComputerId,
+} from "../../lib/teamComputer";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
 import { teamContractChanged, teamMutationInput } from "../../lib/teamForm";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
@@ -15,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { TeamMemberPicker, type TeamMembership } from "../TeamMemberPicker";
+import { ComputerSelect } from "../ComputerSelect";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 
 export function TeamDrawer({
@@ -30,6 +38,7 @@ export function TeamDrawer({
 }) {
   const { t } = useTranslation();
   const avatarLabelId = useId();
+  const computerLabelId = useId();
   const { confirm } = useDialogs();
   const { createTeamMutation, updateTeamMutation, deleteTeamMutation } = useRelayMutations();
   const [name, setName] = useState("");
@@ -38,8 +47,12 @@ export function TeamDrawer({
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>([]);
   const [leadId, setLeadId] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("teams"));
-  const [validationError, setValidationError] = useState<"name" | "members" | null>(null);
+  // Null until the user picks: the computer then follows the team record, or
+  // the only computer the employee has.
+  const [computerPick, setComputerPick] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<"name" | "computer" | "members" | "off_computer" | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const computerRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLFieldSetElement>(null);
 
   useEffect(() => {
@@ -50,6 +63,7 @@ export function TeamDrawer({
     setMemberConfigs(team?.memberConfigs ?? {});
     setAcceptanceCriteria(team?.acceptanceCriteria ?? []);
     setProfileImageUrl(randomPresetAvatar("teams"));
+    setComputerPick(null);
     setValidationError(null);
   }, [open, team?.id]);
 
@@ -58,11 +72,22 @@ export function TeamDrawer({
     () => employeeAgents.filter((agent) => !agent.deletedAt),
     [employeeAgents],
   );
+  const computers = useComputerOptions(employeeId ?? "", open && Boolean(employeeId));
+  // A team lives on one computer: it is chosen first, and the member picker
+  // only offers the agents placed on it.
+  const savedComputerId = team ? teamComputerId(team, agents) : "";
+  const computerId = computerPick
+    ?? (savedComputerId || (computers.options.length === 1 ? computers.options[0].computerId : ""));
+  const computerAgents = useMemo(
+    () => agentsForTeamComputer(agents, computerId, memberIds),
+    [agents, computerId, memberIds],
+  );
   const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
   const saving = createTeamMutation.isPending || updateTeamMutation.isPending;
   const hasUnsavedChanges = open && (
     teamContractChanged({ memberConfigs, acceptanceCriteria }, team ?? {}, memberIds)
     || name.trim() !== (team?.name ?? "").trim()
+    || (computerPick !== null && computerPick !== savedComputerId)
     || leadId !== (team?.leadAgentId ?? "")
     || memberIds.length !== (team?.memberAgentIds ?? []).length
     || memberIds.some((id) => !(team?.memberAgentIds ?? []).includes(id))
@@ -74,6 +99,12 @@ export function TeamDrawer({
     if (await confirmDiscardChanges()) onClose();
   }
 
+  function changeComputer(next: string) {
+    setValidationError(null);
+    setComputerPick(next);
+    changeMembership(pruneMembershipToComputer({ memberIds, leadId }, agents, next));
+  }
+
   function changeMembership(next: TeamMembership) {
     setValidationError(null);
     setMemberIds(next.memberIds);
@@ -82,6 +113,11 @@ export function TeamDrawer({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!computerId) {
+      setValidationError("computer");
+      computerRef.current?.focus();
+      return;
+    }
     if (!name.trim()) {
       setValidationError("name");
       nameRef.current?.focus();
@@ -92,11 +128,17 @@ export function TeamDrawer({
       membersRef.current?.focus();
       return;
     }
+    if (membersOffComputer(agents, computerId, memberIds).length > 0) {
+      setValidationError("off_computer");
+      membersRef.current?.focus();
+      return;
+    }
     setValidationError(null);
     const input = teamMutationInput({
       name,
       leadAgentId: leadId,
       memberAgentIds: memberIds,
+      computerId,
       memberConfigs, acceptanceCriteria,
       enabled: team?.enabled ?? true,
     });
@@ -139,13 +181,33 @@ export function TeamDrawer({
     >
       <form className="adm-form" onSubmit={(event) => void submit(event)} noValidate>
         <Field
+          label={t("teams.computer")}
+          labelId={computerLabelId}
+          wrapper="div"
+          hint={t("teams.computer_hint")}
+          error={validationError === "computer" ? t("teams.computer_required") : undefined}
+          errorId="team-computer-error"
+        >
+          <ComputerSelect
+            ref={computerRef}
+            initialFocus
+            options={computers.options}
+            value={computerId}
+            onChange={changeComputer}
+            placeholder={computers.isLoading ? t("admin.loading") : t("teams.computer_placeholder")}
+            disabled={busy || computers.isLoading || computers.options.length === 0}
+            labelledBy={computerLabelId}
+            error={validationError === "computer"}
+            errorId="team-computer-error"
+          />
+        </Field>
+        <Field
           label={t("teams.name")}
           error={validationError === "name" ? t("teams.name_required") : undefined}
           errorId="team-name-error"
         >
           <Input
             ref={nameRef}
-            data-modal-initial-focus
             name="team-name"
             autoComplete="off"
             value={name}
@@ -171,12 +233,17 @@ export function TeamDrawer({
         )}
         <TeamMemberPicker
           ref={membersRef}
-          agents={agents}
+          agents={computerAgents}
           value={{ memberIds, leadId }}
           onChange={changeMembership}
-          disabled={busy}
-          error={validationError === "members" ? t("teams.members_required") : undefined}
+          disabled={busy || !computerId}
+          error={validationError === "members"
+            ? t("teams.members_required")
+            : validationError === "off_computer"
+            ? t("teams.members_off_computer")
+            : undefined}
           errorId="team-members-error"
+          emptyHint={computerId ? t("teams.computer_no_agents") : t("teams.members_choose_computer")}
         />
         <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
           <Textarea
