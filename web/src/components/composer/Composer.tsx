@@ -248,6 +248,7 @@ const ComposerView = forwardRef<ComposerHandle, {
         {activeTeamId && !projectName && !addressedLogicalAgentId ? (
           <CollaborationStyleSelect compact aria-label={t("collab_style.composer_label")}
             value={style} onChange={setStyle} disabled={running || sendPending || readOnly}
+            inheritStyle={effectiveStyle(teams?.find((team) => team.id === activeTeamId))}
             inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams?.find((team) => team.id === activeTeamId))}`) })} />
         ) : null}
       </div>

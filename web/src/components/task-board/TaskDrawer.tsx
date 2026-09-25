@@ -340,6 +340,7 @@ export function TaskDrawer({
         {form.assignedTeamId ? <Field label={t("collab_style.task_label")} wrapper="div">
           <CollaborationStyleSelect aria-label={t("collab_style.task_label")} value={form.collaborationStyle ?? null}
             disabled={saving} onChange={(collaborationStyle) => onChange({ ...form, collaborationStyle })}
+            inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}
             inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
         </Field> : null}
         <Field label={t("backlog.description")}>

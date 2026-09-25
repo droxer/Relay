@@ -27,7 +27,11 @@
     "turn_lead_summary": "Lead · summary",
     "review_cycle": "Review round {{cycle}} of {{max}}",
     "waiting_for_you": "Waiting for you: review budget used up",
-    "ran_solo": "Ran solo: no reviewer available"
+    "ran_solo": "Ran solo: no reviewer available",
+    "team_default_short": "team default",
+    "inherit_hint": "Follow the team's setting.",
+    "slot_lead_summary": "Combines",
+    "loop_until_approved": "Changes go back to {{builder}} until {{reviewer}} approves."
   },
   "app": {
     "title": "Relay"

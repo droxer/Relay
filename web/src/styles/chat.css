@@ -534,51 +534,299 @@
   padding-block: var(--sp-3);
 }
 
-.collab-style-icon {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  justify-content: center;
+/* The inherit row closes the group it heads: a hairline, not a blank gap. */
+.collab-style-option-inherit {
+  margin-bottom: var(--sp-1);
+  border-bottom: 0.5px solid var(--line-1);
+  border-radius: var(--r-2) var(--r-2) 0 0;
+}
+
+/* ---- style schematic ------------------------------------------------
+   One drawing per style (CollaborationStyleDiagram). Links recede, nodes
+   carry the shape; the lead is the only filled node. */
+.collab-diagram {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--ink-2);
+  overflow: visible;
+}
+
+/* Strokes hold their weight at any plate size, so the small option plate
+   stays as legible as the card. */
+.collab-diagram circle,
+.collab-diagram line,
+.collab-diagram path,
+.collab-diagram polyline {
+  vector-effect: non-scaling-stroke;
+}
+
+.collab-diagram-node {
+  fill: var(--surface-1);
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.collab-diagram-node-lead {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.collab-diagram-link {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.collab-diagram-return path {
+  stroke-dasharray: 3 3;
+}
+
+/* The art plate: a quiet framed surface the schematic sits on. */
+.collab-style-card-art,
+.collab-style-option-art {
+  display: block;
   flex-shrink: 0;
-  padding: var(--sp-2);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
   background: var(--surface-2);
-  color: var(--ink-2);
 }
 
+.collab-style-option-art {
+  align-self: flex-start;
+  width: 72px;
+  height: 40px;
+  padding: 2px var(--sp-1);
+}
+
+.collab-style-card-art {
+  width: 100%;
+  aspect-ratio: 88 / 44;
+  max-height: 72px;
+  padding: var(--sp-2) var(--sp-3);
+}
+
+/* ---- team picker cards ---------------------------------------------- */
+.collab-style-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.collab-style-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.collab-style-card:hover:not([data-disabled]) {
+  border-color: var(--ink-4);
+}
+
+.collab-style-card[data-checked] {
+  border-color: var(--action);
+  box-shadow: 0 0 0 1px var(--action);
+}
+
+.collab-style-card[data-checked] .collab-style-card-art {
+  border-color: transparent;
+  background: var(--action-soft);
+}
+
+.collab-style-card[data-checked] .collab-diagram {
+  color: var(--action);
+}
+
+.collab-style-card[data-disabled] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+.collab-style-card-name,
+.collab-style-summary-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ink-1);
+  font: var(--type-label);
+}
+
+.collab-style-card-hint {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+@media (max-width: 720px) {
+  .collab-style-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked, the art sits beside the words rather than above them. */
+  .collab-style-card {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: var(--sp-3);
+    row-gap: var(--sp-1);
+  }
+
+  .collab-style-card .collab-style-card-art {
+    grid-row: 1 / span 2;
+    align-self: start;
+    padding: var(--sp-1) var(--sp-2);
+  }
+}
+
+/* The composer/task trigger names the style it resolves to; "team default"
+   is a quiet qualifier, not the headline. */
+.collab-style-trigger-note {
+  color: var(--ink-3);
+}
+
+.collab-style-section {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.collab-style-section > .workspace-dossier-section-title {
+  margin-bottom: 0;
+}
+
+.collab-style-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.collab-style-summary > .collab-style-card-art {
+  width: 120px;
+  height: 64px;
+  padding: var(--sp-1) var(--sp-2);
+}
+
+.collab-style-summary-text {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.collab-style-summary-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+/* The run order reads as one flow: steps joined by chevrons, each step a
+   role over the member who fills it. */
 .collab-style-preview {
   display: grid;
+  justify-self: start;
   gap: var(--sp-2);
-  padding-block: var(--sp-2);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--sp-3);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
 }
 
 .collab-style-sequence {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  align-items: center;
+  row-gap: var(--sp-2);
   margin: 0;
   padding: 0;
   list-style: none;
-  font: var(--type-body-sm);
 }
 
 .collab-style-sequence li {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
   min-width: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-  overflow-wrap: anywhere;
+}
+
+.collab-style-arrow {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-inline: var(--sp-1);
+  color: var(--ink-4);
 }
 
 .collab-style-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+}
+
+.collab-style-step-text {
+  display: grid;
+  min-width: 0;
+}
+
+/* The initial is a true circle; the lead's is the only filled one, matching
+   the schematic's filled lead node. */
+.collab-style-step-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ink-4);
+  border-radius: var(--r-full);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font: var(--type-label);
+}
+
+.collab-style-sequence li[data-slot="lead"] .collab-style-step-avatar {
+  border-color: var(--ink-1);
+  background: var(--ink-1);
+  color: var(--surface-1);
+}
+
+.collab-style-step-role {
   color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-transform: uppercase;
+}
+
+.collab-style-step-name {
+  color: var(--ink-1);
+  font: var(--type-label);
+  overflow-wrap: anywhere;
+}
+
+.collab-style-loop {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .msg-turn-foot {
