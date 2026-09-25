@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..persistence.team_store import TeamValidationError, validate_team_payload
 from ..security.auth import require_admin_session
+from ..services.team_computer import resolve_team_computer
 from .agent_routes import _agent_with_placements, _employee_exists
 from .deps import AppContextDep
 from .helpers import (
@@ -36,6 +37,44 @@ def _owned_team(
     if team.get("ownerEmployeeId") != employee_id:
         raise HTTPException(403, "Cannot access another employee's team.")
     return team
+
+
+def _validated_roster(
+    ctx: AppContextDep,
+    owner_employee_id: str,
+    body: dict[str, Any],
+    *,
+    current: dict[str, Any] | None = None,
+) -> tuple[str, list[str], dict[str, Any]]:
+    """Validate a team write's roster and pin it to one computer.
+
+    Returns the lead, the members, and the computer fields to persist — empty
+    when the write touches neither roster nor computer.
+    """
+    lead, members = validate_team_payload(
+        owner_employee_id, body, ctx.agent_store, current=current
+    )
+    computer = resolve_team_computer(
+        owner_employee_id,
+        body,
+        members,
+        current=current,
+        registry=ctx.registry,
+        agent_store=ctx.agent_store,
+        placement_store=ctx.agent_placement_store,
+    )
+    return lead, members, ({"computerId": computer} if computer else {})
+
+
+def _team_patch(
+    body: dict[str, Any], lead: str, members: list[str], computer: dict[str, Any]
+) -> dict[str, Any]:
+    patch = dict(body)
+    if "leadAgentId" in body:
+        patch["leadAgentId"] = lead
+    if "memberAgentIds" in body:
+        patch["memberAgentIds"] = members
+    return {**patch, **computer}
 
 
 def _team_view(ctx: AppContextDep, team: dict[str, Any]) -> dict[str, Any]:
@@ -80,14 +119,10 @@ def create_team(
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
     try:
-        lead, members = validate_team_payload(
-            actor["employeeId"],
-            body,
-            ctx.agent_store,
-        )
+        lead, members, computer = _validated_roster(ctx, actor["employeeId"], body)
         team = ctx.team_store.create_team(
             actor["employeeId"],
-            {**body, "leadAgentId": lead, "memberAgentIds": members},
+            {**body, "leadAgentId": lead, "memberAgentIds": members, **computer},
         )
     except ValueError as error:
         raise _team_error(error) from error
@@ -102,18 +137,12 @@ def update_team(
     current = _owned_team(ctx, team_id, actor["employeeId"])
     body = _request_body
     try:
-        lead, members = validate_team_payload(
-            actor["employeeId"],
-            body,
-            ctx.agent_store,
-            current=current,
+        lead, members, computer = _validated_roster(
+            ctx, actor["employeeId"], body, current=current
         )
-        patch = dict(body)
-        if "leadAgentId" in body:
-            patch["leadAgentId"] = lead
-        if "memberAgentIds" in body:
-            patch["memberAgentIds"] = members
-        team = ctx.team_store.update_team(team_id, patch)
+        team = ctx.team_store.update_team(
+            team_id, _team_patch(body, lead, members, computer)
+        )
     except ValueError as error:
         raise _team_error(error) from error
     return {"team": _team_view(ctx, team)}
@@ -152,11 +181,7 @@ def create_control_panel_team(
     if not _employee_exists(ctx.auth_store, owner_employee_id):
         raise HTTPException(404, "Employee not found.")
     try:
-        lead, members = validate_team_payload(
-            owner_employee_id,
-            body,
-            ctx.agent_store,
-        )
+        lead, members, computer = _validated_roster(ctx, owner_employee_id, body)
         team = ctx.team_store.create_team(
             owner_employee_id,
             {
@@ -168,6 +193,7 @@ def create_control_panel_team(
                 "collaborationStyle": body.get("collaborationStyle"),
                 "leadAgentId": lead,
                 "memberAgentIds": members,
+                **computer,
             },
         )
     except ValueError as error:
@@ -191,18 +217,12 @@ def update_control_panel_team(
     current = _active_team(ctx, team_id)
     body = _request_body
     try:
-        lead, members = validate_team_payload(
-            current["ownerEmployeeId"],
-            body,
-            ctx.agent_store,
-            current=current,
+        lead, members, computer = _validated_roster(
+            ctx, current["ownerEmployeeId"], body, current=current
         )
-        patch = dict(body)
-        if "leadAgentId" in body:
-            patch["leadAgentId"] = lead
-        if "memberAgentIds" in body:
-            patch["memberAgentIds"] = members
-        team = ctx.team_store.update_team(team_id, patch)
+        team = ctx.team_store.update_team(
+            team_id, _team_patch(body, lead, members, computer)
+        )
     except ValueError as error:
         raise _team_error(error) from error
     return {"team": _team_view(ctx, team)}

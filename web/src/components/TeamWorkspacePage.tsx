@@ -22,6 +22,7 @@ import {
 import { PageHeader } from "./PageHeader";
 import { IdentityMark } from "./IdentityMark";
 import { TeamMemberPicker, type TeamMembership } from "./TeamMemberPicker";
+import { agentsForTeamComputer, membersOffComputer, teamComputerId } from "../lib/teamComputer";
 import { TeamMemberCard } from "./TeamMemberCard";
 import { ProfileImage, ProfileImagePicker } from "./ProfileImagePicker";
 import { ActivitiesSkeleton, WorkspaceActivities, WorkspaceError } from "./workspace/WorkspacePrimitives";
@@ -76,8 +77,16 @@ function TeamProfile({
   const [imageSaving, setImageSaving] = useState(false);
   // The one member card open for inline edit; the others lock until it closes.
   const [cardEditingId, setCardEditingId] = useState<string | null>(null);
-  const [validationError, setValidationError] = useState<"members" | null>(null);
+  const [validationError, setValidationError] = useState<"members" | "off_computer" | null>(null);
   const membersRef = useRef<HTMLFieldSetElement>(null);
+  // The team lives on one computer, so a roster edit only offers the agents
+  // placed there (plus current members, so a legacy split roster can be
+  // trimmed rather than hidden).
+  const computerId = teamComputerId(team, agents);
+  const computerAgents = useMemo(
+    () => agentsForTeamComputer(agents, computerId, memberIds),
+    [agents, computerId, memberIds],
+  );
   const busy = updateTeamMutation.isPending || deleteTeamMutation.isPending
     || imageSaving;
   const draftDirty = teamContractChanged(
@@ -193,6 +202,14 @@ function TeamProfile({
       membersRef.current?.focus();
       return;
     }
+    const offComputer = membersOffComputer(agents, computerId, memberIds);
+    const rosterChanged = memberIds.length !== team.memberAgentIds.length
+      || memberIds.some((id) => !team.memberAgentIds.includes(id));
+    if (rosterChanged && offComputer.length > 0) {
+      setValidationError("off_computer");
+      membersRef.current?.focus();
+      return;
+    }
     setValidationError(null);
     try {
       await updateTeamMutation.mutateAsync({
@@ -200,6 +217,9 @@ function TeamProfile({
         input: teamMutationInput({
           name: team.name,
           memberAgentIds: memberIds,
+          // Pins a team saved before teams carried a computer, once its
+          // whole roster is on one.
+          ...(offComputer.length === 0 && computerId ? { computerId } : {}),
           memberConfigs, acceptanceCriteria,
           leadAgentId: leadId,
           collaborationStyle: style,
@@ -289,12 +309,17 @@ function TeamProfile({
               {editing ? (
                 <TeamMemberPicker
                   ref={membersRef}
-                  agents={agents}
+                  agents={computerAgents}
                   value={{ memberIds, leadId }}
                   onChange={changeMembership}
                   disabled={busy}
                   legendHidden
-                  error={validationError ? t("teams.members_required") : undefined}
+                  emptyHint={t("teams.computer_no_agents")}
+                  error={validationError === "members"
+                    ? t("teams.members_required")
+                    : validationError === "off_computer"
+                    ? t("teams.members_off_computer")
+                    : undefined}
                   errorId="team-profile-members-error"
                 />
               ) : (

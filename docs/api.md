@@ -586,6 +586,19 @@ Existing teams without a style use Build → Review on their next work request.
 Select Lead-led to retain lead planning and final synthesis. See
 [ADR-021](adr/021-team-collaboration-styles.md).
 
+### Team computer
+
+A team lives on one computer, like a project's crew. `POST`/`PATCH /teams`
+(and the `/admin/teams` variants) accept `computerId`, the stable computer
+identity agent creation uses; the team records it and every member must have an
+active placement there (`team_member_computer_mismatch`). A computer that is
+not the owner's returns `team_computer_forbidden`, one that is unknown or
+retired `team_computer_not_found`. A write that names no computer keeps the
+team's recorded one, or — for a new or legacy team — takes the single computer
+hosting the whole roster, refusing a roster no one computer hosts. Resending an
+unchanged roster (a rename, a member's contract) is not a roster change, so
+legacy teams saved before this rule stay editable.
+
 ### Responsibilities
 
 Team create/update requests accept these optional fields in addition to the

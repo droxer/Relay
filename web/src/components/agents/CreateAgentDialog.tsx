@@ -2,19 +2,15 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent} from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createAgent, listSandboxes } from "../../api";
-import {
-  computersForEmployee,
-  computerName,
-  runtimesForComputer,
-  type ComputerOwnership,
-  type NodeLike,
-} from "../../lib/createAgent";
+import { useQueryClient } from "@tanstack/react-query";
+import { createAgent } from "../../api";
+import { runtimesForComputer } from "../../lib/createAgent";
+import { useComputerOptions } from "../../hooks/useComputerOptions";
+import { ComputerSelect } from "../ComputerSelect";
 import { EMPLOYEE_AGENTS_QUERY_KEY } from "../../hooks/useEmployeeAgents";
 import { agentLabel } from "../../lib/plan";
 import { AGENT_NAMES, AGENT_ROLE_OPTIONS } from "../../types";
-import type { AgentName, AgentRole, EmployeeAgent, SandboxRecord } from "../../types";
+import type { AgentName, AgentRole, EmployeeAgent } from "../../types";
 import { AgentMark } from "../AgentMark";
 import { PresetAvatarGrid } from "../PresetAvatarGrid";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
@@ -32,7 +28,6 @@ import {
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   ICON,
-  nodeOwnershipIcon,
 } from "../icons";
 import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 import { Alert } from "@/components/ui/alert";
@@ -43,48 +38,6 @@ interface CreateAgentDialogProps {
   employeeId: string;
   /** Fires once the agent exists on the backend, so the caller can select it right away. */
   onCreated: (agent: EmployeeAgent) => void;
-}
-
-/** GET /sandboxes carries workspaceId (the host machine id) alongside the
- *  fields relay-core's SandboxRecord already types — see
- *  core/computer_identity.py's computer_id() on the backend. */
-type SandboxWithWorkspace = SandboxRecord & { workspaceId?: string };
-
-function ComputerOptionLabel({
-  kindLabel,
-  label,
-  ownership,
-}: {
-  kindLabel: string;
-  label: string;
-  ownership: ComputerOwnership;
-}) {
-  const ComputerIcon = nodeOwnershipIcon(ownership);
-  return (
-    <span className="create-agent-computer-option">
-      <ComputerIcon size={ICON.sm} aria-hidden="true" />
-      <span className="create-agent-computer-name" translate="no">{label}</span>
-      <span className="create-agent-computer-kind">{kindLabel}</span>
-    </span>
-  );
-}
-
-/** Maps a daemon node onto the identity shape createAgent.ts operates on.
- *  `sandbox.agents` is a status-dict keyed by every possible runtime kind
- *  (ready/failed/unknown), not a list of what's installed, so only
- *  `status === "ready"` entries are surfaced as supportedAgents. */
-function toNodeLike(sandbox: SandboxWithWorkspace): NodeLike {
-  const readyRuntimes = Object.entries(sandbox.agents ?? {})
-    .filter(([, status]) => status === "ready")
-    .map(([kind]) => kind);
-  return {
-    id: sandbox.id,
-    employeeId: sandbox.employeeId,
-    workspaceId: sandbox.workspaceId,
-    managedNodeId: sandbox.managedNodeId,
-    supportedAgents: readyRuntimes,
-    disabledAgents: sandbox.disabledAgents,
-  };
 }
 
 /**
@@ -107,27 +60,8 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const runtimeTriggerRef = useRef<HTMLButtonElement>(null);
   const roleTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const sandboxesQuery = useQuery({
-    queryKey: ["create-agent", "sandboxes"],
-    queryFn: ({ signal }: { signal: AbortSignal }) => listSandboxes(undefined, signal),
-    enabled: open,
-  });
-  const sandboxes = useMemo(
-    () => (sandboxesQuery.data?.sandboxes ?? []) as SandboxWithWorkspace[],
-    [sandboxesQuery.data],
-  );
-  const nodeLikes = useMemo(() => sandboxes.map(toNodeLike), [sandboxes]);
-
-  const computerOptions = useMemo(() => {
-    return computersForEmployee(nodeLikes, employeeId).map((group) => {
-      const primary = sandboxes.find((sandbox) => group.nodes.some((node) => node.id === sandbox.id));
-      return {
-        computerId: group.computerId,
-        ownership: group.ownership,
-        label: primary ? computerName(primary) : group.computerId,
-      };
-    });
-  }, [nodeLikes, sandboxes, employeeId]);
+  const computers = useComputerOptions(employeeId, open);
+  const { nodeLikes, options: computerOptions } = computers;
 
   const [computerId, setComputerId] = useState("");
   const [executorKind, setExecutorKind] = useState<AgentName | "">("");
@@ -198,7 +132,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
 
   // While the computer list is still loading the select is disabled; say so
   // instead of showing the same placeholder as the empty selection state.
-  const computerPlaceholder = sandboxesQuery.isLoading
+  const computerPlaceholder = computers.isLoading
     ? t("admin.loading")
     : t("agents_page.create_computer_placeholder");
 
@@ -268,49 +202,22 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
             error={fieldErrors.computerId}
             errorId="create-agent-computer-error"
           >
-            <Select
-              value={computerId || null}
-              onValueChange={(value) => {
-                setComputerId(value ?? "");
+            <ComputerSelect
+              ref={computerTriggerRef}
+              initialFocus
+              options={computerOptions}
+              value={computerId}
+              onChange={(value) => {
+                setComputerId(value);
                 clearFieldError("computerId");
               }}
-              disabled={isBusy || sandboxesQuery.isLoading || computerOptions.length === 0}
-            >
-              <SelectTrigger
-                ref={computerTriggerRef}
-                data-modal-initial-focus
-                className="w-full"
-                aria-labelledby={computerLabelId}
-                aria-invalid={Boolean(fieldErrors.computerId) || undefined}
-                aria-describedby={fieldErrors.computerId ? "create-agent-computer-error" : undefined}
-              >
-                <SelectValue placeholder={computerPlaceholder}>
-                  {(value: string | null) => {
-                    const selected = computerOptions.find((option) => option.computerId === value);
-                    if (!selected) return computerPlaceholder;
-                    return (
-                      <ComputerOptionLabel
-                        kindLabel={t(`admin.v2.node_ownership_${selected.ownership}`)}
-                        label={selected.label}
-                        ownership={selected.ownership}
-                      />
-                    );
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {computerOptions.map((option) => (
-                  <SelectItem key={option.computerId} value={option.computerId}>
-                    <ComputerOptionLabel
-                      kindLabel={t(`admin.v2.node_ownership_${option.ownership}`)}
-                      label={option.label}
-                      ownership={option.ownership}
-                    />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {!sandboxesQuery.isLoading && computerOptions.length === 0 ? (
+              placeholder={computerPlaceholder}
+              disabled={isBusy || computers.isLoading || computerOptions.length === 0}
+              labelledBy={computerLabelId}
+              error={Boolean(fieldErrors.computerId)}
+              errorId="create-agent-computer-error"
+            />
+            {!computers.isLoading && computerOptions.length === 0 ? (
               <p className="adm-form-hint">{t("agents_page.create_computer_empty")}</p>
             ) : null}
           </Field>

@@ -764,7 +764,16 @@ def test_project_task_rejects_agents_and_teams_on_another_computer(monkeypatch) 
         stranger = _agent(client, app, computer_b, "Stranger", "claude")
         _login_alice(client)
         project = _project(client, computer_a, lead)
-        split_team = _team(client, lead, stranger, name="Split")
+        # The team API refuses a split roster now; a legacy split team can
+        # still exist in storage, and project admission must keep refusing it.
+        split_team = app.state.team_store.create_team(
+            lead["supervisorEmployeeId"],
+            {
+                "name": "Split",
+                "leadAgentId": lead["id"],
+                "memberAgentIds": [lead["id"], stranger["id"]],
+            },
+        )
         task_id = client.post(
             "/api/v1/tasks",
             json={"title": "Pinned task", "projectId": project["id"]},
