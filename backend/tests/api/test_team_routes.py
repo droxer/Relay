@@ -3313,7 +3313,8 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
 
 
 @pytest.mark.parametrize("new_thread", [False, True])
-def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
+@pytest.mark.parametrize("disabled_member", [None, "lead", "builder", "reviewer"])
+def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled_member) -> None:
     from relay.sessions.controller import SessionController
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3345,6 +3346,12 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
             workspace_layout="thread",
         )
         session = controller.create_session("Fix it")
+        if disabled_member:
+            disabled = {"lead": lead, "builder": builder, "reviewer": reviewer}[disabled_member]
+            changed = client.patch(
+                f"/api/v1/admin/agents/{disabled['id']}", json={"enabled": False},
+            )
+            assert changed.status_code == 200, changed.text
         _login(client, "alice")
 
         response = client.post(
@@ -3352,6 +3359,11 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread) -> None:
             json={"taskGoal": "Fix it", "teamId": team["id"], "style": "build_review"}
             if new_thread else {"text": "Fix it"},
         )
+        if disabled_member in ("builder", "reviewer"):
+            assert response.status_code == 409, response.text
+            assert "agent_disabled" in response.text
+            assert app.state.registry.take_commands(node_id, "node_token") == []
+            return
         assert response.status_code == 202, response.text
         if new_thread:
             session = response.json()

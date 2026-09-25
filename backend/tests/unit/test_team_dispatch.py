@@ -317,6 +317,34 @@ def test_pipeline_runs_members_in_role_order_and_last_synthesizes() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("role", "kind", "brief_start"),
+    [
+        ("implementer", "implementation", "Implement"),
+        ("fixer", "repair", "Fix confirmed defects"),
+        ("tester", "verification", "Validate"),
+        ("reviewer", "review", "Review the accumulated"),
+    ],
+)
+def test_pipeline_result_owner_keeps_its_specialist_work(role, kind, brief_start):
+    from relay.collaboration.service import compile_assignment_work_graph
+
+    roster = [_agent("lead", "codex", defaultRole="planner"),
+              _agent("specialist", "claude", defaultRole=role)]
+    team = _team(memberAgentIds=["lead", "specialist"])
+    assignments = team_member_assignments(roster, team=team, style="pipeline")
+    compiled = compile_assignment_work_graph(
+        [{**item, "assignmentId": item["agentId"]} for item in assignments],
+        purpose="accomplish", team_snapshot=assignments[0]["teamSnapshot"],
+    )
+    final = compiled[-1]
+    assert final["brief"].startswith(brief_start)
+    assert final["workKind"] == kind
+    assert final["synthesizer"] is True
+    assert "final result" in final["brief"]
+    assert final["dependsOnWorkItemIds"] == ["lead"]
+
+
 def test_one_member_build_review_falls_back_to_solo_and_records_it() -> None:
     team = _team(memberAgentIds=["lead"])
     assignments = team_member_assignments(
