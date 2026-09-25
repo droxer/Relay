@@ -113,10 +113,10 @@ def team_agents(
     team_store: Any,
     agent_store: Any,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Resolve a team to its ordered, dispatchable members. Lead first.
+    """Resolve an authorized team roster, lead first.
 
-    The single validation point for "can this team run work right now",
-    shared by task dispatch and by thread continuation.
+    Member availability is checked by resolve_agent_assignments after the
+    round selects its participants. An unused member must not block dispatch.
     """
     team = team_store.get_team(team_id) if team_store and team_id else None
     if not team or team.get("deletedAt"):
@@ -133,12 +133,6 @@ def team_agents(
     agents = [agent_store.get_agent(member) for member in ordered_member_ids]
     if any(not agent or agent.get("deletedAt") for agent in agents):
         raise TeamDispatchError("team_invalid", permanent=True)
-    if any(
-        not agent.get("enabled", True)
-        and (agent["id"] == lead or (team.get("memberConfigs", {}).get(agent["id"], {}).get("participation") != "on_request"))
-        for agent in agents
-    ):
-        raise TeamDispatchError("team_disabled", permanent=True)
     return team, agents
 
 
@@ -262,7 +256,13 @@ def _styled_assignments(
                 agent.get("defaultRole") or "implementer",
                 "action",
                 index == last,
-                _member_brief(agent.get("defaultRole"), False, index == last),
+                _member_brief(agent.get("defaultRole"), False)
+                + (
+                    " After completing your own contribution, "
+                    "produce one coherent final result for the user, including "
+                    "delivered changes, validation results, and remaining limitations."
+                    if index == last else ""
+                ),
             )
             for index, agent in enumerate(ordered)
         ]
