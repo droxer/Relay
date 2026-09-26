@@ -7,6 +7,7 @@ import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentLabel } from "../lib/plan";
 import {
   orderedProjectMembers,
+  DEFAULT_PROJECT_PAGE_TAB,
   parseProjectPageTab,
   projectMemberState,
   projectPageActions,
@@ -345,9 +346,9 @@ export function ProjectWorkspacePage({
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
   const [pageTab, setPageTab] = useUrlSearchState(
     "tab",
-    "tasks" as ProjectPageTab,
+    DEFAULT_PROJECT_PAGE_TAB,
     parseProjectPageTab,
-    (value) => value === "tasks" ? null : value,
+    (value) => value === DEFAULT_PROJECT_PAGE_TAB ? null : value,
     "push",
   );
   // Accept legacy project task links and redirect them to the Tasks destination.

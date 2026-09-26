@@ -9,7 +9,11 @@ export type ProjectPageTab = "tasks" | "profile" | "workspace";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 export type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["tasks", "profile", "workspace"];
+/* The crew leads: a project opens on who works in it (the Agents tab, id
+   "profile"), and the strip lists that tab first so the default sits where
+   the eye starts. */
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["profile", "tasks", "workspace"];
+export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "profile";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */
 export const MAX_PROJECT_MEMBERS = 32;
@@ -43,7 +47,7 @@ export function agentsEligibleForProject(
 export function parseProjectPageTab(value: string | null): ProjectPageTab {
   return PROJECT_PAGE_TABS.includes(value as ProjectPageTab)
     ? value as ProjectPageTab
-    : "tasks";
+    : DEFAULT_PROJECT_PAGE_TAB;
 }
 
 export function orderedProjectMembers(project: ProjectRecord): ProjectMember[] {
