@@ -42,7 +42,8 @@ interface BacklogBoardProps {
   cardProps: (task: RelayTaskListItem) => CardProps;
   /** The single commit path; it owns the transition rules and refusals. */
   onMoveTask: (task: RelayTaskListItem, status: TaskWorkflowStage) => void;
-  onCreateInLane: (status: TaskWorkflowStage) => void;
+  /** Omitted where nothing may be created (a read-only project). */
+  onCreateInLane?: (status: TaskWorkflowStage) => void;
   onLanePageChange: (status: TaskWorkflowStage, page: number) => void;
 }
 
@@ -157,7 +158,7 @@ function BoardLanes({ value, lanes, laneTotals, cardProps, onCreateInLane, onLan
                  card keeps its tab stop and "sortable" role description. */
               <KanbanItem key={task.id} value={task.id} asHandle role="article" render={<BacklogTaskCard {...cardProps(task)} />} />
             ))}
-            {status === "backlog" || status === "assigned" ? (
+            {onCreateInLane && (status === "backlog" || status === "assigned") ? (
               <Button variant="ghost" type="button" className="backlog-lane-add" onClick={() => onCreateInLane(status)}>
                 <ActionAdd size={ICON.sm} />
                 <span>{t("backlog.new_task")}</span>

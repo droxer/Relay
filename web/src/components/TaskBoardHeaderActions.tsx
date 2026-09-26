@@ -19,15 +19,17 @@ export function TaskBoardHeaderActions({
 }: {
   refreshLabel: string;
   createLabel: string;
-  isRefreshing: boolean;
-  onRefresh: () => void;
-  onCreate: () => void;
+  isRefreshing?: boolean;
+  /** Omitted where the shell already keeps the list fresh. */
+  onRefresh?: () => void;
+  /** Omitted where nothing may be created (a read-only project). */
+  onCreate?: () => void;
   leading?: ReactNode;
 }) {
   return (
     <>
       {leading}
-      <Button
+      {onRefresh ? <Button
         type="button"
         variant="ghost"
         // Same ghost icon family as the create plus beside it — a bordered
@@ -38,8 +40,8 @@ export function TaskBoardHeaderActions({
         onClick={onRefresh}
       >
         <NavRefresh size={ICON.md} />
-      </Button>
-      <Button
+      </Button> : null}
+      {onCreate ? <Button
         type="button"
         variant="ghost"
         // The shared list-header create affordance, same as the
@@ -50,7 +52,7 @@ export function TaskBoardHeaderActions({
         onClick={onCreate}
       >
         <ActionAdd size={ICON.md} />
-      </Button>
+      </Button> : null}
     </>
   );
 }

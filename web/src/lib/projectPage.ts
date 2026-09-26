@@ -5,15 +5,15 @@ import type {
   WorkspaceBriefResponse,
 } from "../types.js";
 
-export type ProjectPageTab = "tasks" | "profile" | "workspace";
+export type ProjectPageTab = "general" | "tasks" | "workspace";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 export type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
-/* The crew leads: a project opens on who works in it (the Agents tab, id
-   "profile"), and the strip lists that tab first so the default sits where
-   the eye starts. */
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["profile", "tasks", "workspace"];
-export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "profile";
+/* A project opens on General — what it is for and who works in it — and the
+   strip lists that tab first so the default sits where the eye starts. The
+   retired "profile" id (the old Agents tab) is unknown, so it lands here. */
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["general", "tasks", "workspace"];
+export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "general";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */
 export const MAX_PROJECT_MEMBERS = 32;

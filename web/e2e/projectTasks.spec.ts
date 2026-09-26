@@ -1,101 +1,84 @@
 import { expect, test } from "@playwright/test";
 
 for (const mobile of [false, true]) {
-  test(`project task lifecycle and layout (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+  test(`project general and tasks board (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
-    const project = { id: "launch", name: "Autumn launch", ownerEmployeeId: "u", computerId: "c", enabled: true,
+    const project = { id: "launch", name: "Autumn launch", description: "Ship the autumn release: landing page, pricing, and notes.",
+      ownerEmployeeId: "u", computerId: "c", enabled: true,
       members: [], leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
     const tasks = ["backlog", "assigned", "running", "review", "done", "blocked"].map((status, i) => ({
-      id: `task-${i}`, title: ["Write the release brief", "Polish onboarding", "Build the launch page", "Review final copy", "Choose the release date", "Resolve the deployment issue"][i],
+      id: `task_${i}abcdef`, title: ["Write the release brief", "Polish onboarding", "Build the launch page", "Review final copy", "Choose the release date", "Resolve the deployment issue"][i],
       projectId: "launch", status, workflowStage: status === "blocked" ? "running" : status,
       description: "", priority: "normal", isRoutine: false, routineEnabled: false,
       linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp,
     }));
-    const requests: string[] = [];
+    // Another project's task must never reach this project's board.
+    const elsewhere = { ...tasks[0], id: "task_elsewhere", title: "Another project's task", projectId: "other" };
+    const created: Array<Record<string, unknown>> = [];
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      requests.push(route.request().url());
-
-      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks, sandboxes: [], skills: [] };
+      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [...tasks, elsewhere], sandboxes: [], skills: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
       if (path.endsWith("/tasks") && route.request().method() === "POST") {
         const input = route.request().postDataJSON();
-        expect(input.projectId).toBe("launch");
-        const created = { ...tasks[0], ...input, id: "created", activity: [], events: [] };
-        tasks.push(created); body = created;
+        created.push(input);
+        const task = { ...tasks[0], ...input, id: "task_created1", activity: [], events: [] };
+        tasks.push(task); body = task;
       }
       const detail = tasks.find((task) => path.endsWith(`/tasks/${task.id}`));
       if (detail) body = { ...detail, activity: [], events: [] };
       if (path.endsWith("/events")) body = { events: [] };
-      if (path.endsWith("/runs")) body = { runs: [] };
+      if (path.endsWith("/runs")) body = { taskId: "", runs: [] };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
+
+    // General leads: the brief, then the crew, beside the identity rail.
     await page.goto("/projects/launch");
-    await expect(page.getByRole("tab", { name: "Tasks", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("button", { name: "Write the release brief" })).toBeVisible();
-    await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
-    await expect(page.getByRole("tab", { name: "Activities", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "General", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("heading", { name: "Description", exact: true })).toBeVisible();
+    await expect(page.getByText(project.description)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
     await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
-    await expect(page.locator('[data-nav="backlog"]')).not.toHaveAttribute("aria-current", "page");
-    await page.getByRole("textbox", { name: "New task", exact: true }).fill("Prepare release notes");
-    await page.getByRole("button", { name: "New task", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Prepare release notes" })).toBeVisible();
-    await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "7");
-    await expect(page.getByRole("textbox", { name: "New task", exact: true })).toHaveValue("");
-    const panel = page.locator(".project-tasks-panel");
-    expect(await panel.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
-    const finalCard = page.getByRole("button", { name: "Choose the release date" });
-    await finalCard.scrollIntoViewIfNeeded();
-    await expect(finalCard).toBeInViewport();
-    await panel.evaluate((el) => { el.scrollTop = 0; });
-    await page.screenshot({ path: `/tmp/relay-project-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    await page.getByRole("tab", { name: "Agents", exact: true }).click();
-    await expect(page.getByRole("tab", { name: "Agents", exact: true })).toHaveAttribute("aria-selected", "true");
-    // Global creation from a project section returns to that project's tasks.
-    await page.keyboard.press("c");
-    await expect(page.getByRole("tab", { name: "Tasks", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("textbox", { name: "New task", exact: true })).toBeFocused();
-    await page.getByRole("button", { name: "Prepare release notes", exact: true }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-general-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
+
+    // Tasks is the backlog board itself, fixed to this project.
+    await page.getByRole("tab", { name: "Tasks", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?tab=tasks$/);
+    const board = page.locator(".backlog-page--project");
+    await expect(board).toBeVisible();
+    await expect(board.locator(".sec-rail")).toHaveCount(0);
+    await expect(board.getByRole("link", { name: "Write the release brief", exact: true })).toBeVisible();
+    await expect(board.getByText("Another project's task")).toHaveCount(0);
+    await board.getByRole("button", { name: "Board view", exact: true }).click();
+    await expect(board.locator(".backlog-stats")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-tasks-board-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
+    await board.getByRole("button", { name: "List view", exact: true }).click();
+
+    // A new task is created into this project without choosing one.
+    await board.getByRole("button", { name: "New task", exact: true }).first().click();
+    const form = page.getByRole("dialog", { name: "New task", exact: true });
+    await form.getByRole("textbox", { name: "Title", exact: true }).fill("Prepare release notes");
+    await form.getByRole("button", { name: "Create task", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    expect(created[0]).toMatchObject({ title: "Prepare release notes", projectId: "launch" });
+
+    // A record opens as a drawer over the project, not on the backlog route.
+    await board.getByRole("link", { name: "Write the release brief", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef$/);
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Definition", exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/\/backlog\/created\?project=launch/);
-    await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Prepare release notes", exact: true })).toBeInViewport();
-    const definitionTab = page.getByRole("tab", { name: "Definition", exact: true });
-    expect((await definitionTab.boundingBox())?.width).toBeGreaterThan(60);
-    await definitionTab.click();
-    await expect(page.getByRole("tab", { name: "Definition", exact: true })).toHaveAttribute("aria-selected", "true");
-    await page.getByRole("tab", { name: "Activity", exact: true }).click();
-    if (mobile) await expect(page.locator(".task-project-nav-mobile select")).toHaveValue("launch");
-    else {
-      await page.locator(".task-project-nav").getByRole("link", { name: "Write the release brief", exact: true }).click();
-      await expect(page).toHaveURL(/\/backlog\/task-0\?project=launch/);
-    }
-    await page.screenshot({ path: `/tmp/relay-grouped-tasks-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    if (mobile) await page.locator(".task-project-nav-mobile select").selectOption("");
-    else await page.locator(".task-project-nav").getByRole("link", { name: "All tasks", exact: true }).click();
-    await expect(page).toHaveURL(/\/backlog$/);
-    await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Global project task");
-    await dialog.getByRole("button", { name: "Create task", exact: true }).click();
-    await expect(dialog.getByText("Choose a project before creating a task.")).toBeVisible();
-    await dialog.getByRole("combobox", { name: "Projects", exact: true }).click();
-    await page.getByRole("option", { name: "Autumn launch", exact: true }).click();
-    await dialog.getByRole("button", { name: "Create task", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(page.locator("#backlog-panel").getByRole("link", { name: "Global project task", exact: true })).toBeVisible();
-    await page.goto("/projects/launch?task=task-0&recordTab=files");
-    await expect(page).toHaveURL((url) => url.pathname === "/backlog/task-0" && url.searchParams.get("project") === "launch" && url.searchParams.get("tab") === "files");
+    await page.getByRole("tab", { name: "Files", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=files$/);
+    // The modal drawer hides the page beneath it; the board's tab stays chosen.
+    await expect(page.getByRole("tab", { name: "Tasks", exact: true, includeHidden: true })).toHaveAttribute("aria-selected", "true");
+    await page.screenshot({ path: `test-results/project-task-record-${mobile ? "mobile" : "desktop"}.png` });
+
+    // A deep link to a record's tab lands on the same drawer.
+    await page.goto("/projects/launch?task=task_0abcdef&recordTab=files");
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=files$/);
     await expect(page.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
-    await page.goBack();
-    await expect(page).toHaveURL(/\/backlog$/);
-    await page.locator('[data-nav="projects"]').click();
-    await expect(page).toHaveURL(/\/projects$/);
-    await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
-    expect(requests.some((url) => url.includes("workspace/brief"))).toBe(false);
   });
 }
 

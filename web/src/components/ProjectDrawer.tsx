@@ -15,13 +15,17 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function projectDraftKey(name: string, computerId: string): string {
-  return JSON.stringify({ name, computerId });
+/** Backend cap on a project's description (PROJECT_DESCRIPTION_MAX_LENGTH). */
+const PROJECT_DESCRIPTION_MAX_LENGTH = 4000;
+
+function projectDraftKey(name: string, description: string, computerId: string): string {
+  return JSON.stringify({ name, description, computerId });
 }
 
-/* Project settings: the record's identity (name, computer) and its danger
+/* Project settings: the record's identity (name, description, computer) and its danger
    zone. The crew is managed on the project profile page itself — adding and
    editing members lives next to the member cards it changes, not in setup. */
 export function ProjectDrawer({
@@ -45,6 +49,7 @@ export function ProjectDrawer({
   const { confirm } = useDialogs();
   const { createProjectMutation, updateProjectMutation, archiveProjectMutation, deleteProjectMutation } = useRelayMutations();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [computerId, setComputerId] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [computerError, setComputerError] = useState<string | null>(null);
@@ -52,7 +57,7 @@ export function ProjectDrawer({
   const computerTriggerRef = useRef<HTMLButtonElement>(null);
   const computerLabelId = useId();
   const initializedKeyRef = useRef<string | null>(null);
-  const initialDraftKeyRef = useRef(projectDraftKey("", ""));
+  const initialDraftKeyRef = useRef(projectDraftKey("", "", ""));
   const initialProjectRef = useRef(project);
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
   const projectComputers = useMemo(
@@ -86,21 +91,23 @@ export function ProjectDrawer({
     projectSave.resetError();
     if (!project) {
       reset();
-      initialDraftKeyRef.current = projectDraftKey("", "");
+      initialDraftKeyRef.current = projectDraftKey("", "", "");
       return;
     }
     setName(project.name);
+    setDescription(project.description ?? "");
     setComputerId(projectRuntimeNodeId);
     setNameError(null);
     setComputerError(null);
-    initialDraftKeyRef.current = projectDraftKey(project.name, projectRuntimeNodeId);
+    initialDraftKeyRef.current = projectDraftKey(project.name, project.description ?? "", projectRuntimeNodeId);
   }, [open, project, projectRuntimeNodeId]);
   const hasUnsavedChanges = initializedKeyRef.current !== null
-    && projectDraftKey(name, computerId) !== initialDraftKeyRef.current;
+    && projectDraftKey(name, description, computerId) !== initialDraftKeyRef.current;
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
 
   function reset() {
     setName("");
+    setDescription("");
     setComputerId("");
     setNameError(null);
     setComputerError(null);
@@ -124,13 +131,21 @@ export function ProjectDrawer({
       computerTriggerRef.current?.focus();
       return;
     }
+    /* The brief rides the request only when it says something new, so a
+       rename never rewrites a description it did not touch. */
+    const nextDescription = description.trim();
+    const base = initialProjectRef.current ?? project;
+    const descriptionChanged = nextDescription !== (base?.description ?? "").trim();
     try {
       const result = project
-        ? await projectSave.save(initialProjectRef.current ?? project, {
-            expectedVersion: (initialProjectRef.current ?? project).version, name: name.trim(),
+        ? await projectSave.save(base ?? project, {
+            expectedVersion: (base ?? project).version,
+            name: name.trim(),
+            ...(descriptionChanged ? { description: nextDescription } : {}),
           })
         : await createProjectMutation.mutateAsync({
             name: name.trim(),
+            ...(nextDescription ? { description: nextDescription } : {}),
             daemonNodeId: computerId,
             leadAgentId: null,
             members: [],
@@ -250,6 +265,17 @@ export function ProjectDrawer({
             )}
           </Field>
         </div>
+
+        <Field label={t("project.description")} hint={t("project.description_hint")}>
+          <Textarea
+            name="project-description"
+            rows={4}
+            maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
+            placeholder={t("project.description_placeholder")}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </Field>
 
         {project ? (
           <div className="adm-drawer-section">

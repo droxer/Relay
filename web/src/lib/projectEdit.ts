@@ -9,6 +9,7 @@ export interface ProjectEditConflict {
 
 export class ProjectEditError extends Error {}
 
+const projectFields = ["name", "description", "leadAgentId", "enabled"] as const;
 const memberFields = ["role", "responsibilities", "instructions", "enabled"] as const;
 const labels: Record<string, string> = {
   leadAgentId: "member_make_lead", enabled: "member_enabled",
@@ -46,9 +47,12 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
     }
     return merged;
   }
-  const desiredProject = { ...base, ...input };
-  const mergedProject = mergeFields(base, desiredProject as ProjectRecord, latest, ["name", "leadAgentId", "enabled"]);
-  for (const field of ["name", "leadAgentId", "enabled"] as const) {
+  /* Projects created before descriptions existed carry none; read that as
+     empty so an untouched brief is never mistaken for an edit. */
+  const withDescription = (project: ProjectRecord): ProjectRecord => ({ ...project, description: project.description ?? "" });
+  const desiredProject = withDescription({ ...base, ...input } as ProjectRecord);
+  const mergedProject = mergeFields(withDescription(base), desiredProject, withDescription(latest), projectFields);
+  for (const field of projectFields) {
     if (field in input) Object.assign(patch, { [field]: mergedProject[field] });
   }
   if (input.members) {
