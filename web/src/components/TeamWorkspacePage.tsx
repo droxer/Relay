@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { deleteTeamProfileImage, getWorkspaceBrief, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useComputerOptions } from "../hooks/useComputerOptions";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
@@ -15,9 +16,12 @@ import { teamAvailability } from "../lib/taskAssignment";
 import { teamContractChanged, teamMutationInput } from "../lib/teamForm";
 import type { AgentTeam } from "../types";
 import {
+  ActionCalendar,
   ActionEdit,
+  ActionRetry,
   AdminDelete,
   ICON,
+  nodeOwnershipIcon,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { IdentityMark } from "./IdentityMark";
@@ -32,6 +36,7 @@ import { StatusPill, TonePill } from "./StatusPill";
 import { truncateId } from "../lib/adminHelpers";
 import { formatRelativeTime } from "./admin/helpers";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
@@ -83,6 +88,13 @@ function TeamProfile({
   // placed there (plus current members, so a legacy split roster can be
   // trimmed rather than hidden).
   const computerId = teamComputerId(team, agents);
+  const { options: computers } = useComputerOptions(team.ownerEmployeeId, true);
+  const computer = computers.find((option) => option.computerId === computerId);
+  const ComputerIcon = nodeOwnershipIcon(computer?.ownership ?? "pending");
+  const computerLabel = computer?.label || agents
+    .flatMap((agent) => agent.placements)
+    .find((placement) => placement.computerId === computerId && placement.desiredState !== "removed")
+    ?.nodeDisplayName || computerId;
   const computerAgents = useMemo(
     () => agentsForTeamComputer(agents, computerId, memberIds),
     [agents, computerId, memberIds],
@@ -273,8 +285,8 @@ function TeamProfile({
     <div className="workspace-profile">
       {/* Same dossier grammar as the agent record: a document column holding
           the thing you can change (the roster), an identity rail beside it,
-          and record-wide management below both. Facts that only name the
-          record (status, member count, id) live in the RecordBand above.
+          and record-wide management below both. The header holds the team
+          ID and availability; the rail holds its identity and timestamps.
 
           Unlike the agent record, a team's document is a roster — a few rows,
           not an instructions essay — so the grid is stretched to the pane and
@@ -452,8 +464,28 @@ function TeamProfile({
             )}
           </div>
 
-          {/* Created/updated moved to the band — the rail holds only the
-              things you can change. */}
+          <div className="workspace-dossier-field">
+            <span className="workspace-dossier-field-label">{t("teams.computer")}</span>
+            {computerLabel ? (
+              <Badge className="max-w-full" title={computerLabel}>
+                <ComputerIcon size={ICON.xs} className="shrink-0" aria-hidden="true" />
+                <span className="truncate" translate="no">{computerLabel}</span>
+              </Badge>
+            ) : <span className="workspace-dossier-name-value">—</span>}
+          </div>
+
+          {/* Read-only coordinates, not editable fields: a row of quiet
+              chips under a hairline, each carrying its own glyph. */}
+          <div className="workspace-dossier-stamp workspace-dossier-stamps">
+            <Badge render={<time dateTime={team.createdAt} />} title={team.createdAt}>
+              <ActionCalendar size={ICON.xs} aria-hidden="true" />
+              {t("admin.v2.agent_meta_created", { time: formatRelativeTime(team.createdAt, t) })}
+            </Badge>
+            <Badge render={<time dateTime={team.updatedAt} />} title={team.updatedAt}>
+              <ActionRetry size={ICON.xs} aria-hidden="true" />
+              {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(team.updatedAt, t) })}
+            </Badge>
+          </div>
         </aside>
 
         {/* Management spans both columns — it acts on the whole record, not
@@ -497,16 +529,9 @@ export function TeamWorkspacePage({
     enabled: pageTab !== "profile",
     refetchInterval: pageTab === "activities" ? TEAM_BRIEF_POLL_MS : false,
   });
-  /* The band is the record's read-only spine, identical on both tabs —
-     the same rule the agent record follows: facts live here and no tab panel
-     may restate them. Every field comes off the team record itself.
-
-     Member count and lead are deliberately NOT here: the roster on the
-     profile tab already names every member and marks the lead, so a band
-     cell would be the same fact one row higher. The timestamps take those
-     slots instead — they are read-only record coordinates, which is exactly
-     what the band is for, and the rail is reserved for editable things. */
-  const bandFacts: RecordFact[] = [
+  /* Availability leads — it is the fact you came to check; the id is a
+     reference coordinate and trails. */
+  const headerFacts: RecordFact[] = [
     {
       key: "availability",
       label: t("admin.v2.agent_availability_label"),
@@ -515,20 +540,11 @@ export function TeamWorkspacePage({
         : <StatusPill value={teamAvailability(team)} />,
     },
     {
-      key: "created",
-      label: t("workspace.band_created"),
-      value: formatRelativeTime(team.createdAt, t),
-    },
-    {
-      key: "updated",
-      label: t("workspace.band_updated"),
-      value: formatRelativeTime(team.updatedAt, t),
-    },
-    {
       key: "id",
       label: t("workspace.band_team_id"),
-      value: truncateId(team.id),
-      technical: true,
+      // A chip like its availability neighbour, so the title line reads as
+      // two tagged facts instead of a pill followed by loose text.
+      value: <Badge className="code" translate="no">{truncateId(team.id)}</Badge>,
       title: team.id,
     },
   ];
@@ -558,6 +574,7 @@ export function TeamWorkspacePage({
         )}
         titleVariant="record"
         titleAs="h2"
+        facts={<RecordBand facts={headerFacts} label={t("workspace.band_team_label")} variant="title" />}
         layout="stacked"
         toolbar={(
           <TabsList className="workspace-page-tabs" aria-label={t("teams.sections")}>
@@ -574,7 +591,6 @@ export function TeamWorkspacePage({
           </TabsList>
         )}
       />
-      <RecordBand facts={bandFacts} label={t("workspace.band_team_label")} />
 
       {/* One body shell for both tabs, matching the agent record — it
           owns the container query the profile dossier grid reads. */}

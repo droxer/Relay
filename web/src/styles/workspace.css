@@ -219,6 +219,16 @@
   align-items: baseline;
 }
 
+/* A hairline between the name and its facts, so the first fact label does
+   not read as the next word of the title. Team record only: its facts share
+   the title line, while the project's (it carries header actions) always
+   wrap to a row of their own, where a leading rule points at nothing. */
+.team-workspace-page .record-band--title {
+  margin-left: var(--sp-1);
+  padding-left: var(--sp-4);
+  border-left: 0.5px solid var(--line-2);
+}
+
 .record-band--title .record-band-cell {
   flex: 0 1 auto;
   flex-direction: row;
@@ -233,6 +243,20 @@
      wraps, so the facts stay one wrapping line under it. */
   .record-band--title {
     display: flex;
+  }
+
+  /* ...and drops that grid's row rule too, which otherwise underlines the
+     first two facts of any title band with four or more (the project's).
+     Matches the grid rule's specificity so source order decides. */
+  .record-band--title .record-band-cell:nth-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  /* Wrapped under the title, a leading rule points at nothing. */
+  .team-workspace-page .record-band--title {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
   }
 }
 
@@ -532,6 +556,14 @@
   color: var(--ink-4);
   font: var(--type-body-sm);
   text-wrap: pretty;
+}
+
+/* The team rail prints its stamps as chips: they wrap between chips, never
+   inside one (the badge itself is nowrap). */
+.workspace-dossier-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
 }
 
 .workspace-dossier-admin {
