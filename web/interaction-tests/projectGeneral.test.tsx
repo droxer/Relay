@@ -57,7 +57,7 @@ it("renders the backlog board on Tasks, scoped to this project's live tasks", as
   renderPage(project());
   fireEvent.click(screen.getByRole("tab", { name: "project.tasks_tab" }));
   await waitFor(() => expect(screen.getByTestId("backlog-board")).toBeTruthy());
-  expect(board.props).toMatchObject({ variant: "project", projectId: "p", readOnly: false });
+  expect(board.props).toMatchObject({ projectId: "p", readOnly: false });
   expect((board.props?.tasks as RelayTaskListItem[]).map((item) => item.id)).toEqual(["mine"]);
 });
 

@@ -47,6 +47,13 @@ export function TaskRecordActions({
           {t("record.run_now")}
         </Button>
       ) : null}
+      {actions.includes("triage") ? (
+        /* Moving into a project happens in the edit form, where the project
+           and the assignment it unlocks are chosen together. */
+        <Button type="button" variant="default" size="cta" disabled={busy} onClick={onEdit}>
+          {t("issues.add_to_project")}
+        </Button>
+      ) : null}
       {actions.includes("retry") ? (
         <Button type="button" variant="default" size="cta" loading={busyAction === "retry"} onClick={onRun}>
           <ActionStart size={ICON.sm} />

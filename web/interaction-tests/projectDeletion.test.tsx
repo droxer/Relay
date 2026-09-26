@@ -22,7 +22,7 @@ it("does not delete when the user cancels the destructive confirmation", async (
   render(<ProjectDrawer open project={project} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
   await waitFor(() => expect(confirm).toHaveBeenCalled());
-  expect(confirm.mock.calls[0][0].message).toMatch(/tasks, routines, conversations, and artifacts/);
+  expect(confirm.mock.calls[0][0].message).toMatch(/issues, routines, conversations, and artifacts/);
   expect(remove).not.toHaveBeenCalled();
 });
 

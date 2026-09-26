@@ -64,7 +64,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Web transport boundary | `web/src/api.ts` | backend route and `web/src/types.ts` |
 | Web server-state cache | `web/src/hooks/useRelayData.ts`, `useRelayMutations.ts` | session SSE/detail hooks and cache merge helpers |
 | Web session streaming | `web/src/hooks/useSessionEvents.ts` | `lib/sessionEvents.ts`, `sessionEventMerge.ts`, `sessionPollMerge.ts` |
-| Backlog and routines | `web/src/components/BacklogPage.tsx`, `RoutinesPage.tsx` | `lib/backlog.ts`, `routine.ts`, task API contract |
+| Issues, project boards, and routines | `web/src/components/IssuesPage.tsx`, `BacklogPage.tsx`, `RoutinesPage.tsx` | `lib/issueQueues.ts`, `backlog.ts`, `routine.ts`, task API contract |
 | Managed computers | `backend/relay/services/managed_nodes.py` | managed-node routes and `packages/relay-supervisor/` |
 | Chat providers | `packages/relay-chat/src/gateway.ts`, `providers/` | backend chat routes and provider tests |
 | Database schema | table declarations under `backend/relay/persistence/` | `backend/migrations/versions/`, schema-drift tests |

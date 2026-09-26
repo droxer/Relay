@@ -4,7 +4,7 @@ import { TaskRecordActions } from "../src/components/task-record/TaskRecordActio
 import type { RelayTaskListItem } from "../src/types";
 
 const blockedTask = {
-  id: "blocked-task", title: "Retry me", description: "", status: "blocked",
+  id: "blocked-task", projectId: "project", title: "Retry me", description: "", status: "blocked",
   priority: "normal", assignedAgentId: "agent", assignedAgent: "codex",
   blockerReason: "Computer was unavailable", linkedSessionIds: [],
   createdAt: "2026-09-20T00:00:00Z", updatedAt: "2026-09-20T00:00:00Z",

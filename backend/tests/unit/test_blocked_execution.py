@@ -17,6 +17,8 @@ from relay.services.dispatch_failure import record_dispatch_failure
 from relay.services.task_dispatch import start_task_on_ready_node
 from relay.tasks import TaskScheduler
 
+from issue_projects import PROJECT_CAPABILITY, project_for
+
 
 @pytest.fixture(params=["local", "database"])
 def execution(tmp_path, request):
@@ -33,7 +35,7 @@ def execution(tmp_path, request):
     registry = DaemonNodeRegistry(
         sessions, LocalDaemonStore(tmp_path), task_store=tasks
     )
-    registry.register(
+    node = registry.register(
         {
             "sandboxId": "node",
             "employeeId": "alice",
@@ -41,7 +43,7 @@ def execution(tmp_path, request):
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["task-workspaces", "thread-workspaces"],
+            "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
             "status": "ready",
         },
         "ui_token",
@@ -60,12 +62,16 @@ def execution(tmp_path, request):
     backend = ServerDaemonNodeBackend(
         registry, employee_agent_store=agents, agent_placement_store=placements
     )
+    projects = DatabaseProjectStore(f"sqlite:///{tmp_path}/projects.db", create_schema=True)
+    project = project_for(projects, "alice", node, [agent["id"]])
     task = tasks.create_task(
         {
             "title": "Deliver work",
             "assignedAgent": "codex",
             "assignedAgentId": agent["id"],
             "assigneeEmployeeId": "alice",
+            "ownerEmployeeId": "alice",
+            "projectId": project["id"],
             "status": "assigned",
         }
     )
@@ -77,7 +83,7 @@ def execution(tmp_path, request):
         agent_store=agents,
         agent_placement_store=placements,
         team_store=None,
-        project_store=None,
+        project_store=projects,
         managed_node_store=None,
     )
     return ctx, task, agent
@@ -101,16 +107,20 @@ def test_missing_assignment_records_actionable_blocker(
     ctx, original, _ = execution
     # Keep only the task under test in the dispatch queue.
     ctx.task_store.update_task(original["id"], {"status": "backlog"})
-    ctx.project_store = DatabaseProjectStore(
-        f"sqlite:///{tmp_path}/projects.db", create_schema=True
+    # A missing team is found inside a real project (work outside one never
+    # dispatches); a missing project is simply a project id nobody stored.
+    fields = (
+        {"projectId": original["projectId"], "assignedTeamId": str(uuid4())}
+        if assignment == "team"
+        else {"projectId": str(uuid4())}
     )
-    field = "assignedTeamId" if assignment == "team" else "projectId"
     task = ctx.task_store.create_task(
         {
             "title": "Missing assignment",
             "status": "assigned",
             "assigneeEmployeeId": "alice",
-            field: str(uuid4()),
+            "ownerEmployeeId": "alice",
+            **fields,
         }
     )
     if source == "manual":

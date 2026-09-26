@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const mobile of [false, true]) {
-  test(`task status list and execution drawer (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+  test(`issue queues and execution drawer (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
     const projects = ["Launch", "Support", "Empty"].map((name) => ({ id: name.toLowerCase(), name, enabled: true, members: [], ownerEmployeeId: "u", computerId: "c", createdAt: stamp, updatedAt: stamp }));
@@ -19,15 +19,15 @@ for (const mobile of [false, true]) {
       if (path.endsWith("/runs")) body = { runs: [] };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
-    await page.goto("/backlog");
+    await page.goto("/issues");
     const panel = page.locator("#backlog-panel");
     await expect(panel.getByRole("group", { name: "Backlog metrics" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Ship the release", exact: true })).toHaveCount(1);
     await expect(panel.getByRole("columnheader", { name: "Actions", exact: true })).toHaveCount(0);
-    const rows = panel.getByRole("table", { name: "All tasks", exact: true });
+    const rows = panel.getByRole("table", { name: "Issues", exact: true });
     await expect(rows.getByRole("link", { name: "Ship the release" })).toBeVisible();
     await expect(rows.getByRole("link", { name: "Answer customers" })).toBeVisible();
-    await expect(panel.locator(".list-group-band")).toHaveCount(0);
+    await expect(panel.locator(".issues-band")).toHaveCount(2);
     // Filters are chips: "Add filter" → field → value (one condition, so no
     // condition step). The page's filter state still lives in the URL.
     const addFilter = async (field: string, value: string) => {
@@ -43,11 +43,11 @@ for (const mobile of [false, true]) {
     await expect(rows.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     await expect(page).toHaveURL((url) => url.searchParams.get("team") === "team-a");
     await panel.getByRole("button", { name: "Clear", exact: true }).click();
-    const statusNav = panel.getByRole("navigation", { name: "Status", exact: true });
-    await statusNav.getByRole("button", { name: "Review 1", exact: true }).click();
+    const statusNav = panel.getByRole("navigation", { name: "Issue queues", exact: true });
+    await statusNav.getByRole("button", { name: "Needs me 1", exact: true }).click();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
-    await expect(statusNav.getByRole("button", { name: "In progress 1", exact: true })).toBeVisible();
-    await statusNav.getByRole("button", { name: "All tasks 2", exact: true }).click();
+    await expect(statusNav.getByRole("button", { name: "Running 1", exact: true })).toBeVisible();
+    await statusNav.getByRole("button", { name: "All open 2", exact: true }).click();
     await addFilter("Projects", "Empty");
     await expect(panel.getByRole("link", { name: "Ship the release" })).toHaveCount(0);
     // The project chip survives an empty project; removing it returns to all projects.
@@ -62,7 +62,7 @@ for (const mobile of [false, true]) {
       return hit === element || element.contains(hit);
     })).toBe(true);
     await page.screenshot({ path: `/tmp/relay-tasks-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    await panel.getByRole("searchbox", { name: "Search tasks" }).fill("Ship");
+    await panel.getByRole("searchbox", { name: "Search issues" }).fill("Ship");
     await panel.getByRole("link", { name: "Ship the release", exact: true }).click();
     const drawer = page.getByRole("dialog");
     await expect(drawer).toBeVisible();
@@ -72,15 +72,15 @@ for (const mobile of [false, true]) {
     await page.screenshot({ path: `/tmp/relay-task-drawer-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
     await expect(drawer).toHaveCount(0);
-    await expect(panel.getByRole("searchbox", { name: "Search tasks" })).toHaveValue("Ship");
-    await expect(page).toHaveURL((url) => url.pathname === "/backlog" && url.searchParams.get("q") === "Ship");
-    await panel.getByRole("searchbox", { name: "Search tasks" }).fill("");
+    await expect(panel.getByRole("searchbox", { name: "Search issues" })).toHaveValue("Ship");
+    await expect(page).toHaveURL((url) => url.pathname === "/issues" && url.searchParams.get("q") === "Ship");
+    await panel.getByRole("searchbox", { name: "Search issues" }).fill("");
     await expect(panel.getByRole("link", { name: "Answer customers" })).toBeVisible();
-    await page.goto("/backlog/ship?project=launch&tab=files");
+    await page.goto("/issues/ship?project=launch&tab=files");
     await expect(drawer.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
     await expect(drawer).toHaveCount(0);
-    await expect(page).toHaveURL((url) => url.pathname === "/backlog" && url.searchParams.get("project") === "launch");
+    await expect(page).toHaveURL((url) => url.pathname === "/issues" && url.searchParams.get("project") === "launch");
     await expect(panel.getByRole("link", { name: "Ship the release" })).toBeVisible();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);

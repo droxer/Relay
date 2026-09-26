@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
+from issue_projects import project_for_agents
+
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.persistence.store_common import _write_json
@@ -2467,7 +2469,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "project-workspaces"],
                 "status": "ready",
             }
         )
@@ -2501,8 +2503,9 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
             == 200
         )
 
+        project = project_for_agents(app.state.project_store, "alice", [agent])
         task = client.post(
-            "/api/v1/tasks", json={"title": "Build it", "assignedAgentId": agent["id"]}
+            "/api/v1/tasks", json={"title": "Build it", "projectId": project["id"], "assignedAgentId": agent["id"]}
         )
         started = client.post(
             f"/api/v1/tasks/{task.json()['id']}/runs",
@@ -2554,15 +2557,15 @@ def test_task_owner_cannot_be_reassigned_to_another_employees_agent(
                 },
             ).json()["agent"]
 
-        task = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "Move ownership safely",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
-                "assignedAgentId": agents["alice"]["id"],
-            },
-        ).json()
+        # Employee reassignment on the projectless path belongs to routine runs.
+        task = client.app.state.task_store.create_task({
+            "sourceRoutineId": "routine_nightly",
+            "title": "Move ownership safely",
+            "ownerEmployeeId": "alice",
+            "assigneeEmployeeId": "alice",
+            "assignedAgentId": agents["alice"]["id"],
+            "assignedAgent": "codex",
+        })
 
         missing_agent = client.patch(
             f"/api/v1/tasks/{task['id']}", json={"assigneeEmployeeId": "bob"}
@@ -2631,9 +2634,11 @@ def test_employee_task_writes_require_named_agents_and_preserve_status(
         )
         assert agentless_routine.status_code == 400
 
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Explicitly blocked",
                 "status": "backlog",
                 "assignedAgentId": agent["id"],
@@ -2682,7 +2687,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", "project-workspaces"],
                 "status": "ready",
             }
         )
@@ -2698,6 +2703,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
         legacy = app.state.task_store.create_task(
             {
                 "title": "Start legacy work",
+                "sourceRoutineId": "routine_nightly",
                 "ownerEmployeeId": "requester",
                 "assigneeEmployeeId": "alice",
                 "assignedAgent": "codex",

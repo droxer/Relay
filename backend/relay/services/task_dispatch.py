@@ -42,6 +42,7 @@ from .dispatch_failure import (
     record_dispatch_failure,
     safe_dispatch_error_message,
 )
+from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .project_runtime import ProjectDispatchError, project_work_error, resolve_project_task_assignments
 from .task_workspace import (
     recorded_task_workspace,
@@ -247,6 +248,15 @@ class TaskDispatcher:
         return self._prepared_node, result
 
     def _prepare_dispatch(self) -> DispatchResult | None:
+        # Work already under way reports that, not that it could never start.
+        if issue_needs_project(self.task) and not self._execution_active():
+            return _record_result(
+                self.ctx,
+                self.task["id"],
+                "rejected",
+                code=ISSUE_NEEDS_PROJECT,
+                message="Move this issue into a project before it can run.",
+            )
         if (
             self.retry_blocked
             and self.task.get("status") == "blocked"

@@ -124,7 +124,7 @@ describe("app pathname routes", () => {
     assert.equal(pathForAppState({ route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: "team 1" }), "/teams/team%201");
     assert.equal(hrefForRoute("main", "ses_123"), "/threads/ses_123");
     assert.equal(hrefForRoute("projects"), "/projects");
-    assert.equal(hrefForRoute("backlog"), "/backlog");
+    assert.equal(hrefForRoute("backlog"), "/issues");
     assert.equal(hrefForRoute("routine"), "/routines");
     assert.equal(hrefForRoute("settings"), "/settings/computers");
   });
@@ -359,9 +359,32 @@ describe("app pathname routes", () => {
     );
     // Task records also retain their list filters.
     assert.equal(
-      browserUrlForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: "T-1001" }, "/backlog", "?status=blocked"),
-      "/backlog/T-1001?status=blocked",
+      browserUrlForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: "T-1001" }, "/issues", "?status=blocked"),
+      "/issues/T-1001?status=blocked",
     );
+  });
+});
+
+describe("the Issues address", () => {
+  it("writes /issues and still reads a /backlog link from before the rename", () => {
+    assert.deepEqual(parseAppPath("/issues"), parseAppPath("/backlog"));
+    assert.equal(parseAppPath("/issues").route, "backlog");
+    assert.equal(parseAppPath("/backlog/T-1001").taskId, "T-1001");
+    assert.equal(pathForAppState(parseAppPath("/backlog/T-1001")), "/issues/T-1001");
+  });
+
+  it("keeps the queue, grouping, and new sort keys, and only valid values", () => {
+    assert.equal(
+      canonicalBrowserUrl("/issues", "?queue=untriaged&group=assignee&sort=-updated&project=p1"),
+      "/issues?sort=-updated&project=p1&queue=untriaged&group=assignee",
+    );
+    assert.equal(canonicalBrowserUrl("/issues", "?queue=bogus&group=bogus"), "/issues");
+  });
+
+  it("leaves the queue and grouping off a project's Tasks tab", () => {
+    const url = new URL(`http://relay.local/projects/p${canonicalBrowserUrl("/projects/p", "?tab=tasks&queue=blocked&group=status")}`);
+    assert.equal(url.searchParams.get("queue"), null);
+    assert.equal(url.searchParams.get("group"), null);
   });
 });
 

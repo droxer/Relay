@@ -274,7 +274,6 @@ def test_plain_task_runs_is_its_own_single_row(monkeypatch) -> None:
         agent = _create_agent(app)
         created = client.post("/api/v1/tasks", json={
             "title": "One-off audit",
-            "assignedAgentId": agent["id"],
         })
         assert created.status_code == 201, created.text
         task = created.json()

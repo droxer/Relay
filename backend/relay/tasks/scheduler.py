@@ -37,6 +37,7 @@ from ..services.dispatch_failure import (
     record_dispatch_failure,
     safe_dispatch_error_message,
 )
+from ..services.issue_triage import issue_needs_project
 from ..services.project_runtime import (
     ProjectDispatchError,
     project_work_error,
@@ -298,6 +299,9 @@ class TaskScheduler:
         for candidate in self._dispatchable_tasks():
             if attempts >= self.max_dispatches_per_tick:
                 break
+            # Legacy projectless work that was already Ready waits for triage.
+            if issue_needs_project(candidate):
+                continue
             # Admitted work stays assigned until the daemon starts executing.
             # Do not re-route it, block it, or enqueue another execution.
             if dispatch_claim_active(candidate) or (

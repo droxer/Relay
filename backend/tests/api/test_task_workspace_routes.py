@@ -147,20 +147,20 @@ def task_with_run(client: TestClient):
     def _make(*, capabilities: list[str]) -> tuple[dict, dict]:
         node = _register_node(app, "node_alice", "machine-alice", capabilities)
         agent = _agent(client, node)
-        created = client.post(
-            "/api/v1/tasks",
-            json={
+        created = app.state.task_store.create_task(
+            {
                 "title": "Ship the report",
+                "sourceRoutineId": "routine_nightly",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
+                "assignedAgent": agent["executorKind"],
                 "status": "assigned",
             },
         )
-        assert created.status_code == 201, created.text
         result = asyncio.run(app.state.task_scheduler.tick())
         assert result.dispatched == 1
-        task = client.get(f"/api/v1/tasks/{created.json()['id']}").json()
+        task = client.get(f"/api/v1/tasks/{created['id']}").json()
         return task, node
 
     return _make

@@ -14,6 +14,7 @@ import type { TaskHistoryEntry } from "../../lib/taskHistory";
 export type HistoryNameResolver = {
   teamName?: (teamId: string) => string | undefined;
   agentName?: (agentId: string) => string | undefined;
+  projectName?: (projectId: string) => string | undefined;
 };
 
 export function historyEntryLabel(entry: TaskHistoryEntry, t: TFunction, names?: HistoryNameResolver): string {
@@ -30,6 +31,10 @@ export function historyEntryLabel(entry: TaskHistoryEntry, t: TFunction, names?:
         ? names?.agentName?.(entry.agentId)
         : entry.agent;
     return name ? t("backlog.history.assigned_to", { name }) : t("backlog.history.assigned");
+  }
+  if (entry.kind === "project_set") {
+    const name = entry.projectId ? names?.projectName?.(entry.projectId) : undefined;
+    return name ? t("backlog.history.project_set_to", { name }) : t("backlog.history.project_set");
   }
   const label = t(`backlog.history.${entry.kind}`);
   return entry.message ? `${label} — ${entry.message}` : label;

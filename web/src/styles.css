@@ -70,6 +70,7 @@
 @import "./styles/list-sort.css" layer(relay);
 @import "./styles/list-group.css" layer(relay);
 @import "./styles/backlog-list.css" layer(relay);
+@import "./styles/issues.css" layer(relay);
 @import "./styles/agents.css" layer(relay);
 @import "./styles/skills.css" layer(relay);
 @import "./styles/teams.css" layer(relay);

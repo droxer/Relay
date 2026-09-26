@@ -1,0 +1,83 @@
+/* Issues — the cross-project table. It speaks the task-table grammar in
+   backlog-list.css (row accent, ref, priority, due and assignee tracks); this
+   file adds only what a table read ACROSS projects needs: the status and
+   project columns, and bands that are row groups inside one table rather
+   than a table per group. */
+
+.issue-col-status { width: 148px; }
+.issue-col-project { width: 180px; }
+
+/* The band is a row, so it sticks on its cell (sticky on <tr> is unreliable)
+   and clears the hoisted header the same way the list-group band does. */
+.issues-rows { --list-head-h: 40px; }
+
+.issues-band > td {
+  position: sticky;
+  top: var(--list-head-h);
+  z-index: 1;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 0.5px solid var(--line-2);
+  background: var(--surface-0);
+}
+
+.issues-group + .issues-group .issues-band > td {
+  padding-top: var(--sp-5);
+}
+
+.issues-band { --row-accent: var(--ink-4); }
+.issues-band[data-status="assigned"],
+.issues-band[data-status="review"] { --row-accent: var(--info); }
+.issues-band[data-status="running"] { --row-accent: var(--live); }
+.issues-band[data-status="waiting_for_human"],
+.issues-band[data-intake="true"] { --row-accent: var(--warn); }
+.issues-band[data-status="blocked"] { --row-accent: var(--err); }
+.issues-band[data-status="done"] { --row-accent: var(--ok); }
+.issues-band .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
+
+.issues-band-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* The intake band says why it matters without a second row of chrome. */
+.issues-band-hint {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+.issue-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  white-space: nowrap;
+}
+
+.backlog-row .issue-status .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
+
+.issue-project {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issue-project--none { color: var(--ink-4); }
+
+.issue-intake-chip { flex: none; }
+
+.issues-group-by,
+.issues-move {
+  width: auto;
+  min-width: 0;
+}
+
+@media (max-width: 820px) {
+  .issue-col-project,
+  .issue-col-status { display: none; }
+}

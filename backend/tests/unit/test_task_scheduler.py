@@ -11,6 +11,7 @@ from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
 from relay.persistence.agent_placement_store import LocalAgentPlacementStore
 from relay.persistence.daemon_store import LocalDaemonStore
 from relay.persistence.employee_agent_store import LocalEmployeeAgentStore
+from relay.persistence.project_store import DatabaseProjectStore
 from relay.persistence.session_store import LocalSessionStore
 from relay.persistence.task_store import LocalTaskStore
 from relay.persistence.team_store import LocalTeamStore
@@ -22,6 +23,15 @@ from relay.tasks import (
     materialize_legacy_agent_assignment,
     next_routine_date,
 )
+
+from issue_projects import PROJECT_CAPABILITY, project_for
+
+
+# Work outside a project never runs (services/issue_triage.py), except a
+# routine's own runs: a routine names its agent or team. These tests exercise
+# the scheduler's projectless agent and team branches, so their work is a
+# routine run — the one kind of projectless work those branches still serve.
+ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
 
 
 def _logical_backend(
@@ -83,6 +93,7 @@ def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_retur
             )
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Ship scheduled backlog",
                     "description": "Run automatically.",
                     "assignedAgent": "codex",
@@ -128,7 +139,8 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
     """The scheduler resolves the run's workspace layout the same way
     ``TaskDispatcher`` does: against the node it actually dispatched to, not
     a hardcoded default. A node that advertises ``task-workspaces`` gets the
-    task's durable per-task directory rather than the legacy per-thread one.
+    task's durable directory rather than the legacy per-thread one — for a
+    routine run, nested under its routine.
     """
 
     async def run_flow() -> None:
@@ -154,6 +166,7 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
             backend, agent = _logical_backend(root, registry, "sbx_alice")
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Ship scheduled backlog",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -170,7 +183,7 @@ def test_scheduler_dispatches_the_task_layout_to_a_capable_node() -> None:
             assert result.dispatched == 1
             [command] = registry.take_commands("sbx_alice", "node_token")
             assert command["workspaceLayout"] == "task"
-            assert command["workspaceSubpath"] == f"tasks/{task['id']}"
+            assert command["workspaceSubpath"] == f"tasks/routine_nightly/{task['id']}"
 
     asyncio.run(run_flow())
 
@@ -202,6 +215,7 @@ def test_scheduler_dispatches_when_employee_owns_multiple_computers() -> None:
             )
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Runs on either computer",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -265,6 +279,7 @@ def test_scheduler_claim_fences_the_resolved_logical_assignment() -> None:
             )
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Fence the selected agent",
                     "assignedAgent": "codex",
                     "assignedAgentId": original_agent["id"],
@@ -325,6 +340,7 @@ def test_scheduler_requests_managed_capacity_once_when_no_node_is_ready() -> Non
             backend, agent = _logical_backend(root, registry)
             task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Needs managed capacity",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -407,6 +423,7 @@ def test_scheduler_falls_back_to_managed_after_local_node_is_removed() -> None:
             backend, agent = _logical_backend(root, registry)
             task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Continue after Alice disconnects local mode",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -468,6 +485,7 @@ def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
             placement_store.create_placement(agent, "node_builder")
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Ship with Builder",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -578,6 +596,7 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
             backend, agent = _logical_backend(root, registry, "sbx_alice")
             high = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Older high priority",
                     "priority": "high",
                     "assignedAgent": "codex",
@@ -588,6 +607,7 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
             )
             low = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Newer low priority",
                     "priority": "low",
                     "assignedAgent": "codex",
@@ -688,6 +708,7 @@ def test_scheduler_blocks_after_first_failed_dispatch() -> None:
             backend.agent_placement_store = routing_backend.agent_placement_store
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Keeps failing",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -757,6 +778,7 @@ def test_scheduler_keeps_the_claim_on_ambiguous_dispatch_failure() -> None:
             backend.agent_placement_store = routing_backend.agent_placement_store
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Ambiguous failure",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -869,6 +891,7 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
             )
             legacy = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Legacy executor task",
                     "assignedAgent": "codex",
                     "ownerEmployeeId": "requester",
@@ -1040,6 +1063,7 @@ def test_scheduler_routes_assignment_through_task_assignee() -> None:
             backend, agent = _logical_backend(root, registry, "sbx_alice")
             delegated = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Delegated work",
                     "assignedAgent": "codex",
                     "assignedAgentId": agent["id"],
@@ -1132,6 +1156,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             )
             first = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Lead work",
                     "assignedTeamId": team["id"],
                     "ownerEmployeeId": "requester",
@@ -1205,6 +1230,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             agent_store.update_agent(lead["id"], {"enabled": False})
             second = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Blocked lead work",
                     "assignedTeamId": team["id"],
                     "assigneeEmployeeId": "alice",
@@ -1385,6 +1411,7 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
             )
             task = task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Wait for the team",
                     "assignedTeamId": team["id"],
                     "assigneeEmployeeId": "alice",
@@ -1443,6 +1470,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
             )
             task_store.create_task(
                 {
+                    **ROUTINE_RUN,
                     "title": "Provision for the Team lead",
                     "assignedTeamId": team["id"],
                     "assigneeEmployeeId": "alice",
@@ -1480,7 +1508,7 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
     registry = DaemonNodeRegistry(
         LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
     )
-    registry.register(
+    node = registry.register(
         {
             "sandboxId": "sbx_alice",
             "employeeId": "alice",
@@ -1488,7 +1516,7 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["task-workspaces", "thread-workspaces", "round-result"],
+            "capabilities": ["task-workspaces", "thread-workspaces", "round-result", PROJECT_CAPABILITY],
             "status": "ready",
         },
         "ui_token",
@@ -1503,11 +1531,15 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
     backend = ServerDaemonNodeBackend(
         registry, employee_agent_store=agent_store, agent_placement_store=placements
     )
+    # Rounds are backlog work, and backlog work runs inside a project.
+    projects = DatabaseProjectStore(f"sqlite:///{root}/projects.db", create_schema=True)
+    project = project_for(projects, "alice", node, [agent["id"]])
     scheduler = TaskScheduler(
         task_store=task_store,
         registry=registry,
         backend=backend,
         org_settings_store=_FixedOrgSettings(max_task_rounds),
+        project_store=projects,
     )
     task = task_store.create_task(
         {
@@ -1515,6 +1547,8 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
             "assignedAgent": "codex",
             "assignedAgentId": agent["id"],
             "assigneeEmployeeId": "alice",
+            "ownerEmployeeId": "alice",
+            "projectId": project["id"],
             "status": "assigned",
         }
     )

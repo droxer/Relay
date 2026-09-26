@@ -41,6 +41,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ..core.ids import new_relay_id
+from ..services.issue_triage import issue_needs_project, project_move_error
 from .protocols import TaskDispatchAssignment
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
@@ -282,6 +283,13 @@ def task_assignment_events(
     ]
 
 
+def validate_project_move_events(task: dict[str, Any], events: list[dict[str, Any]]) -> None:
+    """Recheck triage against current state while holding the store write lock."""
+    if any(event.get("type") == "task.project_set" for event in events):
+        if code := project_move_error(task):
+            raise ValueError(code)
+
+
 def task_update_events(
     task_id: str,
     payload: dict[str, Any],
@@ -309,6 +317,12 @@ def task_update_events(
         if field in payload:
             updated[field] = payload[field]
     events = [relay_task_event("task.updated", task_id, updated)]
+    if payload.get("projectId"):
+        # Triage: an intake issue joins a project. It precedes the assignment
+        # and status events so a replay validates them against the project.
+        events.append(
+            relay_task_event("task.project_set", task_id, {"projectId": payload["projectId"]})
+        )
     assignment_supplied = "assignedAgentId" in payload or "assignedTeamId" in payload
     resolved_assignment = assignment
     if resolved_assignment is None and assignment_supplied:
@@ -392,6 +406,7 @@ class LocalTaskStore:
                 "linkedSessionIds", []
             ):
                 return current
+            validate_project_move_events(current, new_events)
             # Validate immutable facts before writing the authoritative log.
             task = materialize_task_events([*current.get("events", []), *new_events])
             if needs_wip_admission(current, task):
@@ -547,6 +562,7 @@ class LocalTaskStore:
             task
             for task in self.list_dispatchable_tasks()
             if task.get("assignedAgent") == agent
+            and not issue_needs_project(task)
             and not task.get("assignedTeamId")
             and (
                 not assignee_employee_id
@@ -1130,6 +1146,7 @@ class DatabaseTaskStore:
                 "linkedSessionIds", []
             ):
                 return current
+            validate_project_move_events(current, events)
             task = apply_task_events(current, events, version=sequence)
             if needs_wip_admission(current, task):
                 if self.engine.dialect.name == "postgresql":
@@ -1541,6 +1558,7 @@ class DatabaseTaskStore:
             task
             for task in self.list_dispatchable_tasks()
             if task.get("assignedAgent") == agent
+            and not issue_needs_project(task)
             and not task.get("assignedTeamId")
             and (
                 not assignee_employee_id

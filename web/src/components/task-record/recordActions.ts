@@ -1,4 +1,5 @@
 import type { RelayTaskListItem } from "../../types.js";
+import { issueNeedsProject } from "../../lib/issueQueues.ts";
 
 /**
  * What a record can do, decided in one place from what it is.
@@ -12,10 +13,10 @@ import type { RelayTaskListItem } from "../../types.js";
  * detail surface for both boards: the backlog's peek drawer carried them,
  * and retiring the peek could not retire the actions with it.
  */
-export type RecordAction = "run" | "retry" | "cancel" | "block" | "unblock" | "done" | "delete";
+export type RecordAction = "run" | "retry" | "cancel" | "block" | "unblock" | "done" | "delete" | "triage";
 
 export function recordActions(
-  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineEnabled" | "assignedAgentId" | "assignedTeamId">,
+  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineEnabled" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId">,
   /** Set when the task belongs to a project that is closed for work. */
   options?: { readOnly?: boolean },
 ): readonly RecordAction[] {
@@ -27,9 +28,13 @@ export function recordActions(
   if (task.isRoutine) return assigned && task.routineEnabled ? ["run"] : [];
   if (task.status === "done") return [];
   const actions: RecordAction[] = [];
+  // Intake: no project means nowhere to run, so the way forward is triage
+  // (see lib/issueQueues). A legacy intake issue can still carry an agent;
+  // offering Retry on it would only be refused.
+  if (issueNeedsProject(task)) actions.push("triage");
   // A dispatch that was refused leaves the occurrence assigned and not
   // running — the state `784d23fa` made require a manual retry.
-  if (assigned && (task.status === "blocked" || task.status === "assigned")) actions.push("retry");
+  else if (assigned && (task.status === "blocked" || task.status === "assigned")) actions.push("retry");
   actions.push(task.status === "blocked" ? "unblock" : "block");
   if (task.status === "review") actions.push("done");
   return actions;

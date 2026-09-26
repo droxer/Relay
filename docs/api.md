@@ -14,9 +14,9 @@ documentation locations, and UI metadata from the backend's shared constants.
 /threads/{threadId}
 /projects
 /projects/{projectId}
-/backlog/{taskId}
-/backlog/{taskId}/threads/{threadId}
-/backlog
+/issues/{taskId}
+/issues/{taskId}/threads/{threadId}
+/issues
 /routines
 /agents
 /agents/{agentId}
@@ -311,25 +311,32 @@ that project's recent Threads, active tasks, active runs, artifacts, and bound
 Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
-Projects and Tasks are separate browser destinations. `/projects` opens the
-project directory and `/projects/{id}` opens project details. The project detail
-opens on Tasks; `?tab=profile` opens Agents and `?tab=workspace` opens shared files.
-The project Activities tab is removed; old `?tab=activities` links canonicalize
-to its task overview. Activity, execution history, results, and task files live in
-task records in the Tasks destination.
+Projects and Issues are separate browser destinations. `/projects` opens the
+project directory; `/projects/{id}` opens General, and `?tab=tasks` opens the
+project's Issues tab with its board/list views. `?task={taskId}` opens an issue
+record over that project; `recordTab` selects a section of that record.
 
-`/backlog` opens All tasks. Its secondary sidebar groups task links by project;
-`/backlog?project={id}` filters the list and `/backlog/{taskId}?project={id}` opens
-task details in the main pane. A project dropdown replaces the sidebar on mobile.
-Task `?tab=definition` and `?tab=files` select record sections; Activity is default.
-Legacy `/projects/{id}?task={taskId}&recordTab=files` links redirect into Tasks.
-Browser task and routine creation requires choosing a project; scoped creation
-inherits that project. The backend optional-project contract and legacy data
-remain compatible pending the ownership migration.
-The Tasks view filters the complete task summary collection by `projectId`,
-excludes deleted tasks and routine definitions, and includes routine occurrences.
-Progress counts accepted (`done`) tasks against that collection. Workflow columns
-retain blocked and human-waiting labels within their recorded workflow stage.
+`/issues` is a list-only table across projects, grouped by project, status,
+assignee, or no grouping (`?group=`). Its queue rail selects `needs_me`,
+`untriaged`, `blocked`, `running`, `overdue`, `open` (default), or `done`
+(`?queue=`). `?project={id}` is a filter, not a separate project workspace.
+Deleted issues and routine templates are excluded; routine runs remain visible.
+Archived projects are hidden unless explicitly selected. `/issues/{taskId}`
+opens a record drawer; `?tab=definition` and `?tab=files` select its sections.
+Old `/backlog` paths and record/thread deep links continue to resolve.
+
+An issue without a project is intake: it cannot receive an agent or team,
+become Ready, create a thread, be picked up, or start. These requests return
+409 `issue_needs_project`. The scheduler and agent claim paths also hold legacy
+projectless work. Routine templates and their `sourceRoutineId` runs are exempt;
+clients cannot create a routine run by supplying `sourceRoutineId` to POST.
+
+`PATCH /api/v1/tasks/{id}` with `projectId` moves unstarted intake into an enabled
+project owned by the same employee and records `task.project_set`. An assignment
+may accompany the move, subject to the project's normal assignment rules.
+Project membership cannot subsequently be cleared or changed. Work with linked
+threads, routines, and routine runs cannot be moved. Clearing a legacy intake
+assignment is allowed and returns Ready intake to Backlog.
 
 Task/thread creation accepts `projectId`. Project dispatch rejects Computer,
 team, or non-member overrides; the backend resolves the fixed roster and the
@@ -705,7 +712,7 @@ The Token drawer prefers it for installation/reconnection. BoxLite computers
 and records lacking the owner/workspace needed by the installer retain
 `daemonCommand`; neither response embeds the token in a command.
 
-Existing `/backlog/{taskId}/threads/{threadId}` deep links retain the Tasks
+Existing `/issues/{taskId}/threads/{threadId}` deep links retain the Tasks
 destination. Legacy `/projects/{projectId}/threads/{threadId}` links
 resolve to the linked task; unlinked project conversations return to project
 details. Legacy `/projects/{projectId}/new` opens the project's task list.

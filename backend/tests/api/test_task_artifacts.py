@@ -6,6 +6,8 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from issue_projects import routine_run_with_session
+
 from relay.app import create_app
 from relay.persistence.stores import relay_event
 from relay.sessions import SessionController
@@ -21,13 +23,7 @@ def _bootstrap(client: TestClient) -> None:
 
 
 def _create_task_with_session(client: TestClient, workspace_path: str, *, title: str = "Ship the quarterly deck") -> dict[str, Any]:
-    response = client.post("/api/v1/tasks", json={
-        "title": title,
-        "createSession": True,
-        "workspacePath": workspace_path,
-    })
-    assert response.status_code == 201, response.text
-    return response.json()
+    return routine_run_with_session(client.app, title, workspace_path)
 
 
 def _workspace_artifact(workspace: str, name: str, *, artifact_id: str, created_at: str, content_type: str) -> dict[str, Any]:

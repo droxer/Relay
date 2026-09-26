@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 
+from issue_projects import routine_run_with_session
+
 from relay.app import create_app
 from relay.core.ids import new_database_id, now_iso
 from relay.services.event_notifier import (
@@ -212,9 +214,7 @@ def test_legacy_daemon_completion_does_not_collect_backend_files(review_app, tmp
 def test_terminal_thread_actions_leave_linked_task_unchanged(
     review_app, review_client, action, session_status, task_status
 ):
-    task = review_client.post(
-        "/api/v1/tasks", json={"title": "Linked task", "createSession": True}
-    ).json()
+    task = routine_run_with_session(review_app, "Linked task")
     session_id = task["linkedSessionIds"][0]
     review_app.state.task_store.update_task(task["id"], {"status": "waiting_for_human"})
     endpoint = "cancellations" if action == "cancellations" else "decisions"
@@ -229,9 +229,7 @@ def test_terminal_thread_actions_leave_linked_task_unchanged(
 def test_terminal_thread_action_does_not_write_linked_tasks(
     review_app, review_client, monkeypatch
 ):
-    task = review_client.post(
-        "/api/v1/tasks", json={"title": "Atomic completion", "createSession": True}
-    ).json()
+    task = routine_run_with_session(review_app, "Atomic completion")
     session_id = task["linkedSessionIds"][0]
     task_before = review_app.state.task_store.get_task(task["id"])
 
@@ -251,9 +249,7 @@ def test_terminal_occurrence_keeps_routine_schedule_and_deleted_history(
     review_app, review_client
 ):
     store = review_app.state.task_store
-    task = review_client.post(
-        "/api/v1/tasks", json={"title": "Occurrence", "createSession": True}
-    ).json()
+    task = routine_run_with_session(review_app, "Occurrence")
     session_id = task["linkedSessionIds"][0]
     routine = store.create_task(
         {"title": "Schedule", "isRoutine": True, "ownerEmployeeId": "admin"}

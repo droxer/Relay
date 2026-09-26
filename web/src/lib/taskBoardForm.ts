@@ -3,6 +3,7 @@ import type { AgentName, CollaborationStyle, CurrentUser, TaskPriority, TaskRout
 export type TaskBoardFormBase = {
   id?: string;
   projectId?: string;
+  sourceRoutineId?: string;
   title: string;
   description: string;
   priority: TaskPriority;

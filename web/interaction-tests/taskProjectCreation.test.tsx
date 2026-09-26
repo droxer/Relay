@@ -14,11 +14,11 @@ const projects = [
   { id: "archived", name: "Archived", enabled: true, archivedAt: "today", members: [] },
 ] as unknown as ProjectRecord[];
 
-function Form({ initial = { ...emptyBacklogForm(user), title: "Ship" }, save, createProject, choices = projects }: {
-  initial?: TaskBoardFormState; save: (form: TaskBoardFormState) => void; createProject?: () => void; choices?: ProjectRecord[];
+function Form({ initial = { ...emptyBacklogForm(user), title: "Ship" }, save, createProject, choices = projects, projectChoice }: {
+  initial?: TaskBoardFormState; save: (form: TaskBoardFormState) => void; createProject?: () => void; choices?: ProjectRecord[]; projectChoice?: "required" | "optional" | "locked";
 }) {
   const [form, setForm] = useState(initial);
-  return <TaskDrawer open form={form} onChange={setForm} onSubmit={() => save(form)} onClose={vi.fn()}
+  return <TaskDrawer open form={form} projectChoice={projectChoice} onChange={setForm} onSubmit={() => save(form)} onClose={vi.fn()}
     saving={false} title="New" subtitle="Task" projects={choices} onCreateProject={createProject}
     logicalAgents={[{ id: "a", displayName: "Member", supervisorEmployeeId: "u" }, { id: "b", displayName: "Outside", supervisorEmployeeId: "u" }] as any}
     teams={[{ id: "team", name: "Outside team", ownerEmployeeId: "u" }] as any} />;
@@ -79,4 +79,34 @@ it("offers every agent and team on the project's computer, not just its roster",
   }
   render(<Placed />);
   expect(screen.getByTestId("assignment-options").textContent).toBe("Member,NeighbourNear team");
+});
+
+
+it("files intake without a project and offers no executor", () => {
+  const save = vi.fn();
+  render(<Form save={save} projectChoice="optional" />);
+  expect(screen.queryByTestId("assignment-options")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ title: "Ship" }));
+});
+
+it("keeps executor editing available on a projectless routine run", () => {
+  render(<Form save={vi.fn()} projectChoice="locked" initial={{
+    ...emptyBacklogForm(user), id: "run", sourceRoutineId: "routine", title: "Nightly run",
+  }} />);
+  expect(screen.getByTestId("assignment-options")).toBeTruthy();
+  expect(screen.queryByText("issues.assignment_needs_project")).toBeNull();
+});
+
+
+it("can clear a legacy intake assignment without choosing another executor", () => {
+  const save = vi.fn();
+  render(<Form save={save} projectChoice="optional" initial={{
+    ...emptyBacklogForm(user), id: "legacy", title: "Held intake", status: "assigned",
+    assignedAgent: "codex", assignedAgentId: "a",
+  }} />);
+  expect(screen.queryByTestId("assignment-options")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "issues.clear_assignment" }));
+  fireEvent.click(screen.getByRole("button", { name: "backlog.save_task" }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", assignedAgentId: "" }));
 });

@@ -525,7 +525,6 @@ export function ProjectWorkspacePage({
           {/* The backlog board itself, fixed to this project. */}
           <BacklogPage
             key={project.id}
-            variant="project"
             readOnly={membersReadOnly}
             projectId={project.id}
             projects={[project]}
