@@ -92,6 +92,15 @@
   height: 23px;
 }
 
+/* The default mark is a profile image, not a stray icon: it fills the tile
+   like it does at every other size. Caught by the 23px icon rule above, its
+   12% padding (resolved against the 64px tile) left an ~8px glyph adrift in
+   an empty square. */
+.profile-image-picker-visual > .identity-mark {
+  width: 100%;
+  height: 100%;
+}
+
 .profile-image-picker-action {
   position: absolute;
   /* Corner badge: -5px lets the 25px disc straddle the tile's bottom-right

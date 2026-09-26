@@ -29,10 +29,13 @@ import { AgentStateBadge } from "./AgentStateBadge";
 import {
   ActionAdd,
   ActionEdit,
+  ActionRetry,
   ICON,
   NavBack,
   NavProjects,
+  nodeOwnershipIcon,
 } from "./icons";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "./PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectMemberEditor } from "./ProjectMemberEditor";
@@ -100,13 +103,14 @@ function ProjectMemberLane({
           <span className="project-member-tile-name">
             <strong>{name}</strong>
             {lead ? <LeadBadge /> : null}
+            {/* The role is a chip beside the name, as on a team member card —
+                not the tail of the runtime line. */}
+            <TonePill tone="neutral" label={t(`project.roles.${member.role}`)} />
             {!member.enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null}
             {!available ? <TonePill tone="warn" label={t("project.member_missing")} /> : null}
           </span>
           <span className="project-member-tile-meta">
             {agent ? agentLabel(agent.executorKind) : member.agentId}
-            {" · "}
-            {t(`project.roles.${member.role}`)}
           </span>
         </span>
       </header>
@@ -246,6 +250,9 @@ export function ProjectWorkspacePage({
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
+  const ComputerIcon = nodeOwnershipIcon(
+    !computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local",
+  );
   const state = project.archivedAt ? "archived" : project.enabled ? "active" : "disabled";
   const bandFacts: RecordFact[] = [
     {
@@ -258,22 +265,34 @@ export function ProjectWorkspacePage({
         />
       ),
     },
+    /* Every fact is a chip, the same grammar as the team record's title line:
+       a state pill followed by loose text read as a sentence, not a set. */
     {
       key: "computer",
       label: t("project.computer"),
-      value: computerLabel,
+      value: (
+        <Badge className="max-w-full" translate="no">
+          <ComputerIcon size={ICON.xs} className="shrink-0" aria-hidden="true" />
+          <span className="truncate">{computerLabel}</span>
+        </Badge>
+      ),
       title: project.computerId,
     },
     {
       key: "updated",
       label: t("workspace.band_updated"),
-      value: formatRelativeTime(project.updatedAt, t),
+      value: (
+        <Badge render={<time dateTime={project.updatedAt} />}>
+          <ActionRetry size={ICON.xs} aria-hidden="true" />
+          {formatRelativeTime(project.updatedAt, t)}
+        </Badge>
+      ),
+      title: project.updatedAt,
     },
     {
       key: "id",
       label: t("project.band_id"),
-      value: truncateId(project.id),
-      technical: true,
+      value: <Badge className="code" translate="no">{truncateId(project.id)}</Badge>,
       title: project.id,
     },
   ];
