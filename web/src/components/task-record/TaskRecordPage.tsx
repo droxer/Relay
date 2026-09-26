@@ -119,7 +119,8 @@ export function TaskRecordPage({
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
     agentName: (agentId) => logicalAgents.find((agent) => agent.id === agentId)?.displayName,
-  }), [teams, logicalAgents]);
+    projectName: (projectId) => projectOf(projectId)?.name,
+  }), [teams, logicalAgents, projectOf]);
   const assigneeName = taskAssigneeLabel(task, taskAgentDisplayName(task, logicalAgents, teams), t);
   const facts = useMemo<RecordFact[]>(
     () => recordBandFacts(

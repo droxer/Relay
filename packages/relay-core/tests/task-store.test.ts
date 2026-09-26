@@ -84,3 +84,14 @@ describe("blocked execution explanations", () => {
     assert.equal(resumed.attention, undefined);
   });
 });
+
+
+it("replays an intake issue joining a project", () => {
+  const task = materializeTaskEvents([
+    relayTaskEvent("task.created", "intake", { title: "Triage", description: "", priority: "normal" }),
+    relayTaskEvent("task.project_set", "intake", { projectId: "project" }),
+    relayTaskEvent("task.assigned", "intake", { agent: "codex", agentId: "agent" }),
+  ]);
+  assert.equal(task.projectId, "project");
+  assert.equal(task.assignedAgentId, "agent");
+});

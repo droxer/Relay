@@ -849,11 +849,15 @@ export interface TaskMutationInput {
   routineEnabled?: boolean;
   assignedAgentId?: string | null;
   assignedTeamId?: string | null;
+  /** Triage: moves an intake issue (one with no project) into a project.
+      One way only — the server refuses it for a task that already has one. */
+  projectId?: string;
 }
 
 export interface CreateTaskInput extends TaskMutationInput {
   title: string;
-  projectId: string;
+  /** Omitted for an intake issue, which cannot take an agent or run. */
+  projectId?: string;
 }
 
 export interface StartTaskResponse {

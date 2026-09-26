@@ -60,9 +60,25 @@ type TaskDrawerProps = {
   onClosed?: () => void;
   /** Stacking order — 1 when the form opens above a record drawer. */
   layer?: number;
+  /**
+   * How the project field behaves. `required` (the default for a new record)
+   * insists on one; `optional` also offers "No project" — an intake issue,
+   * which cannot take an agent or run until triage moves it into a project;
+   * `locked` (the default once saved) only names it, because a project is
+   * where work runs and moving run work would strand its thread.
+   */
+  projectChoice?: "required" | "optional" | "locked";
 };
 
-function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
+/** The Select value that stands for "no project" — Select has no null item. */
+const NO_PROJECT = "__none__";
+
+function BacklogFields({ form, onChange, canRun }: {
+  form: BacklogTaskFormState;
+  onChange: (next: TaskBoardFormState) => void;
+  /** False for intake: without a project there is no Ready to move to. */
+  canRun: boolean;
+}) {
   const { t } = useTranslation();
   const statusLabelId = useId();
   const dueLabelId = useId();
@@ -80,7 +96,9 @@ function BacklogFields({ form, onChange }: { form: BacklogTaskFormState; onChang
             <SelectValue>{(value: TaskStatus) => t(`backlog.statuses.${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {manualTaskStatuses(form.status, Boolean(form.startedAt)).map((status) => (
+            {manualTaskStatuses(form.status, Boolean(form.startedAt))
+              .filter((status) => canRun || status !== "assigned" || status === form.status)
+              .map((status) => (
               <SelectItem key={status} value={status} label={t(`backlog.statuses.${status}`)}>{t(`backlog.statuses.${status}`)}</SelectItem>
             ))}
           </SelectContent>
@@ -187,6 +205,7 @@ export function TaskDrawer({
   onDelete,
   onClosed,
   layer,
+  projectChoice = form.id ? "locked" : "required",
 }: TaskDrawerProps) {
   const { t } = useTranslation();
   const priorityLabelId = useId();
@@ -221,7 +240,7 @@ export function TaskDrawer({
         ?.focus();
       return;
     }
-    if (!form.id && (!project || !project.enabled || project.archivedAt)) {
+    if (projectChoice === "required" && (!project || !project.enabled || project.archivedAt)) {
       setProjectError(true);
       projectTriggerRef.current?.focus();
       return;
@@ -251,6 +270,9 @@ export function TaskDrawer({
     team.id === form.assignedTeamId,
   ));
   const selectedAgent = agentOptions.find((agent) => agent.id === form.assignedAgentId);
+  /* Intake: an issue outside a project has nowhere to run, so it offers no
+     agent or team — the server refuses one — only the way into a project. */
+  const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.sourceRoutineId;
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
 
   // A saved task can reference an agent/team that has since been deleted or is
@@ -288,17 +310,29 @@ export function TaskDrawer({
       layer={layer}
     >
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} noValidate>
-        {!form.id ? (
-          <Field label={t("project.projects")} labelId={projectLabelId} wrapper="div" error={projectError ? t("project.required") : undefined}>
-            <Select value={form.projectId || ""} onValueChange={(value) => {
+        {projectChoice !== "locked" ? (
+          <Field
+            label={t("project.projects")}
+            labelId={projectLabelId}
+            wrapper="div"
+            hint={projectChoice === "optional" ? t("issues.project_hint") : undefined}
+            error={projectError ? t("project.required") : undefined}
+          >
+            <Select value={form.projectId || (projectChoice === "optional" ? NO_PROJECT : "")} onValueChange={(value) => {
               if (!value) return;
-              onChange({ ...clearTaskAssignment(form), ...(form.variant === "backlog" ? { status: form.status } : {}), projectId: value });
+              const projectId = value === NO_PROJECT ? undefined : value;
+              onChange({
+                ...clearTaskAssignment(form),
+                ...(form.variant === "backlog" ? { status: projectId || form.status !== "assigned" ? form.status : "backlog" } : {}),
+                projectId,
+              });
               setProjectError(false);
             }}>
               <SelectTrigger ref={projectTriggerRef} className="w-full" aria-labelledby={projectLabelId} aria-invalid={projectError || undefined}>
-                <SelectValue>{() => project?.name ?? t("project.choose")}</SelectValue>
+                <SelectValue>{() => project?.name ?? t(projectChoice === "optional" ? "issues.no_project" : "project.choose")}</SelectValue>
               </SelectTrigger>
               <SelectContent>
+                {projectChoice === "optional" ? <SelectItem value={NO_PROJECT}>{t("issues.no_project")}</SelectItem> : null}
                 {availableProjects.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -354,7 +388,7 @@ export function TaskDrawer({
         </Field>
         <div className="task-drawer-form-grid">
           {form.variant === "routine" ? <RoutineFields form={form} onChange={onChange} /> : null}
-          {form.variant === "backlog" ? <BacklogFields form={form} onChange={onChange} /> : null}
+          {form.variant === "backlog" ? <BacklogFields form={form} onChange={onChange} canRun={!intake} /> : null}
           <Field label={t("backlog.priority")} labelId={priorityLabelId} wrapper="div">
             <Select
               value={form.priority}
@@ -373,7 +407,16 @@ export function TaskDrawer({
               </SelectContent>
             </Select>
           </Field>
-          <AssignmentField
+          {intake ? (
+            <Field label={t("backlog.assignment_label")} wrapper="div">
+              <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
+              {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
+                <Button type="button" variant="ghost" disabled={saving} onClick={() => onChange(clearTaskAssignment(form))}>
+                  {t("issues.clear_assignment")}
+                </Button>
+              ) : null}
+            </Field>
+          ) : <AssignmentField
             fieldId={assignmentFieldId}
             summaryId={assignmentSummaryId}
             autoFocus={initialFocus === "assignment"}
@@ -410,7 +453,7 @@ export function TaskDrawer({
                 });
               }
             }}
-          />
+          />}
         </div>
         {form.variant === "routine" ? (
           <>

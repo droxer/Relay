@@ -424,7 +424,7 @@ def test_user_routes_are_scoped_to_authenticated_employee(monkeypatch) -> None:
         task_response = alice_client.post("/api/v1/tasks", json={
             "title": "Alice task",
             "ownerEmployeeId": "bob",
-            "createSession": True,
+            "isRoutine": True, "routineEnabled": False, "createSession": True,
             "assignments": [{"agent": "claude"}],
         })
         assert task_response.status_code == 201
@@ -686,7 +686,7 @@ def test_admin_can_create_resources_for_specific_employee(monkeypatch) -> None:
         response = client.post("/api/v1/tasks", json={
             "title": "Bob task",
             "ownerEmployeeId": "bob",
-            "createSession": True,
+            "isRoutine": True, "routineEnabled": False, "createSession": True,
         })
 
         assert response.status_code == 201
@@ -1123,7 +1123,7 @@ def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch)
         response = client.post("/api/v1/tasks", json={
             "title": "Persist task in DB",
             "description": "Create a DB-backed session too.",
-            "createSession": True,
+            "isRoutine": True, "routineEnabled": False, "createSession": True,
             "workspacePath": "/workspace",
         })
         assert response.status_code == 201

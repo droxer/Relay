@@ -20,6 +20,7 @@ from ..persistence.stores import (
 from ..persistence.task_lifecycle import validate_manual_transition, wip_limit
 from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
 from ..services.produced_files import file_currency, listing_directories, live_status
+from ..services.issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project, project_move_error
 from ..services.project_runtime import project_task_assignment_error
 from ..services.task_deletion import (
     TaskDeletionError,
@@ -138,6 +139,28 @@ def team_for_assignment(
     ):
         raise HTTPException(403, "Team access denied.")
     return team
+
+
+def ensure_issue_in_project(task: dict[str, Any]) -> None:
+    """Refuse to hand intake work to an agent or team: it has nowhere to run."""
+    if issue_needs_project(task):
+        raise HTTPException(409, ISSUE_NEEDS_PROJECT)
+
+
+def project_move_target(
+    ctx: AppContextDep, current: dict[str, Any], body: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The project a PATCH moves an intake issue into, if it moves one."""
+    if "projectId" not in body:
+        return None
+    project_id = string_field(body, "projectId")
+    if not project_id:
+        raise HTTPException(400, "projectId cannot be cleared.")
+    if code := project_move_error(current):
+        raise HTTPException(409, code)
+    return project_for_owner(
+        ctx, project_id, current.get("ownerEmployeeId"), require_enabled=True
+    )
 
 
 def validate_project_task_assignment(
@@ -452,11 +475,18 @@ def create_task(
     collaboration_style = _task_collaboration_style(body, allow_clear=False)
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
+    routine = routine_fields(body, calendar_date=ctx.today())
+    creates_thread = body.get("createSession") is True or isinstance(
+        body.get("assignments"), list
+    )
+    if issue_needs_project({**routine, "projectId": project and project["id"]}) and (
+        status == "assigned" or assigned_agent_id or assigned_team_id or creates_thread
+    ):
+        raise HTTPException(409, ISSUE_NEEDS_PROJECT)
     if status == "assigned" and not (project or assigned_agent_id or assigned_team_id):
         raise HTTPException(400, "assigned status requires an agent or team.")
     if status and status not in ("backlog", "assigned"):
         raise HTTPException(400, "New tasks must enter Backlog or Ready.")
-    routine = routine_fields(body, calendar_date=ctx.today())
     if (
         routine.get("isRoutine")
         and not (project or assigned_agent_id or assigned_team_id)
@@ -467,9 +497,6 @@ def create_task(
         project or assigned_agent_id or assigned_team_id
     ):
         raise HTTPException(400, "An enabled routine requires an agent or team.")
-    creates_thread = body.get("createSession") is True or isinstance(
-        body.get("assignments"), list
-    )
     if creates_thread and assigned_team_id:
         try:
             task_thread_ownership(
@@ -568,6 +595,9 @@ def update_task(
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, current)
     body = _request_body
+    move_project = project_move_target(ctx, current, body)
+    # Everything below judges the task as it will be once the move lands.
+    effective = {**current, "projectId": move_project["id"]} if move_project else current
     title = string_field(body, "title") or None
     description = (
         body.get("description") if isinstance(body.get("description"), str) else None
@@ -610,7 +640,7 @@ def update_task(
         raise HTTPException(400, "task_agent_and_team_conflict")
     validate_project_task_assignment(
         ctx,
-        current,
+        effective,
         assigned_agent_id=assigned_agent_id,
         assigned_team_id=assigned_team_id,
     )
@@ -688,10 +718,11 @@ def update_task(
         and not routine
         and acceptance_policy is None
         and collaboration_style is None
+        and not move_project
     ):
         raise HTTPException(
             400,
-            "PATCH requires title, description, priority, dueDate, assigneeEmployeeId, assignedAgentId, assignedTeamId, or status.",
+            "PATCH requires title, description, priority, dueDate, assigneeEmployeeId, assignedAgentId, assignedTeamId, projectId, or status.",
         )
     next_routine_enabled = routine.get("routineEnabled", current.get("routineEnabled"))
     next_is_routine = routine.get("isRoutine", current.get("isRoutine"))
@@ -717,14 +748,30 @@ def update_task(
     if (
         next_is_routine
         and next_routine_enabled
-        and not (current.get("projectId") or next_agent_id or next_team_id)
+        and not (effective.get("projectId") or next_agent_id or next_team_id)
     ):
         raise HTTPException(400, "An enabled routine requires an agent or team.")
+    if move_project and (next_agent_id or next_team_id):
+        # A kept legacy assignment must still be someone on the project's computer.
+        validate_project_assignment(
+            ctx,
+            move_project,
+            assigned_agent_id=next_agent_id,
+            assigned_team_id=next_team_id,
+        )
     assignment_clear_requested = assignment_changed and not (
         next_agent_id or next_team_id
     )
+    # Clearing stays allowed: it is how a legacy Ready intake issue goes back
+    # to Backlog (just below).
+    if (
+        issue_needs_project({**effective, "isRoutine": next_is_routine})
+        and not assignment_clear_requested
+        and (status == "assigned" or (assignment_changed and (next_agent_id or next_team_id)))
+    ):
+        raise HTTPException(409, ISSUE_NEEDS_PROJECT)
     if (status or current.get("status")) == "assigned" and not (
-        current.get("projectId") or next_agent_id or next_team_id
+        effective.get("projectId") or next_agent_id or next_team_id
     ):
         if assignment_clear_requested:
             status = "backlog"
@@ -760,6 +807,7 @@ def update_task(
         "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
         "dueDate": due_date,
         "assigneeEmployeeId": assignee,
+        **({"projectId": move_project["id"]} if move_project else {}),
         **routine,
         **assignment_patch,
     }
@@ -786,7 +834,7 @@ def update_task(
         try:
             task = (
                 update_task_unless_dispatching(ctx, task_id, update_payload)
-                if status or assignment_changed or assignee_changed or acceptance_policy
+                if status or assignment_changed or assignee_changed or acceptance_policy or move_project
                 else ctx.task_store.update_task(task_id, update_payload)
             )
         except ValueError as error:
@@ -833,6 +881,7 @@ def assign_task(
     actor = request_actor(request, ctx.auth_store)
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, current)
+    ensure_issue_in_project(current)
     if task_has_active_linked_session(ctx.session_store, current):
         raise HTTPException(409, "task_execution_active")
     body = _request_body
@@ -901,6 +950,7 @@ def assign_task(
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, task)
+    ensure_issue_in_project(task)
     raw_assignments = body.get("assignments")
     assignments = assignment_list(raw_assignments)
     if body.get("agent") is not None:
@@ -1084,6 +1134,7 @@ async def start_task(
 def _prepare_task_pickup(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     current = get_task_for_actor(ctx.task_store, task_id, actor)
     ensure_task_project_writable(ctx, current)
+    ensure_issue_in_project(current)
     if current.get("status") not in ("backlog", "assigned"):
         raise HTTPException(409, "task_not_dispatchable")
     if task_has_active_linked_session(ctx.session_store, current):

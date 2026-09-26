@@ -188,6 +188,14 @@ export type RelayTaskEvent =
     }
   | {
       id: string;
+      /** Triage: an intake issue joined a project. */
+      type: "task.project_set";
+      taskId: string;
+      timestamp: string;
+      projectId: string;
+    }
+  | {
+      id: string;
       type: "task.unassigned";
       taskId: string;
       timestamp: string;
@@ -334,6 +342,8 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
         else delete task.dueDate;
       }
       applyRoutineFields(task, event);
+    } else if (event.type === "task.project_set") {
+      task.projectId = event.projectId;
     } else if (event.type === "task.assigned") {
       if ("teamId" in event) {
         task.assignedTeamId = event.teamId;

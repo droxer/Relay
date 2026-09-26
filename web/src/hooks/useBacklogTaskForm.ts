@@ -28,9 +28,13 @@ import type { CurrentUser, RelayTaskListItem } from "../types";
 export function useBacklogTaskForm({
   currentUser,
   seed,
+  allowIntake = false,
 }: {
   currentUser: CurrentUser;
   seed?: { projectId?: string };
+  /** The Issues page may file an issue with no project (intake) and triage
+      one into a project later. A project's own board never does either. */
+  allowIntake?: boolean;
 }) {
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
@@ -57,6 +61,7 @@ export function useBacklogTaskForm({
       variant: "backlog",
       id: task.id,
       projectId: task.projectId,
+      sourceRoutineId: task.sourceRoutineId,
       title: task.title,
       description: task.description,
       priority: task.priority,
@@ -99,7 +104,11 @@ export function useBacklogTaskForm({
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
+    if (!form || !form.title.trim() || (!form.id && !form.projectId && !allowIntake)) return;
+    /* A project chosen for an intake issue is a move: it rides the same PATCH
+       as the assignment, and the server applies the move first. */
+    const movesIntoProject = Boolean(form.id && form.projectId && !formBaseline?.projectId);
+    const intake = !form.projectId && !form.sourceRoutineId;
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
@@ -110,10 +119,13 @@ export function useBacklogTaskForm({
         acceptancePolicy: form.acceptancePolicy ?? "human",
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         dueDate: form.dueDate,
-        ...taskAssignmentMutationFields(form),
+        /* Intake takes no agent or team. Clearing is still sent for a legacy
+           issue that carried one, which is the one change it may make. */
+        ...(intake && !form.id ? {} : taskAssignmentMutationFields(form)),
+        ...(movesIntoProject ? { projectId: form.projectId } : {}),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else if (form.projectId) await createTaskMutation.mutateAsync({ ...payload, projectId: form.projectId });
+      else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}) });
       dismiss();
     } catch {
       // mutation onError surfaces a toast; keep the drawer open for retry.
@@ -144,9 +156,16 @@ export function useBacklogTaskForm({
     }
   }
 
+  /* Locked once a record has a project; open for a new record, and for a
+     saved intake issue on a surface that triages. */
+  const projectChoice: "required" | "optional" | "locked" = !form?.id
+    ? (allowIntake ? "optional" : "required")
+    : allowIntake && !formBaseline?.projectId && !formBaseline?.sourceRoutineId ? "optional" : "locked";
+
   return {
     form,
     setForm,
+    projectChoice,
     open,
     assignmentFocus,
     saving,

@@ -24,6 +24,8 @@ export type TaskHistoryEntry = {
   teamId?: string;
   agentId?: string;
   agent?: string;
+  /** Project an intake issue was moved into. */
+  projectId?: string;
   status?: TaskStatus;
   message?: string;
 };
@@ -32,6 +34,7 @@ export type TaskHistoryKind =
   | "created"
   | "assigned"
   | "unassigned"
+  | "project_set"
   | "status"
   | "session_linked"
   | "session_unlinked"
@@ -64,6 +67,8 @@ function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry 
       };
     case "task.unassigned":
       return { ...base, kind: "unassigned" };
+    case "task.project_set":
+      return { ...base, kind: "project_set", projectId: event.projectId };
     case "task.status":
       return { ...base, kind: "status", status: event.status, message: event.reason };
     case "task.session_linked":

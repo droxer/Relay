@@ -41,7 +41,7 @@ describe("task record routes", () => {
   });
 
   it("round-trips every record path through pathForAppState", () => {
-    for (const path of ["/backlog/T-1001", "/routines/R-42", "/routines/R-42/runs/T-2288"]) {
+    for (const path of ["/issues/T-1001", "/routines/R-42", "/routines/R-42/runs/T-2288"]) {
       assert.equal(pathForAppState(parseAppPath(path)), path, path);
     }
   });
@@ -204,7 +204,20 @@ describe("record surface hygiene", () => {
 });
 
 describe("record actions", () => {
-  const assigned = { assignedAgentId: "agent-1", assignedTeamId: "", routineEnabled: true };
+  const assigned = { assignedAgentId: "agent-1", assignedTeamId: "", routineEnabled: true, projectId: "project-1" };
+
+  it("offers an intake issue triage instead of a run", () => {
+    /* An issue outside a project cannot run — the server refuses it — so a
+       legacy one that still carries an agent offers the way into a project,
+       never Retry. A routine run is exempt: its routine names the crew. */
+    const intake = { ...assigned, projectId: undefined };
+    assert.deepEqual(recordActions({ ...intake, isRoutine: false, status: "assigned" }), ["triage", "block"]);
+    assert.deepEqual(recordActions({ ...intake, isRoutine: false, status: "backlog" }), ["triage", "block"]);
+    assert.deepEqual(
+      recordActions({ ...intake, sourceRoutineId: "routine-1", isRoutine: false, status: "assigned" }),
+      ["retry", "block"],
+    );
+  });
 
   it("offers a running record a cancel and nothing else", () => {
     assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "running" }), ["cancel"]);
@@ -258,7 +271,7 @@ describe("record actions", () => {
   });
 
   it("will not dispatch a record that has nobody to dispatch to", () => {
-    const unassigned = { assignedAgentId: "", assignedTeamId: "", routineEnabled: true };
+    const unassigned = { assignedAgentId: "", assignedTeamId: "", routineEnabled: true, projectId: "project-1" };
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: true, status: "backlog" }), []);
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), ["unblock"]);
     // A paused routine is not run by a button either.

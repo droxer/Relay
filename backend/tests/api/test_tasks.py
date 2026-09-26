@@ -13,6 +13,11 @@ from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import active_routine_occurrence
 
+from issue_projects import PROJECT_CAPABILITY, project_for_agents
+
+# A routine's run is the one kind of work that dispatches outside a project.
+ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
+
 
 def _bootstrap_admin(client: TestClient) -> None:
     response = client.post(
@@ -103,7 +108,7 @@ def _create_agent(
                 "workspacePath": f"/workspace/{employee_id}",
                 "protocolVersion": 1,
                 "supportedAgents": sorted(existing_ready | {executor_kind}),
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "stopped",
             }
         )
@@ -188,10 +193,12 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         )
         assert skipped_routine.status_code == 404
 
+        project = project_for_agents(app.state.project_store, "alice", [agent])
         normal = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Claim normal backlog",
+                "projectId": project["id"],
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
@@ -486,10 +493,13 @@ def test_marking_task_done_only_completes_task_scoped_session(
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
+        agent = _create_agent(client, "alice")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
 
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Write the report",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -548,7 +558,7 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -556,6 +566,8 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert registered.status_code == 200
 
         agent = _create_agent(client, "alice", node_id="sbx_alice")
+
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         assert (
             client.app.state.agent_placement_store.list_placements(agent_id=agent["id"])
             != []
@@ -564,6 +576,7 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Run from backlog",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -639,16 +652,18 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
         )
         assert registered.status_code == 200
         agent = _create_agent(client, "alice", node_id="sbx_alice")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Explain backlog",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -681,15 +696,19 @@ def test_task_start_requests_managed_capacity_when_no_node_is_ready(
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         agent = _create_agent(client, "alice")
-        task = client.post(
-            "/api/v1/tasks",
-            json={
+        # Managed capacity is requested on the projectless path, which only a
+        # routine's own runs take now; project work waits for its computer.
+        task = app.state.task_store.create_task(
+            {
+                **ROUTINE_RUN,
                 "title": "Provision before running",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-            },
-        ).json()
+                "status": "assigned",
+            }
+        )
 
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
@@ -714,15 +733,19 @@ def test_task_start_reports_restart_of_stopped_managed_capacity(monkeypatch) -> 
         app.state.managed_node_store.update_node(
             managed["id"], {"desiredState": "stopped"}
         )
-        task = client.post(
-            "/api/v1/tasks",
-            json={
+        # Managed capacity is requested on the projectless path, which only a
+        # routine's own runs take now; project work waits for its computer.
+        task = app.state.task_store.create_task(
+            {
+                **ROUTINE_RUN,
                 "title": "Restart managed capacity",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-            },
-        ).json()
+                "status": "assigned",
+            }
+        )
 
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
 
@@ -752,7 +775,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -762,9 +785,12 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
             client, "alice", executor_kind="claude", node_id="sbx_alice"
         )
         codex_agent = _create_agent(client, "alice", node_id="sbx_alice")
+        # The crew is the project's roster, lead first.
+        project = project_for_agents(client.app.state.project_store, "alice", [claude_agent, codex_agent])
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Plan onboarding",
                 "description": "Discuss rollout and implementation.",
                 "ownerEmployeeId": "alice",
@@ -773,15 +799,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
         )
         assert created.status_code == 201
 
-        started = client.post(
-            f"/api/v1/tasks/{created.json()['id']}/runs",
-            json={
-                "assignments": [
-                    {"agentId": claude_agent["id"], "agent": "claude"},
-                    {"agentId": codex_agent["id"], "agent": "codex"},
-                ],
-            },
-        )
+        started = client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={})
         assert started.status_code == 202
         session_id = started.json()["session"]["id"]
         assert started.json()["task"]["linkedSessionIds"] == [session_id]
@@ -853,7 +871,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
         )
 
 
-def test_unclassified_task_without_assignment_uses_existing_ready_agents(
+def test_unassigned_project_task_runs_the_project_roster(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -873,7 +891,7 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
                 "nodeLocation": "employee-device",
                 "protocolVersion": 1,
                 "supportedAgents": [],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "stopped",
             },
             "ui_token",
@@ -889,7 +907,7 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -918,9 +936,13 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
             },
         )
         assert reviewer.status_code == 201, reviewer.text
+        project = project_for_agents(
+            app.state.project_store, "alice", [named.json()["agent"], reviewer.json()["agent"]]
+        )
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Design checkout recovery",
                 "description": "Find the right implementation plan and risks.",
                 "ownerEmployeeId": "alice",
@@ -993,13 +1015,16 @@ def test_unclassified_task_without_assignment_uses_existing_ready_agents(
         assert finished.status_code == 200
         assert finished.json()["status"] == "review"
 
-        removed = client.delete(
-            f"/api/v1/admin/agents/{reviewer.json()['agent']['id']}"
+        # Dropping the reviewer from the roster leaves the lead to run alone.
+        app.state.project_store.update_project(
+            project["id"],
+            {"members": [member for member in project["members"] if member["agentId"] == named.json()["agent"]["id"]]},
+            expected_version=project["version"],
         )
-        assert removed.status_code == 200, removed.text
         single = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Run with the one remaining named agent",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -1035,16 +1060,18 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
         )
         assert registered.status_code == 200
         agent = _create_agent(client, "alice", node_id="sbx_alice")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Audit the release",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -1113,7 +1140,7 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1164,17 +1191,19 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
         )
         assert registered.status_code == 200
         agent = _create_agent(client, "alice", node_id="sbx_alice")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
 
         created = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Scheduled backlog",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -1227,7 +1256,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1350,7 +1379,7 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1403,12 +1432,15 @@ def test_claimed_task_rejects_status_and_assignment_updates(monkeypatch) -> None
         _create_user(client, "alice", employee_id="alice")
         first = _create_agent(client, "alice", executor_kind="codex")
         second = _create_agent(client, "alice", executor_kind="claude")
+        project = project_for_agents(client.app.state.project_store, "alice", [first, second])
 
         for patch in ({"status": "done"}, {"assignedAgentId": second["id"]}):
             task = client.post(
                 "/api/v1/tasks",
                 json={
-                    "title": "Claimed task",
+                    "projectId": project["id"],
+                    "ownerEmployeeId": "alice",
+                "title": "Claimed task",
                     "assigneeEmployeeId": "alice",
                     "assignedAgentId": first["id"],
                     "status": "assigned",
@@ -1435,10 +1467,13 @@ def test_claimed_task_rejects_pickup_assignment_update(monkeypatch) -> None:
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         first = _create_agent(client, "alice", executor_kind="codex")
+        project = project_for_agents(client.app.state.project_store, "alice", [first])
         second = _create_agent(client, "alice", executor_kind="claude")
         task = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
+                "ownerEmployeeId": "alice",
                 "title": "Claimed pickup",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": first["id"],
@@ -1469,9 +1504,12 @@ def test_claimed_task_allows_metadata_update(monkeypatch) -> None:
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         agent = _create_agent(client, "alice", executor_kind="codex")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         task = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
+                "ownerEmployeeId": "alice",
                 "title": "Original title",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
@@ -1509,7 +1547,7 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces"],
+                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1521,9 +1559,11 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
         override = _create_agent(
             client, "alice", executor_kind="claude", node_id="sbx_alice"
         )
+        project = project_for_agents(client.app.state.project_store, "alice", [assigned, override])
         task = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Use the assigned agent",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -1565,10 +1605,13 @@ def test_task_rejects_invalid_due_date(monkeypatch) -> None:
         )
         assert invalid_status.status_code == 400
 
+        # Outside a project, Ready is refused before anything else is asked:
+        # intake has nowhere to run.
         assigned_without_agent = client.post(
             "/api/v1/tasks", json={"title": "Missing agent", "status": "assigned"}
         )
-        assert assigned_without_agent.status_code == 400
+        assert assigned_without_agent.status_code == 409
+        assert assigned_without_agent.json()["detail"] == "issue_needs_project"
 
 
 def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
@@ -1631,22 +1674,26 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
         assert "routineNextRunDate" in enabled_custom_without_date.json()["detail"]
 
 
-def test_clearing_an_assigned_task_returns_it_to_backlog(monkeypatch) -> None:
+def test_clearing_a_legacy_ready_intake_issue_returns_it_to_backlog(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         agent = _create_agent(client, "alice")
-        task = client.post(
-            "/api/v1/tasks",
-            json={
+        # Clearing only returns work to Backlog outside a project, which is now
+        # an intake issue made Ready before intake existed. In a project the
+        # roster would still run it, so it stays Ready there.
+        task = client.app.state.task_store.create_task(
+            {
                 "title": "Requeue me",
+                "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
-            },
-        ).json()
+            }
+        )
 
         cleared = client.patch(
             f"/api/v1/tasks/{task['id']}",
@@ -1695,9 +1742,12 @@ def test_active_task_assignment_cannot_change(monkeypatch) -> None:
         _create_user(client, "alice", employee_id="alice")
         first = _create_agent(client, "alice", executor_kind="codex")
         second = _create_agent(client, "alice", executor_kind="claude")
+        project = project_for_agents(client.app.state.project_store, "alice", [first, second])
         task = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
+                "ownerEmployeeId": "alice",
                 "title": "Already running",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": first["id"],
@@ -1735,9 +1785,12 @@ def test_pickup_rejects_terminal_tasks_without_creating_a_session(monkeypatch) -
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         agent = _create_agent(client, "alice")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         task = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
+                "ownerEmployeeId": "alice",
                 "title": "Already done",
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
@@ -1835,9 +1888,11 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         agent = _create_agent(client, "alice")
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
         dispatching = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Dispatching",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
@@ -1857,6 +1912,7 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
         running = client.post(
             "/api/v1/tasks",
             json={
+                "projectId": project["id"],
                 "title": "Already running",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",

@@ -22,6 +22,11 @@ from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import start_task_on_ready_node
 
+from issue_projects import PROJECT_CAPABILITY, project_for
+
+# A routine's run is the one kind of work that dispatches outside a project.
+ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
+
 
 def _bootstrap_admin(client: TestClient) -> None:
     response = client.post(
@@ -142,22 +147,25 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
         )
         agent = _agent(app, node)
 
-        task = client.post(
-            "/api/v1/tasks",
-            json={
+        # The per-task layout serves routine runs; other work runs in a project.
+        task = app.state.task_store.create_task(
+            {
+                **ROUTINE_RUN,
                 "title": "Write the report",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-            },
-        ).json()
+                "status": "assigned",
+            }
+        )
 
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
 
         command = _take_command(app, node)
         assert command["workspaceLayout"] == "task"
-        assert command["workspaceSubpath"] == f"tasks/{task['id']}"
+        assert command["workspaceSubpath"] == f"tasks/routine_nightly/{task['id']}"
 
 
 def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
@@ -169,15 +177,18 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
         node = _register_node(app, "sbx_alice", capabilities=["thread-workspaces"])
         agent = _agent(app, node)
 
-        task = client.post(
-            "/api/v1/tasks",
-            json={
+        # The per-task layout serves routine runs; other work runs in a project.
+        task = app.state.task_store.create_task(
+            {
+                **ROUTINE_RUN,
                 "title": "Write the report",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-            },
-        ).json()
+                "status": "assigned",
+            }
+        )
 
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
@@ -216,6 +227,7 @@ def test_dispatch_resolves_the_layout_on_the_legacy_no_agent_record_branch(
 
         task = app.state.task_store.create_task(
             {
+                **ROUTINE_RUN,
                 "title": "Legacy task without a named agent",
                 "assignedAgent": "codex",
                 "ownerEmployeeId": "alice",
@@ -236,7 +248,7 @@ def test_dispatch_resolves_the_layout_on_the_legacy_no_agent_record_branch(
 
         command = _take_command(app, node)
         assert command["workspaceLayout"] == "task"
-        assert command["workspaceSubpath"] == f"tasks/{task['id']}"
+        assert command["workspaceSubpath"] == f"tasks/routine_nightly/{task['id']}"
 
 
 def test_project_task_keeps_the_project_workspace(monkeypatch) -> None:
@@ -340,9 +352,10 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
+        project = project_for(app.state.project_store, "alice", node, [agent["id"]])
 
         async def failing_run(node_id, request):
             raise ValueError("capacity_exhausted: node is full")
@@ -355,6 +368,7 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
                 "assignedAgentId": agent["id"],
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "projectId": project["id"],
                 "status": "assigned",
             }
         )
@@ -388,9 +402,10 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
+        project = project_for(app.state.project_store, "alice", node, [agent["id"]])
 
         async def failing_run(node_id, request):
             raise ValueError("connection reset")
@@ -403,6 +418,7 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
                 "assignedAgentId": agent["id"],
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "projectId": project["id"],
                 "status": "assigned",
             }
         )

@@ -260,6 +260,7 @@ def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
                 "title": "Later",
                 "priority": "high",
                 "assigneeEmployeeId": "alice",
+                "projectId": "project_billing",
                 "dueDate": "2026-07-10",
             }
         )
@@ -268,6 +269,7 @@ def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
                 "title": "Earlier",
                 "priority": "high",
                 "assigneeEmployeeId": "alice",
+                "projectId": "project_billing",
                 "dueDate": "2026-06-25",
             }
         )
@@ -276,6 +278,7 @@ def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
                 "title": "Bob",
                 "priority": "high",
                 "assigneeEmployeeId": "bob",
+                "projectId": "project_billing",
                 "dueDate": "2026-06-01",
             }
         )
@@ -564,6 +567,7 @@ def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
                 "title": "Later",
                 "priority": "high",
                 "assigneeEmployeeId": "alice",
+                "projectId": "project_billing",
                 "dueDate": "2026-07-10",
             }
         )
@@ -572,6 +576,7 @@ def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
                 "title": "Earlier",
                 "priority": "high",
                 "assigneeEmployeeId": "alice",
+                "projectId": "project_billing",
                 "dueDate": "2026-06-25",
             }
         )
@@ -580,6 +585,7 @@ def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
                 "title": "Bob",
                 "priority": "high",
                 "assigneeEmployeeId": "bob",
+                "projectId": "project_billing",
                 "dueDate": "2026-06-01",
             }
         )
@@ -1196,3 +1202,40 @@ def test_routine_occurrence_without_a_style_inherits_nothing(database: bool) -> 
         occurrence = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
 
         assert "collaborationStyle" not in occurrence
+
+
+@pytest.mark.parametrize("database", [False, True])
+def test_task_claim_skips_intake_issues(database) -> None:
+    """An issue outside a project is never picked up, even if it was made Ready
+    before intake existed; a routine run outside a project still is."""
+    with TemporaryDirectory() as root:
+        store = (
+            DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
+            if database
+            else LocalTaskStore(root)
+        )
+        intake = store.create_task({"title": "Loose", "priority": "high", "assigneeEmployeeId": "alice"})
+        run = store.create_task({
+            "title": "Nightly run", "assigneeEmployeeId": "alice", "sourceRoutineId": "routine_nightly",
+        })
+        for task in (intake, run):
+            store.assign_task(task["id"], "codex")
+
+        claimed = store.claim_next_task_for_agent("codex", "alice")
+
+        assert claimed is not None and claimed["id"] == run["id"]
+        assert store.claim_next_task_for_agent("codex", "alice") is None
+
+
+@pytest.mark.parametrize("database", [False, True])
+def test_stale_project_move_cannot_replace_the_first_move(database) -> None:
+    with TemporaryDirectory() as root:
+        store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True) if database else LocalTaskStore(root)
+        issue = store.create_task({"title": "Intake"})
+        stale = {"expectedStatus": "backlog", "expectedExecutionRevision": 0}
+        store.update_task_if_not_dispatching(issue["id"], {**stale, "projectId": "first"})
+        with pytest.raises(ValueError, match="task_already_in_project"):
+            store.update_task_if_not_dispatching(issue["id"], {**stale, "projectId": "second"})
+        current = store.get_task(issue["id"])
+        assert current["projectId"] == "first"
+        assert len([event for event in current["events"] if event["type"] == "task.project_set"]) == 1

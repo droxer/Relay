@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.sessions import SessionController
 
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
 
@@ -71,21 +72,28 @@ def test_queued_project_start_retries_when_runtime_recovers(setup, failure):
 @pytest.mark.parametrize("scope", ["agent", "project"])
 def test_precreated_idle_thread_can_start_without_duplicate_execution(setup, scope):
     app, client, node, agent, project = setup
-    assignment = (
-        {"assignedAgentId": agent["id"]}
-        if scope == "agent"
-        else {"projectId": project["id"]}
-    )
-    response = client.post(
-        "/api/v1/tasks",
-        json={
+    if scope == "agent":
+        task = app.state.task_store.create_task({
             "title": "Start precreated thread",
-            "createSession": True,
-            **assignment,
-        },
-    )
-    assert response.status_code == 201, response.text
-    task = response.json()
+            "sourceRoutineId": "routine_nightly",
+            "ownerEmployeeId": "alice",
+            "assigneeEmployeeId": "alice",
+            "assignedAgentId": agent["id"],
+            "assignedAgent": agent["executorKind"],
+        })
+        controller = SessionController(
+            app.state.session_store, task_store=app.state.task_store,
+            task_id=task["id"], owner_employee_id="alice", owner_agent_id=agent["id"],
+        )
+        controller.create_session(task["title"], ["human", "codex"])
+        task = app.state.task_store.get_task(task["id"])
+    else:
+        response = client.post("/api/v1/tasks", json={
+            "title": "Start precreated thread", "createSession": True,
+            "projectId": project["id"],
+        })
+        assert response.status_code == 201, response.text
+        task = response.json()
     [original_session_id] = task["linkedSessionIds"]
     assert not app.state.daemon_store.active_run_request_for_task(task["id"])
     result = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
@@ -106,8 +114,9 @@ def test_precreated_idle_thread_can_start_without_duplicate_execution(setup, sco
 @pytest.mark.parametrize("scope", ["agent", "project", "routine"])
 def test_explicit_start_retries_blocked_dispatch_without_automatic_retry(setup, monkeypatch, scope):
     app, client, node, agent, project = setup
-    assignment = {"projectId": project["id"]} if scope == "project" else {"assignedAgentId": agent["id"]}
+    assignment = {"projectId": project["id"]} if scope == "project" else {"assignedAgentId": agent["id"], "projectId": project["id"]}
     if scope == "routine":
+        assignment.pop("projectId", None)
         assignment.update(isRoutine=True, routineCadence="weekly", routineEnabled=True,
                           routineNextRunDate=app.state.today().isoformat())
     created = client.post("/api/v1/tasks", json={"title": "Retry failed work", **assignment})
@@ -141,8 +150,8 @@ def test_explicit_start_retries_blocked_dispatch_without_automatic_retry(setup, 
 
 
 def test_explicit_start_does_not_unblock_owned_execution(setup):
-    app, client, node, agent, _ = setup
-    task = client.post("/api/v1/tasks", json={"title": "Already admitted", "assignedAgentId": agent["id"]}).json()
+    app, client, node, agent, project = setup
+    task = client.post("/api/v1/tasks", json={"title": "Already admitted", "projectId": project["id"], "assignedAgentId": agent["id"]}).json()
     started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
     assert started["dispatch"]["state"] == "started", started
     app.state.task_store.update_task(task["id"], {"status": "blocked", "blockerReason": "Waiting for reconciliation"})

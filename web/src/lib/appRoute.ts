@@ -12,7 +12,7 @@ import {
 } from "./viewTypes.ts";
 
 const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
-  backlog: "/backlog",
+  backlog: "/issues",
   routine: "/routines",
   agents: "/agents",
   teams: "/teams",
@@ -31,6 +31,13 @@ const LEGACY_SECTION_PATHS: Record<string, SettingsSection> = {
 };
 
 const WORK_ROUTES = new Map(Object.entries(WORK_PATHS).map(([route, path]) => [path, route as AppRoute]));
+
+/* The route is still named `backlog` inside the app; only its address became
+   /issues. Reading the path folds that back so every `head === "backlog"`
+   below keeps one meaning, and a /backlog link from before the rename lands
+   on the same page. */
+const PATH_HEAD_ALIASES: Record<string, string> = { issues: "backlog" };
+WORK_ROUTES.set("/backlog", "backlog");
 
 export const APP_NAVIGATION_EVENT = "relay:navigation";
 
@@ -62,7 +69,9 @@ function decodeSegment(segment: string | undefined): string | null {
 }
 
 function pathSegments(pathname: string): string[] {
-  return pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+  const segments = pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+  const head = segments[0] ? PATH_HEAD_ALIASES[segments[0]] : undefined;
+  return head ? [head, ...segments.slice(1)] : segments;
 }
 
 export function parseAppPath(pathname: string, _search = ""): AppLocationState {
@@ -146,7 +155,7 @@ export function pathForAppState({
   if (login) return "/login";
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
   if (route === "backlog" && taskId) {
-    const taskPath = `/backlog/${encodeURIComponent(taskId)}`;
+    const taskPath = `${WORK_PATHS.backlog}/${encodeURIComponent(taskId)}`;
     return sessionId ? `${taskPath}/threads/${encodeURIComponent(sessionId)}` : taskPath;
   }
   if (route === "routine" && taskId) {
@@ -216,7 +225,7 @@ const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
  * Keep in sync with each surface's `SortColumn` set.
  */
 const LIST_SORT_PARAMS: Record<string, Record<string, ReadonlySet<string>>> = {
-  backlog: { sort: new Set(["title", "status", "priority", "assignee", "due"]) },
+  backlog: { sort: new Set(["title", "status", "priority", "assignee", "due", "project", "updated"]) },
   routines: { sort: new Set(["title", "state", "priority", "assignee", "nextRun"]) },
   // Two tables on one path, so each owns its own key.
   admin: {
@@ -269,6 +278,9 @@ const LANE_PAGE_PARAMS: Record<string, readonly string[]> = {
 const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | null>> = {
   backlog: {
     project: null,
+    // The Issues page's queue and grouping (lib/issueQueues).
+    queue: new Set(["needs_me", "untriaged", "blocked", "running", "overdue", "done"]),
+    group: new Set(["status", "assignee", "none"]),
     q: null,
     status: new Set(["backlog", "assigned", "running", "waiting_for_human", "review", "blocked", "done"]),
     priority: new Set(["high", "normal", "low"]),
@@ -408,7 +420,11 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
       /* The tab embeds the backlog board, so it owns the board's params —
          except the project chip: this board's project is the route. */
       copyFilterParams("backlog", source, target);
+      /* Minus what only the Issues page speaks: the project is this board's
+         route, and queues and grouping are the cross-project table's. */
       target.delete("project");
+      target.delete("queue");
+      target.delete("group");
       copySortParams("backlog", source, target);
       copyPageParams("backlog", source, target);
       copyParam(source, target, "task");

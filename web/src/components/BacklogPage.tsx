@@ -3,7 +3,7 @@
 
 import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
@@ -23,7 +23,6 @@ import { emptyBacklogForm, taskStartMutationInput } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
-import { PageHeader } from "./PageHeader";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
@@ -34,18 +33,12 @@ import { taskRef } from "../lib/taskRef";
 
 
 interface BacklogPageProps {
-  /** `project` embeds the board in a project's Tasks tab: the project is
-   *  fixed, so there is no status rail, no project chip, and no page title —
-   *  the project page's own header names the place. */
-  variant?: "page" | "project";
   /** A closed project shows its work but offers nothing to create or move. */
   readOnly?: boolean;
-  projectId?: string;
-  projectNotice?: ReactNode;
-  onSelectProject?: (id: string | null) => void;
+  projectId: string;
   projects?: ProjectRecord[];
   onCreateProject?: (onCreated: (id: string) => void) => void;
-  /** The task whose record is open, from `/backlog/<id>`. */
+  /** The task whose record is open, from the project route. */
   recordTaskId?: string | null;
   /** Opens a record; `null` returns to the board. */
   onOpenRecord: (taskId: string | null) => void;
@@ -86,8 +79,7 @@ import {
 
 
 
-export function BacklogPage({ variant = "page", readOnly = false, projectId, projectNotice, onSelectProject, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, nodes, currentUser, isRefreshing = false, onRefresh, onOpenThread }: BacklogPageProps) {
-  const inProject = variant === "project";
+export function BacklogPage({ readOnly = false, projectId, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, nodes, currentUser, isRefreshing = false, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const { t } = useTranslation();
@@ -172,19 +164,6 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
   const selectedCount = visibleSelection.size;
 
-  /* The project is a chip in the bar like any other filter, but choosing one
-     navigates: a project's backlog is its own route, not a query param. */
-  const projectFilter = useMemo(() => onSelectProject ? {
-    field: {
-      id: "project",
-      label: t("project.projects"),
-      kind: "select" as const,
-      options: projects.filter((project) => !project.archivedAt || project.id === projectId)
-        .map((project) => ({ value: project.id, label: project.name })),
-    },
-    value: projectId ?? "",
-    onChange: (id: string) => onSelectProject(id || null),
-  } : undefined, [onSelectProject, projects, projectId, t]);
   const openCreate = readOnly ? undefined : () => openTaskForm(emptyBacklogForm(currentUser));
 
   // Keep the server and first client render deterministic, then restore the
@@ -295,25 +274,11 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
 
   return (
     <section
-      id={inProject ? undefined : "backlog-panel"}
-      className={inProject ? "backlog-page backlog-page--project" : "backlog-page sec-shell"}
+      className="backlog-page backlog-page--project"
       data-view={view}
       aria-label={t("backlog.title")}
-      tabIndex={inProject ? undefined : -1}
     >
-      {inProject ? null : (
-        <div className="sec-rail">
-          <PageHeader kicker={t("nav.workspace")} title={t("nav.backlog")}
-            count={t("backlog.sub", { count: backlogTasks.length })} titleVariant="display" layout="stacked" />
-          <TaskStatusNav value={filters.status} counts={sectionCounts}
-            onChange={(status) => setFilters({ ...filters, status })} />
-        </div>
-      )}
-      <div className={inProject ? "backlog-project-main" : "sec-main"}>
-      {inProject ? (
-        /* The project header already names the place. The rail's status
-           sections fold into a strip here — the same control, laid flat — so
-           status keeps a visible home and "All tasks" carries the count. */
+      <div className="backlog-project-main">
         <div className="backlog-project-toolbar">
           <div className="backlog-project-status">
             <TaskStatusNav value={filters.status} counts={sectionCounts}
@@ -321,23 +286,12 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
           </div>
           <div className="backlog-project-actions">{headerActions}</div>
         </div>
-      ) : (
-        <PageHeader
-          title={filters.status === "all" ? t("backlog.title") : t(`backlog.statuses.${filters.status}`)}
-          titleAs="h2"
-          titleVariant="display"
-          actions={headerActions}
-        />
-      )}
 
-      {projectNotice}
-
-      {onSelectProject || backlogTasks.length > 0 ? (
+      {backlogTasks.length > 0 ? (
         <>
           {view === "board" ? <BacklogStats tasks={backlogTasks} /> : null}
           <BacklogFiltersBar
             filters={filters}
-            extraField={projectFilter}
             agents={logicalAgents}
             teams={teams}
             onChange={setFilters}
@@ -392,7 +346,6 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
             contextFor={(task) => {
               const assignment = taskAssignmentDisplay(task);
               return {
-                projectName: inProject ? undefined : projects.find((project) => project.id === task.projectId)?.name,
                 ready: assignment.ready,
                 agentDisplayName: assignment.name,
                 agentImageUrl: assignment.imageUrl,
@@ -410,7 +363,6 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
             const assignment = taskAssignmentDisplay(task);
             return {
               task,
-              projectName: inProject ? undefined : projects.find((project) => project.id === task.projectId)?.name,
               selected: visibleSelection.has(task.id),
               onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
               agentDisplayName: assignment.name,
@@ -440,7 +392,7 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
         <TaskRecordView
           taskId={drawerRecordId}
           /* Inside a project `?tab=` is the project's own tab strip. */
-          tabSearchKey={inProject ? "recordTab" : undefined}
+          tabSearchKey="recordTab"
           currentUser={currentUser}
           tasks={tasks}
           drawer={{
