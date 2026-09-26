@@ -170,6 +170,21 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <NavThreads size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.threads")}</span>
           </a>
+          <a
+            className={`sidenav-btn sidenav-secondary-item ${route === "routine" ? "active" : ""}`}
+            data-nav="routine"
+            href={hrefForRoute("routine")}
+            aria-label={t("nav.routine")}
+            aria-current={route === "routine" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "routine")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavRoutine size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.routine")}</span>
+          </a>
         </div>
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workspace")}>
           <span className="sidenav-group-label sr-only" aria-hidden="true">{t("nav.workspace")}</span>
@@ -202,21 +217,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           >
             <NavBacklog size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.backlog")}</span>
-          </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item ${route === "routine" ? "active" : ""}`}
-            data-nav="routine"
-            href={hrefForRoute("routine")}
-            aria-label={t("nav.routine")}
-            aria-current={route === "routine" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "routine")}
-            onMouseEnter={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavRoutine size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.routine")}</span>
           </a>
         </div>
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workforce")}>
