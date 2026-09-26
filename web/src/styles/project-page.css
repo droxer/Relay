@@ -446,3 +446,41 @@
   .project-task-summary { grid-template-columns: 1fr; gap: var(--sp-3); }
   .project-task-create { flex-wrap: wrap; }
 }
+
+/* ---- project Agents tab: roster document + identity rail -------------
+   Same stretch as the team record (workspace.css): the rail rule runs the
+   full pane height instead of stopping under a short roster. */
+.project-profile-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.project-profile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.project-profile .workspace-profile-dossier {
+  flex: 1;
+  min-height: 0;
+}
+
+@container record (min-width: 768px) {
+  .project-profile .workspace-profile-dossier {
+    grid-template-rows: minmax(min-content, 1fr);
+  }
+}
+
+/* The roster keeps its own bottom rhythm; the grid gap owns the rest. */
+.project-profile .project-member-tiles {
+  padding-bottom: 0;
+}
+
+/* A path, so it may break anywhere; it keeps the rail's value size rather
+   than the larger code role. */
+.project-rail-path {
+  overflow-wrap: anywhere;
+}

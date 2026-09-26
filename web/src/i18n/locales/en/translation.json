@@ -246,7 +246,9 @@
     "edit_conflict_again": "The project changed again. Your draft is preserved; save again to review the latest changes.",
     "edit_closed": "This project is archived or disabled. Your draft is preserved, but it cannot be saved.",
     "edit_member_removed": "This member was removed while you were editing. Your draft is preserved; close this editor and add the member again if needed.",
-    "edit_member_added": "This agent was added while you were editing. Your draft is preserved; open the existing member to edit it."
+    "edit_member_added": "This agent was added while you were editing. Your draft is preserved; open the existing member to edit it.",
+    "rename": "Rename project",
+    "rail_no_lead": "No lead yet"
   },
   "thread": {
     "project_indicator": "Project: {{name}}",

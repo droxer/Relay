@@ -242,7 +242,9 @@
     "edit_conflict_again": "專案再次發生變更。草稿已保留；再次儲存以查看最新修改。",
     "edit_closed": "專案已封存或停用。草稿已保留，但無法儲存。",
     "edit_member_removed": "編輯期間該成員已被移除。草稿已保留；如有需要，請關閉編輯器後重新新增成員。",
-    "edit_member_added": "編輯期間該智能體已被新增。草稿已保留；請開啟現有成員進行編輯。"
+    "edit_member_added": "編輯期間該智能體已被新增。草稿已保留；請開啟現有成員進行編輯。",
+    "rename": "重新命名專案",
+    "rail_no_lead": "尚未指定負責人"
   },
   "thread": {
     "project_indicator": "專案：{{name}}",

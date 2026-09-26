@@ -41,6 +41,10 @@ import {
   WorkspaceEmpty,
 } from "./workspace/WorkspacePrimitives";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
+import { DossierNameField } from "./workspace/DossierNameField";
+import { ProfileImagePicker } from "./ProfileImagePicker";
+import { useRelayMutations } from "../hooks/useRelayMutations";
+import { useProjectSave } from "../hooks/useProjectSave";
 import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
@@ -154,6 +158,18 @@ function ProjectProfile({
 
   return (
     <div className="workspace-profile project-profile">
+      {/* Same dossier grammar as the team record: the roster is the document,
+          and the project's identity sits in a rail beside it. */}
+      <div className="workspace-profile-panel workspace-profile-dossier">
+        <section className="workspace-dossier-doc" aria-labelledby="project-profile-members">
+          {/* The team record's section head, so the count rides its label the
+              same way on both rosters. */}
+          <div className="team-profile-section-head">
+            <h2 id="project-profile-members" className="workspace-dossier-section-title">
+              {t("project.members")}
+              <span className="tnum">{members.length}</span>
+            </h2>
+          </div>
       {members.length ? (
         <div className="project-member-tiles">
           {members.map((member, index) => (
@@ -190,7 +206,67 @@ function ProjectProfile({
           ) : null}
         </div>
       )}
+        </section>
+        <ProjectIdentityRail project={project} agents={agents} readOnly={!onAddMember} />
+      </div>
     </div>
+  );
+}
+
+const noImage = async () => {};
+
+/** The project's identity column: its mark, its name (renamed in place),
+ *  and the two facts the header band does not already carry. */
+function ProjectIdentityRail({ project, agents, readOnly }: {
+  project: ProjectRecord;
+  agents: EmployeeAgent[];
+  readOnly: boolean;
+}) {
+  const { t } = useTranslation();
+  const { updateProjectMutation } = useRelayMutations();
+  const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
+  const lead = project.leadAgentId ? agents.find((agent) => agent.id === project.leadAgentId) : undefined;
+  const leadName = project.leadAgentId ? lead?.displayName ?? t("project.member_unavailable") : t("project.rail_no_lead");
+
+  async function rename(next: string): Promise<boolean> {
+    return Boolean(await projectSave.save(project, { expectedVersion: project.version, name: next }));
+  }
+
+  return (
+    <aside className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
+      <div className="workspace-dossier-portrait">
+        {/* Projects carry no uploaded image; the mark stands in, in the same
+            frame a team's portrait uses. */}
+        <ProfileImagePicker
+          name={project.name}
+          fallback={<ProjectMark size={ICON.lg} />}
+          editable={false}
+          onUpload={noImage}
+          onRemove={noImage}
+        />
+      </div>
+      <DossierNameField
+        label={t("project.name")}
+        name={project.name}
+        inputName="project-name"
+        renameLabel={t("project.rename")}
+        saveLabel={t("project.save")}
+        disabled={projectSave.pending}
+        readOnly={readOnly}
+        error={projectSave.error}
+        onSave={rename}
+      />
+      <div className="workspace-dossier-field">
+        <span className="workspace-dossier-field-label">{t("project.member_make_lead")}</span>
+        <span className="workspace-dossier-field-value" translate="no">{leadName}</span>
+      </div>
+      <div className="workspace-dossier-field">
+        <span className="workspace-dossier-field-label">{t("project.shared_workspace")}</span>
+        <span className="workspace-dossier-field-value project-rail-path" translate="no" title={project.workspaceSubpath}>
+          {project.workspaceSubpath}
+        </span>
+      </div>
+    </aside>
   );
 }
 
@@ -349,7 +425,7 @@ export function ProjectWorkspacePage({
             onOpenRecord={(taskId) => void navigateToAppPath(projectTasksHref(project.id, taskId))}
           />
         </TabsContent>
-        <TabsContent value="profile">
+        <TabsContent value="profile" className="project-profile-panel">
           <ProjectProfile
             project={project}
             agents={agents}

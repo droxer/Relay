@@ -33,8 +33,8 @@ import { formatRelativeTime } from "./admin/helpers";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DossierNameField } from "./workspace/DossierNameField";
 import { CollaborationStyleCards, CollaborationSlotPreview, CollaborationStyleSummary } from "./CollaborationStyleSelect";
 import { effectiveStyle } from "../lib/collaborationStyle";
 
@@ -66,8 +66,6 @@ function TeamProfile({
     [employeeAgents],
   );
   const [editing, setEditing] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [nameDraft, setNameDraft] = useState(team.name);
   const [memberIds, setMemberIds] = useState<string[]>(team.memberAgentIds);
   const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
@@ -141,18 +139,7 @@ function TeamProfile({
     setValidationError(null);
   }
 
-  function startRename() {
-    setNameDraft(team.name);
-    setRenaming(true);
-  }
-
-  async function saveRename() {
-    const next = nameDraft.trim();
-    if (!next) return;
-    if (next === team.name.trim()) {
-      setRenaming(false);
-      return;
-    }
+  async function saveRename(next: string): Promise<boolean> {
     try {
       await updateTeamMutation.mutateAsync({
         teamId: team.id,
@@ -163,9 +150,10 @@ function TeamProfile({
           enabled: team.enabled,
         }),
       });
-      setRenaming(false);
+      return true;
     } catch {
       // The shared mutation handler announces the error and keeps the draft open.
+      return false;
     }
   }
 
@@ -372,60 +360,15 @@ function TeamProfile({
             />
           </div>
 
-          <div className="workspace-dossier-field">
-            <span className="workspace-dossier-field-label">{t("teams.name")}</span>
-            {renaming ? (
-              <div className="workspace-dossier-rename">
-                <Input
-                  name="team-name"
-                  type="text"
-                  aria-label={t("teams.name")}
-                  autoComplete="off"
-                  autoFocus
-                  required
-                  value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void saveRename();
-                    if (event.key === "Escape") setRenaming(false);
-                  }}
-                  disabled={busy}
-                />
-                <div className="workspace-dossier-rename-actions">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="dense"
-                    onClick={() => setRenaming(false)}
-                    disabled={busy}
-                  >
-                    {t("dialog.cancel")}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="dense"
-                    onClick={() => void saveRename()}
-                    disabled={busy}
-                  >
-                    {t("teams.save")}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="workspace-dossier-name-row">
-                <span className="workspace-dossier-name-value" translate="no">{team.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="workspace-dossier-icon-btn"
-                  tooltip={t("teams.rename")}
-                  onClick={startRename}
-                >
-                  <ActionEdit size={ICON.sm} aria-hidden="true" />
-                </Button>
-              </div>
-            )}
-          </div>
+          <DossierNameField
+            label={t("teams.name")}
+            name={team.name}
+            inputName="team-name"
+            renameLabel={t("teams.rename")}
+            saveLabel={t("teams.save")}
+            disabled={busy}
+            onSave={saveRename}
+          />
 
           {/* Created/updated moved to the band — the rail holds only the
               things you can change. */}
