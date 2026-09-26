@@ -340,24 +340,57 @@
   overflow: hidden;
 }
 
-/* No title: the project header names the place. The strip keeps the count
-   on the left and the board's controls on the right. */
+/* No title: the project header names the place. The strip carries status
+   on the left, the board's controls on the right, on one rule. */
 .backlog-project-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--page-gutter) 0;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--page-gutter);
+  border-bottom: 0.5px solid var(--line-1);
 }
 
-.backlog-project-count {
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+/* The rail's section list, laid flat: same rows, same selection fill, same
+   receding empties — only the axis changes. It scrolls sideways rather than
+   wrapping, so the row keeps one height at any width. */
+.backlog-project-status {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* A strip that runs past its box fades out instead of cutting a label in
+     half; the list's end padding lets the last section clear the fade once
+     the reader scrolls to it. */
+  mask-image: linear-gradient(to right, black calc(100% - var(--sp-7)), transparent 100%);
+}
+
+.backlog-project-status::-webkit-scrollbar {
+  display: none;
+}
+
+.backlog-project-status .sec-nav {
+  padding: 0;
+}
+
+.backlog-project-status .sec-nav-list {
+  flex-direction: row;
+  gap: var(--sp-1);
+  padding-inline-end: var(--sp-7);
+}
+
+.backlog-project-status .sec-nav-btn {
+  width: auto;
+  gap: var(--sp-2);
+  white-space: nowrap;
+}
+
+.backlog-project-status .sec-nav-label {
+  flex: none;
 }
 
 .backlog-project-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--sp-2);
 }

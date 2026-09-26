@@ -170,6 +170,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <NavThreads size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.threads")}</span>
           </a>
+        </div>
+        <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workspace")}>
+          <span className="sidenav-group-label sr-only" aria-hidden="true">{t("nav.workspace")}</span>
           <a
             className={`sidenav-btn ${route === "projects" ? "active" : ""}`}
             data-nav="projects"
@@ -185,9 +188,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <NavProjects size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("project.projects")}</span>
           </a>
-        </div>
-        <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workspace")}>
-          <span className="sidenav-group-label sr-only" aria-hidden="true">{t("nav.workspace")}</span>
           <a
             className={`sidenav-btn ${route === "backlog" ? "active" : ""}`}
             data-nav="backlog"
