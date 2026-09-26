@@ -185,18 +185,6 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
     value: projectId ?? "",
     onChange: (id: string) => onSelectProject(id || null),
   } : undefined, [onSelectProject, projects, projectId, t]);
-  /* Embedded in a project there is no status rail, so status rides the bar
-     as a chip — the same filter, spoken where the reader can reach it. */
-  const statusFilter = useMemo(() => ({
-    field: {
-      id: "status",
-      label: t("backlog.status"),
-      kind: "select" as const,
-      options: TASK_STATUSES.map((status) => ({ value: status, label: t(`backlog.statuses.${status}`) })),
-    },
-    value: filters.status === "all" ? "" : filters.status,
-    onChange: (status: string) => setFilters({ ...filters, status: (status || "all") as typeof filters.status }),
-  }), [filters, setFilters, t]);
   const openCreate = readOnly ? undefined : () => openTaskForm(emptyBacklogForm(currentUser));
 
   // Keep the server and first client render deterministic, then restore the
@@ -323,10 +311,14 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
       )}
       <div className={inProject ? "backlog-project-main" : "sec-main"}>
       {inProject ? (
-        /* The project header already names the place; the board keeps only
-           its count and its controls. */
+        /* The project header already names the place. The rail's status
+           sections fold into a strip here — the same control, laid flat — so
+           status keeps a visible home and "All tasks" carries the count. */
         <div className="backlog-project-toolbar">
-          <span className="backlog-project-count tnum">{t("backlog.sub", { count: backlogTasks.length })}</span>
+          <div className="backlog-project-status">
+            <TaskStatusNav value={filters.status} counts={sectionCounts}
+              onChange={(status) => setFilters({ ...filters, status })} />
+          </div>
           <div className="backlog-project-actions">{headerActions}</div>
         </div>
       ) : (
@@ -345,7 +337,7 @@ export function BacklogPage({ variant = "page", readOnly = false, projectId, pro
           {view === "board" ? <BacklogStats tasks={backlogTasks} /> : null}
           <BacklogFiltersBar
             filters={filters}
-            extraField={inProject ? statusFilter : projectFilter}
+            extraField={projectFilter}
             agents={logicalAgents}
             teams={teams}
             onChange={setFilters}
