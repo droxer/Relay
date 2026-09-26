@@ -28,11 +28,13 @@ import type {
 import { AgentStateBadge } from "./AgentStateBadge";
 import {
   ActionAdd,
+  ActionCalendar,
   ActionEdit,
   ActionRetry,
   ICON,
   NavBack,
   NavProjects,
+  WorkspaceFolder,
   nodeOwnershipIcon,
 } from "./icons";
 import { Badge } from "@/components/ui/badge";
@@ -141,14 +143,92 @@ function ProjectMemberLane({
   );
 }
 
+type RailComputer = { label: string; Icon: ReturnType<typeof nodeOwnershipIcon> };
+
+/** The project's identity, beside its crew — the same rail the team record
+ *  carries: mark, name, the computer and folder it lives in, and its stamps.
+ *  The name is renamed through Project settings, which owns every edit. */
+function ProjectIdentityRail({
+  project,
+  computer,
+  onOpenSettings,
+}: {
+  project: ProjectRecord;
+  computer: RailComputer;
+  onOpenSettings?: () => void;
+}) {
+  const { t } = useTranslation();
+  const { Icon: ComputerIcon } = computer;
+  return (
+    <aside className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
+      <div className="workspace-dossier-portrait">
+        <span className="project-rail-mark" aria-hidden="true">
+          <NavProjects size={ICON.xl} />
+        </span>
+      </div>
+
+      <div className="workspace-dossier-field">
+        <span className="workspace-dossier-field-label">{t("project.name")}</span>
+        <div className="workspace-dossier-name-row">
+          <span className="workspace-dossier-name-value" translate="no">{project.name}</span>
+          {onOpenSettings ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="workspace-dossier-icon-btn"
+              tooltip={t("project.edit")}
+              onClick={onOpenSettings}
+            >
+              <ActionEdit size={ICON.sm} aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="workspace-dossier-field">
+        <span className="workspace-dossier-field-label">{t("project.computer")}</span>
+        <Badge className="max-w-full" title={project.computerId} translate="no">
+          <ComputerIcon size={ICON.xs} className="shrink-0" aria-hidden="true" />
+          <span className="truncate">{computer.label}</span>
+        </Badge>
+      </div>
+
+      {project.workspaceSubpath ? (
+        <div className="workspace-dossier-field">
+          <span className="workspace-dossier-field-label">{t("project.shared_workspace")}</span>
+          <Badge className="code max-w-full" title={project.workspaceSubpath} translate="no">
+            <WorkspaceFolder size={ICON.xs} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{project.workspaceSubpath}</span>
+          </Badge>
+        </div>
+      ) : null}
+
+      <div className="workspace-dossier-stamp workspace-dossier-stamps">
+        <Badge render={<time dateTime={project.createdAt} />} title={project.createdAt}>
+          <ActionCalendar size={ICON.xs} aria-hidden="true" />
+          {t("admin.v2.agent_meta_created", { time: formatRelativeTime(project.createdAt, t) })}
+        </Badge>
+        <Badge render={<time dateTime={project.updatedAt} />} title={project.updatedAt}>
+          <ActionRetry size={ICON.xs} aria-hidden="true" />
+          {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
+        </Badge>
+      </div>
+    </aside>
+  );
+}
+
 function ProjectProfile({
   project,
   agents,
+  computer,
+  onOpenSettings,
   onAddMember,
   onEditMember,
 }: {
   project: ProjectRecord;
   agents: EmployeeAgent[];
+  computer: RailComputer;
+  onOpenSettings?: () => void;
   onAddMember?: () => void;
   onEditMember?: (member: ProjectMember) => void;
 }) {
@@ -158,6 +238,44 @@ function ProjectProfile({
 
   return (
     <div className="workspace-profile project-profile">
+      {/* Same dossier grammar as the team record: the crew is the document,
+          the project's identity is the rail beside it. */}
+      <div className="workspace-profile-dossier">
+        <section className="workspace-dossier-doc" aria-labelledby="project-profile-members">
+          <h2 id="project-profile-members" className="workspace-dossier-section-title">
+            {t("project.members")}
+            <span className="tnum">{members.length}</span>
+          </h2>
+          <ProjectCrew
+            project={project}
+            members={members}
+            agentsById={agentsById}
+            onAddMember={onAddMember}
+            onEditMember={onEditMember}
+          />
+        </section>
+        <ProjectIdentityRail project={project} computer={computer} onOpenSettings={onOpenSettings} />
+      </div>
+    </div>
+  );
+}
+
+function ProjectCrew({
+  project,
+  members,
+  agentsById,
+  onAddMember,
+  onEditMember,
+}: {
+  project: ProjectRecord;
+  members: ProjectMember[];
+  agentsById: Map<string, EmployeeAgent>;
+  onAddMember?: () => void;
+  onEditMember?: (member: ProjectMember) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
       {members.length ? (
         <div className="project-member-tiles">
           {members.map((member, index) => (
@@ -194,7 +312,7 @@ function ProjectProfile({
           ) : null}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -250,10 +368,13 @@ export function ProjectWorkspacePage({
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
-  const ComputerIcon = nodeOwnershipIcon(
-    !computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local",
-  );
+  const railComputer: RailComputer = {
+    label: computerLabel,
+    Icon: nodeOwnershipIcon(!computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local"),
+  };
   const state = project.archivedAt ? "archived" : project.enabled ? "active" : "disabled";
+  /* Same split as the team record: the title line carries the state and the
+     id; the computer, folder and stamps live in the Agents tab's rail. */
   const bandFacts: RecordFact[] = [
     {
       key: "state",
@@ -264,30 +385,6 @@ export function ProjectWorkspacePage({
           label={t(`project.state_${state}`)}
         />
       ),
-    },
-    /* Every fact is a chip, the same grammar as the team record's title line:
-       a state pill followed by loose text read as a sentence, not a set. */
-    {
-      key: "computer",
-      label: t("project.computer"),
-      value: (
-        <Badge className="max-w-full" translate="no">
-          <ComputerIcon size={ICON.xs} className="shrink-0" aria-hidden="true" />
-          <span className="truncate">{computerLabel}</span>
-        </Badge>
-      ),
-      title: project.computerId,
-    },
-    {
-      key: "updated",
-      label: t("workspace.band_updated"),
-      value: (
-        <Badge render={<time dateTime={project.updatedAt} />}>
-          <ActionRetry size={ICON.xs} aria-hidden="true" />
-          {formatRelativeTime(project.updatedAt, t)}
-        </Badge>
-      ),
-      title: project.updatedAt,
     },
     {
       key: "id",
@@ -372,6 +469,8 @@ export function ProjectWorkspacePage({
           <ProjectProfile
             project={project}
             agents={agents}
+            computer={railComputer}
+            onOpenSettings={actions.settings ? onOpenSettings : undefined}
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
           />

@@ -21,6 +21,27 @@
   padding: clamp(var(--sp-5), 4vw, var(--sp-8));
 }
 
+/* The crew column's heading carries its count, like the team's Members. */
+.project-profile .workspace-dossier-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+/* The rail's portrait. A project has no uploaded image, so its class glyph
+   sits on the same 64px tile the team and agent portraits use. */
+.project-rail-mark {
+  display: grid;
+  place-items: center;
+  width: var(--avatar-2xl);
+  height: var(--avatar-2xl);
+  border-radius: var(--r-3);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 0.5px var(--line-1);
+  color: var(--ink-2);
+}
+
 .project-member-tile-instructions > span {
   color: var(--ink-4);
   font: var(--type-micro);
