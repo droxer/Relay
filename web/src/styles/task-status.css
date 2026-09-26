@@ -301,15 +301,23 @@
 
 /* On a tile the facts line rides the BOTTOM of the frame: `margin-top: auto`
    puts the tile's slack above it, so every tile in a lane states its
-   priority, agent and date on the same line. `0 1 auto` lets it clip rather
-   than grow, so an unusually chatty record spends its own space and never
-   the grid's. In the list rows this class is plain content and keeps
-   flowing. */
+   priority, agent and date on the same line. It is one row tall and never
+   shrinks (a squeezed row sliced its own glyphs), so an unusually chatty
+   record spends its own space and never the grid's. In the list rows this
+   class is plain content and keeps flowing. */
 .backlog-task .backlog-meta {
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: none;
   overflow: hidden;
   margin-top: auto;
+  /* One row of facts, clipped at whole facts. The frame is a fixed height,
+     so a line that wrapped used to be sliced through its middle at the
+     tile's bottom edge. The row still wraps, but the box is exactly one row
+     tall: a fact that does not fit on it drops out whole rather than showing
+     half its glyphs — the drawer carries it in full. The tallest atom is a
+     badge (one line plus a hairline and 2px of padding, ~1lh + 5.5px), and
+     the next row starts a whole line plus --sp-3 below, so 1lh + --sp-1-5
+     shows the first row entire and none of the second. */
+  height: calc(1lh + var(--sp-1-5));
 }
 
 .backlog-due {
