@@ -11,6 +11,7 @@ PROJECT_NAME_MAX_LENGTH = 120
 PROJECT_MEMBER_MAX_COUNT = 32
 PROJECT_RESPONSIBILITIES_MAX_LENGTH = 4_000
 PROJECT_INSTRUCTIONS_MAX_LENGTH = 8_000
+PROJECT_DESCRIPTION_MAX_LENGTH = 4_000
 
 
 def create_project_payload(
@@ -50,11 +51,24 @@ def create_project_payload(
             "project_name_required",
             max_length=PROJECT_NAME_MAX_LENGTH,
         ),
+        "description": project_description(payload.get("description")),
         "computerId": target_computer_id,
         "leadAgentId": lead_agent_id,
         "members": members,
         "enabled": enabled,
     }
+
+
+def project_description(value: Any) -> str:
+    """A project's brief: optional free text, stored trimmed; absent is empty."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ProjectValidationError("project_description_invalid")
+    normalized = value.strip()
+    if len(normalized) > PROJECT_DESCRIPTION_MAX_LENGTH:
+        raise ProjectValidationError("project_description_too_long")
+    return normalized
 
 
 def resolve_target_node_id(monitor_nodes: list[dict[str, Any]], computer_id_value: str) -> str | None:
@@ -86,7 +100,14 @@ def update_project_payload(
     expected_version = payload.get("expectedVersion")
     if not isinstance(expected_version, int) or isinstance(expected_version, bool):
         raise ProjectValidationError("project_expected_version_required")
-    allowed = {"name", "leadAgentId", "members", "enabled", "expectedVersion"}
+    allowed = {
+        "name",
+        "description",
+        "leadAgentId",
+        "members",
+        "enabled",
+        "expectedVersion",
+    }
     if set(payload) - allowed:
         raise ProjectValidationError("project_patch_unsupported")
     patch = {key: value for key, value in payload.items() if key != "expectedVersion"}
@@ -96,6 +117,8 @@ def update_project_payload(
             "project_name_required",
             max_length=PROJECT_NAME_MAX_LENGTH,
         )
+    if "description" in patch:
+        patch["description"] = project_description(patch["description"])
     if "members" in patch or "leadAgentId" in patch:
         members, lead_agent_id = validate_project_roster(
             owner_employee_id,

@@ -167,6 +167,58 @@ def test_employee_creates_and_updates_computer_bound_project(monkeypatch) -> Non
         assert stale.json()["detail"] == "project_version_conflict"
 
 
+def test_project_description_is_optional_trimmed_and_editable(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        computer = _register_computer(app, "node_alice_a", "machine-a")
+        _login_alice(client)
+
+        bare = client.post(
+            "/api/v1/projects",
+            json={"name": "No brief", "daemonNodeId": computer["id"], "members": []},
+        )
+        assert bare.status_code == 201, bare.text
+        assert bare.json()["project"]["description"] == ""
+
+        created = client.post(
+            "/api/v1/projects",
+            json={
+                "name": "Relay launch",
+                "description": "  Ship the GA release.  ",
+                "daemonNodeId": computer["id"],
+                "members": [],
+            },
+        )
+        assert created.status_code == 201, created.text
+        project = created.json()["project"]
+        assert project["description"] == "Ship the GA release."
+
+        updated = client.patch(
+            f"/api/v1/projects/{project['id']}",
+            json={"description": "Ship GA, then harden.", "expectedVersion": 1},
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["project"]["description"] == "Ship GA, then harden."
+        assert updated.json()["project"]["name"] == "Relay launch"
+
+        invalid = client.patch(
+            f"/api/v1/projects/{project['id']}",
+            json={"description": 42, "expectedVersion": 2},
+        )
+        assert invalid.status_code == 400
+        assert invalid.json()["detail"] == "project_description_invalid"
+
+        too_long = client.patch(
+            f"/api/v1/projects/{project['id']}",
+            json={"description": "x" * 4_001, "expectedVersion": 2},
+        )
+        assert too_long.status_code == 400
+        assert too_long.json()["detail"] == "project_description_too_long"
+
+
 def test_concurrent_project_archive_maps_stale_update_to_conflict(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

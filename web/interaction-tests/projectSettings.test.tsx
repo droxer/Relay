@@ -37,10 +37,10 @@ it("preserves the name draft and its base revision when polling advances the pro
 it("loads the current project when reopening settings", () => {
   const props = { open: true, project, computers, onClose: vi.fn(), onSaved: vi.fn() };
   const view = render(<ProjectDrawer {...props} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Unsaved" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Unsaved" } });
   view.rerender(<ProjectDrawer {...props} open={false} />);
   view.rerender(<ProjectDrawer {...props} project={{ ...project, name: "Latest", version: 2 }} />);
-  expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("Latest");
+  expect((screen.getByRole("textbox", { name: "project.name" }) as HTMLInputElement).value).toBe("Latest");
 });
 
 it("renames an existing project when its runtime computer is absent", async () => {
@@ -62,7 +62,7 @@ it("offers a confirmed retry after a stale rename", async () => {
   update.mockRejectedValueOnce(new RelayApiError("project_version_conflict", 409, "project_version_conflict"));
   getProject.mockResolvedValue({ project: { ...project, name: "Their name", version: 2 } });
   render(<ProjectDrawer open project={project} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "My name" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "My name" } });
   fireEvent.click(screen.getByRole("button", { name: "project.save" }));
   await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
   expect(confirm.mock.calls[0][0].message).toContain("Their name");
@@ -73,11 +73,35 @@ it("creates a project on the selected compatible computer", async () => {
   const onSaved = vi.fn();
   create.mockResolvedValue({ project });
   render(<ProjectDrawer open computers={computers} onClose={vi.fn()} onSaved={onSaved} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "New project" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "New project" } });
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "node" } });
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
   await waitFor(() => expect(create).toHaveBeenCalledWith({ name: "New project", daemonNodeId: "node", leadAgentId: null, members: [] }));
   expect(onSaved).toHaveBeenCalledWith(project);
+});
+
+it("saves an edited description and leaves an untouched one out of a rename", async () => {
+  render(<ProjectDrawer open project={{ ...project, description: "Old brief" }} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  const description = screen.getByRole("textbox", { name: /^project\.description/ }) as HTMLTextAreaElement;
+  expect(description.value).toBe("Old brief");
+  fireEvent.change(description, { target: { value: "  Ship GA.  " } });
+  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
+  await waitFor(() => expect(update).toHaveBeenCalledWith({
+    projectId: "p",
+    input: { name: "Original", description: "Ship GA.", expectedVersion: 1 },
+  }));
+});
+
+it("creates a project with a description", async () => {
+  create.mockResolvedValue({ project });
+  render(<ProjectDrawer open computers={computers} onClose={vi.fn()} onSaved={vi.fn()} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "New project" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /^project\.description/ }), { target: { value: "What it is for" } });
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "node" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  await waitFor(() => expect(create).toHaveBeenCalledWith({
+    name: "New project", description: "What it is for", daemonNodeId: "node", leadAgentId: null, members: [],
+  }));
 });
 
 it("archives a project only after confirmation", async () => {
@@ -110,12 +134,12 @@ it.each(["network", "conflict", "closed"])("keeps the draft if conflict recovery
   if (failure === "conflict") update.mockRejectedValueOnce(conflict);
   const onClose = vi.fn();
   render(<ProjectDrawer open project={project} computers={[]} onClose={onClose} onSaved={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Keep my draft" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Keep my draft" } });
   fireEvent.click(screen.getByRole("button", { name: "project.save" }));
   await screen.findByRole("alert");
   expect(update).toHaveBeenCalledTimes(failure === "conflict" ? 2 : 1);
   expect(onClose).not.toHaveBeenCalled();
-  expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("Keep my draft");
+  expect((screen.getByRole("textbox", { name: "project.name" }) as HTMLInputElement).value).toBe("Keep my draft");
 });
 
 it("reports an ordinary save error without fetching or retrying", async () => {

@@ -361,6 +361,8 @@ export interface ProjectRecord {
   id: string;
   ownerEmployeeId: string;
   name: string;
+  /** What the project is for. Absent on projects created before it existed. */
+  description?: string;
   computerId: string;
   workspaceLayout: "project";
   workspaceSubpath: string;
@@ -379,6 +381,7 @@ export interface ProjectsResponse {
 
 export interface CreateProjectInput {
   name: string;
+  description?: string;
   daemonNodeId: string;
   leadAgentId?: string | null;
   members: Array<{
@@ -393,6 +396,7 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput {
   expectedVersion: number;
   name?: string;
+  description?: string;
   leadAgentId?: string | null;
   members?: CreateProjectInput["members"];
   enabled?: boolean;

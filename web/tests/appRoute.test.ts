@@ -227,8 +227,8 @@ describe("app pathname routes", () => {
       "/projects/project-1?task=task-9",
     );
     // The record lives on the tasks tab; no other tab can show it.
-    // Agents is the default tab, so leaving the task behind leaves a bare path.
-    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=profile&task=task-9"), "/projects/project-1");
+    // General is the default tab, so leaving the task behind leaves a bare path.
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=general&task=task-9"), "/projects/project-1");
   });
 
   it("reports which paths keep the thread space params", () => {
@@ -374,9 +374,28 @@ it("preserves approval when the legacy computer path redirects to settings", () 
   assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
 });
 
-it("keeps the project tasks tab explicit and canonicalizes Agents as the default", () => {
+it("keeps the project tasks tab explicit and canonicalizes General as the default", () => {
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p");
+  // The retired Agents tab id is unknown, so an old link lands on General.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p?tab=tasks");
+});
+
+it("keeps the embedded board's filters, sort, and pages on the project tasks tab only", () => {
+  const url = new URL(
+    canonicalBrowserUrl("/projects/p", "?tab=tasks&q=ship&status=review&priority=high&sort=-due&lanes=backlog.2&project=other"),
+    "http://relay.test",
+  );
+  assert.equal(url.searchParams.get("tab"), "tasks");
+  assert.equal(url.searchParams.get("q"), "ship");
+  assert.equal(url.searchParams.get("status"), "review");
+  assert.equal(url.searchParams.get("priority"), "high");
+  assert.equal(url.searchParams.get("sort"), "-due");
+  assert.equal(url.searchParams.get("lanes"), "backlog.2");
+  // The route is the project; a project chip cannot re-scope this board.
+  assert.equal(url.searchParams.has("project"), false);
+  // Another tab has no board, so the board's params do not follow it.
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=workspace&q=ship&status=review"), "/projects/p?tab=workspace");
 });
 
 it("preserves team, assignment, and upcoming task filters in list and record URLs", () => {

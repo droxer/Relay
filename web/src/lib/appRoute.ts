@@ -202,7 +202,7 @@ const AGENT_TABS = new Set(["profile", "skills", "activities"]);
 const TASK_RECORD_TABS = new Set(["activity", "definition", "files"]);
 const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "files"]);
 const TEAM_TABS = new Set(["profile", "activities"]);
-const PROJECT_TABS = new Set(["tasks", "profile", "workspace"]);
+const PROJECT_TABS = new Set(["general", "tasks", "workspace"]);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
 
 /**
@@ -405,6 +405,12 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
        without leaving the project. It belongs to the tasks tab; no other tab
        has a board to open it over. */
     if (tab === "tasks") {
+      /* The tab embeds the backlog board, so it owns the board's params —
+         except the project chip: this board's project is the route. */
+      copyFilterParams("backlog", source, target);
+      target.delete("project");
+      copySortParams("backlog", source, target);
+      copyPageParams("backlog", source, target);
       copyParam(source, target, "task");
       const recordTab = source.get("recordTab");
       if (target.has("task") && (recordTab === "definition" || recordTab === "files")) {

@@ -34,6 +34,12 @@ import { taskRef } from "../lib/taskRef";
 
 
 interface BacklogPageProps {
+  /** `project` embeds the board in a project's Tasks tab: the project is
+   *  fixed, so there is no status rail, no project chip, and no page title —
+   *  the project page's own header names the place. */
+  variant?: "page" | "project";
+  /** A closed project shows its work but offers nothing to create or move. */
+  readOnly?: boolean;
   projectId?: string;
   projectNotice?: ReactNode;
   onSelectProject?: (id: string | null) => void;
@@ -44,11 +50,12 @@ interface BacklogPageProps {
   /** Opens a record; `null` returns to the board. */
   onOpenRecord: (taskId: string | null) => void;
   tasks: RelayTaskListItem[];
-  sessions: RelaySession[];
+  sessions?: RelaySession[];
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
-  isRefreshing: boolean;
-  onRefresh: () => Promise<void>;
+  isRefreshing?: boolean;
+  /** Omitted where the shell already polls the task list. */
+  onRefresh?: () => Promise<void>;
   onOpenThread: (sessionId: string, taskId?: string) => void;
 }
 
@@ -79,7 +86,8 @@ import {
 
 
 
-export function BacklogPage({ projectId, projectNotice, onSelectProject, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, sessions, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: BacklogPageProps) {
+export function BacklogPage({ variant = "page", readOnly = false, projectId, projectNotice, onSelectProject, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, nodes, currentUser, isRefreshing = false, onRefresh, onOpenThread }: BacklogPageProps) {
+  const inProject = variant === "project";
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
   const { t } = useTranslation();
@@ -177,6 +185,19 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     value: projectId ?? "",
     onChange: (id: string) => onSelectProject(id || null),
   } : undefined, [onSelectProject, projects, projectId, t]);
+  /* Embedded in a project there is no status rail, so status rides the bar
+     as a chip — the same filter, spoken where the reader can reach it. */
+  const statusFilter = useMemo(() => ({
+    field: {
+      id: "status",
+      label: t("backlog.status"),
+      kind: "select" as const,
+      options: TASK_STATUSES.map((status) => ({ value: status, label: t(`backlog.statuses.${status}`) })),
+    },
+    value: filters.status === "all" ? "" : filters.status,
+    onChange: (status: string) => setFilters({ ...filters, status: (status || "all") as typeof filters.status }),
+  }), [filters, setFilters, t]);
+  const openCreate = readOnly ? undefined : () => openTaskForm(emptyBacklogForm(currentUser));
 
   // Keep the server and first client render deterministic, then restore the
   // browser-only preference once hydration has completed.
@@ -254,6 +275,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
   // The single commit path for a board drop — mouse, touch and keyboard all
   // arrive here through the kanban's onMove.
   function moveTaskToLane(task: RelayTaskListItem, status: TaskStatus) {
+    if (readOnly) return;
     const rejection = taskDropRejection(task, status);
     if (rejection === "needs_assignment") {
       announce({ message: t("backlog.drop_needs_assignment"), tone: "error" });
@@ -272,30 +294,49 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
     });
   }
 
+  const headerActions = (
+    <TaskBoardHeaderActions
+      leading={<BacklogViewToggle view={view} onChange={changeView} />}
+      refreshLabel={t("nav.refresh")}
+      createLabel={t("backlog.new_task")}
+      isRefreshing={isRefreshing}
+      onRefresh={onRefresh ? () => void onRefresh() : undefined}
+      onCreate={openCreate}
+    />
+  );
+
   return (
-    <section id="backlog-panel" className="backlog-page sec-shell" data-view={view} aria-label={t("backlog.title")} tabIndex={-1}>
-      <div className="sec-rail">
-        <PageHeader kicker={t("nav.workspace")} title={t("nav.backlog")}
-          count={t("backlog.sub", { count: backlogTasks.length })} titleVariant="display" layout="stacked" />
-        <TaskStatusNav value={filters.status} counts={sectionCounts}
-          onChange={(status) => setFilters({ ...filters, status })} />
-      </div>
-      <div className="sec-main">
-      <PageHeader
-        title={filters.status === "all" ? t("backlog.title") : t(`backlog.statuses.${filters.status}`)}
-        titleAs="h2"
-        titleVariant="display"
-        actions={
-          <TaskBoardHeaderActions
-            leading={<BacklogViewToggle view={view} onChange={changeView} />}
-            refreshLabel={t("nav.refresh")}
-            createLabel={t("backlog.new_task")}
-            isRefreshing={isRefreshing}
-            onRefresh={() => void onRefresh()}
-            onCreate={() => openTaskForm(emptyBacklogForm(currentUser))}
-          />
-        }
-      />
+    <section
+      id={inProject ? undefined : "backlog-panel"}
+      className={inProject ? "backlog-page backlog-page--project" : "backlog-page sec-shell"}
+      data-view={view}
+      aria-label={t("backlog.title")}
+      tabIndex={inProject ? undefined : -1}
+    >
+      {inProject ? null : (
+        <div className="sec-rail">
+          <PageHeader kicker={t("nav.workspace")} title={t("nav.backlog")}
+            count={t("backlog.sub", { count: backlogTasks.length })} titleVariant="display" layout="stacked" />
+          <TaskStatusNav value={filters.status} counts={sectionCounts}
+            onChange={(status) => setFilters({ ...filters, status })} />
+        </div>
+      )}
+      <div className={inProject ? "backlog-project-main" : "sec-main"}>
+      {inProject ? (
+        /* The project header already names the place; the board keeps only
+           its count and its controls. */
+        <div className="backlog-project-toolbar">
+          <span className="backlog-project-count tnum">{t("backlog.sub", { count: backlogTasks.length })}</span>
+          <div className="backlog-project-actions">{headerActions}</div>
+        </div>
+      ) : (
+        <PageHeader
+          title={filters.status === "all" ? t("backlog.title") : t(`backlog.statuses.${filters.status}`)}
+          titleAs="h2"
+          titleVariant="display"
+          actions={headerActions}
+        />
+      )}
 
       {projectNotice}
 
@@ -304,7 +345,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
           {view === "board" ? <BacklogStats tasks={backlogTasks} /> : null}
           <BacklogFiltersBar
             filters={filters}
-            extraField={projectFilter}
+            extraField={inProject ? statusFilter : projectFilter}
             agents={logicalAgents}
             teams={teams}
             onChange={setFilters}
@@ -333,8 +374,8 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
             <BoardEmpty
               title={filtered ? t("backlog.no_match_title") : t("backlog.no_tasks_title")}
               body={filtered ? t("backlog.no_match_body") : t("backlog.no_tasks_body")}
-              createLabel={filtered ? undefined : t("backlog.new_task")}
-              onCreate={filtered ? undefined : () => openTaskForm(emptyBacklogForm(currentUser))}
+              createLabel={filtered || !openCreate ? undefined : t("backlog.new_task")}
+              onCreate={filtered ? undefined : openCreate}
               clearLabel={filtered ? t("backlog.clear_filters") : undefined}
               onClear={filtered ? () => setFilters({ ...initialFilters, status: filters.status }) : undefined}
             />
@@ -359,7 +400,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
             contextFor={(task) => {
               const assignment = taskAssignmentDisplay(task);
               return {
-                projectName: projects.find((project) => project.id === task.projectId)?.name,
+                projectName: inProject ? undefined : projects.find((project) => project.id === task.projectId)?.name,
                 ready: assignment.ready,
                 agentDisplayName: assignment.name,
                 agentImageUrl: assignment.imageUrl,
@@ -377,7 +418,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
             const assignment = taskAssignmentDisplay(task);
             return {
               task,
-              projectName: projects.find((project) => project.id === task.projectId)?.name,
+              projectName: inProject ? undefined : projects.find((project) => project.id === task.projectId)?.name,
               selected: visibleSelection.has(task.id),
               onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
               agentDisplayName: assignment.name,
@@ -387,7 +428,7 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
             };
           }}
           onMoveTask={moveTaskToLane}
-          onCreateInLane={(status) => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
+          onCreateInLane={readOnly ? undefined : (status) => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
           onLanePageChange={setLanePage}
         />
       )}
@@ -406,6 +447,8 @@ export function BacklogPage({ projectId, projectNotice, onSelectProject, project
       {drawerRecordId ? (
         <TaskRecordView
           taskId={drawerRecordId}
+          /* Inside a project `?tab=` is the project's own tab strip. */
+          tabSearchKey={inProject ? "recordTab" : undefined}
           currentUser={currentUser}
           tasks={tasks}
           drawer={{

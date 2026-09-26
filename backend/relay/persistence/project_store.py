@@ -350,6 +350,7 @@ def _new_project(owner_employee_id: str, payload: dict[str, Any]) -> dict[str, A
             "project_name_required",
             max_length=PROJECT_NAME_MAX_LENGTH,
         ),
+        "description": payload.get("description") or "",
         "computerId": _required_text(
             payload.get("computerId"), "project_computer_required"
         ),
@@ -365,7 +366,7 @@ def _new_project(owner_employee_id: str, payload: dict[str, Any]) -> dict[str, A
 
 
 def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
-    allowed = {"name", "leadAgentId", "members", "enabled"}
+    allowed = {"name", "description", "leadAgentId", "members", "enabled"}
     unknown = set(patch) - allowed
     if unknown:
         raise ProjectValidationError("project_patch_unsupported")
@@ -378,6 +379,8 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
         )
     if "enabled" in normalized and not isinstance(normalized["enabled"], bool):
         raise ProjectValidationError("project_enabled_invalid")
+    if "description" in normalized and not isinstance(normalized["description"], str):
+        raise ProjectValidationError("project_description_invalid")
     return normalized
 
 

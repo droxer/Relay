@@ -35,6 +35,6 @@ it("changes a project record tab without changing the project tab or closing the
 
 it("drops drawer tabs when the project record is absent or the tab is invalid", () => {
   expect(canonicalBrowserUrl("/projects/p", "?recordTab=files")).toBe("/projects/p");
-  expect(canonicalBrowserUrl("/projects/p", "?tab=profile&task=t&recordTab=files")).toBe("/projects/p");
+  expect(canonicalBrowserUrl("/projects/p", "?tab=general&task=t&recordTab=files")).toBe("/projects/p");
   expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=invalid")).toBe("/projects/p?task=t");
 });

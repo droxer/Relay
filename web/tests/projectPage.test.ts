@@ -66,9 +66,11 @@ describe("project page behavior", () => {
      is a base-ui Tabs now, which owns arrow/Home/End itself. What stays ours
      is canonicalizing the tab named in the URL. */
   it("canonicalizes the tab named in the URL", () => {
-    // A project opens on its Agents tab (id "profile").
-    assert.equal(parseProjectPageTab(null), "profile");
-    assert.equal(parseProjectPageTab("unknown"), "profile");
+    // A project opens on its General tab; the retired Agents id lands there.
+    assert.equal(parseProjectPageTab(null), "general");
+    assert.equal(parseProjectPageTab("unknown"), "general");
+    assert.equal(parseProjectPageTab("profile"), "general");
+    assert.equal(parseProjectPageTab("tasks"), "tasks");
     assert.equal(parseProjectPageTab("workspace"), "workspace");
   });
 

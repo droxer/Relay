@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
@@ -51,16 +51,15 @@ import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 
-import { ProjectTasks } from "./ProjectTasks";
-import { navigateToAppPath } from "../lib/appRoute";
-import { projectTasksHref } from "./ProjectTaskNav";
+import { BacklogPage } from "./BacklogPage";
+import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
 
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the three that are not it. */
 const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
+  general: "project.general_subtitle",
   tasks: "project.tasks_subtitle",
-  profile: "project.tasks_team_subtitle",
   workspace: "project.tasks_workspace_subtitle",
 };
 
@@ -218,7 +217,45 @@ function ProjectIdentityRail({
   );
 }
 
-function ProjectProfile({
+/** The project's brief. It is edited in Project settings with the name, so
+ *  the pencil opens settings rather than editing in place. */
+function ProjectDescription({
+  project,
+  onOpenSettings,
+}: {
+  project: ProjectRecord;
+  onOpenSettings?: () => void;
+}) {
+  const { t } = useTranslation();
+  const description = project.description?.trim();
+  return (
+    <section className="project-general-section" aria-labelledby="project-general-description">
+      <div className="project-general-section-head">
+        <h2 id="project-general-description" className="workspace-dossier-section-title">
+          {t("project.description")}
+        </h2>
+        {onOpenSettings ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="workspace-dossier-icon-btn"
+            tooltip={t("project.description_edit")}
+            onClick={onOpenSettings}
+          >
+            <ActionEdit size={ICON.sm} aria-hidden="true" />
+          </Button>
+        ) : null}
+      </div>
+      {description ? (
+        <p className="project-description">{description}</p>
+      ) : (
+        <p className="project-description is-empty">{t("project.description_empty")}</p>
+      )}
+    </section>
+  );
+}
+
+function ProjectGeneral({
   project,
   agents,
   computer,
@@ -239,22 +276,25 @@ function ProjectProfile({
 
   return (
     <div className="workspace-profile project-profile">
-      {/* Same dossier grammar as the team record: the crew is the document,
-          the project's identity is the rail beside it. */}
+      {/* Same dossier grammar as the team record: what the project is for and
+          who works in it are the document, its identity is the rail. */}
       <div className="workspace-profile-dossier">
-        <section className="workspace-dossier-doc" aria-labelledby="project-profile-members">
-          <h2 id="project-profile-members" className="workspace-dossier-section-title">
-            {t("project.members")}
-            <span className="tnum">{members.length}</span>
-          </h2>
-          <ProjectCrew
-            project={project}
-            members={members}
-            agentsById={agentsById}
-            onAddMember={onAddMember}
-            onEditMember={onEditMember}
-          />
-        </section>
+        <div className="workspace-dossier-doc project-general-doc">
+          <ProjectDescription project={project} onOpenSettings={onOpenSettings} />
+          <section className="project-general-section" aria-labelledby="project-general-members">
+            <h2 id="project-general-members" className="workspace-dossier-section-title">
+              {t("project.members")}
+              <span className="tnum">{members.length}</span>
+            </h2>
+            <ProjectCrew
+              project={project}
+              members={members}
+              agentsById={agentsById}
+              onAddMember={onAddMember}
+              onEditMember={onEditMember}
+            />
+          </section>
+        </div>
         <ProjectIdentityRail project={project} computer={computer} onOpenSettings={onOpenSettings} />
       </div>
     </div>
@@ -344,14 +384,18 @@ export function ProjectWorkspacePage({
 }) {
   const { t, i18n } = useTranslation();
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
-  const [pageTab, setPageTab] = useUrlSearchState(
+  /* The tab is always written explicitly and left to canonicalization to
+     drop when it is implied: an open `?task=` implies Tasks, so a bare
+     "general" would otherwise read back as Tasks and keep the task open. */
+  const [urlTab, setPageTab] = useUrlSearchState(
     "tab",
     DEFAULT_PROJECT_PAGE_TAB,
     parseProjectPageTab,
-    (value) => value === DEFAULT_PROJECT_PAGE_TAB ? null : value,
+    (value) => value,
     "push",
   );
-  // Accept legacy project task links and redirect them to the Tasks destination.
+  /* A task record opens as a drawer over the project's board — the project
+     stays the reader's place — and `?task=` keeps it addressable. */
   const [recordTaskId] = useUrlSearchState<string | null>(
     "task",
     null,
@@ -359,13 +403,24 @@ export function ProjectWorkspacePage({
     (value) => value,
     "push",
   );
-  // Preserve old project-task deep links, but task details now belong to Tasks.
-  useEffect(() => {
-    if (!recordTaskId) return;
-    const recordTab = new URLSearchParams(window.location.search).get("recordTab");
-    const suffix = recordTab === "files" || recordTab === "definition" ? `&tab=${recordTab}` : "";
-    void navigateToAppPath(projectTasksHref(project.id, recordTaskId) + suffix, { replace: true });
-  }, [project.id, recordTaskId]);
+  const pageTab: ProjectPageTab = recordTaskId ? "tasks" : urlTab;
+  /* Opening or closing a record is one write that pins the Tasks tab, so
+     closing it returns to the board rather than to the default tab, and the
+     board's filters in the query string ride along untouched. */
+  const openTaskRecord = (taskId: string | null) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", "tasks");
+    if (taskId) url.searchParams.set("task", taskId);
+    else {
+      url.searchParams.delete("task");
+      url.searchParams.delete("recordTab");
+    }
+    void navigateToAppPath(canonicalBrowserUrl(url.pathname, url.search));
+  };
+  const projectTasks = useMemo(
+    () => tasks.filter((task) => task.projectId === project.id && !task.deletedAt),
+    [tasks, project.id],
+  );
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
@@ -375,7 +430,7 @@ export function ProjectWorkspacePage({
   };
   const state = project.archivedAt ? "archived" : project.enabled ? "active" : "disabled";
   /* Same split as the team record: the title line carries the state and the
-     id; the computer, folder and stamps live in the Agents tab's rail. */
+     id; the computer, folder and stamps live in the General tab's rail. */
   const bandFacts: RecordFact[] = [
     {
       key: "state",
@@ -444,10 +499,10 @@ export function ProjectWorkspacePage({
                 value={tab}
                 className={`workspace-page-tab${pageTab === tab ? " is-active" : ""}`}
               >
-                {tab === "tasks"
+                {tab === "general"
+                  ? t("project.general_tab")
+                  : tab === "tasks"
                   ? t("project.tasks_tab")
-                  : tab === "profile"
-                  ? t("project.tasks_team_tab")
                   : t("workspace.tab_workspace")}
               </TabsTrigger>
             ))}
@@ -456,24 +511,30 @@ export function ProjectWorkspacePage({
       />
 
       <div className="workspace-body">
-        <TabsContent value="tasks" className="project-tasks-panel">
-          <ProjectTasks
-            key={project.id}
-            project={project}
-            tasks={tasks}
-            agents={agents}
-            teams={teams}
-            onOpenRecord={(taskId) => void navigateToAppPath(projectTasksHref(project.id, taskId))}
-          />
-        </TabsContent>
-        <TabsContent value="profile">
-          <ProjectProfile
+        <TabsContent value="general">
+          <ProjectGeneral
             project={project}
             agents={agents}
             computer={railComputer}
             onOpenSettings={actions.settings ? onOpenSettings : undefined}
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
+          />
+        </TabsContent>
+        <TabsContent value="tasks" className="project-tasks-panel">
+          {/* The backlog board itself, fixed to this project. */}
+          <BacklogPage
+            key={project.id}
+            variant="project"
+            readOnly={membersReadOnly}
+            projectId={project.id}
+            projects={[project]}
+            tasks={projectTasks}
+            nodes={computers}
+            currentUser={currentUser}
+            recordTaskId={recordTaskId}
+            onOpenRecord={openTaskRecord}
+            onOpenThread={(sessionId) => onOpenThread(sessionId)}
           />
         </TabsContent>
         <TabsContent value="workspace" className="workspace-inspect">
