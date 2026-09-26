@@ -227,7 +227,8 @@ describe("app pathname routes", () => {
       "/projects/project-1?task=task-9",
     );
     // The record lives on the tasks tab; no other tab can show it.
-    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=profile&task=task-9"), "/projects/project-1?tab=profile");
+    // Agents is the default tab, so leaving the task behind leaves a bare path.
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=profile&task=task-9"), "/projects/project-1");
   });
 
   it("reports which paths keep the thread space params", () => {
@@ -373,9 +374,9 @@ it("preserves approval when the legacy computer path redirects to settings", () 
   assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
 });
 
-it("keeps the project team tab explicit and canonicalizes Tasks as the default", () => {
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p?tab=profile");
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p");
+it("keeps the project tasks tab explicit and canonicalizes Agents as the default", () => {
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p?tab=tasks");
 });
 
 it("preserves team, assignment, and upcoming task filters in list and record URLs", () => {

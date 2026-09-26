@@ -1,4 +1,5 @@
 import { requestNavigation } from "./navigationGuard.ts";
+import { DEFAULT_PROJECT_PAGE_TAB } from "./projectPage.ts";
 import {
   DEFAULT_ADMIN_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -384,9 +385,17 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
       copyPageParams(head, source, target);
     }
   } else if (head === "projects" && entityId && rest.length === 0) {
-    const requestedTab = source.get("tab") || "tasks";
-    const tab = PROJECT_TABS.has(requestedTab) ? requestedTab : "tasks";
-    if (PROJECT_TABS.has(tab) && tab !== "tasks") target.set("tab", tab);
+    /* A legacy `?task=` link — bare, or on a retired tab like Activities —
+       predates the Agents default and meant the tasks board, so it still
+       lands there rather than losing its task. */
+    const fallbackTab = source.has("task") ? "tasks" : DEFAULT_PROJECT_PAGE_TAB;
+    const requestedTab = source.get("tab") || fallbackTab;
+    const tab = PROJECT_TABS.has(requestedTab) ? requestedTab : fallbackTab;
+    // An open task implies the tasks tab (only it can show the record), so a
+    // task URL stays `?task=` without restating the tab; otherwise the tab is
+    // written only when it is not the default.
+    const impliedTab = tab === "tasks" && source.has("task") ? "tasks" : DEFAULT_PROJECT_PAGE_TAB;
+    if (tab !== impliedTab) target.set("tab", tab);
     if (tab === "workspace") {
       copyParam(source, target, "path");
       copyParam(source, target, "item");

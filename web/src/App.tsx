@@ -732,7 +732,9 @@ export function App() {
       onNewThread={startNewThread}
       onNewTask={() => {
         taskCreateIntent()?.queue();
-        if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}`);
+        // The queued intent is picked up by the tasks board, which is no
+        // longer the project's default tab — ask for it by name.
+        if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}?tab=tasks`);
         else if (route !== "backlog") navigateToRoute("backlog");
       }}
       theme={preferences.theme}
