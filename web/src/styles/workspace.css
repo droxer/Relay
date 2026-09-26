@@ -220,10 +220,9 @@
 }
 
 /* A hairline between the name and its facts, so the first fact label does
-   not read as the next word of the title. Team record only: its facts share
-   the title line, while the project's (it carries header actions) always
-   wrap to a row of their own, where a leading rule points at nothing. */
-.team-workspace-page .record-band--title {
+   not read as the next word of the title. */
+.team-workspace-page .record-band--title,
+.project-workspace-page .record-band--title {
   margin-left: var(--sp-1);
   padding-left: var(--sp-4);
   border-left: 0.5px solid var(--line-2);
@@ -253,7 +252,8 @@
   }
 
   /* Wrapped under the title, a leading rule points at nothing. */
-  .team-workspace-page .record-band--title {
+  .team-workspace-page .record-band--title,
+  .project-workspace-page .record-band--title {
     margin-left: 0;
     padding-left: 0;
     border-left: 0;
