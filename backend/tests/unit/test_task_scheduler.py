@@ -1218,10 +1218,10 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             updated = task_store.get_task(second["id"])
             assert updated["status"] == "blocked"
             assert updated["dispatchOutcome"]["state"] == "rejected"
-            assert updated["dispatchOutcome"]["code"] == "team_disabled"
+            assert updated["dispatchOutcome"]["code"] == "agent_disabled"
             assert (
                 updated["dispatchOutcome"]["message"]
-                == "The assigned team cannot execute this task (team_disabled)."
+                == "Agent Lead is disabled."
             )
 
     asyncio.run(run_flow())
@@ -1403,7 +1403,7 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
             assert result.dispatched == 0
             assert updated["status"] == "blocked"
             assert updated["dispatchOutcome"]["state"] == "rejected"
-            assert updated["dispatchOutcome"]["code"] == "team_disabled"
+            assert updated["dispatchOutcome"]["code"] == "agent_disabled"
             assert "dispatchClaim" not in updated
 
     asyncio.run(run_flow())

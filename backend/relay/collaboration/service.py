@@ -1093,7 +1093,11 @@ def _work_owner_agent_id(assignment: dict[str, Any]) -> str:
 
 
 def _work_kind(assignment: dict[str, Any]) -> str:
-    if assignment.get("synthesizer") is True:
+    # Pipeline's last specialist also reports the aggregate result; it still
+    # owns its role's work rather than a separate synthesis-only turn.
+    if assignment.get("synthesizer") is True and (
+        assignment.get("teamSnapshot") or {}
+    ).get("collaborationStyle") != "pipeline":
         return "synthesis"
     mode = assignment.get("mode") or "action"
     role = assignment.get("role")
