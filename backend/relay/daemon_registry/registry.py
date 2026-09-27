@@ -3830,7 +3830,17 @@ class DaemonNodeRegistry:
                     next_index = len(assignments)
             if not question and not repair:
                 if work_result is None or work_result.get("status") != "done":
-                    if assignment.get("required", True):
+                    # Continue after a missing member report so the next
+                    # specialist or reviewer can inspect the workspace. The
+                    # completion gate still rejects the missing evidence.
+                    style = (assignment.get("teamSnapshot") or {}).get("collaborationStyle")
+                    inspect_missing_member_report = (
+                        work_result is None
+                        and next_index < len(assignments)
+                        and style in ("build_review", "pipeline", "lead_led")
+                        and not assignment.get("coordinator")
+                    )
+                    if assignment.get("required", True) and not inspect_missing_member_report:
                         next_index = len(assignments)
                 elif (run_request.get("currentIndex", 0) == 0 and assignment.get("coordinator")
                       and len(assignments) > 1 and next_state.get(COLLABORATION_MANIFEST_STATE_KEY)

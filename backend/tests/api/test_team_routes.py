@@ -3301,7 +3301,8 @@ def test_recovery_cannot_take_a_task_reserved_by_another_thread(recovery_team_th
 
 @pytest.mark.parametrize("source", ["thread", "task"])
 @pytest.mark.parametrize("omit_member", [False, True])
-def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, source, omit_member):
+@pytest.mark.parametrize("member_reports", [True, False])
+def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, source, omit_member, member_reports):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -3340,7 +3341,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
             app.state.registry.handle_event(node_id, {
                 "type": "run.completed", "commandId": command["id"], "sessionId": session_id,
                 "runId": command["runId"], "agent": command["agent"], "exitCode": 0,
-                "roundResult": {"status": "done", "work": work},
+                **({"roundResult": {"status": "done", "work": work}} if work else {}),
             }, "node_token")
 
         good = {"status": "done", "evidence": ["Focused validation passed"]}
@@ -3355,27 +3356,38 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
             if task:
                 assert app.state.task_store.get_task(task["id"])["status"] != "done"
             return
-        for member in members:
+        for index, member in enumerate(members):
             [command] = app.state.registry.take_commands(node_id, "node_token")
             assert command["logicalAgentId"] == member["id"]
             assert command["state"]["assignment_brief"].startswith(f"Implement {member['displayName']}")
-            finish(command, good)
+            finish(command, good if member_reports or index else None)
         [final] = app.state.registry.take_commands(node_id, "node_token")
         assert final["logicalAgentId"] == lead["id"]
         assert "Review every delegated contribution" in final["state"]["assignment_brief"]
         assert len(final["state"]["work_predecessor_results"]) == 3
+        if not member_reports:
+            assert any(
+                item["status"] == "missing"
+                for item in final["state"]["work_predecessor_results"].values()
+            )
         if task:
             assert app.state.task_store.get_task(task["id"])["status"] != "done"
         finish(final, good)
         assert app.state.registry.take_commands(node_id, "node_token") == []
         assert app.state.session_store.get_session(session_id)["status"] == "completed"
+        assert app.state.session_store.get_session(session_id)["workOutcome"] == (
+            "reported_done" if member_reports else "blocked"
+        )
         if task:
-            assert app.state.task_store.get_task(task["id"])["status"] == "done"
+            assert app.state.task_store.get_task(task["id"])["status"] == (
+                "done" if member_reports else "waiting_for_human"
+            )
 
 
 @pytest.mark.parametrize("new_thread", [False, True])
 @pytest.mark.parametrize("disabled_member", [None, "lead", "builder", "reviewer"])
-def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled_member) -> None:
+@pytest.mark.parametrize("builder_reports", [True, False])
+def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled_member, builder_reports) -> None:
     from relay.sessions.controller import SessionController
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -3441,15 +3453,85 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled
                 "runId": implementer_command["runId"],
                 "agent": implementer_command["agent"],
                 "exitCode": 0,
-                **_successful_work_report(implementer_command),
+                **(_successful_work_report(implementer_command) if builder_reports else {}),
             },
             "node_token",
         )
         [reviewer_command] = app.state.registry.take_commands(node_id, "node_token")
         assert reviewer_command["logicalAgentId"] == reviewer["id"]
         assert reviewer_command["state"]["team_phase"] == "review"
+        if not builder_reports:
+            predecessor = reviewer_command["state"]["work_predecessor_results"]
+            assert next(iter(predecessor.values()))["status"] == "missing"
+            _mark_executing(app, node_id, reviewer_command)
+            app.state.registry.handle_event(
+                node_id,
+                {
+                    "type": "run.completed",
+                    "commandId": reviewer_command["id"],
+                    "sessionId": session["id"],
+                    "runId": reviewer_command["runId"],
+                    "agent": reviewer_command["agent"],
+                    "exitCode": 0,
+                    **_successful_work_report(reviewer_command),
+                },
+                "node_token",
+            )
+            assert app.state.session_store.get_session(session["id"])["workOutcome"] == "blocked"
         updated = app.state.session_store.get_session(session["id"])
         assert updated["collaborationRounds"][-1]["style"] == "build_review"
+
+
+def test_pipeline_continues_to_final_specialist_after_missing_member_report(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex", role="planner")
+        builder = _agent(client, "alice", "Builder", "claude", role="implementer")
+        reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
+        node_id = "test_node_alice"
+        app.state.registry.register({
+            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex", "claude"],
+            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"],
+            "status": "ready",
+        })
+        team = client.post("/api/v1/admin/teams", json={
+            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
+            "collaborationStyle": "pipeline",
+        }).json()["team"]
+        _login(client, "alice")
+        response = client.post("/api/v1/agent-runs", json={"taskGoal": "Fix it", "teamId": team["id"]})
+        assert response.status_code == 202, response.text
+        session_id = response.json()["id"]
+
+        def finish(command, report):
+            _mark_executing(app, node_id, command)
+            app.state.registry.handle_event(node_id, {
+                "type": "run.completed", "commandId": command["id"],
+                "sessionId": session_id, "runId": command["runId"],
+                "agent": command["agent"], "exitCode": 0,
+                **(_successful_work_report(command) if report else {}),
+            }, "node_token")
+
+        [plan] = app.state.registry.take_commands(node_id, "node_token")
+        assert plan["logicalAgentId"] == lead["id"]
+        finish(plan, True)
+        [build] = app.state.registry.take_commands(node_id, "node_token")
+        assert build["logicalAgentId"] == builder["id"]
+        finish(build, False)
+        [review] = app.state.registry.take_commands(node_id, "node_token")
+        assert review["logicalAgentId"] == reviewer["id"]
+        assert review["state"]["work_kind"] == "review"
+        assert any(item["status"] == "missing" for item in review["state"]["work_predecessor_results"].values())
+        finish(review, True)
+        assert app.state.registry.take_commands(node_id, "node_token") == []
+        assert app.state.session_store.get_session(session_id)["workOutcome"] == "blocked"
 
 
 def test_message_style_is_validated(monkeypatch) -> None:

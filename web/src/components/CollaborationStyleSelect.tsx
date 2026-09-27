@@ -76,7 +76,7 @@ export function CollaborationStyleCards({ value, onChange, disabled, "aria-label
       aria-label={t(`collab_style.${style}`)}>
       <span className="collab-style-card-art"><CollaborationStyleDiagram style={style} /></span>
       <span className="collab-style-card-name">
-        <CollaborationStyleIcon style={style} className="size-3.5" />
+        <CollaborationStyleIcon style={style} className="size-4" />
         {t(`collab_style.${style}`)}
       </span>
       <span className="collab-style-card-hint">{t(`collab_style.${style}_hint`)}</span>
@@ -92,7 +92,7 @@ export function CollaborationStyleSummary({ style }: { style: CollaborationStyle
     <span className="collab-style-card-art"><CollaborationStyleDiagram style={resolved} /></span>
     <span className="collab-style-summary-text">
       <span className="collab-style-summary-name">
-        <CollaborationStyleIcon style={resolved} className="size-3.5" />
+        <CollaborationStyleIcon style={resolved} className="size-4" />
         {t(`collab_style.${resolved}`)}
       </span>
       <span className="collab-style-summary-hint">{t(`collab_style.${resolved}_hint`)}</span>
@@ -131,7 +131,7 @@ export function CollaborationSlotPreview({ members, leadId, style, nameOf }: {
       </li>)}
     </ol>
     {builder && reviewer ? <p className="collab-style-loop">
-      <ActionRetry aria-hidden="true" className="size-3.5 shrink-0" />
+      <ActionRetry aria-hidden="true" className="size-4 shrink-0" />
       <span>{t("collab_style.loop_until_approved", { builder: nameOf(builder.memberId), reviewer: nameOf(reviewer.memberId) })}</span>
     </p> : null}
     {preview.fallbackFrom ? <p className="collab-style-loop">{t("collab_style.fallback_solo")}</p> : null}

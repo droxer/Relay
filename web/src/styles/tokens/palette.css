@@ -46,6 +46,7 @@
     1100px   multi-pane → single pane (agents, backlog, teams, workspace)
     1200px   dashboard widest; SHELL — the narrowest viewport that can seat
              all four shell columns on their floors (1128px of them)
+    1400px   thread metadata hides the computer chip as the pane narrows
 
    Two rules of thumb: a new query should reuse a tier above rather than
    invent a neighbour (700/800/1024 were each ~20px from a real tier and have
