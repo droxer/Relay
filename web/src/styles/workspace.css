@@ -191,6 +191,8 @@
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-2);
   color: var(--ink-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .record-band-value--empty {

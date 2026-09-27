@@ -58,7 +58,7 @@
    lengths, not scale steps: the design grid bans arbitrary bracket values in
    component classes, so the tracks live here where column geometry always
    lived. */
-.task-col-ref { width: 68px; }
+.task-col-ref { width: 190px; min-width: 190px; overflow-wrap: anywhere; }
 .task-col-priority { width: 104px; }
 .task-col-due { width: 150px; }
 .task-col-assignee { width: 172px; }

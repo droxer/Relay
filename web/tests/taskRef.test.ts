@@ -4,8 +4,8 @@ import { describe, it } from "node:test";
 import { taskRef } from "../src/lib/taskRef.js";
 
 describe("taskRef", () => {
-  it("prints the discriminating tail of a relay id", () => {
-    assert.equal(taskRef("task_mfoo12_ab12cd"), "AB12CD");
+  it("prints the full stored issue id", () => {
+    assert.equal(taskRef("task_mfoo12_ab12cd"), "task_mfoo12_ab12cd");
   });
 
   it("is stable for one id and different for two", () => {
@@ -13,9 +13,8 @@ describe("taskRef", () => {
     assert.notEqual(taskRef("task_mfoo12_ab12cd"), taskRef("task_mfoo12_zz99yy"));
   });
 
-  it("falls back to the tail of an id with no segments", () => {
-    // Legacy and seeded records do not all carry the prefix_ts_rand shape.
-    assert.equal(taskRef("legacy-task-000042"), "000042");
-    assert.equal(taskRef("abc"), "ABC");
+  it("preserves legacy ids exactly", () => {
+    assert.equal(taskRef("legacy-task-000042"), "legacy-task-000042");
+    assert.equal(taskRef("abc"), "abc");
   });
 });

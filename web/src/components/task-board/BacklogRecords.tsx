@@ -16,6 +16,7 @@ import {
 import { dueTone, type BacklogSortKey } from "../../lib/backlog";
 import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
 import { pathForAppState } from "../../lib/appRoute";
+import { taskRef } from "../../lib/taskRef";
 
 export function hrefForTaskRecord(taskId: string): string {
   return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
@@ -77,7 +78,7 @@ export function BacklogTaskCard({
       data-priority={task.priority}
       data-selected={selected ? "true" : undefined}
     >
-      {/* The card is a tile: a title and one facts line. Everything else the
+      {/* The card is a tile: an ID, a title, and one facts line. Everything else the
           record carries — prose, exceptions, provenance, outcome, actions —
           is one click away in the record drawer; a lane of tiles is a
           scanning surface, not seven small dossiers. The checkbox holds the
@@ -91,6 +92,7 @@ export function BacklogTaskCard({
           onCheckedChange={onToggleSelect}
         />
         <div className="backlog-card-body">
+          <span className="code task-card-id" translate="no">{taskRef(task.id)}</span>
           <a
           className="backlog-task-title"
           href={hrefForTaskRecord(task.id)}
@@ -228,6 +230,12 @@ export function BacklogTaskList({
           <span className="sr-only">{state.current.t(`backlog.statuses.${row.original.status}`)}</span>
         </>
       ),
+    },
+    {
+      id: "issue-id",
+      meta: { headClass: "task-col-ref", cellClass: "code task-col-ref" } satisfies ColumnChrome,
+      header: () => state.current.t("backlog.col_ref"),
+      cell: ({ row }) => taskRef(row.original.id),
     },
     {
       id: "title",

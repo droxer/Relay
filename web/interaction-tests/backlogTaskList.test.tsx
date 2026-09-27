@@ -4,7 +4,7 @@ import { BacklogTaskList } from "../src/components/task-board/BacklogRecords";
 import type { RelayTaskListItem } from "../src/types";
 
 const task = {
-  id: "t-1", title: "Ship it", status: "blocked", priority: "high",
+  id: "task_mfoo12_ab12cd", title: "Ship it", status: "blocked", priority: "high",
   assignedAgentId: "agent-1", assignedAgent: "codex", dueDate: "2026-09-30",
   linkedSessionIds: [], createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z",
 } as RelayTaskListItem;
@@ -19,7 +19,7 @@ function renderList(sort: Parameters<typeof BacklogTaskList>[0]["sort"] = null) 
       sort={sort}
       onSort={onSort}
       selectAll={<input type="checkbox" aria-label="select all" />}
-      selectedIds={new Set(["t-1"])}
+      selectedIds={new Set([task.id])}
       onToggleSelect={onToggleSelect}
       contextFor={() => ({ ready: true, projectName: "Relay", agentDisplayName: "Atlas" })}
       onOpenTask={onOpenTask}
@@ -32,8 +32,9 @@ it("renders a table whose header and row cell counts match", () => {
   const { container } = renderList();
   const headCells = container.querySelectorAll("thead th");
   const bodyCells = container.querySelectorAll("tbody tr td");
-  expect(headCells.length).toBe(5);
+  expect(headCells.length).toBe(6);
   expect(bodyCells.length).toBe(headCells.length);
+  expect(container.querySelector("td.task-col-ref")?.textContent).toBe(task.id);
 });
 
 it("puts aria-sort only on the actively sorted column", () => {
@@ -55,11 +56,11 @@ it("carries the status/priority/selected data attributes on the row", () => {
 it("opens the record from the title link and toggles selection", () => {
   const { container, onOpenTask, onToggleSelect, onSort } = renderList();
   const title = container.querySelector("a.backlog-row-title")!;
-  expect(title.getAttribute("href")).toContain("t-1");
+  expect(title.getAttribute("href")).toContain(task.id);
   fireEvent.click(title);
-  expect(onOpenTask).toHaveBeenCalledWith("t-1");
+  expect(onOpenTask).toHaveBeenCalledWith(task.id);
   fireEvent.click(container.querySelector('[role="checkbox"][aria-label*="backlog.select_task"]')!);
-  expect(onToggleSelect).toHaveBeenCalledWith("t-1");
+  expect(onToggleSelect).toHaveBeenCalledWith(task.id);
   const dueHead = Array.from(container.querySelectorAll("th button")).find((b) => b.textContent?.includes("backlog.due"))!;
   fireEvent.click(dueHead);
   expect(onSort).toHaveBeenCalledWith("due");

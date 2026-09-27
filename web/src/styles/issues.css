@@ -1,5 +1,5 @@
 /* Issues — the cross-project table. It speaks the task-table grammar in
-   backlog-list.css (row accent, ref, priority, due and assignee tracks); this
+   backlog-list.css (row accent, issue ID, priority, due and assignee tracks); this
    file adds only what a table read ACROSS projects needs: the status and
    project columns, and bands that are row groups inside one table rather
    than a table per group. */
