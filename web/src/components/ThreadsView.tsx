@@ -13,6 +13,7 @@ import {
   buildLogicalAgentImageMap,
   buildLogicalAgentNameMap,
   displayNameForExecutor,
+  labelForAgentRun,
 } from "../lib/agentDisplayNames";
 import { preloadMarkdown } from "./LazyMarkdown";
 import { threadAgentName } from "../lib/threadBand";
@@ -25,9 +26,10 @@ import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
 import { MessageBlock, isGroupedContinuation, type DerivedMessage } from "./MessageBlock";
-import { phaseDividerLabel } from "../lib/projectMessages";
+import { handoffSource, phaseDividerLabel } from "../lib/projectMessages";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
 import { HandoffStatus } from "./HandoffStatus";
+import { TeamHandoffCue } from "./TeamHandoffCue";
 import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
 import { DecisionBar } from "./composer/DecisionBar";
@@ -404,9 +406,8 @@ export function ThreadsView({
                   // full transcript, not the mounted slice.
                   const i = transcriptWindow.start + offset;
                   const phaseLabel = phaseDividerLabel(displayMessages, i, t);
-                  const prev = i > 0 ? displayMessages[i - 1] : undefined;
-                  const isHandoff =
-                    msg.kind === "agent" && prev?.kind === "agent" && prev.agent !== msg.agent;
+                  const source = handoffSource(displayMessages, i);
+                  const isHandoff = source !== undefined;
                   const PhaseIcon = msg.kind === "agent" && isHandoff ? ActionRoute : null;
                   return (
                     <div key={msg.id} className="transcript-turn">
@@ -435,10 +436,17 @@ export function ThreadsView({
                         onOpenArtifact={onOpenArtifacts}
                         onRetryAgent={onRetryAgent}
                         retryDisabled={running}
+                        pickupFrom={source ? labelForAgentRun(source, logicalAgentNames, agentDisplayNames) : undefined}
                       />
                     </div>
                   );
                 })}
+                <TeamHandoffCue
+                  session={activeSession}
+                  logicalAgentNames={logicalAgentNames}
+                  logicalAgentImages={logicalAgentImages}
+                  agentDisplayNames={agentDisplayNames}
+                />
                 <HandoffStatus session={activeSession} />
                 <CollaborationStatus session={activeSession} />
                 {awaitingDecision ? (

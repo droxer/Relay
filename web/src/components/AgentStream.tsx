@@ -52,9 +52,10 @@ type AgentStreamProps = {
   stderr: string;
   streaming: boolean;
   collaborations: CodexCollaborationEvent[];
+  pickupFrom?: string;
 };
 
-export function AgentStream({ agent, stdout, stderr, streaming, collaborations }: AgentStreamProps) {
+export function AgentStream({ agent, stdout, stderr, streaming, collaborations, pickupFrom }: AgentStreamProps) {
   const { t } = useTranslation();
   // Settling can append a completed-log fallback that overlaps live output;
   // rebuild once at that boundary so the final transcript is canonical.
@@ -66,7 +67,11 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations }
     [accumulator, stdout, stderr, streaming],
   );
   const { segments, liveTextIndex } = displayed;
-  const workingLabel = t("agent_stream.empty_working");
+  // A handoff turn that has not produced anything yet is still being picked
+  // up (queued, booting, reading the prior work) — say whose work it takes.
+  const workingLabel = pickupFrom && segments.length === 0
+    ? t("agent_stream.picking_up", { agent: pickupFrom })
+    : t("agent_stream.empty_working");
   // The run stays `streaming` until the daemon posts `agent.completed`, which
   // lands after the CLI's own end-of-turn frame — don't keep pulsing "Working…"
   // beneath a line that already says the agent finished.
