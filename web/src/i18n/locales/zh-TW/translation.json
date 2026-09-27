@@ -1390,7 +1390,10 @@
     "suggestion_orient": "講講這個專案是如何組織的",
     "awaiting_first": "等待首則訊息",
     "phase_agent": "Agent",
-    "phase_handoff": "移交"
+    "phase_handoff": "移交",
+    "handoff_to": "{{from}} 已完成 · 正在移交給 {{to}}",
+    "handoff_open": "{{from}} 已完成 · 正在安排下一步",
+    "handoff_elapsed": "{{seconds}} 秒"
   },
   "login": {
     "username": "使用者名稱",
@@ -1531,7 +1534,8 @@
     "reasoning_label": "推理過程",
     "reasoning_steps_other": "{{count}} 步",
     "command_expand_other": "顯示其餘 {{count}} 行",
-    "command_collapse": "收起"
+    "command_collapse": "收起",
+    "picking_up": "正在接手 {{agent}} 的工作…"
   },
   "message": {
     "user_label": "你",

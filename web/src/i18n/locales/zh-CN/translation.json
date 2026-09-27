@@ -1390,7 +1390,10 @@
     "suggestion_orient": "讲讲这个项目是如何组织的",
     "awaiting_first": "等待第一条消息",
     "phase_agent": "代理",
-    "phase_handoff": "交接"
+    "phase_handoff": "交接",
+    "handoff_to": "{{from}} 已完成 · 正在交接给 {{to}}",
+    "handoff_open": "{{from}} 已完成 · 正在安排下一步",
+    "handoff_elapsed": "{{seconds}} 秒"
   },
   "login": {
     "lede": "与你并肩工作的 AI 伙伴，让时间回到真正重要的事。",
@@ -1531,7 +1534,8 @@
     "reasoning_label": "推理过程",
     "reasoning_steps_other": "{{count}} 步",
     "command_expand_other": "显示其余 {{count}} 行",
-    "command_collapse": "收起"
+    "command_collapse": "收起",
+    "picking_up": "正在接手 {{agent}} 的工作…"
   },
   "message": {
     "user_label": "你",

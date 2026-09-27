@@ -279,6 +279,76 @@
   color: var(--ink-4);
 }
 
+/* ---- Team handoff cue ---------------------------------------------------
+   The quiet gap between two team members' turns. It holds the rail slot the
+   next turn will land in — the incoming teammate's mark on a dashed, live
+   node — so the thread shows work changing hands instead of going still. */
+.team-handoff {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 5.5rem;
+  column-gap: var(--sp-3);
+  align-items: center;
+  color: var(--ink-3);
+}
+
+.rail-node.rail-node-agent.team-handoff-node {
+  border-radius: var(--r-2);
+  border-style: dashed;
+  border-color: var(--live);
+  background: var(--surface-3);
+  opacity: 0.7;
+}
+
+.team-handoff-label {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font: var(--type-label);
+}
+
+.team-handoff-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-handoff-dots {
+  display: inline-flex;
+  gap: var(--sp-0-5);
+  margin-left: var(--sp-2);
+}
+
+.team-handoff-dots > i {
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+  background: var(--live);
+}
+
+.team-handoff-elapsed {
+  grid-column: 3;
+  justify-self: end;
+  color: var(--ink-4);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .team-handoff-node {
+    animation: agent-rail-pulse var(--t-pulse) var(--ease) infinite;
+  }
+
+  .team-handoff-dots > i {
+    --blink-from: 0.25;
+    animation: blink var(--t-pulse) var(--ease) infinite;
+  }
+
+  .team-handoff-dots > i:nth-child(2) { animation-delay: calc(var(--t-pulse) / 6); }
+  .team-handoff-dots > i:nth-child(3) { animation-delay: calc(var(--t-pulse) / 3); }
+}
+
 .msg {
   position: relative;
   display: grid;
@@ -415,7 +485,8 @@
 
 @media (max-width: 820px) {
   .msg,
-  .transcript-phase {
+  .transcript-phase,
+  .team-handoff {
     grid-template-columns: 20px minmax(0, 1fr) auto;
   }
 }

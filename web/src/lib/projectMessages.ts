@@ -69,6 +69,18 @@ function previousTranscriptTurn(messages: DerivedMessage[], index: number): Deri
   return undefined;
 }
 
+/** The previous agent's turn when this turn takes work over from another
+ * agent — the source of a handoff — or undefined for any other turn. */
+export function handoffSource(
+  messages: DerivedMessage[],
+  index: number,
+): Extract<DerivedMessage, { kind: "agent" }> | undefined {
+  const message = messages[index];
+  if (message?.kind !== "agent") return undefined;
+  const prev = previousTranscriptTurn(messages, index);
+  return prev?.kind === "agent" && !isSameAgentTurn(prev, message) ? prev : undefined;
+}
+
 /** Label for a phase divider when the transcript hands work to another agent. */
 export function phaseDividerLabel(
   messages: DerivedMessage[],
@@ -78,13 +90,7 @@ export function phaseDividerLabel(
   const message = messages[index];
   if (message.kind !== "agent" || isGroupedContinuation(messages, index)) return null;
 
-  const prev = previousTranscriptTurn(messages, index);
-  if (!prev) return null;
-
-  if (prev.kind === "agent" && !isSameAgentTurn(prev, message)) {
-    return t("transcript.phase_handoff");
-  }
-  return null;
+  return handoffSource(messages, index) ? t("transcript.phase_handoff") : null;
 }
 
 // A JSONL line carrying an agent-protocol envelope. Used to place an agent log

@@ -180,6 +180,9 @@ type MessageBlockProps = {
   onOpenArtifact?: (artifact: RelayArtifact) => void;
   onRetryAgent?: (agent: AgentName, agentId?: string) => void;
   retryDisabled?: boolean;
+  /** Name of the teammate this turn takes over from, when it is a handoff.
+   * Until the first output lands the turn says so instead of "Working…". */
+  pickupFrom?: string;
 };
 
 export const MessageBlock = memo(function MessageBlock({
@@ -194,6 +197,7 @@ export const MessageBlock = memo(function MessageBlock({
   onOpenArtifact,
   onRetryAgent,
   retryDisabled = false,
+  pickupFrom,
 }: MessageBlockProps) {
   const { t, i18n } = useTranslation();
   const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.language || undefined), [i18n.language]);
@@ -242,6 +246,7 @@ export const MessageBlock = memo(function MessageBlock({
             stderr={message.stderr}
             streaming={message.streaming}
             collaborations={message.collaborations}
+            pickupFrom={pickupFrom}
           />
           {message.attachments.length > 0 ? (
             <div className="attachment-list">
