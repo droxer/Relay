@@ -13,6 +13,21 @@ import { ProfileImage } from "./ProfileImagePicker";
 // one motion, and a ticking "1s" would be noise.
 const ELAPSED_AFTER_SECONDS = 3;
 const TICK_MS = 1000;
+// The backend usually stages the next run in the same request that closes the
+// previous one, and a finished round closes right after its last turn. Holding
+// the row back this long keeps those instant transitions from flashing it.
+const SHOW_AFTER_MS = 800;
+
+/** True once `key` has stayed the same for SHOW_AFTER_MS. */
+function useSettled(key: string | null): boolean {
+  const [settled, setSettled] = useState<string | null>(null);
+  useEffect(() => {
+    if (!key) return undefined;
+    const timer = window.setTimeout(() => setSettled(key), SHOW_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [key]);
+  return key !== null && settled === key;
+}
 
 function useElapsedSeconds(since: string | undefined): number {
   const [now, setNow] = useState(() => Date.now());
@@ -41,11 +56,14 @@ export function TeamHandoffCue({ session, logicalAgentNames, logicalAgentImages,
   const { t } = useTranslation();
   const handoff = deriveTeamHandoff(session);
   const elapsed = useElapsedSeconds(handoff?.since);
-  if (!handoff) return null;
+  const settled = useSettled(handoff?.fromRunId ?? null);
+  if (!handoff || !settled) return null;
 
   const from = labelForAgentRun({ agent: handoff.fromAgent, agentId: handoff.fromAgentId }, logicalAgentNames, agentDisplayNames);
   const to = handoff.toAgentId ? logicalAgentNames[handoff.toAgentId] : undefined;
-  const label = to ? t("transcript.handoff_to", { from, to }) : t("transcript.handoff_open", { from });
+  const label = handoff.outcome === "failed"
+    ? t("transcript.handoff_after_failure", { from })
+    : to ? t("transcript.handoff_to", { from, to }) : t("transcript.handoff_open", { from });
   const image = handoff.toAgentId ? logicalAgentImages[handoff.toAgentId] : undefined;
 
   return (
@@ -63,7 +81,9 @@ export function TeamHandoffCue({ session, logicalAgentNames, logicalAgentImages,
         <span className="team-handoff-dots" aria-hidden="true"><i /><i /><i /></span>
       </span>
       {elapsed >= ELAPSED_AFTER_SECONDS ? (
-        <span className="team-handoff-elapsed">{t("transcript.handoff_elapsed", { seconds: elapsed })}</span>
+        // Hidden from assistive tech: it sits inside live regions, and a
+        // counter there would be announced every second.
+        <span className="team-handoff-elapsed" aria-hidden="true">{t("transcript.handoff_elapsed", { seconds: elapsed })}</span>
       ) : null}
     </div>
   );
