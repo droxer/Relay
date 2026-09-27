@@ -443,6 +443,10 @@ export const DisclosureChevron = withStandardStroke(LucideChevronRight, "Disclos
 export const PagePrevious = withStandardStroke(LucideChevronLeft, "PagePrevious");
 export const PageNext = withStandardStroke(LucideChevronRight, "PageNext");
 
+// Trailing mark on a list row whose whole body is a link to another record
+// (a routine's run ledger) — says "this opens" without a second target.
+export const RowOpen = withStandardStroke(LucideChevronRight, "RowOpen");
+
 // Generic actions not covered above.
 export const ActionAdd = withStandardStroke(Plus, "ActionAdd");
 export const ActionSubtract = withStandardStroke(Minus, "ActionSubtract");

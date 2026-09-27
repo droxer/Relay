@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelaySession, RelayTaskListItem } from "../types";
 import { hrefForRoute, hrefForSettingsSection, navigateToAppPath } from "../lib/appRoute";
-import { executionRecoveryGuide, taskRecoveryGuide, type RecoveryGuide } from "../lib/executionRecovery";
+import { executionRecoveryGuide, taskRecoveryGuide, taskRecoveryReason, type RecoveryGuide } from "../lib/executionRecovery";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 
@@ -110,13 +110,7 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
   if (!guide) return null;
   const linked = task.workspaceWaiting?.blockingSessionId || (task.status === "blocked" && task.attention ? task.attention.sessionId : task.linkedSessionIds.at(-1));
   const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
-  let reason: string | undefined;
-  if (task.status === "blocked") {
-    reason = task.attention?.summary ?? task.blockerReason;
-    if (task.attention?.evidence === "unknown" || reason === "Execution needs attention.") reason = undefined;
-  } else if (task.status === "assigned" && task.dispatchOutcome?.state !== "started") {
-    reason = task.dispatchOutcome?.message;
-  }
+  const reason = taskRecoveryReason(task);
   return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} aria-label={t("recovery.title")}>
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     {reason ? <p className="recovery-context">{reason}</p> : null}

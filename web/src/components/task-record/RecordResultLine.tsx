@@ -21,9 +21,12 @@ import type { TaskRun } from "../../types";
  */
 export function RecordResultLine({
   taskId,
+  hideReason = false,
   onOpenThread,
 }: {
   taskId: string;
+  /** The recovery panel above already quotes this failure — say it once. */
+  hideReason?: boolean;
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -43,12 +46,12 @@ export function RecordResultLine({
   const outcome = runOutcome(run);
   const duration = runDurationMs(run);
   const when = run.endedAt ?? run.startedAt;
+  const reason = hideReason ? null : run.failureMessage;
 
   /* A queued run can carry nothing but a thread id. A strip whose only
      content is a right-floating "Open thread" link reads as a stray, and the
      timeline below already links that thread — so with no facts, no strip. */
-  if (!when && duration === null && run.artifactCount === 0 && !run.failureMessage) return null;
-
+  if (!when && duration === null && run.artifactCount === 0 && !reason) return null;
 
   return (
     <section className="task-result-summary" data-outcome={outcome} aria-label={t("backlog.result_title")}>
@@ -70,9 +73,7 @@ export function RecordResultLine({
           {t("backlog.result_files", { count: run.artifactCount })}
         </span>
       ) : null}
-      {run.failureMessage ? (
-        <span className="task-result-reason">{run.failureMessage}</span>
-      ) : null}
+      {reason ? <span className="task-result-reason">{reason}</span> : null}
       {run.latestSessionId ? (
         <a
           className="record-inline-action task-result-thread"

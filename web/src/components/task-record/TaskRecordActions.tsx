@@ -4,12 +4,10 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ActionStart, ICON } from "../icons";
 import type { RelayTaskListItem } from "../../types";
-import type { RecordVariant } from "./recordVocabulary";
 import { recordActions, type RecordAction } from "./recordActions";
 
 export function TaskRecordActions({
   task,
-  variant,
   readOnly = false,
   busyAction,
   onRun,
@@ -20,7 +18,6 @@ export function TaskRecordActions({
   onDelete,
 }: {
   task: RelayTaskListItem;
-  variant: RecordVariant;
   /** The task's project is closed for work — the record is readable, not actionable. */
   readOnly?: boolean;
   busyAction: RecordAction | null;
@@ -95,7 +92,11 @@ export function TaskRecordActions({
         disabled={busy}
         onClick={onDelete}
       >
-        {t(variant === "routine" ? "routine.delete_task" : "backlog.delete_task")}
+        {/* Plain "Delete" on both vocabularies: the record's title already
+            names what goes, the confirm dialog repeats it, and "Delete
+            routine" was the one label that pushed a narrow drawer's
+            actions onto a second row. */}
+        {t("backlog.delete_task")}
       </Button>
     </>
   );

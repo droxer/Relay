@@ -526,6 +526,11 @@
       "loading": "正在載入執行…",
       "empty": "此例程尚未執行。",
       "error": "無法載入執行。",
+      "col_date": "日期",
+      "col_outcome": "結果",
+      "col_duration": "耗時",
+      "col_files": "檔案",
+      "started_at": "{{time}} 開始",
       "files_other": "{{count}} 個檔案",
       "outcome": {
         "done": "已完成",

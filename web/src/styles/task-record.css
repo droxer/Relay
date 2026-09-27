@@ -37,24 +37,69 @@
 
 /* ── Run ledger ───────────────────────────────────────────────────── */
 
+/* One column template for the header and every row, so "Duration" sits over
+   the durations and a row without files still holds the files column open.
+   Mark · date · outcome (+ why) · duration · files · open. */
+.record-run-head,
+.record-run-link {
+  display: grid;
+  grid-template-columns: var(--sp-3) 5.5rem minmax(0, 1fr) 3.5rem 4.5rem var(--sp-4);
+  column-gap: var(--sp-3);
+  align-items: center;
+  padding-inline: var(--sp-3);
+}
+
+.record-run-head {
+  padding-block: 0 var(--sp-2);
+  border-bottom: 0.5px solid var(--line-1);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--track-0);
+  text-transform: uppercase;
+}
+
+.record-run-head > span {
+  grid-row: 1;
+}
+
+.record-run-head-date {
+  grid-column: 2;
+}
+
+.record-run-head > :nth-child(2) {
+  grid-column: 3;
+}
+
+.record-run-head > :nth-child(3) {
+  grid-column: 4;
+}
+
+.record-run-head > :nth-child(4) {
+  grid-column: 5;
+}
+
+.record-run-head-num {
+  text-align: right;
+}
+
 .record-run-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* Hairlines between rows rather than floating pills: a ledger is read down
+   its columns, and the rules are what carry the eye across a row. */
+.record-run + .record-run {
+  border-top: 0.5px solid var(--line-2);
+}
+
 /* One destination per row. The whole row is the link — a ledger read by
    scanning down a date column cannot afford a second target per line. */
 .record-run-link {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
   min-width: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid transparent;
+  min-height: 2.75rem;
+  padding-block: var(--sp-2);
   border-radius: var(--r-2);
   color: var(--ink-2);
   font: var(--type-body-sm);
@@ -63,8 +108,23 @@
 }
 
 .record-run-link:hover {
-  border-color: var(--line-1);
   background: var(--control-fill-hover);
+}
+
+/* Everything hangs from the first line, so a two-line row (a failure and its
+   reason) keeps its date and mark level with the outcome word instead of
+   floating between the two lines. The mark is centred on that line box. */
+.record-run-link {
+  align-items: start;
+}
+
+.record-run-link > .state-mark {
+  justify-self: center;
+  margin-top: calc((1lh - var(--dot)) / 2);
+}
+
+.record-run-open {
+  margin-top: calc((1lh - 14px) / 2);
 }
 
 /* The mark carries the outcome's tone; the row's own text stays neutral so
@@ -74,34 +134,83 @@
 }
 
 .record-run-date {
-  flex: none;
-  min-width: 4.5rem;
   color: var(--ink-1);
+  white-space: nowrap;
+}
+
+.record-run-summary {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .record-run-outcome {
-  flex: none;
+  color: var(--ink-1);
 }
 
 .record-run-reason {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   color: var(--ink-3);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.record-run-meta,
+.record-run-duration,
 .record-run-files {
-  flex: none;
-  margin-left: auto;
   color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
 }
 
-/* Two trailing columns; only the first claims the free space. */
-.record-run-meta ~ .record-run-files {
-  margin-left: 0;
+/* Quiet until the row is under the pointer — the header already says rows
+   open, and thirty chevrons at full ink would outweigh the dates. */
+.record-run-open {
+  justify-self: end;
+  color: var(--ink-4);
+}
+
+.record-run-link:hover .record-run-open {
+  color: var(--ink-2);
+}
+
+/* A narrow drawer cannot give files a column of its own: the count tucks
+   under the duration, and the outcome keeps the width it needs to say why. */
+@container record (max-width: 640px) {
+  .record-run-head,
+  .record-run-link {
+    grid-template-columns: var(--sp-3) 3.75rem minmax(0, 1fr) auto var(--sp-4);
+    column-gap: var(--sp-2);
+    padding-inline: var(--sp-2);
+  }
+
+  .record-run-head > :nth-child(3) {
+    grid-column: 4;
+  }
+
+  .record-run-head > :nth-child(4) {
+    display: none;
+  }
+
+  .record-run-link {
+    grid-template-rows: auto auto;
+  }
+
+  .record-run-link > * {
+    grid-row: 1;
+  }
+
+  .record-run-summary {
+    grid-row: 1 / span 2;
+  }
+
+  .record-run-files {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .record-run-open {
+    grid-column: 5;
+  }
 }
 
 .record-run-more {
@@ -194,6 +303,16 @@
   flex-wrap: wrap;
   gap: var(--sp-3);
   margin-bottom: var(--sp-4);
+}
+
+/* The record's actions as one cluster at the row's end; when the tabs take
+   the full width on a narrow drawer, the cluster wraps beneath them intact. */
+.record-drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
 }
 
 /* The band is a flush strip on the page; inset by the drawer body's padding

@@ -12,6 +12,7 @@ import { PageHeader } from "../PageHeader";
 import { RecordBand, type RecordFact } from "../workspace/RecordBand";
 import { recordBandFacts } from "./recordBandFacts";
 import { TaskRecoveryPanel } from "../ExecutionRecoveryPanel";
+import { taskRecoveryReason } from "../../lib/executionRecovery";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordArtifacts } from "./RecordArtifacts";
 import { RecordHistory } from "./RecordHistory";
@@ -163,7 +164,6 @@ export function TaskRecordPage({
   const actions = (
     <TaskRecordActions
       task={task}
-      variant={variant}
       readOnly={readOnly}
       busyAction={busyAction}
       onRun={onRun}
@@ -188,7 +188,10 @@ export function TaskRecordPage({
            sections and what can be done about them. */
         <div className="record-drawer-toolbar">
           {tabsList}
-          {actions}
+          {/* One cluster, held to the end of the row. Loose in the
+              toolbar's space-between, each button claimed its own gap and
+              the row read as four unrelated controls. */}
+          <div className="record-drawer-actions">{actions}</div>
         </div>
       ) : (
         <PageHeader
@@ -240,7 +243,7 @@ export function TaskRecordPage({
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
             <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} />
-            <RecordResultLine taskId={task.id} onOpenThread={onOpenThread} />
+            <RecordResultLine taskId={task.id} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
             <RecordHistory taskId={task.id} live={task.status === "running"} names={historyNames} onOpenThread={onOpenThread} />
           </TabsContent>
         )}
