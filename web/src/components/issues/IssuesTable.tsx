@@ -140,7 +140,7 @@ export function IssuesTable({
                     onCheckedChange={() => onToggleSelect(task.id)}
                   />
                 </TableCell>
-                <TableCell className="task-col-ref backlog-row-ref">{taskRef(task.id)}</TableCell>
+                <TableCell className="code task-col-ref backlog-row-ref" translate="no">{taskRef(task.id)}</TableCell>
                 <TableCell className="max-w-md whitespace-normal">
                   <div className="backlog-row-lead-main">
                     <a className="backlog-row-title" href={hrefForTaskRecord(task.id)} onClick={(event) => openIssue(event, task.id)}>

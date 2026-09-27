@@ -521,7 +521,7 @@
       "project_set": "Moved into a project",
       "project_set_to": "Moved into {{name}}"
     },
-    "col_ref": "Ref",
+    "col_ref": "Issue ID",
     "add_due": "Add date",
     "runs": {
       "title": "Runs",

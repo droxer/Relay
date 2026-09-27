@@ -65,7 +65,7 @@ describe("task board review regressions", () => {
     assert.match(routineRecords, /loading=\{starting\}/);
   });
 
-  it("uses the compact reference as drawer identity on both boards", () => {
+  it("uses the full issue id as drawer identity on both boards", () => {
     assert.match(backlogPage, /taskRef\(form\.id\)/);
     assert.match(routinesPage, /taskRef\(form\.id\)/);
     assert.match(taskDrawer, /subtitleMono=\{Boolean\(form\.id\)\}/);

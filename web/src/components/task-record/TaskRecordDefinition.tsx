@@ -12,7 +12,7 @@ import type { RecordVariant } from "./recordVocabulary";
  * What the record is, read-only.
  *
  * The band above already carries the spine a reader came in knowing — state,
- * cadence or status, next run or due, assignee, ref — and `RecordBand`'s
+ * cadence or status, next run or due, assignee, issue ID — and `RecordBand`'s
  * contract forbids restating any of it here. So this panel holds exactly what
  * the band cannot: the description as a document, and the settings that
  * govern a run without describing when it happens.

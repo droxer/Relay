@@ -519,7 +519,7 @@
       "project_set": "已移入專案",
       "project_set_to": "已移入 {{name}}"
     },
-    "col_ref": "編號",
+    "col_ref": "議題 ID",
     "add_due": "新增日期",
     "runs": {
       "title": "執行",

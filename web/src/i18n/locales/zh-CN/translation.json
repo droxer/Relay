@@ -519,7 +519,7 @@
       "project_set": "已移入项目",
       "project_set_to": "已移入 {{name}}"
     },
-    "col_ref": "编号",
+    "col_ref": "问题 ID",
     "add_due": "添加日期",
     "runs": {
       "title": "运行",
