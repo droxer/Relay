@@ -99,6 +99,37 @@ describe("deriveTeamHandoff", () => {
     assert.equal(deriveTeamHandoff(session(runs, "build_review"))?.toAgentId, "ada");
   });
 
+  it("names the repair owner in Pipeline and Lead-led rounds", () => {
+    for (const style of ["pipeline", "lead_led"] as const) {
+      const s = session([
+        run("r1", "a1", "lead"),
+        run("r2", "a2", "ada"),
+        run("r3", "a3", "rex", {
+          role: "reviewer",
+          workResult: { status: "continue", evidence: [], findings: [{ workItemId: "build", note: "fix" }] },
+        }),
+      ], style);
+      const round = s.collaborationRounds![0]!;
+      round.assignments = [
+        { assignmentId: "a1", agentId: "lead", role: "planner" },
+        { assignmentId: "a2", agentId: "ada", role: "implementer" },
+        { assignmentId: "a3", agentId: "rex", role: "reviewer" },
+        ...(style === "lead_led" ? [{ assignmentId: "a4", agentId: "lead", synthesizer: true }] : []),
+      ];
+      round.workGraph = {
+        contract: { name: "relay.collaboration.work-graph", version: 1 },
+        items: [
+          { workItemId: "plan", assignmentId: "a1", ownerAgentId: "lead", delegationAuthority: "conductor", kind: "planning", objective: "Plan", dependsOnWorkItemIds: [], required: true },
+          { workItemId: "build", assignmentId: "a2", ownerAgentId: "ada", delegationAuthority: "conductor", kind: "implementation", objective: "Build", dependsOnWorkItemIds: ["plan"], required: true },
+          { workItemId: "review", assignmentId: "a3", ownerAgentId: "rex", delegationAuthority: "conductor", kind: "review", objective: "Review", dependsOnWorkItemIds: ["build"], required: true },
+        ],
+        completion: { kind: "all_required" },
+        delegationPolicy: { authority: "conductor", policy: "sequential-role-delegation-v1" },
+      };
+      assert.equal(deriveTeamHandoff(s)?.toAgentId, "ada", style);
+    }
+  });
+
   it("leaves the target open when the last assignment has finished", () => {
     const runs = [run("r1", "a1", "ada"), run("r2", "a2", "rex", { workResult: { status: "done", evidence: [] } })];
     assert.equal(deriveTeamHandoff(session(runs, "build_review"))?.toAgentId, null);

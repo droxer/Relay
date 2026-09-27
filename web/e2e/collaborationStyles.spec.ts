@@ -87,12 +87,12 @@ test("task override can be saved and cleared to inherit", async ({ page }) => {
   await page.getByRole("combobox", { name: "Collaboration", exact: true }).click();
   await expect(page.getByRole("option", { name: "Solo", exact: true })).toHaveCount(0);
   await page.getByRole("option", { name: "Pipeline", exact: true }).click();
-  await page.getByRole("button", { name: "Save task", exact: true }).click();
+  await page.getByRole("button", { name: "Save issue", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("pipeline");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Collaboration", exact: true }).click();
   await page.getByRole("option", { name: "Team default (Build → Review)", exact: true }).click();
-  await page.getByRole("button", { name: "Save task", exact: true }).click();
+  await page.getByRole("button", { name: "Save issue", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.collaborationStyle).toBe("");
 });
 

@@ -30,6 +30,13 @@ gates and findings-to-owner repair path, with at most two repair cycles.
 Runtime failures in those styles fail the round without coordinator recovery.
 The reviewer runs in review mode. Required work applies to the compiled slots;
 unselected roster members do not prevent completion.
+If the builder exits successfully without a valid work report, the reviewer
+still runs with that report marked missing. The round remains blocked by the
+missing required evidence unless a repair cycle obtains a valid builder report.
+In Pipeline, a missing report does not prevent later specialists from running.
+In Lead-led, the lead's initial work plan remains required. Once delegated work
+starts, a member's missing report does not prevent later members or the lead's
+final review from running. Missing reports still block acceptance in both modes.
 
 Discussion, addressed-member messages, and recovery retain existing behavior.
 The backend never executes agents; no daemon protocol or SQL migration changes.
@@ -43,7 +50,8 @@ Team settings preview role-based slots. Task overrides can return to team
 inheritance. Composer overrides reset after successful send and survive failed
 dispatch. Retry keys distinguish styles while preserving legacy unstyled keys.
 Turn labels use each run's frozen style; review progress and solo fallbacks
-are shown when applicable. Copy is available in English and both Chinese locales.
+are shown when applicable. Findings handoffs name the earlier implementation
+owner selected for repair. Copy is available in English and both Chinese locales.
 
 Existing teams without a stored style use Build → Review for future work.
 Running rounds retain their captured style; teams can select Lead-led to keep

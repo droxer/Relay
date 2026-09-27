@@ -240,7 +240,7 @@ describe("composer agent selection", () => {
     // A thread pinned to a computer the fleet no longer lists still says where
     // it runs, instead of dropping the line entirely.
     assert.match(runtime, /if \(!nodeId\) return null;/);
-    assert.match(composer, /<ThreadRuntimeReadout node=\{activeRuntimeNode\} nodeId=\{runtimeNodeId\} \/>/);
+    assert.match(composer, /<ThreadRuntimeReadout[\s\S]{0,120}node=\{activeRuntimeNode\}[\s\S]{0,80}nodeId=\{runtimeNodeId\}/);
   });
 
   it("asks \"which agent\" in one vocabulary", async () => {
