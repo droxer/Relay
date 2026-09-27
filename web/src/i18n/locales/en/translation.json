@@ -1401,7 +1401,8 @@
     "phase_handoff": "Handoff",
     "handoff_to": "{{from}} finished · handing off to {{to}}",
     "handoff_open": "{{from}} finished · lining up the next step",
-    "handoff_elapsed": "{{seconds}}s"
+    "handoff_elapsed": "{{seconds}}s",
+    "handoff_after_failure": "{{from}} stopped · lining up the next step"
   },
   "login": {
     "lede": "An AI partner that works alongside you, so your time goes to the work that matters.",

@@ -1393,7 +1393,8 @@
     "phase_handoff": "交接",
     "handoff_to": "{{from}} 已完成 · 正在交接给 {{to}}",
     "handoff_open": "{{from}} 已完成 · 正在安排下一步",
-    "handoff_elapsed": "{{seconds}} 秒"
+    "handoff_elapsed": "{{seconds}} 秒",
+    "handoff_after_failure": "{{from}} 已中止 · 正在安排下一步"
   },
   "login": {
     "lede": "与你并肩工作的 AI 伙伴，让时间回到真正重要的事。",
