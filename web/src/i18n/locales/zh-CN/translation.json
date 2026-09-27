@@ -526,6 +526,11 @@
       "loading": "正在加载运行…",
       "empty": "该例程尚未运行。",
       "error": "无法加载运行。",
+      "col_date": "日期",
+      "col_outcome": "结果",
+      "col_duration": "耗时",
+      "col_files": "文件",
+      "started_at": "{{time}} 开始",
       "files_other": "{{count}} 个文件",
       "outcome": {
         "done": "已完成",

@@ -24,7 +24,9 @@
              tier, where the `workspace-list` file rows drop their date
              (the thread space panel is this narrow on the widest screen
              in the building, which is why it cannot be a viewport query)
-     640px   compact — dashboard, admin shell, composer, workspace panes
+     640px   compact — dashboard, admin shell, composer, workspace panes;
+             also a CONTAINER tier, where the `record` run ledger folds its
+             files column under the duration
      768px   CONTAINER tier, not a viewport one — the `computer` and `record`
              containers widen here. Container queries are breakpoints too and
              belong in this list; leaving them out is what made this row look

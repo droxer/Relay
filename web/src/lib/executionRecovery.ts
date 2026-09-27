@@ -57,6 +57,23 @@ register(["dispatch_failed"], "failure", "computer");
 register(["execution_failed", "agent_exit_failed", "execution_cancelled"], "failure");
 register(["manual_block"], "manual_block");
 
+/**
+ * The recorded reason the recovery panel quotes, when it quotes one.
+ *
+ * Exported so a surface beside the panel (a run's result line) can tell the
+ * reason is already on screen and not print the same failure twice.
+ */
+export function taskRecoveryReason(task: RelayTaskListItem): string | undefined {
+  if (!taskRecoveryGuide(task)) return undefined;
+  if (task.status === "blocked") {
+    const reason = task.attention?.summary ?? task.blockerReason;
+    if (task.attention?.evidence === "unknown" || reason === "Execution needs attention.") return undefined;
+    return reason;
+  }
+  if (task.status === "assigned" && task.dispatchOutcome?.state !== "started") return task.dispatchOutcome?.message;
+  return undefined;
+}
+
 export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null {
   if (task.status === "waiting_for_human") return { key: "human", tone: "info" };
   if (task.status === "review") return { key: "review", tone: "info" };

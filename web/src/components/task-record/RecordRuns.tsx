@@ -8,6 +8,7 @@ import { RecordFailure } from "./RecordFailure";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { formatRunDuration, runDurationMs, runOutcome, type RunOutcome } from "../../lib/taskRuns";
 import type { TaskRun } from "../../types";
+import { ICON, RowOpen } from "../icons";
 import { StateMark, type StateTone } from "../StateMark";
 
 /**
@@ -45,7 +46,9 @@ function runDate(value: string | null | undefined, locale: string): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(locale || undefined, { month: "short", day: "numeric" }).format(date);
+  // A ledger that crosses New Year must not show two "Jan 3"s a year apart.
+  const year = date.getFullYear() === new Date().getFullYear() ? undefined : "numeric";
+  return new Intl.DateTimeFormat(locale || undefined, { month: "short", day: "numeric", year }).format(date);
 }
 
 function runTime(value: string | null, locale: string): string {
@@ -99,6 +102,17 @@ export function RecordRuns({
 
   return (
     <>
+      {/* Column names, once. The rows are a table read down its columns —
+          without a header a bare "2m" or "1 file" had to be decoded per row.
+          Hidden from assistive tech: each row's link already reads as a
+          sentence, and a header outside the list would be announced as
+          orphaned text. */}
+      <div className="record-run-head" aria-hidden="true">
+        <span className="record-run-head-date">{t("backlog.runs.col_date")}</span>
+        <span>{t("backlog.runs.col_outcome")}</span>
+        <span className="record-run-head-num">{t("backlog.runs.col_duration")}</span>
+        <span className="record-run-head-num">{t("backlog.runs.col_files")}</span>
+      </div>
       <ol className="record-run-list">
         {runs.map((run) => (
           <RunRow
@@ -140,6 +154,12 @@ function RunRow({
   const { t } = useTranslation();
   const outcome = runOutcome(run);
   const duration = runDurationMs(run);
+  /* The second line says the one thing the outcome word cannot: why a run
+     failed, or since when one has been going. The trailing columns stay
+     numbers only — a clock time in the duration column read as a duration. */
+  const started = runTime(run.startedAt, locale);
+  const detail = run.failureMessage
+    ?? (outcome === "running" && started ? t("backlog.runs.started_at", { time: started }) : null);
 
   return (
     <li className="record-run" data-outcome={outcome}>
@@ -156,15 +176,19 @@ function RunRow({
       >
         <StateMark tone={TONE_FOR_OUTCOME[outcome]} shape={outcome === "pending" ? "dashed" : undefined} />
         <span className="record-run-date tnum">{runDate(run.scheduledFor ?? run.createdAt, locale)}</span>
-        <span className="record-run-outcome">{t(`backlog.runs.outcome.${outcome}`)}</span>
-        {/* A run that failed says why here; nothing else on the row can. */}
-        {run.failureMessage ? <span className="record-run-reason">{run.failureMessage}</span> : null}
-        <span className="record-run-meta tnum">
-          {duration === null ? runTime(run.startedAt, locale) : formatRunDuration(duration)}
+        <span className="record-run-summary">
+          <span className="record-run-outcome">{t(`backlog.runs.outcome.${outcome}`)}</span>
+          {/* A failure's reason is clipped to one line; the title carries
+              the whole of it, and the run's own record quotes it in full. */}
+          {detail ? <span className="record-run-reason" title={detail}>{detail}</span> : null}
         </span>
-        {run.artifactCount > 0 ? (
-          <span className="record-run-files tnum">{t("backlog.runs.files", { count: run.artifactCount })}</span>
-        ) : null}
+        {/* Both numeric cells always render, empty or not, so the columns
+            hold their line down the ledger. */}
+        <span className="record-run-duration tnum">{duration === null ? "" : formatRunDuration(duration)}</span>
+        <span className="record-run-files tnum">
+          {run.artifactCount > 0 ? t("backlog.runs.files", { count: run.artifactCount }) : ""}
+        </span>
+        <RowOpen className="record-run-open" size={ICON.sm} />
       </a>
     </li>
   );
