@@ -14,13 +14,17 @@ def test_installer_is_public_and_pins_the_archive(monkeypatch, tmp_path):
     monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(bundle))
     monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://api.example.com")
     client = TestClient(create_app(str(tmp_path / "state")))
-    response = client.get("/computer/install.sh")
+    response = client.get("/install.sh")
     assert response.status_code == 200
     assert "text/x-shellscript" in response.headers["content-type"]
     digest = hashlib.sha256(bundle.read_bytes()).hexdigest()
     assert digest in response.text
     assert f"https://api.example.com/computer/daemon-{digest}.tar.gz" in response.text
-    assert subprocess.run(["sh", "-n"], input=response.text, text=True).returncode == 0
+    assert "@@" not in response.text
+    # `| sudo bash` is the published form; commands copied before it piped to sh.
+    for shell in ("bash", "sh"):
+        assert subprocess.run([shell, "-n"], input=response.text, text=True).returncode == 0
+    assert client.get("/computer/install.sh").text == response.text
     archive = client.get(f"/computer/daemon-{digest}.tar.gz")
     assert archive.content == bundle.read_bytes()
     assert client.get(f"/computer/daemon-{'0' * 64}.tar.gz").status_code == 404
@@ -29,7 +33,17 @@ def test_installer_is_public_and_pins_the_archive(monkeypatch, tmp_path):
 def test_installer_missing_build_fails_explicitly(monkeypatch, tmp_path):
     monkeypatch.setenv("RELAY_COMPUTER_BUNDLE", str(tmp_path / "missing"))
     client = TestClient(create_app(str(tmp_path / "state")))
+    assert client.get("/install.sh").status_code == 503
     assert client.get("/computer/install.sh").status_code == 503
+
+
+def test_setup_command_is_the_bare_installer_pipeline(monkeypatch):
+    from starlette.requests import Request
+    from relay.api.computer_installer_routes import computer_setup_command
+
+    monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", "https://eveland.ai")
+    request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
+    assert computer_setup_command(request) == "curl -fsSL https://eveland.ai/install.sh | sudo bash"
 
 
 def test_install_command_quotes_user_paths_and_uses_public_origin(monkeypatch):
@@ -40,9 +54,9 @@ def test_install_command_quotes_user_paths_and_uses_public_origin(monkeypatch):
     request = Request({"type": "http", "scheme": "http", "server": ("internal", 80), "path": "/", "headers": []})
     workspace = "/Users/alice/a project/$(touch pwned)'"
     command = computer_install_command(request, {"id": "node-1", "employeeId": "alice", "workspacePath": workspace})
-    assert command.startswith("curl -fsSL https://api.example.com/computer/install.sh | sh -s -- ")
-    args = shlex.split(command.split(" | sh -s -- ")[1])
-    assert args == ["--backend-url", "https://api.example.com", "--sandbox-id", "node-1", "--employee-id", "alice", "--workspace", workspace]
+    assert command.startswith("curl -fsSL https://api.example.com/install.sh | sudo bash -s -- ")
+    args = shlex.split(command.split(" | sudo bash -s -- ")[1])
+    assert args == ["--sandbox-id", "node-1", "--employee-id", "alice", "--workspace", workspace]
 
 
 def _shell_fixture(tmp_path):
@@ -64,7 +78,10 @@ def _shell_fixture(tmp_path):
     scripts = {
         "curl": '#!/bin/sh\n[ "${FAIL_DOWNLOAD:-}" != 1 ] || exit 22\nwhile [ "$1" != -o ]; do shift; done\ncp "$FIXTURE_ARCHIVE" "$2"\n',
         "node": '#!/bin/sh\n[ "$1" != -e ] || exit 0\n[ -f "$1" ] || exit 9\n[ "$RELAY_DAEMON_NODE_TOKEN" = test-token ] || exit 10\nprintf "INSTALL_STARTED\\n"\nprintf "%s\\n" "$@" > "$FIXTURE_ARGS"\n',
-        "id": '#!/bin/sh\nprintf "501\\n"\n',
+        # `id -u` reports root only while FAKE_ROOT is set; `id -u <name>` never does.
+        "id": '#!/bin/sh\n[ "${FAKE_ROOT:-}" = 1 ] && [ "$#" = 1 ] && { printf "0\\n"; exit; }\nprintf "501\\n"\n',
+        # Records the hand-off, then runs it as the (already unprivileged) test user.
+        "sudo": '#!/bin/sh\nprintf "%s\\n" "$@" > "$FIXTURE_SUDO"\nwhile [ "$1" != bash ]; do shift; done\nunset FAKE_ROOT\nexec "$@"\n',
     }
     for name, contents in scripts.items():
         path = bin_dir / name
@@ -74,9 +91,11 @@ def _shell_fixture(tmp_path):
     home.mkdir()
     env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:{os.environ['PATH']}",
            "RELAY_DAEMON_NODE_TOKEN": "test-token", "FIXTURE_ARCHIVE": str(archive),
-           "FIXTURE_ARGS": str(tmp_path / "args")}
+           "FIXTURE_ARGS": str(tmp_path / "args"), "FIXTURE_SUDO": str(tmp_path / "sudo")}
+    env.pop("SUDO_USER", None)
     source = (Path(__file__).parents[2] / "relay/computer/install.sh").read_text()
     source = source.replace("@@BUNDLE_URL@@", "https://relay.example.com/client.tar.gz")
+    source = source.replace("@@BACKEND_URL@@", "https://relay.example.com")
     source = source.replace("@@BUNDLE_SHA256@@", hashlib.sha256(archive.read_bytes()).hexdigest())
     return source, env
 
@@ -90,6 +109,60 @@ def test_piped_installer_preserves_paths_and_does_not_print_token(tmp_path):
         assert "INSTALL_STARTED" in result.stdout
         assert "test-token" not in result.stdout + result.stderr
         assert (tmp_path / "args").read_text().splitlines()[1:] == args
+
+
+def test_bare_installer_supplies_the_backend_it_was_served_from(tmp_path):
+    source, env = _shell_fixture(tmp_path)
+    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "args").read_text().splitlines()[1:] == ["--backend-url", "https://relay.example.com"]
+
+
+def test_sudo_installs_for_the_invoking_user_not_root(tmp_path):
+    source, env = _shell_fixture(tmp_path)
+    env.update(FAKE_ROOT="1", SUDO_USER="alice")
+    args = ["--sandbox-id", "node-1", "--employee-id", "alice", "--workspace", "/a path/$HOME $(not-executed)'"]
+    result = subprocess.run(["bash", "-s", "--", *args], input=source, env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert "INSTALL_STARTED" in result.stdout
+    # Root never runs the client: it hands the install to alice's login shell.
+    assert (tmp_path / "sudo").read_text().splitlines() == ["-i", "-u", "alice", "bash", "-s"]
+    assert (tmp_path / "args").read_text().splitlines()[1:] == ["--backend-url", "https://relay.example.com", *args]
+    assert "test-token" not in result.stdout + result.stderr
+
+
+def test_sudo_hand_off_failure_fails_the_installer(tmp_path):
+    source, env = _shell_fixture(tmp_path)
+    env.update(FAKE_ROOT="1", SUDO_USER="alice", FAIL_DOWNLOAD="1")
+    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True)
+    assert result.returncode != 0
+    assert not (tmp_path / "args").exists()
+
+
+def test_root_without_an_invoking_user_is_refused(tmp_path):
+    source, env = _shell_fixture(tmp_path)
+    for sudo_user in (None, "root"):
+        env.update(FAKE_ROOT="1")
+        env.pop("SUDO_USER", None)
+        if sudo_user:
+            env["SUDO_USER"] = sudo_user
+        # A root shell's own account is uid 0 whichever way it is looked up.
+        (tmp_path / "bin/id").write_text('#!/bin/sh\nprintf "0\\n"\n')
+        result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True)
+        assert result.returncode != 0
+        assert "normal user" in result.stderr
+        assert not (tmp_path / "sudo").exists()
+        assert not (tmp_path / "args").exists()
+
+
+def test_sudo_hand_off_requires_bash(tmp_path):
+    source, env = _shell_fixture(tmp_path)
+    env.update(FAKE_ROOT="1", SUDO_USER="alice", BASH_VERSION="")
+    result = subprocess.run(["sh"], input=source, env=env, text=True, capture_output=True)
+    if result.returncode == 0:  # /bin/sh is bash on this host; nothing to refuse
+        return
+    assert "sudo bash" in result.stderr
+    assert not (tmp_path / "args").exists()
 
 
 def test_download_failure_does_not_execute_or_replace_client(tmp_path):

@@ -770,7 +770,7 @@
     "platform_linux": "已支持 · ARM64 / x64 · 需要 systemd 用户服务",
     "platform_windows": "暂不支持 · 已列入支持计划",
     "platform_shell_hint": "以下命令适用于 macOS / Linux 终端（Bash 或 zsh），不适用于 Windows PowerShell 或命令提示符。",
-    "connect_requirements": "无需 Git 或 npm。安装程序会按需安装 Node.js，并设置后台服务。",
+    "connect_requirements": "无需 Git 或 npm。安装程序会要求输入这台电脑的密码（sudo），然后为你自己的账户安装：按需安装 Node.js，并设置后台服务。",
     "connect_workspace_hint": "要连接的电脑上已存在的文件夹，例如 /Users/alice/project 或 /home/alice/project。",
     "connect_command_step": "运行安装命令",
     "connect_token_step": "粘贴节点令牌",

@@ -9,7 +9,7 @@ vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ con
 const node = { id: "local-1", nodeLocation: "employee-device", sandboxMode: "none" } as ControlPanelDaemonNodeRecord;
 const credentials = {
   nodeToken: "fixture-token", daemonEnv: {}, daemonCommand: "legacy-daemon-command",
-  installCommand: "curl -fsSL https://relay.example/computer/install.sh | sh -s -- --sandbox-id local-1",
+  installCommand: "curl -fsSL https://relay.example/install.sh | sudo bash -s -- --sandbox-id local-1",
 };
 beforeEach(() => { vi.mocked(revealComputerToken).mockReset(); vi.mocked(reissueComputerToken).mockReset(); });
 

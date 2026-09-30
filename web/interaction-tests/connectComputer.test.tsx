@@ -23,7 +23,7 @@ it("explains installation before generating a command", () => {
 it("guides command and token steps without claiming registration means connected", async () => {
   vi.mocked(createLocalDeviceEnrollment).mockResolvedValue({
     node: { id: "computer-1" }, daemonEnv: {}, reused: true, nodeToken: "fixture-token",
-    installCommand: "curl -fsSL https://relay.example/computer/install.sh | sh -s -- --sandbox-id computer-1",
+    installCommand: "curl -fsSL https://relay.example/install.sh | sudo bash -s -- --sandbox-id computer-1",
     daemonCommand: "old-daemon-command",
   } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>);
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
@@ -47,7 +47,7 @@ it("only reports connected after a fresh online status and copies the installer 
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   const response = {
     node: { id: "computer-1", online: true }, daemonEnv: {}, nodeToken: "fixture-token",
-    installCommand: "curl -fsSL https://relay.example/computer/install.sh | sh",
+    installCommand: "curl -fsSL https://relay.example/install.sh | sudo bash",
   } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>;
   vi.mocked(createLocalDeviceEnrollment).mockResolvedValue(response);
   const props = { open: true, onClose: vi.fn(), onConnected: vi.fn() };

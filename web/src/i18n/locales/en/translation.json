@@ -775,7 +775,7 @@
     "platform_linux": "Supported · ARM64 / x64 · Requires systemd user services",
     "platform_windows": "Not supported yet · Planned",
     "platform_shell_hint": "The commands below are for macOS / Linux terminals (Bash or zsh). They do not support Windows PowerShell or Command Prompt.",
-    "connect_requirements": "No Git or npm required. The installer adds Node.js if needed and sets up a background service.",
+    "connect_requirements": "No Git or npm required. The installer asks for this computer's password (sudo), then installs for your own account: it adds Node.js if needed and sets up a background service.",
     "connect_workspace_hint": "An existing folder on the computer you are connecting, such as /Users/alice/project or /home/alice/project.",
     "connect_command_step": "Run the install command",
     "connect_token_step": "Paste your node token",
