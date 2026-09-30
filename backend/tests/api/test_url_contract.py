@@ -31,6 +31,7 @@ def _bootstrap(client: TestClient) -> None:
 def test_openapi_publishes_only_the_canonical_json_contract(
     monkeypatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setenv("RELAY_CHANNELS_ENABLED", "1")
     client = _client(monkeypatch, tmp_path)
     schema = client.get("/api/openapi.json").json()
     paths = schema["paths"]

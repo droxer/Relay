@@ -30,13 +30,16 @@ describe("app pathname routes", () => {
       "/routines": "routine",
       "/agents": "agents",
       "/teams": "teams",
-      "/channels": "channels",
       "/admin": "admin",
       "/settings": "settings",
     } as const;
     for (const [path, route] of Object.entries(routes)) {
       assert.equal(parseAppPath(path).route, route);
     }
+  });
+
+  it("treats the disabled channels page as not found", () => {
+    assert.deepEqual(parseAppPath("/channels"), { route: "main", mobileView: "chat", sessionId: null, notFound: true });
   });
 
   it("parses a settings section, and keeps the paths its sections came from", () => {

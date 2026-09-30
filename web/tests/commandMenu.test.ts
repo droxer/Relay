@@ -37,11 +37,16 @@ describe("buildCommands", () => {
     assert.ok(!userCommands.some((command) => command.label.includes("Admin")));
   });
 
+  it("leaves the disabled channels page out of the palette", () => {
+    assert.ok(!adminCommands.some((command) => command.id === "go:channels"));
+    assert.ok(!userCommands.some((command) => command.id === "go:channels"));
+  });
+
   it("offers every navigation destination with its go-to hint", () => {
     const navigate = userCommands.filter((command) => command.group === "navigate");
     assert.deepEqual(
       navigate.map((command) => command.id),
-      ["go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:channels", "go:settings"],
+      ["go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:settings"],
     );
     for (const command of navigate) {
       assert.match(command.hint ?? "", /^G [A-Z]$/, `${command.id} lost its go-to hint`);

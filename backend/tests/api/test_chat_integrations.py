@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.chat import DatabaseChatIntegrationStore, LocalChatIntegrationStore
@@ -15,6 +16,12 @@ from relay.chat.provider_health import (
     provision_chat_integration,
 )
 from relay.core.computer_identity import computer_id
+
+
+@pytest.fixture(autouse=True)
+def _channels_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chat channels ship disabled; these tests cover the enabled feature."""
+    monkeypatch.setenv("RELAY_CHANNELS_ENABLED", "1")
 
 
 async def _healthy_provider(_settings):

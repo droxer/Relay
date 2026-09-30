@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogViewport,
 } from "@/components/ui/dialog";
+import { CHANNELS_ENABLED } from "@/lib/features";
 import { commandShortcutLabel } from "@/lib/shortcuts";
 import { sendShortcutLabel } from "@/lib/sendShortcut";
 
@@ -33,7 +34,7 @@ const NAVIGATE_ROWS: ShortcutRow[] = [
   { keys: "G R", labelKey: "nav.routine" },
   { keys: "G A", labelKey: "nav.agents" },
   { keys: "G E", labelKey: "nav.teams" },
-  { keys: "G H", labelKey: "nav.channels" },
+  ...(CHANNELS_ENABLED ? [{ keys: "G H", labelKey: "nav.channels" }] : []),
   { keys: "G S", labelKey: "nav.settings" },
   { keys: "G D", labelKey: "nav.admin", adminOnly: true },
 ];

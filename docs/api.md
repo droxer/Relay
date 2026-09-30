@@ -53,7 +53,7 @@ route. `/` is replaced with `/threads`.
 | `/api/v1/sandboxes`, `/api/v1/daemon-nodes` | Execution-plane observations and commands |
 | `/api/v1/artifacts`, `/api/v1/workspace` | Generated artifacts and workspace reads |
 | `/api/v1/admin` | Administrative users, employees, fleet, agents, teams, and integrations |
-| `/api/v1/internal/chat` | Chat-service identity and conversation operations |
+| `/api/v1/internal/chat` | Chat-service identity and conversation operations. Mounted, together with `/api/v1/admin/chat-integrations`, only when `RELAY_CHANNELS_ENABLED=1` |
 | `/api/v1/daemon-node-registrations` | Daemon heartbeat registration |
 | `/api/v1/daemon-node-enrollments` | Managed and local daemon enrollment |
 

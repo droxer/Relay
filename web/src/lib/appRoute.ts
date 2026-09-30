@@ -1,3 +1,4 @@
+import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
 import { DEFAULT_PROJECT_PAGE_TAB } from "./projectPage.ts";
 import {
@@ -30,7 +31,13 @@ const LEGACY_SECTION_PATHS: Record<string, SettingsSection> = {
   "/skills": "skills",
 };
 
-const WORK_ROUTES = new Map(Object.entries(WORK_PATHS).map(([route, path]) => [path, route as AppRoute]));
+/* A disabled feature has no address: /channels reads as not found rather than
+   opening a page whose API the backend has not mounted. */
+const WORK_ROUTES = new Map(
+  Object.entries(WORK_PATHS)
+    .filter(([route]) => route !== "channels" || CHANNELS_ENABLED)
+    .map(([route, path]) => [path, route as AppRoute]),
+);
 
 /* The route is still named `backlog` inside the app; only its address became
    /issues. Reading the path folds that back so every `head === "backlog"`

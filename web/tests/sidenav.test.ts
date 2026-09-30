@@ -107,7 +107,7 @@ describe("sidenav destinations", () => {
      Every destination needs a rail anchor, and every anchor hidden on phones
      needs its More entry. */
   /* `channels` is deliberately kept out of the nav — designIssues.test.ts
-     enforces its absence — and stays reachable through the command palette. */
+     enforces its absence. The feature is off by default (lib/features.ts). */
   const HIDDEN_ROUTES = new Set(["channels"]);
   /* `settings` is personal, not a work destination: it hangs off the footer's
      account menu (the gear) rather than the destination list, so its anchor is
