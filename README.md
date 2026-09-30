@@ -105,4 +105,4 @@ Start with the [`docs/` index](docs/README.md) for the canonical setup, API, arc
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0-only](LICENSE)
