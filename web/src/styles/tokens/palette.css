@@ -713,14 +713,20 @@
      glyphs sit on each other's shoulders. */
   --leading-prose: 1.75;
 
-  /* Tracking — every reading and display role sets SOLID. The source system
-     tightened its body roles by -0.01em, a setting drawn for its own face;
-     the platform UI faces already carry per-size tracking of their own (San
-     Francisco tightens and loosens itself by optical size), so a second
-     tightening on top only crowds them. The tokens stay, at 0, because the
-     paired-track contract in roles.css is what keeps a role's tracking decided
-     in one place. */
-  --track-display: 0;
+  /* Tracking — READING roles set solid. The source system tightened its body
+     roles by -0.01em, a setting drawn for its own face; the platform UI faces
+     already carry per-size tracking of their own (San Francisco tightens and
+     loosens itself by optical size), so a second tightening on body text only
+     crowds it. The tokens stay explicit because the paired-track contract in
+     roles.css is what keeps a role's tracking decided in one place.
+
+     The DISPLAY tier is the one exception. Reference systems tighten hard at
+     display sizes (eveland.ai runs -0.03 to -0.075em there), well past what
+     the platform faces apply on their own, and the extra snap is what keeps a
+     28px KPI numeral or page title from reading loose. The app takes half a
+     step: -0.02em is ~0.5px at the 28px rung — visible settle, not the
+     marketing crunch. Reading tiers stay at 0. */
+  --track-display: -0.02em;
   --track-body: 0;
   --track-body-sm: 0;
   --track-0: 0;

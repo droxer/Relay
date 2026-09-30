@@ -88,6 +88,23 @@
   transition: background var(--t-fast) var(--ease);
 }
 
+/* Entrance — rows rise in on the shared --t-stagger ladder (the same
+   choreography rule as the sidenav groups and login cover), capped at eight
+   so a long roster never waits on a delay. */
+.teams-list-row {
+  opacity: 0;
+  --rise-from: var(--rise-sm);
+  animation: rise var(--t-slow) var(--ease) both;
+}
+
+.teams-list-row:nth-child(2) { animation-delay: calc(var(--t-stagger) * 1); }
+.teams-list-row:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
+.teams-list-row:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+.teams-list-row:nth-child(5) { animation-delay: calc(var(--t-stagger) * 4); }
+.teams-list-row:nth-child(6) { animation-delay: calc(var(--t-stagger) * 5); }
+.teams-list-row:nth-child(7) { animation-delay: calc(var(--t-stagger) * 6); }
+.teams-list-row:nth-child(n+8) { animation-delay: calc(var(--t-stagger) * 7); }
+
 .teams-list-row:hover {
   background: var(--row-hover);
 }

@@ -183,15 +183,19 @@ describe("application typography roles", () => {
     assert.match(roles, /--type-label:\s+500[^;]+var\(--font-sans\);/);
   });
 
-  it("sets the reading and display tiers solid and tracks only the caps", () => {
+  it("sets the reading tiers solid and tightens only the display tier and the caps", () => {
     const palette = readWebSource("styles/tokens/palette.css");
 
-    // The system UI faces carry their own per-size tracking, so no reading or
-    // display role adds one. The zero-valued tokens are the design, not
-    // missing values; they keep the paired-track contract greppable.
-    assert.match(palette, /--track-display:\s*0;/);
+    // The system UI faces carry their own per-size tracking, so no READING
+    // role adds one. The zero-valued tokens are the design, not missing
+    // values; they keep the paired-track contract greppable.
     assert.match(palette, /--track-body:\s*0;/);
     assert.match(palette, /--track-body-sm:\s*0;/);
+    // The display tier is the exception: reference systems tighten hard at
+    // display sizes (eveland.ai runs -0.03 to -0.075em), well past what the
+    // platform faces apply on their own. -0.02em is the conservative
+    // half-step — about 0.5px at the 28px rung.
+    assert.match(palette, /--track-display:\s*-0\.02em;/);
     // Caps tracking is NOT solid any more. The source system sets its uppercase
     // captions solid because it sets them at 700, where stroke weight holds the
     // caps apart; --type-micro runs 500 here, so the track has to do that work
@@ -263,9 +267,9 @@ describe("application typography roles", () => {
     // Display text without its paired track silently loses the tracking the
     // role was designed with, and a second letter-spacing in the same rule
     // silently overrides it. The contract is PRESENCE of the declaration, not
-    // a non-zero value: --type-display-track and --type-heading-track resolve
-    // to var(--track-0) = 0 by design, and the declaration must still be there
-    // so the pairing stays greppable.
+    // a non-zero value: --type-heading-track resolves to var(--track-0) = 0 by
+    // design, and the declaration must still be there so the pairing stays
+    // greppable.
     //
     // Two shapes count as display-tier and BOTH must be swept: the --type-*
     // shorthand roles, and rules that opt into `font-family: var(--font-display)`
