@@ -1,3 +1,4 @@
+import { CHANNELS_ENABLED } from "./features.ts";
 import type { AppRoute } from "./viewTypes.js";
 
 /* Command-menu model — the command list and its ranking are pure so the
@@ -48,6 +49,7 @@ export function buildCommands({
 }): CommandItem[] {
   const navigate = NAV_COMMANDS
     .filter(({ route }) => route !== "admin" || isAdmin)
+    .filter(({ route }) => route !== "channels" || CHANNELS_ENABLED)
     .map(({ route, labelKey, hint, keywords }): CommandItem => ({
       id: `go:${route}`,
       group: "navigate",

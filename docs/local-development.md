@@ -31,7 +31,9 @@ Relay uses project-local env files at each runtime boundary:
 - `backend/.env`: Python backend settings, migration database URL, and optional
   task scheduler tuning (`RELAY_TASK_SCHEDULER_ENABLED`,
   `RELAY_TASK_SCHEDULER_INTERVAL_SECONDS`, `RELAY_TASK_SCHEDULER_MAX_DISPATCHES`,
-  `RELAY_TASK_SCHEDULER_TIMEZONE`).
+  `RELAY_TASK_SCHEDULER_TIMEZONE`). Chat channels stay unmounted unless
+  `RELAY_CHANNELS_ENABLED=1` is set here and the web UI is built with
+  `NEXT_PUBLIC_RELAY_CHANNELS_ENABLED=1`.
 - `web/.env.local`: Next.js development proxy settings.
 - `packages/relay-core/.env`: shared TypeScript runtime and agent credential
   defaults.
@@ -449,6 +451,26 @@ RELAY_DEMO_PASSWORD='choose-a-local-test-password' python3 script/seed_demo.py
 The seed is idempotent and can be run again before a snapshot to refresh the
 demo computer's ready state. Set `RELAY_DEMO_BASE_URL` or
 `RELAY_DEMO_USERNAME` when testing another local instance or account.
+
+### README snapshots
+
+The product snapshots in `README.md` and `README.zh-CN.md` are generated, not
+hand-captured. The script loads the static web export and answers every API
+call from the demo data in `script/readme-snapshots/fixtures.mjs`, so it needs
+no backend, database, daemon, or agent credentials — and it can show states a
+seeded backend cannot, such as a run in flight:
+
+```bash
+npm run build -w web
+node script/readme-snapshots/capture.mjs
+```
+
+It writes `docs/images/relay-<surface>.png` and the `-zh-CN` variant of each
+at 2880×1800. Pass `--only <surface>` to refresh one snapshot, or
+`--draft --out <dir>` for a quick 1x pass while editing fixtures. The run
+fails if a page throws, renders an error boundary, never reaches its ready
+selector, or requests an API path the fixtures do not answer. It uses the
+Chromium that Playwright installs (`npx playwright install chromium`).
 
 For a token-gated bootstrap instead, set `RELAY_ADMIN_TOKEN` and create the
 first admin explicitly:

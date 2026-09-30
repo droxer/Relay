@@ -412,8 +412,9 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         managed_node_routes.router,
     )
     canonical_groups = api_router_groups()
+    channels_enabled = channels_enabled_from_env()
     for router in api_routers:
-        include_api_router(canonical_groups, router)
+        include_api_router(canonical_groups, router, channels_enabled=channels_enabled)
     app.include_router(canonical_groups.public)
     app.include_router(canonical_groups.admin)
     app.include_router(canonical_groups.internal_chat)
@@ -538,6 +539,16 @@ def task_store_from_env(root_dir: Path) -> Any:
     )
     store.verify_schema()
     return store
+
+
+def channels_enabled_from_env() -> bool:
+    """Whether the chat channels feature is published.
+
+    Off unless ``RELAY_CHANNELS_ENABLED`` opts in: the routes that configure
+    and serve chat integrations are then not mounted at all.
+    """
+    value = os.environ.get("RELAY_CHANNELS_ENABLED", "").strip().lower()
+    return value in ("1", "true", "yes", "on")
 
 
 def chat_store_from_env(root_dir: Path) -> Any:

@@ -27,6 +27,16 @@ WEB_UI_ROUTE_ROOTS = frozenset(
 )
 
 
+# Chat channels: the gateway's internal API and the admin surface that
+# configures it. They are published together or not at all.
+CHANNEL_ROUTE_PREFIXES = ("/internal/chat/", "/admin/chat-integrations")
+
+
+def is_channel_route(path: str) -> bool:
+    """True for a route that belongs to the chat channels feature."""
+    return path.startswith(CHANNEL_ROUTE_PREFIXES)
+
+
 @dataclass
 class ApiRouterGroups:
     public: APIRouter
@@ -63,10 +73,21 @@ def _api_group(groups: ApiRouterGroups, path: str) -> APIRouter:
     return groups.public
 
 
-def include_api_router(groups: ApiRouterGroups, router: APIRouter) -> None:
-    """Publish a domain router under the canonical versioned API prefix."""
+def include_api_router(
+    groups: ApiRouterGroups,
+    router: APIRouter,
+    *,
+    channels_enabled: bool = True,
+) -> None:
+    """Publish a domain router under the canonical versioned API prefix.
+
+    With channels disabled, chat routes are left unpublished: they answer 404
+    and stay out of the OpenAPI document, as if the feature were not built.
+    """
     for route in router.routes:
         if not isinstance(route, APIRoute):
+            continue
+        if not channels_enabled and is_channel_route(route.path):
             continue
         _api_group(groups, route.path).add_api_route(
             f"{API_PREFIX}{route.path}",

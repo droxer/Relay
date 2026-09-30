@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from tempfile import TemporaryDirectory
 
+import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
+
+
+@pytest.fixture(autouse=True)
+def _channels_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Chat channels ship disabled; these tests cover the enabled feature."""
+    monkeypatch.setenv("RELAY_CHANNELS_ENABLED", "1")
 
 CHAT_HEADERS = {"Authorization": "Bearer chat_secret"}
 CONVERSATION = {

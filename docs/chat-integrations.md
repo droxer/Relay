@@ -1,5 +1,12 @@
 # Chat Integrations
 
+> **Disabled by default.** The chat channels feature is switched off in the
+> application. The backend does not mount `/api/v1/admin/chat-integrations` or
+> `/api/v1/internal/chat/*` unless it runs with `RELAY_CHANNELS_ENABLED=1`, and
+> the web UI has no Channels page, command, or shortcut unless it is built with
+> `NEXT_PUBLIC_RELAY_CHANNELS_ENABLED=1`. Everything below describes the
+> feature as it behaves once both are set.
+
 Relay supports Discord, Telegram, Lark, and future chat clients through the
 provider-neutral `relay-chat` package. Chat clients are control-plane clients:
 they invoke agents through the Relay backend and never talk to daemon nodes

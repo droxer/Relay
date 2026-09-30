@@ -27,7 +27,7 @@
 - [`agent-first-runtime-design.md`](agent-first-runtime-design.md) 负责逻辑智能体运行时设计。
 - [`managed-node-provisioning.md`](managed-node-provisioning.md) 负责托管计算机的期望状态、注册、协调和供应商生命周期。
 - [`node-heartbeats.md`](node-heartbeats.md) 负责执行平面的存活租约。
-- [`chat-integrations.md`](chat-integrations.md) 负责供应商配置、身份映射、命令、安全和运维；[`relay-chat` 软件包说明](../packages/relay-chat/README.md)仅描述软件包边界。
+- [`chat-integrations.md`](chat-integrations.md) 负责聊天渠道的供应商配置、身份映射、命令、安全和运维（该功能默认关闭，需设置 `RELAY_CHANNELS_ENABLED`）；[`relay-chat` 软件包说明](../packages/relay-chat/README.md)仅描述软件包边界。
 - [`relay-daemon` 说明](../packages/relay-daemon/README.md)负责守护进程环境和交付契约。
 
 ## 决策与设计

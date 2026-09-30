@@ -1,3 +1,4 @@
+import { CHANNELS_ENABLED } from "./features.ts";
 import type { AppRoute } from "./viewTypes.js";
 
 /* Keyboard shortcut model — pure, so the whole matrix is unit-testable without
@@ -24,7 +25,8 @@ export type ShortcutEventShape = {
 /* Go-to chords. The letter mnemonic bends where a route's initial is taken:
    threads owns T, projects owns P, so teams takes E; channels takes H; admin takes D
    (dashboard). Settings takes S — its computers and skills sections are the
-   chords `s` and `c` used to reach, and both are one click away inside it. */
+   chords `s` and `c` used to reach, and both are one click away inside it.
+   The channels chord exists only in a build that enables the feature. */
 export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
   t: "main",
   p: "projects",
@@ -33,7 +35,7 @@ export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
   a: "agents",
   e: "teams",
   s: "settings",
-  h: "channels",
+  ...(CHANNELS_ENABLED ? { h: "channels" as const } : {}),
   d: "admin",
 };
 

@@ -124,9 +124,14 @@ describe("shortcut resolver", () => {
     assert.equal(resolve(key("c", { defaultPrevented: true })), null);
   });
 
+  it("binds no go-to chord to the disabled channels page", () => {
+    assert.equal(GO_SHORTCUTS.h, undefined);
+    assert.ok(!Object.values(GO_SHORTCUTS).includes("channels"));
+  });
+
   it("keeps every go-to letter mapped to a distinct route", () => {
     const routes = Object.values(GO_SHORTCUTS);
     assert.equal(new Set(routes).size, routes.length);
-    assert.deepEqual([...routes].sort(), ["admin", "agents", "backlog", "channels", "main", "projects", "routine", "settings", "teams"]);
+    assert.deepEqual([...routes].sort(), ["admin", "agents", "backlog", "main", "projects", "routine", "settings", "teams"]);
   });
 });
