@@ -11,126 +11,123 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Relay is a local-first control plane for AI work. It gives every employee a bench of named AI agents — and the threads, issues, routines, and projects to direct them — while the organization keeps one record of who asked for what, which agent did it, on which computer, and what it produced.
+Relay is a local-first control plane for AI work. Employees direct named AI agents through threads, issues, routines, and projects, and the organization keeps one record of who asked for what, which agent did it, on which computer, and what it produced.
 
-Agents run where the work already lives. A Relay daemon on an employee's own computer, or on a managed computer, runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, and Kimi against a real workspace — directly on the host, or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox. The backend never executes an agent: it queues work, records every event, and streams the result back to the web UI.
+Agents run where the work already lives. A Relay daemon on an employee's computer or a managed computer runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, and Kimi in a real workspace — on the host, or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
 
 <p align="center">
   <img src="docs/images/relay-threads.png" alt="A Relay thread: one agent has fixed a bug and handed it to a second agent, whose review is streaming live" width="960">
 </p>
 
-## Why Relay
-
-- **Named agents, not anonymous CLIs.** An agent has a name, a role, standing instructions, skills, and a home computer. Several agents can share one runtime, and every turn is attributed to the agent that ran it.
-- **One place for ad-hoc and planned work.** Ask in a thread, track it as an issue, put it on a schedule as a routine, or give it a shared workspace as a project — all four dispatch through the same path.
-- **Teams that review their own work.** Put agents on a team, choose how they collaborate — Solo, Build → Review, Pipeline, or Lead-led — and assign the team instead of a single agent.
-- **People stay in charge.** Watch a run as it streams, stop it, retry it, hand it to another agent, and decide when the work is accepted. Decisions are recorded with the employee who made them.
-- **Your computers, your credentials.** Daemons connect out to the backend, so agents use the tools and logins already on the machine, and nothing about a workspace has to leave it to be useful.
-- **An organization-wide view.** Administrators see employees, computers, fleet health, activity, and token usage in one control panel.
-
-## How it works
-
-```mermaid
-flowchart LR
-  people["Employees<br/>web UI"]
-  backend["Relay backend<br/>control plane · PostgreSQL event log"]
-  local["Daemon<br/>employee computer"]
-  managed["Daemon<br/>managed computer · BoxLite"]
-  agents["Claude Code · Codex · Pi · Kimi"]
-
-  people -->|"threads · issues · routines"| backend
-  local -->|"polls for commands, reports events"| backend
-  managed -->|"polls for commands, reports events"| backend
-  local --> agents
-  managed --> agents
-```
-
-The backend owns sessions, tasks, identity, and the computer registry. Each daemon registers with it, polls for commands, runs the agent CLI in its workspace, and reports output, results, and generated files back. See [System Architecture](docs/system-architecture.md) for the full picture.
-
 ## Features
 
-| | |
-|---|---|
-| **Threads** | Start a thread with an agent, a team, or a project on the computer you choose. The agent decides whether the goal needs an answer, investigation, workspace changes, validation, review, or a clarifying question. Stream reasoning, commands, and tool calls; stop, retry, or hand the thread to another agent. |
-| **Issues** | Capture work as issues with priority, due date, and an agent or team assignee. Triage them into projects, follow them from backlog to done, and read each issue's run history and produced files. |
-| **Routines** | Schedule recurring work daily, weekly, or monthly. The scheduler promotes each due routine into a run and dispatches it to its assignee; pause a routine or run it now. |
-| **Projects** | Bind a persistent shared workspace and an ordered roster of project agents to one computer, then run project threads and issues that share that workspace. |
-| **Agents & teams** | Create named agents with a runtime, role, personality, and skills. Group them into teams with a lead, per-member responsibilities, acceptance criteria, and a collaboration style. |
-| **Skills** | Publish reusable skill bundles, inspect their files and revisions, and grant them to individual agents or teams from a shared library. |
-| **Computers** | Enroll employee computers or reconcile managed computers while tracking health, installed runtimes, capacity, command leases, and durable identity. |
-| **Administration** | Operate employees, agents, computers, fleet health, activity, and token usage from one control panel. |
+- **Threads** — Work with an agent, a team, or a project on the computer you choose. Watch reasoning, commands, and tool calls stream; stop, retry, or hand off at any point.
+- **Issues** — Track work with priority, due date, and an agent or team assignee, from backlog to done, with run history and produced files.
+- **Routines** — Schedule recurring work daily, weekly, or monthly; Relay dispatches each run to its assignee.
+- **Projects** — Bind a shared workspace and a roster of agents to one computer.
+- **Agents and teams** — Give each agent a runtime, role, personality, and skills. Group agents into teams that work Solo, Build → Review, Pipeline, or Lead-led.
+- **Skills** — Publish versioned skill bundles and grant them to agents from a shared library.
+- **Computers** — Enroll employee or managed computers and see their health, runtimes, and running work.
+- **Administration** — Manage employees, computers, activity, and token usage from one control panel.
+
+## Architecture
+
+Relay has three layers: people work in the web UI, the backend decides and records, and daemons on real computers do the work.
+
+```mermaid
+flowchart TB
+  subgraph experience["Experience · web UI for employees and administrators"]
+    direction TB
+    threads["Threads"]
+    issues["Issues"]
+    routines["Routines"]
+    projects["Projects"]
+    workforce["Agents and teams"]
+    admin["Control panel"]
+  end
+
+  subgraph control["Control plane · Relay backend"]
+    direction TB
+    api["API and live<br/>event stream"]
+    identity["Identity and<br/>ownership"]
+    records["Sessions and tasks<br/>event log"]
+    scheduler["Routine<br/>scheduler"]
+    registry["Computer registry<br/>and dispatch"]
+    skills["Skills<br/>library"]
+  end
+
+  store[("PostgreSQL<br/>events and artifacts")]
+
+  subgraph execution["Execution plane · one Relay daemon per computer"]
+    direction TB
+    subgraph managed["Managed computer"]
+      managedDaemon["Relay daemon"]
+      managedAgents["Agent CLIs in BoxLite<br/>Claude Code · Codex<br/>Pi · Kimi"]
+      managedWorkspace["Workspace files"]
+      managedDaemon --> managedAgents --> managedWorkspace
+    end
+    subgraph local["Employee computer"]
+      localDaemon["Relay daemon"]
+      localAgents["Agent CLIs on the host<br/>Claude Code · Codex<br/>Pi · Kimi"]
+      localWorkspace["Workspace files"]
+      localDaemon --> localAgents --> localWorkspace
+    end
+  end
+
+  experience <-->|"requests · live updates"| control
+  control <-->|"commands · results"| localDaemon
+  control <-->|"commands · results"| managedDaemon
+  control --- store
+```
+
+The backend never executes an agent. It writes every state change to an event log in PostgreSQL and dispatches runs; each daemon connects out, polls for commands, runs the agent CLI in its workspace, and reports results back. See [System Architecture](docs/system-architecture.md) for details.
 
 ## Product tour
 
-The snapshots below show the web UI with demo data. They are generated by [`script/readme-snapshots`](script/readme-snapshots/capture.mjs) and can be refreshed without a running backend.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-issues.png" alt="Relay issues table grouped by project">
+      <br><strong>Issues</strong><br>Every open issue across projects, with queues for what needs you.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-projects.png" alt="Relay project board">
+      <br><strong>Projects</strong><br>A project board from backlog to done, with flow metrics.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-routines.png" alt="Relay routines list">
+      <br><strong>Routines</strong><br>Recurring work with its cadence, next run, and assignee.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-agents.png" alt="Relay agent profile">
+      <br><strong>Agents</strong><br>Runtime, host computer, role, personality, and skills.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-teams.png" alt="Relay team profile">
+      <br><strong>Teams</strong><br>Members, responsibilities, and how work moves between them.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-skills.png" alt="Relay skills library">
+      <br><strong>Skills</strong><br>Versioned bundles with their files and revision history.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-computers.png" alt="Relay computers page">
+      <br><strong>Computers</strong><br>What each computer is running and which runtimes are ready.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/relay-admin.png" alt="Relay admin dashboard">
+      <br><strong>Control panel</strong><br>Thread volume, fleet health, and token usage.
+    </td>
+  </tr>
+</table>
 
-### Work with agents in a thread
-
-A thread runs on one computer and belongs to an agent, a team, or a project. Each turn streams as it happens — reasoning, commands, tool calls, and the files it produced. In the snapshot at the top of this page, one agent has fixed a race condition and handed it to a second agent, whose review is still running.
-
-### Plan work as issues
-
-One table holds every open issue across projects, with queues for what needs you, what is untriaged, blocked, running, or overdue. An issue can run once it sits in a project and has an agent or a team assigned.
-
-<p align="center">
-  <img src="docs/images/relay-issues.png" alt="Relay issues table grouped by project, with status, priority, assignee, and due date" width="960">
-</p>
-
-### Give work a shared workspace
-
-A project binds a workspace directory and a roster of agents to one computer. Its board follows the project's issues from backlog to done, with flow numbers — work in progress, blocked, overdue, cycle time — above it.
-
-<p align="center">
-  <img src="docs/images/relay-projects.png" alt="Relay project board with backlog, ready, in-progress, and review columns" width="960">
-</p>
-
-### Put recurring work on a schedule
-
-Routines are issues that repeat. Each one names its cadence, its next run, and the agent or team that carries it out.
-
-<p align="center">
-  <img src="docs/images/relay-routines.png" alt="Relay routines list with next run date and assignee for each routine" width="960">
-</p>
-
-### Shape each agent
-
-An agent's record shows its runtime, the computer that hosts it, its availability, its role, and the personality applied before every run — next to the skills it has been granted and its recent activity.
-
-<p align="center">
-  <img src="docs/images/relay-agents.png" alt="Relay agent profile showing runtime, host computer, availability, role, and personality" width="960">
-</p>
-
-### Coordinate agent teams
-
-A team lives on one computer and states who does what: the lead, each member's role and responsibility, and how a round of work moves between them.
-
-<p align="center">
-  <img src="docs/images/relay-teams.png" alt="Relay team profile with three members, their roles, and a Build to Review collaboration style" width="960">
-</p>
-
-### Share skills across agents
-
-Skills are versioned bundles of instructions, references, and scripts. Publish one to the organization, review its files and revision history, and grant it to the agents that need it.
-
-<p align="center">
-  <img src="docs/images/relay-skills.png" alt="Relay skills library with a skill's bundle files and revision history" width="960">
-</p>
-
-### See what each computer is doing
-
-Every enrolled computer reports what it is running now, which agent runtimes are installed and ready, and where its workspace lives. A local computer runs agents directly; a managed one runs them inside BoxLite.
-
-<p align="center">
-  <img src="docs/images/relay-computers.png" alt="Relay computers page with running work, runtime versions, and workspace details for two computers" width="960">
-</p>
-
-### Run the organization
-
-The control panel's dashboard tracks thread volume, fleet health, token usage, and the most active employees.
-
-<p align="center">
-  <img src="docs/images/relay-admin.png" alt="Relay admin dashboard with thread trend, computer status, token usage, and most active employees" width="960">
-</p>
+Snapshots show demo data and are generated by [`script/readme-snapshots`](script/readme-snapshots/capture.mjs).
 
 ## Quick start
 
@@ -175,58 +172,26 @@ Tests, database migrations, the supervisor, pre-commit hooks, and shutdown comma
 
 ## Project structure
 
-Relay is one repository with a Python control plane, TypeScript execution packages, and a Next.js web UI. The backend never runs an agent; everything that executes lives under `packages/`.
-
 ```
-backend/                  Python / FastAPI control plane
-  relay/api/              HTTP routes, one module per domain (threads, tasks, agents, teams, projects, admin …)
-  relay/persistence/      Event-sourced stores for sessions, tasks, agents, teams, and projects
-  relay/sessions/         Session controller, handoff, and conversation continuity
-  relay/daemon_registry/  Computer admission, command leases, run dispatch
-  relay/tasks/            Scheduler that promotes routines and dispatches assigned issues
-  relay/services/         Assignment, workspaces, team and project runtime rules
-  relay/security/         Auth store, JWT, password policy, rate limiting
-  migrations/             Alembic migrations
-  tests/                  pytest suite
-packages/                 TypeScript (npm workspaces)
-  relay-core/             Shared protocol and pure helpers: agent registry, CLI commands, prompts, renderers
-  relay-daemon/           Execution plane: registers a computer, polls for commands, runs agent CLIs
-  relay-supervisor/       Keeps employee daemons provisioned and running
-web/                      Next.js web UI, exported statically and served by the backend
-  src/components/         Pages and UI, grouped by surface
-  src/lib/                Routing, derivations, and other pure helpers
-  src/i18n/               English, Simplified Chinese, and Traditional Chinese strings
-  tests/, e2e/            Unit tests and Playwright specs
-docs/                     Architecture, API, deployment, design system, and ADRs (docs/adr)
-script/                   User bootstrap, demo seeding, README snapshot generator
-devbox/, dockerfile       The BoxLite guest image that sandboxed agents run in
+backend/     Python / FastAPI control plane: API routes, event-sourced stores, scheduler, migrations
+packages/    TypeScript workspaces
+  relay-core/        Shared protocol, agent registry, CLI commands, prompts
+  relay-daemon/      Execution plane: registers a computer and runs agent CLIs
+  relay-supervisor/  Keeps employee daemons provisioned and running
+web/         Next.js web UI, exported statically and served by the backend
+docs/        Architecture, API, deployment, design system, and ADRs
+script/      User bootstrap, demo seeding, README snapshot generator
+devbox/      The BoxLite guest image that sandboxed agents run in
 ```
-
-| To change… | Start in |
-|---|---|
-| An API route or its response shape | `backend/relay/api/`, then `web/src/api.ts` and `web/src/types.ts` |
-| How session or task state evolves | `backend/relay/persistence/` — state changes go through `append_event`, never a direct write |
-| What a daemon and the backend say to each other | `packages/relay-core/src/daemon-node-protocol.ts` and `backend/relay/daemon_registry/` |
-| How an agent CLI is launched or its output parsed | `packages/relay-core/src/agents.ts`, `commands.ts`, and `web/src/lib/agentStream.ts` |
-| A page in the web UI | `web/src/components/`, with its strings in `web/src/i18n/locales/` |
-| A database column | A new Alembic migration in `backend/migrations/` |
 
 ## Contributing
 
-1. Follow the [quick start](#quick-start) to get the backend, a daemon, and the web UI running locally.
-2. Read [`CLAUDE.md`](CLAUDE.md) before a larger change — it lists the invariants the codebase depends on, such as "the backend never executes agents" and "the event log is authoritative".
-3. Run the checks that cover what you touched:
+1. Get the stack running with the [quick start](#quick-start).
+2. Read [`CLAUDE.md`](CLAUDE.md) for the invariants the codebase depends on, and [`docs/adr/`](docs/adr/README.md) for past design decisions.
+3. Run `npm test` (TypeScript and Python suites) and `make pre-commit-run` before opening a pull request.
+4. Update the matching page under [`docs/`](docs/README.md) when behavior changes.
 
-   ```bash
-   npm test                   # TypeScript suite and Python backend suite
-   make backend-test          # backend only
-   npm run test:react -w web  # web component tests
-   make pre-commit-run        # the hooks that run on every commit
-   ```
-
-4. Keep the documentation in step: update the matching page under [`docs/`](docs/README.md), and regenerate the README snapshots with `node script/readme-snapshots/capture.mjs` when a change alters a surface they show.
-
-Design decisions are recorded as ADRs in [`docs/adr/`](docs/adr/README.md); add one when a change settles a question others will ask again.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the detailed layout and a guide to where each kind of change starts.
 
 ## Deployment
 
