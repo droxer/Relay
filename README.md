@@ -28,24 +28,61 @@ Agents run where the work already lives. A Relay daemon on an employee's own com
 - **Your computers, your credentials.** Daemons connect out to the backend, so agents use the tools and logins already on the machine, and nothing about a workspace has to leave it to be useful.
 - **An organization-wide view.** Administrators see employees, computers, fleet health, activity, and token usage in one control panel.
 
-## How it works
+## Architecture
+
+Relay has three layers. People work in the web UI, the backend decides and records, and daemons on real computers do the work.
 
 ```mermaid
-flowchart LR
-  people["Employees<br/>web UI"]
-  backend["Relay backend<br/>control plane · PostgreSQL event log"]
-  local["Daemon<br/>employee computer"]
-  managed["Daemon<br/>managed computer · BoxLite"]
-  agents["Claude Code · Codex · Pi · Kimi"]
+flowchart TB
+  subgraph experience["Experience · web UI for employees and administrators"]
+    direction TB
+    threads["Threads"]
+    issues["Issues"]
+    routines["Routines"]
+    projects["Projects"]
+    workforce["Agents and teams"]
+    admin["Control panel"]
+  end
 
-  people -->|"threads · issues · routines"| backend
-  local -->|"polls for commands, reports events"| backend
-  managed -->|"polls for commands, reports events"| backend
-  local --> agents
-  managed --> agents
+  subgraph control["Control plane · Relay backend"]
+    direction TB
+    api["API and live<br/>event stream"]
+    identity["Identity and<br/>ownership"]
+    records["Sessions and tasks<br/>event log"]
+    scheduler["Routine<br/>scheduler"]
+    registry["Computer registry<br/>and dispatch"]
+    skills["Skills<br/>library"]
+  end
+
+  store[("PostgreSQL<br/>events and artifacts")]
+
+  subgraph execution["Execution plane · one Relay daemon per computer"]
+    direction TB
+    subgraph managed["Managed computer"]
+      managedDaemon["Relay daemon"]
+      managedAgents["Agent CLIs in BoxLite<br/>Claude Code · Codex<br/>Pi · Kimi"]
+      managedWorkspace["Workspace files"]
+      managedDaemon --> managedAgents --> managedWorkspace
+    end
+    subgraph local["Employee computer"]
+      localDaemon["Relay daemon"]
+      localAgents["Agent CLIs on the host<br/>Claude Code · Codex<br/>Pi · Kimi"]
+      localWorkspace["Workspace files"]
+      localDaemon --> localAgents --> localWorkspace
+    end
+  end
+
+  experience <-->|"requests · live updates"| control
+  control <-->|"commands · results"| localDaemon
+  control <-->|"commands · results"| managedDaemon
+  control --- store
 ```
 
-The backend owns sessions, tasks, identity, and the computer registry. Each daemon registers with it, polls for commands, runs the agent CLI in its workspace, and reports output, results, and generated files back. See [System Architecture](docs/system-architecture.md) for the full picture.
+- **Experience.** One web UI for employees and administrators: threads, issues, routines, and projects to direct work; agents and teams to shape who does it; a control panel to run the organization.
+- **Control plane.** The backend owns identity, sessions, tasks, skills, and the computer registry, and writes every state change to an event log in PostgreSQL. It schedules routines and dispatches runs, but never executes an agent itself.
+- **Execution plane.** Each computer runs one daemon. It connects out to the backend, polls for commands, runs the agent CLI in its workspace — on the host for an employee computer, inside BoxLite for a managed one — and reports output, results, and generated files back.
+
+See [System Architecture](docs/system-architecture.md) for the full picture.
 
 ## Features
 

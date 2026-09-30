@@ -25,24 +25,61 @@ Relay 是一个本地优先的 AI 工作控制平面。它为每位员工配备�
 - **你的计算机，你的凭据。** 守护进程主动连接后端，智能体直接使用机器上已有的工具和登录状态，工作区无需离开本机即可发挥作用。
 - **组织级全局视图。** 管理员可在同一个控制面板中查看员工、计算机、集群健康、活动和令牌用量。
 
-## 工作原理
+## 产品架构
+
+Relay 分为三层：人在 Web 界面中工作，后端负责决策与记录，运行在真实计算机上的守护进程负责执行。
 
 ```mermaid
-flowchart LR
-  people["员工<br/>Web 界面"]
-  backend["Relay 后端<br/>控制平面 · PostgreSQL 事件日志"]
-  local["守护进程<br/>员工计算机"]
-  managed["守护进程<br/>托管计算机 · BoxLite"]
-  agents["Claude Code · Codex · Pi · Kimi"]
+flowchart TB
+  subgraph experience["体验层 · 面向员工与管理员的 Web 界面"]
+    direction TB
+    threads["对话"]
+    issues["议题"]
+    routines["例行任务"]
+    projects["项目"]
+    workforce["智能体与团队"]
+    admin["控制面板"]
+  end
 
-  people -->|"对话 · 议题 · 例行任务"| backend
-  local -->|"轮询命令，上报事件"| backend
-  managed -->|"轮询命令，上报事件"| backend
-  local --> agents
-  managed --> agents
+  subgraph control["控制平面 · Relay 后端"]
+    direction TB
+    api["API 与<br/>实时事件流"]
+    identity["身份与<br/>归属"]
+    records["会话与任务<br/>事件日志"]
+    scheduler["例行任务<br/>调度器"]
+    registry["计算机注册表<br/>与派发"]
+    skills["技能库"]
+  end
+
+  store[("PostgreSQL<br/>事件与产物")]
+
+  subgraph execution["执行平面 · 每台计算机一个 Relay 守护进程"]
+    direction TB
+    subgraph managed["托管计算机"]
+      managedDaemon["Relay 守护进程"]
+      managedAgents["BoxLite 中的智能体 CLI<br/>Claude Code · Codex<br/>Pi · Kimi"]
+      managedWorkspace["工作区文件"]
+      managedDaemon --> managedAgents --> managedWorkspace
+    end
+    subgraph local["员工计算机"]
+      localDaemon["Relay 守护进程"]
+      localAgents["主机上的智能体 CLI<br/>Claude Code · Codex<br/>Pi · Kimi"]
+      localWorkspace["工作区文件"]
+      localDaemon --> localAgents --> localWorkspace
+    end
+  end
+
+  experience <-->|"请求 · 实时更新"| control
+  control <-->|"命令 · 结果"| localDaemon
+  control <-->|"命令 · 结果"| managedDaemon
+  control --- store
 ```
 
-后端负责会话、任务、身份和计算机注册表。每个守护进程向后端注册、轮询命令、在自己的工作区中运行智能体 CLI，并回传输出、结果和生成的文件。完整说明见[系统架构](docs/system-architecture.md)。
+- **体验层。** 面向员工与管理员的统一 Web 界面：用对话、议题、例行任务和项目来指挥工作；用智能体与团队来决定由谁完成；用控制面板来运营整个组织。
+- **控制平面。** 后端负责身份、会话、任务、技能和计算机注册表，并将每一次状态变更写入 PostgreSQL 中的事件日志。它调度例行任务并派发运行，但自身从不执行智能体。
+- **执行平面。** 每台计算机运行一个守护进程。它主动连接后端、轮询命令、在自己的工作区中运行智能体 CLI——员工计算机直接在主机上运行，托管计算机在 BoxLite 中运行——并回传输出、结果和生成的文件。
+
+完整说明见[系统架构](docs/system-architecture.md)。
 
 ## 功能特性
 
