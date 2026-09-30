@@ -1,6 +1,8 @@
 #!/bin/sh
-# Served with a release URL and digest injected by the Relay backend.
-# Keep all work inside main: a truncated download must not run half a script.
+# Served with a release URL, digest and backend origin injected by the Relay backend.
+# Keep all work inside functions: a truncated download must not run half a script.
+# Published as `curl … | sudo bash`. POSIX sh throughout, so commands copied
+# before that (`| sh`) keep working; only the sudo hand-off needs bash.
 set -eu
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
@@ -10,13 +12,40 @@ sha256() {
 }
 download() { curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 300 "$1" -o "$2"; }
 
-main() {
-    [ "$(id -u)" != 0 ] || fail 'Run this installer as your normal user, without sudo.'
+# Relay is per-user: the client, its service and the agent logins all live in
+# the invoking account. Root therefore installs nothing itself and only hands
+# the install to that account's login shell, which restores the PATH sudo reset.
+install_as_invoking_user() {
+    relay_user=${SUDO_USER:-}
+    [ -n "$relay_user" ] && [ "$(id -u "$relay_user")" != 0 ] || fail 'Relay installs for your own account. Run this command with sudo from your normal user, not from a root shell.'
+    [ -n "${BASH_VERSION:-}" ] || fail 'Pipe the installer to bash: curl … | sudo bash'
+    # The script itself was consumed from stdin, so replay its functions. Arguments
+    # travel in that stream, quoted, never through the login shell's command line.
+    {
+        printf 'set -eu\n'
+        declare -f fail sha256 download install_relay
+        printf 'RELAY_SUDO_PATH=%q\ninstall_relay' "$PATH"
+        [ "$#" -eq 0 ] || printf ' %q' "$@"
+        printf '\n'
+    } | sudo -i -u "$relay_user" bash -s
+}
+
+install_relay() {
+    [ "$(id -u)" != 0 ] || fail 'Relay cannot be installed for root. Run this command with sudo from your normal user.'
+    # A login shell skips interactive rc files; keep what the sudo caller could reach.
+    [ -z "${RELAY_SUDO_PATH:-}" ] || PATH="$PATH:$RELAY_SUDO_PATH"
+    # sudo drops the variable systemctl --user needs to find the session manager.
+    if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then
+        XDG_RUNTIME_DIR="/run/user/$(id -u)"
+        export XDG_RUNTIME_DIR
+    fi
     case "$(uname -s)" in Darwin) platform=darwin ;; Linux) platform=linux ;; *) fail 'Relay supports macOS and Linux.' ;; esac
     case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; x86_64|amd64) arch=x64 ;; *) fail 'Unsupported CPU architecture.' ;; esac
     for utility in curl tar awk; do command -v "$utility" >/dev/null 2>&1 || fail "Required command missing: $utility"; done
     command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || fail 'SHA-256 verification requires shasum or sha256sum.'
-    [ "$#" -gt 0 ] || fail 'Copy the installation command from Relay → Connect this computer; it includes your computer settings.'
+    backend_given=false
+    for arg in "$@"; do [ "$arg" != '--backend-url' ] || backend_given=true; done
+    [ "$backend_given" = true ] || set -- --backend-url @@BACKEND_URL@@ "$@"
     umask 077
     relay_root="$HOME/.local/share/relay"
     mkdir -p "$relay_root/releases"
@@ -64,5 +93,9 @@ main() {
     [ "$legacy_setup" != true ] || [ -n "${RELAY_DAEMON_NODE_TOKEN:-}" ] || fail 'Node token must not be empty.'
     export RELAY_DAEMON_NODE_TOKEN
     "$relay_node" "$release/node_modules/relay-daemon/dist/install.js" "$@"
+}
+
+main() {
+    if [ "$(id -u)" = 0 ]; then install_as_invoking_user "$@"; else install_relay "$@"; fi
 }
 main "$@"

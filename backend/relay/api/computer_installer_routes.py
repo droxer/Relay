@@ -17,11 +17,14 @@ router = APIRouter()
 ASSETS = Path(__file__).resolve().parents[1] / "computer"
 
 
+def computer_setup_command(request: Request) -> str:
+    """The whole browser-approved setup: the served script knows its own backend."""
+    return f"curl -fsSL {shlex.quote(backend_base_url(request) + '/install.sh')} | sudo bash"
+
+
 def computer_install_command(request: Request, node: dict[str, Any]) -> str:
-    origin = backend_base_url(request)
-    args = ["--backend-url", origin, "--sandbox-id", node["id"],
-            "--employee-id", node["employeeId"], "--workspace", node["workspacePath"]]
-    return f"curl -fsSL {shlex.quote(origin + '/computer/install.sh')} | sh -s -- {shlex.join(args)}"
+    args = ["--sandbox-id", node["id"], "--employee-id", node["employeeId"], "--workspace", node["workspacePath"]]
+    return f"{computer_setup_command(request)} -s -- {shlex.join(args)}"
 
 
 def _bundle() -> tuple[Path, str]:
@@ -33,11 +36,15 @@ def _bundle() -> tuple[Path, str]:
     return path, digest
 
 
+# `/computer/install.sh` is where commands copied before the root path point.
+@router.get("/install.sh", include_in_schema=False)
 @router.get("/computer/install.sh", include_in_schema=False)
 def installer(request: Request) -> Response:
     _, digest = _bundle()
+    origin = backend_base_url(request)
     source = (ASSETS / "install.sh").read_text()
-    source = source.replace("@@BUNDLE_URL@@", shlex.quote(f"{backend_base_url(request)}/computer/daemon-{digest}.tar.gz"))
+    source = source.replace("@@BUNDLE_URL@@", shlex.quote(f"{origin}/computer/daemon-{digest}.tar.gz"))
+    source = source.replace("@@BACKEND_URL@@", shlex.quote(origin))
     source = source.replace("@@BUNDLE_SHA256@@", digest)
     return Response(source, media_type="text/x-shellscript", headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 

@@ -691,15 +691,26 @@ consultations are permitted per request. See
 
 ## Personal-computer installation
 
+`GET /api/v1/computer-authorizations/setup-command` returns the browser-approved
+setup command, which takes no arguments because the served script carries its
+own backend origin:
+
+```sh
+curl -fsSL https://relay.example.com/install.sh | sudo bash
+```
+
 `POST /api/v1/daemon-node-enrollments/local` additionally returns `installCommand`,
-a shell-quoted `curl … | sh -s -- …` command scoped to the enrolled computer. It
+the same pipeline with shell-quoted arguments scoped to the enrolled computer
+(`… | sudo bash -s -- --sandbox-id … --employee-id … --workspace …`). It
 contains no token; the installer reads the existing node token from `/dev/tty`.
 `daemonCommand` and `daemonEnv` remain available for compatibility.
 
 Public non-JSON download routes at the backend origin:
 
-- `GET /computer/install.sh`: POSIX shell installer pinned to the current client
-  archive checksum, `Cache-Control: no-store`; 503 if the client was not built.
+- `GET /install.sh`: shell installer pinned to the current client archive
+  checksum and to this backend's origin, `Cache-Control: no-store`; 503 if the
+  client was not built. `GET /computer/install.sh` serves the same script for
+  commands copied before the root path existed.
 - `GET /computer/daemon-{sha256}.tar.gz`: compiled client archive, immutable
   caching; 404 if the requested digest is not the deployed release.
 

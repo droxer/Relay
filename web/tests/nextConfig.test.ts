@@ -11,6 +11,10 @@ describe("Next development API proxy", () => {
 
     assert.match(source, /source: "\/api\/:path\*", destination: `\$\{backendUrl\}\/api\/:path\*`/);
     assert.match(source, /source: "\/profile-images\/:path\*", destination: `\$\{backendUrl\}\/profile-images\/:path\*`/);
+    // The install command names this origin, so a hosted build has to serve the
+    // installer and the release archive it pins from the backend too.
+    assert.match(source, /source: "\/install\.sh", destination: `\$\{backendUrl\}\/install\.sh`/);
+    assert.match(source, /source: "\/computer\/:archive\(daemon-\[a-f0-9\]\{64\}\\\\\.tar\\\\\.gz\)", destination: `\$\{backendUrl\}\/computer\/:archive`/);
     assert.doesNotMatch(source, /backendUrl\}\/sessions/);
     assert.doesNotMatch(source, /backendUrl\}\/cp/);
   });

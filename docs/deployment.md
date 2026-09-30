@@ -237,8 +237,9 @@ calls the backend origin directly with `credentials: "include"`.
 
 3. **Connect a computer.** Open *Computers → Connect this computer*, register
    the workspace, and copy the **Install and connect** command to that computer.
-   It downloads `/computer/install.sh` from the public backend and runs it with
-   the computer ID, owner ID and workspace path. Paste the node token at the
+   The browser-approved setup is a bare `curl -fsSL <origin>/install.sh | sudo bash`;
+   a command for an already enrolled computer appends its computer ID, owner ID
+   and workspace path (`… | sudo bash -s -- …`) and asks for the node token at a
    hidden terminal prompt. Credentials are never embedded in the copied command.
    Configure `RELAY_PUBLIC_BACKEND_URL` to your public HTTPS API origin; keep
    the web build's `NEXT_PUBLIC_*` settings aligned. Loopback HTTP is supported
@@ -248,8 +249,18 @@ calls the backend origin directly with `credentials: "include"`.
    verified archive of compiled JavaScript, so users do not need repository
    access, Git, npm, or a compiler. If Node.js 22.19+ is missing it downloads a
    private Node.js 24 runtime from nodejs.org and checks its published SHA-256.
-   It requires curl, tar, and shasum or sha256sum; run as a normal user, not root.
-   Agent CLIs and their login credentials must already be installed separately.
+   It requires curl, tar, and shasum or sha256sum. Agent CLIs and their login
+   credentials must already be installed separately.
+
+   `sudo` is only the entry point: nothing is installed as root or system-wide.
+   The script hands the whole install to the invoking account (`$SUDO_USER`)
+   through that account's login shell, so every file and the service below
+   belong to that user. A root shell with no invoking user is refused, and the
+   hand-off needs bash — hence `| sudo bash`. Piping to a shell without `sudo`
+   installs for the current user exactly the same way. Because sudo resets the
+   environment, the service sees what the login shell exports (plus the PATH
+   sudo kept); agent settings exported only from an interactive rc file need
+   `… | sudo bash -s -- --runtime-env-file <private JSON file>`.
 
    After checking backend registration and the workspace, the installer creates
    a per-computer LaunchAgent (macOS) or systemd user service (Linux). The service
@@ -274,9 +285,12 @@ calls the backend origin directly with `credentials: "include"`.
    included in `make build-packages` and `npm run build`). The default archive is
    `backend/relay/computer/daemon.tar.gz`; `RELAY_COMPUTER_BUNDLE` can override it.
    A missing archive returns HTTP 503 with an actionable build instruction.
-   Keep `/computer/install.sh` and `/computer/daemon-<sha256>.tar.gz` reachable
-   without login at the API origin. Archives are immutable by digest; the script
-   is not cached. This change does not publish a CDN release or alter token expiry.
+   Keep `/install.sh` and `/computer/daemon-<sha256>.tar.gz` reachable without
+   login at the origin named by `RELAY_PUBLIC_BACKEND_URL` (the script also bakes
+   that origin in as its backend). A separately hosted web build
+   (`RELAY_WEB_HOST=proxy`) proxies both paths to the backend. Archives are
+   immutable by digest; the script is not cached. This change does not publish a
+   CDN release or alter token expiry.
 
 ## Operational notes
 

@@ -770,7 +770,7 @@
     "platform_linux": "已支援 · ARM64 / x64 · 需要 systemd 使用者服務",
     "platform_windows": "暫不支援 · 已列入支援計畫",
     "platform_shell_hint": "以下命令適用於 macOS / Linux 終端機（Bash 或 zsh），不適用於 Windows PowerShell 或命令提示字元。",
-    "connect_requirements": "無需 Git 或 npm。安裝程式會視需要安裝 Node.js，並設定背景服務。",
+    "connect_requirements": "無需 Git 或 npm。安裝程式會要求輸入這台電腦的密碼（sudo），然後為你自己的帳戶安裝：視需要安裝 Node.js，並設定背景服務。",
     "connect_workspace_hint": "要連接的電腦上已存在的資料夾，例如 /Users/alice/project 或 /home/alice/project。",
     "connect_command_step": "執行安裝命令",
     "connect_token_step": "貼上節點權杖",

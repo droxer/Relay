@@ -36,6 +36,10 @@ const spaFallbackRewrites = () => CLIENT_ROUTES.map((source) => ({ source, desti
 const backendProxyRewrites = () => [
   { source: "/api/:path*", destination: `${backendUrl}/api/:path*` },
   { source: "/profile-images/:path*", destination: `${backendUrl}/profile-images/:path*` },
+  // `curl … /install.sh | sudo bash` names this origin; the script then fetches
+  // the release archive it pins. Nothing else under /computer is proxied.
+  { source: "/install.sh", destination: `${backendUrl}/install.sh` },
+  { source: "/computer/:archive(daemon-[a-f0-9]{64}\\.tar\\.gz)", destination: `${backendUrl}/computer/:archive` },
 ];
 
 /**

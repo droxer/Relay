@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import shlex
 import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
@@ -14,6 +13,7 @@ from sqlalchemy import delete, insert, select, update
 from ..persistence.store_common import store_transaction
 from ..security.device_authorization import computer_authorizations as grants
 from .auth_routes import _consume_auth_attempt, _auth_rate_key
+from .computer_installer_routes import computer_setup_command
 from .daemon_node_routes import create_local_device_enrollment
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, backend_base_url, request_actor, valid_employee_workspace_path
@@ -40,8 +40,7 @@ def _current(conn: Any, code: str) -> Any:
 @router.get("/computer-authorizations/setup-command")
 def setup_command(request: Request, ctx: AppContextDep) -> dict[str, str]:
     _human(request, ctx)
-    origin = backend_base_url(request)
-    return {"installCommand": f"curl -fsSL {shlex.quote(origin + '/computer/install.sh')} | sh -s -- --backend-url {shlex.quote(origin)}"}
+    return {"installCommand": computer_setup_command(request)}
 
 
 @router.post("/computer-authorizations", status_code=201)
