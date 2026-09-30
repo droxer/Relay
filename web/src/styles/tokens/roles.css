@@ -216,7 +216,7 @@
   --type-meta:          500 var(--fs-1)/var(--leading-caps) var(--font-sans);
   --type-title-content: 400 var(--fs-title)/var(--leading-tight) var(--font-sans);
 
-  --type-display-track:      var(--track-display); /* the display tier sets solid */
+  --type-display-track:      var(--track-display); /* the one tightened tier — see palette.css */
   --type-title-track:        var(--track-display);
   --type-heading-track:      var(--track-0);
   --type-number-track:       var(--track-display);
