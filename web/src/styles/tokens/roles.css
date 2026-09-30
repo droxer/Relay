@@ -122,7 +122,7 @@
   --focus-outline: var(--focus-w) solid var(--link);
   --focus-outline-danger: var(--focus-w) dashed var(--err);
 
-  /* Type roles — the active Noto Sans family carries every tier. Hierarchy
+  /* Type roles — the platform UI face carries every tier. Hierarchy
      comes from WEIGHT and SIZE, not face: display and heading tiers are 500,
      emphasis and control tiers are 700, and reading is 400. The mono face is
      technical text only, set 400 untracked.
@@ -137,11 +137,10 @@
        font: var(--type-title);
        letter-spacing: var(--type-title-track);
 
-     Several paired tracks resolve to 0 — that is the design, not a missing
-     value: the source system tracks its READING roles (-0.16px at 16px, -0.14px at
-     14px ≈ -0.01em) and sets the display tier and the uppercase captions
-     solid. The tokens stay explicit so a role's tracking is decided here,
-     once, not re-derived at every call site. */
+     Most paired tracks resolve to 0 — that is the design, not a missing
+     value: the system faces track themselves, so only the uppercase captions
+     carry a track. The tokens stay explicit so a role's tracking is decided
+     here, once, not re-derived at every call site. */
   --type-display:      500 var(--fs-6)/var(--leading-display) var(--font-display);
   /* The display tier is 28px/500 — the display weight in this system is the
      MIDDLE of the ramp, not the top of it. Emphasis at reading sizes runs
@@ -173,14 +172,13 @@
      CASE and size, which is the separator this role has always led with. */
   --type-micro:        500 var(--fs-1)/var(--leading-caps) var(--font-sans); /* + uppercase */
   --type-number:       500 var(--fs-5)/var(--leading-number) var(--font-display);
-  /* Code sizes to the mono face's metrics, not the sans ladder. 1rem = 14px
-     sits deliberately BETWEEN the 13px body-sm rung and the 15px body rung:
-     mono advances are wider than sans at the same size, so 14px mono already
-     occupies the column width of ~15px sans. Snapping it onto --fs-2 would
-     make code read smaller than the prose around it, which is the one place
-     legibility must not lose. It is a literal on purpose — do not "converge"
-     it onto a sans rung. */
-  --type-code:         400 1rem/var(--leading-snug) var(--font-mono);
+  /* Code sizes to the mono face's metrics, not the sans ladder. --fs-code
+     (14px) sits two pixels under the 16px body rung: mono advances are wider
+     than sans at the same size, so 14px mono already occupies the column
+     width of ~16px sans. It shares its value with --fs-2 today by coincidence,
+     not by design — it has its own token so the sans ladder can move without
+     dragging the code face with it. */
+  --type-code:         400 var(--fs-code)/var(--leading-snug) var(--font-mono);
 
   /* ----- Content-origin roles -----
      The three roles above the label tier answer "how loud", but the app also
@@ -234,9 +232,8 @@
 }
 
 /* CJK — reading roles want looser leading. */
-html:lang(zh-CN),
-html:lang(zh-TW) {
-  --type-body:    400 var(--fs-4)/var(--leading-normal) var(--font-sans);
+html:lang(zh-CN) {
+  --type-body:   400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-body-sm: 400 var(--fs-2)/var(--leading-normal) var(--font-sans);
 }
 

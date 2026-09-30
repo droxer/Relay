@@ -639,8 +639,12 @@
 
   /* Type sizes — rem so browser font-size preference scales the UI
      (root pinned to 87.5% in base.css; 1rem = 14px at the default). */
-  /* APPLICATION LADDER, NOT THE BRAND'S MARKETING LADDER: 12 / 13 / 14 / 15 /
+  /* APPLICATION LADDER, NOT THE BRAND'S MARKETING LADDER: 12 / 14 / 15 / 16 /
      17 / 19 / 22 / 28, with the hero display on its own clamp above.
+
+     The three reading rungs (14 / 15 / 16) follow the reference docs site the
+     system faces were taken from: 14px chrome and 16px reading text. The
+     caption rung and every heading tier stay where the console set them.
 
      The source system publishes 12/14/16/18/24/36/48 — a ladder drawn for a
      single-column commerce page where a product title owns the viewport. This
@@ -649,7 +653,7 @@
      rungs wholesale set 24px pane titles over 14px rail rows and 36px KPI
      numerals inside admin tiles, and the whole UI read a full step too loud.
      The rungs below are the ones this app was built against — every density
-     decision in the surface CSS (13px rail titles over 12px meta, the 14px
+     decision in the surface CSS (14px rail titles over 12px meta, the 15px
      dense-prose tier, the 19px pane title) is written to them.
 
      The brand relationship is kept where it matters and dropped where it does
@@ -666,9 +670,15 @@
      these tokens directly, so a low direct-var count does not by itself mean
      a dead rung. Recount before deleting anything. */
   --fs-1: 0.8571rem; /* 12px — caption: badges, legal microcopy, compact metadata */
-  --fs-2: 0.9286rem; /* 13px — body-sm: labels, chrome, button and pill-tab text */
-  --fs-3: 1rem;      /* 14px — dense prose, the compact scope's body rung */
-  --fs-4: 1.0714rem; /* 15px — body copy: the primary reading size */
+  --fs-2: 1rem;      /* 14px — body-sm: labels, chrome, button and pill-tab text */
+  --fs-3: 1.0714rem; /* 15px — dense prose, the compact scope's body rung */
+  --fs-4: 1.1429rem; /* 16px — body copy: the primary reading size */
+  /* Code is NOT a rung of the sans ladder: the mono face is sized to its own
+     metrics (wider advances, taller x-height), so it holds 14px while the
+     reading rungs around it move. Every surface that shows code — fenced and
+     inline markdown code, diffs, plain artifacts, the file viewer — reads this
+     token, so they cannot drift apart again. */
+  --fs-code: 1rem;   /* 14px — code, diffs, file contents */
   --fs-heading: 1.2143rem; /* 17px — subtitle-lg: section headings, in-message h1 */
   --fs-title: 1.3571rem;   /* 19px — card titles, pane and page titles */
   --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */
@@ -703,16 +713,16 @@
      glyphs sit on each other's shoulders. */
   --leading-prose: 1.75;
 
-  /* Tracking — the source system sets its display tier solid and gives the BODY
-     roles a fractional negative track instead: -0.16px at 16px and -0.14px
-     at 14px (≈ -0.01em), the snug-but-not-condensed setting Optimistic VF
-     was drawn for. Caps get no letterspacing — the source system's uppercase
-     captions are set solid — and the display tier is 0 because at 28–36px
-     the face already sets tight. The paired-track contract in roles.css is
-     what keeps these attached to their roles. */
+  /* Tracking — every reading and display role sets SOLID. The source system
+     tightened its body roles by -0.01em, a setting drawn for its own face;
+     the platform UI faces already carry per-size tracking of their own (San
+     Francisco tightens and loosens itself by optical size), so a second
+     tightening on top only crowds them. The tokens stay, at 0, because the
+     paired-track contract in roles.css is what keeps a role's tracking decided
+     in one place. */
   --track-display: 0;
-  --track-body: -0.01em;
-  --track-body-sm: -0.01em;
+  --track-body: 0;
+  --track-body-sm: 0;
   --track-0: 0;
   /* Uppercase captions were set SOLID because the source system sets them at
      700, where the extra stroke weight holds the caps apart on its own. This
@@ -722,25 +732,29 @@
      size live on --type-meta, which tracks as body text. */
   --track-caps: 0.03em;
 
-  /* Families — Noto Sans carries reading, control, and display text, separated
-     by the 400/500/700 product ladder rather than by face. Fontsource supplies
-     the self-hosted variable families behind --font-app-*. JetBrains Mono remains
-     technical text only and is sized to its own metrics. */
+  /* Families — the platform's own UI face carries reading, control, and display
+     text, separated by the 400/500/700 product ladder rather than by face:
+     San Francisco on Apple, Segoe UI on Windows, Roboto on Android/ChromeOS,
+     Noto Sans on Linux. No sans web font is loaded, so reading text never
+     swaps after first paint, and the stack is one list for English and
+     Chinese alike. JetBrains Mono (--font-app-mono, vendored and injected by
+     app/layout.tsx) remains technical text only and is sized to its own
+     metrics. */
   /* Transcript content is multilingual even when the UI language is English.
-     Keep explicit Han fallbacks in the default stacks so agent-authored CJK
-     never depends on a browser's last-resort missing-glyph substitution. */
-  --font-app-sans: "Noto Sans Variable";
-  --font-app-cjk-sc: "Noto Sans SC Variable";
-  --font-app-cjk-tc: "Noto Sans TC Variable";
-  --font-sans: var(--font-app-sans), "Noto Sans", "PingFang SC", "PingFang TC", "Microsoft YaHei UI", "Microsoft JhengHei UI", "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans SC", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+     The Simplified Chinese faces sit behind the Latin ones so agent-authored
+     Han never depends on a browser's last-resort substitution (which, under
+     lang="en", may pick a Japanese or Traditional face). */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans SC", "Noto Sans TC", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
-  /* OpenType — the source system switches ss01 and ss02 on together across every
-     heading role and treats them as a paired alternates package, never one
-     without the other. Faces without the sets ignore the declaration, so
-     base.css applies the pair app-wide rather than fencing it to headings. */
-  --font-features: "ss01" 1, "ss02" 1;
+  /* OpenType — the base feature recipe every face starts from. System UI faces
+     assign their stylistic sets differently (on San Francisco ss01/ss02 redraw
+     the 6, 9 and 4), so none is switched on: the recipe is the default kerning
+     only. (The vendored mono carries neither set, so code is unaffected.) It
+     stays a token because `font-feature-settings` REPLACES rather than
+     adds — rules that want tabular figures lead with this and append "tnum". */
+  --font-features: "kern" 1;
 
   /* Motion — one ease, two speeds, no overshoot. The source system publishes no
      timings and recommends 150–250ms ease-out for surface transitions and
@@ -905,26 +919,15 @@ html[data-theme="light"] {
   --scrim: rgba(10, 19, 23, 0.55);
 }
 
-/* CJK — choose the region-matched Noto family for both Latin and Han glyphs so
-   mixed labels remain internally coherent. The platform families stay behind
-   it as resilient local fallbacks. Technical text keeps the mono with CJK
-   glyph fallback. */
+/* CJK — the sans stack is NOT restated here: Chinese uses the same system
+   stack as English, with Latin set in the platform UI face and Han falling
+   through to its Simplified Chinese companion. Technical text keeps the mono
+   with Simplified Chinese glyph fallback. */
 html:lang(zh-CN) {
-  --font-sans: var(--font-app-cjk-sc), "Noto Sans SC", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", var(--font-app-sans), "Noto Sans", sans-serif;
-  --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans Mono CJK SC", "Noto Sans SC", monospace;
-}
-
-html:lang(zh-TW) {
-  --font-sans: var(--font-app-cjk-tc), "Noto Sans TC", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", var(--font-app-sans), "Noto Sans", sans-serif;
-  --font-display: var(--font-sans);
-  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans Mono CJK TC", "Noto Sans TC", monospace;
-}
-
-html:lang(zh-CN),
-html:lang(zh-TW) {
-  /* The default reading tracks are fractionally negative; Han glyphs are
-     square and must never be tightened, so every track is pinned solid here. */
+  /* Han glyphs are square and must never be tightened. The root tracks are
+     solid today; they stay pinned here so a future Latin tightening cannot
+     reach Chinese. */
   --track-display: 0;
   --track-body: 0;
   --track-body-sm: 0;
@@ -946,7 +949,7 @@ html:lang(zh-TW) {
      scope actually wraps — every rail that used it overrode it back. */
   --sp-row: var(--sp-3);
   /* The dense reading tier runs one rung down: the compact scope's --fs-4
-     becomes the ladder's 14px dense-prose rung. Heading tiers are untouched —
+     becomes the ladder's 15px dense-prose rung. Heading tiers are untouched —
      density compresses rows, not hierarchy.
 
      REDECLARING THE ROLES IS LOAD-BEARING, NOT REDUNDANT. A custom property is
@@ -981,11 +984,9 @@ html:lang(zh-TW) {
 }
 
 /* CJK reading roles are looser; the compact scope must restate them too or a
-   dense Han list silently reverts to the standard 15px tier. */
+   dense Han list silently reverts to the standard 16px tier. */
 html:lang(zh-CN) [data-density="compact"],
-html:lang(zh-TW) [data-density="compact"],
-html:lang(zh-CN)[data-density="compact"],
-html:lang(zh-TW)[data-density="compact"] {
+html:lang(zh-CN)[data-density="compact"] {
   --type-body: 400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
 }

@@ -3,13 +3,16 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 
 import {
   applyTheme,
+  normalizeLanguage,
   readDrawerWidth,
+  readLanguage,
   readSidenavExpanded,
   readSidenavWidth,
   readTheme,
   readThreadListBesideSpace,
   readThreadListWidth,
   readThreadSpaceWidth,
+  SUPPORTED_LANGUAGES,
   SUPPORTED_THEMES,
   writeDrawerWidth,
   writeSidenavExpanded,
@@ -97,6 +100,23 @@ describe("Relay web theme storage", () => {
     assert.equal(themeAttr, "light");
     applyTheme("dark");
     assert.equal(themeAttr, "dark");
+  });
+
+  it("reads a retired Traditional Chinese preference as Simplified Chinese", () => {
+    storage.set("relay-web.language", "zh-TW");
+    assert.equal(readLanguage(), "zh-CN");
+    storage.set("relay-web.language", "zh-CN");
+    assert.equal(readLanguage(), "zh-CN");
+  });
+
+  it("normalizes any stored or server-sent language onto a shipped one", () => {
+    assert.deepEqual([...SUPPORTED_LANGUAGES], ["en", "zh-CN"]);
+    assert.equal(normalizeLanguage("en"), "en");
+    assert.equal(normalizeLanguage("zh-CN"), "zh-CN");
+    assert.equal(normalizeLanguage("zh-TW"), "zh-CN");
+    assert.equal(normalizeLanguage("fr"), "en");
+    assert.equal(normalizeLanguage(null), "en");
+    assert.equal(normalizeLanguage(undefined), "en");
   });
 
   it("exports all preference theme options", () => {

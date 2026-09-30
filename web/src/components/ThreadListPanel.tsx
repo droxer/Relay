@@ -149,7 +149,7 @@ export function ThreadListPanel({
 
   return (
     // Compact density: the rail is a list layout, so thread and project names
-    // sit one rung down (16 → 15px) against their 13px meta — the same
+    // sit one rung down (16 → 15px) against their 12px meta — the same
     // treatment the agent roster and teams table get.
     <aside id="thread-panel" className="thread-panel" aria-label={t(directoryMode === "projects" ? "project.projects" : "nav.threads")} tabIndex={-1} data-density="compact">
       <div className="thread-panel-inner">

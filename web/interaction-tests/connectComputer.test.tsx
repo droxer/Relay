@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import en from "../src/i18n/locales/en/translation.json";
-import zhTW from "../src/i18n/locales/zh-TW/translation.json";
+import zhCN from "../src/i18n/locales/zh-CN/translation.json";
 import { ConnectComputerDrawer } from "../src/components/computer/ConnectComputerDrawer";
 import { createLocalDeviceEnrollment } from "../src/api";
 
@@ -38,8 +38,8 @@ it("guides command and token steps without claiming registration means connected
   expect(screen.queryByText("old-daemon-command")).toBeNull();
 });
 
-it("does not retain the repository-install instructions in Traditional Chinese", () => {
-  expect(zhTW.computer.connect_setup_hint).not.toMatch(/relay-client|export PATH|儲存庫存取/);
+it("does not retain the repository-install instructions in Simplified Chinese", () => {
+  expect(zhCN.computer.connect_setup_hint).not.toMatch(/relay-client|export PATH|仓库访问|存储库访问/);
 });
 
 it("only reports connected after a fresh online status and copies the installer separately from the token", async () => {

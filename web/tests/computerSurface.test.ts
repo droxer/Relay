@@ -118,7 +118,6 @@ describe("My Computer record card", () => {
       read("web/src/components/ComputerPage.tsx"),
       read("web/src/i18n/locales/en/translation.json"),
       read("web/src/i18n/locales/zh-CN/translation.json"),
-      read("web/src/i18n/locales/zh-TW/translation.json"),
     ]);
     const disconnect = page.match(/async function handleDisconnectNode[\s\S]*?\n  }/)?.[0] ?? "";
     assert.notEqual(disconnect.trim(), "", "the disconnect-handler regex stopped matching — refresh it");

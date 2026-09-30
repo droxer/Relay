@@ -20,7 +20,7 @@ import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "./lib/daemonNo
 import { isEmployeeAgentRoutable, preferredRoutableAgent } from "./lib/agentDisplayNames";
 import { mentionCandidates } from "./lib/mentions";
 import { threadRoundTeam } from "./lib/messageRouting";
-import { applyTheme, readTokens, selectedEmployeeKey } from "./lib/appStorage";
+import { applyTheme, normalizeLanguage, readTokens, selectedEmployeeKey } from "./lib/appStorage";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
@@ -468,7 +468,7 @@ export function App() {
     if (preferencesUserId === user.id) return;
 
     const nextTheme = user.theme ?? "system";
-    const nextLanguage = user.language ?? "en";
+    const nextLanguage = normalizeLanguage(user.language);
     preferences.adopt({ theme: nextTheme, language: nextLanguage });
     applyTheme(nextTheme);
     document.documentElement.lang = nextLanguage;

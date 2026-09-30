@@ -29,44 +29,35 @@ describe("local typography assets", () => {
     assert.doesNotMatch(attributes, /web\/src\/app\/fonts\/.*filter=lfs/);
     assert.ok(existsSync(path.join(fontsDir, "OFL-JetBrainsMono.txt")), "missing JetBrains Mono license");
 
-    for (const file of ["IBMPlexSans-Variable.woff2", "OFL-IBMPlexSans.txt"]) {
-      assert.ok(!existsSync(path.join(fontsDir, file)), `${file} should leave with the retired family`);
-    }
+    // The mono is the ONLY vendored face; a retired binary left in the tree
+    // would ship bytes no stylesheet names.
+    assert.deepEqual(readdirSync(fontsDir).sort(), ["JetBrainsMono-Variable.woff2", "OFL-JetBrainsMono.txt"]);
   });
 
-  it("resolves licensed variable font subsets locally for Latin and both Chinese regions", () => {
+  it("loads no sans web font — the reading face is the platform's own", () => {
+    const manifest = JSON.parse(readFileSync(path.join(repoRoot, "web", "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const fontPackages = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
+      .filter((name) => /fontsource|font-/i.test(name));
+    assert.deepEqual(fontPackages, [], "the web app must not depend on a font package");
+
     const layout = readWebSource("app/layout.tsx");
-    for (const pkg of ["noto-sans", "noto-sans-sc", "noto-sans-tc"]) {
-      assert.ok(layout.includes(`import "@fontsource-variable/${pkg}/index.css";`));
-      const dir = path.join(repoRoot, "node_modules", "@fontsource-variable", pkg);
-      assert.match(readFileSync(path.join(dir, "LICENSE"), "utf8"), /SIL OPEN FONT LICENSE/);
-      const css = readFileSync(path.join(dir, "index.css"), "utf8");
-      assert.match(css, /font-weight: 100 900/);
-      assert.match(css, /font-display: swap/);
-      assert.match(css, /unicode-range:/);
-      const urls = [...css.matchAll(/url\(([^)]+)\)/g)].map((match) => match[1]);
-      assert.ok(urls.length > 0);
-      for (const url of urls) {
-        assert.ok(url.startsWith("./files/"), `font URL must resolve locally: ${url}`);
-        assert.equal(readFileSync(path.join(dir, url)).subarray(0, 4).toString("ascii"), "wOF2");
-      }
-    }
+    assert.doesNotMatch(layout, /next\/font\/google|@fontsource/, "the layout must not load a sans web font");
+    assert.equal([...layout.matchAll(/localFont\(/g)].length, 1, "the mono is the only locally loaded face");
+    assert.doesNotMatch(layout, /fonts\.(?:googleapis|gstatic)\.com/, "the layout must not reach a font CDN");
   });
 
-  it("retires Mona Sans, Geist, and Geist Mono rather than leaving them dormant", () => {
-    // Leaving the old binaries in the tree would ship ~203 KB nobody loads.
-    for (const file of ["MonaSans-Variable.woff2", "Geist-Variable.woff2", "GeistMono-Variable.woff2", "OFL-MonaSans.txt"]) {
-      assert.ok(!existsSync(path.join(fontsDir, file)), `${file} should have been removed`);
-    }
-    // No retired face may survive in the token layer, and the layout must get
-    // the UI families from installed, self-hosted font packages.
+  it("leaves no retired family in the token layer", () => {
     for (const file of ["styles/tokens/palette.css", "styles/tokens/roles.css", "styles/tokens/base.css", "styles/tokens/shadcn-bridge.css"]) {
       const code = readWebSource(file).replace(/\/\*[\s\S]*?\*\//g, "");
-      assert.doesNotMatch(code, /Geist|IBM Plex|Optimistic VF|Montserrat/, `${file} still references a retired family`);
+      assert.doesNotMatch(
+        code,
+        /Geist|IBM Plex|Optimistic VF|Montserrat|Mona Sans|Noto Sans (?:SC |TC )?Variable|--font-app-(?:sans|cjk)/,
+        `${file} still references a retired family`,
+      );
     }
-    const layout = readWebSource("app/layout.tsx");
-    assert.doesNotMatch(layout, /next\/font\/google/, "production builds must not download fonts from Google");
-    assert.doesNotMatch(layout, /IBMPlexSans|Optimistic VF|Montserrat/);
   });
 });
 
@@ -80,9 +71,10 @@ describe("application typography roles", () => {
 
     const expectedPixels = new Map([
       ["--fs-1", 12],
-      ["--fs-2", 13],
-      ["--fs-3", 14],
-      ["--fs-4", 15],
+      ["--fs-2", 14],
+      ["--fs-3", 15],
+      ["--fs-4", 16],
+      ["--fs-code", 14],
       ["--fs-heading", 17],
       ["--fs-title", 19],
       ["--fs-5", 22],
@@ -103,34 +95,65 @@ describe("application typography roles", () => {
     assert.ok(Math.abs(Number(hero[2]) * 14 - 36) < 0.01, "the hero ceiling should resolve to 36px");
   });
 
-  it("wires one sans for every reading and display role, mono for technical text only", () => {
+  it("holds every code surface on the code size, off the sans ladder", () => {
+    // The mono face is sized to its own metrics. When the reading rungs moved
+    // up a pixel, fenced code rode along on --fs-3 while inline code did not;
+    // one token is what keeps the code surfaces the same size as each other.
+    assert.match(readWebSource("styles/tokens/roles.css"), /--type-code:\s+400 var\(--fs-code\)\//);
+    for (const [file, selector] of [
+      ["styles/markdown.css", ".md-body code"],
+      ["styles/markdown.css", ".agent-code"],
+      ["styles/agent-stream.css", ".agent-thinking code"],
+      ["styles/artifact.css", ".artifact-diff"],
+      ["styles/artifact.css", ".artifact-plain"],
+      ["styles/workspace-files.css", ".code-view-scroll"],
+    ] as const) {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const bodies = [...readWebSource(file).matchAll(new RegExp(`(?:^|[},\\n])\\s*${escaped}\\s*\\{([^}]*)\\}`, "g"))].map((m) => m[1]);
+      const sized = bodies.filter((body) => /font-size:/.test(body));
+      assert.ok(sized.length > 0, `${selector} no longer sets a size`);
+      for (const body of sized) assert.match(body, /font-size:\s*var\(--fs-code\);/, `${selector} must size from --fs-code`);
+    }
+  });
+
+  it("wires the system sans for every reading and display role, mono for technical text only", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
-    for (const [pkg, variable, family] of [
-      ["noto-sans", "--font-app-sans", "Noto Sans Variable"],
-      ["noto-sans-sc", "--font-app-cjk-sc", "Noto Sans SC Variable"],
-      ["noto-sans-tc", "--font-app-cjk-tc", "Noto Sans TC Variable"],
-    ]) {
-      assert.ok(layout.includes(`import "@fontsource-variable/${pkg}/index.css";`));
-      assert.ok(palette.includes(`${variable}: "${family}";`));
-    }
+    // The sans leads with the platform faces in a fixed order: Apple, then
+    // Windows, then Android/ChromeOS, then the older and Linux fallbacks.
+    assert.match(
+      palette,
+      /--font-sans:\s*-apple-system,\s*BlinkMacSystemFont,\s*"Segoe UI",\s*Roboto,\s*"Helvetica Neue",\s*"Noto Sans",\s*Arial,/,
+    );
+    // It ends on its generic and carries the color-emoji faces after it so a
+    // pictograph never renders as a monochrome outline.
+    assert.match(palette, /--font-sans:[^;]*sans-serif,\s*"Apple Color Emoji",\s*"Segoe UI Emoji",\s*"Segoe UI Symbol",\s*"Noto Color Emoji";/);
+
+    // The technical face is the vendored JetBrains Mono, injected by the layout.
     assert.match(layout, /src:\s*["']\.\/fonts\/JetBrainsMono-Variable\.woff2["']/);
     assert.match(layout, /variable:\s*["']--font-app-mono["']/);
-    assert.doesNotMatch(layout, /MonaSans|--font-app-display|Geist/);
-    assert.doesNotMatch(layout, /fonts\.(?:googleapis|gstatic)\.com/, "fonts must be self-hosted");
+    assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*["']JetBrains Mono["']/);
 
     // The display tier is the SANS family at a heavier weight — hierarchy
     // comes from weight and size, never from a second face. The mono is
     // technical text only.
-    assert.match(palette, /--font-sans:\s*var\(--font-app-sans\),\s*["']Noto Sans["']/);
     assert.match(palette, /--font-display:\s*var\(--font-sans\);/);
-    assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*["']JetBrains Mono["']/);
     assert.doesNotMatch(
       palette,
       /--font-display:[^;]*(--font-app-mono|JetBrains|Mono)/,
-      "the display tier is no longer mono — it resolves to the Noto sans stack",
+      "the display tier is not mono — it resolves to the sans stack",
     );
+  });
+
+  it("switches on no stylistic set, because system faces assign them differently", () => {
+    const code = readWebSource("styles/tokens/palette.css").replace(/\/\*[\s\S]*?\*\//g, "");
+
+    // On San Francisco ss01/ss02 redraw the 6, 9 and 4; on Segoe UI they mean
+    // something else again. The recipe stays a token so "tnum" rules can lead
+    // with it, but it must not name a set.
+    assert.match(code, /--font-features:\s*"kern" 1;/);
+    assert.doesNotMatch(code, /"ss\d\d"/);
   });
 
   it("sets the display tiers at 500, emphasis at 700, and keeps code at 400", () => {
@@ -140,8 +163,8 @@ describe("application typography roles", () => {
     // display and heading-sm tiers are 500 and the heaviest weight in the
     // system (700) belongs to the SMALL roles — button labels, badges, body
     // emphasis. Size carries hierarchy; weight carries emphasis. The product
-    // deliberately exposes only the 400/500/700 ladder even though Noto Sans
-    // supports more weights.
+    // deliberately exposes only the 400/500/700 ladder even though the system
+    // faces support more weights.
     assert.match(roles, /--type-display:\s+500[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-title:\s+500[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-heading:\s+700[^;]+var\(--font-display\);/);
@@ -160,17 +183,15 @@ describe("application typography roles", () => {
     assert.match(roles, /--type-label:\s+500[^;]+var\(--font-sans\);/);
   });
 
-  it("tracks the reading tiers and sets the display tier solid", () => {
+  it("sets the reading and display tiers solid and tracks only the caps", () => {
     const palette = readWebSource("styles/tokens/palette.css");
 
-    // The source system tightens its READING roles fractionally (-0.16px at 16px,
-    // -0.14px at 14px ≈ -0.01em) and sets the display tier and the uppercase
-    // captions solid, the opposite of the usual arrangement. The
-    // zero-valued tokens are the design, not missing values; they keep the
-    // paired-track contract greppable.
+    // The system UI faces carry their own per-size tracking, so no reading or
+    // display role adds one. The zero-valued tokens are the design, not
+    // missing values; they keep the paired-track contract greppable.
     assert.match(palette, /--track-display:\s*0;/);
-    assert.match(palette, /--track-body:\s*-0\.01em;/);
-    assert.match(palette, /--track-body-sm:\s*-0\.01em;/);
+    assert.match(palette, /--track-body:\s*0;/);
+    assert.match(palette, /--track-body-sm:\s*0;/);
     // Caps tracking is NOT solid any more. The source system sets its uppercase
     // captions solid because it sets them at 700, where stroke weight holds the
     // caps apart; --type-micro runs 500 here, so the track has to do that work
@@ -285,31 +306,23 @@ describe("application typography roles", () => {
     assert.deepEqual(problems, [], `display-tier rules missing, overriding, or mispairing display tracking:\n${problems.join("\n")}`);
   });
 
-  it("keeps CJK typography internally coherent and display tracking restrained", () => {
-    const palette = readWebSource("styles/tokens/palette.css");
+  it("sets Chinese in the same system stack and only loosens its metrics", () => {
+    const palette = readWebSource("styles/tokens/palette.css").replace(/\/\*[\s\S]*?\*\//g, "");
     const base = readWebSource("styles/tokens/base.css");
     const atelier = readWebSource("styles/atelier.css");
 
-    // The matching regional Noto family carries Latin and Han together. The
-    // system faces remain fallbacks, and display tracking is neutralised so
-    // Han titles do not crush.
-    assert.match(
-      palette,
-      /html:lang\(zh-CN\)\s*\{[^}]*--font-sans:\s*var\(--font-app-cjk-sc\),\s*"Noto Sans SC"[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
-    );
-    assert.match(
-      palette,
-      /html:lang\(zh-TW\)\s*\{[^}]*--font-sans:\s*var\(--font-app-cjk-tc\),\s*"Noto Sans TC"[^;]*;[^}]*--font-display:\s*var\(--font-sans\);/s,
-    );
-    for (const [locale, region] of [["zh-CN", "SC"], ["zh-TW", "TC"]] as const) {
-      const localeBlock = palette.match(new RegExp(`html:lang\\(${locale}\\)\\s*\\{([^}]*)\\}`, "s"))?.[1] ?? "";
-      assert.match(localeBlock, new RegExp(`--font-sans:[^;]*"Noto Sans CJK ${region}"`));
-      assert.match(localeBlock, new RegExp(`--font-mono:[^;]*"Noto Sans Mono CJK ${region}"`));
-    }
-    assert.match(
-      palette,
-      /html:lang\(zh-CN\),\s*html:lang\(zh-TW\)\s*\{[^}]*--track-display:\s*0;/s,
-    );
+    // Chinese and English share one family stack: Latin sets in the platform
+    // UI face and Han falls through to its Simplified Chinese companion. The
+    // locale block restates no reading family — it neutralises the tracking so
+    // Han titles do not crush, opens the leading, and narrows the mono's Han
+    // fallback to the Simplified Chinese faces.
+    const localeBlock = palette.match(/html:lang\(zh-CN\)\s*\{([^}]*)\}/s)?.[1] ?? "";
+    assert.notEqual(localeBlock.trim(), "", "the zh-CN metrics block went missing");
+    assert.doesNotMatch(localeBlock, /--font-(?:sans|display):/, "zh-CN must not fork the reading stack");
+    assert.match(localeBlock, /--font-mono:\s*var\(--font-app-mono\),\s*"JetBrains Mono"[^;]*"Noto Sans Mono CJK SC"/);
+    assert.match(localeBlock, /--track-display:\s*0;/);
+    assert.match(localeBlock, /--track-body:\s*0;/);
+    assert.match(localeBlock, /--leading-normal:\s*1\.7;/);
 
     const eyebrowRule = base.match(/\.eyebrow\s*\{([^}]*)\}/)?.[1] ?? "";
     const headerKickerRule = atelier.match(/\.page-header-kicker,[^{]+\{([^}]*)\}/s)?.[1] ?? "";
@@ -322,7 +335,7 @@ describe("application typography roles", () => {
     const root = palette.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
 
     // Agent output can be Chinese while the surrounding controls remain in
-    // English, so glyph coverage cannot depend only on html:lang(zh-*).
+    // English, so glyph coverage cannot depend on html:lang(zh-CN).
     // --font-display aliases --font-sans, so resolve one level of indirection
     // before checking the stack.
     for (const role of ["sans", "display", "mono"]) {
@@ -340,7 +353,24 @@ describe("application typography roles", () => {
 
     assert.match(layout, /localStorage\.getItem\(["']relay-web\.language["']\)/);
     assert.match(layout, /(?:l|language)===["']zh-CN["']/);
-    assert.match(layout, /(?:l|language)===["']zh-TW["']/);
     assert.match(layout, /setAttribute\(["']lang["'],\s*(?:l|language)\)/);
+    // A preference saved while Traditional Chinese existed paints as
+    // Simplified Chinese, matching normalizeLanguage in lib/appStorage.ts.
+    assert.match(layout, /if\((?:l|language)===["']zh-TW["']\)(?:l|language)=["']zh-CN["'];/);
+  });
+
+  it("styles and ships only English and Simplified Chinese", () => {
+    const stylesDir = path.join(repoRoot, "web", "src", "styles");
+    const sheets = [
+      ...readdirSync(stylesDir).filter((f) => f.endsWith(".css")).map((f) => path.join(stylesDir, f)),
+      ...readdirSync(path.join(stylesDir, "tokens")).filter((f) => f.endsWith(".css")).map((f) => path.join(stylesDir, "tokens", f)),
+    ];
+    const stragglers = sheets
+      .filter((file) => /:lang\(zh-(?:TW|HK|Hant)\)/.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(repoRoot, file));
+    assert.deepEqual(stragglers, [], "these still style a retired locale");
+
+    const locales = readdirSync(path.join(repoRoot, "web", "src", "i18n", "locales")).sort();
+    assert.deepEqual(locales, ["en", "zh-CN"]);
   });
 });

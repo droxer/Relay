@@ -347,13 +347,12 @@ describe("weight ladder", () => {
   });
 });
 
-describe("tabular figures keep the root's stylistic sets", () => {
+describe("tabular figures keep the root's feature recipe", () => {
   it("never replaces --font-features with a bare tnum", () => {
     // font-feature-settings REPLACES the inherited declaration rather than
-    // adding to it, so `font-feature-settings: "tnum" 1` switches OFF the
-    // ss01/ss02 pair :root turns on — a pair base.css documents as
-    // inseparable. The complete recipe must survive whichever Noto face is
-    // active for the document language.
+    // adding to it, so `font-feature-settings: "tnum" 1` switches OFF
+    // whatever :root turns on. The recipe is only default kerning today, but
+    // leading with the token is what keeps that true if it ever grows.
     const offenders: string[] = [];
     for (const sheet of walk(stylesDir, /\.css$/)) {
       for (const m of stripComments(sheet.text).matchAll(/font-feature-settings:\s*([^;]+);/g)) {
@@ -367,7 +366,7 @@ describe("tabular figures keep the root's stylistic sets", () => {
     assert.deepEqual(
       offenders,
       [],
-      `these drop the root's stylistic sets; lead with var(--font-features):\n  ${offenders.join("\n  ")}`,
+      `these drop the root's feature recipe; lead with var(--font-features):\n  ${offenders.join("\n  ")}`,
     );
   });
 });

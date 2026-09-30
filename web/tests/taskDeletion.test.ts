@@ -19,7 +19,7 @@ type Translation = {
 
 describe("task deletion", () => {
   it("provides complete confirmation and success copy in every locale", async () => {
-    for (const locale of ["en", "zh-CN", "zh-TW"]) {
+    for (const locale of ["en", "zh-CN"]) {
       const path = resolve(`web/src/i18n/locales/${locale}/translation.json`);
       const translation = JSON.parse(await readFile(path, "utf8")) as Translation;
 

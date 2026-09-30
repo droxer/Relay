@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 import en from "../src/i18n/locales/en/translation.json";
 import zhCN from "../src/i18n/locales/zh-CN/translation.json";
-import zhTW from "../src/i18n/locales/zh-TW/translation.json";
 import { SkillsPage } from "../src/components/SkillsPage";
 import { ShareSkillDrawer } from "../src/components/ShareSkillDrawer";
 import { projectMessages } from "../src/lib/projectMessages";
@@ -17,9 +16,9 @@ vi.mock("../src/hooks/useEmployeeAgents", () => ({ EMPLOYEE_AGENTS_QUERY_KEY: "e
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/api", () => ({ createSkill: vi.fn(), deleteSkill: vi.fn(), importSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn(), assignSkill: vi.fn(), revokeSkillAssignment: vi.fn() }));
 
-async function locale(language: "zh-CN" | "zh-TW") {
+async function locale(language: "zh-CN") {
   const instance = createInstance();
-  await instance.init({ lng: language, fallbackLng: false, interpolation: { escapeValue: false }, resources: { "zh-CN": { translation: zhCN }, "zh-TW": { translation: zhTW } } });
+  await instance.init({ lng: language, fallbackLng: false, interpolation: { escapeValue: false }, resources: { "zh-CN": { translation: zhCN } } });
   return instance;
 }
 function providers(instance: Awaited<ReturnType<typeof locale>>, child: ReactNode) {
@@ -28,7 +27,6 @@ function providers(instance: Awaited<ReturnType<typeof locale>>, child: ReactNod
 
 it.each([
   ["zh-CN" as const, "技能库还是空的", "发布第一个技能"],
-  ["zh-TW" as const, "技能庫仍是空的", "發佈第一個技能"],
 ])("renders the %s library workflow from the real locale resource", async (language, emptyTitle, publish) => {
   const instance = await locale(language);
   render(providers(instance, <SkillsPage currentUser={{ employeeId: "employee-1" } as any} />));
@@ -37,19 +35,18 @@ it.each([
   expect(screen.queryByText("Your skills library is empty")).toBeNull();
 });
 
-it("interpolates the Traditional Chinese team and selected-agent counts", async () => {
-  const instance = await locale("zh-TW");
+it("interpolates the Simplified Chinese team and selected-agent counts", async () => {
+  const instance = await locale("zh-CN");
   const skill = { id: "skill-1", displayName: "Release notes", grantedAgentIds: [], assignments: [], files: [], revisions: [] } as any;
   const agents = [{ id: "agent-1", displayName: "Codex reviewer", executorKind: "codex", enabled: true }] as any;
   const teams = [{ id: "team-1", name: "Launch team", memberAgentIds: ["agent-1"] }] as any;
   render(providers(instance, <ShareSkillDrawer skill={skill} agents={agents} teams={teams} onClose={vi.fn()} />));
-  expect(screen.getByRole("button", { name: "Launch team · 1 位成員" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "分享給 0 個智慧體" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Launch team · 1 名成员" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "共享给 0 个智能体" })).toBeTruthy();
 });
 
 it.each([
   "zh-CN" as const,
-  "zh-TW" as const,
 ])("localizes delivery failures in %s while retaining the skill identifier", async (language) => {
   const instance = await locale(language);
   const session = {
@@ -74,7 +71,6 @@ it.each([
 it.each([
   ["en" as const, en, "1 byte", "1,024 bytes"],
   ["zh-CN" as const, zhCN, "1 字节", "1,024 字节"],
-  ["zh-TW" as const, zhTW, "1 位元組", "1,024 位元組"],
 ])("pluralizes the %s bundle file size on a numeric count", async (language, resource, one, many) => {
   const instance = createInstance();
   await instance.init({

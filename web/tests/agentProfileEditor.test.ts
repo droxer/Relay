@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 
 describe("agent profile editor", () => {
   it("adds unified profile-action copy to every locale and drops the old personality-only keys", async () => {
-    const locales = ["en", "zh-CN", "zh-TW"];
+    const locales = ["en", "zh-CN"];
     for (const locale of locales) {
       const raw = await readFile(resolve(`web/src/i18n/locales/${locale}/translation.json`), "utf8");
       const json = JSON.parse(raw);

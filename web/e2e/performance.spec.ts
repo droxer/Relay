@@ -151,7 +151,6 @@ test("the eager bundle ships no markdown pipeline, syntax grammars or unused loc
     "highlight.js": "highlightAuto",
     remark: "micromark",
     "zh-CN catalogue": "每人在制上限",
-    "zh-TW catalogue": "每人在製上限",
   }).filter(([, signature]) => eager.includes(signature)).map(([name]) => name);
   expect(leaked, "modules found in the eager bundle").toEqual([]);
 

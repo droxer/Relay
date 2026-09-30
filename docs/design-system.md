@@ -59,9 +59,9 @@ Phosphor.
   doing *right now*. Splitting them across hues rather than across channels is
   deliberate: a pulsing blue dot beside a blue button would put "working" and
   "press me" in the same colour.
-- **One sans, every job.** Relay self-hosts **Noto Sans Variable** through
-  version-locked Fontsource packages, with region-matched **Noto Sans SC/TC**
-  families for Chinese.
+- **One sans, every job.** Relay sets everything in the **platform UI face**
+  (San Francisco, Segoe UI, Roboto, Noto Sans) — no sans web font is loaded,
+  and English and Chinese share one stack.
   Hierarchy is built from **size and
   weight** (400/500/700), never from a second face. The weight ramp is
   inverted against the usual expectation: the display tiers are 500 and the
@@ -117,7 +117,7 @@ Tailwind `@theme` machinery:
    named spacing scale — `p-sm` and `p-3` were the same 12px reached two ways,
    and the numeric scale is the one that maps 1:1 onto `--sp-N`.
 4. **`base.css`** — html/body reset, the `:focus-visible` contract, the
-   `ss01`/`ss02` feature pair, and the shared utilities (`.tnum`, `.code`,
+   base `--font-features` recipe, and the shared utilities (`.tnum`, `.code`,
    `.eyebrow`, `.tone-*`).
 
    `.tnum` and `.code` are deliberately two names, not one. `.tnum` gives
@@ -282,6 +282,13 @@ liveness surface changes.
 same family, and the display tier is a size and weight decision, not a face
 decision. **JetBrains Mono** (`--font-mono`) carries technical text only.
 
+`--font-sans` is a system stack, in this order: `-apple-system,
+BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial`,
+then the Simplified Chinese faces (`"PingFang SC"`, `"Microsoft YaHei UI"`,
+`"Microsoft YaHei"`, `"Noto Sans CJK SC"`, `"Noto Sans SC"`), `sans-serif`, and
+the color-emoji faces. No sans font is downloaded, so reading text never swaps
+after first paint and the build needs no font package.
+
 The display face is chosen by **content origin, not by size**: a fixed UI noun
 (Threads, Backlog, the wordmark, a drawer title) takes the display tier, while
 a string written by a person or an agent takes its calmer content sibling —
@@ -309,28 +316,33 @@ silently loses its tracking unless the call site remembers a second
 declaration — pairing the tokens by name makes the omission greppable, and
 `typographyTokens.test.ts` sweeps every stylesheet for it.
 
-**The tracking runs the other way round here.** The source system tightens its
-*reading* roles fractionally (−0.16px at 16px, −0.14px at 14px ≈ −0.01em) —
-the snug-but-not-condensed setting carried from the source reference — and
-sets the display tier and the uppercase captions **solid**. Several paired tracks
-therefore resolve to 0 by design; the tokens stay explicit so a role's
-tracking is decided in `roles.css`, once.
+**Reading and display text set solid.** The source system tightened its
+*reading* roles by −0.01em, a setting drawn for its own face. The platform UI
+faces carry per-size tracking of their own, so Relay adds none: `--track-body`,
+`--track-body-sm` and `--track-display` are all 0, and only the uppercase
+captions are tracked (`--track-caps`, 0.03em). The tokens stay explicit so a
+role's tracking is decided in `roles.css`, once.
 
-**`ss01` and `ss02` ship together.** The source system treats them as a paired
-alternates package for every heading role, never one without the other.
-`base.css` declares the pair (`--font-features`) at the root: faces without
-the sets ignore it, so fencing it to headings would buy nothing but a second
-place to forget one of them.
+**No stylistic set is switched on.** System faces assign `ss01`/`ss02`
+differently (on San Francisco they redraw the 6, 9 and 4), so
+`--font-features` is default kerning only (the vendored mono carries neither
+set, so code is unaffected). It stays a token because
+`font-feature-settings` replaces rather than adds: a rule that wants tabular
+figures writes `var(--font-features), "tnum" 1`.
 
-**There is no 800 role.** Noto Sans supports it, but Relay deliberately exposes
+**There is no 800 role.** The system faces support it, but Relay deliberately exposes
 only the 400/500/700 product ladder. The heaviest product weight already belongs
 to the small emphasis tiers, while display tiers sit at 500.
 
-The size ladder is **12 / 13 / 14 / 15 / 17 / 19 / 22 / 28px** at the
+The size ladder is **12 / 14 / 15 / 16 / 17 / 19 / 22 / 28px** at the
 browser's default font size (`--fs-1/2/3/4/heading/title/5/6`). All sizes use
 rem; the root is 87.5% (14px by default), so user font preferences scale type.
-The hero size clamps between 22 and 36px. Dense prose (`--fs-3`, 14px) and
-body copy (`--fs-4`, 15px) are distinct roles. Code uses 14px monospace.
+The hero size clamps between 22 and 36px. The three reading rungs follow the
+reference docs site the system faces came from: labels and chrome (`--fs-2`)
+are 14px and body copy (`--fs-4`) is 16px, with dense prose (`--fs-3`, 15px)
+between them as a distinct role. Code is not a rung of that ladder: every code
+surface reads `--fs-code` (14px monospace), so the sans rungs can move without
+dragging the code face with them.
 
 **`--track-display` must be applied to every display-tier rule** — via the
 role's paired track token or directly. Display-tier means *two* shapes, and
@@ -344,19 +356,19 @@ the sweep requires exactly one correct declaration per display-tier rule.
 The one deliberate exclusion is `.relay-bleed-mark`, a single decorative
 glyph with no inter-character spacing to track.
 
-**CJK:** `html:lang(zh-CN)` / `html:lang(zh-TW)` select Noto Sans SC/TC for
-both Latin and Han glyphs, keeping mixed-script labels internally coherent.
-Both region families are bundled from `@fontsource-variable` 5.3.0 (OFL-1.1)
-with unicode-range subsets and no preload, so the browser fetches only the
-subsets needed by the pre-paint language and visible text. Builds need no
-Google Fonts connection after npm dependencies are installed.
-Platform CJK faces remain resilient fallbacks. Every track is pinned to 0 in
-Chinese because Han glyphs are square and must never be tightened; reading
-leading loosens to 1.7/1.8/1.9.
+**CJK:** Relay ships English and Simplified Chinese. `html:lang(zh-CN)` does
+not fork the sans stack — Latin sets in the platform UI face and Han falls
+through to the Simplified Chinese faces named in the root stack, which also
+covers agent-authored Chinese inside an English UI. The locale block changes
+metrics: every track is pinned to 0 because Han glyphs are square and must
+never be tightened, and reading leading loosens to 1.7/1.8/1.9. A language
+preference saved as `zh-TW` while Traditional Chinese was offered reads as
+`zh-CN` (`normalizeLanguage` in `web/src/lib/appStorage.ts`,
+`normalize_user_language` in `backend/relay/security/auth.py`).
 
 JetBrains Mono remains a vendored fontsource **latin** subset (5.3.0,
-OFL-1.1, wght 100–800). Technical CJK glyphs fall through to the regional
-system and Noto Mono CJK faces named in the locale stacks.
+OFL-1.1, wght 100–800). Technical CJK glyphs fall through to the system and
+Noto Mono CJK faces named in the mono stacks.
 
 ## Geometry, elevation, motion
 
@@ -375,7 +387,7 @@ system and Noto Mono CJK faces named in the locale stacks.
   the source system renders inputs and primary pills at the same height so they share
   a silhouette and clear the WCAG AAA touch floor.
 - **Density:** `[data-density="compact"]` drops the reading tier one rung
-  (`--fs-4` 15 → 14px; body-sm 13 → 12px) for genuinely dense surfaces (tables and list
+  (`--fs-4` 16 → 15px; body-sm 14 → 12px) for genuinely dense surfaces (tables and list
   layouts). Put the attribute on the dense container, not the page. It
   overrides `--fs-4` **and restates every role built on it** (`--type-body`,
   `--type-name`, `--type-body-sm`), because a custom property resolves
@@ -486,7 +498,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Don't add a size step off the source system's ladder — separate by weight
   instead.
 - Don't declare `font-weight: 800` — the Relay product ladder deliberately
-  stops at 700 even though Noto Sans exposes heavier weights.
+  stops at 700 even though the system faces expose heavier weights.
 
 ## Shell dimensions
 
@@ -749,10 +761,9 @@ Source principles:
 24 / 36 / 48 plus a hero clamp. The 28px/300 editorial tier is not adopted as a
 size — Relay expresses the same "visual rest" idea as `--type-title-content`
 (24px/400), because a dense operator tool has no editorial intro headlines. The
-proprietary source face is not redistributable, so Relay uses the open-licensed
-Noto Sans family instead. The product keeps only the 400/500/700 rungs; 300 and
-800 remain outside the role system even though the variable Noto files support
-them.
+proprietary source face is not redistributable, so Relay uses the platform UI
+face instead. The product keeps only the 400/500/700 rungs; 300 and 800 remain
+outside the role system even though the system faces support them.
 
 ## Source layout scales
 
