@@ -188,6 +188,8 @@ devbox/      沙箱内智能体所运行的 BoxLite 客户机镜像
 3. 提交 Pull Request 前运行 `npm test`（TypeScript 与 Python 测试）和 `make pre-commit-run`。
 4. 行为发生变化时，同步更新 [`docs/`](docs/README.zh-CN.md) 下对应的页面。
 
+详细的目录结构以及各类改动的入手位置，见 [`CONTRIBUTING.md`](CONTRIBUTING.md)（英文）。
+
 ## 部署
 
 [`docs/deployment.md`](docs/deployment.md) 介绍如何将 Web 界面部署到 Vercel、将后端和 Postgres 部署到 Railway。守护进程不部署在这两个平台上——它们运行在沙箱所在的计算机上，并主动连接后端 URL。

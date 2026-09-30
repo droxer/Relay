@@ -191,6 +191,8 @@ devbox/      The BoxLite guest image that sandboxed agents run in
 3. Run `npm test` (TypeScript and Python suites) and `make pre-commit-run` before opening a pull request.
 4. Update the matching page under [`docs/`](docs/README.md) when behavior changes.
 
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the detailed layout and a guide to where each kind of change starts.
+
 ## Deployment
 
 [`docs/deployment.md`](docs/deployment.md) covers hosting the web UI on Vercel and the backend plus Postgres on Railway. Daemons stay off both platforms — they run wherever the sandbox lives and connect out to the backend URL.
