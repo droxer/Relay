@@ -13,7 +13,7 @@
      narrow viewport shrinks the rails and a wide one feeds the conversation.
      That order is also why each preferred width is wrapped in a min() against
      the viewport: grid tops the rails up BEFORE the chat column grows past its
-     floor, so an uncapped px preference is a rail holding 318px on a 1024px
+     floor, so an uncapped px preference is a rail holding 360px on a 1024px
      screen while the conversation sits at its minimum. Above the crossover the
      px value wins, so nothing about a wide screen changes.
 

@@ -172,17 +172,17 @@ function renderedWidth(page: Page, selector: string) {
 }
 
 test("a dragged rail width reaches the rendered grid track", async ({ browser }) => {
-  // Both widths sit above the defaults (228 / 318) and below the viewport caps
+  // Both widths sit above the defaults (228 / 360) and below the viewport caps
   // at 1440 (18vw = 259, 26vw = 374), so this isolates the override reaching
   // the track from the capping behaviour tested below.
   const page = await openPage(browser, "/threads/review-thread", false, {
     "relay-web.sidenavExpanded": "true",
     "relay-web.sidenavWidth": "250",
-    "relay-web.threadListWidth": "360",
+    "relay-web.threadListWidth": "372",
   });
   await expect(page.locator(RAIL_WIDTHS.rail).first()).toBeVisible();
   expect(await renderedWidth(page, RAIL_WIDTHS.sidenav)).toBe(250);
-  expect(await renderedWidth(page, RAIL_WIDTHS.rail)).toBe(360);
+  expect(await renderedWidth(page, RAIL_WIDTHS.rail)).toBe(372);
   await page.context().close();
 });
 

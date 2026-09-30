@@ -1,6 +1,6 @@
 import { TRANSCRIPT_MIN_WIDTH, viewportCeiling } from "./threadSpace.ts";
 
-export const THREAD_LIST_WIDTH_DEFAULT = 318;
+export const THREAD_LIST_WIDTH_DEFAULT = 360;
 export const THREAD_LIST_WIDTH_MIN = 240;
 export const THREAD_LIST_WIDTH_MAX = 480;
 /** The share of the viewport this column's preferred width is capped to —

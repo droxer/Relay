@@ -565,7 +565,7 @@
   --sidenav-w-open: 228px;
   --sidenav-w-min: 180px;
   --sidenav-w-cap: 18vw;
-  --thread-w: 318px;
+  --thread-w: 360px;
   --thread-w-min: 240px;
   --thread-w-cap: 26vw;
   /* The transcript's floor, and the one floor that is itself adaptive: below

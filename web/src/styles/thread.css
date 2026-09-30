@@ -413,7 +413,7 @@
 /* Selection (wash + leading accent bar) comes from `.rail-row` in
    tokens/base.css — one definition shared with the agents and teams rails. */
 
-/* <RelayEmptyState> in a 318px rail: the component's --sp-8/--sp-7 padding
+/* <RelayEmptyState> in a 360px rail: the component's --sp-8/--sp-7 padding
    is sized for a full pane and would leave the title two words wide here. */
 .conversation-empty {
   padding: var(--sp-6) var(--sp-4);
