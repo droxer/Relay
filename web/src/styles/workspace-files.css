@@ -312,7 +312,7 @@
    the document from overflowing a pane narrower than the measure.
 
    The ceiling is in rem, not ch: `ch` resolves against each element's own
-   font-size, so a ch cap written here (15px body) silently came out ~25%
+   font-size, so a ch cap written here (16px body) silently came out ~25%
    narrower than the same number of ch in --measure-wide (declared on :root).
    rem keeps the ceiling predictable.
 
@@ -410,7 +410,7 @@
   overflow: auto;
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
-  font-size: var(--fs-3);
+  font-size: var(--fs-code);
   line-height: var(--leading-normal);
 }
 

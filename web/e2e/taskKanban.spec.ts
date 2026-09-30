@@ -1,8 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const stamp = "2026-09-01T00:00:00.000Z";
+/* The lanes live on a project's Issues tab — the global Issues route is a
+   cross-project table — so every card here belongs to one project. */
+const project = { id: "p", name: "Launch", ownerEmployeeId: "review-user", computerId: "c", enabled: true, members: [],
+  leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p", createdAt: stamp, updatedAt: stamp };
 function task(id: string, status: string, extra: Record<string, unknown> = {}) {
-  return { id, title: id, description: "", priority: "normal", status, workflowStage: status,
+  return { id, title: id, description: "", priority: "normal", status, workflowStage: status, projectId: project.id,
     ownerEmployeeId: "review-user", assignedAgentId: "agent", acceptancePolicy: "human",
     isRoutine: false, routineEnabled: false, linkedSessionIds: [], createdAt: stamp, updatedAt: stamp,
     eventCount: 1, activityCount: 0, ...extra };
@@ -28,42 +32,50 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
-    let body: any = { sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], artifacts: [], events: [], runs: [], files: [], entries: [], tasks, flowPolicy: { wipLimit: 5, scope: "employee" } };
+    let body: any = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], artifacts: [], events: [], runs: [], files: [], entries: [], tasks, flowPolicy: { wipLimit: 5, scope: "employee" } };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
-    if (method === "PATCH" && path.includes("/tasks/")) {
+    const record = tasks.find((item) => decodeURIComponent(path).endsWith(`/tasks/${item.id}`));
+    if (record && method === "PATCH") {
       const input = route.request().postDataJSON();
       writes.push({ path, body: input });
-      const id = decodeURIComponent(path.split("/").at(-1)!);
-      tasks = tasks.map((item) => item.id === id ? { ...item, status: input.action === "unblock" ? "review" : input.status, workflowStage: input.action === "unblock" ? "review" : input.status, eventCount: item.eventCount + 1 } : item);
-      body = { ...tasks.find((item) => item.id === id), events: new Array(tasks.find((item) => item.id === id)!.eventCount).fill({}), activity: [] };
+      const next = input.action === "unblock" ? "review" : input.status;
+      tasks = tasks.map((item) => item.id === record.id ? { ...item, status: next, workflowStage: next, eventCount: item.eventCount + 1 } : item);
+    }
+    if (record) {
+      const current = tasks.find((item) => item.id === record.id)!;
+      body = { ...current, events: new Array(current.eventCount).fill({}), activity: [] };
     }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/backlog");
-  const lanes = page.locator(".backlog-lane");
-  await expect(lanes).toHaveCount(5);
-  const review = page.locator('.backlog-lane[data-status="review"]');
-  const card = review.locator("article").filter({ hasText: "Blocked review" });
-  await expect(card).toContainText("Need approval");
-  await expect(card.getByRole("button", { name: "Done", exact: true })).toBeDisabled();
-  await card.getByRole("button", { name: "Blocked review", exact: true }).click();
-  const guidance = page.getByRole("region", { name: "Next steps" });
+  await openBoard(page);
+  // A blocked task keeps the lane of the stage it was blocked FROM.
+  const card = page.locator('.backlog-lane[data-status="review"] article').filter({ hasText: "Blocked review" });
+  await expect(card).toBeVisible();
+  // A tile is an ID, a title and one facts line; the blocker and every action
+  // live in the record drawer it opens.
+  await expect(card.getByRole("button")).toHaveCount(0);
+  await card.getByRole("link", { name: "Blocked review", exact: true }).click();
+  const drawer = page.getByRole("dialog");
+  const guidance = drawer.getByRole("region", { name: "Next steps" });
   await expect(guidance).toContainText("Need approval");
   await expect(guidance).toContainText("Unblock restores the previous stage");
-  await page.getByRole("button", { name: "Close drawer", exact: true }).click();
-  await card.hover();
-  await card.getByRole("button", { name: "Unblock", exact: true }).click();
-  await expect(card.getByRole("button", { name: "Done", exact: true })).toBeEnabled();
-  await card.getByRole("button", { name: "Done", exact: true }).click();
+  // Review cannot be accepted while it is blocked.
+  await expect(drawer.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
+  await drawer.getByRole("button", { name: "Unblock", exact: true }).click();
+  await drawer.getByRole("button", { name: "Done", exact: true }).click();
+  await expect.poll(() => writes.map((item) => item.body)).toEqual([{ action: "unblock" }, { status: "done" }]);
+  await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
   await expect(page.locator('.backlog-lane[data-status="done"]')).toContainText("Blocked review");
-  expect(writes.map((item) => item.body)).toEqual([{ action: "unblock" }, { status: "done" }]);
-  await expect(page.locator('.backlog-lane[data-status="assigned"] article').getByRole("button", { name: "Done", exact: true })).toBeDisabled();
+  // A Ready task was never in review, so it offers no acceptance either.
+  await page.locator('.backlog-lane[data-status="assigned"] article').getByRole("link", { name: "Queued delivery", exact: true }).click();
+  await expect(drawer.getByRole("button", { name: "Block", exact: true })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
 });
 
-/** The backlog opens as a list; the lanes live behind the view toggle. */
+/** A project's Issues tab opens as a list; the lanes live behind the view toggle. */
 async function openBoard(page: Page) {
-  await page.goto("/backlog");
-  await page.locator(".backlog-view-toggle button").first().click();
+  await page.goto("/projects/p?tab=tasks");
+  await page.getByRole("button", { name: "Board view", exact: true }).click();
   await expect(page.locator(".backlog-lane")).toHaveCount(5);
 }
 
@@ -73,7 +85,7 @@ async function mockQueuedTask(page: Page): Promise<string[]> {
   const writes: string[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: any = { tasks: [queued], sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "employee" } };
+    let body: any = { tasks: [queued], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "employee" } };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
     if (route.request().method() === "POST" && path.endsWith("/runs")) {
       writes.push("run");
@@ -129,8 +141,8 @@ test("Space on a card's checkbox selects it instead of picking the card up", asy
 
 test("the due date is picked from a calendar and kept as a day key", async ({ page }) => {
   await mockQueuedTask(page);
-  await page.goto("/backlog");
-  await page.getByRole("button", { name: "New task" }).first().click();
+  await page.goto("/issues");
+  await page.getByRole("button", { name: "New issue" }).first().click();
   const due = page.getByRole("button", { name: /^Due Pick a date$/ });
   await due.click();
   await page.getByRole("grid").getByRole("button", { name: /14/ }).first().click();

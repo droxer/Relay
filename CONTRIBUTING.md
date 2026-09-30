@@ -27,7 +27,7 @@ packages/                 TypeScript (npm workspaces)
 web/                      Next.js web UI, exported statically and served by the backend
   src/components/         Pages and UI, grouped by surface
   src/lib/                Routing, derivations, and other pure helpers
-  src/i18n/               English, Simplified Chinese, and Traditional Chinese strings
+  src/i18n/               English and Simplified Chinese strings
   tests/, e2e/            Unit tests and Playwright specs
 docs/                     Architecture, API, deployment, design system, and ADRs (docs/adr)
 script/                   User bootstrap, demo seeding, README snapshot generator

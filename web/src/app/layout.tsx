@@ -2,21 +2,17 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
 
-import "@fontsource-variable/noto-sans/index.css";
-import "@fontsource-variable/noto-sans-sc/index.css";
-import "@fontsource-variable/noto-sans-tc/index.css";
 import "../styles.css";
 
 import { InlineScript } from "../components/InlineScript";
 import { Providers } from "./providers";
 
-// UI fonts ship from version-locked Fontsource packages. Their unicode-range
-// subsets load on demand, including the SC/TC family selected by the pre-paint
-// language. Builds and browsers do not need a Google Fonts connection.
+// The reading face is the platform's own UI face (see --font-sans in
+// styles/tokens/palette.css), so no sans web font is loaded.
 
 // Technical text stays on the compact JetBrains Mono face already vendored by
-// the application. Its Latin subset is sufficient because the locale-specific
-// mono stacks retain native and Noto CJK fallbacks for Han glyphs.
+// the application. Its Latin subset is sufficient because the mono stacks
+// retain native and Noto CJK fallbacks for Han glyphs.
 const appMono = localFont({
   src: "./fonts/JetBrainsMono-Variable.woff2",
   variable: "--font-app-mono",
@@ -42,7 +38,8 @@ export const viewport: Viewport = {
 const themeScript = `(function(){try{
   var root=document.documentElement;
   var l=localStorage.getItem("relay-web.language");
-  if(l==="en"||l==="zh-CN"||l==="zh-TW")root.setAttribute("lang",l);
+  if(l==="zh-TW")l="zh-CN";
+  if(l==="en"||l==="zh-CN")root.setAttribute("lang",l);
   var t=localStorage.getItem("relay-web.theme")||"system";
   if(t==="contrast"||t==="contrast-dark"){t="system";localStorage.setItem("relay-web.theme","system");}
   var d=matchMedia("(prefers-color-scheme: dark)").matches;

@@ -102,7 +102,7 @@ describe("batch delete surface", () => {
       toast_bulk_deleted_other?: string;
     };
 
-    for (const locale of ["en", "zh-CN", "zh-TW"]) {
+    for (const locale of ["en", "zh-CN"]) {
       const path = resolve(`web/src/i18n/locales/${locale}/translation.json`);
       const translation = JSON.parse(await readFile(path, "utf8")) as {
         backlog?: BulkCopy & { select_task?: string; select_all_tasks?: string; selected_one?: string; selected_other?: string; clear_selection?: string };

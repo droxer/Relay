@@ -20,7 +20,7 @@ import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "./lib/daemonNo
 import { isEmployeeAgentRoutable, preferredRoutableAgent } from "./lib/agentDisplayNames";
 import { mentionCandidates } from "./lib/mentions";
 import { threadRoundTeam } from "./lib/messageRouting";
-import { applyTheme, readTokens, selectedEmployeeKey } from "./lib/appStorage";
+import { applyTheme, normalizeLanguage, readTokens, selectedEmployeeKey } from "./lib/appStorage";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
@@ -59,7 +59,7 @@ import {
   resolveNewThreadComputer,
   teamRosterForThread,
 } from "./lib/threadRuntime";
-import { navigateToAppPath, validatedReturnTo } from "./lib/appRoute";
+import { hrefForRoute, navigateToAppPath, validatedReturnTo } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
 
@@ -468,7 +468,7 @@ export function App() {
     if (preferencesUserId === user.id) return;
 
     const nextTheme = user.theme ?? "system";
-    const nextLanguage = user.language ?? "en";
+    const nextLanguage = normalizeLanguage(user.language);
     preferences.adopt({ theme: nextTheme, language: nextLanguage });
     applyTheme(nextTheme);
     document.documentElement.lang = nextLanguage;
@@ -548,14 +548,14 @@ export function App() {
     const projectId = routedProjectId ?? activeSession?.projectId;
     if ((route !== "projects" && route !== "main") || !projectId) return;
     if (route === "projects" && composingNew) {
-      void navigateToAppPath(`/backlog?project=${encodeURIComponent(projectId)}`, { replace: true });
+      void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`, { replace: true });
     } else if (tasksStatus === "ready" && !composingNew && activeSession
       && (routedSessionId === activeSession.id || (route === "main" && !routedSessionId))) {
       const sessionId = activeSession.id;
       const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
       if (route === "main" && taskId) return;
       const path = taskId
-        ? `/backlog/${encodeURIComponent(taskId)}/threads/${encodeURIComponent(sessionId)}?project=${encodeURIComponent(projectId)}`
+        ? `${hrefForRoute("backlog")}/${encodeURIComponent(taskId)}/threads/${encodeURIComponent(sessionId)}?project=${encodeURIComponent(projectId)}`
         : `/projects/${encodeURIComponent(projectId)}`;
       void navigateToAppPath(path, { replace: true });
     }
@@ -564,7 +564,7 @@ export function App() {
   function startNewThread(projectId: string | null = null) {
     if (projectId) {
       taskCreateIntent()?.queue();
-      void navigateToAppPath(`/backlog?project=${encodeURIComponent(projectId)}`);
+      void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`);
       return;
     }
     startComposing();

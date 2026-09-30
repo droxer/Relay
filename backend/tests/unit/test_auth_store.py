@@ -176,14 +176,42 @@ def test_database_auth_store_persists_user_preferences() -> None:
         updated = store.update_user_preferences(
             user["id"],
             theme="dark",
-            language="zh-TW",
+            language="zh-CN",
         )
 
         assert updated["theme"] == "dark"
-        assert updated["language"] == "zh-TW"
+        assert updated["language"] == "zh-CN"
 
         reopened = DatabaseUserAuthStore(database_url)
         persisted = reopened.get_user_by_id(user["id"])
         assert persisted is not None
         assert persisted["theme"] == "dark"
-        assert persisted["language"] == "zh-TW"
+        assert persisted["language"] == "zh-CN"
+
+
+def test_retired_traditional_chinese_preference_is_rejected_and_reads_as_simplified() -> None:
+    with TemporaryDirectory() as root:
+        database_url = f"sqlite:///{root}/auth.db"
+        store = DatabaseUserAuthStore(database_url, create_schema=True)
+        user = store.create_user("alice", "kestrel-vault-7719")
+
+        with pytest.raises(ValueError, match="language must be en or zh-CN"):
+            store.update_user_preferences(user["id"], language="zh-TW")  # type: ignore[arg-type]
+
+        # A row written while Traditional Chinese was still offered.
+        engine = create_engine(database_url)
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE auth_users SET language = 'zh-TW'"))
+        engine.dispose()
+
+        persisted = DatabaseUserAuthStore(database_url).get_user_by_id(user["id"])
+        assert persisted is not None
+        assert persisted["language"] == "zh-CN"
+
+
+def test_normalize_user_language_falls_back_to_the_default() -> None:
+    assert auth_module.normalize_user_language("en") == "en"
+    assert auth_module.normalize_user_language("zh-CN") == "zh-CN"
+    assert auth_module.normalize_user_language("zh-TW") == "zh-CN"
+    assert auth_module.normalize_user_language("fr") == "en"
+    assert auth_module.normalize_user_language(None) == "en"

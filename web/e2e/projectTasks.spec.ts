@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const mobile of [false, true]) {
-  test(`project general and tasks board (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+  test(`project general and issues board (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
     const project = { id: "launch", name: "Autumn launch", description: "Ship the autumn release: landing page, pricing, and notes.",
@@ -43,8 +43,8 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-general-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
-    // Tasks is the backlog board itself, fixed to this project.
-    await page.getByRole("tab", { name: "Tasks", exact: true }).click();
+    // The Issues tab is the board itself, fixed to this project.
+    await page.getByRole("tab", { name: "Issues", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=tasks$/);
     const board = page.locator(".backlog-page--project");
     await expect(board).toBeVisible();
@@ -58,10 +58,10 @@ for (const mobile of [false, true]) {
     await board.getByRole("button", { name: "List view", exact: true }).click();
 
     // A new task is created into this project without choosing one.
-    await board.getByRole("button", { name: "New task", exact: true }).first().click();
-    const form = page.getByRole("dialog", { name: "New task", exact: true });
+    await board.getByRole("button", { name: "New issue", exact: true }).first().click();
+    const form = page.getByRole("dialog", { name: "New issue", exact: true });
     await form.getByRole("textbox", { name: "Title", exact: true }).fill("Prepare release notes");
-    await form.getByRole("button", { name: "Create task", exact: true }).click();
+    await form.getByRole("button", { name: "Create issue", exact: true }).click();
     await expect(form).toHaveCount(0);
     expect(created[0]).toMatchObject({ title: "Prepare release notes", projectId: "launch" });
 
@@ -72,7 +72,7 @@ for (const mobile of [false, true]) {
     await page.getByRole("tab", { name: "Files", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=files$/);
     // The modal drawer hides the page beneath it; the board's tab stays chosen.
-    await expect(page.getByRole("tab", { name: "Tasks", exact: true, includeHidden: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Issues", exact: true, includeHidden: true })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: `test-results/project-task-record-${mobile ? "mobile" : "desktop"}.png` });
 
     // A deep link to a record's tab lands on the same drawer.
@@ -103,25 +103,25 @@ test("creating the first project preserves a global task draft", async ({ page }
     }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/backlog");
-  await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
-  const taskForm = page.getByRole("dialog", { name: "New task", exact: true });
+  await page.goto("/issues");
+  await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New issue", exact: true }).click();
+  const taskForm = page.getByRole("dialog", { name: "New issue", exact: true });
   await taskForm.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
   await taskForm.getByRole("button", { name: "Create project", exact: true }).click();
   const projectForm = page.getByRole("dialog", { name: "Start a new project", exact: true });
-  await projectForm.getByRole("textbox").fill("First project");
+  await projectForm.getByRole("textbox", { name: "Project name", exact: true }).fill("First project");
   await projectForm.getByRole("combobox", { name: "Computer", exact: true }).click();
   await page.getByRole("option", { name: "Work computer", exact: true }).click();
   await projectForm.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(projectForm).toHaveCount(0);
   await expect(taskForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Keep this draft");
   await expect(taskForm.getByRole("combobox", { name: "Projects", exact: true })).toContainText("First project");
-  await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
+  await taskForm.getByRole("button", { name: "Create issue", exact: true }).click();
   await expect(page.locator("#backlog-panel").getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
 });
 
 for (const mobile of [false, true]) {
-  test(`task thread stays in Tasks (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+  test(`issue thread stays in Issues (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
     const project = { id: "p", name: "Launch", ownerEmployeeId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
@@ -138,23 +138,32 @@ for (const mobile of [false, true]) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.goto("/projects/p/threads/s");
-    await expect(page).toHaveURL(/\/backlog\/t\/threads\/s\?project=p$/);
+    await expect(page).toHaveURL(/\/issues\/t\/threads\/s\?project=p$/);
     await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
     await expect(page.locator("#chat-panel")).toBeVisible();
     await expect(mobile ? page.locator(".mobile-topbar-title") : page.getByRole("heading", { name: "Release discussion" })).toHaveText("Release discussion");
     await expect(page.locator("#thread-panel")).toHaveCount(0);
-    const back = page.getByRole(mobile ? "button" : "link", { name: "Back to task", exact: true });
-    if (!mobile) await expect(back).toHaveAttribute("href", "/backlog/t?project=p");
+    /* The desktop header states the project as a mark and offers no back link
+       — the issue is one browser-back away and named in the thread's origin
+       line. The phone's top bar keeps one, because the rail is off screen. */
+    const back = page.getByRole("button", { name: "Back to issue", exact: true });
+    const projectMark = page.getByRole("link", { name: "Project: Launch", exact: true });
     await page.reload();
-    await expect(back).toBeVisible();
-    expect((await page.locator("#chat-panel > .record-band").boundingBox())!.height).toBeLessThan(120);
+    if (mobile) await expect(back).toBeVisible();
+    else {
+      await expect(projectMark).toHaveAttribute("href", "/projects/p");
+      await expect(page.getByRole("link", { name: "Back to issue", exact: true })).toHaveCount(0);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/task-thread-${mobile ? "mobile" : "desktop"}.png` });
-    await back.click();
-    await expect(page).toHaveURL(/\/backlog\/t\?project=p$/);
+    if (mobile) await back.click();
+    else await page.goto("/issues/t?project=p");
+    await expect(page).toHaveURL(/\/issues\/t\?project=p$/);
     await expect(page.getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
+    // Opened from the record, the conversation lands in Threads; only an
+    // existing nested deep link keeps the issue route.
     await page.getByRole("link", { name: "Open thread", exact: true }).click();
-    await expect(page).toHaveURL(/\/backlog\/t\/threads\/s/);
+    await expect(page).toHaveURL(/\/threads\/s$/);
     await expect(mobile ? page.locator(".mobile-topbar-title") : page.getByRole("heading", { name: "Release discussion" })).toHaveText("Release discussion");
     await page.goto("/threads");
     const row = page.locator(".conversation-row").filter({ hasText: "Release discussion" });
@@ -171,7 +180,7 @@ for (const mobile of [false, true]) {
     if (mobile) await page.getByRole("button", { name: "Threads", exact: true }).click();
     await expect(row.locator(".conversation-project")).toBeVisible();
     await page.goto("/projects/p/new");
-    await expect(page).toHaveURL(/\/backlog\?project=p$/);
+    await expect(page).toHaveURL(/\/issues\?project=p$/);
   });
 }
 
@@ -204,7 +213,8 @@ test("renaming without a runtime node recovers from a concurrent project edit", 
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/projects/edit-project");
-  await page.getByRole("button", { name: "Project settings", exact: true }).click();
+  // The header and the identity rail both offer it; either opens the same editor.
+  await page.getByRole("button", { name: "Project settings", exact: true }).first().click();
   const editor = page.getByRole("dialog", { name: "Project settings", exact: true });
   await editor.getByRole("textbox", { name: "Project name", exact: true }).fill("My project name");
   await editor.getByRole("button", { name: "Save project", exact: true }).click();

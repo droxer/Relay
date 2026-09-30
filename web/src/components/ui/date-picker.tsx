@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { enUS, zhCN, zhTW } from "react-day-picker/locale"
+import { enUS, zhCN } from "react-day-picker/locale"
 
 import { cn } from "@/lib/utils"
 import { dateFromKey } from "@/lib/dateKey"
@@ -11,7 +11,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ActionCalendar, ActionRemove, ICON } from "@/components/icons"
 
-const DAY_PICKER_LOCALES = { en: enUS, "zh-CN": zhCN, "zh-TW": zhTW } as const
+const DAY_PICKER_LOCALES = { en: enUS, "zh-CN": zhCN } as const
 
 function formatDay(date: Date, language: string): string {
   return new Intl.DateTimeFormat(language, { year: "numeric", month: "short", day: "numeric" }).format(date)

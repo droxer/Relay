@@ -57,11 +57,20 @@ PW_HASH_ALGORITHM = "pbkdf2_sha256"
 PW_HASH_ITERATIONS = 600_000
 UserRole = Literal["admin", "user"]
 UserTheme = Literal["light", "dark", "system"]
-UserLanguage = Literal["en", "zh-CN", "zh-TW"]
+UserLanguage = Literal["en", "zh-CN"]
 USER_THEMES: tuple[UserTheme, ...] = ("light", "dark", "system")
-USER_LANGUAGES: tuple[UserLanguage, ...] = ("en", "zh-CN", "zh-TW")
+USER_LANGUAGES: tuple[UserLanguage, ...] = ("en", "zh-CN")
 DEFAULT_USER_THEME: UserTheme = "system"
 DEFAULT_USER_LANGUAGE: UserLanguage = "en"
+# Traditional Chinese was retired. A preference stored while it existed reads
+# back as Simplified Chinese instead of dropping the reader to English.
+_RETIRED_USER_LANGUAGES: dict[str, UserLanguage] = {"zh-TW": "zh-CN"}
+
+
+def normalize_user_language(value: Any) -> UserLanguage:
+    """Map any stored language value onto one the product still ships."""
+    language = _RETIRED_USER_LANGUAGES.get(value, value) if isinstance(value, str) else value
+    return language if language in USER_LANGUAGES else DEFAULT_USER_LANGUAGE
 _AUTH_LOCKS: dict[str, RLock] = {}
 _AUTH_LOCKS_GUARD = RLock()
 _BOOTSTRAP_ADVISORY_LOCK_ID = 7_362_959_917_925_924_673
@@ -445,7 +454,7 @@ class UserAuthStore:
             "employeeId": user.get("employeeId"),
             "displayName": user.get("displayName"),
             "theme": user.get("theme", DEFAULT_USER_THEME),
-            "language": user.get("language", DEFAULT_USER_LANGUAGE),
+            "language": normalize_user_language(user.get("language")),
             "createdAt": user["createdAt"],
         }
 
@@ -1184,7 +1193,7 @@ def database_user_to_row(
         "role": user["role"],
         "employee_id": employee_pk,
         "theme": user.get("theme", DEFAULT_USER_THEME),
-        "language": user.get("language", DEFAULT_USER_LANGUAGE),
+        "language": normalize_user_language(user.get("language")),
         "password_hash": user["passwordHash"],
         "created_at": _parse_iso(user["createdAt"]),
         "updated_at": _parse_iso(user["updatedAt"]),
@@ -1271,7 +1280,7 @@ def row_to_database_user(row: Any) -> dict[str, Any]:
         "role": row["role"],
         "employeeId": str(row["employee_id"]) if row["employee_id"] else None,
         "theme": row["theme"],
-        "language": row["language"],
+        "language": normalize_user_language(row["language"]),
         "passwordHash": row["password_hash"],
         "createdAt": _format_iso(row["created_at"]),
         "updatedAt": _format_iso(row["updated_at"]),
@@ -1286,7 +1295,7 @@ def _validate_user_preferences(
     if theme is not None and theme not in USER_THEMES:
         raise ValueError("theme must be light, dark, or system.")
     if language is not None and language not in USER_LANGUAGES:
-        raise ValueError("language must be en, zh-CN, or zh-TW.")
+        raise ValueError("language must be en or zh-CN.")
 
 
 def database_session_to_row(

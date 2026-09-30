@@ -134,7 +134,7 @@ export function TeamsPage({
                The two facts a row carried under column headers (name, status)
                read positionally here, as they do on every other rail. */
             /* Compact density: a roster rail is a list layout, so names sit
-               one rung down (16 → 15px) against their 13px meta — scoped to
+               one rung down (16 → 15px) against their 12px meta — scoped to
                the list, as on the agent roster, so the detail pane beside it
                keeps its record density. */
             <ul className="teams-list" data-density="compact" aria-label={t("teams.title")}>

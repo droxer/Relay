@@ -8,7 +8,6 @@ import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 const LANGUAGES: { code: Language; label: string; native: string }[] = [
   { code: "en",    label: "English",            native: "English"   },
   { code: "zh-CN", label: "Simplified Chinese", native: "简体中文"   },
-  { code: "zh-TW", label: "Traditional Chinese",native: "繁體中文"   },
 ];
 
 const THEME_VALUES: Theme[] = ["light", "dark", "system"];
@@ -16,7 +15,6 @@ const THEME_VALUES: Theme[] = ["light", "dark", "system"];
 const LANGUAGE_BADGES: Record<Language, string> = {
   en: "EN",
   "zh-CN": "简",
-  "zh-TW": "繁",
 };
 
 /* Bespoke rather than an icons.tsx export, deliberately: this is a filled disc

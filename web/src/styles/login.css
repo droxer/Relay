@@ -185,7 +185,7 @@
 .login-point-mark {
   flex: none;
   /* Nudged onto the first line's baseline box — a 14px square glyph sits
-     high against 13px text set at --leading-normal. */
+     high against 14px text set at --leading-normal. */
   translate: 0 2px;
   /* Muted ink, not --lg-accent: the cobalt on this screen is the CTA and
      nothing else, so a decorative marker must not spend it. */

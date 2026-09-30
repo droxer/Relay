@@ -60,7 +60,7 @@ const longThreadEvents = Array.from({ length: 12 }, (_, turn) => {
   ];
 }).flat();
 
-async function openPage(browser: Browser, path: string, touch: boolean, layout?: Record<string, string>, thread?: Record<string, unknown>): Promise<Page> {
+async function openPage(browser: Browser, path: string, touch: boolean, layout?: Record<string, string>, thread?: Record<string, unknown>, fixtures?: Record<string, unknown>): Promise<Page> {
   const context = await browser.newContext(touch
     ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }
     : { viewport: { width: 1440, height: 900 } });
@@ -75,7 +75,7 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [], projects: [], sandboxes: [], skills: [] };
+    let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [], projects: [], sandboxes: [], skills: [], ...fixtures };
     if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     if (pathname.endsWith("/threads/review-thread")) body = { ...session, ...thread };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -139,12 +139,14 @@ test("composer agent picker fits its content at phone width", async ({ browser }
 for (const touch of [false, true]) {
   test(`filter bar controls share one height${touch ? " on touch" : ""}`, async ({ browser }) => {
     const page = await openPage(browser, "/routines", touch);
-    // The chip row's "Add filter" trigger sits on the same rung as the search and sort.
-    const controls = [".backlog-filter-search-wrap", ".list-sort-menu", '.backlog-filter-chips [data-slot="popover-trigger"]'];
+    // The chip row's "Add filter" trigger sits on the same rung as the search
+    // and sort. The sort menu is the narrow layout's control: above 820px the
+    // column headers sort and it is not drawn at all.
+    const controls = [".backlog-filter-search-wrap", ...(touch ? [".list-sort-menu"] : []), '.backlog-filter-chips [data-slot="popover-trigger"]'];
     for (const selector of controls) await expect(page.locator(selector).first()).toBeVisible();
     const heights = await Promise.all(controls.map((selector) =>
       page.locator(selector).first().evaluate((element) => element.getBoundingClientRect().height)));
-    expect(heights, controls.join(" / ")).toEqual([heights[0], heights[0], heights[0]]);
+    expect(heights, controls.join(" / ")).toEqual(controls.map(() => heights[0]));
     // The search frame is a fixed height; its field must not spill out of it.
     expect(await overhang(page, ".backlog-filter-search-wrap")).toBeLessThanOrEqual(0);
     const [frame, field] = await Promise.all([".backlog-filter-search-wrap", ".backlog-filter-search"].map((selector) =>
@@ -327,14 +329,20 @@ function clippedChildren(page: Page, selector: string) {
   });
 }
 
-test("a backlog card keeps its action buttons inside the card on touch", async ({ browser }) => {
-  /* The coarse-pointer block in a11y.css raises every action icon to the 44px
-     touch target. That is the right call on its own, but the card's foot row
-     was sized for the smaller desktop icons, so the enlarged row ran past a
-     card that is overflow:hidden and the trailing button was sliced. The rule
-     that exists to make targets reachable was making the last one unreachable,
-     on every card, in the only layout where it applies. */
-  const page = await openPage(browser, "/backlog", true);
+test("a board card keeps its controls inside the card on touch", async ({ browser }) => {
+  /* The coarse-pointer block in a11y.css raises every control to the 44px
+     touch target. That is the right call on its own, but a card is
+     overflow:hidden and sized for the smaller desktop controls, so an enlarged
+     row can run past it and be sliced — the rule that exists to make targets
+     reachable making one unreachable, in the only layout where it applies.
+
+     The lanes live on a project's Issues tab, behind the view toggle; the
+     global Issues route is a table and draws no cards. */
+  const project = { id: "p", name: "Launch", ownerEmployeeId: "review-user", computerId: "c", enabled: true, members: [],
+    leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p", createdAt: stamp, updatedAt: stamp };
+  const page = await openPage(browser, "/projects/p?tab=tasks", true, undefined, undefined,
+    { projects: [project], tasks: [{ ...task, projectId: project.id }] });
+  await page.getByRole("button", { name: "Board view", exact: true }).click();
   await expect(page.locator(".backlog-task").first()).toBeVisible();
   const clipped = await clippedChildren(page, ".backlog-task");
   expect(clipped, JSON.stringify(clipped)).toEqual([]);
@@ -349,12 +357,15 @@ test("dragging the thread rail moves the rail, and stops where CSS stops it", as
      declared on :root and never saw the width AppShell writes inline.
 
      Two things have to hold at once. The rail must land on its ceiling — at
-     1300px that is the 26vw cap (338), not the 480px absolute maximum — and
-     the stored width must not exceed what CSS will render, or the handle
+     1600px that is the 26vw cap (416), not the 480px absolute maximum — and
+     the viewport has to be wide enough that the 360px default starts BELOW
+     that cap, or there is no room to drag into and "it moved" proves nothing.
+     And the stored width must not exceed what CSS will render, or the handle
      climbs away from the edge it is dragging and the gesture feels broken
      while every number still reads correctly. */
   const page = await openPage(browser, "/threads/review-thread", false, { "relay-web.sidenavExpanded": "true" });
-  await page.setViewportSize({ width: 1300, height: 900 });
+  const viewportWidth = 1600;
+  await page.setViewportSize({ width: viewportWidth, height: 900 });
   const handle = page.locator(".thread-panel-resize").first();
   await expect(handle).toBeVisible();
 
@@ -370,7 +381,7 @@ test("dragging the thread rail moves the rail, and stops where CSS stops it", as
 
   const after = await railWidth();
   expect(after).toBeGreaterThan(before);           // it moved at all
-  expect(after).toBe(Math.round(0.26 * 1300));     // and stopped at the viewport cap
+  expect(after).toBe(Math.round(0.26 * viewportWidth)); // and stopped at the viewport cap
 
   // The handle rides the rail's edge, not the pointer: past the ceiling the
   // pointer keeps going and the handle must not.

@@ -293,7 +293,7 @@ export function AgentsPage({
           //
           // Compact density stays on each band's list: a 318px roster rail is
           // a list layout, so names sit one rung down (16 → 15px) beside their
-          // 13px meta — the same treatment the backlog and admin tables get.
+          // 12px meta — the same treatment the backlog and admin tables get.
           <div className="agents-roster-groups">
             {agentGroups.map((group) => {
               const label = group.label ?? t("agents_page.group_unplaced");

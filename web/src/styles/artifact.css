@@ -107,7 +107,7 @@
 .artifact-diff {
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
-  font-size: var(--fs-3);
+  font-size: var(--fs-code);
   line-height: var(--leading-normal);
   overflow-x: auto;
   color: var(--ink-1);
@@ -166,7 +166,7 @@
   border-radius: var(--r-2);
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
-  font-size: var(--fs-3);
+  font-size: var(--fs-code);
   line-height: var(--leading-normal);
   white-space: pre-wrap;
   overflow-x: auto;

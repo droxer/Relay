@@ -4,13 +4,12 @@ import { initReactI18next } from "react-i18next";
 import en from "./locales/en/translation.json";
 
 /* English is bundled: it is the default and the fallback, so it must be there
-   before the first paint. The Chinese catalogues are ~24 KB gzipped each and
-   were bundled too, so every user downloaded and parsed two languages they
-   were not reading. They now load when a user switches to one — callers
-   already await changeLanguage, which resolves once the catalogue arrives. */
+   before the first paint. The Chinese catalogue is ~24 KB gzipped and was
+   bundled too, so every user downloaded and parsed a language they might not
+   be reading. It now loads when a user switches to it — callers already await
+   changeLanguage, which resolves once the catalogue arrives. */
 const LAZY_CATALOGUES: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
   "zh-CN": () => import("./locales/zh-CN/translation.json"),
-  "zh-TW": () => import("./locales/zh-TW/translation.json"),
 };
 
 void i18n
@@ -22,7 +21,7 @@ void i18n
   .init({
     lng: "en",
     fallbackLng: "en",
-    supportedLngs: ["en", "zh-CN", "zh-TW"],
+    supportedLngs: ["en", "zh-CN"],
     resources: { en: { translation: en } },
     // Keep the bundled English without asking the backend for it again.
     partialBundledLanguages: true,

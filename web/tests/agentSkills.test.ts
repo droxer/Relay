@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 
 describe("agent skills on the agent record", () => {
   it("ships the skills copy in every locale", async () => {
-    for (const locale of ["en", "zh-CN", "zh-TW"]) {
+    for (const locale of ["en", "zh-CN"]) {
       const raw = await readFile(resolve(`web/src/i18n/locales/${locale}/translation.json`), "utf8");
       const json = JSON.parse(raw);
       assert.equal(typeof json.agents_page.tab_skills, "string", `${locale} missing agents_page.tab_skills`);
@@ -52,7 +52,7 @@ describe("agent skills on the agent record", () => {
     const api = await readFile(resolve("web/src/api.ts"), "utf8");
     assert.match(api, /\/skills\/\$\{encodeURIComponent\(skillId\)\}\/files\?path=/);
 
-    for (const locale of ["en", "zh-CN", "zh-TW"]) {
+    for (const locale of ["en", "zh-CN"]) {
       const json = JSON.parse(await readFile(resolve(`web/src/i18n/locales/${locale}/translation.json`), "utf8"));
       for (const key of ["preview_kicker", "preview_loading", "preview_truncated", "preview_revision"]) {
         assert.equal(typeof json.skills[key], "string", `${locale} missing skills.${key}`);

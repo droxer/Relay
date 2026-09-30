@@ -57,7 +57,7 @@ const buttonVariants = cva(
         default:
           "h-(--control-h) gap-1.5 px-6 has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
         /* The text tier climbs with the size tier: xs 12px (caption) → dense, sm and
-           default 13px (the source system's button-md, the base `text-xs`).
+           default 14px (the source system's button-md, the base `text-xs`).
            Every tier takes the CONTROL radius (--r-2, 6px) from the base, not
            a pill: see the radii block in palette.css for why this app squares
            off the brand's lozenge. These tiers restate it only to win the
@@ -72,7 +72,7 @@ const buttonVariants = cva(
            label typography. Replaces the old `.adm-form-actions` descendant
            override so footer buttons are styled explicitly.
 
-           Shares `default`'s 13px/700 label and differs from it by padding
+           Shares `default`'s 14px/700 label and differs from it by padding
            alone — in this system the button label is ALREADY the bold tier
            (the source system's button-md is 14px/700), so a commit action cannot
            emphasise itself by getting heavier. It leads through the cobalt

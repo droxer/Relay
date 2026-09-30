@@ -51,7 +51,7 @@
    list page carries. */
 
 .conversation-list {
-  /* The rail carries data-density="compact" for TYPE (13px names, 12px meta)
+  /* The rail carries data-density="compact" for TYPE (14px names, 12px meta)
      and takes its row rhythm straight from that scope. It used to restate
      --sp-row here because compact's 8px left a two-line row's name and meta
      touching their own edges; compact is 12px now, which is the value this
@@ -210,7 +210,7 @@
   flex: 1;
   overflow: hidden;
   color: var(--ink-1);
-  /* Same 13px/700 list-rail identity as the thread rows it contains. */
+  /* Same 14px/700 list-rail identity as the thread rows it contains. */
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   text-overflow: ellipsis;
@@ -273,7 +273,7 @@
 }
 
 /* Nested threads are subordinate to the folder, so they give up the 600
-   weight to it — the label role's 500 at the same 13px rung. The step down
+   weight to it — the label role's 500 at the same 14px rung. The step down
    marks "subordinate", not "unimportant". */
 .project-folder-threads .conversation-name strong {
   color: var(--ink-2);
@@ -428,7 +428,7 @@
 }
 
 /* The full row's second line: status, agent marks, offline badge. One
-   13px label-voiced line, and no hue at all — the tone is drawn once, by the
+   14px label-voiced line, and no hue at all — the tone is drawn once, by the
    pip leading the title above it, and a status word in warn ink would read
    as running text anyway (design-system.md status fill rules). */
 .conversation-subline {
@@ -527,7 +527,7 @@
 .conversation-name strong {
   min-width: 0;
   color: var(--ink-1);
-  /* List-rail identity: 13px/700, one rung under --type-name. A rail of
+  /* List-rail identity: 14px/700, one rung under --type-name. A rail of
      16px bold titles reads shouty at 318px — and CJK glyphs at 16px bold
      more so — so rows here wear the strong-label role and let weight, not
      size, separate title from meta. */

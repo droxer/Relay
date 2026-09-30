@@ -151,7 +151,6 @@ test("the eager bundle ships no markdown pipeline, syntax grammars or unused loc
     "highlight.js": "highlightAuto",
     remark: "micromark",
     "zh-CN catalogue": "每人在制上限",
-    "zh-TW catalogue": "每人在製上限",
   }).filter(([, signature]) => eager.includes(signature)).map(([name]) => name);
   expect(leaked, "modules found in the eager bundle").toEqual([]);
 
@@ -169,6 +168,6 @@ test("a Chinese-language user still gets the lazily loaded catalogue", async ({ 
       : { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/backlog");
-  await expect(page.getByRole("heading", { name: "暂无任务" })).toBeVisible();
+  await page.goto("/issues");
+  await expect(page.getByRole("heading", { name: "没有未完成的议题" })).toBeVisible();
 });

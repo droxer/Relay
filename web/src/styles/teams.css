@@ -162,7 +162,7 @@
   border: 0;
   background: transparent;
   color: var(--ink-1);
-  /* Same 13px/700 list-rail identity as the agent roster and thread rail. */
+  /* Same 14px/700 list-rail identity as the agent roster and thread rail. */
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   text-align: left;
