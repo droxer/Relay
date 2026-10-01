@@ -35,13 +35,16 @@ export function AgentPlacementBadge({
 
   return (
     <Tooltip content={detailTitle}>
+      {/* A computer's name is what someone called their machine, not an
+          identifier, so it reads in the sans like every other name; the id
+          stays monospaced where it is shown (node cards, the copy field). */}
       <Badge
-        className="agent-placement-badge code"
+        className="agent-placement-badge"
         data-ownership={description.ownership}
       >
         <StateMark tone={placementStatusTone(status)} />
         <OwnershipIcon size={ICON.sm} aria-hidden="true" />
-        <span className="agent-placement-badge-name code" translate="no">
+        <span className="agent-placement-badge-name" translate="no">
           {description.nodeName}
         </span>
         <span className="sr-only">{statusLabel}</span>

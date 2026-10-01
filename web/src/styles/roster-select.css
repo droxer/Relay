@@ -6,7 +6,7 @@
 
 /* Roster tabs pinned at the top of the picker popup. Agents and teams are two
    rosters, so the popup switches between them instead of stacking both into
-   one scroll. Same segmented-control language as .workspace-page-tabs —
+   one scroll. Same segmented-control language as .backlog-view-toggle —
    line-1 border, gapless segments, surface-0 active fill — sized to the popup
    and split evenly so neither roster reads as the primary one. A surface that
    can only offer one roster renders no strip at all. */

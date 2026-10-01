@@ -55,7 +55,7 @@ export function EmployeeComputers({
           >
             <NodePresence node={node} t={t} />
             <OwnershipMark size={ICON.sm} className="adm-node-chip-mark" aria-hidden="true" />
-            <span className="adm-computer-chip-name code" translate="no">
+            <span className="adm-computer-chip-name" translate="no">
               {node.displayName || node.id}
             </span>
           </Badge>
