@@ -1,14 +1,15 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { listControlPanelDaemonNodes } from "../src/api";
 import { useLocalDaemonNodes } from "../src/hooks/useLocalDaemonNodes";
 import { useThreadDirectory } from "../src/hooks/useThreadDirectory";
 import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "../src/lib/daemonNodes";
-import type { DaemonNodeMonitorRecord, RelaySession } from "../src/types";
+import type { ControlPanelDaemonNodeRecord, DaemonNodeMonitorRecord, RelaySession } from "../src/types";
 
 vi.mock("../src/api", () => ({ listControlPanelDaemonNodes: vi.fn() }));
+beforeEach(() => { vi.mocked(listControlPanelDaemonNodes).mockReset(); });
 
 const nodes: DaemonNodeMonitorRecord[] = [];
 const projects: [] = [];
@@ -22,14 +23,15 @@ function renderDirectory(enabled: boolean) {
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   const view = renderHook(({ query }) => {
-    const { localNodes } = useLocalDaemonNodes(enabled);
+    const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(enabled);
     // The same query -> node merge -> directory chain used by App.
     const visibleNodes = useMemo(() => mergeVisibleDaemonNodes(nodes, localNodes), [localNodes]);
     const runtimeNodes = useMemo(() => mergeThreadRuntimeNodes(nodes, localNodes), [localNodes]);
-    return useThreadDirectory({
+    const directory = useThreadDirectory({
       route: "main", myThreads: threads, projects, routedProjectId: null,
       threadQuery: query, tasks, visibleNodes, runtimeNodes, logicalAgents,
     });
+    return { ...directory, refreshLocalDaemonNodes };
   }, { wrapper, initialProps: { query: "" } });
   return { ...view, client };
 }
@@ -57,8 +59,33 @@ it("keeps the directory usable after local-node discovery fails", async () => {
   vi.mocked(listControlPanelDaemonNodes).mockRejectedValue(new Error("Unavailable"));
   const view = renderDirectory(true);
   await waitFor(() => expect(view.client.getQueryState(["relay", "control-panel-nodes"])?.status).toBe("error"));
-  act(() => view.rerender({ query: "A thread" }));
+  view.rerender({ query: "A thread" });
   expect(view.result.current.directoryThreads).toHaveLength(1);
+  view.unmount();
+  view.client.clear();
+});
+
+it("applies discovered runs and keeps them visible if a later refresh fails", async () => {
+  const node = {
+    id: "computer", employeeId: "employee", status: "ready", online: true, stale: false,
+    activeRuns: [{ sessionId: "thread", agent: "codex" }],
+  } as ControlPanelDaemonNodeRecord;
+  vi.mocked(listControlPanelDaemonNodes).mockResolvedValue({ nodes: [] });
+  const view = renderDirectory(true);
+  await waitFor(() => expect(view.client.getQueryState(["relay", "control-panel-nodes"])?.status).toBe("success"));
+  expect(view.result.current.directoryThreads[0].runningAgent).toBeUndefined();
+
+  vi.mocked(listControlPanelDaemonNodes).mockResolvedValue({ nodes: [node] });
+  await act(async () => {
+    expect(await view.result.current.refreshLocalDaemonNodes()).toEqual([node]);
+  });
+  await waitFor(() => expect(view.result.current.directoryThreads[0].runningAgent).toBe("codex"));
+
+  vi.mocked(listControlPanelDaemonNodes).mockRejectedValue(new Error("Unavailable"));
+  await act(async () => {
+    expect(await view.result.current.refreshLocalDaemonNodes()).toEqual([]);
+  });
+  expect(view.result.current.directoryThreads[0].runningAgent).toBe("codex");
   view.unmount();
   view.client.clear();
 });
