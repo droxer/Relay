@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Card,
@@ -23,6 +23,7 @@ interface TopEmployeesProps {
 
 export function TopEmployees({ employees, nodes, ranked, error, className }: TopEmployeesProps) {
   const { t } = useTranslation();
+  const titleId = useId();
 
   const rows = useMemo(() => {
     const nodeCountByEmployee = new Map<string, number>();
@@ -49,14 +50,16 @@ export function TopEmployees({ employees, nodes, ranked, error, className }: Top
   return (
     <Card render={<section />} className={className}>
       <CardHeader>
-        <CardTitle render={<h2 />}>{t("admin.v2.dash_top_title")}</CardTitle>
+        <CardTitle render={<h2 id={titleId} />}>{t("admin.v2.dash_top_title")}</CardTitle>
       </CardHeader>
       {error ? (
         <CardDescription>{error}</CardDescription>
       ) : rows.length === 0 ? (
         <CardDescription>{t("admin.v2.dash_top_empty")}</CardDescription>
       ) : (
-        <ol className="adm-dash-top-list">
+        // The panel caps its height, so the list scrolls; a scroller with no
+        // focusable content is unreachable by keyboard without a tab stop.
+        <ol className="adm-dash-top-list" tabIndex={0} aria-labelledby={titleId}>
           {rows.map((row, index) => (
             <li key={row.id} className="adm-dash-top-row">
               <span className="adm-dash-top-rank tnum">{index + 1}</span>

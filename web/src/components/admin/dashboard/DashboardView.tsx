@@ -10,6 +10,7 @@ import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
 import { TokenUsageChart } from "./TokenUsageChart";
 import { TopEmployees } from "./TopEmployees";
+import { formatCompact } from "../../../lib/compactNumber";
 
 interface DashboardViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
@@ -143,15 +144,4 @@ function compareTrend(current: number, prior: number): Trend {
     direction: diff > 0 ? "up" : "down",
     label: `${pct > 0 ? "+" : ""}${pct}%`,
   };
-}
-
-// Compact notation earns its keep on token counts (2.7M) but throws away
-// precision on the numbers an operator actually reads back — 1,041 threads
-// became "1K". Group below 100k, compact above.
-const COMPACT_THRESHOLD = 100_000;
-
-function formatCompact(value: number, locale: string): string {
-  return value < COMPACT_THRESHOLD
-    ? new Intl.NumberFormat(locale).format(value)
-    : new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }

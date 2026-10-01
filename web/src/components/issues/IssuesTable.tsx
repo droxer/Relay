@@ -141,7 +141,7 @@ export function IssuesTable({
                   />
                 </TableCell>
                 <TableCell className="code task-col-ref backlog-row-ref" translate="no">{taskRef(task.id)}</TableCell>
-                <TableCell className="max-w-md whitespace-normal">
+                <TableCell className="task-col-title">
                   <div className="backlog-row-lead-main">
                     <a className="backlog-row-title" href={hrefForTaskRecord(task.id)} onClick={(event) => openIssue(event, task.id)}>
                       {task.title}

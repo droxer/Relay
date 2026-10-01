@@ -540,6 +540,16 @@
   .msg-system {
     grid-template-columns: 20px minmax(0, 1fr) auto;
   }
+
+  /* At phone width a command overran the ~240px column and was cut
+     mid-string (`rg "status = 'exporting'" bi`) — a horizontal scroller whose
+     overlay scrollbar never shows on touch, so nothing said there was more.
+     Wrapped, the whole command is on screen; the collapse toggle still caps
+     a long body's height. */
+  .agent-command code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* System rows that carry an artifact render the card itself. */

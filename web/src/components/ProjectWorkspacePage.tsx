@@ -160,7 +160,7 @@ function ProjectIdentityRail({
   const { t } = useTranslation();
   const { Icon: ComputerIcon } = computer;
   return (
-    <aside className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
+    <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
       <div className="workspace-dossier-portrait">
         <span className="project-rail-mark" aria-hidden="true">
           <NavProjects size={ICON.xl} />
@@ -213,7 +213,7 @@ function ProjectIdentityRail({
           {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
         </Badge>
       </div>
-    </aside>
+    </section>
   );
 }
 

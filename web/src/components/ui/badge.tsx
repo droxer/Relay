@@ -32,11 +32,16 @@ const badgeVariants = cva(
            exactly the drift the primitive exists to prevent. 35 is the kept
            value: at 30 the cooler info and warning edges start dissolving into
            the row divider in the light theme, and the badge loses its shape. */
-        neutral: "border-hairline bg-surface-strong text-ink",
-        success: "border-success/35 bg-background text-success",
-        info: "border-info/35 bg-background text-info",
-        warning: "border-warning/35 bg-background text-warning",
-        danger: "border-danger/35 bg-background text-danger",
+        /* Flat: a tint, not an outline. A toned edge around a toned word was
+           two marks for one fact, and a row of status pills read as a row of
+           little boxes. The fill carries the shape; the transparent border
+           keeps the box model identical so nothing shifts. 8%, not 10%: on the
+           canvas (--surface-0) a 10% green tint put --ok text at 4.49:1. */
+        neutral: "border-transparent bg-surface-strong text-ink",
+        success: "border-transparent bg-success/8 text-success",
+        info: "border-transparent bg-info/8 text-info",
+        warning: "border-transparent bg-warning/8 text-warning",
+        danger: "border-transparent bg-danger/8 text-danger",
         /* Chrome only — the caller's own stylesheet owns the border colour and
            ink. For badges whose tone scale is richer than the five semantic
            ones above: a routine's schedule health runs live → overdue → due →

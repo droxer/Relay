@@ -153,7 +153,11 @@ export function ComputerCard({
         </div>
       </header>
 
-      <section className="computer-card-activity" aria-label={t("computer.now_running")}>
+      {/* Unnamed sections on purpose: each opens with an <h3> under the card's
+          <h2>, which already places it. Naming them made every card on the
+          page add the same three "Now running" / "Runtimes" / "Details"
+          landmarks, none of them tellable apart. */}
+      <section className="computer-card-activity">
         <h3 className="computer-card-section-title">
           {t("computer.now_running")}
           {activeRuns.length > 0 ? (
@@ -208,7 +212,7 @@ export function ComputerCard({
       </section>
 
       <div className="computer-card-body">
-        <section className="computer-card-panel" aria-label={t("admin.v2.node_runtimes")}>
+        <section className="computer-card-panel">
           <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
           {runtimes.length === 0 ? (
             <p className="computer-card-idle">{t("admin.v2.node_hosted_agents_empty")}</p>
@@ -221,7 +225,7 @@ export function ComputerCard({
           )}
         </section>
 
-        <section className="computer-card-panel" aria-label={t("computer.details")}>
+        <section className="computer-card-panel">
           <h3 className="computer-card-section-title">{t("computer.details")}</h3>
           <dl className="computer-fact-list">
             <Fact label={t("computer.fact_workspace")}>

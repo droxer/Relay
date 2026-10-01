@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import type { TokenUsageState } from "../../../hooks/useTokenUsage";
 import { formatChartDate } from "../../../lib/chartDate";
+import { formatCompact } from "../../../lib/compactNumber";
 import { Badge } from "@/components/ui/badge";
 
 const WIDTH = 720;
@@ -128,9 +129,10 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
       </CardHeader>
       <CardDescription>
         {t("admin.v2.dash_tokens_summary", {
-          input: numberFormat.format(visibleTotals.input),
-          output: numberFormat.format(visibleTotals.output),
-          cache: numberFormat.format(visibleTotals.cache),
+          // Same voice as the KPI tile above it (36.9M), not 16,280,000.
+          input: formatCompact(visibleTotals.input, i18n.language),
+          output: formatCompact(visibleTotals.output, i18n.language),
+          cache: formatCompact(visibleTotals.cache, i18n.language),
         })}
       </CardDescription>
       <svg

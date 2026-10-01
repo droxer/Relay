@@ -269,3 +269,26 @@
     min-height: 0;
   }
 }
+
+/* Same idea for the 16px checkbox and radio: their ::after already reaches
+   44px tall, but only 24px wide, so a thumb landing beside the box missed it
+   in every task table's select column. Widen the pseudo-element on touch —
+   the 16px drawing, and the column it sits in, stay as they are. */
+@media (pointer: coarse) {
+  [data-slot="checkbox"]::after,
+  [data-slot="radio-group-item"]::after {
+    inset-inline: -14px;
+  }
+
+  /* In a table the cell has to hold that area too: the select column hugged
+     its 16px box, so the widened hit area ran under the scroller's clipped
+     edge on one side and under the title link on the other. A 44px column
+     with the box centred keeps every pixel of it tappable. */
+  td:has(> [data-slot="checkbox"]),
+  th:has(> [data-slot="checkbox"]) {
+    width: var(--touch-target);
+    min-width: var(--touch-target);
+    padding-inline: 0;
+    text-align: center;
+  }
+}

@@ -65,21 +65,22 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-/* Segmented tabs — same segmented-control language as .backlog-view-toggle
-   (line-1 border, gapless segments, surface-0 active fill), but tab-sized:
-   34px min-height with type-label-strong instead of 28px icon buttons.
-   Scoped under .workspace-page so these beat the shared atelier.css
-   selectors (higher specificity) and restore layout/hover/active treatment
-   removed when legacy tab CSS was deleted. */
+/* Section tabs — flat underline, not a segmented control. These switch the
+   page's sections (Profile / Skills / Activities); they are navigation, and a
+   bordered track with a raised active chip dressed them as a toggle. The
+   genuine toggles (.backlog-view-toggle, the roster picker) keep the
+   segmented language. The rail carries one hairline the tabs sit on; the
+   active tab's 2px rule overlaps it. Scoped under .workspace-page so these
+   beat the shared atelier.css selectors. */
 .workspace-page .workspace-page-tabs {
   display: inline-flex;
   align-items: stretch;
-  gap: 0;
+  gap: var(--sp-5);
   max-width: 100%;
-  padding: var(--sp-0-5);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .workspace-page .workspace-page-tab {
@@ -88,18 +89,18 @@
   justify-content: center;
   gap: var(--sp-2);
   min-height: var(--control-h-sm);
-  padding: 0 var(--sp-4);
+  padding: 0;
   border: 0;
-  border-radius: calc(var(--r-2) - 2px);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-3);
   cursor: pointer;
   font: var(--type-label-strong);
   white-space: nowrap;
   transition:
-    background var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
+    border-color var(--t-fast) var(--ease);
 }
 
 .workspace-page .workspace-page-tab:hover {
@@ -108,9 +109,8 @@
 
 .workspace-page .workspace-page-tab[aria-selected="true"],
 .workspace-page .workspace-page-tab.is-active {
-  background: var(--surface-0);
   color: var(--ink-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-1);
+  border-bottom-color: var(--ink-1);
 }
 
 .workspace-page .workspace-page-tab[aria-selected="true"] .workspace-page-tab-count,

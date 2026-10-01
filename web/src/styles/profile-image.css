@@ -159,6 +159,24 @@
   color: var(--err);
 }
 
+/* A destructive control at rest made every read-only glance at an agent or
+   team look like an edit form. Where the pointer can hover, it waits for the
+   picker to be hovered or to hold focus; touch keeps it, having no hover to
+   wait for. The change badge stays — it is how the image says it is
+   editable at all. Opacity, not display, so it stays in the tab order and
+   :focus-within can reveal it. */
+@media (hover: hover) and (pointer: fine) {
+  .profile-image-picker-remove {
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+
+  .profile-image-picker:hover .profile-image-picker-remove,
+  .profile-image-picker:focus-within .profile-image-picker-remove {
+    opacity: 1;
+  }
+}
+
 .profile-image-picker-error {
   position: absolute;
   top: calc(100% + var(--sp-3));

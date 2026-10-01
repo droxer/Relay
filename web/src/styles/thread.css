@@ -738,11 +738,14 @@
   color: var(--ink-4);
 }
 
-/* Project identity stays legible beside the task origin, even in narrow rails. */
+/* Project identity stays legible beside the task origin, even in narrow rails.
+   No fixed share: a 50% cap truncated "Platform Infrastructure" beside a
+   two-word status with half the row still empty. The status segment is
+   flex: none, so the chip is what gives when the row runs short — and it
+   gives only then. */
 .conversation-project {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 50%;
   color: var(--ink-2);
 }
 

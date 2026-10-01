@@ -89,6 +89,11 @@
     "archive_project": "无法归档项目。请刷新后重试。"
   },
   "skip_to_content": "跳至内容",
+  "route_not_found": {
+    "title": "页面未找到",
+    "body": "此地址在 Relay 中没有对应的页面。请检查链接，或返回会话列表。",
+    "home": "前往会话"
+  },
   "nav": {
     "threads": "对话",
     "workspace": "工作区",

@@ -887,8 +887,12 @@ html[data-theme="light"] {
 
   /* --action / --action-hover / --on-action are register-invariant (declared
      once on :root) — cobalt reads on both canvases without retuning. Only
-     the soft callout tint changes weight here. */
-  --action-soft: color-mix(in srgb, #0064e0 15%, transparent);
+     the soft callout tint changes weight here. 10%, not 15%: at 15% every
+     selected row, active nav item and section-rail entry was a saturated blue
+     block, and beside the leading accent bar that already marks the selection
+     it read as a second, louder indicator. The flat register lets the bar
+     lead and the wash only confirm it. */
+  --action-soft: color-mix(in srgb, #0064e0 10%, transparent);
 
   /* Light status — the same three hues, deepened until each clears 4.5:1 as
      small text on the worst plane here (--surface-2). The source system's own values
