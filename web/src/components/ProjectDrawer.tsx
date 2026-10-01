@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
@@ -28,15 +28,7 @@ function projectDraftKey(name: string, description: string, computerId: string):
 /* Project settings: the record's identity (name, description, computer) and its danger
    zone. The crew is managed on the project profile page itself — adding and
    editing members lives next to the member cards it changes, not in setup. */
-export function ProjectDrawer({
-  open,
-  computers,
-  project,
-  onClose,
-  onSaved,
-  onDeleted,
-  layer,
-}: {
+type ProjectDrawerProps = {
   open: boolean;
   computers: DaemonNodeMonitorRecord[];
   project?: ProjectRecord | null;
@@ -44,21 +36,34 @@ export function ProjectDrawer({
   onSaved: (project: ProjectRecord) => void;
   onDeleted?: () => void;
   layer?: number;
-}) {
+};
+
+export function ProjectDrawer(props: ProjectDrawerProps) {
+  const [opening, setOpening] = useState({ open: props.open, generation: 0 });
+  if (opening.open !== props.open) {
+    setOpening({ open: props.open, generation: opening.generation + (props.open ? 1 : 0) });
+  }
+  // A new opening adopts the latest record; polls within an opening keep its draft and base revision.
+  const generation = opening.generation + (props.open && !opening.open ? 1 : 0);
+  return <ProjectDrawerBody key={`${props.project?.id ?? "new"}:${generation}`} {...props} />;
+}
+
+function ProjectDrawerBody({ open, computers, project, onClose, onSaved, onDeleted, layer }: ProjectDrawerProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const { createProjectMutation, updateProjectMutation, archiveProjectMutation, deleteProjectMutation } = useRelayMutations();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [computerId, setComputerId] = useState("");
+  const [name, setName] = useState(project?.name ?? "");
+  const [description, setDescription] = useState(project?.description ?? "");
+  const [computerId, setComputerId] = useState(() => project
+    ? computers.find((computer) => stableComputerId(computer) === project.computerId)?.id ?? ""
+    : "");
   const [nameError, setNameError] = useState<string | null>(null);
   const [computerError, setComputerError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const computerTriggerRef = useRef<HTMLButtonElement>(null);
   const computerLabelId = useId();
-  const initializedKeyRef = useRef<string | null>(null);
-  const initialDraftKeyRef = useRef(projectDraftKey("", "", ""));
-  const initialProjectRef = useRef(project);
+  const [initialDraftKey] = useState(() => projectDraftKey(name, description, computerId));
+  const [initialProject] = useState(project);
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
   const projectComputers = useMemo(
     () => computers.filter((computer) => computer.capabilities?.includes("project-workspaces")),
@@ -79,39 +84,8 @@ export function ProjectDrawer({
     : project?.computerId ?? "";
   const busy = createProjectMutation.isPending || updateProjectMutation.isPending || archiveProjectMutation.isPending || deleteProjectMutation.isPending || projectSave.pending;
 
-  useEffect(() => {
-    if (!open) {
-      initializedKeyRef.current = null;
-      return;
-    }
-    const initializationKey = project?.id ?? "new";
-    if (initializedKeyRef.current === initializationKey) return;
-    initializedKeyRef.current = initializationKey;
-    initialProjectRef.current = project;
-    projectSave.resetError();
-    if (!project) {
-      reset();
-      initialDraftKeyRef.current = projectDraftKey("", "", "");
-      return;
-    }
-    setName(project.name);
-    setDescription(project.description ?? "");
-    setComputerId(projectRuntimeNodeId);
-    setNameError(null);
-    setComputerError(null);
-    initialDraftKeyRef.current = projectDraftKey(project.name, project.description ?? "", projectRuntimeNodeId);
-  }, [open, project, projectRuntimeNodeId]);
-  const hasUnsavedChanges = initializedKeyRef.current !== null
-    && projectDraftKey(name, description, computerId) !== initialDraftKeyRef.current;
+  const hasUnsavedChanges = projectDraftKey(name, description, computerId) !== initialDraftKey;
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
-
-  function reset() {
-    setName("");
-    setDescription("");
-    setComputerId("");
-    setNameError(null);
-    setComputerError(null);
-  }
 
   async function requestClose() {
     if (busy) return;
@@ -134,7 +108,7 @@ export function ProjectDrawer({
     /* The brief rides the request only when it says something new, so a
        rename never rewrites a description it did not touch. */
     const nextDescription = description.trim();
-    const base = initialProjectRef.current ?? project;
+    const base = initialProject ?? project;
     const descriptionChanged = nextDescription !== (base?.description ?? "").trim();
     try {
       const result = project
@@ -209,7 +183,6 @@ export function ProjectDrawer({
       width="form"
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
-      onClosed={reset}
     >
       <form className="adm-form project-setup-form" onSubmit={(event) => void submit(event)} noValidate>
         <div className="project-setup-basics-grid">

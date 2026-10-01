@@ -5,7 +5,7 @@ import { reconcileExecution, retryExecutionRecovery } from "./api";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logout } from "./api";
-import type { AgentName, AgentTeam, EmployeeAgent, RelayArtifact, RelaySession } from "./types";
+import type { AgentName, AgentTeam, CollaborationStyle, EmployeeAgent, RelayArtifact, RelaySession } from "./types";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
@@ -29,6 +29,7 @@ import { useRelayStore } from "./lib/store";
 import { useHandoffStore } from "./lib/handoffStore";
 import { useComposerTargetStore } from "./lib/composerTargetStore";
 import { useThreadSendStore } from "./lib/threadSendStore";
+import { useStableCallback as useStableEvent } from "./hooks/useStableCallback";
 import { useAuthSession } from "./hooks/useAuthSession";
 import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
@@ -49,7 +50,7 @@ import { AppShell, RouteFallback } from "./components/AppShell";
 import { ThreadsView } from "./components/ThreadsView";
 import type { ComposerHandle } from "./components/composer/Composer";
 import type { DerivedMessage } from "./components/MessageBlock";
-import { ProjectMessagesAccumulator } from "./lib/projectMessages";
+import { useProjectedMessages } from "./hooks/useProjectedMessages";
 import type { AppRoute } from "./lib/viewTypes";
 import { visibleThreadArtifacts } from "./lib/threadArtifacts";
 import {
@@ -83,14 +84,6 @@ const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string
   admin: "admin-panel",
 };
 
-function useStableEvent<TArgs extends unknown[], TResult>(handler: (...args: TArgs) => TResult): (...args: TArgs) => TResult {
-  const handlerRef = useRef(handler);
-  useEffect(() => {
-    handlerRef.current = handler;
-  });
-  return useCallback((...args: TArgs) => handlerRef.current(...args), []);
-}
-
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export function App() {
@@ -109,10 +102,8 @@ export function App() {
   const selectedEmployee = useRelayStore((s) => s.selectedEmployee);
   const setSelectedEmployee = useRelayStore((s) => s.setSelectedEmployee);
   const selectedSessionId = useRelayStore((s) => s.selectedSessionId);
-  const setSelectedSessionId = useRelayStore((s) => s.setSelectedSessionId);
   const tokens = useRelayStore((s) => s.tokens);
   const setTokens = useRelayStore((s) => s.setTokens);
-  const [hydrated, setHydrated] = useState(false);
   const openSession = useRelayStore((s) => s.openSession);
   const startComposing = useRelayStore((s) => s.startComposing);
   const clearSelection = useRelayStore((s) => s.clearSelection);
@@ -124,13 +115,12 @@ export function App() {
   // Who the composer addresses. A team picked while staging a brand-new thread
   // is cleared the moment an existing thread opens or the pick is sent; a
   // project thread talks to the whole roster until one member is picked.
-  const activeAgent = useComposerTargetStore((s) => s.activeAgent);
-  const activeLogicalAgentId = useComposerTargetStore((s) => s.activeLogicalAgentId);
+  const chosenExecutor = useComposerTargetStore((s) => s.activeAgent);
+  const chosenAgentId = useComposerTargetStore((s) => s.activeLogicalAgentId);
   const pendingThreadTeamId = useComposerTargetStore((s) => s.pendingThreadTeamId);
   const projectRoomTarget = useComposerTargetStore((s) => s.projectRoomTarget);
   const newThreadNodeId = useComposerTargetStore((s) => s.newThreadNodeId);
   const setNewThreadNodeId = useComposerTargetStore((s) => s.setNewThreadNodeId);
-  const setActiveTarget = useComposerTargetStore((s) => s.setActiveTarget);
   const pickAgent = useComposerTargetStore((s) => s.pickAgent);
   const pickTeam = useComposerTargetStore((s) => s.pickTeam);
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
@@ -139,12 +129,13 @@ export function App() {
   // their message without waiting for the provision + run round-trip. It is
   // hidden once the persisted turn arrives (matched by id for a continued
   // session, or by text for the goal of a freshly created one).
-  const pendingUserMessage = useThreadSendStore((s) => s.pendingUserMessage);
+  const pendingEcho = useThreadSendStore((s) => s.pendingUserMessage);
   const isRunning = useThreadSendStore((s) => s.dispatching);
   const dropPendingMessage = useThreadSendStore((s) => s.dropPendingMessage);
   const [threadQuery, setThreadQuery] = useState("");
   const { user, authChecked, setUser } = useAuthSession();
   const mounted = useClientMounted();
+  const hydrated = authChecked && mounted;
   const panels = usePanelLayout(mounted);
   const preferences = useUserPreferences({
     mounted,
@@ -157,8 +148,12 @@ export function App() {
   const { teams } = useTeams(user?.employeeId);
   const localNodeAdoptionStartedRef = useRef(false);
   const [preferencesUserId, setPreferencesUserId] = useState<string | null>(null);
+  const [preferencesOwner, setPreferencesOwner] = useState(user?.id ?? null);
+  if (preferencesOwner !== (user?.id ?? null)) {
+    setPreferencesOwner(user?.id ?? null);
+    setPreferencesUserId(null);
+  }
   const composerRef = useRef<ComposerHandle>(null);
-  const messageProjectorRef = useRef(new ProjectMessagesAccumulator());
   const messageOperationIdsRef = useRef(new Map<string, string>());
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
 
@@ -239,8 +234,9 @@ export function App() {
 
   const applySessionFromHash = useCallback((sessionId: string) => {
     clearPendingTeam();
+    pickRoom();
     openSession(sessionId);
-  }, [clearPendingTeam, openSession]);
+  }, [clearPendingTeam, openSession, pickRoom]);
 
   const setComposingNewFromPath = useCallback((next: boolean) => {
     if (next) startComposing();
@@ -288,11 +284,6 @@ export function App() {
   const projectDispatchDisabled = Boolean(
     activeProject && (activeProject.archivedAt || !activeProject.enabled),
   );
-  // Narrowing a round to one member is a per-thread choice, not a standing
-  // preference: opening another thread (or another project) starts at the room.
-  useEffect(() => {
-    pickRoom();
-  }, [activeProject?.id, activeSession?.id, pickRoom]);
   // Recovery (rerun / handoff) repairs a team's own work, so in a team thread
   // it answers only the team's members, exactly as a project thread answers
   // only its own. A new round is different: the thread is pinned to a computer,
@@ -318,6 +309,9 @@ export function App() {
   const composerLogicalAgents = activeProject
     ? effectiveSelectableLogicalAgents
     : selectableLogicalAgents;
+  const activeTarget = preferredRoutableAgent(composerLogicalAgents, chosenAgentId);
+  const activeLogicalAgentId = activeTarget?.id ?? null;
+  const activeAgent = activeTarget?.executorKind ?? chosenExecutor;
   const threadMentionCandidates = useMemo(
     () => mentionCandidates(composerLogicalAgents),
     [composerLogicalAgents],
@@ -378,22 +372,18 @@ export function App() {
     [visibleNodes, activeSession?.id],
   );
   const activeRun = activeRunOwner?.run;
+  const messages = useProjectedMessages(activeSession, t);
+  const pendingUserMessage = pendingEcho && !messages.some(
+    (message) => message.kind === "user" && (message.id === pendingEcho.id || message.text === pendingEcho.text),
+  ) ? pendingEcho : null;
   const threadRunning = isThreadRunInFlight({
     activeRun,
     session: activeSession,
     pendingSend: pendingUserMessage !== null,
     dispatchingRun: isRunning,
   });
-  const messages = useMemo<DerivedMessage[]>(
-    () => messageProjectorRef.current.update(activeSession, t),
-    [activeSession, t],
-  );
   const displayMessages = useMemo<DerivedMessage[]>(() => {
     if (!pendingUserMessage) return messages;
-    const present = messages.some(
-      (m) => m.kind === "user" && (m.id === pendingUserMessage.id || m.text === pendingUserMessage.text),
-    );
-    if (present) return messages;
     return [
       ...messages,
       { kind: "user", id: pendingUserMessage.id, timestamp: new Date().toISOString(), text: pendingUserMessage.text },
@@ -403,14 +393,6 @@ export function App() {
   // Declared after displayMessages: the pin re-runs on block count and
   // session id, both of which are derived above.
   const transcript = useTranscriptPin(displayMessages.length, activeSession?.id);
-
-  useEffect(() => {
-    if (!pendingUserMessage) return;
-    const present = messages.some(
-      (m) => m.kind === "user" && (m.id === pendingUserMessage.id || m.text === pendingUserMessage.text),
-    );
-    if (present) dropPendingMessage();
-  }, [dropPendingMessage, messages, pendingUserMessage]);
 
   const activeThreadLabel = showProjectOverview && activeProject
     ? activeProject.name
@@ -425,7 +407,7 @@ export function App() {
     if (route === "main" || route === "projects") return mobileView === "threads" ? "#thread-panel" : "#chat-panel";
     if (route === "agents" && agentId) return "#agent-detail-panel";
     return `#${WORK_ROUTE_SKIP_IDS[route]}`;
-  }, [agentId, route, mobileView, notFound, showProjectOverview, showProjectDirectoryEmpty, isTaskThread]);
+  }, [agentId, route, mobileView, notFound, showProjectOverview, isTaskThread]);
 
   const awaitingDecision = useMemo(() => isAwaitingFeedbackDecision(activeSession), [activeSession]);
 
@@ -458,30 +440,30 @@ export function App() {
     refreshWithToken,
   });
 
+  const { invalidate: invalidatePreferences, adopt: adoptPreferences } = preferences;
   useEffect(() => {
-    preferences.invalidate(user?.id ?? null);
-  }, [user?.id]);
+    invalidatePreferences(user?.id ?? null);
+  }, [invalidatePreferences, user?.id]);
 
   useEffect(() => {
     if (!mounted) return;
-    if (!user) {
-      setPreferencesUserId(null);
-      return;
-    }
+    if (!user) return;
     if (preferencesUserId === user.id) return;
 
     const nextTheme = user.theme ?? "system";
     const nextLanguage = normalizeLanguage(user.language);
-    preferences.adopt({ theme: nextTheme, language: nextLanguage });
+    adoptPreferences({ theme: nextTheme, language: nextLanguage });
     applyTheme(nextTheme);
     document.documentElement.lang = nextLanguage;
     const languageChange = i18n.language === nextLanguage
       ? Promise.resolve()
       : i18n.changeLanguage(nextLanguage);
+    let cancelled = false;
     void languageChange
-      .catch(() => undefined)
-      .finally(() => setPreferencesUserId(user.id));
-  }, [i18n, mounted, preferencesUserId, user]);
+      .catch((error: unknown) => console.error("[relay] language change failed", error))
+      .finally(() => { if (!cancelled) setPreferencesUserId(user.id); });
+    return () => { cancelled = true; };
+  }, [adoptPreferences, i18n, mounted, preferencesUserId, user]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -491,8 +473,7 @@ export function App() {
     // shows the current employee's own work (never another employee's).
     const myEmployeeId = user?.employeeId ?? user?.username ?? "";
     if (myEmployeeId) setSelectedEmployee(myEmployeeId);
-    setHydrated(true);
-  }, [authChecked, user]);
+  }, [authChecked, user, setTokens, setSelectedEmployee]);
   // Adoption reads /api/v1/admin/daemon-nodes, which is admin-only: running it for every
   // signed-in user meant a 403 on each load whose failure was swallowed. Gate
   // it exactly like the query it depends on (useLocalDaemonNodes above).
@@ -511,12 +492,6 @@ export function App() {
       localStorage.removeItem(selectedEmployeeKey);
     }
   }, [selectedEmployee, hydrated]);
-  useEffect(() => {
-    const selected = composerLogicalAgents.length === 0
-      ? undefined
-      : preferredRoutableAgent(composerLogicalAgents, activeLogicalAgentId);
-    setActiveTarget(selected ?? null);
-  }, [activeLogicalAgentId, composerLogicalAgents, setActiveTarget]);
   // Keep the handoff target routable as the thread's roster changes.
   useEffect(() => {
     if (effectiveSelectableLogicalAgents.length === 0) return;
@@ -539,6 +514,7 @@ export function App() {
     }
     dropPendingMessage();
     clearPendingTeam();
+    pickRoom();
     openSession(sessionId);
     if (taskId) space.setThreadListHidden(false);
     syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId,
@@ -570,6 +546,7 @@ export function App() {
       void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`);
       return;
     }
+    pickRoom();
     startComposing();
     dropPendingMessage();
     // Same rule as the staging effect: a pick survives a heartbeat flap, and
@@ -581,6 +558,7 @@ export function App() {
   }
 
   function selectProject(projectId: string | null) {
+    pickRoom();
     setComposingNew(false);
     dropPendingMessage();
     clearSelection();
@@ -638,6 +616,7 @@ export function App() {
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
     threadRunning, requiresRuntimeSelection, projectDispatchDisabled,
     effectiveSelectableLogicalAgents,
+    composerLogicalAgents,
     threadMentionCandidates, composerTeams,
     selectedEmployee, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
@@ -648,7 +627,7 @@ export function App() {
     reportMutationError, t,
   });
 
-  const handleComposerSend = useStableEvent((style?: import("./types").CollaborationStyle) => sendMessage(style));
+  const handleComposerSend = useStableEvent((style?: CollaborationStyle) => sendMessage(style));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
@@ -828,7 +807,6 @@ export function App() {
             taskThread={isTaskThread}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}
-            teams={teams}
             currentUser={user}
             filteredThreads={directoryThreads}
             projects={route === "projects" ? directoryProjects : []}

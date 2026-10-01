@@ -11,7 +11,7 @@ import { canCancelThreadRun, threadCancelNodeId } from "../lib/threadRunning";
 import { resolveThreadMessageAddress, threadMessageInput, threadMessageOperationKey, threadRoundTeam } from "../lib/messageRouting";
 import { formatDispatchError } from "../lib/agentReadiness";
 import { rerunAssignmentForSession } from "../lib/workflow";
-import { isEmployeeAgentRoutable } from "../lib/agentDisplayNames";
+import { isEmployeeAgentRoutable, preferredRoutableAgent } from "../lib/agentDisplayNames";
 import { useHandoffStore } from "../lib/handoffStore";
 import { useComposerTargetStore } from "../lib/composerTargetStore";
 import { useRelayStore } from "../lib/store";
@@ -49,6 +49,7 @@ export interface ThreadDispatchDeps {
 
   /* --- who can be addressed (the pick itself is in useComposerTargetStore) */
   effectiveSelectableLogicalAgents: EmployeeAgent[];
+  composerLogicalAgents?: EmployeeAgent[];
   threadMentionCandidates: Parameters<typeof resolveThreadMessageAddress>[0]["candidates"];
   composerTeams: AgentTeam[];
 
@@ -90,6 +91,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
     threadRunning, requiresRuntimeSelection, projectDispatchDisabled,
     effectiveSelectableLogicalAgents,
+    composerLogicalAgents = effectiveSelectableLogicalAgents,
     threadMentionCandidates, composerTeams,
     selectedEmployee, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
@@ -109,8 +111,11 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     }
     // Read at send time: who the composer addresses and whether a new thread
     // is being staged live in their stores, not in this hook's props.
-    const { activeAgent, activeLogicalAgentId, pendingThreadTeamId, projectRoomTarget } =
+    const { activeAgent: chosenExecutor, activeLogicalAgentId: chosenAgentId, pendingThreadTeamId, projectRoomTarget } =
       useComposerTargetStore.getState();
+    const activeTarget = preferredRoutableAgent(composerLogicalAgents, chosenAgentId);
+    const activeLogicalAgentId = activeTarget?.id ?? null;
+    const activeAgent = activeTarget?.executorKind ?? chosenExecutor;
     const { composingNew } = useRelayStore.getState();
     // When staging a new thread, always create; otherwise continue the
     // open one. composingNew forces a fresh owner-scoped session here.
@@ -136,7 +141,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       && composerTeams.some((team) => team.id === roundTeam.addressTeamId)
       ? roundTeam.addressTeamId
       : null;
-    let goal = raw;
+    const goal = raw;
     let newThreadAgentIds: string[] | undefined;
     // A project round addresses the whole roster unless the composer (or a
     // mention) names one member — the backend expands whichever it is given.
@@ -232,6 +237,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       // A staged team became the new thread's own team; a team picked in a
       // started thread stays the target for its next round too.
       if (!sessionId) useComposerTargetStore.getState().clearPendingTeam();
+      if (activeSession?.id !== done.id) useComposerTargetStore.getState().pickRoom();
       useRelayStore.getState().openSession(done.id);
       syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id);
       if (messageOperationKey) {

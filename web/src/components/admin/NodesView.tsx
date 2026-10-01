@@ -278,7 +278,6 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
         ),
       },
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, toggleSort]);
 
   const filtered = useMemo(() => {

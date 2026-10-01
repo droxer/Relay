@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
@@ -63,14 +63,7 @@ function rosterPayload(project: ProjectRecord) {
   }));
 }
 
-export function ProjectMemberEditor({
-  open,
-  member,
-  project,
-  agents,
-  computers,
-  onClose,
-}: {
+type ProjectMemberEditorProps = {
   open: boolean;
   /** Null member = add mode; an existing member = edit mode. */
   member: ProjectMember | null;
@@ -78,20 +71,39 @@ export function ProjectMemberEditor({
   agents: EmployeeAgent[];
   computers: DaemonNodeMonitorRecord[];
   onClose: () => void;
-}) {
+};
+
+export function ProjectMemberEditor(props: ProjectMemberEditorProps) {
+  const [opening, setOpening] = useState({ open: props.open, generation: 0 });
+  if (opening.open !== props.open) {
+    setOpening({ open: props.open, generation: opening.generation + (props.open ? 1 : 0) });
+  }
+  const generation = opening.generation + (props.open && !opening.open ? 1 : 0);
+  return <ProjectMemberEditorBody key={`${props.project.id}:${props.member?.agentId ?? "new"}:${generation}`} {...props} />;
+}
+
+function ProjectMemberEditorBody({ open, member, project, agents, computers, onClose }: ProjectMemberEditorProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const { updateProjectMutation } = useRelayMutations();
-  const [draft, setDraft] = useState<MemberDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<MemberDraft>(() => member
+    ? {
+        agentId: member.agentId,
+        role: member.role,
+        responsibilities: member.responsibilities,
+        instructions: member.instructions ?? "",
+        enabled: member.enabled,
+        lead: member.agentId === project.leadAgentId,
+      }
+    : { ...EMPTY_DRAFT, lead: project.members.length === 0 });
   const [leadError, setLeadError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [responsibilitiesError, setResponsibilitiesError] = useState<string | null>(null);
   const agentTriggerRef = useRef<HTMLButtonElement>(null);
   const responsibilitiesRef = useRef<HTMLTextAreaElement>(null);
-  const initializedKeyRef = useRef<string | null>(null);
-  const initialProjectRef = useRef(project);
+  const [initialProject] = useState(project);
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync, Object.fromEntries(agents.map((agent) => [agent.id, agent.displayName])));
-  const initialDraftKeyRef = useRef(draftKey(EMPTY_DRAFT));
+  const [initialDraftKey] = useState(() => draftKey(draft));
   const agentLabelId = useId();
   const roleLabelId = useId();
 
@@ -121,34 +133,7 @@ export function ProjectMemberEditor({
 
   const busy = updateProjectMutation.isPending || projectSave.pending;
 
-  useEffect(() => {
-    if (!open) {
-      initializedKeyRef.current = null;
-      return;
-    }
-    const initializationKey = member ? `${project.id}:${member.agentId}` : `${project.id}:new`;
-    if (initializedKeyRef.current === initializationKey) return;
-    initializedKeyRef.current = initializationKey;
-    initialProjectRef.current = project;
-    projectSave.resetError();
-    const initial = member
-      ? {
-          agentId: member.agentId,
-          role: member.role,
-          responsibilities: member.responsibilities,
-          instructions: member.instructions ?? "",
-          enabled: member.enabled,
-          lead: member.agentId === project.leadAgentId,
-        }
-      : { ...EMPTY_DRAFT, lead: project.members.length === 0 };
-    setDraft(initial);
-    setLeadError(null);
-    setAgentError(null);
-    setResponsibilitiesError(null);
-    initialDraftKeyRef.current = draftKey(initial);
-  }, [open, member, project.id, project.version, project.leadAgentId, project.members.length]);
-
-  const dirty = initializedKeyRef.current !== null && draftKey(draft) !== initialDraftKeyRef.current;
+  const dirty = draftKey(draft) !== initialDraftKey;
   const confirmDiscard = useUnsavedChangesGuard(open && dirty && !busy);
 
   function patch(patchDraft: Partial<MemberDraft>) {
@@ -191,7 +176,7 @@ export function ProjectMemberEditor({
       ...(draft.instructions.trim() ? { instructions: draft.instructions.trim() } : {}),
       enabled: draft.enabled,
     };
-    const baseProject = initialProjectRef.current;
+    const baseProject = initialProject;
     const base = rosterPayload(baseProject);
     const members = member
       ? base.map((item) => (item.agentId === member.agentId ? payload : item))
@@ -222,7 +207,7 @@ export function ProjectMemberEditor({
       tone: "danger",
     });
     if (!accepted) return;
-    const baseProject = initialProjectRef.current;
+    const baseProject = initialProject;
     const members = rosterPayload(baseProject).filter((item) => item.agentId !== member.agentId);
     const leadAgentId = baseProject.leadAgentId === member.agentId
       ? members.find((item) => item.enabled)?.agentId ?? null

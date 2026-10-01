@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 
 /**
  * Keeps a derived value's identity stable while its content key is unchanged.
@@ -11,9 +11,10 @@ import { useRef } from "react";
  * effects downstream stop firing on every poll.
  */
 export function useStableValue<T>(value: T, signature: string): T {
-  const held = useRef<{ signature: string; value: T }>({ signature, value });
-  if (held.current.signature !== signature) {
-    held.current = { signature, value };
+  const [held, setHeld] = useState(() => ({ signature, value }));
+  if (held.signature !== signature) {
+    setHeld({ signature, value });
+    return value;
   }
-  return held.current.value;
+  return held.value;
 }

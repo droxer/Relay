@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
 import type { ProjectRecord } from "../types";
 import { matchesThreadQuery, reuseThreadItems, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
@@ -62,14 +62,13 @@ export function useThreadDirectory({
   // Items are rebuilt whenever any input moves — a node or task poll — but a
   // row is memoized on its item, so each unchanged item keeps its previous
   // object. Without this every row re-rendered on every poll.
-  const previousItems = useRef<ThreadItem[]>([]);
-  const threadItems = useMemo<ThreadItem[]>(() => {
+  const candidates = useMemo<ThreadItem[]>(() => {
     const runningBy = new Map(
       visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run.agent] as const)),
     );
     const projectNames = new Map(projects.map(project => [project.id, project.name]));
     const agentsById = new Map(logicalAgents.map((agent) => [agent.id, agent]));
-    const next = reuseThreadItems(previousItems.current, myThreads.map((session) => ({
+    return myThreads.map((session) => ({
       session,
       runningAgent: runningBy.get(session.id),
       nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
@@ -81,10 +80,14 @@ export function useThreadDirectory({
       participants: (session.participantAgentIds ?? [])
         .map((agentId) => agentsById.get(agentId))
         .filter((agent): agent is DirectoryAgent => Boolean(agent)),
-    })));
-    previousItems.current = next;
-    return next;
+    }));
   }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins, projects]);
+
+  const [held, setHeld] = useState(() => ({ candidates, items: candidates }));
+  const threadItems = held.candidates === candidates
+    ? held.items
+    : reuseThreadItems(held.items, candidates);
+  if (held.candidates !== candidates) setHeld({ candidates, items: threadItems });
 
   const filteredThreads = useMemo(
     () => threadItems.filter((item) => matchesThreadQuery(item.session, threadQuery)

@@ -238,7 +238,6 @@ export function EmployeeGroupTable({
         },
       },
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, onSort]);
 
   const table = useReactTable({

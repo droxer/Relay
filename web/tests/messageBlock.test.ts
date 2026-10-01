@@ -807,3 +807,18 @@ describe("logical agent identity in the transcript", () => {
     assert.deepEqual(rerun, { agent: "claude", agentId: "agt_zoe" });
   });
 });
+
+
+describe("isolated incremental projections", () => {
+  it("does not let a discarded projection contaminate the committed transcript", () => {
+    const base = { id: "isolated", taskGoal: "Goal", createdAt: timestamp, events: [] } as unknown as RelaySession;
+    const committed = new ProjectMessagesAccumulator();
+    const initial = committed.update(base, t);
+    const discarded = committed.advance({ ...base, events: [{ id: "aborted", sessionId: base.id, type: "user.message", timestamp, text: "Discard me" }] }, t);
+    assert.equal(discarded.messages.length, 2);
+    assert.strictEqual(committed.update(base, t), initial);
+    const next = committed.advance({ ...base, events: [{ id: "accepted", sessionId: base.id, type: "user.message", timestamp, text: "Keep me" }] }, t);
+    assert.equal(next.messages.at(-1)?.kind, "user");
+    assert.deepEqual(next.messages.filter((message) => message.kind === "user").map((message) => message.text), ["Goal", "Keep me"]);
+  });
+});
