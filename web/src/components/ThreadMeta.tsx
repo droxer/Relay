@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import { formatRelativeTime, nodeOwnershipProfile } from "../lib/adminHelpers";
+import { nodeOwnershipProfile } from "../lib/adminHelpers";
 import { pathForAppState } from "../lib/appRoute";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { useProjectLookup } from "../hooks/useProjectLookup";
@@ -15,16 +15,10 @@ import { ICON, NavProjects, nodeOwnershipIcon } from "./icons";
  * A thread's coordinates, as marks rather than a table of words.
  *
  * Who is in the room, which machine answers for them, which project the work
- * belongs to, when it last moved — the four facts a reader checks mid
+ * belongs to — the three facts a reader checks mid
  * conversation. They were an eyebrow-and-value band under the header, which
- * cost a whole row of transcript and set four uppercase labels against a
+ * cost a whole row of transcript and set uppercase labels against a
  * title; the room was ALSO drawn a second time beside them as a face stack.
- *
- * Marks carry the kind, so the labels go: a face is an agent, a laptop glyph
- * with a live dot is a computer, the layers glyph is a project. Each name
- * stays beside its mark — a face alone is a riddle at this size — and the
- * words that used to be printed (Agent, Computer, Project) move into the
- * tooltip and the screen-reader line.
  *
  * NOTHING HERE IS DRAWN TWICE. The room is this stack or the single agent
  * chip, never both; the computer and the project are stated here and no
@@ -63,14 +57,6 @@ export function ThreadMeta({
       {session.computerId ? (
         <ComputerChip computerId={session.computerId} node={computer} />
       ) : null}
-      <time
-        className="thread-meta-time"
-        dateTime={session.updatedAt}
-        title={`${t("thread.band_updated")}: ${new Date(session.updatedAt).toLocaleString()}`}
-      >
-        <span className="sr-only">{t("thread.band_updated")}: </span>
-        {formatRelativeTime(session.updatedAt, t)}
-      </time>
     </div>
   );
 }

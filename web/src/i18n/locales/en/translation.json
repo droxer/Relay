@@ -315,8 +315,7 @@
     "band_label": "Thread record",
     "band_project": "Project",
     "band_agent": "Agent",
-    "band_computer": "Computer",
-    "band_updated": "Updated"
+    "band_computer": "Computer"
   },
   "composer": {
     "placeholder": "Message the agent…",

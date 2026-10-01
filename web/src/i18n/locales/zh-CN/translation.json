@@ -313,8 +313,7 @@
     "band_label": "会话档案",
     "band_project": "项目",
     "band_agent": "智能体",
-    "band_computer": "电脑",
-    "band_updated": "更新时间"
+    "band_computer": "电脑"
   },
   "composer": {
     "placeholder": "给智能体发消息…",

@@ -1097,20 +1097,12 @@
   color: var(--ink-3);
 }
 
-.thread-meta-time {
-  flex: none;
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  white-space: nowrap;
-}
 
 /* Whole facts drop as the panel narrows — the thread list and the space
    panel each take their share of this row — in reverse order of what a
    reader checks mid-conversation. The computer goes first, then the room:
    both are a glance away on the composer's targets rail. What survives to
-   the narrowest panel is the project (the only fact that leads somewhere)
-   and when the thread last moved. */
+   the narrowest panel is the project, the only fact that leads somewhere. */
 @media (max-width: 1400px) {
   .thread-meta-computer {
     display: none;
