@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ControlPanelDaemonNodeRecord } from "relay-core";
 import { SupervisorBackendClient } from "../src/backend-client.js";
-import { LocalDaemonLauncher, workspaceForEmployee, workspaceForManagedNode } from "../src/launchers.js";
+import { CommandTemplateLauncher, LocalDaemonLauncher, workspaceForEmployee, workspaceForManagedNode } from "../src/launchers.js";
 import { RelaySupervisor } from "../src/reconcile.js";
 import type {
   DaemonLaunchRequest,
@@ -266,4 +266,55 @@ test("remote recovery follows HTTP liveness after bootstrap and detaches on shut
   assert.equal(starts, 3);
   await supervisor.stop();
   assert.equal(stops, 1);
+});
+
+test("local launcher rejects spawn failures without crashing the supervisor", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-launch-error-"));
+  try {
+    const launcher = new LocalDaemonLauncher({ backendUrl: "http://backend.test", workspaceRoot: root,
+      command: join(root, "missing-daemon") });
+    await assert.rejects(launcher.start({ employee: { id: "alice" },
+      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+      env: { RELAY_DAEMON_NODE_TOKEN: "token" } }), /ENOENT/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("local launcher refuses host execution before spawning without acknowledgement", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-host-ack-"));
+  const previous = process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION;
+  delete process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION;
+  try {
+    const launcher = new LocalDaemonLauncher({ backendUrl: "http://backend.test", workspaceRoot: root,
+      sandboxMode: "none", command: "/usr/bin/true" });
+    await assert.rejects(launcher.start({ employee: { id: "alice" },
+      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+      env: { RELAY_DAEMON_NODE_TOKEN: "token" } }), /Host agent execution/);
+  } finally {
+    if (previous === undefined) delete process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION;
+    else process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("acknowledged local host execution forwards permission to the daemon", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-host-launch-"));
+  try {
+    const launcher = new LocalDaemonLauncher({ backendUrl: "http://backend.test", workspaceRoot: root,
+      sandboxMode: "none", allowHostAgentExecution: true, command: "/usr/bin/true" });
+    const managed = await launcher.start({ employee: { id: "alice" },
+      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+      env: { RELAY_DAEMON_NODE_TOKEN: "token" } });
+    assert.ok(managed.child?.spawnargs.includes("--allow-host-agent-execution"));
+    await managed.stop();
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("remote command launcher rejects a missing bootstrap directory safely", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-bootstrap-error-"));
+  try {
+    const launcher = new CommandTemplateLauncher({ command: "true", cwd: join(root, "missing") });
+    await assert.rejects(launcher.start({ employee: { id: "alice" },
+      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+      env: { RELAY_DAEMON_NODE_TOKEN: "token" } }), /ENOENT/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

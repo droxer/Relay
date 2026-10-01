@@ -87,7 +87,11 @@ export class TerminalOutbox {
             && other.sequence < sequence(record!.event))) {
             return new Response("Earlier output is awaiting delivery.", { status: 503 });
           }
-          init = { ...init, body: JSON.stringify(record.event) };
+          // A replay worker may finalize the command while this live sender
+          // is retrying. Late durable output must remain admissible then.
+          const event = outputTypes.has(String(record.event.type))
+            ? { ...record.event, replayed: true } : record.event;
+          init = { ...init, body: JSON.stringify(event) };
         }
       }
       const response = await send(input, init);
