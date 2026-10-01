@@ -211,7 +211,7 @@ export function ThreadsView({
   [activeSession?.agentRuns, activeSession?.collaborationRounds]);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectRecord | null>(null);
-  const transcriptWindow = useTranscriptWindow(activeSession?.id, displayMessages.length);
+  const { start: transcriptStart, sentinelRef } = useTranscriptWindow(activeSession?.id, displayMessages.length);
   // A thread is about to render markdown: start the pipeline download now so
   // the first turn rarely shows its plain-text fallback.
   const hasTranscript = Boolean(activeSession);
@@ -392,16 +392,16 @@ export function ThreadsView({
           <div className="transcript-inner">
             {activeSession || pendingUserMessage ? (
               <>
-                {transcriptWindow.start > 0 ? (
+                {transcriptStart > 0 ? (
                   // Keyed by the window start so each page mounts a fresh
                   // sentinel, and the observer reports it again if the new
                   // page still leaves it in range.
-                  <div key={`older-${transcriptWindow.start}`} ref={transcriptWindow.sentinelRef} className="transcript-older-sentinel" aria-hidden="true" />
+                  <div key={`older-${transcriptStart}`} ref={sentinelRef} className="transcript-older-sentinel" aria-hidden="true" />
                 ) : null}
-                {displayMessages.slice(transcriptWindow.start).map((msg, offset) => {
+                {displayMessages.slice(transcriptStart).map((msg, offset) => {
                   // Grouping and dividers read neighbours, so they index the
                   // full transcript, not the mounted slice.
-                  const i = transcriptWindow.start + offset;
+                  const i = transcriptStart + offset;
                   const phaseLabel = phaseDividerLabel(displayMessages, i, t);
                   const source = handoffSource(displayMessages, i);
                   const isHandoff = source !== undefined;

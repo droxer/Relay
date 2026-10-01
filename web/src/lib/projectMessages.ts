@@ -237,6 +237,27 @@ export class ProjectMessagesAccumulator {
   private snapshot: DerivedMessage[] = [];
   private readonly runState = new Map<string, RunProjectionState>();
 
+  /** Derive the next projection without changing this committed accumulator. */
+  advance(session: RelaySession | undefined, t: TFunction): { accumulator: ProjectMessagesAccumulator; messages: DerivedMessage[] } {
+    const next = new ProjectMessagesAccumulator();
+    next.sessionId = this.sessionId;
+    next.taskGoal = this.taskGoal;
+    next.createdAt = this.createdAt;
+    next.translator = this.translator;
+    next.processedEvents = this.processedEvents;
+    next.lastEventId = this.lastEventId;
+    next.out = [...this.out];
+    next.snapshot = this.snapshot;
+    for (const [runId, state] of this.runState) {
+      next.runState.set(runId, {
+        ...state,
+        attachmentIds: new Set(state.attachmentIds),
+        collaborations: [...state.collaborations],
+      });
+    }
+    return { accumulator: next, messages: next.update(session, t) };
+  }
+
   update(session: RelaySession | undefined, t: TFunction): DerivedMessage[] {
     if (!session) {
       this.clear();

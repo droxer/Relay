@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
@@ -167,14 +167,15 @@ export function IssuesPage({
 
   const openCreate = () => openForm({ ...emptyBacklogForm(currentUser), projectId: projectFilter ?? undefined });
 
+  const openCreateFromIntent = useEffectEvent(() => openCreate());
+
   // The `c` chord and the palette's "New issue" land here, as on the old board.
   useEffect(() => {
     const channel = taskCreateIntent();
     if (!channel) return;
-    const consume = () => { if (channel.consume()) openCreate(); };
+    const consume = () => { if (channel.consume()) openCreateFromIntent(); };
     consume();
     return channel.subscribe(consume);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function rowContext(task: RelayTaskListItem): IssueRowContext {

@@ -48,7 +48,8 @@
   },
   "errors": {
     "screen_failed": "此页面无法加载",
-    "screen_failed_body": "请重新加载，或打开其他页面。",
+    "screen_failed_body": "请重试、重新加载应用，或打开其他页面。",
+    "try_again": "重试",
     "reload_app": "重新加载应用",
     "rename_thread": "无法重命名对话。请刷新对话列表后重试。",
     "rename_computer": "无法重命名电脑。请检查连接后重试。",

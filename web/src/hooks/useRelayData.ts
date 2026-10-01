@@ -81,16 +81,10 @@ export function useRelayData(
   // initiated refresh drives page-level refresh chrome.
   const [manualRefreshPending, setManualRefreshPending] = useState(false);
 
-  // The token used by the next fetch. Held in a ref (not the query key) to
-  // preserve the previous single-bucket behavior: the lists are one cache
-  // entry refetched with whatever token is current, regardless of which token
-  // produced the rows already on screen.
-  const tokenRef = useRef(token);
-  tokenRef.current = token;
   // One-shot override applied by refresh(_, tokenOverride) during sandbox
   // provisioning, before the freshly minted token has propagated into state.
   const overrideRef = useRef<string | undefined>(undefined);
-  const fetchToken = () => overrideRef.current ?? tokenRef.current;
+  const fetchToken = () => overrideRef.current ?? token;
 
   const { sandboxes, nodes, sessions, tasks, projects, projectsStatus, tasksStatus, projectsError } = useQueries({
     combine: combineRelayCollections,

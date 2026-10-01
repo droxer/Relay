@@ -18,7 +18,6 @@ import {
 } from "../lib/projectPage";
 import { truncateId, formatRelativeTime } from "../lib/adminHelpers";
 import type {
-  AgentTeam,
   CurrentUser,
   DaemonNodeMonitorRecord,
   EmployeeAgent,

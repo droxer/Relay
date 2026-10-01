@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -68,19 +68,21 @@ export function AgentProfilePanel({
     || personalityDraft.trim() !== (agent.instructions ?? "").trim()
   );
   const dirtyDraftRef = useRef(false);
-  dirtyDraftRef.current = dirtyDraft;
+  useLayoutEffect(() => { dirtyDraftRef.current = dirtyDraft; }, [dirtyDraft]);
 
-  useEffect(() => {
-    onDirtyChange?.(dirtyDraft);
-  }, [dirtyDraft, onDirtyChange]);
+  function reportDraftDirty(name: string, personality: string, editing = true) {
+    onDirtyChange?.(editing && (name.trim() !== agent.displayName.trim()
+      || personality.trim() !== (agent.instructions ?? "").trim()));
+  }
 
-  const previousAgentIdRef = useRef<string | null>(null);
+  const previousAgentIdRef = useRef(agent.id);
   useEffect(() => {
     if (previousAgentIdRef.current === agent.id) return;
     const hadDirtyDraft = dirtyDraftRef.current;
     previousAgentIdRef.current = agent.id;
     const resetEditingState = () => {
       setEditingProfile(false);
+      onDirtyChange?.(false);
       setError(null);
       setSaving(false);
       setPendingPlacementId(null);
@@ -100,7 +102,7 @@ export function AgentProfilePanel({
     }).then((ok) => {
       if (ok) resetEditingState();
     });
-  }, [agent.id, confirm, t]);
+  }, [agent.id, confirm, t, onDirtyChange]);
 
   async function patchAgent(patch: Parameters<typeof updateEmployeeAgent>[1]) {
     if (canManage) {
@@ -123,6 +125,7 @@ export function AgentProfilePanel({
     setNameDraft(agent.displayName);
     setPersonalityDraft(agent.instructions ?? "");
     setEditingProfile(true);
+    onDirtyChange?.(false);
     setError(null);
   }
 
@@ -133,6 +136,7 @@ export function AgentProfilePanel({
     const personalityChanged = trimmedPersonality !== (agent.instructions ?? "").trim();
     if (!nameChanged && !personalityChanged) {
       setEditingProfile(false);
+      onDirtyChange?.(false);
       return;
     }
     setSaving(true);
@@ -145,6 +149,7 @@ export function AgentProfilePanel({
       if (!result) return;
       applyAgentUpdate(result.agent);
       setEditingProfile(false);
+      onDirtyChange?.(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -308,9 +313,9 @@ export function AgentProfilePanel({
           editable={canEditProfile}
           saving={saving}
           onStartEdit={startEditProfile}
-          onNameDraftChange={setNameDraft}
-          onPersonalityDraftChange={setPersonalityDraft}
-          onCancel={() => setEditingProfile(false)}
+          onNameDraftChange={(value) => { setNameDraft(value); reportDraftDirty(value, personalityDraft); }}
+          onPersonalityDraftChange={(value) => { setPersonalityDraft(value); reportDraftDirty(nameDraft, value); }}
+          onCancel={() => { setEditingProfile(false); onDirtyChange?.(false); }}
           onSave={() => void handleProfileSave()}
         />
         {canEditProfile && error ? (

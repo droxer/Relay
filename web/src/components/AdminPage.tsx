@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DashboardView } from "./admin/dashboard/DashboardView";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
@@ -147,13 +147,14 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     }
   }
 
+  const probeAuthOnMount = useEffectEvent((signal: AbortSignal) => {
+    if (!seededAdmin) void checkAuth(signal);
+  });
+
   useEffect(() => {
-    // Already authenticated via the app session — no probe needed on mount.
-    if (seededAdmin) return;
     const controller = new AbortController();
-    void checkAuth(controller.signal);
+    probeAuthOnMount(controller.signal);
     return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The node poll lives in useAdminNodes; a failure that looks like an expired

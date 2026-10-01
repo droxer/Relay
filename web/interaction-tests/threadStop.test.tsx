@@ -28,6 +28,7 @@ function setup(existing = false) {
     activeProject: null, activeRun: undefined, activeRunOwner: null, activeRuntimeNode: null,
     threadRunning: false, requiresRuntimeSelection: false, projectDispatchDisabled: false,
     effectiveSelectableLogicalAgents: [],
+    composerLogicalAgents: [{ id: "agent-1", executorKind: "codex", availability: "ready", enabled: true }],
     threadMentionCandidates: [{ id: "agent-1", name: "Codex", eligible: true }],
     composerTeams: [],
     selectedEmployee: "alice", selectedSandbox: undefined, selectedThreadNodeId: "node-1",

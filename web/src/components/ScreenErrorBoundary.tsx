@@ -1,10 +1,10 @@
 "use client";
 
-import { Component, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 
-function ErrorFallback() {
+function ErrorFallback({ onRetry }: { onRetry: () => void }) {
   const { t } = useTranslation();
   return (
     <section className="route-loading" role="alert">
@@ -16,6 +16,7 @@ function ErrorFallback() {
           pressable. Adding the primitive to the recovery path is safe in the
           way that matters — if Button itself were the thing that broke, the 83
           surfaces that use it would already be down. */}
+      <Button variant="outline" type="button" onClick={onRetry}>{t("errors.try_again")}</Button>
       <Button variant="outline" type="button" onClick={() => window.location.reload()}>{t("errors.reload_app")}</Button>
     </section>
   );
@@ -34,5 +35,11 @@ export class ScreenErrorBoundary extends Component<{
     return props.resetKey !== state.resetKey ? { failed: false, resetKey: props.resetKey } : null;
   }
 
-  render() { return this.state.failed ? <ErrorFallback /> : this.props.children; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[relay] screen failed to render", error, info);
+  }
+
+  retry = () => { this.setState({ failed: false }); };
+
+  render() { return this.state.failed ? <ErrorFallback onRetry={this.retry} /> : this.props.children; }
 }
