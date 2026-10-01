@@ -114,7 +114,10 @@
 
   --action: #0064e0;
   --action-hover: #0457cb; /* the source system's button-buy-cta-pressed */
-  --action-soft: color-mix(in srgb, #0091ff 15%, transparent); /* soft-cobalt callout tint, selection wash, active nav */
+  /* Soft-cobalt callout tint, selection wash, active nav. 10% in both
+     registers: at 15% the selected rail row was a saturated blue block on the
+     neutral charcoal, louder than the accent bar that already marks it. */
+  --action-soft: color-mix(in srgb, #0091ff 10%, transparent);
   --on-action: #ffffff;
 
   /* Status — the source system's semantic hues. The published values are BADGE FILL
@@ -221,7 +224,10 @@
      canvas value (the source system's canvas white, #ffffff). */
   --paper: #ffffff;
 
-  --scrim: rgba(10, 19, 23, 0.66);
+  /* Achromatic, like every plane it dims. It used to be blue-black, left over
+     from the tinted palette, and cast a cold wash over the neutral page
+     behind every drawer. */
+  --scrim: rgba(0, 0, 0, 0.6);
 
   /* ----- Register-invariant scales ----- */
 
@@ -862,7 +868,7 @@ html[data-theme="light"] {
   --code-declaration: #1f4f82;
   --code-attribute: #5b3a75;
 
-  --scrim: rgba(36, 48, 53, 0.22);
+  --scrim: rgba(23, 23, 23, 0.24); /* --ink-1's neutral, never a slate */
 }
 
 /* CJK — the sans stack is NOT restated here: Chinese uses the same system

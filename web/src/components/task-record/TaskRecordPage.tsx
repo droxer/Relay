@@ -225,7 +225,7 @@ export function TaskRecordPage({
 
       <div className="workspace-body">
         {variant === "routine" ? (
-          <TabsContent value="runs">
+          <TabsContent value="runs" className="record-runs-panel">
             <RecordRuns
               taskId={task.id}
               hrefForRun={(runTaskId) => pathForAppState({
@@ -250,10 +250,14 @@ export function TaskRecordPage({
         <TabsContent value="definition">
           <TaskRecordDefinition task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
         </TabsContent>
-        <TabsContent value="files">
-          {/* The durable record first, then what is in the workspace now. */}
-          <RecordArtifacts taskId={task.id} />
+        {/* What is in the workspace now — the project's explorer, given the
+            whole tab — and, beside it, the durable record of what runs
+            produced, which outlives the computer being online. */}
+        <TabsContent value="workspace" className="record-workspace-panel">
           <RecordWorkspace taskId={task.id} />
+        </TabsContent>
+        <TabsContent value="artifacts">
+          <RecordArtifacts taskId={task.id} />
         </TabsContent>
       </div>
     </Tabs>

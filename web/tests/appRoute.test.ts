@@ -352,13 +352,13 @@ describe("app pathname routes", () => {
     );
     // Closing it hands them back; the record's tab stays with the record.
     assert.equal(
-      browserUrlForAppState(onBoard, "/routines/R-42", "?state=paused&tab=files"),
+      browserUrlForAppState(onBoard, "/routines/R-42", "?state=paused&tab=artifacts"),
       "/routines?state=paused",
     );
     // Routine to one of its runs carries both the tab and the filters.
     assert.equal(
-      browserUrlForAppState({ ...onBoard, taskId: "R-42", runId: "T-2288" }, "/routines/R-42", "?state=paused&tab=files"),
-      "/routines/R-42/runs/T-2288?tab=files&state=paused",
+      browserUrlForAppState({ ...onBoard, taskId: "R-42", runId: "T-2288" }, "/routines/R-42", "?state=paused&tab=artifacts"),
+      "/routines/R-42/runs/T-2288?tab=artifacts&state=paused",
     );
     // Task records also retain their list filters.
     assert.equal(

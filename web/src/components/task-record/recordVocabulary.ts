@@ -13,10 +13,22 @@ import type { RelayTaskListItem } from "../../types.js";
  */
 export type RecordVariant = "task" | "routine";
 
-export type RecordTab = "runs" | "activity" | "definition" | "files";
+/* "workspace" is the live directory, browsed with the project's explorer;
+   "artifacts" is the durable record of what runs produced. They shared one
+   "files" tab, stacked, until the explorer needed the tab's full height.
 
-export const TASK_RECORD_TABS: readonly RecordTab[] = ["activity", "definition", "files"];
-export const ROUTINE_RECORD_TABS: readonly RecordTab[] = ["runs", "definition", "files"];
+   A routine has no Workspace tab: it never runs, and each of its runs owns a
+   folder of its own, so its folders are browsed run by run in the Runs tab. */
+export type RecordTab = "runs" | "activity" | "definition" | "workspace" | "artifacts";
+
+export const TASK_RECORD_TABS: readonly RecordTab[] = ["activity", "definition", "workspace", "artifacts"];
+export const ROUTINE_RECORD_TABS: readonly RecordTab[] = ["runs", "definition", "artifacts"];
+
+/** Retired tab ids and where a link that still carries one should land. */
+export const LEGACY_RECORD_TABS: Readonly<Record<RecordVariant, Readonly<Record<string, RecordTab>>>> = {
+  task: { files: "workspace" },
+  routine: { files: "runs", workspace: "runs" },
+};
 
 export function recordVariant(task: Pick<RelayTaskListItem, "isRoutine">): RecordVariant {
   return task.isRoutine ? "routine" : "task";
@@ -32,5 +44,6 @@ export function defaultRecordTab(variant: RecordVariant): RecordTab {
 
 export function parseRecordTab(value: string | null, variant: RecordVariant): RecordTab {
   const tabs = recordTabs(variant);
-  return tabs.includes(value as RecordTab) ? (value as RecordTab) : defaultRecordTab(variant);
+  const tab = (value && LEGACY_RECORD_TABS[variant][value]) || value;
+  return tabs.includes(tab as RecordTab) ? (tab as RecordTab) : defaultRecordTab(variant);
 }

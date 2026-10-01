@@ -26,16 +26,20 @@ function PaneHeader({
 }
 
 export function WorkspaceFilePanes({
-  path, selectedPath, files, content, view, setView, homeStatus,
+  path, rootLabel, selectedPath, files, content, view, setView, homeStatus, barActions,
   openDirectory, onSelectFile, onRetry, onClosePreview,
 }: {
   path: string;
+  /** Replaces "home" at the root of the path bar. */
+  rootLabel?: string;
   selectedPath: string;
   files: Pick<ComponentProps<typeof WorkspaceFileList>, "data" | "error" | "isLoading">;
   content: Pick<ComponentProps<typeof WorkspaceFilePreview>, "data" | "error" | "isLoading">;
   view: ComponentProps<typeof WorkspaceFileActions>["view"];
   setView: ComponentProps<typeof WorkspaceFileActions>["onViewChange"];
   homeStatus?: ReturnType<typeof workspaceHomeStatus>;
+  /** Surface-specific controls at the path bar's end, after the live source. */
+  barActions?: ReactNode;
   openDirectory: (path: string) => void;
   onSelectFile: ComponentProps<typeof WorkspaceFileList>["onSelectFile"];
   onRetry: () => void;
@@ -48,7 +52,7 @@ export function WorkspaceFilePanes({
       <section className="workspace-pane workspace-pane-browse" aria-label={t("workspace.tab_files")}>
         <div className="workspace-tabpanel-files">
           <div className="workspace-files-bar">
-            <WorkspacePathBreadcrumb path={path} onNavigate={openDirectory} />
+            <WorkspacePathBreadcrumb path={path} rootLabel={rootLabel} onNavigate={openDirectory} />
             <div className="workspace-files-bar-end">
               {homeStatus?.kind === "live" ? (
                 <span className="workspace-home-status" title={homeStatus.nodeId || undefined}>
@@ -57,6 +61,7 @@ export function WorkspaceFilePanes({
                   {homeStatus.nodeId ? <span className="workspace-home-node code">{homeStatus.nodeId}</span> : null}
                 </span>
               ) : null}
+              {barActions}
             </div>
           </div>
           <WorkspaceFileList

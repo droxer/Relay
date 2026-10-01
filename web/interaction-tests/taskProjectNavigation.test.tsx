@@ -21,10 +21,10 @@ it("redirects legacy project Activities tabs to tasks while preserving task deta
   expect(parseProjectPageTab("activities")).toBe("general");
   expect(canonicalBrowserUrl("/projects/p", "?tab=activities")).toBe("/projects/p");
   expect(canonicalBrowserUrl("/projects/p", "?tab=activities&task=t")).toBe("/projects/p?task=t");
-  expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=files")).toBe("/projects/p?task=t&recordTab=files");
+  expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=artifacts")).toBe("/projects/p?task=t&recordTab=artifacts");
 });
 
 it("preserves project scope and filters through task record navigation", () => {
   expect(canonicalBrowserUrl("/issues", "?project=p&q=ship")).toBe("/issues?project=p&q=ship");
-  expect(canonicalBrowserUrl("/issues/t", "?project=p&q=ship&tab=files")).toBe("/issues/t?tab=files&project=p&q=ship");
+  expect(canonicalBrowserUrl("/issues/t", "?project=p&q=ship&tab=workspace")).toBe("/issues/t?tab=workspace&project=p&q=ship");
 });

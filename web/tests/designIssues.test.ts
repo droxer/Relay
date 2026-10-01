@@ -226,4 +226,46 @@ describe("reviewed design regressions", () => {
       "the preview body renders its own view switch again",
     );
   });
+
+  it("dims the page behind an overlay with a neutral scrim in both themes", () => {
+    /* The surfaces went achromatic and the scrim stayed blue-black, so every
+       drawer cast a cold tint over the neutral page behind it. */
+    const palette = readWeb("src/styles/tokens/palette.css");
+    const scrims = [...palette.matchAll(/--scrim:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/g)];
+    assert.equal(scrims.length, 2, "one scrim per register");
+    for (const [declaration, r, g, b] of scrims) {
+      assert.ok(r === g && g === b, `${declaration} is tinted; the palette is neutral`);
+    }
+  });
+
+  it("lays the record drawer out like the record pages it mirrors", () => {
+    const view = readWeb("src/components/task-record/TaskRecordView.tsx");
+    const styles = readWeb("src/styles/task-record.css");
+    const actions = readWeb("src/components/task-record/TaskRecordActions.tsx");
+    // Tabs sit on the drawer header's rule and the band runs flush, as on /agents.
+    assert.match(view, /bodyClassName="record-drawer-body"/);
+    assert.match(styles, /\.adm-drawer-body\.record-drawer-body\s*\{[^}]*padding:\s*0/);
+    assert.match(styles, /\.adm-drawer-head:has\(\+ \.record-drawer-body\)\s*\{[^}]*border-bottom:\s*0/);
+    assert.doesNotMatch(styles, /\.record-drawer \.record-band\s*\{[^}]*border-top/);
+    // Record actions are the quiet 32px tier every other record header uses.
+    assert.doesNotMatch(actions, /size="cta"/);
+    assert.match(actions, /<ActionEdit/);
+  });
+
+  it("browses a record's files with the project workspace's explorer, not a boxed copy", () => {
+    const record = readWeb("src/components/task-record/RecordWorkspace.tsx");
+    const styles = readWeb("src/styles/task-record.css");
+    // Same path bar as the project: live source and the refresh at its end.
+    assert.match(record, /homeStatus=\{workspaceHomeStatus\(fileQuery\.data\)\}/);
+    assert.match(record, /barActions=/);
+    // No second heading over the explorer, and no bordered card around it.
+    assert.doesNotMatch(record, /record-panel-title/);
+    assert.doesNotMatch(styles, /\.record-workspace-files\s*\{[^}]*border:/);
+    // Workspace is its own tab, flush, and gives the explorer the drawer's
+    // height; the durable artifacts list is a separate tab beside it.
+    const page = readWeb("src/components/task-record/TaskRecordPage.tsx");
+    assert.match(page, /<TabsContent value="workspace" className="record-workspace-panel">\s*<RecordWorkspace/);
+    assert.match(page, /<TabsContent value="artifacts">\s*<RecordArtifacts/);
+    assert.match(styles, /\.record-drawer \.workspace-body > \.record-workspace-panel\s*\{[^}]*padding:\s*0/);
+  });
 });
