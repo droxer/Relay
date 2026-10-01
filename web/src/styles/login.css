@@ -24,10 +24,10 @@
   --lg-hairline: var(--dark-line);
   --lg-hairline-soft: var(--dark-line-soft);
   /* --lg-steel names the screen's action fill role (the name is kept from
-     the old local palette; the value is the register-invariant action
-     cobalt, so the pre-auth CTA is the same control as post-auth). */
-  --lg-steel: var(--action);
-  --lg-steel-active: var(--action-hover);
+     the old local palette; the pre-auth CTA stays in the pinned dark
+     register, even when the saved application theme is light). */
+  --lg-steel: var(--dark-ink);
+  --lg-steel-active: var(--dark-ink-soft);
   --lg-err: var(--dark-ink); /* error is the loud/bright tier — dots stay calm */
   --lg-accent: var(--lg-steel);
   /* The canvas is pinned dark whatever theme is saved, so the shared focus
@@ -187,7 +187,7 @@
   /* Nudged onto the first line's baseline box — a 14px square glyph sits
      high against 14px text set at --leading-normal. */
   translate: 0 2px;
-  /* Muted ink, not --lg-accent: the cobalt on this screen is the CTA and
+  /* Muted ink, not --lg-accent: the bright neutral on this screen is the CTA and
      nothing else, so a decorative marker must not spend it. */
   color: var(--lg-muted);
 }
@@ -342,7 +342,7 @@
    re-paints the plate in the pinned pre-auth register. */
 .login-submit {
   background: var(--lg-accent);
-  color: var(--on-action);
+  color: var(--lg-canvas);
 }
 
 .login-submit:hover:not(:disabled) {
@@ -350,17 +350,9 @@
 }
 
 .login-submit:disabled {
-  /* Label uses --lg-muted rather than --on-action: --on-action is dark ink
-     picked for the full-strength cobalt fill, and on the 40% disabled wash
-     it would read as live text on a dimmed button. A neutral muted step
-     stays legible against the darkened fill and reads as "unavailable". */
-  background: color-mix(in srgb, var(--lg-accent) 40%, var(--lg-canvas));
+  background: var(--dark-surface);
   color: var(--lg-muted);
-  /* The wash is the disabled signal — cancel the primitive's opacity-50 so
-     the label keeps the --lg-muted contrast it was picked for. This is a
-     deliberate carve-out from the system's "disabled is opacity" rule: the
-     pinned pre-auth cover never lightens, so a sheer cobalt fill would
-     keep nearly full strength and read as available rather than dimmed. */
+  border-color: var(--lg-hairline);
   opacity: 1;
 }
 

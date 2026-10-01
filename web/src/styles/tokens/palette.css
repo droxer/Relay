@@ -1,21 +1,9 @@
-/* Meta commerce palette — raw values, both registers side by side.
-   Relay uses a neutral canvas, cobalt primary actions, compact 4/6/8px
-   corners, and flat surfaces. This is the only file allowed to originate a
-   color. The source commerce reference below is adapted, not copied.
-   Source system: docs/design-system.md, "Appendix — the source system"
-   (Meta hardware commerce — white canvas, cobalt
-   #0064e0 CTA, Optimistic VF, 100px pills, 16–32px card rounding), adapted
-   dual-register for Relay. Supersedes the Fieldnotes identity (cream canvas,
-   olive ink, one highlighter yellow).
-
-   The source system documents no dark-mode token set (see the "Known gaps"
-   section of docs/design-system.md), so the
-   dark register below is DERIVED: the ink-deep #0a1317 becomes the canvas,
-   the cloud greys invert into an elevation ladder, and the two sanctioned
-   hues (cobalt, Oculus purple) are lifted only where AA demands it. Every
-   value that the source system does publish is used verbatim in the light register
-   unless WCAG forced a deepening, and each of those deepenings is noted at
-   the token.
+/* Relay palette — Vercel Geist-inspired neutral surfaces in both themes.
+   Near-black and near-white canvases, achromatic grey elevation and borders,
+   and accessible neutral text keep the workspace quiet. Blue remains reserved
+   for actions and links; semantic hues identify status and syntax.
+   This is the only file allowed to originate a color.
+   Reference: https://vercel.com/geist/colors
 
    Breakpoints (reference — custom properties can't drive @media, so this
    list is the only registry there is; keep it honest when you add a query).
@@ -67,7 +55,7 @@
 :root {
   /* Dark register (default) — the night side of the commerce surface.
 
-     The source system's ink-deep (#0a1317) carries the canvas, and the ladder above
+     Neutral charcoal (#0a0a0a) carries the canvas, and the ladder above
      it is an ELEVATION ladder: 0 < 1 < 3 in perceived lift, with 2 as the
      fill tier (search wells, hover) between card and drawer. The light
      register cannot reproduce that — see the note there before assuming
@@ -76,10 +64,10 @@
      Elevation is near-flat: the canvas → card step plus a hairline separates
      a card from the page, and only floating commerce chrome (drawers,
      dialogs, sticky summaries) earns the one published shadow. */
-  --surface-0: #0a1317; /* canvas — the source system's ink-deep */
-  --surface-1: #131c21; /* cards, panels */
-  --surface-2: #1b262c; /* fills, search, hover */
-  --surface-3: #22303a; /* drawers, modals */
+  --surface-0: #0a0a0a; /* neutral charcoal canvas */
+  --surface-1: #171717; /* cards, panels */
+  --surface-2: #1f1f1f; /* fills, search, hover */
+  --surface-3: #262626; /* drawers, modals */
 
   /* Zone surfaces — the three-pane shell (rail → list → canvas) reads as a
      monotonic elevation ladder in BOTH registers. The generic --surface-N
@@ -87,21 +75,21 @@
      surface-1 in dark, but the light register's raised-is-lighter ladder then
      puts the list ABOVE the rail (see the light block). These roles pin the
      zone order explicitly. Dark: rail is the lightest step, canvas darkest. */
-  --surface-rail: #1b262c;
-  --surface-list: #131c21;
+  --surface-rail: #1f1f1f;
+  --surface-list: #171717;
 
   /* Ink — every tier that can carry TEXT clears WCAG 1.4.3 (4.5:1) against
      the worst plane it can land on, which is --surface-3, not the canvas.
-     Cool off-whites tinted to the ink-deep canvas so the register reads as
+     Soft off-whites balanced against the charcoal canvas so the register reads as
      one material.
-     Worst-plane ratios: ink-1 13.5 · ink-2 10.5 · ink-3 7.2 · ink-4 6.0. */
-  --ink-1: #ffffff; /* headings, emphasis */
-  --ink-2: #dfe3e8; /* body */
-  --ink-3: #b6bec6; /* secondary labels */
-  --ink-4: #a4adb6; /* timestamps, meta, disabled */
+     Each tier is checked against every surface by paletteTokens.test.ts. */
+  --ink-1: #ededed; /* headings, emphasis */
+  --ink-2: #d4d4d4; /* body */
+  --ink-3: #b3b3b3; /* secondary labels */
+  --ink-4: #a1a1a1; /* timestamps, meta, disabled */
 
-  --line-1: #2c3a43; /* structural hairline */
-  --line-2: #1f2b32; /* soft hairline */
+  --line-1: #333333; /* structural hairline */
+  --line-2: #292929; /* soft hairline */
 
   /* Action — cobalt, register-invariant AS A FILL. The source system reserves
      #0064e0 for the in-product commerce CTA and gives marketing surfaces a
@@ -119,6 +107,11 @@
      the 36px runtime mark in admin-v2-drawers.css); anything that reads as
      text and needs a blue takes --link. No disabled hex: disabled is
      --opacity-disabled. */
+  /* Primary CTAs invert with the theme; blue remains a selection/link accent. */
+  --cta-fill: #ededed;
+  --cta-hover: #d4d4d4;
+  --cta-ink: #0a0a0a;
+
   --action: #0064e0;
   --action-hover: #0457cb; /* the source system's button-buy-cta-pressed */
   --action-soft: color-mix(in srgb, #0091ff 15%, transparent); /* soft-cobalt callout tint, selection wash, active nav */
@@ -153,7 +146,7 @@
   --err: #ff6367;  /* critical — the source system's #e41e3f, lifted for the dark canvas */
   /* Text on an --err FILL (destructive hover inversion). The lifted red is
      bright enough here that the on-fill text is the canvas ink (6.5:1). */
-  --on-err: #0a1317;
+  --on-err: #0a0a0a;
 
   /* Live — work an agent is doing RIGHT NOW. The source system sanctions exactly two
      accents beyond the neutrals: cobalt and Oculus purple. Cobalt is spoken
@@ -213,15 +206,15 @@
      a hex that nothing proves still matches the register it mirrors, which is
      the exact drift these tokens exist to prevent. Add a tier when something
      paints it. */
-  --dark-canvas: #0a1317;
-  --dark-surface: #131c21;
-  --dark-elevated: #22303a;
-  --dark-ink: #ffffff;
-  --dark-ink-soft: #b6bec6;
+  --dark-canvas: #0a0a0a;
+  --dark-surface: #171717;
+  --dark-elevated: #262626;
+  --dark-ink: #ededed;
+  --dark-ink-soft: #b3b3b3;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
   --dark-line-soft: color-mix(in srgb, #ffffff 8%, transparent);
 
-  --light-canvas: #eef1f5;
+  --light-canvas: #fafafa;
 
   /* Document paper — artifact/file previews assume a white page in every
      register, matching how the document would print. It is also the brand's
@@ -802,89 +795,31 @@
   --rise: 8px;
 }
 
-/* Light register — the stark white commerce page. Designed alongside dark,
-   not derived from it.
-
-   THE LADDER RUNS BOTH WAYS HERE. On a light canvas "raised" means lighter and
-   "inset" means darker, and white is a ceiling you cannot build above — so 0..3
-   is a ladder of DISTINCTNESS, not of lightness:
-
-     surface-0  canvas          #eef1f5   the soft-cloud page
-     surface-1  cards, panels   #fbfcfd   raised — near white
-     surface-2  fills, wells    #e0e6ed   RECESSED — deliberately darker
-     surface-3  drawers, modals #ffffff   the top plane, the source system's canvas
-
-   surface-2 inverting direction between registers is correct: a search field
-   or hover well recedes from white and emerges from black. The source system paints
-   its marketing canvas pure white and its wells in surface-soft #f1f4f7;
-   Relay is a three-pane application rather than a scrolling page, so the two
-   trade places — the cloud grey carries the page and stark white carries the
-   cards and floating chrome that sit on it. Both values stay inside the
-   published cloud/white pair. */
+/* Light register — near-white canvas and white content planes.
+   Subtle elevation is supported by borders rather than a strong grey wash.
+   Navigation and inset controls use neutral greys, without the previous
+   blue tint. Floating surfaces use the shared shadow/ring tokens. */
 html[data-theme="light"] {
-  --surface-0: #eef1f5;
-  --surface-1: #fbfcfd;
-  /* The recessed fill has to work HARDER in this register than in dark. A
-     well (search field, hover row, inset chip) is separated from its plane by
-     the step between them, and the light planes are packed between the cloud
-     canvas and white — at #e2e7ee a search field measured 1.03 against the
-     list panel it sits in and read as plain text with a hairline, not as a
-     field. Deepened until the step is perceptible: 1.08 against the list,
-     1.11 against the canvas.
-
-     It cannot go deeper than this. The plane moves TOWARD the mid-tone status
-     inks as it darkens, and at #dee4ec the calmest of them (--live, --ok)
-     measured 4.53:1 here — passing, with no margin left for the next nudge.
-     This value keeps every tier at 4.6+ while the well still reads as a
-     well. */
-  --surface-2: #e0e6ed; /* recessed fill — see the note above */
+  --cta-fill: #171717;
+  --cta-hover: #383838;
+  --cta-ink: #ffffff;
+  --surface-0: #fafafa;
+  --surface-1: #ffffff;
+  --surface-2: #ebebeb; /* recessed fill — see the note above */
   --surface-3: #ffffff; /* top plane: the source system's canvas white */
 
-  /* Zone surfaces — the ladder RUNS THE OTHER WAY from the dark register, and
-     that is the point rather than an oversight. Dark builds the shell UP from
-     the canvas because lift means lighter there. Light cannot copy that: a
-     near-white rail beside a cloud canvas makes the app's CHROME the brightest
-     thing on screen, with the content sheet reading as the recessed part —
-     the exact inverse of a system whose whole premise is that the product
-     (the content) is the surface and everything else gets out of its way.
+  /* Navigation recedes through two subtle neutral-grey steps. */
+  --surface-rail: #f0f0f0;
+  --surface-list: #f5f5f5;
 
-     So in light the shell RECEDES: rail is the deepest cloud step, the list
-     sits between it and the canvas, and the content canvas is the lightest of
-     the three — with cards (--surface-1) and drawers (--surface-3) still
-     rising above it. Reading order by lightness is therefore
-     rail < list < canvas < card < drawer, which is the same order a reader's
-     eye should travel.
+  /* Neutral text; every tier clears AA on the recessed fill. */
+  --ink-1: #171717; /* ink-deep */
+  --ink-2: #262626; /* ink */
+  --ink-3: #525252; /* charcoal */
+  --ink-4: #666666; /* steel, deepened for AA */
 
-     The steps are deepened past what the cloud scale would suggest: at the
-     original #e6ebf1/#eaeef4 the ladder measured 1.029 (rail → list) and
-     1.028 (list → canvas) — a quarter of the dark register's 1.119/1.087,
-     and exactly the ~1.03 step this file rejects for a well on the list
-     panel (see --surface-2 above). These values measure ≈1.05 on both
-     steps, and the rail → list seam additionally carries a --line-1 border
-     (atelier.css) because a structural boundary must not rest on luminance
-     alone. */
-  --surface-rail: #e2e7ed;
-  --surface-list: #e8ecf2;
-
-  /* Ink — the source system's text ramp: ink-deep, ink, charcoal, and a deepened
-     steel. The published steel (#5d6c7b) measures 4.34:1 on --surface-2, the
-     one plane that moves toward the ink, so ink-4 steps down until it passes.
-     Ratios against --surface-2: ink-1 14.9 · ink-2 13.3 · ink-3 7.2 ·
-     ink-4 5.0. Stone (#8595a4) stays out of the ramp entirely — it is a
-     disabled-label value, and disabled here is opacity. */
-  --ink-1: #0a1317; /* ink-deep */
-  --ink-2: #1c1e21; /* ink */
-  --ink-3: #444950; /* charcoal */
-  --ink-4: #556170; /* steel, deepened for AA */
-
-  --line-1: #ced0d4; /* hairline */
-  /* The SOFT hairline must still read on the recessed planes: at #dee3e9 it
-     measured 1.027 on --surface-2 — under the 1.03 step this file rejects
-     for a well on the list panel — and existed only on cards and drawers
-     (1.26/1.29). #d6dce3 measures 1.10 on a well and stays clearly softer
-     than --line-1 everywhere (1.22 vs 1.23 on the well, 1.38 vs 1.54 on a
-     drawer). */
-  --line-2: #d6dce3; /* hairline-soft */
+  --line-1: #d4d4d4; /* hairline */
+  --line-2: #e5e5e5; /* hairline-soft */
 
   /* --action / --action-hover / --on-action are register-invariant (declared
      once on :root) — cobalt reads on both canvases without retuning. Only

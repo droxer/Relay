@@ -128,8 +128,8 @@
 
 .profile-image-picker-trigger:hover .profile-image-picker-action,
 .profile-image-picker-trigger:focus-visible .profile-image-picker-action {
-  background: var(--action);
-  color: var(--on-action);
+  background: var(--cta-fill);
+  color: var(--cta-ink);
   transform: translateY(-1px);
 }
 

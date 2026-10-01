@@ -253,14 +253,12 @@ describe("pre-auth login palette", () => {
     );
   });
 
-  it("lets the register-invariant cobalt CTA reach pre-auth", () => {
-    // The primary action is one cobalt in EVERY context, pre-auth included, so
-    // login.css aliases :root's action tokens rather than pinning its own
-    // sign-in colour. Guard the declaration so the pin cannot drift back in.
+  it("pins the login CTA to the dark neutral register", () => {
+    // Login stays dark even when the saved application theme is light.
     const loginCode = login.replace(/\/\*[\s\S]*?\*\//g, "");
-    assert.doesNotMatch(loginCode, /--action\s*:/, "login.css must not override --action; the yellow CTA reaches pre-auth");
-    assert.match(login, /--lg-steel:\s*var\(--action\);/);
-    assert.match(login, /--lg-steel-active:\s*var\(--action-hover\);/);
+    assert.doesNotMatch(loginCode, /--action\s*:/, "login.css must not override the shared selection accent");
+    assert.match(login, /--lg-steel:\s*var\(--dark-ink\);/);
+    assert.match(login, /--lg-steel-active:\s*var\(--dark-ink-soft\);/);
   });
 
   it("originates no color of its own", () => {
@@ -460,28 +458,32 @@ describe("ink ramp legibility", () => {
 });
 
 describe("surface ladder", () => {
-  it("gives the canvas → card step room to read without a drop shadow", () => {
-    // Elevation is flat, so this step plus a hairline is ALL that separates a
-    // card from the page. Measured on the Fieldnotes ramps: 1.09 dark
-    // (olive-charcoal → card), 1.13 light (cream → warm white).
-    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
-      const step = contrast(tokenIn(register, "--surface-0"), tokenIn(register, "--surface-1"));
-      assert.ok(step >= 1.07, `${label} canvas → card is only ${step.toFixed(3)}:1`);
+  it("keeps both themes' large surfaces achromatic", () => {
+    for (const register of [darkRegister, lightRegister]) {
+      for (const name of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--line-1", "--line-2"]) {
+        const [r, g, b] = channels(tokenIn(register, name));
+        assert.equal(r, g, `${name} must not tint the neutral workspace`);
+        assert.equal(g, b, `${name} must not tint the neutral workspace`);
+      }
     }
   });
 
-  it("never lets the floating plane collapse into the card plane", () => {
-    // In the light register the ladder is one of DISTINCTNESS, not lightness:
-    // --surface-3 is pure white ABOVE the near-white card, while --surface-2
-    // recedes below the canvas. A dialog must never read as the card it floats
-    // over.
-    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
-      const card = tokenIn(register, "--surface-1");
-      const float = tokenIn(register, "--surface-3");
-      assert.notEqual(float, card, `${label} --surface-3 is identical to --surface-1`);
-      const spread = contrast(tokenIn(register, "--surface-0"), float);
-      assert.ok(spread >= 1.1, `${label} canvas → floating plane is only ${spread.toFixed(3)}:1`);
+  it("separates dark planes by elevation and light planes by borders", () => {
+    const canvas = tokenIn(darkRegister, "--surface-0");
+    const card = tokenIn(darkRegister, "--surface-1");
+    const floating = tokenIn(darkRegister, "--surface-3");
+    assert.ok(contrast(canvas, card) >= 1.07);
+    assert.ok(contrast(canvas, floating) >= 1.1);
+    assert.notEqual(card, floating);
+    for (const name of ["--surface-0", "--surface-1", "--surface-3"]) {
+      assert.ok(contrast(tokenIn(lightRegister, "--line-1"), tokenIn(lightRegister, name)) >= 1.4,
+        `light ${name} needs a visible structural border`);
     }
+    // White cards and white overlays share a fill in Geist-style light mode;
+    // floating chrome must retain its border and shadow to convey depth.
+    const dialog = readStyle("dialog.css");
+    assert.match(readStyle("tokens/roles.css"), /--shadow-2:[^;]*var\(--line-1\)/);
+    assert.match(dialog, /box-shadow:[^;]*var\(--shadow-2\)/);
   });
 });
 
@@ -660,3 +662,31 @@ function componentSources(): string[] {
   walk(path.join(repoRoot, "web", "src"));
   return sources;
 }
+
+
+describe("neutral CTA palette", () => {
+  it("routes shared primary buttons through the neutral CTA palette", () => {
+    const bridge = readStyle("tokens/shadcn-bridge.css");
+    assert.match(bridge, /--primary:\s*var\(--cta-fill\)/);
+    assert.match(bridge, /--primary-foreground:\s*var\(--cta-ink\)/);
+    assert.match(bridge, /--color-primary-active:\s*var\(--cta-hover\)/);
+    const button = stripStyleComments(readWebSource("components/ui/button.tsx"));
+    assert.match(button, /bg-primary text-primary-foreground hover:bg-primary-active/);
+    assert.doesNotMatch(button, /hover:text-\(--action\)/);
+  });
+
+  it("keeps primary labels legible in both themes at rest and on hover", () => {
+    for (const register of [darkRegister, lightRegister]) {
+      const ink = tokenIn(register, "--cta-ink");
+      for (const fill of ["--cta-fill", "--cta-hover"]) {
+        const hex = tokenIn(register, fill);
+        const [r, g, b] = channels(hex);
+        assert.equal(r, g);
+        assert.equal(g, b);
+        assert.ok(contrast(ink, hex) >= 4.5, `${fill} must keep its label legible`);
+      }
+    }
+    assert.ok(contrast(tokenIn(darkRegister, "--cta-fill"), tokenIn(darkRegister, "--surface-3")) >= 3);
+    assert.ok(contrast(tokenIn(lightRegister, "--cta-fill"), tokenIn(lightRegister, "--surface-3")) >= 3);
+  });
+});

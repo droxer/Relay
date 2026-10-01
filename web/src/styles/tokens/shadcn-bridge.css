@@ -39,7 +39,7 @@
   --color-body: var(--ink-2);
   --color-muted-soft: var(--ink-4);
   --color-on-primary: var(--on-action);
-  --color-primary-active: var(--action-hover);
+  --color-primary-active: var(--cta-hover);
   --color-surface-strong: var(--surface-2);
   --color-surface-raised: var(--surface-3);
   --color-hairline: var(--line-1);
@@ -160,8 +160,8 @@
      elevation: separation comes from --shadow-2's hairline ring, never a blur. */
   --popover: var(--surface-3);
   --popover-foreground: var(--ink-1);
-  --primary: var(--action);
-  --primary-foreground: var(--on-action);
+  --primary: var(--cta-fill);
+  --primary-foreground: var(--cta-ink);
   --secondary: var(--surface-2);
   --secondary-foreground: var(--ink-1);
   --muted: var(--surface-2);

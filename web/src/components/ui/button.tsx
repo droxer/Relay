@@ -13,8 +13,8 @@ const buttonVariants = cva(
       variant: {
         /* Disabled drops OUT of the fill rather than fading through it. The
            shared `disabled:opacity-(--opacity-disabled)` is right for ghost/outline/link, where
-           the label sits on the page's own surface, but half-opacity white on
-           cobalt measures ~2.2:1 — and a filled CTA is exactly the button that
+           the label sits on the page's own surface. A filled CTA uses explicit
+           disabled surface and ink tokens to preserve legibility; it is the button that
            spends most of its life disabled (admin Settings' Save is disabled
            until its field is dirty). */
         default:
@@ -49,7 +49,7 @@ const buttonVariants = cva(
         /* Circular icon-only action — the source system's 40px button-icon-circular:
            ink-3 idle; a control wash + line-2 + ink-1 on hover. Always paired
            with the `icon` (--control-h) / `icon-dense` (--control-h-xs) sizes.
-           `tinted` swaps the hover to an --action wash; the `danger` modifier
+           `tinted` keeps the same neutral hover; the `danger` modifier
            re-tints it to --err and adds the hairline that keeps the
            destructive signal alive under forced-colors. */
         icon: "text-(--ink-3) hover:border-(--line-2) hover:bg-(--control-fill-hover) hover:text-(--ink-1)",
@@ -79,7 +79,7 @@ const buttonVariants = cva(
            Shares `default`'s 14px/700 label and differs from it by padding
            alone — in this system the button label is ALREADY the bold tier
            (the source system's button-md is 14px/700), so a commit action cannot
-           emphasise itself by getting heavier. It leads through the cobalt
+           emphasise itself by getting heavier. It leads through the neutral
            fill of the `default` variant and a wider pill. */
         cta: "h-(--control-h) gap-2 px-7",
         /* Square counterpart of `default`: the toolbar refresh buttons sit
@@ -94,11 +94,10 @@ const buttonVariants = cva(
         "icon-sm": "size-(--control-h-sm)",
         "icon-lg": "size-(--control-h-lg)",
       },
-      /* Tinted hover for the `icon` variant — the icon communicates a colored
-         action instead of the neutral ink hover. Declared after `variant` so
-         these classes win the tailwind-merge conflict. */
+      /* Keep the legacy tinted prop compatible while all non-destructive
+         icon actions follow the neutral Geist-style hover treatment. */
       tinted: {
-        true: "hover:border-transparent hover:bg-[color-mix(in_srgb,var(--action)_10%,transparent)] hover:text-(--action)",
+        true: "hover:border-(--line-2) hover:bg-(--control-fill-hover) hover:text-(--ink-1)",
         false: "",
       },
       /* Destructive intent on a QUIET tier — the icon-only row actions (delete
