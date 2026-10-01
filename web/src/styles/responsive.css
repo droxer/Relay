@@ -183,7 +183,10 @@
     display: none;
   }
 
+  /* Icon-only here, so it needs the floor on both axes: at its own padding
+     the glyph-only button measured 34px wide beside 44px neighbours. */
   .mobile-topbar-chat-tools .chat-artifacts-button {
+    min-width: var(--touch-target);
     min-height: var(--touch-target);
     padding-inline: var(--sp-2);
   }
