@@ -224,12 +224,17 @@ export function BacklogTaskList({
       header: () => <span className="sr-only">{state.current.t("backlog.status")}</span>,
       /* The dot-plus-sr-only grammar AgentStateBadge uses: the shape carries
          a word for anyone who cannot see it. */
-      cell: ({ row }) => (
-        <>
-          <StateMark shape={TASK_STATUS_SHAPE[row.original.status]} />
-          <span className="sr-only">{state.current.t(`backlog.statuses.${row.original.status}`)}</span>
-        </>
-      ),
+      cell: ({ row }) => {
+        const label = state.current.t(`backlog.statuses.${row.original.status}`);
+        /* The title gives a pointer the word the sr-only span gives a screen
+           reader — the dot alone is shape and colour, not a name. */
+        return (
+          <span title={label}>
+            <StateMark shape={TASK_STATUS_SHAPE[row.original.status]} />
+            <span className="sr-only">{label}</span>
+          </span>
+        );
+      },
     },
     {
       id: "issue-id",
@@ -239,7 +244,7 @@ export function BacklogTaskList({
     },
     {
       id: "title",
-      meta: { cellClass: "max-w-md whitespace-normal" } satisfies ColumnChrome,
+      meta: { cellClass: "task-col-title" } satisfies ColumnChrome,
       header: () => sortHead("title", state.current.t("backlog.col_task")),
       cell: ({ row }) => {
         const task = row.original;

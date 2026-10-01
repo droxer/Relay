@@ -63,6 +63,13 @@
 .task-col-due { width: 150px; }
 .task-col-assignee { width: 172px; }
 .task-col-actions { width: 176px; text-align: right; }
+/* The title is the one flexible track. Its link truncates with an ellipsis,
+   but under auto table layout a nowrap cell's min-content is the WHOLE title,
+   so the table widened past its pane and the trailing columns slid out of
+   view behind a scrollbar-less overflow (Assignee read "Platforn", Actions sat
+   on the window edge). `max-width: 0` drops that min-content floor and
+   `width: 100%` hands the track every pixel the fixed columns leave. */
+.task-col-title { width: 100%; max-width: 0; }
 
 /* The hoisted column header travels with the scroll so it keeps naming the
    row under the reader's eye. `th`, not the row: sticky positioning on <tr>
@@ -228,6 +235,33 @@ tr[data-routine-state="paused"] .backlog-row-title,
 
 .backlog-row:hover .backlog-due-empty { color: var(--ink-3); }
 .backlog-due-empty:hover { background: var(--control-fill-hover); color: var(--ink-1); }
+
+/* Phone widths keep what a row is FOR — select, title, who has it. At 390px
+   the desktop track set left the title ~90px between a 190px id column and
+   the date, so every title cut off after a word. The id, priority and date
+   are all on the record one tap away. */
+@media (max-width: 820px) {
+  .task-col-ref,
+  .task-col-priority,
+  .task-col-due { display: none; }
+  .task-col-assignee { width: 128px; }
+
+  /* With the title the only flexible track, a trailing chip ("Needs project")
+     beside it left the title one letter and an ellipsis. Here the chip drops
+     under the title, and the title takes two lines before it truncates. */
+  .task-col-title .backlog-row-lead-main {
+    flex-wrap: wrap;
+    row-gap: var(--sp-1);
+  }
+
+  .task-col-title .backlog-row-title {
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   /* Pulse rings live on pseudos now — hide them outright under reduced

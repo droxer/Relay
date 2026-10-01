@@ -395,7 +395,7 @@ function TeamProfile({
           </form>
         </div>
 
-        <aside className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
+        <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
           <div className="workspace-dossier-portrait">
             <ProfileImagePicker
               imageUrl={team.profileImageUrl}
@@ -486,7 +486,7 @@ function TeamProfile({
               {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(team.updatedAt, t) })}
             </Badge>
           </div>
-        </aside>
+        </section>
 
         {/* Management spans both columns — it acts on the whole record, not
             on the roster document or the identity rail. Hidden while the

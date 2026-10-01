@@ -69,7 +69,10 @@ body {
   left: var(--sp-4);
   top: var(--sp-4);
   z-index: var(--z-dialog);
-  transform: translateY(calc(-100% - var(--sp-4)));
+  /* Parked a step past the top edge, not flush with it: at exactly -100% -
+     top its bottom edge sat on y=0 and a fractional height let one row of
+     the action fill paint as a blue sliver over every page. */
+  transform: translateY(calc(-100% - var(--sp-4) - var(--sp-2)));
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
   background: var(--action);

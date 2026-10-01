@@ -9,6 +9,8 @@ import type { AgentName, AgentTeam, EmployeeAgent, RelayArtifact, RelaySession }
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
+import { RelayEmptyState } from "./components/RelayEmptyState";
+import { Button } from "@/components/ui/button";
 import { useRelayData } from "./hooks/useRelayData";
 import { useRelayMutations } from "./hooks/useRelayMutations";
 import { useMutationError } from "./hooks/useMutationError";
@@ -417,12 +419,13 @@ export function App() {
       : t("thread.new_thread");
 
   const skipLinkHref = useMemo(() => {
+    if (notFound) return "#route-not-found";
     if (isTaskThread) return "#chat-panel";
     if (route === "projects" && showProjectOverview) return "#project-detail-panel";
     if (route === "main" || route === "projects") return mobileView === "threads" ? "#thread-panel" : "#chat-panel";
     if (route === "agents" && agentId) return "#agent-detail-panel";
     return `#${WORK_ROUTE_SKIP_IDS[route]}`;
-  }, [agentId, route, mobileView, showProjectOverview, showProjectDirectoryEmpty, isTaskThread]);
+  }, [agentId, route, mobileView, notFound, showProjectOverview, showProjectDirectoryEmpty, isTaskThread]);
 
   const awaitingDecision = useMemo(() => isAwaitingFeedbackDecision(activeSession), [activeSession]);
 
@@ -743,10 +746,23 @@ export function App() {
       <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${recordTaskId}:${recordRunId}:${teamWorkspaceId}`}>
       <Suspense fallback={<RouteFallback />}>
         {notFound ? (
-          <section className="route-loading" role="status">
-            <h1>Page not found</h1>
-            <p>The requested Relay page does not exist.</p>
-          </section>
+          // Fills the content tracks (not the rail column it used to fall
+          // into), is the skip link's target, and offers a way back — it was a
+          // bare English line with nowhere to go.
+          <div id="route-not-found" className="route-not-found" tabIndex={-1}>
+            <RelayEmptyState
+              fill
+              titleId="route-not-found-title"
+              headingLevel={1}
+              title={t("route_not_found.title")}
+              body={t("route_not_found.body")}
+              actions={(
+                <Button type="button" variant="outline" size="dense" onClick={() => navigateToRoute("main")}>
+                  {t("route_not_found.home")}
+                </Button>
+              )}
+            />
+          </div>
         ) : route === "admin" ? (
           <AdminPage
             currentUser={user}

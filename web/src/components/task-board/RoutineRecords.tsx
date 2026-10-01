@@ -202,11 +202,14 @@ export function RoutineTable({
         header: () => <span className="sr-only">{stateRef.current.t("routine.state")}</span>,
         cell: ({ row }) => {
           const state = stateRef.current.stateFor(row.original);
+          const label = stateRef.current.t(`routine.states.${state}`);
+          /* The title gives a pointer the word the sr-only span gives a
+             screen reader — the dot alone is shape and colour, not a name. */
           return (
-            <>
+            <span title={label}>
               <StateMark shape={ROUTINE_STATE_SHAPE[state]} />
-              <span className="sr-only">{stateRef.current.t(`routine.states.${state}`)}</span>
-            </>
+              <span className="sr-only">{label}</span>
+            </span>
           );
         },
       },
@@ -218,7 +221,7 @@ export function RoutineTable({
       },
       {
         id: "title",
-        meta: { cellClass: "max-w-md" } satisfies ColumnChrome,
+        meta: { cellClass: "task-col-title" } satisfies ColumnChrome,
         header: () => sortHead("title", stateRef.current.t("backlog.col_task")),
         cell: ({ row }) => {
           const task = row.original;

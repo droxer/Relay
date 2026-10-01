@@ -50,7 +50,10 @@
 
 .computer-connect-usage {
   margin-left: var(--sp-1);
-  color: var(--ink-4);
+  /* The button's own ink, set apart by weight alone. --ink-4 is a page-ground
+     tone: on the primary fill it measured 1.17:1 and the count vanished. */
+  color: inherit;
+  font-weight: 400;
 }
 
 .computer-connect-limit {

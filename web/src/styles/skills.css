@@ -132,6 +132,13 @@
   white-space: nowrap;
 }
 
+/* --ink-4 is tuned for AA on the rail's own ground; on the selected row's
+   action-soft wash it fell to 4.33:1. The selected row steps the meta up one
+   ink, which clears AA on the wash in both themes. */
+.skills-roster-row-select[aria-current="page"] .skills-roster-row-meta {
+  color: var(--ink-3);
+}
+
 .skill-muted {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);

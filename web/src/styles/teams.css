@@ -416,6 +416,16 @@
     display: none;
   }
 
+  /* The 46vh cap above is for the stacked roster-over-detail layout. Here the
+     detail is hidden, so the cap only boxed the roster into a short scroller
+     with the rest of the screen empty — the roster takes the whole pane. */
+  .teams-page[data-view="list"] .teams-roster {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    border-bottom: 0;
+  }
+
   .teams-page[data-view="detail"] .teams-roster {
     display: none;
   }

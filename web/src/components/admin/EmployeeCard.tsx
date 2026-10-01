@@ -1,12 +1,12 @@
 "use client";
 
 import { employeeHandleOf } from "../../lib/employeeHandle";
+import { identityMonogram } from "../../lib/identity";
 import type { TFunction } from "i18next";
 import { Button } from "@/components/ui/button";
 import {
   ActionEdit,
   AdminDelete,
-  AdminEmployees,
   ICON,
 } from "../icons";
 import {
@@ -42,8 +42,11 @@ export function EmployeeCard({
       data-employee={member.id}
     >
       <header className="adm-node-card-head">
+        {/* Initials, the way the dashboard's top-employees list draws the same
+            person — one generic people glyph on every card told them apart by
+            nothing. */}
         <span className="adm-node-avatar adm-emp-avatar" aria-hidden="true" translate="no">
-          <AdminEmployees size={ICON.lg} aria-hidden="true" />
+          {identityMonogram(member.displayName)}
         </span>
         <div className="adm-node-card-identity">
           <span className="adm-node-card-name" translate="no">{member.displayName}</span>

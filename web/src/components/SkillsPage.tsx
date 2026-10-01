@@ -250,7 +250,9 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
      card. The create affordance is the ghost plus the projects, threads and
      agents rails all carry. */
   return (
-    <main className="skills-page" id="skills-panel" data-view={skills.length ? "list" : "empty"}>
+    // A section, not a <main>: this renders inside the shell's <main>, and a
+    // nested second main landmark is one screen readers cannot disambiguate.
+    <section className="skills-page" id="skills-panel" aria-label={t("skills.title")} data-view={skills.length ? "list" : "empty"}>
       <nav className="skills-list" aria-label={t("skills.library_label")}>
         {/* No kicker: the library is a section of personal settings, and the
             section rail one column to the left already names it. The skill
@@ -724,6 +726,6 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           onClose={() => setSharing(false)}
         />
       ) : null}
-    </main>
+    </section>
   );
 }

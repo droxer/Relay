@@ -89,6 +89,11 @@
     "archive_project": "Couldn't archive the project. Refresh it and try again."
   },
   "skip_to_content": "Skip to content",
+  "route_not_found": {
+    "title": "Page not found",
+    "body": "This address doesn’t match a page in Relay. Check the link, or go back to your threads.",
+    "home": "Go to threads"
+  },
   "nav": {
     "threads": "Threads",
     "workspace": "Workspace",
@@ -389,7 +394,7 @@
     "today": "Today",
     "unscheduled": "Unscheduled",
     "empty_lane": "No issues",
-    "unassigned": "unassigned",
+    "unassigned": "Unassigned",
     "no_due": "No due date",
     "no_agent": "No agent",
     "agent_team": "All agents (discussion)",

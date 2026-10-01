@@ -425,8 +425,21 @@ tr.is-pulse > td:first-child::after {
 
 /* ── Employee card (card view) — inherits the node-card frame so the two
    views read as one system; only the interior slots differ. ───────────── */
+/* The fleet card's fixed height is sized for a computer's header. An
+   employee's header stacks name, handle, department and a state pill, which
+   left the body ~40px — every card faded its computer chips out entirely, so
+   the card never showed the one thing it lists. Employee cards grow from that
+   floor instead; the grid stretches each row to its tallest card, so a row
+   still reads as one even band. */
+.adm-emp-card.adm-node-card {
+  height: auto;
+  min-height: var(--card-h-fleet);
+}
+
 .adm-emp-card .adm-node-card-body {
   gap: var(--sp-3);
+  overflow: visible;
+  mask-image: none;
 }
 
 .adm-emp-card-dept {

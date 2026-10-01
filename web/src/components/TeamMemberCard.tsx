@@ -235,7 +235,9 @@ export function TeamMemberCard({ member, config, lead, canEdit, saving, onEditin
   );
 
   return (
-    <article
+    // A div, not an <article>: ARIA does not allow role="group" on article,
+    // and the group role (named by the member) is what this card is.
+    <div
       className="team-work-member"
       data-editing={editing || undefined}
       role="group"
@@ -270,6 +272,6 @@ export function TeamMemberCard({ member, config, lead, canEdit, saving, onEditin
       ) : (
         <TeamMemberSummary member={member} config={config} lead={lead} />
       )}
-    </article>
+    </div>
   );
 }

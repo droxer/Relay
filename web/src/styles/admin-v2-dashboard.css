@@ -184,6 +184,19 @@
 
 /* Total on the left, the deep link on the right: the card absorbed the fleet
    band's only two unique parts when the band came out. */
+.adm-dash-health-footer {
+  column-gap: var(--sp-3);
+}
+
+/* The total is one phrase: it squeezed to "5 / computers" on two lines beside
+   the link. It stays whole and the footer stays one line — wrapping the link
+   below instead grew the footer inside the panel's fixed frame and sliced the
+   state grid's counts above it. */
+.adm-dash-health-footer > :first-child {
+  flex: none;
+  white-space: nowrap;
+}
+
 .adm-dash-health-footer > :last-child {
   margin-inline-start: auto;
 }
@@ -470,7 +483,12 @@
 .adm-dash-top-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  /* The bottom pad lets the last row scroll clear of the fade below, so the
+     fade only ever lands on a row that has more list after it. */
+  padding: 0 0 var(--sp-5);
+  /* The panel clips this list at whatever height the grid row leaves; without
+     a fade the cut fell mid-glyph and read as a rendering fault. */
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--sp-5)), transparent 100%);
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
@@ -559,6 +577,10 @@
   .adm-dash-tile--nodes { border-right: 0.5px solid var(--line-1); border-bottom: 0.5px solid var(--line-1); }
   .adm-dash-tile--employees { border-right: none; border-bottom: 0.5px solid var(--line-1); }
   .adm-dash-tile--tokens { grid-column: 1 / -1; border-right: none; }
+  /* The floor exists so a desktop row holds one height while readings load.
+     Stacked, each row is its own height, and the floor only padded the
+     foot-less Computers / Employees pair into two tall empty boxes. */
+  .adm-dash-tile { min-height: 0; }
 }
 
 /* Phone: stay two-up rather than collapsing to a single column — four stacked

@@ -79,3 +79,19 @@
   }
 
 }
+
+/* The not-found screen spans the content tracks the way .tasks-workspace
+   does; as a bare section it fell into the rail column beside the nav. */
+.route-not-found {
+  grid-column: 2 / -1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 820px) {
+  .route-not-found {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

@@ -186,11 +186,13 @@ export function ThreadListPanel({
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      <section
+      {/* A plain scroller, not a second landmark: the enclosing <aside> already
+          carries this exact name, and two landmarks with one name are ones a
+          screen reader cannot tell apart. */}
+      <div
         // project-directory widens the row gap for folder blocks; in threads
         // mode the list must keep conversation-list's tight single-line gap.
         className={directoryMode === "projects" ? "conversation-list project-directory" : "conversation-list"}
-        aria-label={directoryMode === "projects" ? t("project.projects") : t("nav.threads")}
       >
         {directoryMode === "projects" ? hierarchy.projects.map(({ project, threads: projectThreads }) => {
           const computerLabel = computers.find((computer) => computer.id === project.computerId)?.displayName
@@ -287,7 +289,7 @@ export function ThreadListPanel({
             )}
           />
         ) : null}
-      </section>
+      </div>
       </div>
       <ResizeHandle
         className="thread-panel-resize"
