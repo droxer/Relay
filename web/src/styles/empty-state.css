@@ -55,6 +55,13 @@
   text-align: left;
 }
 
+/* …and it stays top-anchored like the rows it stands in for: --fill's
+   vertical centering floated the block mid-panel on tall boards, which read
+   as a lost dialog rather than an empty column. */
+.relay-empty--board.relay-empty--fill {
+  justify-content: flex-start;
+}
+
 .relay-empty--board .relay-empty-body {
   max-width: var(--measure);
 }
