@@ -41,6 +41,12 @@ composition. They intercept discovery requests and do not require a backend.
 - All 1,827 compiled package/web unit tests passed with local port/process
   access. The restricted run had three environment-related failures.
 - Focused ESLint check for `src/hooks/useLocalDaemonNodes.ts` passed.
+- All 368 React interaction tests passed with
+  `npm run test:react -w web -- --maxWorkers=2`. The default worker run had one
+  roster keyboard test time out; that file passed alone and in this rerun.
+- Backend suite: 2,008 passed, 10 skipped, one installer TTY test failed in the
+  restricted environment. Rerunning all 15 computer installer tests with local
+  port/process access passed, including that test.
 - Focused V8 coverage: `npm run test:react -w web --
   interaction-tests/threadDirectoryLoading.test.tsx --coverage
   --coverage.include=src/hooks/useLocalDaemonNodes.ts` measured 100% statements,
@@ -51,3 +57,6 @@ composition. They intercept discovery requests and do not require a backend.
   the suites were run separately with the Webpack build above.
 - Dependency audit found four existing advisories (one high, two moderate,
   one low). No dependency versions changed.
+- `node script/readme-snapshots/capture.mjs` rendered the production App and
+  captured all 18 dark-theme README screenshots (nine surfaces, two languages)
+  without page errors, error boundaries, missing fixtures, or theme mismatches.
