@@ -199,7 +199,6 @@ describe("reviewed design regressions", () => {
     // One back control, one spelling of it, on every surface a file opens on.
     for (const surface of [
       "src/components/space/ThreadSpaceFiles.tsx",
-      "src/components/task-record/RecordWorkspace.tsx",
       "src/components/artifact/ArtifactPreviewHeader.tsx",
     ]) {
       assert.match(readWeb(surface), /<FilePaneBack/, `${surface} rolls its own back control`);
@@ -212,12 +211,14 @@ describe("reviewed design regressions", () => {
        with a download on only one of the three. All three now mount the same
        component in the file's own header row. */
     const surfaces = [
-      "src/components/ProjectWorkspaceFiles.tsx",
+      "src/components/workspace/WorkspaceFilePanes.tsx",
       "src/components/space/ThreadSpaceFiles.tsx",
-      "src/components/task-record/RecordWorkspace.tsx",
     ];
     for (const surface of surfaces) {
       assert.match(readWeb(surface), /<WorkspaceFileActions/, `${surface} builds its own file controls`);
+    }
+    for (const surface of ["src/components/ProjectWorkspaceFiles.tsx", "src/components/task-record/RecordWorkspace.tsx"]) {
+      assert.match(readWeb(surface), /<WorkspaceFilePanes/, `${surface} must reuse the shared file panes`);
     }
     // The preview is controlled: a header cannot read state its sibling holds.
     assert.ok(

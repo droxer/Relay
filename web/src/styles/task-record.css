@@ -605,3 +605,28 @@
   flex: 0 1 auto;
   min-width: 0;
 }
+
+/* Shared project workspace panes adapt to the drawer's available width. */
+.record-workspace-files {
+  container-type: inline-size;
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  overflow: hidden;
+}
+
+.record-workspace-files .workspace-panes {
+  min-height: 280px;
+  max-height: 600px;
+}
+
+@container (max-width: 640px) {
+  .record-workspace-files .workspace-panes:not(.is-browse-only) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(100px, 180px) minmax(180px, 1fr);
+  }
+
+  .record-workspace-files .workspace-pane-browse {
+    border-right: 0;
+    border-bottom: 0.5px solid var(--line-1);
+  }
+}
