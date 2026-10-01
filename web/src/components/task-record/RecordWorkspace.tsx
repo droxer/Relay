@@ -70,11 +70,13 @@ export function RecordWorkspace({ taskId }: { taskId: string }) {
 
   return (
     <section className="record-panel" aria-label={t("backlog.workspace")}>
-      <h3 className="record-panel-title">{t("backlog.workspace")}</h3>
-      <Button variant="ghost" type="button" onClick={() => {
-        void fileQuery.refetch();
-        if (selectedPath) void contentQuery.refetch();
-      }}>{t("backlog.workspace_refresh")}</Button>
+      <div className="record-panel-head">
+        <h3 className="record-panel-title">{t("backlog.workspace")}</h3>
+        <Button variant="ghost" size="dense" type="button" onClick={() => {
+          void fileQuery.refetch();
+          if (selectedPath) void contentQuery.refetch();
+        }}>{t("backlog.workspace_refresh")}</Button>
+      </div>
       {/* Why this listing is stale, named but not linked: the recovery panel at
           the top of the drawer owns navigation to the blocking thread, and one
           drawer should not offer the same thread twice. */}

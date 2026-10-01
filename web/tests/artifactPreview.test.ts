@@ -4,9 +4,12 @@ import { describe, it } from "node:test";
 import type { RelayArtifact } from "relay-core";
 
 import {
+  artifactDownloadName,
   artifactFileName,
   artifactRawHref,
   artifactRenderMode,
+  artifactShowsKind,
+  formatArtifactDate,
   workspaceFilePreviewMode,
 } from "../src/lib/artifactPreview.js";
 
@@ -112,5 +115,41 @@ describe("artifactFileName", () => {
 describe("artifactRawHref", () => {
   it("URL-encodes both identifiers", () => {
     assert.equal(artifactRawHref("ses 1", "art/2"), "/api/v1/threads/ses%201/artifacts/art%2F2");
+  });
+});
+
+describe("artifactDownloadName", () => {
+  it("replaces filesystem-reserved characters and collapses whitespace", () => {
+    assert.equal(artifactDownloadName('notes/2026: "draft"?.md'), "notes 2026 draft .md");
+  });
+
+  it("falls back to a stable name when nothing usable is left", () => {
+    assert.equal(artifactDownloadName(" /\\ "), "artifact");
+  });
+});
+
+describe("artifactShowsKind", () => {
+  it("hides the kind tag for workspace files, whose name already says what they are", () => {
+    assert.equal(artifactShowsKind("workspace_file"), false);
+  });
+
+  it("keeps it for kinds a title does not name", () => {
+    for (const kind of ["plan", "diff", "review", "summary", "command_log", "test_output", "agent_output"] as const) {
+      assert.equal(artifactShowsKind(kind), true, kind);
+    }
+  });
+});
+
+describe("formatArtifactDate", () => {
+  it("formats a timestamp with month, day, and time so versions differ", () => {
+    const earlier = formatArtifactDate("2026-08-09T10:00:00.000Z", "en");
+    const later = formatArtifactDate("2026-08-09T10:30:00.000Z", "en");
+    assert.match(earlier, /Aug/);
+    assert.notEqual(earlier, later);
+  });
+
+  it("returns empty for a missing value and the raw input when unparseable", () => {
+    assert.equal(formatArtifactDate(undefined, "en"), "");
+    assert.equal(formatArtifactDate("not a date", "en"), "not a date");
   });
 });

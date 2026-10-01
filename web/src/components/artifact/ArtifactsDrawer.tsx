@@ -5,6 +5,8 @@ import { Drawer } from "@/components/ui/Drawer";
 import { ArtifactBody } from "./ArtifactBody";
 import { ArtifactIndexStrip } from "./ArtifactIndexStrip";
 import { ArtifactPreviewHeader } from "./ArtifactPreviewHeader";
+import type { ArtifactView } from "./ArtifactViewToggle";
+import { artifactRenderMode } from "../../lib/artifactPreview";
 import { ArtifactsEmpty } from "./ArtifactsEmpty";
 import { OVERLAY_TAKEOVER_QUERY } from "../../lib/breakpoints";
 
@@ -30,6 +32,10 @@ export function ArtifactsDrawer({
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stripExpanded, setStripExpanded] = useState(false);
+  /* Narrow screens lay the list out in flow above the preview; wide ones
+     slide it over the preview, so there a pick should put it away again. */
+  const [listInFlow, setListInFlow] = useState(false);
+  const [view, setView] = useState<ArtifactView>("preview");
 
   const artifactsRef = useRef(artifacts);
   artifactsRef.current = artifacts;
@@ -41,7 +47,11 @@ export function ArtifactsDrawer({
 
     const mq = window.matchMedia(OVERLAY_TAKEOVER_QUERY);
     setStripExpanded(mq.matches);
-    const handleChange = (event: MediaQueryListEvent) => setStripExpanded(event.matches);
+    setListInFlow(mq.matches);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setStripExpanded(event.matches);
+      setListInFlow(event.matches);
+    };
     mq.addEventListener("change", handleChange);
     return () => mq.removeEventListener("change", handleChange);
   }, [open, initialArtifactId]);
@@ -50,6 +60,15 @@ export function ArtifactsDrawer({
     () => artifacts.find((a) => a.id === selectedId) ?? artifacts[0] ?? null,
     [artifacts, selectedId],
   );
+
+  // Each file opens on its rendered reading, as in the thread space panel.
+  useEffect(() => setView("preview"), [selectedArtifact?.id]);
+  const renderMode = selectedArtifact ? artifactRenderMode(selectedArtifact) : "none";
+
+  function selectArtifact(id: string): void {
+    setSelectedId(id);
+    if (!listInFlow) setStripExpanded(false);
+  }
 
   const effectiveSessionId = selectedArtifact
     ? resolveSessionId(selectedArtifact, sessionId)
@@ -79,7 +98,7 @@ export function ArtifactsDrawer({
             <ArtifactIndexStrip
               artifacts={artifacts}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              onSelect={selectArtifact}
               expanded={stripExpanded}
               onExpandedChange={setStripExpanded}
             />
@@ -90,9 +109,13 @@ export function ArtifactsDrawer({
                   <ArtifactPreviewHeader
                     artifact={selectedArtifact}
                     sessionId={effectiveSessionId}
+                    /* Same switch, same rule as the thread space panel: a
+                       body with one reading gets no switch. */
+                    view={renderMode === "none" ? undefined : view}
+                    onViewChange={renderMode === "none" ? undefined : setView}
                   />
                   <div className="artifact-preview-body">
-                    <ArtifactBody artifact={selectedArtifact} sessionId={effectiveSessionId} />
+                    <ArtifactBody artifact={selectedArtifact} sessionId={effectiveSessionId} view={view} />
                   </div>
                 </>
               ) : (

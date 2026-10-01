@@ -21,7 +21,10 @@ import {
   Columns3,
   CircleDashed,
   File,
+  FileCode,
   FileDiff,
+  FileImage,
+  FileSpreadsheet,
   FileText,
   FolderClosed,
   Rows3,
@@ -418,6 +421,11 @@ export const ArtifactCommand = withStandardStroke(Terminal, "ArtifactCommand");
 export const ArtifactSummary = withStandardStroke(FileText, "ArtifactSummary");
 export const ArtifactOutput = withStandardStroke(Bot, "ArtifactOutput");
 export const ArtifactFile = withStandardStroke(File, "ArtifactFile");
+// A produced file's sheet takes its family's mark, so a strip of files is not
+// a column of identical blank pages: picture, source, table, else plain sheet.
+export const ArtifactFileImage = withStandardStroke(FileImage, "ArtifactFileImage");
+export const ArtifactFileCode = withStandardStroke(FileCode, "ArtifactFileCode");
+export const ArtifactFileTable = withStandardStroke(FileSpreadsheet, "ArtifactFileTable");
 
 // shadcn primitives (sheet, select) reach for these by their original
 // names; wrap them so they share ICON_STROKE with the rest of the app.
