@@ -587,7 +587,7 @@ describe("workspace status colors", () => {
   // same time — see stateMark.test.ts and toneDriver.test.ts.
   it("reads the tone driver instead of re-deriving a hue per status", () => {
     const files = readFileSync(
-      path.resolve("web", "src", "components", "ProjectWorkspaceFiles.tsx"),
+      path.resolve("web", "src", "components", "workspace", "WorkspaceFilePanes.tsx"),
       "utf8",
     );
     assert.match(

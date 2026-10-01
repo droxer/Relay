@@ -8,16 +8,8 @@ import type {
   TaskWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
 } from "../../types";
-import {
-  WorkspaceFileList,
-  WorkspacePathBreadcrumb,
-} from "../workspace/WorkspaceFileList";
-import {
-  WorkspaceFilePreview,
-  useWorkspaceFileView,
-} from "../workspace/WorkspaceFilePreview";
-import { WorkspaceFileActions } from "../workspace/WorkspaceFileActions";
-import { FilePaneBack } from "../workspace/FilePaneBack";
+import { useWorkspaceFileView } from "../workspace/WorkspaceFilePreview";
+import { WorkspaceFilePanes } from "../workspace/WorkspaceFilePanes";
 import { Button } from "@/components/ui/button";
 import { taskWorkspaceState } from "./taskWorkspaceState";
 
@@ -105,49 +97,20 @@ export function RecordWorkspace({ taskId }: { taskId: string }) {
         </p>
       ) : state === "empty" ? (
         <p className="record-panel-note">{t("backlog.workspace_empty")}</p>
-      ) : selectedPath ? (
-        <div className="thread-space-files">
-          <div className="thread-space-files-bar">
-            <FilePaneBack onClick={() => setSelectedPath("")} />
-            <span className="thread-space-files-name">{selectedName}</span>
-            {/* Same row, same controls as the workspace pane and the thread
-                space panel — the third surface a file opens on. */}
-            <div className="thread-space-files-actions">
-              <WorkspaceFileActions
-                name={selectedName}
-                data={contentQuery.data}
-                view={view}
-                onViewChange={setView}
-              />
-            </div>
-          </div>
-          <div className="thread-space-files-body">
-            <WorkspaceFilePreview
-              name={selectedName}
-              data={contentQuery.data}
-              isLoading={contentQuery.isLoading}
-              error={contentQuery.isError ? contentQuery.error : null}
-              view={view}
-            />
-          </div>
-        </div>
       ) : (
-        <div className="thread-space-files">
-          <div className="thread-space-files-bar">
-            <WorkspacePathBreadcrumb path={path} onNavigate={openDirectory} />
-          </div>
-          <div className="thread-space-files-body">
-            <WorkspaceFileList
-              data={fileQuery.data}
-              error={fileQuery.error}
-              isLoading={fileQuery.isLoading}
-              path={path}
-              selectedPath={selectedPath}
-              onOpenDirectory={openDirectory}
-              onSelectFile={(entry) => setSelectedPath(entry.path)}
-              onRetry={() => void fileQuery.refetch()}
-            />
-          </div>
+        <div className="record-workspace-files">
+          <WorkspaceFilePanes
+            path={path}
+            selectedPath={selectedPath}
+            files={{ data: fileQuery.data, error: fileQuery.error, isLoading: fileQuery.isLoading }}
+            content={{ data: contentQuery.data, error: contentQuery.error, isLoading: contentQuery.isLoading }}
+            view={view}
+            setView={setView}
+            openDirectory={openDirectory}
+            onSelectFile={(entry) => setSelectedPath(entry.path)}
+            onRetry={() => void fileQuery.refetch()}
+            onClosePreview={() => setSelectedPath("")}
+          />
         </div>
       )}
     </section>

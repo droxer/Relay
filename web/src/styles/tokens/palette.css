@@ -862,7 +862,7 @@ html[data-theme="light"] {
   --code-declaration: #1f4f82;
   --code-attribute: #5b3a75;
 
-  --scrim: rgba(10, 19, 23, 0.55);
+  --scrim: rgba(36, 48, 53, 0.22);
 }
 
 /* CJK — the sans stack is NOT restated here: Chinese uses the same system
