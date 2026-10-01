@@ -54,3 +54,32 @@ export function artifactRenderMode(artifact: RelayArtifact): ArtifactRenderMode 
   if (isHtmlFile(name)) return "html";
   return "none";
 }
+
+/** A filesystem-safe download name from an artifact title. Every download
+ *  control funnels through this so the same artifact saves under one name
+ *  whichever surface it was downloaded from. */
+export function artifactDownloadName(title: string): string {
+  const cleaned = title.replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned || "artifact";
+}
+
+/** Whether an artifact's kind tag earns its place beside its title. A plan, a
+ *  diff, or a review is not named by its title; a workspace file is — "File"
+ *  next to `notes.md` is noise. One rule for every list and header. */
+export function artifactShowsKind(kind: RelayArtifact["kind"]): boolean {
+  return kind !== "workspace_file";
+}
+
+/** Short creation stamp ("Oct 1, 14:05") that tells versions of one file
+ *  apart in artifact lists. Unparseable input is returned as-is. */
+export function formatArtifactDate(value: string | undefined, locale: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(locale || undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { SpaceItem } from "../../lib/threadSpace";
 import { ArtifactKindIcon } from "../artifact/ArtifactIndexStrip";
+import { artifactFileName } from "../../lib/artifactPreview";
 import { Button } from "@/components/ui/button";
 import { ICON } from "../icons";
 
@@ -106,7 +107,7 @@ export function ThreadSpaceList({
               onClick={() => onSelect(artifact.id)}
             >
               <span className="thread-space-row-icon" aria-hidden="true">
-                <ArtifactKindIcon kind={artifact.kind} size={ICON.sm} />
+                <ArtifactKindIcon kind={artifact.kind} size={ICON.sm} name={artifactFileName(artifact)} />
               </span>
               <span className="thread-space-row-copy">
                 <span className="thread-space-row-title">{artifact.title}</span>

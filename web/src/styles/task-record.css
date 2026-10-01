@@ -414,6 +414,21 @@
   border-top: 0.5px solid var(--line-2);
 }
 
+/* Title on the left, the panel's one action (refresh, versions) at the
+   right on the same line. The action used to be a bare button wedged between
+   the title and the list. */
+.record-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.record-panel-head > .record-panel-title {
+  margin: 0;
+}
+
 .record-panel-title {
   display: flex;
   align-items: center;
@@ -432,7 +447,9 @@
 
 .record-panel-note {
   margin: 0;
-  color: var(--ink-4);
+  /* --ink-3, the artifact preview's status ink: one tier for every
+     loading / empty note, not a dimmer one in the record. */
+  color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }

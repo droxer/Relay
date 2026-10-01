@@ -321,6 +321,9 @@
 
 
 .thread-space-preview {
+  /* The artifact header's container (artifact.css): at this panel's width
+     the file's actions wrap under its name. */
+  container: artifact-preview / inline-size;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;

@@ -26,7 +26,8 @@
              in the building, which is why it cannot be a viewport query)
      640px   compact — dashboard, admin shell, composer, workspace panes;
              also a CONTAINER tier, where the `record` run ledger folds its
-             files column under the duration
+             files column under the duration, and where the
+             `artifact-preview` header wraps a file's actions under its name
      768px   CONTAINER tier, not a viewport one — the `computer` and `record`
              containers widen here. Container queries are breakpoints too and
              belong in this list; leaving them out is what made this row look

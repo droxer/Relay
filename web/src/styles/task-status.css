@@ -433,6 +433,13 @@
   transform: translateX(1.5px);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the optical-centre offset, drop the hover nudge. */
+  .backlog-action-primary.backlog-action-icon:hover:not(:disabled) svg {
+    transform: translateX(0.5px);
+  }
+}
+
 
 .backlog-empty {
   margin: 0;

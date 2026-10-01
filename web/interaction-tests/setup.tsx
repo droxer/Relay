@@ -1,6 +1,6 @@
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { createElement } from "react";
+import { cloneElement, createElement } from "react";
 
 // jsdom ships no PointerEvent, but base-ui controls construct one from the
 // owner window on click, so any test that clicks a <Checkbox>/<Switch> throws
@@ -25,7 +25,10 @@ vi.mock("@/components/ui/dialog", () => {
 });
 vi.mock("@/components/ui/toast", () => ({ Toaster: () => null, toast: { add: vi.fn() } }));
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, tooltip: _tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, ...props }: any) => createElement("button", props, children),
+  // `render` swaps the element like the real base-ui primitive does, so a
+  // link-button (a download anchor) stays an anchor under test.
+  Button: ({ children, tooltip: _tooltip, variant: _variant, size: _size, loading: _loading, loadingLabel: _loadingLabel, nativeButton: _native, render, ...props }: any) =>
+    render ? cloneElement(render, props, children) : createElement("button", props, children),
   // Real variants are class strings; tests only need a stable stand-in so
   // link-buttons stay distinguishable from bare anchors.
   buttonVariants: ({ variant = "default", size = "default" }: any = {}) => `btn-${variant} btn-${size}`,

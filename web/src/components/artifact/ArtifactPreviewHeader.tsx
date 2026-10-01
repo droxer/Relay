@@ -1,17 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelayArtifact } from "relay-core";
-import { artifactRawHref } from "../../lib/artifactPreview";
+import { artifactDownloadName, artifactRawHref, artifactShowsKind } from "../../lib/artifactPreview";
 import { ArtifactViewToggle, type ArtifactView } from "./ArtifactViewToggle";
 import { FilePaneBack } from "../workspace/FilePaneBack";
 import { Button } from "@/components/ui/button";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { useDialogs } from "@/components/ui/DialogProvider";
-
-function sanitizeFilename(title: string): string {
-  const cleaned = title.replace(/[/\\:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
-  return cleaned || "artifact";
-}
 
 const TEXT_KINDS: ReadonlySet<RelayArtifact["kind"]> = new Set([
   "diff",
@@ -51,10 +46,7 @@ export function ArtifactPreviewHeader({
   const { announce } = useDialogs();
   const [copied, setCopied] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* A workspace file's kind tag reads "File" next to a name ending in `.md` —
-   * the chip earns its place for a plan, a diff or a review, which the name
-   * alone does not tell you, and is pure noise for a file. */
-  const showKind = artifact.kind !== "workspace_file";
+  const showKind = artifactShowsKind(artifact.kind);
   const kindLabel = t(`artifact.kind.${artifact.kind}`, { defaultValue: artifact.kind });
   const rawHref = artifactRawHref(sessionId, artifact.id);
   const canCopy = TEXT_KINDS.has(artifact.kind);
@@ -93,26 +85,29 @@ export function ArtifactPreviewHeader({
           through. Same row, same order as the workspace pane. */}
       <div className="artifact-preview-actions">
         {view && onViewChange ? <ArtifactViewToggle view={view} onChange={onViewChange} /> : null}
+        {/* Ghost dense buttons — the workspace pane's download control — so
+            the same action is one control wherever a file is open. */}
         {canCopy ? (
           <Button variant="ghost"
+            size="dense"
             type="button"
-            className="artifact-preview-action-btn"
             onClick={handleCopy}
             aria-label={copied ? t("artifact.copied") : t("artifact.action_copy")}
           >
             {copied ? t("artifact.copied") : t("artifact.action_copy")}
           </Button>
         ) : null}
-        <a
-          className="artifact-preview-action-btn"
-          href={rawHref}
-          download={sanitizeFilename(artifact.title)}
-          aria-label={t("artifact.action_download")}
+        <Button variant="ghost"
+          size="dense"
+          nativeButton={false}
+          render={<a href={rawHref} download={artifactDownloadName(artifact.title)} />}
         >
           {t("artifact.action_download")}
-        </a>
-        {onClose ? <OverlayCloseButton label={t("sheet.close")} onClick={onClose} /> : null}
+        </Button>
       </div>
+      {/* Outside the actions group so a narrow header can keep it on the
+          name's line while the actions wrap below (artifact.css). */}
+      {onClose ? <OverlayCloseButton className="overlay-close artifact-preview-close" label={t("sheet.close")} onClick={onClose} /> : null}
     </header>
   );
 }

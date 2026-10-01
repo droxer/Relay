@@ -34,11 +34,16 @@ function DiffView({ text }: { text: string }) {
       {lines.map((line, index) => {
         const kind = classifyDiffLine(line);
         const sign = kind === "add" ? "+" : kind === "del" ? "-" : " ";
+        // The gutter draws the sign, so the text drops its own leading
+        // +/-/space — it printed twice ("- -") and indented every line.
+        const body = kind === "add" || kind === "del" || (kind === "context" && line.startsWith(" "))
+          ? line.slice(1)
+          : line;
         return (
           <div key={index} className={`artifact-diff-line is-${kind}`}>
             <span className="artifact-diff-ln" aria-hidden="true">{index + 1}</span>
             <span className="artifact-diff-sign" aria-hidden="true">{sign}</span>
-            <span className="artifact-diff-text">{line || " "}</span>
+            <span className="artifact-diff-text">{body || " "}</span>
           </div>
         );
       })}
