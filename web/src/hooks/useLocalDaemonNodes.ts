@@ -7,6 +7,10 @@ import {
   fetchControlPanelNodes,
 } from "../lib/controlPanelQueries";
 
+// The directory compares derived node arrays during render. A fresh fallback
+// on every render would keep invalidating those arrays before data arrives.
+const EMPTY_LOCAL_NODES: ControlPanelDaemonNodeRecord[] = [];
+
 // Admin-only discovery of daemon nodes registered with a co-located control
 // panel. Shares CONTROL_PANEL_NODES_KEY with useAdminNodes so threads + admin do
 // not double-poll /api/v1/admin/daemon-nodes on localhost.
@@ -38,5 +42,5 @@ export function useLocalDaemonNodes(enabled: boolean): {
     [queryClient],
   );
 
-  return { localNodes: query.data ?? [], refreshLocalDaemonNodes };
+  return { localNodes: query.data ?? EMPTY_LOCAL_NODES, refreshLocalDaemonNodes };
 }
