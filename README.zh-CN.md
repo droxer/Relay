@@ -72,7 +72,7 @@ Relay 是一个本地优先的 AI 工作控制平面。员工通过对话、议�
   </tr>
 </table>
 
-截图使用演示数据，由 [`script/readme-snapshots`](script/readme-snapshots/capture.mjs) 生成。
+截图使用深色主题和演示数据，由 [`script/readme-snapshots`](script/readme-snapshots/capture.mjs) 生成。
 
 ## 快速开始
 

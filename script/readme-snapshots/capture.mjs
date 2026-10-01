@@ -121,7 +121,7 @@ async function captureShot(browser, origin, shot, language, options) {
     viewport: VIEWPORT,
     deviceScaleFactor: options.draft ? 1 : 2,
     locale: language.code,
-    colorScheme: "light",
+    colorScheme: "dark",
   });
   await context.addInitScript((expanded) => {
     localStorage.setItem("relay-web.sidenavExpanded", expanded);
@@ -136,6 +136,7 @@ async function captureShot(browser, origin, shot, language, options) {
     await shot.prepare?.(page);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(SETTLE_MS);
+    if (await page.locator("html").getAttribute("data-theme") !== "dark") problems.push("dark theme was not applied");
     if (BOUNDARY_TEXT.test(await page.locator("body").innerText())) problems.push("rendered an error boundary");
     const file = join(options.outDir, `relay-${shot.name}${language.suffix}.png`);
     await page.screenshot({ path: file });
