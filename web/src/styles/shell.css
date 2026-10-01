@@ -231,15 +231,22 @@
 }
 
 .page-header-icon-action--primary {
-  color: var(--on-action);
-  background: var(--action);
-  border-color: var(--action);
+  color: var(--cta-ink);
+  background: var(--cta-fill);
+  border-color: var(--cta-fill);
 }
 
-.page-header-icon-action--primary:hover {
-  color: var(--on-action);
-  background: var(--action-hover);
-  border-color: var(--action-hover);
+.page-header-icon-action--primary:hover:not(:disabled) {
+  color: var(--cta-ink);
+  background: var(--cta-hover);
+  border-color: var(--cta-hover);
+}
+
+.page-header-icon-action--primary:disabled {
+  color: var(--ink-4);
+  background: var(--surface-2);
+  border-color: var(--line-1);
+  opacity: 1;
 }
 
 .page-header-actions--stacked {
