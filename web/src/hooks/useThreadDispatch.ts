@@ -136,7 +136,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       && composerTeams.some((team) => team.id === roundTeam.addressTeamId)
       ? roundTeam.addressTeamId
       : null;
-    let goal = raw;
+    const goal = raw;
     let newThreadAgentIds: string[] | undefined;
     // A project round addresses the whole roster unless the composer (or a
     // mention) names one member — the backend expands whichever it is given.

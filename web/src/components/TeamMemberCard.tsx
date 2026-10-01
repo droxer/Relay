@@ -81,8 +81,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
    checkbox. The wrapping <label> is the whole accessible name on each flag:
    base-ui already points the control's aria-labelledby at it, so an aria-label
    repeating the same copy would announce twice. */
-function TeamMemberContractFields({ member, config, lead, idBase, disabled, onChange }: {
-  member: TeamCardMember;
+function TeamMemberContractFields({ config, lead, idBase, disabled, onChange }: {
   config: TeamMemberConfig;
   lead: boolean;
   idBase: string;
@@ -162,8 +161,7 @@ function TeamMemberContractFields({ member, config, lead, idBase, disabled, onCh
 }
 
 /* The read card: what the member owns, how they take part. */
-function TeamMemberSummary({ member, config, lead }: {
-  member: TeamCardMember;
+function TeamMemberSummary({ config, lead }: {
   config: TeamMemberConfig;
   lead: boolean;
 }) {
@@ -253,7 +251,6 @@ export function TeamMemberCard({ member, config, lead, canEdit, saving, onEditin
       {editing ? (
         <>
           <TeamMemberContractFields
-            member={member}
             config={draft}
             lead={lead}
             idBase={idBase}
@@ -270,7 +267,7 @@ export function TeamMemberCard({ member, config, lead, canEdit, saving, onEditin
           </div>
         </>
       ) : (
-        <TeamMemberSummary member={member} config={config} lead={lead} />
+        <TeamMemberSummary config={config} lead={lead} />
       )}
     </div>
   );

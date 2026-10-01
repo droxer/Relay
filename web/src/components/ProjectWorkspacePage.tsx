@@ -360,7 +360,6 @@ function ProjectCrew({
 export function ProjectWorkspacePage({
   project,
   agents,
-  teams,
   tasks,
   currentUser,
   computers,
@@ -370,7 +369,6 @@ export function ProjectWorkspacePage({
 }: {
   project: ProjectRecord;
   agents: EmployeeAgent[];
-  teams: AgentTeam[];
   /* The shell already polls the task list; a second observer on the same
      query key with its own interval polled the whole table twice over for
      one project's lanes. */
@@ -382,7 +380,7 @@ export function ProjectWorkspacePage({
   onOpenSettings: () => void;
   onBack: () => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
   /* The tab is always written explicitly and left to canonicalization to
      drop when it is implied: an open `?task=` implies Tasks, so a bare

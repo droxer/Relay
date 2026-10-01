@@ -109,7 +109,6 @@ export function App() {
   const selectedEmployee = useRelayStore((s) => s.selectedEmployee);
   const setSelectedEmployee = useRelayStore((s) => s.setSelectedEmployee);
   const selectedSessionId = useRelayStore((s) => s.selectedSessionId);
-  const setSelectedSessionId = useRelayStore((s) => s.setSelectedSessionId);
   const tokens = useRelayStore((s) => s.tokens);
   const setTokens = useRelayStore((s) => s.setTokens);
   const [hydrated, setHydrated] = useState(false);
@@ -828,7 +827,6 @@ export function App() {
             taskThread={isTaskThread}
             directoryMode={route === "projects" ? "projects" : "threads"}
             tasks={tasks}
-            teams={teams}
             currentUser={user}
             filteredThreads={directoryThreads}
             projects={route === "projects" ? directoryProjects : []}

@@ -47,7 +47,6 @@ export type ThreadsViewProps = {
   /** The shell's task list — the project board reads its lanes from it
    *  rather than opening a second observer on the same query. */
   tasks: RelayTaskListItem[];
-  teams: AgentTeam[];
   currentUser: CurrentUser;
   filteredThreads: ThreadItem[];
   projects: ProjectRecord[];
@@ -130,7 +129,6 @@ export function ThreadsView({
   taskThread = false,
   directoryMode,
   tasks,
-  teams,
   currentUser,
   filteredThreads,
   projects,
@@ -290,7 +288,6 @@ export function ThreadsView({
         <ProjectWorkspacePage
           project={selectedProject}
           agents={logicalAgents}
-          teams={teams}
           tasks={tasks}
           currentUser={currentUser}
           computers={runtimeNodes}

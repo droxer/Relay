@@ -87,7 +87,6 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const {
     startTaskMutation,
     updateTaskMutation,
-    deleteTaskMutation,
     deleteTasksMutation,
   } = useRelayMutations();
   // The filters live in the query string, so a filtered board survives
