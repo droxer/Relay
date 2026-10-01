@@ -7,6 +7,7 @@ export interface LocalDaemonLauncherOptions {
   backendUrl: string;
   workspaceRoot: string;
   sandboxMode?: "none" | "boxlite";
+  allowHostAgentExecution?: boolean;
   command?: string;
   logger?: SupervisorLogger;
 }
@@ -30,6 +31,7 @@ export class LocalDaemonLauncher implements DaemonLauncher {
   private readonly backendUrl: string;
   private readonly workspaceRoot: string;
   private readonly sandboxMode: "none" | "boxlite";
+  private readonly allowHostAgentExecution: boolean;
   private readonly command: string;
   private readonly logger?: SupervisorLogger;
 
@@ -38,10 +40,14 @@ export class LocalDaemonLauncher implements DaemonLauncher {
     this.workspaceRoot = options.workspaceRoot;
     this.sandboxMode = options.sandboxMode ?? "boxlite";
     this.command = options.command ?? "relay-daemon";
+    this.allowHostAgentExecution = options.allowHostAgentExecution ?? process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION === "1";
     this.logger = options.logger;
   }
 
   async start(request: DaemonLaunchRequest): Promise<ManagedDaemon> {
+    if (this.sandboxMode === "none" && !this.allowHostAgentExecution) {
+      throw new Error("Host agent execution requires allowHostAgentExecution or RELAY_ALLOW_HOST_AGENT_EXECUTION=1.");
+    }
     mkdirSync(request.workspacePath, { recursive: true });
     const child = spawn(this.command, [
       "--backend-url",
@@ -54,6 +60,7 @@ export class LocalDaemonLauncher implements DaemonLauncher {
       requiredToken(request),
       "--sandbox",
       this.sandboxMode,
+      ...(this.allowHostAgentExecution ? ["--allow-host-agent-execution"] : []),
     ], {
       cwd: request.workspacePath,
       env: {
@@ -68,6 +75,7 @@ export class LocalDaemonLauncher implements DaemonLauncher {
       },
       stdio: "inherit",
     });
+    await waitForSpawn(child);
     return managedChild(`${request.employee.id}:${request.node.id}`, this.name, child, this.logger);
   }
 
@@ -104,11 +112,15 @@ export class CommandTemplateLauncher implements DaemonLauncher {
       shell: true,
       stdio: "inherit",
     });
+    await waitForSpawn(child);
     return managedChild(`${request.employee.id}:${request.node.id}`, this.name, child, this.logger);
   }
 }
 
 function managedChild(key: string, provider: string, child: ChildProcess, logger?: SupervisorLogger): ManagedDaemon {
+  child.on("error", (error) => {
+    logger?.warn("daemon launcher child error", { key, provider, error: error.message });
+  });
   child.once("exit", (code, signal) => {
     logger?.warn("daemon launcher child exited", { key, provider, code, signal });
   });
@@ -148,4 +160,13 @@ function shellQuote(value: string): string {
 
 function safePathSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]/g, "_") || "employee";
+}
+
+async function waitForSpawn(child: ChildProcess): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const onSpawn = () => { child.off("error", onError); resolve(); };
+    const onError = (error: Error) => { child.off("spawn", onSpawn); reject(error); };
+    child.once("spawn", onSpawn);
+    child.once("error", onError);
+  });
 }
