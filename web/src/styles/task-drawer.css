@@ -1,5 +1,4 @@
-/* Task board — the task DRAWER: its form stack, read-only meta, and the
-   generated-artifact list. Split out of a 1886-line backlog.css, at the
+/* Task board — the task DRAWER: its form stack and the assignment summary. Split out of a 1886-line backlog.css, at the
    section rules that file's own comments already drew. */
 
 /* ── Task board drawer forms (adm-drawer + adm-form) ──────────────── */
@@ -96,7 +95,7 @@
 }
 
 .task-assignment-summary[data-tone="good"] .task-assignment-summary-mark::after { background: var(--ok); }
-/* Busy agents emit data-tone="info" (TaskDrawer availabilityTone); without
+/* Busy agents emit data-tone="info" (AssignmentField availabilityTone); without
    this rule the pip fell back to the neutral --ink-4 default. Order matches
    .agent-state.tone-* above. */
 .task-assignment-summary[data-tone="info"] .task-assignment-summary-mark::after { background: var(--info); }
@@ -168,6 +167,22 @@
 
 /* ── Task drawer form extras ──────────────────────────────────────── */
 
+/* A <legend> is not a flex item of its fieldset, so .adm-form-section's gap
+   never reaches it and the Schedule heading sat on the first field label.
+   One field-gap step below it, as between any two fields. */
+.task-board-drawer-form .adm-form-legend {
+  margin-bottom: var(--sp-4);
+}
+
+/* A saved task's project, which cannot move: shown as the field's value in
+   the body ink, with the field label above it like every editable field. */
+.task-drawer-readonly-value {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+}
+
 /* .adm-form-actions-leading moved next to .adm-form-actions in
    admin-v2-drawers.css — shared drawer-footer primitive. */
 
@@ -175,71 +190,3 @@
    hints that were direct field children, which made the task drawer's next-run
    hint one step larger than every other field hint in the app. Field hints now
    come through <Field hint> at the shared 13px. */
-
-@media (max-width: 820px) {
-  /* The mobile topbar already names the page, so the in-page header is a pure
-     toolbar spanning the row: a compact segmented view-toggle sits on the left,
-     refresh + create stay clustered at the right, with breathing room between. */
-  .messenger-shell[data-route="backlog"] .page-header-actions,
-  .messenger-shell[data-route="routine"] .page-header-actions {
-    flex: 1 1 auto;
-    flex-wrap: nowrap;
-  }
-
-  /* Toggle keeps its natural width; the auto margin pushes refresh + create
-     to the right edge. */
-  .messenger-shell[data-route="backlog"] .backlog-view-toggle,
-  .messenger-shell[data-route="routine"] .backlog-view-toggle {
-    margin-right: auto;
-  }
-
-  /* Slightly larger tap targets than the desktop 30×28. */
-  .messenger-shell[data-route="backlog"] .backlog-view-btn,
-  .messenger-shell[data-route="routine"] .backlog-view-btn {
-    width: 40px;
-    height: var(--control-h-xs);
-  }
-
-  .backlog-view-toggle {
-    flex-shrink: 0;
-  }
-
-  /* The inline "·" separators aren't wrap-safe — at phone width the row breaks
-     mid-list and strands a dot at a line end. Drop the pseudo-separators and
-     lay the four metrics out as an even two-up grid instead. */
-  .backlog-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--sp-2) var(--sp-4);
-    padding-inline: var(--sp-4);
-  }
-
-  .backlog-stat:not(:last-child)::after {
-    content: none;
-  }
-
-  .backlog-filter-primary,
-  .backlog-filter-chips {
-    padding-inline: var(--sp-4);
-  }
-
-  .backlog-filter-primary {
-    flex-wrap: wrap;
-  }
-
-  .backlog-filter-search-wrap {
-    flex: 1 1 100%;
-  }
-
-  .backlog-page {
-    --backlog-lane-w: min(84vw, 280px);
-  }
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  /* Keep the optical-centre offset, drop the hover nudge. */
-  .backlog-action-primary.backlog-action-icon:hover:not(:disabled) svg {
-    transform: translateX(0.5px);
-  }
-}

@@ -122,6 +122,7 @@
     "resize_label": "Resize sidebar"
   },
   "project": {
+    "locked_hint": "A saved task stays in its project.",
     "delete": "Delete project",
     "deleting": "Deleting…",
     "delete_confirm_title": "Delete {{project}} permanently?",
@@ -362,6 +363,8 @@
     "cancel": "Cancel"
   },
   "backlog": {
+    "acceptance_locked": "Locked once the task has started.",
+    "title_required": "Title is required.",
     "team_filter": "Team",
     "all_teams": "All teams",
     "assignment_filter": "Assignment",
@@ -465,7 +468,6 @@
     "artifacts_loading": "Loading artifacts…",
     "artifacts_empty": "No files from agent runs yet.",
     "artifacts_error": "Could not load artifacts.",
-    "artifact_download": "Download",
     "workspace": "Workspace",
     "workspace_loading": "Loading workspace…",
     "workspace_empty": "Nothing in this issue's workspace yet.",
@@ -819,6 +821,9 @@
     "token_error": "Couldn't load the token: {{message}}"
   },
   "routine": {
+    "schedule": "Schedule",
+    "next_run_auto_hint": "Set by the cadence. Choose Custom to pick a date.",
+    "enabled_needs_target": "Pick a project, agent, or team before turning the schedule on.",
     "title": "Routines",
     "sub_one": "{{count}} routine",
     "sub_other": "{{count}} routines",

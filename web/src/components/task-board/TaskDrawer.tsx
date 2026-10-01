@@ -116,74 +116,103 @@ function BacklogFields({ form, onChange, canRun }: {
   );
 }
 
-function RoutineFields({ form, onChange }: { form: RoutineTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
+/** Everything that decides when a routine runs — what kind it is, how often,
+ *  the next date, and whether the schedule is live — as one group. The switch
+ *  used to sit at the foot of the form, three fields away from the cadence it
+ *  pauses. */
+function RoutineSchedule({ form, onChange }: { form: RoutineTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
   const { t } = useTranslation();
   const typeLabelId = useId();
   const cadenceLabelId = useId();
   const nextRunLabelId = useId();
+  const enabledHintId = useId();
+  const autoNextRun = form.routineCadence !== "custom";
+  // Nothing to run it on yet: the switch cannot turn on, and says why.
+  const cannotEnable = !form.projectId && !form.assignedAgentId && !form.assignedTeamId && !form.routineEnabled;
   return (
-    <>
-      <Field label={t("routine.type")} labelId={typeLabelId} wrapper="div">
-        <Select
-          value={form.routineType}
-          onValueChange={(value) => {
-            if (value == null) return
-            onChange({ ...form, routineType: value as TaskRoutineType })
-          }}
-        >
-          <SelectTrigger className="w-full" aria-labelledby={typeLabelId}>
-            <SelectValue>{(value: TaskRoutineType) => t(`routine.types.${value}`)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {TASK_ROUTINE_TYPES.map((type) => (
-              <SelectItem key={type} value={type} label={t(`routine.types.${type}`)}>{t(`routine.types.${type}`)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label={t("routine.cadence")} labelId={cadenceLabelId} wrapper="div">
-        <Select
-          value={form.routineCadence}
-          onValueChange={(value) => {
-            if (value == null) return
-            const routineCadence = value as TaskRoutineCadence;
-            onChange({
-              ...form,
-              routineCadence,
-              routineNextRunDate: routineCadence === "custom"
-                ? form.routineNextRunDate
-                : nextRoutineRunDate(routineCadence),
-            })
-          }}
-        >
-          <SelectTrigger className="w-full" aria-labelledby={cadenceLabelId}>
-            <SelectValue>{(value: TaskRoutineCadence) => t(`routine.cadences.${value}`)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {TASK_ROUTINE_CADENCES.map((cadence) => (
-              <SelectItem key={cadence} value={cadence} label={t(`routine.cadences.${cadence}`)}>{t(`routine.cadences.${cadence}`)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field
-        label={t("routine.next_run")}
-        hint={t("routine.next_run_hint")}
-        className="task-drawer-next-run"
-        wrapper="div"
-        labelId={nextRunLabelId}
-      >
-        <DatePicker
+    <fieldset className="adm-form-section">
+      <legend className="adm-form-legend">{t("routine.schedule")}</legend>
+      <div className="task-drawer-form-grid">
+        <Field label={t("routine.type")} labelId={typeLabelId} wrapper="div">
+          <Select
+            value={form.routineType}
+            onValueChange={(value) => {
+              if (value == null) return
+              onChange({ ...form, routineType: value as TaskRoutineType })
+            }}
+          >
+            <SelectTrigger className="w-full" aria-labelledby={typeLabelId}>
+              <SelectValue>{(value: TaskRoutineType) => t(`routine.types.${value}`)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_ROUTINE_TYPES.map((type) => (
+                <SelectItem key={type} value={type} label={t(`routine.types.${type}`)}>{t(`routine.types.${type}`)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label={t("routine.cadence")} labelId={cadenceLabelId} wrapper="div">
+          <Select
+            value={form.routineCadence}
+            onValueChange={(value) => {
+              if (value == null) return
+              const routineCadence = value as TaskRoutineCadence;
+              onChange({
+                ...form,
+                routineCadence,
+                routineNextRunDate: routineCadence === "custom"
+                  ? form.routineNextRunDate
+                  : nextRoutineRunDate(routineCadence),
+              })
+            }}
+          >
+            <SelectTrigger className="w-full" aria-labelledby={cadenceLabelId}>
+              <SelectValue>{(value: TaskRoutineCadence) => t(`routine.cadences.${value}`)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_ROUTINE_CADENCES.map((cadence) => (
+                <SelectItem key={cadence} value={cadence} label={t(`routine.cadences.${cadence}`)}>{t(`routine.cadences.${cadence}`)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field
+          label={t("routine.next_run")}
+          /* A cadence sets the date itself; say so, rather than leaving a
+             field that looks editable and opens nothing. */
+          hint={t(autoNextRun ? "routine.next_run_auto_hint" : "routine.next_run_hint")}
+          className="task-drawer-next-run"
+          wrapper="div"
           labelId={nextRunLabelId}
-          name={`${form.variant}-next-run-date`}
-          min={isoToday()}
-          required={form.routineCadence === "custom" && form.routineEnabled}
-          value={form.routineNextRunDate}
-          readOnly={form.routineCadence !== "custom"}
-          onValueChange={(routineNextRunDate) => onChange({ ...form, routineNextRunDate })}
+        >
+          <DatePicker
+            labelId={nextRunLabelId}
+            name={`${form.variant}-next-run-date`}
+            min={isoToday()}
+            required={form.routineCadence === "custom" && form.routineEnabled}
+            value={form.routineNextRunDate}
+            readOnly={autoNextRun}
+            onValueChange={(routineNextRunDate) => onChange({ ...form, routineNextRunDate })}
+          />
+        </Field>
+      </div>
+      <div className="routine-toggle">
+        <span className="routine-toggle-text">
+          <Label render={<span />}>{t("routine.enabled")}</Label>
+          <span className="adm-form-hint" id={enabledHintId}>
+            {t(cannotEnable ? "routine.enabled_needs_target" : "routine.enabled_hint")}
+          </span>
+        </span>
+        <Switch
+          name={`${form.variant}-enabled`}
+          checked={form.routineEnabled}
+          disabled={cannotEnable}
+          onCheckedChange={(checked) => onChange({ ...form, routineEnabled: checked })}
+          aria-label={t("routine.enabled")}
+          aria-describedby={enabledHintId}
         />
-      </Field>
-    </>
+      </div>
+    </fieldset>
   );
 }
 
@@ -232,7 +261,7 @@ export function TaskDrawer({
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     if (!form.title.trim()) {
-      setTitleError(t("admin.v2.chat_error_field_required", { field: t("backlog.title_field") }));
+      setTitleError(t("backlog.title_required"));
       // Move focus to the field at fault — the error is inline, but a reader
       // who submitted from the footer has to be taken back to it.
       event.currentTarget
@@ -338,7 +367,13 @@ export function TaskDrawer({
             </Select>
             {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create")}</Button> : null}
           </Field>
-        ) : project ? <p className="task-project-label">{project.name}</p> : null}
+        ) : project ? (
+          /* Locked once saved, but still a field: labelled like every other
+             value in the form, not a stray line of grey text above the title. */
+          <Field label={t("project.projects")} hint={t("project.locked_hint")} wrapper="div">
+            <p className="task-drawer-readonly-value">{project.name}</p>
+          </Field>
+        ) : null}
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
@@ -354,29 +389,6 @@ export function TaskDrawer({
             aria-describedby={titleError ? "task-drawer-title-error" : undefined}
           />
         </Field>
-        <Field label={t("backlog.acceptance_policy")} labelId={acceptanceLabelId} wrapper="div">
-          <Select
-            value={form.acceptancePolicy ?? "human"}
-            disabled={Boolean(form.startedAt)}
-            onValueChange={(value) => {
-              if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });
-            }}
-          >
-            <SelectTrigger className="w-full" aria-labelledby={acceptanceLabelId}>
-              <SelectValue>{(value: string) => t(value === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human")}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="human">{t("backlog.acceptance_human")}</SelectItem>
-              <SelectItem value="automatic">{t("backlog.acceptance_automatic")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        {form.assignedTeamId ? <Field label={t("collab_style.task_label")} wrapper="div">
-          <CollaborationStyleSelect aria-label={t("collab_style.task_label")} value={form.collaborationStyle ?? null}
-            disabled={saving} onChange={(collaborationStyle) => onChange({ ...form, collaborationStyle })}
-            inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}
-            inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
-        </Field> : null}
         <Field label={t("backlog.description")}>
           <Textarea
             name={`${fieldPrefix}-description`}
@@ -386,9 +398,31 @@ export function TaskDrawer({
             onChange={(event) => updateBase({ description: event.target.value })}
           />
         </Field>
+        {/* Two-up pairs only — acceptance with priority, status with due — so
+            no field is ever left alone in half a row. */}
         <div className="task-drawer-form-grid">
-          {form.variant === "routine" ? <RoutineFields form={form} onChange={onChange} /> : null}
-          {form.variant === "backlog" ? <BacklogFields form={form} onChange={onChange} canRun={!intake} /> : null}
+          <Field
+            label={t("backlog.acceptance_policy")}
+            labelId={acceptanceLabelId}
+            hint={form.startedAt ? t("backlog.acceptance_locked") : undefined}
+            wrapper="div"
+          >
+            <Select
+              value={form.acceptancePolicy ?? "human"}
+              disabled={Boolean(form.startedAt)}
+              onValueChange={(value) => {
+                if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });
+              }}
+            >
+              <SelectTrigger className="w-full" aria-labelledby={acceptanceLabelId}>
+                <SelectValue>{(value: string) => t(value === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human")}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="human">{t("backlog.acceptance_human")}</SelectItem>
+                <SelectItem value="automatic">{t("backlog.acceptance_automatic")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label={t("backlog.priority")} labelId={priorityLabelId} wrapper="div">
             <Select
               value={form.priority}
@@ -407,71 +441,68 @@ export function TaskDrawer({
               </SelectContent>
             </Select>
           </Field>
-          {intake ? (
-            <Field label={t("backlog.assignment_label")} wrapper="div">
-              <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
-              {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
-                <Button type="button" variant="ghost" disabled={saving} onClick={() => onChange(clearTaskAssignment(form))}>
-                  {t("issues.clear_assignment")}
-                </Button>
-              ) : null}
-            </Field>
-          ) : <AssignmentField
-            fieldId={assignmentFieldId}
-            summaryId={assignmentSummaryId}
-            autoFocus={initialFocus === "assignment"}
-            value={taskAssignmentValue(form)}
-            agents={agentOptions}
-            teams={teamOptions}
-            selectedAgent={assignedAgentView}
-            selectedTeam={assignedTeamView}
-            emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
-            onSelect={(selection) => {
-              if (selection.kind === "none") {
-                onChange(clearTaskAssignment(form));
-                return;
-              }
-              if (selection.kind === "agent") {
-                const logicalAgent = logicalAgents.find((agent) => agent.id === selection.id);
-                if (!logicalAgent) return;
-                updateBase({
-                  assignedAgent: logicalAgent.executorKind,
-                  assignedAgentId: logicalAgent.id,
-                  assignedTeamId: "",
-                  // An ownerless agent says nothing about who the task is
-                  // for, so it leaves the assignee as the employee chose it.
-                  assigneeEmployeeId: logicalAgent.supervisorEmployeeId ?? form.assigneeEmployeeId,
-                  ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
-                });
-                return;
-              }
-              const team = teams.find((candidate) => candidate.id === selection.id);
-              if (team) {
-                updateBase({
-                  ...teamAssignmentPatch(team.id),
-                  ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
-                });
-              }
-            }}
-          />}
         </div>
-        {form.variant === "routine" ? (
-          <>
-            <div className="routine-toggle">
-              <span className="routine-toggle-text">
-                <Label render={<span />}>{t("routine.enabled")}</Label>
-                <span className="adm-form-hint">{t("routine.enabled_hint")}</span>
-              </span>
-              <Switch
-                name={`${fieldPrefix}-enabled`}
-                checked={form.routineEnabled}
-                disabled={!form.projectId && !form.assignedAgentId && !form.assignedTeamId && !form.routineEnabled}
-                onCheckedChange={(checked) => onChange({ ...form, routineEnabled: checked })}
-                aria-label={t("routine.enabled")}
-              />
-            </div>
-          </>
+        {form.variant === "backlog" ? (
+          <div className="task-drawer-form-grid">
+            <BacklogFields form={form} onChange={onChange} canRun={!intake} />
+          </div>
         ) : null}
+        {intake ? (
+          <Field label={t("backlog.assignment_label")} wrapper="div">
+            <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
+            {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => onChange(clearTaskAssignment(form))}>
+                {t("issues.clear_assignment")}
+              </Button>
+            ) : null}
+          </Field>
+        ) : <AssignmentField
+          fieldId={assignmentFieldId}
+          summaryId={assignmentSummaryId}
+          autoFocus={initialFocus === "assignment"}
+          value={taskAssignmentValue(form)}
+          agents={agentOptions}
+          teams={teamOptions}
+          selectedAgent={assignedAgentView}
+          selectedTeam={assignedTeamView}
+          emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
+          onSelect={(selection) => {
+            if (selection.kind === "none") {
+              onChange(clearTaskAssignment(form));
+              return;
+            }
+            if (selection.kind === "agent") {
+              const logicalAgent = logicalAgents.find((agent) => agent.id === selection.id);
+              if (!logicalAgent) return;
+              updateBase({
+                assignedAgent: logicalAgent.executorKind,
+                assignedAgentId: logicalAgent.id,
+                assignedTeamId: "",
+                // An ownerless agent says nothing about who the task is
+                // for, so it leaves the assignee as the employee chose it.
+                assigneeEmployeeId: logicalAgent.supervisorEmployeeId ?? form.assigneeEmployeeId,
+                ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
+              });
+              return;
+            }
+            const team = teams.find((candidate) => candidate.id === selection.id);
+            if (team) {
+              updateBase({
+                ...teamAssignmentPatch(team.id),
+                ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
+              });
+            }
+          }}
+        />}
+        {/* Directly under the assignment that reveals it: picking a team
+            below must not insert a field above where the reader is working. */}
+        {form.assignedTeamId ? <Field label={t("collab_style.task_label")} wrapper="div">
+          <CollaborationStyleSelect aria-label={t("collab_style.task_label")} value={form.collaborationStyle ?? null}
+            disabled={saving} onChange={(collaborationStyle) => onChange({ ...form, collaborationStyle })}
+            inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}
+            inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
+        </Field> : null}
+        {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} /> : null}
         <div className="adm-form-actions">
           {form.id && onDelete ? (
             <Button

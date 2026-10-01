@@ -122,6 +122,7 @@
     "resize_label": "调整侧边栏宽度"
   },
   "project": {
+    "locked_hint": "已保存的任务不能更换项目。",
     "delete": "删除项目",
     "deleting": "正在删除…",
     "delete_confirm_title": "永久删除“{{project}}”？",
@@ -360,6 +361,8 @@
     "cancel": "取消"
   },
   "backlog": {
+    "acceptance_locked": "任务开始后无法更改。",
+    "title_required": "标题为必填项。",
     "team_filter": "团队",
     "all_teams": "所有团队",
     "assignment_filter": "执行分配",
@@ -463,7 +466,6 @@
     "artifacts_loading": "正在加载产物…",
     "artifacts_empty": "尚无智能体运行生成的文件。",
     "artifacts_error": "无法加载产物。",
-    "artifact_download": "下载",
     "workspace": "工作区",
     "workspace_loading": "正在加载工作区…",
     "workspace_empty": "此议题的工作区暂无内容。",
@@ -814,6 +816,9 @@
     "token_error": "无法加载令牌：{{message}}"
   },
   "routine": {
+    "schedule": "计划",
+    "next_run_auto_hint": "由频率自动设定。选择“自定义”可指定日期。",
+    "enabled_needs_target": "请先选择项目、智能体或团队，再开启计划。",
     "title": "例行任务",
     "sub_one": "{{count}} 个例行任务",
     "sub_other": "{{count}} 个例行任务",
