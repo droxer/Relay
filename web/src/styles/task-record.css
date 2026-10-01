@@ -37,16 +37,22 @@
 
 /* ── Run ledger ───────────────────────────────────────────────────── */
 
-/* One column template for the header and every row, so "Duration" sits over
-   the durations and a row without files still holds the files column open.
-   Mark · date · outcome (+ why) · duration · files · open. */
+/* One column template for the header and every row's select button, so
+   "Duration" sits over the durations and a row without files still holds the
+   files column open. Mark · date · outcome (+ why) · duration · files. The
+   open-record link sits outside the button, so the header reserves its width
+   on the right instead of as a sixth column. */
 .record-run-head,
 .record-run-link {
   display: grid;
-  grid-template-columns: var(--sp-3) 5.5rem minmax(0, 1fr) 3.5rem 4.5rem var(--sp-4);
+  grid-template-columns: var(--sp-3) 5.5rem minmax(0, 1fr) 3.5rem 4.5rem;
   column-gap: var(--sp-3);
   align-items: center;
   padding-inline: var(--sp-3);
+}
+
+.record-run-head {
+  padding-right: calc(var(--sp-3) + var(--control-h-xs));
 }
 
 .record-run-head {
@@ -78,6 +84,12 @@
   grid-column: 5;
 }
 
+/* The select target and the open-record link side by side. */
+.record-run {
+  display: flex;
+  align-items: start;
+}
+
 .record-run-head-num {
   text-align: right;
 }
@@ -94,21 +106,36 @@
   border-top: 0.5px solid var(--line-2);
 }
 
-/* One destination per row. The whole row is the link — a ledger read by
-   scanning down a date column cannot afford a second target per line. */
+/* The row's main target selects the run; its folder opens beside the
+   ledger. Selected wears the selection wash the file rows and rails use. */
 .record-run-link {
+  flex: 1;
   min-width: 0;
   min-height: 2.75rem;
   padding-block: var(--sp-2);
+  border: 0;
   border-radius: var(--r-2);
+  background: transparent;
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
 
 .record-run-link:hover {
   background: var(--control-fill-hover);
+}
+
+/* The wash covers the whole row, open link included, so the selection reads
+   as one row rather than a highlighted cell beside a bare chevron. */
+.record-run:has(> .record-run-link[aria-pressed="true"]) {
+  border-radius: var(--r-2);
+  background: var(--action-soft);
+}
+
+.record-run-link[aria-pressed="true"]:hover {
+  background: transparent;
 }
 
 /* Everything hangs from the first line, so a two-line row (a failure and its
@@ -123,9 +150,6 @@
   margin-top: calc((1lh - var(--dot)) / 2);
 }
 
-.record-run-open {
-  margin-top: calc((1lh - 14px) / 2);
-}
 
 /* The mark carries the outcome's tone; the row's own text stays neutral so
    a ledger of thirty runs does not read as thirty coloured lines. */
@@ -162,15 +186,26 @@
   white-space: nowrap;
 }
 
-/* Quiet until the row is under the pointer — the header already says rows
-   open, and thirty chevrons at full ink would outweigh the dates. */
+/* The way into the run's own record. Quiet until the row is under the
+   pointer — thirty chevrons at full ink would outweigh the dates. */
 .record-run-open {
-  justify-self: end;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h-xs);
+  height: 2.75rem;
+  border-radius: var(--r-2);
   color: var(--ink-4);
 }
 
-.record-run-link:hover .record-run-open {
+.record-run:hover .record-run-open {
   color: var(--ink-2);
+}
+
+.record-run-open:hover {
+  background: var(--control-fill-hover);
+  color: var(--ink-1);
 }
 
 /* A narrow drawer cannot give files a column of its own: the count tucks
@@ -178,9 +213,13 @@
 @container record (max-width: 640px) {
   .record-run-head,
   .record-run-link {
-    grid-template-columns: var(--sp-3) 3.75rem minmax(0, 1fr) auto var(--sp-4);
+    grid-template-columns: var(--sp-3) 3.75rem minmax(0, 1fr) auto;
     column-gap: var(--sp-2);
     padding-inline: var(--sp-2);
+  }
+
+  .record-run-head {
+    padding-right: calc(var(--sp-2) + var(--control-h-xs));
   }
 
   .record-run-head > :nth-child(3) {
@@ -206,10 +245,6 @@
   .record-run-files {
     grid-column: 4;
     grid-row: 2;
-  }
-
-  .record-run-open {
-    grid-column: 5;
   }
 }
 
@@ -289,10 +324,33 @@
 
 /* ── Drawer presentation ──────────────────────────────────────────── */
 
-/* On the routines board the record opens as a drawer over the list instead
-   of taking the route. The drawer chrome already carries the kicker, title,
-   and close, so what renders here is the toolbar, the band, and the tabs. */
+/* On the boards the record opens as a drawer over the list instead of taking
+   the route. The drawer chrome carries the kicker, title, and close; what
+   renders here is the same spine the agent and project records print under
+   their headers — tabs on one hairline, a flush band, then the section.
+
+   So the body goes flush and the header gives up its rule: the tabs row IS
+   the header's lower edge, as it is on /agents. Inset by the body's padding,
+   the tabs floated 32px under a ruled header and the band became a boxed
+   strip — a second header that no other record surface has. */
+.adm-drawer-body.record-drawer-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.adm-drawer-head:has(+ .record-drawer-body) {
+  border-bottom: 0;
+  padding-bottom: var(--sp-2);
+}
+
+/* The tabs and the band hold still and the section scrolls under them —
+   the project page's arrangement, and what lets the Files tab hand its
+   explorer a real height instead of a capped box. */
 .record-drawer {
+  flex: 1;
+  min-height: 0;
   background: transparent;
 }
 
@@ -302,7 +360,8 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
+  padding: 0 var(--sp-7);
+  border-bottom: 0.5px solid var(--line-1);
 }
 
 /* The record's actions as one cluster at the row's end; when the tabs take
@@ -315,21 +374,127 @@
   margin-left: auto;
 }
 
-/* The band is a flush strip on the page; inset by the drawer body's padding
-   it needs its top edge drawn. */
-.record-drawer .record-band {
-  border-top: 0.5px solid var(--line-1);
-  margin-bottom: var(--sp-4);
-}
-
-/* The drawer's body is the scroll container here — the page mode's flex
-   fill would only clip against it. */
 .record-drawer .workspace-body {
-  flex: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.record-drawer .record-missing {
+/* Each section carries the gutter the flush body gave up — except
+   Workspace, whose explorer runs edge to edge exactly as the project's
+   Workspace tab does, and fills what is left of the drawer. */
+.record-drawer .workspace-body > [role="tabpanel"] {
+  padding: var(--sp-6) var(--sp-7) var(--sp-7);
+}
+
+.record-drawer .workspace-body > .record-workspace-panel {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
   padding: 0;
+}
+
+/* Runs: the ledger beside the selected run's folder. Flush like the
+   Workspace tab, so the explorer runs to the drawer's edges and takes its
+   full height; the ledger scrolls on its own. */
+.record-drawer .workspace-body > .record-runs-panel {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  padding: 0;
+}
+
+.record-runs-split {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(18rem, 0.75fr) minmax(0, 1.25fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 360px;
+}
+
+/* Its own `record` container, so the ledger folds to its narrow layout by
+   the pane's width rather than the drawer's. */
+.record-runs-ledger {
+  container: record / inline-size;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-4) var(--sp-3);
+  border-right: 0.5px solid var(--line-1);
+}
+
+.record-runs-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.record-runs-workspace > .record-workspace {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.record-runs-message {
+  padding: var(--sp-6) var(--sp-7);
+}
+
+/* The run pane has no room for list and preview side by side: opening a
+   file swaps the listing for the preview, and the preview's close is the
+   way back to the folder. */
+.record-runs-workspace .record-workspace-files .workspace-panes:not(.is-browse-only) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.record-runs-workspace .record-workspace-files .workspace-panes:not(.is-browse-only) .workspace-pane-browse {
+  display: none;
+}
+
+.record-runs-workspace .record-workspace-note,
+.record-runs-workspace .record-workspace-notice {
+  padding-inline: var(--sp-4);
+}
+
+/* The band runs edge to edge, but its first fact starts on the gutter the
+   tabs above and the section below both start on. */
+.record-drawer .record-band-cell:first-child {
+  padding-left: var(--sp-7);
+}
+
+@media (max-width: 820px) {
+  .record-drawer-toolbar {
+    padding: 0 var(--sp-4);
+  }
+
+  .record-drawer .workspace-body > [role="tabpanel"] {
+    padding: var(--sp-4);
+  }
+
+  .record-drawer .workspace-body > .record-workspace-panel,
+  .record-drawer .workspace-body > .record-runs-panel {
+    padding: 0;
+  }
+
+  /* A phone has no width for two panes: runs above, the folder below. */
+  .record-runs-split {
+    flex: 1 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(360px, 1fr);
+  }
+
+  .record-runs-ledger {
+    max-height: 40vh;
+    border-right: 0;
+    border-bottom: 0.5px solid var(--line-1);
+  }
+
+  .record-runs-message {
+    padding: var(--sp-4);
+  }
+
+  .record-drawer .record-band-cell:first-child {
+    padding-left: var(--sp-4);
+  }
 }
 
 /* ── Panel failure ────────────────────────────────────────────────── */
@@ -412,6 +577,15 @@
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
   border-top: 0.5px solid var(--line-2);
+}
+
+/* A tab that opens on a panel already sits under the band's rule; a second
+   hairline 32px below it divided nothing from nothing. */
+[role="tabpanel"] > .record-panel:first-child,
+[role="tabpanel"] > .record-timeline:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 /* Title on the left, the panel's one action (refresh, versions) at the
@@ -606,19 +780,55 @@
   min-width: 0;
 }
 
-/* Shared project workspace panes adapt to the drawer's available width. */
+/* ── Workspace tab ─────────────────────────────────────────────────── */
+
+/* The live workspace — the project's explorer (WorkspaceFilePanes) at the
+   same geometry: flush, no card, the path bar as its head. It takes the
+   rest of the tab's height and its panes scroll inside it. */
+.record-workspace {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 360px;
+}
+
 .record-workspace-files {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   container-type: inline-size;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  overflow: hidden;
 }
 
-.record-workspace-files .workspace-panes {
-  min-height: 280px;
-  max-height: 600px;
+/* The bar is the project's 42px row; the 32px refresh rides inside it
+   rather than pushing it to 48. */
+.record-workspace-refresh {
+  margin-block: calc(-1 * var(--sp-1));
 }
 
+.record-workspace-note {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-7) 0;
+}
+
+.record-workspace-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-7);
+}
+
+@media (max-width: 820px) {
+  .record-workspace-notice {
+    padding-inline: var(--sp-4);
+  }
+
+  .record-workspace-note {
+    padding-inline: var(--sp-4);
+  }
+}
+
+/* A drawer is narrower than the project page, so its panes stack sooner. */
 @container (max-width: 640px) {
   .record-workspace-files .workspace-panes:not(.is-browse-only) {
     grid-template-columns: minmax(0, 1fr);

@@ -2,7 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { ActionStart, ICON } from "../icons";
+import { ActionEdit, ActionStart, ICON } from "../icons";
 import type { RelayTaskListItem } from "../../types";
 import { recordActions, type RecordAction } from "./recordActions";
 
@@ -39,7 +39,7 @@ export function TaskRecordActions({
   return (
     <>
       {actions.includes("run") ? (
-        <Button type="button" variant="default" size="cta" loading={busyAction === "run"} onClick={onRun}>
+        <Button type="button" variant="default" size="dense" loading={busyAction === "run"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.run_now")}
         </Button>
@@ -47,37 +47,41 @@ export function TaskRecordActions({
       {actions.includes("triage") ? (
         /* Moving into a project happens in the edit form, where the project
            and the assignment it unlocks are chosen together. */
-        <Button type="button" variant="default" size="cta" disabled={busy} onClick={onEdit}>
+        <Button type="button" variant="default" size="dense" disabled={busy} onClick={onEdit}>
           {t("issues.add_to_project")}
         </Button>
       ) : null}
       {actions.includes("retry") ? (
-        <Button type="button" variant="default" size="cta" loading={busyAction === "retry"} onClick={onRun}>
+        <Button type="button" variant="default" size="dense" loading={busyAction === "retry"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.retry_run")}
         </Button>
       ) : null}
       {actions.includes("cancel") ? (
-        <Button type="button" variant="outline" size="cta" loading={busyAction === "cancel"} onClick={onCancel}>
+        <Button type="button" variant="outline" size="dense" loading={busyAction === "cancel"} onClick={onCancel}>
           {t("record.cancel_run")}
         </Button>
       ) : null}
       {actions.includes("block") ? (
-        <Button type="button" variant="outline" size="cta" loading={busyAction === "block"} onClick={onToggleBlock}>
+        <Button type="button" variant="outline" size="dense" loading={busyAction === "block"} onClick={onToggleBlock}>
           {t("backlog.block")}
         </Button>
       ) : null}
       {actions.includes("unblock") ? (
-        <Button type="button" variant="outline" size="cta" loading={busyAction === "unblock"} onClick={onToggleBlock}>
+        <Button type="button" variant="outline" size="dense" loading={busyAction === "unblock"} onClick={onToggleBlock}>
           {t("backlog.unblock")}
         </Button>
       ) : null}
       {actions.includes("done") ? (
-        <Button type="button" variant="outline" size="cta" loading={busyAction === "done"} onClick={onDone}>
+        <Button type="button" variant="outline" size="dense" loading={busyAction === "done"} onClick={onDone}>
           {t("backlog.done")}
         </Button>
       ) : null}
-      <Button type="button" variant="ghost" size="cta" disabled={busy} onClick={onEdit}>
+      {/* The quiet outline tier every record header uses for its edit
+          action ("Edit profile", "Project settings"). At the 44px CTA size
+          these four buttons were the loudest thing in the drawer. */}
+      <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onEdit}>
+        <ActionEdit size={ICON.sm} aria-hidden="true" />
         {t("record.edit")}
       </Button>
       {/* Destructive, and it says so. As a ghost beside Edit it was the one
@@ -87,7 +91,7 @@ export function TaskRecordActions({
       <Button
         type="button"
         variant="destructive"
-        size="cta"
+        size="dense"
         loading={busyAction === "delete"}
         disabled={busy}
         onClick={onDelete}

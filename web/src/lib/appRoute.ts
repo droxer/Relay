@@ -215,8 +215,18 @@ const AGENT_TABS = new Set(["profile", "skills", "activities"]);
 /* The record surface's tabs, by vocabulary. Registered here for the same
    reason the agent's are: a tab id this table does not list is stripped on
    arrival, so the control toggles and lands back where it started. */
-const TASK_RECORD_TABS = new Set(["activity", "definition", "files"]);
-const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "files"]);
+const TASK_RECORD_TABS = new Set(["activity", "definition", "workspace", "artifacts"]);
+const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "artifacts"]);
+/* Retired record tab ids, rewritten rather than stripped: "files" split into
+   Workspace and Artifacts, and an old link should still open the workspace —
+   or, on a routine, the Runs tab its runs' folders now live in.
+   Mirrors LEGACY_RECORD_TABS in task-record/recordVocabulary.ts. */
+const TASK_RECORD_TAB_ALIASES: Readonly<Record<string, string>> = { files: "workspace" };
+const ROUTINE_RECORD_TAB_ALIASES: Readonly<Record<string, string>> = { files: "runs", workspace: "runs" };
+
+function recordTabParam(value: string | null, aliases = TASK_RECORD_TAB_ALIASES): string | null {
+  return value ? aliases[value] ?? value : null;
+}
 const TEAM_TABS = new Set(["profile", "activities"]);
 const PROJECT_TABS = new Set(["general", "tasks", "workspace"]);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
@@ -357,8 +367,9 @@ function copyRecordTab(
   target: URLSearchParams,
   tabs: ReadonlySet<string>,
   defaultTab: string,
+  aliases?: Readonly<Record<string, string>>,
 ): void {
-  const requested = source.get("tab");
+  const requested = recordTabParam(source.get("tab"), aliases);
   if (requested && requested !== defaultTab && tabs.has(requested)) target.set("tab", requested);
 }
 
@@ -435,8 +446,8 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
       copySortParams("backlog", source, target);
       copyPageParams("backlog", source, target);
       copyParam(source, target, "task");
-      const recordTab = source.get("recordTab");
-      if (target.has("task") && (recordTab === "definition" || recordTab === "files")) {
+      const recordTab = recordTabParam(source.get("recordTab"));
+      if (target.has("task") && recordTab && recordTab !== "activity" && TASK_RECORD_TABS.has(recordTab)) {
         target.set("recordTab", recordTab);
       }
     }
@@ -446,7 +457,7 @@ export function canonicalSearchForPath(pathname: string, search = ""): string {
     copyPageParams(head, source, target);
     copyFilterParams(head, source, target);
   } else if (head === "routines" && entityId && rest.length === 0) {
-    copyRecordTab(source, target, ROUTINE_RECORD_TABS, "runs");
+    copyRecordTab(source, target, ROUTINE_RECORD_TABS, "runs", ROUTINE_RECORD_TAB_ALIASES);
     /* The record opens as a drawer over the board, so the route co-owns the
        board's params — stripping them would reset the list still showing
        beneath the drawer. */

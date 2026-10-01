@@ -67,7 +67,8 @@ for (const mobile of [false, true]) {
     const drawer = page.getByRole("dialog");
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole("tab", { name: "Activity", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(drawer.getByRole("tab", { name: "Files", exact: true })).toBeVisible();
+    await expect(drawer.getByRole("tab", { name: "Workspace", exact: true })).toBeVisible();
+    await expect(drawer.getByRole("tab", { name: "Artifacts", exact: true })).toBeVisible();
     await expect(drawer).toHaveCSS("opacity", "1");
     await page.screenshot({ path: `/tmp/relay-task-drawer-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
@@ -76,8 +77,9 @@ for (const mobile of [false, true]) {
     await expect(page).toHaveURL((url) => url.pathname === "/issues" && url.searchParams.get("q") === "Ship");
     await panel.getByRole("searchbox", { name: "Search issues" }).fill("");
     await expect(panel.getByRole("link", { name: "Answer customers" })).toBeVisible();
+    // A pre-split ?tab=files link opens the live workspace.
     await page.goto("/issues/ship?project=launch&tab=files");
-    await expect(drawer.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(drawer.getByRole("tab", { name: "Workspace", exact: true })).toHaveAttribute("aria-selected", "true");
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
     await expect(drawer).toHaveCount(0);
     await expect(page).toHaveURL((url) => url.pathname === "/issues" && url.searchParams.get("project") === "launch");

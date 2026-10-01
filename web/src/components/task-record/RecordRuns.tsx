@@ -10,14 +10,22 @@ import { formatRunDuration, runDurationMs, runOutcome, type RunOutcome } from ".
 import type { TaskRun } from "../../types";
 import { ICON, RowOpen } from "../icons";
 import { StateMark, type StateTone } from "../StateMark";
+import { RecordWorkspace } from "./RecordWorkspace";
 
 /**
- * A routine's runs, as a list of destinations.
+ * A routine's runs, beside the folder of the one selected.
  *
  * A routine is a definition — it never runs itself, so its runs live in
- * promoted occurrences. Each one is a real task with its own events, files
- * and threads, which is why a row here is a link to that record rather than
- * an accordion: the drawer used to unfold an event list inside a row inside a
+ * promoted occurrences, and each one works in a folder of its own
+ * (`tasks/<routine>/<run>/`). The ledger is the master list and the run's
+ * folder is the detail: selecting a row re-roots the project's explorer at
+ * that run, so a run's output sits next to its outcome instead of one tab
+ * away under an opaque run id.
+ *
+ * The run is still a real task with its own events and threads, so each row
+ * keeps a real link to that record — at the row's end, apart from the select
+ * target, so choosing a run to look at never navigates away. Never an
+ * accordion: the drawer used to unfold an event list inside a row inside a
  * form inside an overlay, and two runs could never be compared or linked to.
  *
  * There is deliberately no summary strip above this list. "24 runs, 3 failed"
@@ -69,6 +77,10 @@ export function RecordRuns({
 }) {
   const { t, i18n } = useTranslation();
   const [limit, setLimit] = useState(RUN_PAGE_SIZE);
+  /* Null until the reader picks one: the newest run is what they came to
+     see, and deriving it (rather than storing it) keeps it the newest as a
+     fresh run lands. */
+  const [pickedRunId, setPickedRunId] = useState<string | null>(null);
 
   /* Through the query cache, like every other read in the app: a tab switch
      re-renders this panel from cache instead of refetching the ledger, and
@@ -91,64 +103,92 @@ export function RecordRuns({
   const runs = runsQuery.data?.runs;
 
   if (runsQuery.isError) {
-    return <RecordFailure message={t("backlog.runs.error")} onRetry={() => void runsQuery.refetch()} />;
+    return (
+      <div className="record-runs-message">
+        <RecordFailure message={t("backlog.runs.error")} onRetry={() => void runsQuery.refetch()} />
+      </div>
+    );
   }
   if (!runs) {
-    return <p className="record-empty" role="status" aria-live="polite">{t("backlog.runs.loading")}</p>;
+    return (
+      <div className="record-runs-message">
+        <p className="record-empty" role="status" aria-live="polite">{t("backlog.runs.loading")}</p>
+      </div>
+    );
   }
   if (runs.length === 0) {
-    return <p className="record-empty">{t("backlog.runs.empty")}</p>;
+    return (
+      <div className="record-runs-message">
+        <p className="record-empty">{t("backlog.runs.empty")}</p>
+      </div>
+    );
   }
 
+  const selected = runs.find((run) => run.taskId === pickedRunId) ?? runs[0];
+  const selectedDate = runDate(selected.scheduledFor ?? selected.createdAt, i18n.language);
+
   return (
-    <>
-      {/* Column names, once. The rows are a table read down its columns —
-          without a header a bare "2m" or "1 file" had to be decoded per row.
-          Hidden from assistive tech: each row's link already reads as a
-          sentence, and a header outside the list would be announced as
-          orphaned text. */}
-      <div className="record-run-head" aria-hidden="true">
-        <span className="record-run-head-date">{t("backlog.runs.col_date")}</span>
-        <span>{t("backlog.runs.col_outcome")}</span>
-        <span className="record-run-head-num">{t("backlog.runs.col_duration")}</span>
-        <span className="record-run-head-num">{t("backlog.runs.col_files")}</span>
+    <div className="record-runs-split">
+      <section className="record-runs-ledger" aria-label={t("record.tab_runs")}>
+        {/* Column names, once. The rows are a table read down its columns —
+            without a header a bare "2m" or "1 file" had to be decoded per row.
+            Hidden from assistive tech: each row's button already reads as a
+            sentence, and a header outside the list would be announced as
+            orphaned text. */}
+        <div className="record-run-head" aria-hidden="true">
+          <span className="record-run-head-date">{t("backlog.runs.col_date")}</span>
+          <span>{t("backlog.runs.col_outcome")}</span>
+          <span className="record-run-head-num">{t("backlog.runs.col_duration")}</span>
+          <span className="record-run-head-num">{t("backlog.runs.col_files")}</span>
+        </div>
+        <ol className="record-run-list">
+          {runs.map((run) => (
+            <RunRow
+              key={run.taskId}
+              run={run}
+              locale={i18n.language}
+              selected={run.taskId === selected.taskId}
+              href={hrefForRun(run.taskId)}
+              onSelect={() => setPickedRunId(run.taskId)}
+              onOpen={() => onOpenRun(run.taskId)}
+            />
+          ))}
+        </ol>
+        {/* The runs endpoint caps a page and has no cursor, so "earlier" is a
+            larger ask rather than a next page. */}
+        {runs.length >= limit ? (
+          <button
+            type="button"
+            className="record-run-more"
+            disabled={runsQuery.isFetching}
+            onClick={() => setLimit((current) => current + RUN_PAGE_SIZE)}
+          >
+            {t("record.runs_show_earlier")}
+          </button>
+        ) : null}
+      </section>
+      {/* Keyed by run: a folder path or an open file belongs to the run it
+          was browsed in, not to whichever run is selected next. */}
+      <div className="record-runs-workspace">
+        <RecordWorkspace key={selected.taskId} taskId={selected.taskId} rootLabel={selectedDate} />
       </div>
-      <ol className="record-run-list">
-        {runs.map((run) => (
-          <RunRow
-            key={run.taskId}
-            run={run}
-            locale={i18n.language}
-            href={hrefForRun(run.taskId)}
-            onOpen={() => onOpenRun(run.taskId)}
-          />
-        ))}
-      </ol>
-      {/* The runs endpoint caps a page and has no cursor, so "earlier" is a
-          larger ask rather than a next page. */}
-      {runs.length >= limit ? (
-        <button
-          type="button"
-          className="record-run-more"
-          disabled={runsQuery.isFetching}
-          onClick={() => setLimit((current) => current + RUN_PAGE_SIZE)}
-        >
-          {t("record.runs_show_earlier")}
-        </button>
-      ) : null}
-    </>
+    </div>
   );
 }
 
 function RunRow({
   run,
   locale,
+  selected,
   href,
+  onSelect,
   onOpen,
 }: {
   run: TaskRun;
   locale: string;
+  selected: boolean;
   href: string;
+  onSelect: () => void;
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
@@ -163,16 +203,12 @@ function RunRow({
 
   return (
     <li className="record-run" data-outcome={outcome}>
-      {/* One destination per row. A real href, so the run can be opened in a
-          new tab or copied, with in-app navigation on a plain click. */}
-      <a
+      {/* Selecting shows this run's folder beside the ledger. */}
+      <button
+        type="button"
         className="record-run-link"
-        href={href}
-        onClick={(event) => {
-          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-          event.preventDefault();
-          onOpen();
-        }}
+        aria-pressed={selected}
+        onClick={onSelect}
       >
         <StateMark tone={TONE_FOR_OUTCOME[outcome]} shape={outcome === "pending" ? "dashed" : undefined} />
         <span className="record-run-date tnum">{runDate(run.scheduledFor ?? run.createdAt, locale)}</span>
@@ -188,7 +224,21 @@ function RunRow({
         <span className="record-run-files tnum">
           {run.artifactCount > 0 ? t("backlog.runs.files", { count: run.artifactCount }) : ""}
         </span>
-        <RowOpen className="record-run-open" size={ICON.sm} />
+      </button>
+      {/* The run's own record. A real href, so it can be opened in a new tab
+          or copied, with in-app navigation on a plain click. */}
+      <a
+        className="record-run-open"
+        href={href}
+        aria-label={t("record.open_run")}
+        title={t("record.open_run")}
+        onClick={(event) => {
+          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+          event.preventDefault();
+          onOpen();
+        }}
+      >
+        <RowOpen size={ICON.sm} aria-hidden="true" />
       </a>
     </li>
   );

@@ -88,25 +88,30 @@ beforeEach(() => {
   listTaskRuns.mockResolvedValue({ taskId: "R-42", runs: RUNS });
 });
 
-it("opens a routine on its runs, with one destination per run", async () => {
+it("opens a routine on its runs, each selectable and each with its own record", async () => {
   renderRecord();
 
   // The ledger is the routine's default tab — its history is the point of the record.
-  const runs = await screen.findAllByRole("link", { name: /backlog\.runs\.outcome/ });
+  const runs = await screen.findAllByRole("button", { name: /backlog\.runs\.outcome/ });
   expect(runs).toHaveLength(2);
-  // A run is addressed under its routine, so it survives a reload or a paste.
-  expect(runs[0]!.getAttribute("href")).toBe("/routines/R-42/runs/T-2288");
+  // The newest run is selected, so its folder is what the explorer shows.
+  expect(runs[0]!.getAttribute("aria-pressed")).toBe("true");
   // A failed run says why on its own row; nothing else on the row can.
   expect(runs[0]!.textContent).toContain("dispatch refused: no ready computer");
-  // No accordion: the row navigates, it does not unfold.
+  // A run is addressed under its routine, so it survives a reload or a paste.
+  const open = screen.getAllByRole("link", { name: "record.open_run" });
+  expect(open[0]!.getAttribute("href")).toBe("/routines/R-42/runs/T-2288");
+  // No accordion: a row selects or navigates, it does not unfold.
   expect(document.querySelector("[aria-expanded]")).toBeNull();
 });
 
-it("navigates into a run instead of expanding it", async () => {
+it("navigates into a run from its open link, and only from there", async () => {
   const user = userEvent.setup();
   const { onOpenRecord } = renderRecord();
 
-  await user.click((await screen.findAllByRole("link", { name: /backlog\.runs\.outcome/ }))[0]!);
+  await user.click((await screen.findAllByRole("button", { name: /backlog\.runs\.outcome/ }))[1]!);
+  expect(onOpenRecord).not.toHaveBeenCalled();
+  await user.click(screen.getAllByRole("link", { name: "record.open_run" })[0]!);
   expect(onOpenRecord).toHaveBeenCalledWith("R-42", "T-2288");
 });
 

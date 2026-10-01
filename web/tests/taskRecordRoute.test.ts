@@ -62,14 +62,14 @@ describe("task record routes", () => {
      makes the control toggle and land back where it started — a dead control
      that renders correctly. Every tab the record offers must survive here. */
   it("carries every record tab through canonicalization", () => {
-    for (const tab of ["definition", "files"]) {
+    for (const tab of ["definition", "workspace", "artifacts"]) {
       assert.equal(
         canonicalBrowserUrl("/backlog/T-1001", `?tab=${tab}`),
         `/backlog/T-1001?tab=${tab}`,
         `the task record drops ?tab=${tab}`,
       );
     }
-    for (const tab of ["definition", "files"]) {
+    for (const tab of ["definition", "artifacts"]) {
       assert.equal(
         canonicalBrowserUrl("/routines/R-42", `?tab=${tab}`),
         `/routines/R-42?tab=${tab}`,
@@ -78,9 +78,19 @@ describe("task record routes", () => {
     }
     // A run speaks the task vocabulary even though it is addressed under its routine.
     assert.equal(
-      canonicalBrowserUrl("/routines/R-42/runs/T-2288", "?tab=files"),
-      "/routines/R-42/runs/T-2288?tab=files",
+      canonicalBrowserUrl("/routines/R-42/runs/T-2288", "?tab=artifacts"),
+      "/routines/R-42/runs/T-2288?tab=artifacts",
     );
+  });
+
+  /* Files split into Workspace and Artifacts. A link minted before the split
+     still opens the live workspace it used to lead with. */
+  it("lands a pre-split ?tab=files link on the workspace tab", () => {
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=files"), "/backlog/T-1001?tab=workspace");
+    // A routine's folders are its runs' folders, browsed from the Runs tab.
+    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=files"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=workspace"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=files"), "/projects/p?task=t&recordTab=workspace");
   });
 
   it("does not advertise a tab the reader did not choose, or one that does not exist", () => {
@@ -114,8 +124,8 @@ describe("record vocabulary", () => {
   it("gives a routine runs and a task activity", () => {
     assert.equal(recordVariant({ isRoutine: true }), "routine");
     assert.equal(recordVariant({ isRoutine: false }), "task");
-    assert.deepEqual(recordTabs("routine"), ["runs", "definition", "files"]);
-    assert.deepEqual(recordTabs("task"), ["activity", "definition", "files"]);
+    assert.deepEqual(recordTabs("routine"), ["runs", "definition", "artifacts"]);
+    assert.deepEqual(recordTabs("task"), ["activity", "definition", "workspace", "artifacts"]);
     assert.equal(defaultRecordTab("routine"), "runs");
     assert.equal(defaultRecordTab("task"), "activity");
   });
@@ -124,7 +134,12 @@ describe("record vocabulary", () => {
     assert.equal(parseRecordTab("runs", "task"), "activity");
     assert.equal(parseRecordTab("activity", "routine"), "runs");
     assert.equal(parseRecordTab(null, "routine"), "runs");
-    assert.equal(parseRecordTab("files", "task"), "files");
+    assert.equal(parseRecordTab("artifacts", "task"), "artifacts");
+    // The pre-split id still means the live workspace.
+    assert.equal(parseRecordTab("files", "task"), "workspace");
+    // A routine has no workspace of its own; its runs' folders live under Runs.
+    assert.equal(parseRecordTab("files", "routine"), "runs");
+    assert.equal(parseRecordTab("workspace", "routine"), "runs");
   });
 
   /* The tab set and the canonicalizer's table are two spellings of one fact.
@@ -300,9 +315,13 @@ describe("the record surface owns what the drawer used to", () => {
     }
   });
 
-  it("gives the run ledger one destination per row and no accordion", () => {
+  it("selects a run to browse its folder, and still links to the run", () => {
     const runs = readWeb("src/components/task-record/RecordRuns.tsx");
-    assert.match(runs, /<a\s+className="record-run-link"/);
+    // The row selects the run whose folder the explorer beside it shows…
+    assert.match(runs, /className="record-run-link"[\s\S]*?aria-pressed=/);
+    assert.match(runs, /<RecordWorkspace\b/);
+    // …and the run's own record stays one real link away.
+    assert.match(runs, /<a\s+className="record-run-open"/);
     // The expand control and its per-row event fetch belong to the run's own
     // surface now; a row that both expands and navigates has two answers to
     // one click.

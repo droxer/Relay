@@ -241,6 +241,9 @@ export function TaskRecordView({
       kicker={kicker}
       title={task ? recordTitle(task, parentRoutine, i18n.language, t) : placeholder?.title ?? t("record.loading")}
       closeLabel={t("drawer.close")}
+      /* Flush: the tabs sit on the header's rule and the band runs edge to
+         edge, the way the agent and project records lay out. */
+      bodyClassName="record-drawer-body"
     >
       {body}
     </Drawer>
