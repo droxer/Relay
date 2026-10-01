@@ -81,3 +81,27 @@ test("output quota preserves existing evidence and still allows terminal results
     assert.equal(outbox.pending().length, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+ test("live retry preserves output after replay has finalized the command", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-late-output-"));
+  try {
+    const outbox = new TerminalOutbox(root);
+    const output = { type: "run.output", commandId: "cmd", leaseId: "lease", sequence: 0, text: "chunk" };
+    outbox.retain(output);
+    outbox.retain({ type: "run.completed", commandId: "cmd", leaseId: "lease" });
+    let terminal = false;
+    const received: string[] = [];
+    const backend: typeof fetch = async (_url, init) => {
+      const event = JSON.parse(String(init?.body));
+      if (event.type === "run.completed") terminal = true;
+      else if (!terminal || event.replayed === true) received.push(event.text);
+      return new Response("{}", { status: 200 });
+    };
+    await outbox.replay(async (url, init) => JSON.parse(String(init?.body)).type === "run.output"
+      ? new Response("unavailable", { status: 503 }) : backend(url, init), "http://backend/events", "token");
+    assert.equal(terminal, true);
+    await outbox.wrapFetch(backend)("http://backend/events", { method: "POST", body: JSON.stringify(output) });
+    assert.deepEqual(received, ["chunk"]);
+    assert.equal(outbox.pending().length, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
