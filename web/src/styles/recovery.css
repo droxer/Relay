@@ -6,10 +6,10 @@
   gap: var(--sp-2);
   min-width: 0;
   padding: var(--sp-4);
-  border: 1px solid var(--line-2);
+  border: 0.5px solid var(--line-2);
   /* The rail carries the tone: a blocked or failed execution warns, work that
      is simply waiting on a person reads as information, not a fault. */
-  border-inline-start: 3px solid var(--recovery-rail, var(--warn));
+  border-inline-start: var(--accent-bar-block-w) solid var(--recovery-rail, var(--warn));
   border-radius: var(--r-3);
   background: var(--surface-1);
   color: var(--ink-2);

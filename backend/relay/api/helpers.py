@@ -16,11 +16,9 @@ from loguru import logger
 from starlette.requests import ClientDisconnect
 
 from ..core.deploy_config import public_backend_url
-from ..core.models import AGENT_NAMES
 from ..daemon_registry import (
     DaemonNodeRegistry,
     sandbox_ui_token_matches,
-    workspace_paths_match,
 )
 from ..persistence.stores import valid_agent
 from ..security.auth import require_user_session
@@ -592,14 +590,6 @@ def authorized_sandbox_for_token(
     )
 
 
-def session_belongs_to_sandbox(
-    session: dict[str, Any], sandbox: dict[str, Any]
-) -> bool:
-    return not sandbox.get("workspacePath") or workspace_paths_match(
-        session.get("workspacePath"), sandbox.get("workspacePath")
-    )
-
-
 def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
     event_type = string_field(value, "type")
     command_id = string_field(value, "commandId")
@@ -941,7 +931,3 @@ def web_ui_asset_response(asset_path: str) -> Response:
         return JSONResponse({"error": "Web UI asset not found."}, status_code=404)
     content_type = mimetypes.guess_type(asset.name)[0] or "application/octet-stream"
     return Response(asset.read_bytes(), media_type=content_type)
-
-
-def agent_names_message(field: str) -> str:
-    return f"{field} must be one of: {', '.join(AGENT_NAMES)}."

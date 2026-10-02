@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { createControlPanelDaemonNode, createManagedNode } from "../../api";
 import type {
@@ -14,6 +14,7 @@ import { RunModeField, type RunLocation } from "./RunModeField";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useOnOpen } from "@/hooks/useKeyChange";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   Select,
@@ -86,19 +87,16 @@ export function AddNodeDrawer({
       : null;
 
   // Reset on open, not on close: clearing as the drawer is dismissed wipes the
-  // fields while they are still on screen, and leaves stale state visible for a
-  // frame if the drawer is ever remounted open. Matches ConnectComputerDrawer.
-  useEffect(() => {
-    if (open) {
-      setNodeLocation("managed");
-      setDisplayName("");
-      setWorkspacePath("");
-      setEmployeeId("");
-      setError(null);
-      setFieldErrors({});
-      setIsBusy(false);
-    }
-  }, [open]);
+  // fields while they are still on screen. Matches ConnectComputerDrawer.
+  useOnOpen(open, () => {
+    setNodeLocation("managed");
+    setDisplayName("");
+    setWorkspacePath("");
+    setEmployeeId("");
+    setError(null);
+    setFieldErrors({});
+    setIsBusy(false);
+  });
 
   function clearFieldError(field: "employeeId" | "workspacePath") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));

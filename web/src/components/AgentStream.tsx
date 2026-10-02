@@ -15,7 +15,6 @@ import {
   AgentStreamAccumulator,
   commandDisplay,
   displayAgentStreamSegments,
-  emptyAgentStreamSegments,
   hasTerminalOutcome,
   parseAgentStderr,
   reasoningOutline,
@@ -28,6 +27,7 @@ import { MarkdownContent } from "./LazyMarkdown";
 import { buildCollaborationTree } from "../lib/collaborationTree";
 import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
+import { useKeyChange } from "../hooks/useKeyChange";
 
 function StreamActivity({ label }: { label: string }) {
   return (
@@ -59,7 +59,8 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
   const { t } = useTranslation();
   // Settling can append a completed-log fallback that overlaps live output;
   // rebuild once at that boundary so the final transcript is canonical.
-  const accumulator = useMemo(() => new AgentStreamAccumulator(agent), [agent, streaming]);
+  const [accumulator, setAccumulator] = useState(() => new AgentStreamAccumulator(agent));
+  useKeyChange(`${agent}\u0000${streaming}`, () => setAccumulator(new AgentStreamAccumulator(agent)));
   // Completed turns stay checkpointed in the accumulator; only the unfinished
   // suffix is reparsed as new SSE output arrives.
   const displayed = useMemo(
@@ -82,18 +83,6 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
   );
 
   if (segments.length === 0) {
-    const emptySegments = emptyAgentStreamSegments(agent, streaming, t);
-    if (emptySegments.length > 0) {
-      return (
-        <div className={`agent-stream ${streaming ? "streaming" : ""}`}>
-          <SubagentTree nodes={collaborationNodes} />
-          {keyedSegments(emptySegments).map(({ key, segment }) => (
-            <SegmentView key={key} segment={segment} />
-          ))}
-          {showActivity ? <StreamActivity label={workingLabel} /> : null}
-        </div>
-      );
-    }
     if (streaming) {
       return (
         <div className="agent-stream streaming">

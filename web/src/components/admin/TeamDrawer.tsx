@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
@@ -24,6 +24,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { TeamMemberPicker, type TeamMembership } from "../TeamMemberPicker";
 import { ComputerSelect } from "../ComputerSelect";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 export function TeamDrawer({
   open,
@@ -55,8 +56,7 @@ export function TeamDrawer({
   const computerRef = useRef<HTMLButtonElement>(null);
   const membersRef = useRef<HTMLFieldSetElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setName(team?.name ?? "");
     setMemberIds(team?.memberAgentIds ?? []);
     setLeadId(team?.leadAgentId ?? "");
@@ -65,7 +65,7 @@ export function TeamDrawer({
     setProfileImageUrl(randomPresetAvatar("teams"));
     setComputerPick(null);
     setValidationError(null);
-  }, [open, team?.id]);
+  }, team?.id ?? "");
 
   const { agents: employeeAgents } = useEmployeeAgents(open ? employeeId : undefined);
   const agents = useMemo(

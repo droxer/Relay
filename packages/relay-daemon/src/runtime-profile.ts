@@ -13,7 +13,7 @@ const SETTING_KEYS = new Set([
 const CREDENTIAL_KEYS = new Set(AGENT_NAMES.flatMap(agent => [...agentCredentialEnvNames(agent)]));
 const ALLOWED_KEYS = new Set([...SETTING_KEYS, ...CREDENTIAL_KEYS]);
 
-export interface RuntimeProfile {
+interface RuntimeProfile {
   version: 1;
   environment: Record<string, string>;
   environmentFile?: string;

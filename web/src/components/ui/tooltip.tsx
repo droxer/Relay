@@ -42,7 +42,7 @@ function TooltipContent({
           data-slot="tooltip-content"
           aria-hidden="true"
           className={cn(
-            "max-w-64 origin-(--transform-origin) rounded-md bg-popover px-2 py-1 text-micro font-medium text-popover-foreground shadow-(--shadow-2) transition-[opacity,transform] duration-(--t-fast) ease-(--ease) data-[closed]:scale-95 data-[closed]:opacity-0 data-[open]:opacity-100",
+            "max-w-64 origin-(--transform-origin) rounded-md bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-(--shadow-2) transition-[opacity,transform] duration-(--t-fast) ease-(--ease) data-[closed]:scale-95 data-[closed]:opacity-0 data-[open]:opacity-100",
             className
           )}
           {...props}

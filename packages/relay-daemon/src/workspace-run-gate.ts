@@ -24,7 +24,7 @@ interface LockOwner {
   sessionId?: string;
 }
 
-export interface WorkspaceGateObserver {
+interface WorkspaceGateObserver {
   sessionId: string;
   /** null means the wait ended; undefined means another process owns the lock. */
   onWaiting?: (blockingSessionId: string | null | undefined) => Promise<void>;

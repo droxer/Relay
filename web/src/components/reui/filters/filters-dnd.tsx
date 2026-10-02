@@ -378,7 +378,7 @@ function startDrag(
     // word for "a row can land here", and the clone is not one.
     carryEl.className =
       "pointer-events-none fixed " +
-      "top-0 left-0 z-100 " +
+      "top-0 left-0 z-(--z-float) " +
       "opacity-95 will-change-transform " +
       "data-drop-invalid:ring-destructive/70 data-drop-invalid:ring-2 " +
       "data-drop-invalid:opacity-60"

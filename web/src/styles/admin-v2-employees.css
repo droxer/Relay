@@ -73,7 +73,6 @@ tr.is-pulse > td:first-child::after {
   100% { opacity: 0; }
 }
 
-.adm-emp-id { min-width: 0; }
 
 .adm-emp-id-line {
   display: flex;

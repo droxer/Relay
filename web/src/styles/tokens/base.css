@@ -28,6 +28,16 @@ html[data-theme="light"] {
   color-scheme: light;
 }
 
+/* A theme flip repaints every surface at once; without this, each one eases
+   its colours over --t-fast and the page cross-fades instead of switching.
+   applyTheme (lib/appStorage.ts) holds the class for the two frames the new
+   register takes to paint. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}
+
 * { box-sizing: border-box; }
 
 /* Root type size: 87.5% of the browser default (14px at the stock 16px)
@@ -115,7 +125,7 @@ body {
    after Tailwind's utilities, so `font: inherit` here reset size, weight, and
    line-height on every shadcn Button and silently beat the utilities that
    buttonVariants sets: `font-bold` and the entire
-   text-micro → text-xs → text-sm size ladder were dead on arrival. The ladder
+   text-xs → text-sm → text-dense size ladder were dead on arrival. The ladder
    coincidentally matched on size (--fs-2 is 14px, same as text-sm), so only
    the weight gave it away — a real login button computed 400 while its class
    list said font-bold. The exclusion above at :not([data-slot]) exists for
@@ -352,14 +362,6 @@ summary:focus-visible,
    component sets its own colour. */
 .ink-dim    { color: var(--ink-3); }
 .ink-strong { color: var(--ink-1); }
-
-/* Hollow-ring "bad/dead" dot — shape carries the alarm, not brightness.
-   One ring width (1px) for every surface — a step above the 0.5px structural
-   hairline so the alarm shape stays legible at dot size. */
-.dot-ring {
-  background: transparent;
-  box-shadow: inset 0 0 0 0.5px var(--tone, var(--err));
-}
 
 /* Shared cross-surface utilities. */
 :root {

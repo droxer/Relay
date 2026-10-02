@@ -7,7 +7,7 @@ import { createContext, useContext } from "react";
  * seam. Kept in its own module so the overrides and the entry component can
  * both reach it without a cycle.
  */
-export type MarkdownMode = {
+type MarkdownMode = {
   /** The text is still being streamed and is a prefix of its final form. */
   live: boolean;
 };

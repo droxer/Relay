@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { diagramElementId, mermaidConfig } from "../../lib/markdown";
@@ -18,16 +18,14 @@ function prefersDark(): boolean {
  *  A diagram is baked into an SVG at render time, so unlike everything else on
  *  the page it cannot follow a theme change through CSS variables — a diagram
  *  drawn in dark and left alone becomes dark boxes on a light page. */
+function subscribeTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
+}
+
 function useIsDark(): boolean {
-  const [dark, setDark] = useState(prefersDark);
-  useEffect(() => {
-    const root = document.documentElement;
-    const observer = new MutationObserver(() => setDark(prefersDark()));
-    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
-    setDark(prefersDark());
-    return () => observer.disconnect();
-  }, []);
-  return dark;
+  return useSyncExternalStore(subscribeTheme, prefersDark, () => true);
 }
 
 /**

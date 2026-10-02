@@ -138,7 +138,7 @@ export function teamsForThreadNode<T extends ThreadTeam>(
   );
 }
 
-export type ThreadRoster = {
+type ThreadRoster = {
   leadAgentId?: string | null;
   memberAgentIds: readonly string[];
 };

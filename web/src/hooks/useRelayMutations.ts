@@ -399,5 +399,3 @@ export function useRelayMutations() {
     invalidateRelay,
   };
 }
-
-export type RunSandboxMutationResult = RelaySession;

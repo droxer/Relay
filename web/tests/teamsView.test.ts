@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
-import { taskAssigneeDisplayName, teamAvailability, teamReady } from "../src/lib/taskAssignment.js";
+import { teamAvailability, teamReady } from "../src/lib/taskAssignment.js";
 import { teamMutationInput } from "../src/lib/teamForm.js";
 import { selectedTeamForWorkspace } from "../src/lib/teamWorkspace.js";
 
@@ -97,24 +97,6 @@ describe("Agent team management", () => {
       memberAgentIds: ["agent_lead"],
       enabled: true,
     });
-  });
-
-  it("keeps the employee as assignee when a team executes the task", () => {
-    const user = {
-      id: "user-1",
-      employeeId: "employee-1",
-      username: "jordan",
-      displayName: "Jordan Lee",
-      role: "user" as const,
-    };
-    assert.equal(taskAssigneeDisplayName({
-      assigneeEmployeeId: "employee-1",
-      assignedTeamId: "team-1",
-    }, user), "Jordan Lee");
-    assert.equal(taskAssigneeDisplayName({
-      assigneeEmployeeId: "employee-2",
-      assignedTeamId: "team-1",
-    }, user), "employee-2");
   });
 
   it("requires every Team member to be ready", () => {

@@ -24,7 +24,7 @@ export type ParsedMention = {
   reason?: MentionCandidate["reason"];
 };
 
-export type ParsedMentions = {
+type ParsedMentions = {
   mentions: ParsedMention[];
   /** Agent ids this message addresses. Empty means the whole room. */
   addressAgentIds: string[];
@@ -143,7 +143,7 @@ export function parseMentions(
 }
 
 /** One run of the draft, either a mention or the plain text between two. */
-export type MentionSegment = {
+type MentionSegment = {
   text: string;
   mention: boolean;
   /** Present only on mention runs; false is what makes one read as blocking. */

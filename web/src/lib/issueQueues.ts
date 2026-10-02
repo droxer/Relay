@@ -27,7 +27,7 @@ export const DEFAULT_ISSUE_GROUPING: IssueGroupBy = "project";
 /** The band key for records that have no value on the grouped field. */
 export const NO_GROUP = "none";
 
-export interface IssueQueueContext {
+interface IssueQueueContext {
   employeeId: string;
   today: string;
 }

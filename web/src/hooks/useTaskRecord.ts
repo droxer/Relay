@@ -5,7 +5,7 @@ import { getTask, RelayApiError } from "../api";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import type { RelayTask, RelayTaskListItem } from "../types";
 
-export const TASK_RECORD_QUERY_KEY = "task-record";
+const TASK_RECORD_QUERY_KEY = "task-record";
 
 /**
  * One task or routine, for its record surface.

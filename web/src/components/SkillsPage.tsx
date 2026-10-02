@@ -25,6 +25,7 @@ import { compactDate } from "../lib/workspaceFormat";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
+import { useKeyChange } from "../hooks/useKeyChange";
 
 type CreateMode = "upload" | "github";
 const SOURCE_LABELS: Record<CreateMode, string> = {
@@ -73,7 +74,9 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const skillsQuery = useSkills();
   const { agents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pickedId, setSelectedId] = useState<string | null>(null);
+  // Until the reader picks one, the list's first skill is the selection.
+  const selectedId = pickedId ?? skillsQuery.data?.skills[0]?.id ?? null;
   const [query, setQuery] = useState("");
   const detailQuery = useSkill(selectedId);
   const [mode, setMode] = useState<CreateMode | null>(null);
@@ -102,11 +105,13 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     uploadRequest.current.draft++;
     uploadRequest.current.revision++;
   }, []);
-  useEffect(() => {
-    uploadRequest.current.revision++;
+  useKeyChange(selectedId, () => {
     setRevisionFiles([]);
     setRevisionNote("");
     setError(null);
+  });
+  useEffect(() => {
+    uploadRequest.current.revision++;
   }, [selectedId]);
   async function readBundle(list: FileList, target: "draft" | "revision") {
     const request = ++uploadRequest.current[target];
@@ -121,17 +126,12 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
       if (request === uploadRequest.current[target]) setError(errorText(error));
     }
   }
-  useEffect(() => {
-    if (!selectedId && skillsQuery.data?.skills[0])
-      setSelectedId(skillsQuery.data.skills[0].id);
-  }, [selectedId, skillsQuery.data]);
-  useEffect(() => {
-    if (skill) {
-      setDisplayName(skill.displayName);
-      setDescription(skill.description);
-      setVisibility(skill.visibility);
-    }
-  }, [skill]);
+  useKeyChange(skill, (next) => {
+    if (!next) return;
+    setDisplayName(next.displayName);
+    setDescription(next.description);
+    setVisibility(next.visibility);
+  }, { from: undefined });
   async function refresh(id?: string) {
     await queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] });
     if (id)

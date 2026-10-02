@@ -17,7 +17,7 @@ import type { Language, Theme } from "../lib/appStorage";
 import type { SettingsSection } from "../lib/viewTypes";
 import type { CurrentUser, DaemonNodeMonitorRecord } from "../types";
 
-export type SettingsPageProps = {
+type SettingsPageProps = {
   section: SettingsSection;
   onSelectSection: (section: SettingsSection) => void;
   currentUser: CurrentUser;

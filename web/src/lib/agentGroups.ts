@@ -4,7 +4,7 @@ import { activePlacements, describeAgentPlacements, placementRuntimeNodeId } fro
 /** The band an agent with nowhere to run falls into; always sorted last. */
 export const UNPLACED_GROUP_KEY = "__unplaced__";
 
-export interface AgentComputerGroup {
+interface AgentComputerGroup {
   /** Stable Computer identity, or `UNPLACED_GROUP_KEY`. */
   key: string;
   /** The computer's display name; `null` for the unplaced band, whose label

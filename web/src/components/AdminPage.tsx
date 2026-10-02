@@ -54,10 +54,12 @@ import {
   type StoredNodeTokenMap,
 } from "./admin/helpers";
 import { Alert } from "@/components/ui/alert";
+import { omit } from "../lib/omit";
+import { useKeyChange } from "../hooks/useKeyChange";
 
 type AuthScreen = "login" | "bootstrap";
 
-export type AdminPageProps = {
+type AdminPageProps = {
   currentUser?: CurrentUser | null;
   /** The open section, read from the path (`/admin/<section>`). The control
       panel's sections are destinations, so the address bar owns which one is
@@ -65,6 +67,35 @@ export type AdminPageProps = {
   section: AdminView;
   onSelectSection: (section: AdminView) => void;
 };
+
+/** What one auth round-trip learned. `requiresBootstrap` is null when the
+ *  status call failed; `admin` is undefined when the identity call was aborted,
+ *  so there is no answer to apply. */
+interface AuthProbe {
+  requiresBootstrap: boolean | null;
+  admin: CurrentUser | null | undefined;
+  adminTokenRequired: boolean;
+}
+
+async function probeAuth(signal?: AbortSignal): Promise<AuthProbe> {
+  let requiresBootstrap: boolean | null = null;
+  try {
+    requiresBootstrap = (await getAuthStatus(signal)).requiresBootstrap;
+  } catch {
+    // Unknown: leave the screen where it is.
+  }
+  try {
+    const result = await getMe(signal);
+    const admin = result.authenticated && result.user?.role === "admin" ? result.user : null;
+    return { requiresBootstrap, admin, adminTokenRequired: false };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { requiresBootstrap, admin: undefined, adminTokenRequired: false };
+    }
+    const status = err && typeof err === "object" && "status" in err ? (err as { status: number }).status : 0;
+    return { requiresBootstrap, admin: null, adminTokenRequired: status === 503 };
+  }
+}
 
 export function AdminPage({ currentUser, section, onSelectSection }: AdminPageProps) {
   const { t } = useTranslation();
@@ -122,49 +153,37 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
   const [assignmentWarning, setAssignmentWarning] = useState<string | null>(null);
   const [storedTokens, setStoredTokens] = useState<StoredNodeTokenMap>(() => readStoredNodeTokens());
 
-  async function checkAuth(signal?: AbortSignal) {
-    try {
-      const statusResult = await getAuthStatus(signal);
-      setNeedsBootstrap(statusResult.requiresBootstrap);
-      setAuthScreen(statusResult.requiresBootstrap ? "bootstrap" : "login");
-    } catch {
-      setNeedsBootstrap(false);
-    }
-    try {
-      const result = await getMe(signal);
-      if (result.authenticated && result.user?.role === "admin") {
-        setAdmin(result.user);
-      } else {
-        setAdmin(null);
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      const status = err && typeof err === "object" && "status" in err ? (err as { status: number }).status : 0;
-      setAdmin(null);
-      if (status === 503) setAuthError(t("admin.admin_token_required"));
-    } finally {
-      setAuthChecked(true);
-    }
+  function applyAuthProbe(probe: AuthProbe) {
+    setNeedsBootstrap(probe.requiresBootstrap ?? false);
+    if (probe.requiresBootstrap !== null) setAuthScreen(probe.requiresBootstrap ? "bootstrap" : "login");
+    if (probe.admin !== undefined) setAdmin(probe.admin);
+    if (probe.adminTokenRequired) setAuthError(t("admin.admin_token_required"));
+    setAuthChecked(true);
   }
 
-  const probeAuthOnMount = useEffectEvent((signal: AbortSignal) => {
-    if (!seededAdmin) void checkAuth(signal);
-  });
+  function checkAuth(signal?: AbortSignal) {
+    return probeAuth(signal).then(applyAuthProbe);
+  }
+
+  // A seeded admin already passed the check upstream; read at mount only.
+  const probeOnMount = useEffectEvent(() => !seededAdmin);
+  const applyMountProbe = useEffectEvent(applyAuthProbe);
 
   useEffect(() => {
+    if (!probeOnMount()) return;
     const controller = new AbortController();
-    probeAuthOnMount(controller.signal);
+    void probeAuth(controller.signal).then(applyMountProbe);
     return () => controller.abort();
   }, []);
 
   // The node poll lives in useAdminNodes; a failure that looks like an expired
   // session drops us back to the login screen (the query disables once admin
   // clears).
-  useEffect(() => {
-    if (pollError && (pollError.includes("401") || pollError.includes("Session expired") || pollError.includes("Admin token is required"))) {
+  useKeyChange(pollError, (error) => {
+    if (error && (error.includes("401") || error.includes("Session expired") || error.includes("Admin token is required"))) {
       setAdmin(null);
     }
-  }, [pollError]);
+  }, { from: null });
 
   useEffect(() => {
     setAdminView(view);
@@ -182,14 +201,18 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     [manageExecutorsNodeId, nodes],
   );
 
+  // Credentials the node poll returns are folded into the stored map as they
+  // arrive; writing the merged map back to storage is the effect's half.
+  const [mergedTokens, setMergedTokens] = useState<StoredNodeTokenMap | null>(null);
+  useKeyChange(nodes, (next) => {
+    const updated = upsertStoredCredentialsFromNodes(storedTokens, next);
+    if (!updated) return;
+    setStoredTokens(updated);
+    setMergedTokens(updated);
+  }, { from: [] });
   useEffect(() => {
-    setStoredTokens((current) => {
-      const updated = upsertStoredCredentialsFromNodes(current, nodes);
-      if (!updated) return current;
-      persistStoredNodeTokenMap(updated);
-      return updated;
-    });
-  }, [nodes]);
+    if (mergedTokens) persistStoredNodeTokenMap(mergedTokens);
+  }, [mergedTokens]);
 
   function handleRevealCredentials(node: ControlPanelDaemonNodeRecord) {
     setCredentialsNodeId(node.id);
@@ -320,7 +343,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
       mergeNodes((prev) => ({
         employees: prev.employees.filter((current) => current.id !== employee.id),
         nodes: prev.nodes.map((current) =>
-          unassignedSet.has(current.id) ? (({ employeeId: _ignored, ...rest }) => rest)(current) : current,
+          unassignedSet.has(current.id) ? omit(current, "employeeId") : current,
         ),
       }));
     } catch (error) {

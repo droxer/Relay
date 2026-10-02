@@ -10,7 +10,7 @@ export function taskWorkflowStage(task: RelayTaskListItem): TaskWorkflowStage {
   return task.status;
 }
 
-export function taskIsWip(task: RelayTaskListItem): boolean {
+function taskIsWip(task: RelayTaskListItem): boolean {
   return !task.isRoutine && !task.deletedAt && task.status !== "done"
     && (Boolean(task.startedAt) || ["running", "review", "waiting_for_human"].includes(task.status));
 }

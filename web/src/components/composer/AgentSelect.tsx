@@ -18,7 +18,7 @@ export function teamSelectValue(teamId: string): string {
   return `${TEAM_VALUE_PREFIX}${teamId}`;
 }
 
-export function parseTeamSelectValue(value: string | null): string | null {
+function parseTeamSelectValue(value: string | null): string | null {
   return value?.startsWith(TEAM_VALUE_PREFIX) ? value.slice(TEAM_VALUE_PREFIX.length) : null;
 }
 

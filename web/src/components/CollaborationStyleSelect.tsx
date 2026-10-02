@@ -44,14 +44,14 @@ export function CollaborationStyleSelect({ value, onChange, inheritLabel, inheri
         <span className="collab-style-option-art">{inherited ? <CollaborationStyleDiagram style={inherited} /> : null}</span>
         <span className="flex min-w-0 flex-col gap-1">
           <span className="font-medium">{inheritLabel}</span>
-          <span className="text-xs leading-normal text-muted-foreground">{t("collab_style.inherit_hint")}</span>
+          <span className="text-sm leading-normal text-muted-foreground">{t("collab_style.inherit_hint")}</span>
         </span>
       </SelectItem> : null}
       {COLLABORATION_STYLES.map((style) => <SelectItem key={style} value={style} aria-label={t(`collab_style.${style}`)} className="collab-style-option">
         <span className="collab-style-option-art"><CollaborationStyleDiagram style={style} /></span>
         <span className="flex min-w-0 flex-col gap-1">
           <span className="font-medium">{t(`collab_style.${style}`)}</span>
-          <span className="text-xs leading-normal text-muted-foreground">{t(`collab_style.${style}_hint`)}</span>
+          <span className="text-sm leading-normal text-muted-foreground">{t(`collab_style.${style}_hint`)}</span>
         </span>
       </SelectItem>)}
     </SelectContent>

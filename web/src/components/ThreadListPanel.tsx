@@ -31,6 +31,7 @@ import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
+import { useKeyChange } from "../hooks/useKeyChange";
 
 // The logged-in employee's own threads. Each row is a session; the list
 // is owner-scoped by the backend, so it only ever shows the current employee's
@@ -332,7 +333,7 @@ function useMinuteClock(): number {
  */
 function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, resetKey: string) {
   const [pages, setPages] = useState(1);
-  useEffect(() => setPages(1), [resetKey]);
+  useKeyChange(resetKey, () => setPages(1));
 
   const groups = useMemo(() => groupThreads(items), [items]);
   const selectedIndex = useMemo(() => {

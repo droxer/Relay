@@ -4,7 +4,7 @@ import type { DaemonNodeMonitorRecord } from "../../types";
 import { nodeOwnershipProfile } from "../../lib/adminHelpers";
 import {
   ICON,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
 } from "../icons";
 import { ComposerContextLine } from "./ComposerContext";
 import {
@@ -117,7 +117,6 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
   const { t } = useTranslation();
   const selected = nodes.find((node) => node.id === value) ?? selectedNode ?? undefined;
   const selectedOwnership = selected ? nodeOwnershipProfile(selected) : null;
-  const SelectedMark = selectedOwnership ? nodeOwnershipIcon(selectedOwnership) : null;
   // Holding the pick through a heartbeat flap is right; hiding that the
   // machine is gone is not. When the pick is not among the selectable options
   // the trigger says so — the rows stay cue-free because they are all live.
@@ -147,7 +146,7 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
           {/* --icon-sm, matching the readout that replaces this trigger once the
               thread starts (ThreadRuntimeReadout draws its mark at ICON.sm) and
               the compact tier the rail sits at. */}
-          {SelectedMark ? <SelectedMark size={ICON.sm} aria-hidden="true" /> : null}
+          {selectedOwnership ? <NodeOwnershipIcon ownership={selectedOwnership} size={ICON.sm} aria-hidden="true" /> : null}
           <span className="thread-runtime-select-name">
             {selected ? runtimeLabel(selected) : t("thread.no_computers")}
           </span>
@@ -163,7 +162,6 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
         >
           {nodes.map((node) => {
             const ownership = nodeOwnershipProfile(node);
-            const OwnershipMark = nodeOwnershipIcon(ownership);
             const name = runtimeLabel(node);
             return (
               <SelectItem
@@ -173,7 +171,7 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
                 className="thread-runtime-option"
                 data-ownership={ownership}
               >
-                <OwnershipMark size={ICON.md} aria-hidden="true" />
+                <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
                 <span className="thread-runtime-option-body">
                   <span className="thread-runtime-option-name" translate="no">{name}</span>
                   {name === node.id ? null : (

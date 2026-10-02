@@ -45,7 +45,7 @@ export type TaskHistoryKind =
   | "activity";
 
 /** Newest-first cap. A long-lived routine accumulates hundreds of events. */
-export const TASK_HISTORY_LIMIT = 25;
+const TASK_HISTORY_LIMIT = 25;
 
 function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry | undefined {
   const base = {

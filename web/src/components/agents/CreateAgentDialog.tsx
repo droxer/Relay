@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent} from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { createAgent } from "../../api";
@@ -31,6 +31,7 @@ import {
 } from "../icons";
 import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 import { Alert } from "@/components/ui/alert";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 interface CreateAgentDialogProps {
   open: boolean;
@@ -64,7 +65,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const { nodeLikes, options: computerOptions } = computers;
 
   const [computerId, setComputerId] = useState("");
-  const [executorKind, setExecutorKind] = useState<AgentName | "">("");
+  const [pickedExecutorKind, setExecutorKind] = useState<AgentName | "">("");
   const [defaultRole, setDefaultRole] = useState<AgentRole | "">("");
   const [displayName, setDisplayName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("agents"));
@@ -100,30 +101,25 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
     [nodeLikes, computerId],
   );
 
-  useEffect(() => {
-    if (open) {
-      setComputerId("");
-      setExecutorKind("");
-      setDefaultRole("");
-      setDisplayName("");
-      setProfileImageUrl(randomPresetAvatar("agents"));
-      setError(null);
-      setFieldErrors({});
-      setIsBusy(false);
-    }
-  }, [open]);
+  useOnOpen(open, () => {
+    setComputerId("");
+    setExecutorKind("");
+    setDefaultRole("");
+    setDisplayName("");
+    setProfileImageUrl(randomPresetAvatar("agents"));
+    setError(null);
+    setFieldErrors({});
+    setIsBusy(false);
+  });
 
   // The runtime picked for a previous computer may not exist on the newly
-  // selected one — drop it rather than silently submitting a stale pick.
-  // A computer with exactly one ready runtime gets it pre-selected; there is
-  // nothing to choose.
-  useEffect(() => {
-    if (executorKind && !runtimeOptions.includes(executorKind)) {
-      setExecutorKind(runtimeOptions.length === 1 ? runtimeOptions[0] : "");
-    } else if (!executorKind && runtimeOptions.length === 1) {
-      setExecutorKind(runtimeOptions[0]);
-    }
-  }, [runtimeOptions, executorKind]);
+  // selected one — it does not count rather than silently submitting a stale
+  // pick. A computer with exactly one ready runtime has it pre-selected;
+  // there is nothing to choose.
+  const executorKind: AgentName | "" =
+    pickedExecutorKind && runtimeOptions.includes(pickedExecutorKind)
+      ? pickedExecutorKind
+      : runtimeOptions.length === 1 ? runtimeOptions[0] : "";
 
   const hasUnsavedChanges = Boolean(
     computerId || executorKind || defaultRole || displayName.trim(),

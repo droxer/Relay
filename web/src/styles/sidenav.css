@@ -302,7 +302,8 @@
   left: 0;
   top: 50%;
   width: var(--accent-bar-w);
-  height: 18px;
+  /* As tall as the nav glyph it marks. */
+  height: var(--icon-lg);
   transform: translateY(-50%);
   border-radius: calc(var(--r-1) / 2);
   background: var(--action);

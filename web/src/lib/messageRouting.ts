@@ -1,7 +1,7 @@
 import type { AgentName, ThreadMessageInput } from "../types.js";
 import { parseMentions, type MentionCandidate } from "./mentions.ts";
 
-export type RoutedComposerMessage = {
+type RoutedComposerMessage = {
   agentId: string;
   agent: AgentName;
   goal: string;
@@ -19,7 +19,7 @@ export function routeComposerMessage(
   };
 }
 
-export type ThreadMessageAddress = {
+type ThreadMessageAddress = {
   blocked: boolean;
   reason?: "mention" | "selected-agent";
   addressAgentIds: string[];

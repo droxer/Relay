@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TFunction } from "i18next";
 
-import { AgentStreamAccumulator, commandDisplay, displayAgentSegments, reasoningOutline, reasoningSummary, displayAgentStreamSegments, emptyAgentStreamSegments, hasStreamingTextCaret, hasTerminalOutcome, parseAgentStderr, parseAgentStream, segmentKeys, userVisibleAgentSegments, agentMessagePlainText, type AgentSegment } from "../src/lib/agentStream.js";
+import { AgentStreamAccumulator, commandDisplay, displayAgentSegments, reasoningOutline, reasoningSummary, displayAgentStreamSegments, hasStreamingTextCaret, hasTerminalOutcome, parseAgentStderr, parseAgentStream, segmentKeys, userVisibleAgentSegments, agentMessagePlainText, type AgentSegment } from "../src/lib/agentStream.js";
 
 describe("agent stream parsing", () => {
   it("filters Codex stdin notice from stderr", () => {
@@ -1234,11 +1234,12 @@ describe("agent stream parsing", () => {
   });
 
   it("does not add a Pi-specific fallback warning for completed empty chat output", () => {
-    const t = (key: string) => key;
-
-    assert.deepEqual(emptyAgentStreamSegments("pi", false, t as TFunction), []);
-    assert.deepEqual(emptyAgentStreamSegments("pi", true, t as TFunction), []);
-    assert.deepEqual(emptyAgentStreamSegments("claude", false, t as TFunction), []);
+    for (const agent of ["pi", "claude"] as const) {
+      for (const streaming of [false, true]) {
+        const { segments } = displayAgentStreamSegments(parseAgentStream(agent, ""), parseAgentStderr(""), streaming);
+        assert.deepEqual(segments, [], `${agent} streaming=${streaming}`);
+      }
+    }
   });
 
   it("extracts user-visible plain text for copy", () => {

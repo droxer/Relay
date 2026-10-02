@@ -83,7 +83,7 @@ function DropdownMenuContent({
    are the same drawing — the sidenav had `.sidenav-more-item` for the links and
    bare <Button variant="ghost"> for the actions, which is two of them. */
 const itemClassName =
-  "relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-xs font-medium text-body no-underline outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+  "relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-body no-underline outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
 
 /* `danger` mirrors the Button variant of the same name: neutral at rest, --err
    on highlight, and the hue is paired with nothing else that would survive
@@ -138,7 +138,7 @@ function DropdownMenuLabel({
   return (
     <MenuPrimitive.GroupLabel
       data-slot="dropdown-menu-label"
-      className={cn("px-2 py-1.5 text-micro text-muted-foreground", className)}
+      className={cn("px-2 py-1.5 text-xs text-muted-foreground", className)}
       {...props}
     />
   )

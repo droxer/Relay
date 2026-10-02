@@ -11,27 +11,30 @@ specifies Relay's current dense workspace UI. The [source-system appendix](#appe
 is historical design reference, not a component specification: Relay adapts its
 colors and typography but uses compact corners and flat elevation.
 
-> **A neutral canvas carries the content; cobalt carries the action;
-> shared tokens and components carry the interface.**
+> **A neutral canvas carries the content; an inverted neutral carries the
+> action; cobalt marks what is selected.**
 
-A near-white cloud canvas with stark white cards, a cool ink ramp, the source
-system's semantic status hues, and one saturated action colour — cobalt `#0064e0` —
-worn only by things you can press. The system adapts the source analysis into
-a dual-register application identity. It supersedes the Fieldnotes identity
-(cream canvas, olive ink, one highlighter yellow), which in turn superseded
-Phosphor.
+Near-black and near-white canvases (`#0a0a0a` / `#fafafa`), achromatic grey
+elevation and hairlines, a neutral ink ramp, the source system's semantic
+status hues, and blue held back for selection and links. The current
+identity follows Vercel Geist's neutral surfaces (PR #324); it supersedes the
+cloud-canvas commerce register, which superseded Fieldnotes and Phosphor.
 
-- **One action colour.** `--action` is cobalt (`#0064e0`) and it is
-  **register-invariant**, down to its pressed state (`--action-hover`
-  `#0457cb`, the source system's `primary-deep`). Text on the fill is always white
-  (`--on-action`, 5.4:1 on the fill and 6.5:1 on the pressed state). The source
-  system runs two primaries — cobalt inside the commerce flow, a black pill on
-  marketing surfaces — and Relay is entirely in-product, so cobalt is the
-  action on every surface, pre-auth chrome included; the black marketing pill
-  has no consumer here and is deliberately not carried as a token, so there is
-  no second primary to keep in step with. There is no disabled hex —
-  disabled is opacity. Links are **not** `--action`: they take `--link` (the source system's meta-link blue),
-  reserved for wayfinding — anchors in prose and the focus ring.
+- **The primary action is neutral.** `--cta-fill` inverts with the theme —
+  `#ededed` on dark, `#171717` on light — with the canvas ink on top
+  (`--cta-ink`), and `--cta-hover` as its pressed step. It is the highest
+  contrast mark on any screen (16.9:1 dark, 17.9:1 light), so it leads
+  without a hue. shadcn's `--primary` points at it, so every default
+  `Button`, the primary page-header action, and the login CTA (on the pinned
+  dark values) read it. There is no disabled hex — disabled is opacity, or the
+  Button's explicit disabled surface for filled variants.
+- **Cobalt marks selection.** `--action` (`#0064e0`, pressed `--action-hover`
+  `#0457cb`, white `--on-action` at 5.4:1 / 6.5:1) is **register-invariant**
+  and says *this one*: the selected-row accent bar, the active nav marker,
+  checked checkboxes, radios and switches, the current pager page,
+  `::selection`, and the skip link. The token keeps its historical name.
+  Links are **not** `--action`: they take `--link`, reserved for wayfinding —
+  anchors in prose and the focus ring.
 - **Status is chromatic, and still dot / border / text — never fills.**
   `--ok` `--warn` `--err` carry the source system's success / warning / critical
   hues. The published values are *badge fill* colours (white text on a
@@ -42,23 +45,19 @@ Phosphor.
 - **Every ink tier that can carry text clears 4.5:1.** The bar is the worst
   plane a tier can land on — `--surface-3` in dark, `--surface-2` in light —
   because meta text sits on drawers and inset wells too. This is why the light
-  ramp's calm end (`--ink-4` `#556170`) is deeper than the source system's steel
-  (`#5d6c7b`, 4.34:1 against the recessed fill), and why `stone` (`#8595a4`)
-  never enters the ramp at all: it is a disabled-label value, and disabled
-  here is opacity.
-- **Dual-first registers.** The light register is the commerce page: a
-  soft-cloud canvas (`#eef1f5`) under near-white cards and stark white
-  floating chrome. The source system publishes **no dark-mode token set** (see
-  [Known gaps](#known-gaps-and-what-relay-did-about-them)), so the dark
-  register is **derived**: `ink-deep` (`#0a1317`)
-  becomes the canvas and the cloud greys invert into an elevation ladder.
-  Dark is the default register (`:root`); `html[data-theme="light"]`
-  overrides it.
-- **Two accents, two jobs.** The source system sanctions cobalt and Oculus purple and
-  nothing else. Cobalt is the action; the purple is `--live`, work an agent is
-  doing *right now*. Splitting them across hues rather than across channels is
-  deliberate: a pulsing blue dot beside a blue button would put "working" and
-  "press me" in the same colour.
+  ramp's calm end (`--ink-4` `#666666`) stops where it does: one step lighter
+  and meta text on the recessed fill drops under AA. Disabled is opacity, so
+  no lighter "disabled label" tier exists.
+- **Dual-first registers.** Dark is the default register (`:root`);
+  `html[data-theme="light"]` overrides it. Both are achromatic: the dark
+  canvas `#0a0a0a` lifts through `#171717` cards to `#262626` drawers, and the
+  light canvas `#fafafa` carries white cards and white floating chrome,
+  separated by hairlines rather than a grey wash.
+- **Two accents, two jobs.** Cobalt and Oculus purple, and nothing else.
+  Cobalt is selection; the purple is `--live`, work an agent is doing *right
+  now*. Splitting them across hues rather than across channels is deliberate:
+  a pulsing blue dot beside a selected blue row would put "working" and
+  "chosen" in the same colour.
 - **One sans, every job.** Relay sets everything in the **platform UI face**
   (San Francisco, Segoe UI, Roboto, Noto Sans) — no sans web font is loaded,
   and English and Chinese share one stack.
@@ -102,10 +101,17 @@ Tailwind `@theme` machinery:
    utilities consume. Utility names (`text-ink`, `border-hairline`,
    `rounded-md`, `text-sm`) stay stable so component markup never tracks
    token renames. Note shadcn's own `--accent` / `--ring` names are its
-   aliases (hover surface / outline color), which is why the action family
-   is named `--action`, not `--accent`. `--ring` points at `--link`, not
-   `--action`: a focused primary button must not ring in more of its own
-   fill.
+   aliases (highlighted row / outline color), which is why the selection
+   family is named `--action`, not `--accent`. `--accent` points at
+   `--control-fill-hover`, a translucent ink wash, never a fixed surface: menus
+   paint on `--popover` (`--surface-3`), and a fixed plane matched it in light
+   (white on white) and sank below it in dark. `--ring` points at `--link`:
+   a focused control must not ring in its own fill.
+
+   The `text-*` utilities keep Tailwind's meanings — `text-xs` 12px,
+   `text-sm` 14px, `text-base` 16px — so vendored code written against
+   Tailwind's names renders at its intended size. `text-dense` (15px) is the
+   one Relay-only name, for the dense-prose rung Tailwind has no word for.
 
    The file has two halves with different rules. The **additive** colour
    aliases exist only if a component asks for them — Tailwind ships no default
@@ -147,54 +153,48 @@ Dark register / light register:
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--surface-0` | `#0a1317` | `#eef1f5` | canvas (ink-deep / soft cloud) |
-| `--surface-1` | `#131c21` | `#fbfcfd` | cards, panels |
-| `--surface-2` | `#1b262c` | `#e0e6ed` | fills, search, hover |
-| `--surface-3` | `#22303a` | `#ffffff` | drawers, modals |
-| `--ink-1` | `#ffffff` | `#0a1317` | headings, emphasis |
-| `--ink-2` | `#dfe3e8` | `#1c1e21` | body |
-| `--ink-3` | `#b6bec6` | `#444950` | secondary labels |
-| `--ink-4` | `#a4adb6` | `#556170` | timestamps, meta, disabled |
-| `--line-1` | `#2c3a43` | `#ced0d4` | structural hairline |
-| `--line-2` | `#1f2b32` | `#d6dce3` | soft hairline |
-| `--action` | `#0064e0` | `#0064e0` | actions, selection, brand — register-invariant |
-| `--action-hover` | `#0457cb` | `#0457cb` | pressed / active — register-invariant |
-| `--action-soft` | 15% soft-cobalt wash | 12% cobalt wash | selection wash, active nav |
-| `--on-action` | `#ffffff` | `#ffffff` | text on the action fill |
+| `--surface-0` | `#0a0a0a` | `#fafafa` | canvas |
+| `--surface-1` | `#171717` | `#ffffff` | cards, panels |
+| `--surface-2` | `#1f1f1f` | `#ebebeb` | fills, search, hover |
+| `--surface-3` | `#262626` | `#ffffff` | drawers, modals, popovers |
+| `--surface-rail` / `--surface-list` | `#1f1f1f` / `#171717` | `#f0f0f0` / `#f5f5f5` | shell zones |
+| `--ink-1` | `#ededed` | `#171717` | headings, emphasis |
+| `--ink-2` | `#d4d4d4` | `#262626` | body |
+| `--ink-3` | `#b3b3b3` | `#525252` | secondary labels |
+| `--ink-4` | `#a1a1a1` | `#666666` | timestamps, meta |
+| `--line-1` | `#333333` | `#d4d4d4` | structural hairline |
+| `--line-2` | `#292929` | `#e5e5e5` | soft hairline |
+| `--cta-fill` / `--cta-hover` | `#ededed` / `#d4d4d4` | `#171717` / `#383838` | primary action fill — inverts with the theme |
+| `--cta-ink` | `#0a0a0a` | `#ffffff` | text on the primary action |
+| `--action` | `#0064e0` | `#0064e0` | selection — register-invariant |
+| `--action-hover` | `#0457cb` | `#0457cb` | pressed selection fill — register-invariant |
+| `--action-soft` | 10% cobalt wash | 10% cobalt wash | selection wash, active nav |
+| `--on-action` | `#ffffff` | `#ffffff` | text on the cobalt fill |
 | `--link` / `--link-hover` | `#8ab4f8` / `#b9d3fb` | `#385898` / `#0457cb` | anchors in prose, focus ring |
 | `--ok` | `#4ac16a` | `#12752f` | ready, passed, done |
 | `--warn` | `#fc9f30` | `#8f560f` | attention, degraded — amber, not the highlighter yellow |
 | `--err` | `#ff6367` | `#c81232` | failed, destructive |
-| `--on-err` | `#0a1317` | `#ffffff` | text on the critical fill |
+| `--on-err` | `#0a0a0a` | `#ffffff` | text on the critical fill |
 | `--info` | = `--ink-3` | = `--ink-3` | neutral notice |
 | `--live` | `#cf7ef0` | `#a121ce` | an agent is working *right now* |
-| `--scrim` | `rgba(10,19,23,.66)` | `rgba(10,19,23,.55)` | overlay scrim (one layer) |
+| `--scrim` | `rgba(0,0,0,.6)` | `rgba(23,23,23,.24)` | overlay scrim (one layer, achromatic) |
 
 ### The surface ladder runs both ways
 
 In **dark** the ladder is elevation: 0 < 1 < 3 in perceived lift, with 2 as
 the fill tier between card and drawer. **Light cannot reproduce that**,
-because white is a ceiling you cannot build above — so 0..3 there is a ladder
-of *distinctness*: cloud canvas `#eef1f5` → near-white cards `#fbfcfd`
-(raised) → drawers/modals `#ffffff` (top plane), with `--surface-2`
-deliberately **recessed** below the canvas.
+because white is a ceiling you cannot build above — so cards and floating
+chrome are both white (`--surface-1` = `--surface-3` = `#ffffff`) and separate
+by hairline and the `--shadow-2` ring, with `--surface-2` deliberately
+**recessed** below the canvas.
 
 The **zone** surfaces run the other way from dark. Dark builds the shell up
-from the canvas (lift means lighter there); light cannot copy that, because a
-near-white rail beside a cloud canvas makes the app's *chrome* the brightest
-thing on screen and leaves the content sheet reading as the recessed part. So
-in light the shell recedes — `--surface-rail` `#e2e7ed` < `--surface-list`
-`#e8ecf2` < canvas — and lightness order becomes rail < list < canvas < card <
-drawer, the same order the eye should travel. A search field or hover well
-recedes from white and emerges from black; that inversion is correct, and only
-`--surface-2` does it.
-
-The source system paints its marketing canvas pure white and its wells in
-`surface-soft` `#f1f4f7`. Relay is a three-pane application rather than a
-scrolling page, so the two trade places: the cloud grey carries the page and
-stark white carries the cards and floating chrome that sit on it. Both values
-stay inside the published cloud/white pair — do not substitute a grey from
-outside it, and do not paint shaded section bands over the canvas.
+from the canvas (lift means lighter there); in light the shell recedes —
+`--surface-rail` `#f0f0f0` < `--surface-list` `#f5f5f5` < canvas `#fafafa` —
+so lightness order becomes rail < list < canvas < card, the same order the eye
+should travel. A search field or hover well recedes from white and emerges
+from black; that inversion is correct, and only `--surface-2` does it. Do not
+paint shaded section bands over the canvas.
 
 ### Contrast floors
 
@@ -203,8 +203,8 @@ can land on**, not against the canvas. Ratios against that plane:
 
 | | ink-1 | ink-2 | ink-3 | ink-4 | ok | warn | err |
 |---|---|---|---|---|---|---|---|
-| dark (vs `--surface-3`) | 13.53 | 10.50 | 7.20 | 5.95 | 5.88 | 6.53 | 4.66 |
-| light (vs `--surface-2`) | 14.94 | 13.29 | 7.22 | 5.02 | 4.63 | 4.77 | 4.66 |
+| dark (vs `--surface-3`) | 12.93 | 10.21 | 7.22 | 5.86 | 6.58 | 7.31 | 5.21 |
+| light (vs `--surface-2`) | 15.04 | 12.69 | 6.55 | 4.82 | 4.88 | 5.02 | 4.91 |
 
 `paletteTokens.test.ts` computes these from the declared hexes rather than
 pinning the hexes themselves, so a future palette move is checked for
@@ -234,11 +234,13 @@ Two accents, two jobs, and they never trade places:
 
 | cobalt (`--action`) | Oculus purple (`--live`) |
 |---|---|
-| primary CTA, subscribe, save | composer running indicator |
-| selection wash, active nav | task + backlog running rows |
-| brand mark accent in app icons | agent stream activity, busy header |
-| the selected-row accent bar | thread pulse, streaming rail node |
+| the selected-row accent bar, active nav marker | composer running indicator |
+| selection wash (`--action-soft`) | task + backlog running rows |
+| checked checkbox / radio / switch, current pager page | agent stream activity, busy header |
+| brand mark accent in app icons | thread pulse, streaming rail node |
 | | status pill on a running agent/node (TonePill `live`) |
+
+The primary action is in neither column: it is the neutral `--cta-fill`.
 
 **`--live` is legal exactly where `--t-pulse` is used, and nowhere
 `--t-pulse-calm` is used.** Passive presence (online dot, idle node, login
@@ -262,8 +264,8 @@ deliberate — a reader who takes the rule literally will file them as bugs:
   one place hue carries structure rather than meaning; they never appear
   outside a `code.hljs` block.
 - **Login is a marketing surface.** Pre-auth runs on the pinned dark ramp
-  because no theme has loaded; its primary CTA takes the register-invariant
-  cobalt like every other primary action. The cover sets its field labels,
+  because no theme has loaded; its primary CTA is the neutral action fill on
+  the pinned dark values (`--dark-ink` plate, canvas ink). The cover sets its field labels,
   footer meta, and status line in the mono face — a deliberate skin;
   everywhere else mono is technical text only.
 - **Empty states remain still.** They share type, spacing, and an optional
@@ -297,17 +299,18 @@ introduces visual rest.
 
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
-| `--type-display` | 500 32/1.17 | `--track-display` (0) | hero headline, admin metric values |
-| `--type-title` | 500 20/1.25 | `--track-display` (0) | page titles and other fixed UI nouns |
-| `--type-heading` | 700 18/1.44 | `--track-0` | section heads, list labels, in-message h1 |
-| `--type-title-content` | 400 20/1.25 | `--track-display` (0) | titles whose text comes from a user or agent |
-| `--type-body` | 400 16/1.5 | `--track-body` | prose, message bodies, inputs |
-| `--type-name` | 700 16/1.5 | `--track-body` | the identity of the thing a row or card is about |
-| `--type-body-sm` | 400 13/1.43 | `--track-body-sm` | dense prose, captions |
-| `--type-label` | 500 13/1.43 | `--track-body-sm` | chrome labels, nav, metadata |
-| `--type-label-strong` | 700 13/1.43 | `--track-body-sm` | bold chrome, button and pill-tab labels |
-| `--type-micro` | 500 12/1.33 | `--track-caps` (0) | structural group labels (+ uppercase), badges — separated from `--type-label` by case and size, not weight |
-| `--type-number` | 500 24/1.28 | `--track-display` (0) | metrics |
+| `--type-display` | 500 28/1.17 | `--track-display` (−0.02em) | hero headline, admin metric values |
+| `--type-title` | 500 19/1.25 | `--track-display` (−0.02em) | page titles and other fixed UI nouns |
+| `--type-heading` | 700 17/1.44 | `--track-0` | section heads, list labels, in-message h1 |
+| `--type-title-content` | 400 19/1.25 | `--track-display` (−0.02em) | titles whose text comes from a user or agent |
+| `--type-body` | 400 16/1.5 | `--track-body` (0) | prose, message bodies, inputs |
+| `--type-name` | 700 16/1.5 | `--track-body` (0) | the identity of the thing a row or card is about |
+| `--type-body-sm` | 400 14/1.43 | `--track-body-sm` (0) | supporting text, captions |
+| `--type-label` | 500 14/1.43 | `--track-body-sm` (0) | chrome labels, nav, metadata |
+| `--type-label-strong` | 700 14/1.43 | `--track-body-sm` (0) | bold chrome, button labels |
+| `--type-micro` | 500 12/1.33 | `--track-caps` (0.03em) | structural group labels (+ uppercase), badges — separated from `--type-label` by case and size, not weight |
+| `--type-meta` | 500 12/1.33 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
+| `--type-number` | 500 22/1.28 | `--track-display` (−0.02em) | metrics |
 | `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
 
 **Every role ships a paired `--type-<role>-track`.** The `font:` shorthand
@@ -316,11 +319,12 @@ silently loses its tracking unless the call site remembers a second
 declaration — pairing the tokens by name makes the omission greppable, and
 `typographyTokens.test.ts` sweeps every stylesheet for it.
 
-**Reading and display text set solid.** The source system tightened its
-*reading* roles by −0.01em, a setting drawn for its own face. The platform UI
-faces carry per-size tracking of their own, so Relay adds none: `--track-body`,
-`--track-body-sm` and `--track-display` are all 0, and only the uppercase
-captions are tracked (`--track-caps`, 0.03em). The tokens stay explicit so a
+**Reading text sets solid; display tightens half a step.** The platform UI
+faces carry per-size tracking of their own, so the reading tracks
+(`--track-body`, `--track-body-sm`) are 0. The display tier takes
+`--track-display` −0.02em (~0.5px at 28px) so titles and numerals settle, and
+the uppercase captions open up with `--track-caps` 0.03em. Under
+`html:lang(zh-CN)` every track is 0. The tokens stay explicit so a
 role's tracking is decided in `roles.css`, once.
 
 **No stylistic set is switched on.** System faces assign `ss01`/`ss02`
@@ -382,7 +386,7 @@ Noto Mono CJK faces named in the mono stacks.
   and were removed. Below
   the base sit exactly two micro steps, `--sp-0-5` 2 and `--sp-1-5` 6, for
   glyph-tight pairs (dot ↔ label, icon ↔ text, stacked meta lines). They are
-  the only sanctioned sub-4px gaps. `--sp-row` (12px, compact 8px via
+  the only sanctioned sub-4px gaps. `--sp-row` (16px, compact 12px via
   `[data-density="compact"]`) sets row rhythm; `--control-h` is **44px** —
   the source system renders inputs and primary pills at the same height so they share
   a silhouette and clear the WCAG AAA touch floor.
@@ -409,12 +413,17 @@ Noto Mono CJK faces named in the mono stacks.
   `--measure-wide` 72 (long-form agent prose). Anything narrower is a layout
   width, not a measure: give it px and a reason.
 - **Z layers:** three tiers, all with consumers — `--z-drawer` 30 ·
-  `--z-float` 120 · `--z-dialog` 300. There is deliberately no `popover` tier
-  below `drawer`. Bare `z-index: 1/2/3` in component CSS orders siblings
+  `--z-dialog` 300 · `--z-float` 400. Menus, selects, popovers, tooltips and
+  drag ghosts all sit on `--z-float`, above dialogs, because anchored chrome
+  must float over the surface it was opened from. There is deliberately no
+  `popover` tier below `drawer`. Bare `z-index: 1/2/3` in component CSS orders siblings
   inside an already-positioned component and must not be promoted to tokens.
 - **Motion:** `--ease` `cubic-bezier(0, 0, 0.2, 1)` (ease-out); `--t-fast`
   150ms, `--t-slow` 250ms — the source system publishes no timings and
   recommends 150–250ms for surface transitions. No spring, no overshoot.
+  A theme switch is not a transition: `applyTheme` holds
+  `html.theme-switching` for two frames, which turns transitions off so the
+  page switches instead of cross-fading.
 - **Ambient loops:** `--t-pulse` 1.6s for active work (streaming agent,
   running task, busy header) and `--t-pulse-calm` 2.6s for passive presence
   (online dot, idle node) — the same liveness reads at the same tempo
@@ -455,11 +464,10 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 ## Do's and Don'ts
 
 ### Do
-- Use `--action` for actions, and use it scarcely: primary CTA, selection,
-  the brand mark. One cobalt pill per fold is plenty — the source system's own
-  note is that the colour's weight is meaningful precisely because it is rare.
-- Pair the action fill with `--on-action` — white on the cobalt, in both
-  registers.
+- Use the default `Button` (`--cta-fill`) for the primary action, one per
+  view; its weight comes from contrast, not hue.
+- Use `--action` for selection only — accent bars, checked controls, the
+  current page — and pair a cobalt fill with `--on-action`.
 - Use `--action-soft` for selected rows and active navigation.
 - Give buttons, tab chips, and badges `--r-2`; reserve `--r-full` for
   actual circles and capsules.
@@ -478,9 +486,9 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
   inline a colour in a component file (`npm run lint:css -w web` enforces).
 
 ### Don't
-- Don't use a status colour as an action, or the action colour as a status.
-- Don't introduce a third accent. Cobalt is the action, purple is liveness,
-  blue is wayfinding; everywhere else the ink ramp is the only signal.
+- Don't use a status colour as an action, or cobalt as an action or a status.
+- Don't introduce a third accent. Cobalt is selection, purple is liveness,
+  link blue is wayfinding; everywhere else the ink ramp is the only signal.
 - Don't give controls pill corners or introduce radii beyond the 4/6/8px ladder.
 - Don't set text or dots in a status tone taken straight from the source
   system's badge palette — those are *fill* values (success `#31a24c` measures 3.1:1
@@ -506,7 +514,8 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 |---|---|---|
 | `--sidenav-w` | 72px | Collapsed left rail |
 | `--sidenav-w-open` | 228px | Expanded left rail |
-| `--thread-w` | 318px | Conversation list pane |
+| `--thread-w` | 360px | Conversation list pane |
+| `--space-w` | 384px | Thread space panel |
 | `--header-h` | 64px | Chat panel top bar (the source system's nav height) |
 
 ## Responsive behaviour

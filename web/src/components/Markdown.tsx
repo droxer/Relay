@@ -69,6 +69,7 @@ const MARKDOWN_COMPONENTS: Components = {
   // Intrinsic dimensions of markdown images are unknown, so no width/height
   // hints — just lazy-load them instead of blocking on the transcript render.
   img: ({ src, alt, ...rest }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); markdown images have no known size
     <img src={src} alt={alt ?? ""} loading="lazy" decoding="async" {...rest} />
   ),
 };

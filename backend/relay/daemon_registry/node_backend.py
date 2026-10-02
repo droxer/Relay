@@ -1110,16 +1110,6 @@ def assert_session_owned_by_employee(
         )
 
 
-def session_owner_employee_id(store: SessionStore, session_id: str) -> str:
-    session = store.get_session(session_id)
-    owner = session.get("ownerEmployeeId")
-    if not owner:
-        raise PermissionError(
-            f"Session {session_id} has no owner; cannot start daemon run."
-        )
-    return owner
-
-
 def _latest_decision_kind_after_latest_user(session: dict[str, Any]) -> str | None:
     latest_user = latest_user_turn_marker(session)
     latest: tuple[tuple[str, int], str] | None = None

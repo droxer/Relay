@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useKeyChange } from "./useKeyChange";
 
 /**
  * Keeps the record a closing drawer is still showing.
@@ -22,13 +23,11 @@ export function useRecordDrawerMirror<T>(
 ): { record: T | null; release: () => void } {
   const [mirror, setMirror] = useState<T | null>(null);
 
-  useEffect(() => {
-    if (key === null) return;
-    setMirror(value);
-    // `key` IS the value's identity: adding `value` would re-run this on
-    // every render for the object-shaped callers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  // `key` IS the value's identity, so the mirror follows the key rather than
+  // the value, which is a new object on every render for object-shaped callers.
+  useKeyChange(key, (next) => {
+    if (next !== null) setMirror(value);
+  }, { from: null });
 
   return {
     record: key === null ? mirror : value,

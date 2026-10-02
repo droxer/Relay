@@ -33,7 +33,7 @@ export function TaskAssignee({
   );
 }
 
-export function TaskExecutionBadge({
+function TaskExecutionBadge({
   task,
   ready,
   availability,

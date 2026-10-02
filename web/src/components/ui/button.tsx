@@ -7,7 +7,7 @@ import { NavRefresh } from "@/components/icons"
 import { Tooltip } from "@/components/ui/tooltip"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-(--opacity-disabled) aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-(--t-fast) ease-(--ease) outline-none select-none focus-visible:border-ring focus-visible:[outline:var(--focus-outline)] focus-visible:[outline-offset:var(--focus-offset)] active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-(--opacity-disabled) aria-invalid:border-destructive aria-invalid:[outline:var(--focus-outline-danger)] aria-invalid:[outline-offset:var(--focus-offset)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -61,14 +61,14 @@ const buttonVariants = cva(
         default:
           "h-(--control-h) gap-1.5 px-6 has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
         /* The text tier climbs with the size tier: xs 12px (caption) → dense, sm and
-           default 14px (the source system's button-md, the base `text-xs`).
+           default 14px (the source system's button-md, the base `text-sm`).
            Every tier takes the CONTROL radius (--r-2, 6px) from the base, not
            a pill: see the radii block in palette.css for why this app squares
            off the brand's lozenge. These tiers restate it only to win the
            tailwind-merge conflict inside a button group. */
-        xs: "h-(--control-h-2xs) gap-1 rounded-md px-3 text-micro in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
-        dense: "h-(--control-h-xs) gap-1 rounded-md px-4 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        sm: "h-(--control-h-sm) gap-1.5 px-4 text-xs",
+        xs: "h-(--control-h-2xs) gap-1 rounded-md px-3 text-xs in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
+        dense: "h-(--control-h-xs) gap-1 rounded-md px-4 text-sm in-data-[slot=button-group]:rounded-md has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        sm: "h-(--control-h-sm) gap-1.5 px-4 text-sm",
         /* One step ABOVE `default`, on the --control-h-lg rung, for hero and
            dual-CTA pairs where the pill carries a marketing weight. */
         lg: "h-(--control-h-lg) gap-2 px-7 has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5",

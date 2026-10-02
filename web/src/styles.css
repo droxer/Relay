@@ -41,6 +41,7 @@
 
 @import "./styles/thread.css" layer(relay);
 @import "./styles/chat.css" layer(relay);
+@import "./styles/collab-style.css" layer(relay);
 @import "./styles/agent-stream.css" layer(relay);
 /* KaTeX's own stylesheet, pulled into `relay` so markdown.css can override its
    display-equation spacing by source order. Unlayered it would outrank every
@@ -66,6 +67,7 @@
 @import "./styles/roster-select.css" layer(relay);
 @import "./styles/task-drawer.css" layer(relay);
 @import "./styles/task-record.css" layer(relay);
+@import "./styles/record-panels.css" layer(relay);
 @import "./styles/recovery.css" layer(relay);
 @import "./styles/list-sort.css" layer(relay);
 @import "./styles/list-group.css" layer(relay);

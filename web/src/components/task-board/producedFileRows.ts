@@ -4,7 +4,7 @@ import type {
   WorkspaceFileEntry,
 } from "../../types.js";
 
-export type ProducedFilesState = "loading" | "failed" | "empty" | "ready";
+type ProducedFilesState = "loading" | "failed" | "empty" | "ready";
 
 /** Keep offline indexed results visible instead of calling the task empty. */
 export function producedFilesState(query: {

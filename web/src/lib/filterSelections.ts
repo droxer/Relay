@@ -19,7 +19,7 @@ export interface SelectionField {
 /** Field id → value; "" when the field is not filtered. */
 export type FilterSelections = Readonly<Record<string, string>>;
 
-export interface SelectionRule {
+interface SelectionRule {
   id: string;
   type: "rule";
   path: string[];
@@ -38,7 +38,7 @@ export interface SelectionGroup {
 export type SelectionQuery = SelectionGroup;
 
 /** What `reconcileQuery` builds: one level of rules, no groups. */
-export interface FlatSelectionQuery extends Omit<SelectionGroup, "rules"> {
+interface FlatSelectionQuery extends Omit<SelectionGroup, "rules"> {
   rules: SelectionRule[];
 }
 

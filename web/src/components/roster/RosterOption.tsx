@@ -41,7 +41,7 @@ export function effectiveAgentAvailability(agent: Pick<EmployeeAgent, "enabled" 
 // Team identity chip — the same `.agent-state` box the boards draw, so the
 // menu, the closed trigger, and the task cards all show one mark. The tone
 // pip carries readiness; the glyph stays neutral.
-export function TeamMark({ team }: { team: TeamView }) {
+function TeamMark({ team }: { team: TeamView }) {
   const { t } = useTranslation();
   const availability = teamAvailability(team);
   const stateLabel = `${team.name} · ${t(`status.${availability}`, { defaultValue: availability })}`;

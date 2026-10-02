@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Any, Literal
 from urllib.parse import urlparse, urlunsplit
 
-from sqlalchemy import JSON, Column, DateTime, Table, Text, insert, select, update
+from sqlalchemy import Column, DateTime, Table, Text, insert, select, update
 from cryptography.fernet import Fernet, InvalidToken
 
 from ..core.ids import new_relay_id, now_iso

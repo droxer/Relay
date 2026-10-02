@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { highlightIfLoaded, loadSyntax, syntaxLoaded } from "../lib/syntaxLoader";
+import { escapeCodeHtml, highlightIfLoaded, loadSyntax, syntaxLoaded } from "../lib/syntaxLoader";
 
 /** Syntax-highlighted HTML for `code`, rendered as escaped plain text for the
  *  one paint before highlight.js loads (see lib/syntaxLoader). */
@@ -15,5 +15,8 @@ export function useHighlightedHtml(code: string, language?: string | null): stri
       live = false;
     };
   }, [ready]);
-  return useMemo(() => highlightIfLoaded(code, language), [code, language, ready]);
+  return useMemo(
+    () => (ready ? highlightIfLoaded(code, language) : escapeCodeHtml(code)),
+    [code, language, ready],
+  );
 }

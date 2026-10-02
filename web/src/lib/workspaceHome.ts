@@ -1,7 +1,7 @@
 import type { ProjectWorkspaceFilesResponse } from "../types.js";
 
 /** What the Files pane header shows about the workspace's data source. */
-export type WorkspaceHomeStatus =
+type WorkspaceHomeStatus =
   | { kind: "live"; nodeId: string | null }
   | { kind: "none" };
 

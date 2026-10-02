@@ -91,10 +91,6 @@ export function backlogSortColumns(
   ];
 }
 
-export function isTaskStatus(value: string | null | undefined): value is TaskStatus {
-  return typeof value === "string" && (TASK_STATUSES as string[]).includes(value);
-}
-
 export function tasksByStatus(tasks: RelayTaskListItem[]): Record<TaskStatus, RelayTaskListItem[]> {
   return TASK_STATUSES.reduce((acc, status) => {
     acc[status] = tasks.filter((task) => taskWorkflowStage(task) === status);

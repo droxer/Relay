@@ -2285,7 +2285,7 @@ const TRIGGER_ICON_FALLBACK_CLASS =
 
 /** The chips field: a form-control surface, so it carries the invalid states. */
 const CHIPS_CLASS =
-  "flex flex-wrap items-center border bg-clip-padding dark:bg-input/30 border-input focus-within:border-ring focus-within:ring-ring/50 has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:ring-destructive/40 has-aria-invalid:border-destructive dark:has-aria-invalid:border-destructive/50 bg-transparent px-2.5 text-sm focus-within:ring-3 has-aria-invalid:ring-3 min-h-8 gap-1 rounded-lg py-1 transition-colors has-data-[slot=combobox-chip]:px-1"
+  "flex flex-wrap items-center border bg-clip-padding border-input focus-within:border-ring focus-within:ring-ring/50 has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:ring-destructive/40 has-aria-invalid:border-destructive dark:has-aria-invalid:border-destructive/50 bg-transparent px-2.5 text-sm focus-within:ring-3 has-aria-invalid:ring-3 min-h-8 gap-1 rounded-lg py-1 transition-colors has-data-[slot=combobox-chip]:px-1"
 
 const CHIP_CLASS =
   "text-foreground flex w-fit items-center justify-center gap-1 font-medium whitespace-nowrap bg-muted rounded-sm px-1.5 text-xs has-data-[slot=combobox-chip-remove]:pr-0 h-[calc(--spacing(5.25))]"
@@ -2297,7 +2297,7 @@ const CHIP_REMOVE_CLASS =
  * left out (mirrored in `cascader-nav.tsx`), as are its `max-h-72` and
  * `min-w-*`: `CascaderContent` sets both from the positioner's variables. */
 const CONTENT_SURFACE_CLASS =
-  "bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 overflow-hidden ring-1 duration-100 ring-foreground/10 shadow-md rounded-lg data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2"
+  "bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 overflow-hidden duration-100 shadow-(--shadow-2) rounded-lg data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2"
 
 const EMPTY_CLASS =
   "text-muted-foreground hidden w-full justify-center py-2 text-center group-data-empty/combobox-content:flex text-sm"
@@ -2641,7 +2641,7 @@ function CascaderContent({
         {...(collisionPadding !== undefined ? { collisionPadding } : null)}
         {...(sticky !== undefined ? { sticky } : null)}
         {...(positionMethod !== undefined ? { positionMethod } : null)}
-        className="isolate z-50"
+        className="isolate z-(--z-float)"
       >
         <ComboboxPrimitive.Popup
           ref={setPopup}

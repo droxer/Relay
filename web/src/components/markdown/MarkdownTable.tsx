@@ -3,6 +3,8 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { omit } from "../../lib/omit";
+
 /**
  * A GFM table in its own horizontal scroll region.
  *
@@ -16,15 +18,15 @@ import { useTranslation } from "react-i18next";
  */
 export function MarkdownTable({
   children,
-  // react-markdown passes its internal AST `node` to every component override;
-  // spread onto the DOM it renders as `node="[object Object]"`.
-  node: _node,
-  ...rest
+  ...props
 }: { children?: ReactNode; node?: unknown } & ComponentPropsWithoutRef<"table">) {
   const { t } = useTranslation();
+  // react-markdown passes its internal AST `node` to every component override;
+  // spread onto the DOM it renders as `node="[object Object]"`.
+  const tableProps = omit(props, "node");
   return (
     <div className="md-table" role="region" aria-label={t("message.table")} tabIndex={0}>
-      <table {...rest}>{children}</table>
+      <table {...tableProps}>{children}</table>
     </div>
   );
 }

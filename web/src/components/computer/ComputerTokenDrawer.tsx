@@ -11,6 +11,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { CredCopyRow } from "../admin/CredCopyRow";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
 import { Alert } from "@/components/ui/alert";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 interface ComputerTokenDrawerProps {
   open: boolean;
@@ -37,15 +38,13 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
   const [busy, setBusy] = useState<"reveal" | "reissue" | null>(null);
   const credentialsRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setCredentials(null);
-      setUnrecoverable(false);
-      setReissued(false);
-      setError(null);
-      setBusy(null);
-    }
-  }, [open]);
+  useOnOpen(open, () => {
+    setCredentials(null);
+    setUnrecoverable(false);
+    setReissued(false);
+    setError(null);
+    setBusy(null);
+  });
 
   // The Reveal button unmounts once credentials arrive; move focus onto the
   // revealed block instead of letting it drop to document.body.

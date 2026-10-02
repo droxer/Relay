@@ -106,7 +106,7 @@ export function parseSortParam<K extends string>(
   return { key: key as K, direction };
 }
 
-export interface SortIndicator {
+interface SortIndicator {
   active: boolean;
   direction: SortDirection | null;
   ariaSort: "ascending" | "descending" | "none";

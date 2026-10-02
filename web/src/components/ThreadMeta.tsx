@@ -9,7 +9,7 @@ import type { DaemonNodeMonitorRecord, EmployeeAgent, RelaySession } from "../ty
 import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
-import { ICON, NavProjects, nodeOwnershipIcon } from "./icons";
+import { ICON, NavProjects, NodeOwnershipIcon } from "./icons";
 
 /**
  * A thread's coordinates, as marks rather than a table of words.
@@ -154,7 +154,6 @@ function ComputerChip({ computerId, node }: {
 }) {
   const { t } = useTranslation();
   const ownership = node ? nodeOwnershipProfile(node) : null;
-  const OwnershipIcon = nodeOwnershipIcon(ownership ?? "pending");
   const online = Boolean(node?.online) && !node?.stale;
   const name = (node && "displayName" in node && typeof node.displayName === "string" && node.displayName.trim())
     || computerId.replace(/^device:[^:]+:/, "");
@@ -166,7 +165,7 @@ function ComputerChip({ computerId, node }: {
       title={`${t("thread.band_computer")}: ${name} · ${presenceLabel}`}
     >
       <span className="adm-presence" data-online={online ? "true" : "false"} aria-hidden="true" />
-      <OwnershipIcon size={ICON.sm} aria-hidden="true" />
+      <NodeOwnershipIcon ownership={ownership ?? "pending"} size={ICON.sm} aria-hidden="true" />
       <span className="sr-only">{t("thread.band_computer")}: </span>
       <span className="thread-meta-name" translate="no">{name}</span>
       <span className="sr-only"> · {presenceLabel}</span>

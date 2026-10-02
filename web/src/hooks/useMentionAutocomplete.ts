@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   activeMentionQuery,
   applyMention,
   type MentionCandidate,
 } from "../lib/mentions";
+import { useKeyChange } from "./useKeyChange";
 
-export type MentionAutocomplete = {
+type MentionAutocomplete = {
   /** Rows to render; empty means the popup is closed. */
   matches: MentionCandidate[];
   /** Track the caret so the open `@…` fragment can be found. */
@@ -70,9 +71,9 @@ export function useMentionAutocomplete({ text, candidates, setText, textareaRef 
 
   // A dismissal outlives only its own fragment. Once the caret is no longer in
   // one, the next `@` starts clean wherever it is typed.
-  useEffect(() => {
-    if (!open && dismissed) setDismissed(null);
-  }, [dismissed, open]);
+  useKeyChange(Boolean(open), (isOpen) => {
+    if (!isOpen) setDismissed(null);
+  });
 
   const blur = useCallback(() => setBlurred(true), []);
   const focus = useCallback(() => setBlurred(false), []);

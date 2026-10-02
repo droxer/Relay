@@ -132,7 +132,7 @@ export function WorkspaceFileList({
   );
 }
 
-export function WorkspaceFileRow({
+function WorkspaceFileRow({
   entry,
   selected,
   onOpenDirectory,

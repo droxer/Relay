@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/command";
 
 /** Id of the list the textarea points `aria-controls` at. */
-export const MENTION_LIST_ID = "composer-mention-list";
+const MENTION_LIST_ID = "composer-mention-list";
 
 /**
  * Autocomplete list for `@` in the composer, on the shared Combobox.

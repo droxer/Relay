@@ -276,7 +276,7 @@ describe("thread space panel wiring", () => {
        header stands down while one is open) and reset alongside the tab. */
     const panel = readWeb("src/components/space/ThreadSpacePanel.tsx");
     assert.match(panel, /<ThreadSpaceFiles\s+key=\{projectId\}\s+projectId=\{projectId\}/);
-    assert.match(panel, /useEffect\(\(\) => setProjectFile\(""\), \[projectId, sessionId\]\)/);
+    assert.match(panel, /useKeyChange\(`\$\{projectId \?\? ""\}\\u0000\$\{sessionId\}`, \(\) => setProjectFile\(""\)\)/);
   });
 
   it("gives the empty state an action, not just a sentence", () => {

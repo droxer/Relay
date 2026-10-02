@@ -872,19 +872,6 @@ def _compatibility_key(
     return f"{supervisor_employee_id}:{computer_id}:{executor_kind}"
 
 
-def compatibility_computer_id(agent: dict[str, Any]) -> str | None:
-    """The Computer a compatibility agent stands in for, if it is scoped to one.
-
-    Returns None for ordinary agents and for legacy two-segment keys that
-    predate Computer scoping, both of which are free to be placed anywhere.
-    """
-    key = agent.get("compatibilityKey")
-    if not isinstance(key, str):
-        return None
-    segments = key.split(":")
-    return segments[1] if len(segments) == 3 else None
-
-
 def _migrate_compatibility_display_name(
     store: Any, agent: dict[str, Any], supervisor_employee_id: str, executor_kind: str
 ) -> dict[str, Any]:

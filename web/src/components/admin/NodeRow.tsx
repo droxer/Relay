@@ -14,7 +14,7 @@ import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import {
   AdminEmployees,
   ICON,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
 } from "../icons";
 
 /* The nodes list is a TanStack table now (see NodesView): a "row" here is one
@@ -44,7 +44,6 @@ export function NodeIdentityCell({
      online/offline is a fact about the connection, not the lifecycle, and a
      stopped computer can still be reachable. */
   const ownership = nodeOwnershipProfile(node);
-  const OwnershipMark = nodeOwnershipIcon(ownership);
 
   return (
     <span className="adm-node-row-id">
@@ -53,7 +52,7 @@ export function NodeIdentityCell({
         data-ownership={ownership}
         translate="no"
       >
-        <OwnershipMark size={ICON.md} aria-hidden="true" />
+        <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
       </span>
       <span className="adm-node-row-identity">
         <span className="adm-node-row-nameline">

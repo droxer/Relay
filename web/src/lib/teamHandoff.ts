@@ -3,7 +3,7 @@ import type { AgentName, RelaySession } from "../types.js";
 type Round = NonNullable<RelaySession["collaborationRounds"]>[number];
 type Run = RelaySession["agentRuns"][number];
 
-export interface TeamHandoff {
+interface TeamHandoff {
   /** Run that ended — identifies this gap. */
   fromRunId: string;
   /** Logical agent that just finished; absent on legacy runs. */

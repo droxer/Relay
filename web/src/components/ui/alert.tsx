@@ -26,8 +26,8 @@ const alertVariants = cva("text-danger", {
   variants: {
     variant: {
       boxed:
-        "m-0 rounded-md border border-(--tone-line) px-4 py-3 text-sm leading-normal [--tone:var(--err)]",
-      inline: "m-0 text-sm",
+        "m-0 rounded-md border border-(--tone-line) px-4 py-3 text-dense leading-normal [--tone:var(--err)]",
+      inline: "m-0 text-dense",
     },
   },
   defaultVariants: {

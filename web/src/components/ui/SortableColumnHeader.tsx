@@ -2,48 +2,13 @@
 
 import { useTranslation } from "react-i18next";
 
-import { sortIndicator, type SortDirection, type SortState } from "../../lib/listSort";
+import type { SortDirection } from "../../lib/listSort";
 import { ICON, SortAscending, SortDescending, SortInactive } from "../icons";
-import { TableHead } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
-/** The same affordance on a real <th>, for shadcn-table surfaces. */
-export function SortableTableHead<K extends string>({
-  className,
-  label,
-  sortKey,
-  sort,
-  onSort,
-  align = "start",
-  defaultDirection = "asc",
-}: {
-  className?: string;
-  label: string;
-  sortKey: K;
-  sort: SortState<K> | null;
-  onSort: (key: K) => void;
-  align?: "start" | "end";
-  defaultDirection?: SortDirection;
-}) {
-  const { active, direction, ariaSort } = sortIndicator(sort, sortKey);
-
-  return (
-    <TableHead className={className} aria-sort={ariaSort}>
-      <SortColumnButton
-        label={label}
-        sortKey={sortKey}
-        onSort={onSort}
-        align={align}
-        defaultDirection={defaultDirection}
-        active={active}
-        direction={direction}
-      />
-    </TableHead>
-  );
-}
-/** The control both header variants share: button, caret, announced label.
-    Exported for TanStack column-def headers, which render inside a TableHead
-    they do not own. */
+/** A sortable column header's control: button, caret, announced label. Built
+    for TanStack column-def headers, which render inside a TableHead they do
+    not own. */
 export function SortColumnButton<K extends string>({
   label,
   sortKey,

@@ -195,22 +195,6 @@ def _managed_runtime_ids(ctx: NodeAgentContext, managed_node_id: str) -> set[str
     return runtime_ids
 
 
-def _retire_superseded_locked(
-    ctx: NodeAgentContext,
-    node: dict[str, Any],
-    employee_id: str,
-    executor_kind: str,
-) -> list[str]:
-    registry = getattr(ctx, "registry", None)
-    dispatch_lock = getattr(registry, "dispatch_lock", None)
-    if dispatch_lock:
-        with dispatch_lock:
-            return retire_superseded_compatibility_agents(
-                ctx, node, employee_id, executor_kind
-            )
-    return retire_superseded_compatibility_agents(ctx, node, employee_id, executor_kind)
-
-
 def retire_superseded_compatibility_agents(
     ctx: NodeAgentContext,
     node: dict[str, Any],

@@ -77,14 +77,14 @@ function Field({
           </span>
         ) : null}
         {optional ? (
-          <span className="text-micro font-medium tracking-(--track-caps) text-muted-foreground uppercase">
+          <span className="text-xs font-medium tracking-(--track-caps) text-muted-foreground uppercase">
             {optional}
           </span>
         ) : null}
       </Label>
       {children}
       {hint ? (
-        <p className="m-0 text-xs leading-normal text-muted-foreground">{hint}</p>
+        <p className="m-0 text-sm leading-normal text-muted-foreground">{hint}</p>
       ) : null}
       {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </Wrapper>
@@ -101,7 +101,7 @@ function Field({
    foot of a drawer form. Field errors sit inline under their control. */
 function FieldError({ id, children }: { id?: string; children: ReactNode }) {
   return (
-    <span id={id} role="alert" className="text-sm text-danger">
+    <span id={id} role="alert" className="text-dense text-danger">
       {children}
     </span>
   )

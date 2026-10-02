@@ -49,7 +49,7 @@ export interface ThreadTargets<N extends ThreadComputerLike> {
   threadParticipants: EmployeeAgent[];
 }
 
-export interface ThreadTargetsInput<N extends ThreadComputerLike> {
+interface ThreadTargetsInput<N extends ThreadComputerLike> {
   activeSession: RelaySession | undefined;
   composingNew: boolean;
   logicalAgents: EmployeeAgent[];

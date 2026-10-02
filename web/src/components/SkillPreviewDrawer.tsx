@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { readSkillFile } from "../api";
 import { SKILLS_QUERY_KEY, useSkill } from "../hooks/useSkills";
 import { Drawer } from "@/components/ui/Drawer";
 
-export interface SkillPreviewDrawerProps {
+interface SkillPreviewDrawerProps {
   skillId: string;
   /** Name to print while the catalog record is still loading. */
   fallbackTitle: string;
@@ -42,14 +42,11 @@ export function SkillPreviewDrawer({
   };
   const detailQuery = useSkill(skillId);
   const skill = detailQuery.data;
-  const [path, setPath] = useState(ENTRY_FILE);
-
+  const [pickedPath, setPath] = useState(ENTRY_FILE);
   // Land on the entry file, or the first one the bundle does carry.
-  useEffect(() => {
-    if (!skill) return;
-    if (skill.files.some((file) => file.path === path)) return;
-    setPath(skill.files[0]?.path ?? ENTRY_FILE);
-  }, [skill, path]);
+  const path = !skill || skill.files.some((file) => file.path === pickedPath)
+    ? pickedPath
+    : skill.files[0]?.path ?? ENTRY_FILE;
 
   const fileQuery = useQuery({
     queryKey: [SKILLS_QUERY_KEY, skillId, "file", channel, path],

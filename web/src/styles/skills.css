@@ -35,15 +35,6 @@
   background: var(--surface-list);
 }
 
-/* The detail pane's kicker, on the same micro role the rail header uses. */
-.skill-eyebrow {
-  margin: 0 0 var(--sp-2);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
 /* Same inset as .conversation-list, .agents-roster-groups + .agents-roster-list
    and .teams-list: --sp-3 top and sides over a --sp-7 bottom run-off. This sat
    at --sp-2 on top, so the library was the one rail whose first row rode 4px

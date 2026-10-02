@@ -200,7 +200,7 @@ describe("markdown component wiring", () => {
 
   it("keeps react-markdown internals off the DOM table", () => {
     // The AST `node` prop spreads onto the element as node="[object Object]".
-    assert.match(readWeb("src/components/markdown/MarkdownTable.tsx"), /node: _node/);
+    assert.match(readWeb("src/components/markdown/MarkdownTable.tsx"), /omit\(props, "node"\)/);
   });
 
   it("renders the space and workspace previews at document scale", () => {

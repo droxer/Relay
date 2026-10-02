@@ -45,7 +45,7 @@ type AgentTurn = Extract<DerivedMessage, { kind: "agent" }>;
 /** Same speaker across two turns. Named agents are compared by logical id when
  * both turns carry one — two agents can share an executor kind — and by
  * executor kind otherwise, so legacy runs still group as before. */
-export function isSameAgentTurn(left: AgentTurn, right: AgentTurn): boolean {
+function isSameAgentTurn(left: AgentTurn, right: AgentTurn): boolean {
   if (left.agentId && right.agentId) return left.agentId === right.agentId;
   return left.agent === right.agent;
 }

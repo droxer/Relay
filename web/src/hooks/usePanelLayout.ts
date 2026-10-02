@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { clampSidenavWidth, SIDENAV_WIDTH_DEFAULT } from "../lib/sidenav";
 import { clampSpaceWidth, SPACE_WIDTH_DEFAULT } from "../lib/threadSpace";
 import { clampThreadListWidth, THREAD_LIST_WIDTH_DEFAULT } from "../lib/threadList";
@@ -12,6 +12,7 @@ import {
   writeThreadListWidth,
   writeThreadSpaceWidth,
 } from "../lib/appStorage";
+import { useKeyChange } from "./useKeyChange";
 
 /**
  * The shell's draggable geometry: how wide the side rail, the thread rail, and
@@ -26,7 +27,7 @@ import {
  * the pointer-up writes to storage, so a drag does not produce a hundred
  * writes.
  */
-export interface PanelLayout {
+interface PanelLayout {
   sidenavExpanded: boolean;
   sidenavWidth: number;
   threadListWidth: number;
@@ -53,17 +54,17 @@ export function usePanelLayout(mounted: boolean): PanelLayout {
   const [threadListResizing, setThreadListResizing] = useState(false);
   const [spaceResizing, setSpaceResizing] = useState(false);
 
-  useEffect(() => {
-    // Read after mount, not in the initializer: the export is prerendered, so
-    // touching localStorage during the first render mismatches hydration.
-    // There is no collapsed-then-expanded flash for it: App renders the shell
-    // only once the auth check resolves, which is always after this lands.
-    if (!mounted) return;
+  // Read once the client owns the tree, not in the initializer: the export is
+  // prerendered, so touching localStorage while hydrating mismatches it.
+  // There is no collapsed-then-expanded flash for it: App renders the shell
+  // only once the auth check resolves, which is always after this lands.
+  useKeyChange(mounted, (isMounted) => {
+    if (!isMounted) return;
     setSidenavExpandedState(readSidenavExpanded());
     setSidenavWidth(clampSidenavWidth(readSidenavWidth() ?? SIDENAV_WIDTH_DEFAULT));
     setThreadListWidth(clampThreadListWidth(readThreadListWidth() ?? THREAD_LIST_WIDTH_DEFAULT));
     setSpaceWidth(clampSpaceWidth(readThreadSpaceWidth() ?? SPACE_WIDTH_DEFAULT));
-  }, [mounted]);
+  }, { from: false });
 
   /* A toggle is a single discrete commit, so it writes straight away. */
   const setSidenavExpanded = useCallback((expanded: boolean) => {

@@ -28,7 +28,6 @@ vi.mock("@/components/reui/filters/filters", () => ({
 }));
 vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
-vi.mock("../src/hooks/useEmployeeNames", () => ({ useEmployeeNames: () => new Map() }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({ startTaskMutation: {}, updateTaskMutation: {}, deleteTaskMutation: {}, deleteTasksMutation: {} }) }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn(), confirm: vi.fn(), prompt: vi.fn() }) }));
 vi.mock("../src/components/ProjectDrawer", () => ({ ProjectDrawer: () => null }));

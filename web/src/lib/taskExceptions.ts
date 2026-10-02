@@ -18,7 +18,7 @@ export const UNKNOWN_BLOCKER_SENTINEL = "Execution needs attention.";
 /** Session phases that mean the run is proceeding, not recovering. */
 const SETTLED_EXECUTION_PHASES = ["running", "terminal"];
 
-export type TaskException =
+type TaskException =
   /** The session behind this task is reconciling rather than running. */
   | { kind: "recovering"; phase: string }
   /** `unknown` means nobody recorded why — render the recovery copy, not a blank reason. */

@@ -6,7 +6,7 @@
     Normalization runs as the admin types, so the drawer's `@handle` preview
     shows the handle that will actually be created rather than the raw keystrokes.
     The backend stays the authority and applies the same rules regardless. */
-export const EMPLOYEE_HANDLE_PATTERN = /^[a-z0-9][a-z0-9._-]{1,63}$/;
+const EMPLOYEE_HANDLE_PATTERN = /^[a-z0-9][a-z0-9._-]{1,63}$/;
 
 /** Strip the decorative `@`, surrounding space, and case differences. */
 export function normalizeEmployeeHandle(raw: string): string {

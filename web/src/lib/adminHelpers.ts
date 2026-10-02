@@ -33,7 +33,7 @@ function shellQuote(value: string): string {
 // A daemon connects to the backend directly, never through the web host, so
 // the copied start command must name the backend origin even when the UI is
 // hosted separately.
-export function defaultBackendUrl(): string {
+function defaultBackendUrl(): string {
   return backendPublicOrigin();
 }
 
@@ -61,7 +61,7 @@ export function buildDaemonStartCommand(
   return `read -rsp 'Relay node token: ' RELAY_DAEMON_NODE_TOKEN && echo && export RELAY_DAEMON_NODE_TOKEN && ${parts.map(shellQuote).join(" ")}`;
 }
 
-export const STALE_AFTER_MS = 15_000;
+const STALE_AFTER_MS = 15_000;
 export interface StoredNodeToken {
   employeeId?: string;
   sandboxToken?: string;
@@ -493,15 +493,15 @@ export function writeStoredNodeToken(nodeId: string, token: StoredNodeToken): vo
   volatileNodeTokens = { ...volatileNodeTokens, [nodeId]: token };
 }
 
-export interface NodeLocalityFlags {
+interface NodeLocalityFlags {
   hasCachedCredentials: boolean;
   isColocatedLive: boolean;
 }
 
-export type NodeOwnershipProfile = "managed" | "local" | "pending";
-export type NodeSandboxProfile = "boxlite" | "host" | "pending";
+type NodeOwnershipProfile = "managed" | "local" | "pending";
+type NodeSandboxProfile = "boxlite" | "host" | "pending";
 
-export type NodeLocalityKind = "this_host" | "saved_here" | "remote";
+type NodeLocalityKind = "this_host" | "saved_here" | "remote";
 
 /** Management ownership is independent of the daemon's sandbox implementation. */
 export function nodeOwnershipProfile(node: Pick<ControlPanelDaemonNodeRecord, "nodeLocation" | "sandboxMode">): NodeOwnershipProfile {
@@ -628,7 +628,7 @@ export async function copyText(value: string): Promise<void> {
  * below that floor the id prints whole, which is also the only form anyone can
  * paste back into a search field.
  */
-export const ID_ELISION_FLOOR = 24;
+const ID_ELISION_FLOOR = 24;
 
 export function truncateId(id: string, head = 8, tail = 8): string {
   if (id.length <= Math.max(head + tail + 1, ID_ELISION_FLOOR)) return id;

@@ -31,11 +31,11 @@ import {
 } from "../roster/RosterOption";
 import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
 
-export const NO_ASSIGNMENT = "__none__";
+const NO_ASSIGNMENT = "__none__";
 const NAV_AGENTS = "__nav_agents__";
 const NAV_TEAMS = "__nav_teams__";
 
-export type AssignmentSelection = TaskAssignmentSelection;
+type AssignmentSelection = TaskAssignmentSelection;
 export type { AgentView, TeamView };
 export { availabilityTone, effectiveAgentAvailability };
 

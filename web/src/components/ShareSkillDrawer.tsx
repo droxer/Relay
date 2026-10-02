@@ -39,7 +39,7 @@ export function ShareSkillDrawer({
     team: { targetType: "team" as const },
     agent: { targetType: "agent" as const },
   };
-  const assignments = skill.assignments ?? [];
+  const assignments = useMemo(() => skill.assignments ?? [], [skill.assignments]);
   const assigned = useMemo(
     () => new Set(assignments.map((item) => `${item.targetType}:${item.targetId}`)),
     [assignments],

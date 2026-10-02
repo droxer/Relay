@@ -105,7 +105,7 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
 }
 
 /** The rail's own vocabulary: every schedule state, under an "all" section. */
-export type RoutineSection = "all" | RoutineState;
+type RoutineSection = "all" | RoutineState;
 
 /**
  * The routine board's section rail — schedule health as a list of

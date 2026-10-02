@@ -58,7 +58,7 @@ export const BACKLOG_FILTER_SPEC: FilterSpec<BacklogFilters> = {
 export type BacklogView = "board" | "list";
 
 export const VIEW_STORAGE_KEY = "relay-web.backlogView";
-export const BACKLOG_VIEWS: readonly BacklogView[] = ["board", "list"];
+const BACKLOG_VIEWS: readonly BacklogView[] = ["board", "list"];
 
 export function parseBacklogView(value: string | null): BacklogView {
   return BACKLOG_VIEWS.includes(value as BacklogView)

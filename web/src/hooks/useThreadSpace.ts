@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { readThreadListBesideSpace, writeThreadListBesideSpace } from "../lib/appStorage";
 import { useUrlSearchState } from "./useUrlSearchState";
+import { useClientMounted } from "./useClientMounted";
+import { useKeyChange } from "./useKeyChange";
 
 /**
  * The thread space panel — the artifact/detail surface that slides in beside
@@ -18,7 +20,7 @@ import { useUrlSearchState } from "./useUrlSearchState";
  * back. Whether the list stays hidden is the user's standing choice: showing
  * it beside the panel is remembered across panels, threads, and reloads.
  */
-export interface ThreadSpace {
+interface ThreadSpace {
   open: boolean;
   artifactId: string | null;
   /** True when the rail is collapsed to make room for the panel. */
@@ -73,14 +75,16 @@ export function useThreadSpace(activeSessionId: string | undefined): ThreadSpace
     else openSpace();
   }, [activeSessionId, closeSpace, open, openSpace]);
 
-  useEffect(() => {
-    // Session switches navigate to a new path, which drops the space/artifact
-    // search params; only the local rail collapse needs resetting. It also runs
-    // on mount, where a reload may land with ?space=1 already open — so apply
-    // the remembered choice rather than always revealing the list. Deferred to
-    // an effect for the same prerender/hydration reason as usePanelLayout.
-    setThreadListHiddenState(!readThreadListBesideSpace());
-  }, [activeSessionId]);
+  // Session switches navigate to a new path, which drops the space/artifact
+  // search params; only the local rail collapse needs resetting. It also runs
+  // on mount, where a reload may land with ?space=1 already open — so apply
+  // the remembered choice rather than always revealing the list. Held until
+  // the client owns the tree, for the same prerender/hydration reason as
+  // usePanelLayout.
+  const mounted = useClientMounted();
+  useKeyChange(mounted ? activeSessionId ?? "" : null, (key) => {
+    if (key !== null) setThreadListHiddenState(!readThreadListBesideSpace());
+  }, { from: null });
 
   return {
     open,

@@ -1,7 +1,7 @@
 import type { CollaborationStyle, TeamMutationInput, TeamMemberConfig } from "../types.js";
 
 /** Drop members who are no longer on the team, and strip blank output lines. */
-export function normalizeMemberConfigs(
+function normalizeMemberConfigs(
   configs: Record<string, TeamMemberConfig>,
   memberAgentIds: string[],
 ): Record<string, TeamMemberConfig> {
@@ -17,7 +17,7 @@ export function normalizeMemberConfigs(
   );
 }
 
-export function normalizeAcceptanceCriteria(criteria: string[]): string[] {
+function normalizeAcceptanceCriteria(criteria: string[]): string[] {
   return criteria.map((value) => value.trim()).filter(Boolean);
 }
 

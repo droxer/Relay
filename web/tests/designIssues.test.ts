@@ -254,7 +254,8 @@ describe("reviewed design regressions", () => {
 
   it("browses a record's files with the project workspace's explorer, not a boxed copy", () => {
     const record = readWeb("src/components/task-record/RecordWorkspace.tsx");
-    const styles = readWeb("src/styles/task-record.css");
+    // The record's sheet is two files: the drawer chrome, then its tab panels.
+    const styles = readWeb("src/styles/task-record.css") + readWeb("src/styles/record-panels.css");
     // Same path bar as the project: live source and the refresh at its end.
     assert.match(record, /homeStatus=\{workspaceHomeStatus\(fileQuery\.data\)\}/);
     assert.match(record, /barActions=/);

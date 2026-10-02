@@ -24,10 +24,6 @@ export function rememberListUrl(): void {
   if (/^\/(backlog|routines)\/?$/.test(pathname)) lastListUrl = `${pathname}${search}`;
 }
 
-export function forgetListUrl(): void {
-  lastListUrl = null;
-}
-
 export function recordBackHref(fallbackPath: string): string {
   return lastListUrl ?? fallbackPath;
 }

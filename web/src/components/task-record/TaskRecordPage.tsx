@@ -123,17 +123,14 @@ export function TaskRecordPage({
     projectName: (projectId) => projectOf(projectId)?.name,
   }), [teams, logicalAgents, projectOf]);
   const assigneeName = taskAssigneeLabel(task, taskAgentDisplayName(task, logicalAgents, teams), t);
-  const facts = useMemo<RecordFact[]>(
-    () => recordBandFacts(
-      task,
-      variant,
-      runningRoutineIds,
-      i18n.language,
-      t,
-      task.projectId ? { id: task.projectId, name: projectName || task.projectId } : undefined,
-      assigneeName,
-    ),
-    [task, variant, runningRoutineIds, i18n.language, t, projectName, assigneeName],
+  const facts: RecordFact[] = recordBandFacts(
+    task,
+    variant,
+    runningRoutineIds,
+    i18n.language,
+    t,
+    task.projectId ? { id: task.projectId, name: projectName || task.projectId } : undefined,
+    assigneeName,
   );
 
   const listPath = pathForAppState({

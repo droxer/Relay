@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const ROLES = ["inherit", "planner", "implementer", "tester", "reviewer", "fixer"] as const;
 
-export type TeamCardMember = {
+type TeamCardMember = {
   id: string;
   displayName: string;
   executorKind: AgentName;

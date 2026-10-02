@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * handler and a ResizeObserver on every frame, and it must never itself cause
  * a render.
  */
-export interface TranscriptPin {
+interface TranscriptPin {
   /** Attach to the scrolling transcript element. */
   ref: (node: HTMLDivElement | null) => void;
   /** Attach to that element's onScroll. */
@@ -52,8 +52,10 @@ export function useTranscriptPin(
 
   useEffect(() => { atBottom.current = true; }, [sessionId]);
 
+  // The DOM node is written through the ref; `element` (its state twin) is in
+  // the deps only so attaching a node re-runs the pin.
   useEffect(() => {
-    const el = element;
+    const el = elementRef.current;
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [element, messageCount, sessionId]);
 

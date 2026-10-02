@@ -3,7 +3,7 @@
  *  Extracted from the component so the decision is testable without mounting
  *  React: "the computer is offline" and "the task produced nothing" look the
  *  same to a careless reader and must not be conflated in the UI. */
-export type TaskWorkspaceState = "loading" | "unavailable" | "empty" | "ready" | "failed" | "not-created" | "offline" | "unsupported" | "denied";
+type TaskWorkspaceState = "loading" | "unavailable" | "empty" | "ready" | "failed" | "not-created" | "offline" | "unsupported" | "denied";
 
 export function taskWorkspaceState(query: {
   isLoading: boolean;

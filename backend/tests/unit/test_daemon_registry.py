@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -2411,7 +2410,7 @@ def test_daemon_poll_renews_known_active_command_before_reclaim() -> None:
                 "sbx_alice", "node_token", lease_seconds=0.05
             )
 
-            time.sleep(0.08)
+            await asyncio.sleep(0.08)
 
             assert (
                 registry.take_commands("sbx_alice", "node_token", lease_seconds=0.05)
@@ -2502,7 +2501,7 @@ def test_daemon_heartbeat_renews_command_dispatched_by_another_backend_replica()
                 [(command["id"], command["leaseId"])],
                 lease_seconds=10,
             )
-            time.sleep(0.08)
+            await asyncio.sleep(0.08)
 
             assert (
                 second.take_commands(
@@ -2716,7 +2715,7 @@ def test_daemon_events_are_accepted_by_a_replica_that_did_not_dispatch_the_comma
                 },
                 "node_token",
             )
-            time.sleep(0.08)
+            await asyncio.sleep(0.08)
             redelivery = first.take_commands(
                 "sbx_alice",
                 "node_token",

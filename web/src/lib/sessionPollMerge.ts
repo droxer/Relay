@@ -1,9 +1,10 @@
 import type { RelaySession, SessionSummary } from "../types.js";
+import { omit } from "./omit.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
 function inflateSessionSummary(summary: SessionSummary): RelaySession {
-  const { artifactCount, eventCount: _eventCount, runCount: _runCount, ...fields } = summary;
+  const { artifactCount, ...fields } = omit(summary, "eventCount", "runCount");
   return {
     ...fields,
     workOutcome: summary.workOutcome ?? undefined,
@@ -30,7 +31,7 @@ export function mergeSessionSummaries(
     // A summary request can start before an SSE frame is committed and return
     // afterward. Never roll event-derived state backward in that race.
     if (summary.eventCount < existing.events.length) return existing;
-    const { artifactCount, eventCount: _eventCount, runCount: _runCount, ...fields } = summary;
+    const { artifactCount, ...fields } = omit(summary, "eventCount", "runCount");
     return {
       ...existing,
       ...fields,

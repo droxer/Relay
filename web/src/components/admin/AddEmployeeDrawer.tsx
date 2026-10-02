@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { createControlPanelEmployee } from "../../api";
 import { initialsOf } from "../../lib/adminHelpers";
@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 interface AddEmployeeDrawerProps {
   open: boolean;
@@ -88,20 +89,18 @@ export function AddEmployeeDrawer({
   const handlePreview = normalizeEmployeeHandle(employeeId);
   const namePreview = displayName.trim();
 
-  useEffect(() => {
-    if (open) {
-      setEmployeeId("");
-      setDisplayName("");
-      setEmail("");
-      setUsername("");
-      setPassword("");
-      setSelectedNodeId("");
-      setMaxLocalComputers("");
-      setError(null);
-      setFieldErrors({});
-      setIsBusy(false);
-    }
-  }, [open]);
+  useOnOpen(open, () => {
+    setEmployeeId("");
+    setDisplayName("");
+    setEmail("");
+    setUsername("");
+    setPassword("");
+    setSelectedNodeId("");
+    setMaxLocalComputers("");
+    setError(null);
+    setFieldErrors({});
+    setIsBusy(false);
+  });
 
   function clearFieldError(field: "employeeId" | "username" | "password" | "maxLocalComputers") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));

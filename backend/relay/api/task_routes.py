@@ -567,7 +567,6 @@ def create_task(
         session = controller.create_session(
             task_goal_text(task),
             participants_for_assignments(assignments, None),
-            True,
         )
         logger.info(
             "Session created from task",

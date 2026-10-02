@@ -16,10 +16,10 @@ import asyncio
 from datetime import date
 from tempfile import TemporaryDirectory
 
+import pytest
 from fastapi.testclient import TestClient
 from relay.api.deps import AppContext
 from relay.app import create_app
-from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import start_task_on_ready_node
 
 from issue_projects import PROJECT_CAPABILITY, project_for
@@ -389,6 +389,50 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
         assert "manually" in failed["blockerReason"]
         # Known rejection releases the claim so an explicit retry can proceed.
         assert "dispatchClaim" not in failed
+
+
+def test_unrecorded_dispatch_failure_reraises_the_original_error(monkeypatch) -> None:
+    """A caller that records failures itself gets the backend's own error.
+
+    The failure is finished in a worker thread (`run_in_threadpool`), where no
+    exception is being handled, so a bare `raise` there surfaced as
+    "RuntimeError: No active exception to reraise" instead of this error.
+    """
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        node = _register_node(
+            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
+        )
+        agent = _agent(app, node)
+        project = project_for(app.state.project_store, "alice", node, [agent["id"]])
+
+        async def failing_run(node_id, request):
+            raise ValueError("capacity_exhausted: node is full")
+
+        monkeypatch.setattr(app.state.backend, "run", failing_run)
+        task = app.state.task_store.create_task(
+            {
+                "title": "Dispatch whose caller records the failure",
+                "assignedAgent": "codex",
+                "assignedAgentId": agent["id"],
+                "ownerEmployeeId": "alice",
+                "assigneeEmployeeId": "alice",
+                "projectId": project["id"],
+                "status": "assigned",
+            }
+        )
+        ctx = app_context_for(app)
+        actor = {"employeeId": "alice", "isAdmin": True}
+
+        with pytest.raises(ValueError, match="capacity_exhausted: node is full"):
+            asyncio.run(
+                start_task_on_ready_node(
+                    ctx, task, actor, assignments=None, record_pending=False
+                )
+            )
 
 
 def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(

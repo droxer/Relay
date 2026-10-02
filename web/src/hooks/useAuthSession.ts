@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMe, RelayApiError } from "../api";
 import type { CurrentUser } from "../types";
 
-export const AUTH_SESSION_QUERY_KEY = ["auth", "me"] as const;
+const AUTH_SESSION_QUERY_KEY = ["auth", "me"] as const;
 
 const MAX_RETRY_DELAY_MS = 15_000;
 
@@ -11,13 +11,13 @@ const MAX_RETRY_DELAY_MS = 15_000;
     gated, and only `anonymous` — a definitive 401/403 — sends the visitor to
     sign in. Treating a dropped connection as signed out bounced every open tab
     to /login whenever the backend restarted. */
-export type AuthStatus = "checking" | "unreachable" | "authenticated" | "anonymous";
+type AuthStatus = "checking" | "unreachable" | "authenticated" | "anonymous";
 
-export function isAuthRejection(error: unknown): boolean {
+function isAuthRejection(error: unknown): boolean {
   return error instanceof RelayApiError && (error.status === 401 || error.status === 403);
 }
 
-export function authRetryDelay(attempt: number): number {
+function authRetryDelay(attempt: number): number {
   return Math.min(1_000 * 2 ** attempt, MAX_RETRY_DELAY_MS);
 }
 

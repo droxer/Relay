@@ -26,7 +26,7 @@ const SEQUENCE_ALPHABETS = [
 
 /** Why a password was refused, or `null` when the local rules all pass. The
     backend may still refuse it for being a commonly guessed secret. */
-export type PasswordProblem = "short" | "long" | "identifier" | "degenerate";
+type PasswordProblem = "short" | "long" | "identifier" | "degenerate";
 
 export function passwordProblem(
   password: string,
@@ -49,7 +49,7 @@ export function isValidPassword(
 /** True when the password is built out of a name the account already has —
     the first guess anyone would make. Short identifiers are skipped: a
     two-letter handle would reject half the dictionary. */
-export function containsIdentifier(
+function containsIdentifier(
   password: string,
   identifiers: ReadonlyArray<string | null | undefined>,
 ): boolean {

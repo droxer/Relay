@@ -166,6 +166,36 @@ for (const theme of ["light", "dark"] as const) {
       await expect(menu).toHaveCSS("background-color", await tokenStyle(menu, "background-color", "var(--popover)"));
     });
 
+    /* The highlighted row has to be visible against the popup it sits in, and
+       read as RAISED toward the ink. `--accent` once pointed at --surface-1:
+       in light that equals --popover (#ffffff on #ffffff, an invisible
+       highlight), in dark it sank below the menu. Composited on a canvas so a
+       translucent wash is measured as painted, not as a declared value. */
+    test("menu highlight lifts off the popup toward the ink", async ({ page }) => {
+      await page.getByRole("button", { name: "Open menu" }).click();
+      await page.keyboard.press("ArrowDown");
+      const item = page.getByRole("menuitem", { name: "First action" });
+      await expect(item).toHaveAttribute("data-highlighted", "");
+      const menu = page.locator('[data-slot="dropdown-menu-content"]');
+      const popup = await menu.evaluate(el => getComputedStyle(el).backgroundColor);
+      const wash = await item.evaluate(el => getComputedStyle(el).backgroundColor);
+      const ink = await menu.evaluate(el => getComputedStyle(el).color);
+      const [popupL, highlightL, inkL] = await page.evaluate(({ popup, wash, ink }) => {
+        const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+        const paint = (...layers: string[]) => {
+          ctx.clearRect(0, 0, 1, 1);
+          for (const fill of layers) { ctx.fillStyle = fill; ctx.fillRect(0, 0, 1, 1); }
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          const lin = (c: number) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+          return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        };
+        return [paint(popup), paint(popup, wash), paint(ink)];
+      }, { popup, wash, ink });
+      const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      expect(contrast(highlightL, popupL)).toBeGreaterThan(1.1);
+      expect(Math.sign(highlightL - popupL)).toBe(Math.sign(inkL - popupL));
+    });
+
     /* The splitter's `grows` prop is the one thing the shared ResizeHandle can
        get silently wrong: a panel whose arrow keys run backwards screenshots
        identically and only fails under the hand. The three shell splitters do

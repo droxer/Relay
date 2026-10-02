@@ -724,7 +724,9 @@ class TaskDispatcher:
         if self.temporary_group_status and released:
             self.ctx.task_store.update_task(self.task["id"], {"status": "backlog"})
         if not self.record_pending:
-            raise
+            # Explicit, not a bare `raise`: this runs in a threadpool worker,
+            # where no exception is being handled.
+            raise error
         updated = record_dispatch_failure(
             self.ctx.task_store, self.task, code=code,
             message=safe_dispatch_error_message(error),

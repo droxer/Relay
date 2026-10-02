@@ -81,7 +81,7 @@ function pathSegments(pathname: string): string[] {
   return head ? [head, ...segments.slice(1)] : segments;
 }
 
-export function parseAppPath(pathname: string, _search = ""): AppLocationState {
+export function parseAppPath(pathname: string): AppLocationState {
   const normalized = pathname === "/" ? "/threads" : `/${pathSegments(pathname).join("/")}`;
   const [head, second, ...rest] = pathSegments(normalized);
   const base = { mobileView: "chat" as const, sessionId: null };
@@ -374,7 +374,7 @@ function copyRecordTab(
 }
 
 /** Returns only query parameters owned by the current route and tab. */
-export function canonicalSearchForPath(pathname: string, search = ""): string {
+function canonicalSearchForPath(pathname: string, search = ""): string {
   const source = new URLSearchParams(search);
   const target = new URLSearchParams();
   const [head, entityId, ...rest] = pathSegments(pathname);
@@ -531,7 +531,7 @@ export function validatedReturnTo(value: string | null, origin = "http://relay.l
   try {
     const candidate = new URL(value, origin);
     if (candidate.origin !== origin) return "/threads";
-    const state = parseAppPath(candidate.pathname, candidate.search);
+    const state = parseAppPath(candidate.pathname);
     if (state.notFound || state.login) return "/threads";
     return canonicalBrowserUrl(candidate.pathname, candidate.search);
   } catch {

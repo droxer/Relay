@@ -12,7 +12,7 @@ export type ShortcutAction =
   | { kind: "new-thread" }
   | { kind: "new-task" };
 
-export type ShortcutEventShape = {
+type ShortcutEventShape = {
   key: string;
   metaKey?: boolean;
   ctrlKey?: boolean;
@@ -39,7 +39,7 @@ export const GO_SHORTCUTS: Readonly<Record<string, AppRoute>> = {
   d: "admin",
 };
 
-export const GO_PREFIX_TIMEOUT_MS = 900;
+const GO_PREFIX_TIMEOUT_MS = 900;
 
 /** True when keystrokes belong to the element, not the app: text fields,
  *  selects, and rich-text surfaces. Buttons and links are NOT editable —
@@ -71,7 +71,7 @@ export function commandShortcutLabel(platform?: string): string {
   return /Mac|iPhone|iPad|iPod/i.test(value) ? "⌘K" : "Ctrl+K";
 }
 
-export type ShortcutResolver = (event: ShortcutEventShape) => ShortcutAction | null;
+type ShortcutResolver = (event: ShortcutEventShape) => ShortcutAction | null;
 
 /**
  * Stateful resolver — the `g` prefix arms a go-to chord for GO_PREFIX_TIMEOUT_MS.

@@ -35,7 +35,8 @@ import {
   NavBack,
   NavProjects,
   WorkspaceFolder,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
+  type NodeOwnership,
 } from "./icons";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "./PageHeader";
@@ -142,7 +143,7 @@ function ProjectMemberLane({
   );
 }
 
-type RailComputer = { label: string; Icon: ReturnType<typeof nodeOwnershipIcon> };
+type RailComputer = { label: string; ownership: NodeOwnership };
 
 /** The project's identity, beside its crew — the same rail the team record
  *  carries: mark, name, the computer and folder it lives in, and its stamps.
@@ -157,7 +158,6 @@ function ProjectIdentityRail({
   onOpenSettings?: () => void;
 }) {
   const { t } = useTranslation();
-  const { Icon: ComputerIcon } = computer;
   return (
     <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
       <div className="workspace-dossier-portrait">
@@ -187,7 +187,7 @@ function ProjectIdentityRail({
       <div className="workspace-dossier-field">
         <span className="workspace-dossier-field-label">{t("project.computer")}</span>
         <Badge className="max-w-full" title={project.computerId} translate="no">
-          <ComputerIcon size={ICON.xs} className="shrink-0" aria-hidden="true" />
+          <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} className="shrink-0" aria-hidden="true" />
           <span className="truncate">{computer.label}</span>
         </Badge>
       </div>
@@ -423,7 +423,7 @@ export function ProjectWorkspacePage({
     || project.computerId.replace(/^device:[^:]+:/, "");
   const railComputer: RailComputer = {
     label: computerLabel,
-    Icon: nodeOwnershipIcon(!computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local"),
+    ownership: !computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local",
   };
   const state = project.archivedAt ? "archived" : project.enabled ? "active" : "disabled";
   /* Same split as the team record: the title line carries the state and the

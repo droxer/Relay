@@ -23,7 +23,7 @@ import {
   ActionCopy,
   AdminEmployees,
   ICON,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
 } from "../icons";
 import { isNodeOnline, nodeOwnershipProfile } from "../../lib/adminHelpers";
 
@@ -76,7 +76,6 @@ export function NodeCard({
   // failed, stopped.
   const showStatusPill = status !== "ready" && status !== "stale";
   const ownership = nodeOwnershipProfile(node);
-  const OwnershipMark = nodeOwnershipIcon(ownership);
 
   return (
     <article
@@ -89,7 +88,7 @@ export function NodeCard({
           data-ownership={ownership}
           translate="no"
         >
-          <OwnershipMark size={ICON.lg} aria-hidden="true" />
+          <NodeOwnershipIcon ownership={ownership} size={ICON.lg} aria-hidden="true" />
         </span>
         <div className="adm-node-card-identity">
           <span className="adm-node-card-nameline">

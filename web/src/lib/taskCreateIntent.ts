@@ -6,7 +6,7 @@
 
 export const TASK_CREATE_INTENT_EVENT = "relay:task-create-intent";
 
-export type TaskCreateIntentChannel = {
+type TaskCreateIntentChannel = {
   /** Arms the one-shot flag and notifies any mounted listener. */
   queue: () => void;
   /** Reads and clears the flag. True at most once per queue(). */

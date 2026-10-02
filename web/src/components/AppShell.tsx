@@ -48,7 +48,7 @@ const MOBILE_EYEBROW_KEYS: Partial<Record<AppRoute, string>> = {
   settings: "nav.settings",
 };
 
-export type MobileChatChrome = {
+type MobileChatChrome = {
   artifactCount: number;
   /** Whether the open thread sits in a project — the panel leads with the
    *  project workspace when it does, and the toggle is named for that. */

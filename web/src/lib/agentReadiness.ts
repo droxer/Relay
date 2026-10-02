@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import type { AgentName, DaemonNodeMonitorRecord } from "../types.js";
 
-export type AgentReadiness = "ready" | "disabled" | "failed" | "unknown";
+type AgentReadiness = "ready" | "disabled" | "failed" | "unknown";
 
 type NodeAgentState = Pick<DaemonNodeMonitorRecord, "agents" | "disabledAgents"> | undefined;
 

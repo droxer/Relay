@@ -22,7 +22,7 @@ type DirectoryNode = { activeRuns: readonly { sessionId: string; agent: ThreadIt
    image on top of what threadNodeOffline reads. */
 type DirectoryAgent = NonNullable<Parameters<typeof threadNodeOffline>[1]>[number] & ThreadParticipant;
 
-export interface ThreadDirectory {
+interface ThreadDirectory {
   /** Every thread with its running agent and node-offline flag resolved. */
   threadItems: ThreadItem[];
   /** …narrowed by the search query. */
@@ -33,7 +33,7 @@ export interface ThreadDirectory {
   directoryThreads: ThreadItem[];
 }
 
-export interface ThreadDirectoryInput {
+interface ThreadDirectoryInput {
   route: string;
   myThreads: ThreadItem["session"][];
   projects: readonly ProjectRecord[];

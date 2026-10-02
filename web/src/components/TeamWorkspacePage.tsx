@@ -21,7 +21,7 @@ import {
   ActionRetry,
   AdminDelete,
   ICON,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { IdentityMark } from "./IdentityMark";
@@ -90,7 +90,6 @@ function TeamProfile({
   const computerId = teamComputerId(team, agents);
   const { options: computers } = useComputerOptions(team.ownerEmployeeId, true);
   const computer = computers.find((option) => option.computerId === computerId);
-  const ComputerIcon = nodeOwnershipIcon(computer?.ownership ?? "pending");
   const computerLabel = computer?.label || agents
     .flatMap((agent) => agent.placements)
     .find((placement) => placement.computerId === computerId && placement.desiredState !== "removed")
@@ -468,7 +467,7 @@ function TeamProfile({
             <span className="workspace-dossier-field-label">{t("teams.computer")}</span>
             {computerLabel ? (
               <Badge className="max-w-full" title={computerLabel}>
-                <ComputerIcon size={ICON.xs} className="shrink-0" aria-hidden="true" />
+                <NodeOwnershipIcon ownership={computer?.ownership ?? "pending"} size={ICON.xs} className="shrink-0" aria-hidden="true" />
                 <span className="truncate" translate="no">{computerLabel}</span>
               </Badge>
             ) : <span className="workspace-dossier-name-value">—</span>}
