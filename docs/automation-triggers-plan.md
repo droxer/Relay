@@ -10,6 +10,20 @@
 
 **Spec:** `docs/automation-triggers-design.md`
 
+## Implementation status (2026-10-02)
+
+- Tasks 1–7 were committed before the continuation.
+- Tasks 8–11 are implemented: transactional matching and coalescing, scheduler
+  wiring, authenticated webhooks, trigger forms and filters, one-time secrets,
+  run labels, and English/Chinese strings.
+- Task 12 local validation is complete and recorded in `docs/testing/automation-triggers.tdd.md`.
+  The migration chain requires PostgreSQL; SQLite cannot run its first migration.
+- Additional regressions cover rollback after interrupted firing, concurrent
+  schedulers, empty webhook bodies, and labels on scheduled/manual occurrences.
+- PR publication remains outside this local implementation; a review packet
+  accompanies the evidence report.
+
+
 ## Global Constraints
 
 - The backend never executes agents; triggers only create occurrences that `_dispatch_assigned_tasks` dispatches.

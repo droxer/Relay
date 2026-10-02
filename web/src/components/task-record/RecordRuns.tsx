@@ -211,7 +211,10 @@ function RunRow({
         onClick={onSelect}
       >
         <StateMark tone={TONE_FOR_OUTCOME[outcome]} shape={outcome === "pending" ? "dashed" : undefined} />
-        <span className="record-run-date tnum">{runDate(run.scheduledFor ?? run.createdAt, locale)}</span>
+        <span className="record-run-date tnum">
+          {runDate(run.scheduledFor ?? run.createdAt, locale)}
+          {run.triggerKind ? <span className="record-run-trigger">{t(`automation.ledger.${run.triggerKind}`)}</span> : null}
+        </span>
         <span className="record-run-summary">
           <span className="record-run-outcome">{t(`backlog.runs.outcome.${outcome}`)}</span>
           {/* A failure's reason is clipped to one line; the title carries

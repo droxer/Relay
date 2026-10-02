@@ -287,7 +287,13 @@ The backend loads `backend/.env` and listens on `BACKEND_PORT`, defaulting to
 `8790`. It also starts the background task scheduler by default, which promotes
 due routines and dispatches assigned tasks to ready daemon nodes. Disable or
 tune it with `RELAY_TASK_SCHEDULER_ENABLED`, `RELAY_TASK_SCHEDULER_INTERVAL_SECONDS`,
-and `RELAY_TASK_SCHEDULER_MAX_DISPATCHES`. Override the port with:
+and `RELAY_TASK_SCHEDULER_MAX_DISPATCHES`. Event/webhook automations use the same
+scheduler and daemon dispatch path. `RELAY_AUTOMATION_MAX_RUNS_PER_HOUR` defaults
+to 6 per automation, `RELAY_AUTOMATION_OUTBOX_BATCH` to 200 rows per tick, and
+`RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT` to 60 calls per minute per automation.
+Webhook rate limiting is per backend process; multiple replicas also need an
+edge limiter. Disabling the task scheduler leaves webhook events queued until
+it resumes (or retention removes them). Override the port with:
 
 ```bash
 make backend BACKEND_PORT=9000

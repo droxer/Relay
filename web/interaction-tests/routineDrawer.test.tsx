@@ -100,3 +100,12 @@ it("explains manual runs and rate-limited pauses", () => {
   expect(screen.getByText("automation.manual_hint")).toBeTruthy();
   expect(enabledHint()?.textContent).toBe("automation.rate_limited");
 });
+
+it("validates an edited title filter without changing the input snapshot", () => {
+  const initial = { ...emptyRoutineForm(user), routineTrigger: { kind: "task_event" as const, on: "created" as const } };
+  render(<Form initial={initial} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "automation.filter_title" }), { target: { value: "x".repeat(121) } });
+  expect(screen.getByText("automation.errors.title_too_long")).toBeTruthy();
+  expect(screen.getByRole("textbox", { name: "automation.filter_title" }).getAttribute("aria-invalid")).toBe("true");
+  expect(initial.routineTrigger).toEqual({ kind: "task_event", on: "created" });
+});

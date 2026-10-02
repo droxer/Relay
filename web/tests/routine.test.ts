@@ -29,6 +29,7 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
     routineCadence: input.routineCadence,
     routineNextRunDate: input.routineNextRunDate,
     routineEnabled: input.routineEnabled ?? false,
+    routineTrigger: input.routineTrigger,
     assignedAgent: input.assignedAgent,
     assignedAgentId: input.assignedAgentId,
     sourceRoutineId: input.sourceRoutineId,
@@ -70,6 +71,7 @@ describe("filterRoutineTasks", () => {
       task({ id: "overdue", title: "Overdue", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-23" }),
       task({ id: "due", title: "Due", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-24" }),
       task({ id: "scheduled", title: "Scheduled", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-25" }),
+      task({ id: "listening", title: "Listening", isRoutine: true, routineEnabled: true, routineTrigger: { kind: "webhook" } }),
       task({ id: "unscheduled", title: "Unscheduled", isRoutine: true, routineEnabled: true }),
       task({ id: "paused", title: "Paused", isRoutine: true, routineEnabled: false }),
     ];

@@ -1,6 +1,6 @@
 import type { AgentName, CollaborationStyle, CurrentUser, RoutineTrigger, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../types.js";
 
-import { SCHEDULE_TRIGGER, triggersEqual } from "./automationTrigger.js";
+import { SCHEDULE_TRIGGER, triggersEqual } from "./automationTrigger.ts";
 
 export type TaskBoardFormBase = {
   id?: string;

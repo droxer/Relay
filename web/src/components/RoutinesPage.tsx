@@ -11,7 +11,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
-import { triggerOf } from "../lib/automationTrigger";
+import { normalizeTriggerForSave, triggerError, triggerOf } from "../lib/automationTrigger";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -183,6 +183,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
+    if (triggerError(form.routineTrigger)) return;
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
@@ -193,9 +194,10 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         priority: form.priority,
         isRoutine: true,
         routineType: form.routineType,
-        routineCadence: form.routineCadence,
+        routineTrigger: normalizeTriggerForSave(form.routineTrigger),
+        ...(form.routineTrigger.kind === "schedule" ? { routineCadence: form.routineCadence } : {}),
         routineEnabled: form.routineEnabled,
-        ...(form.routineCadence === "custom"
+        ...(form.routineTrigger.kind === "schedule" && form.routineCadence === "custom"
           ? { routineNextRunDate: form.routineNextRunDate }
           : {}),
         ...taskAssignmentMutationFields(form),

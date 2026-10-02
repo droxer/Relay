@@ -144,7 +144,7 @@ describe("appRoute path parsing", () => {
       mobileView: "chat",
       sessionId: "sess-1",
     });
-    assert.equal(pathForAppState({ route: "routine", mobileView: "chat", sessionId: null }), "/routines");
+    assert.equal(pathForAppState({ route: "routine", mobileView: "chat", sessionId: null }), "/automations");
   });
 });
 

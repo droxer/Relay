@@ -339,6 +339,8 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     ...(created.collaborationStyle ? { collaborationStyle: created.collaborationStyle } : {}),
     isRoutine: Boolean(created.isRoutine),
     routineEnabled: Boolean(created.routineEnabled),
+    ...(created.routineTriggerKind ? { routineTriggerKind: created.routineTriggerKind } : {}),
+    ...(created.routineTriggerDepth !== undefined ? { routineTriggerDepth: created.routineTriggerDepth } : {}),
     ...(created.sourceRoutineId ? { sourceRoutineId: created.sourceRoutineId } : {}),
     ...(created.scheduledFor ? { scheduledFor: created.scheduledFor } : {}),
     occurrenceIds: [],
@@ -431,11 +433,21 @@ function applyRoutineFields(task: RelayTask, event: Partial<Extract<RelayTaskEve
       delete task.routineType;
       delete task.routineCadence;
       delete task.routineNextRunDate;
+      delete task.routineTrigger;
+      delete task.routineDisabledReason;
       return;
     }
   }
   if (!task.isRoutine) return;
-  if (event.routineEnabled !== undefined) task.routineEnabled = event.routineEnabled;
+  if (event.routineEnabled !== undefined) {
+    task.routineEnabled = event.routineEnabled;
+    if (event.routineEnabled) delete task.routineDisabledReason;
+  }
+  if (event.routineTrigger !== undefined) {
+    task.routineTrigger = structuredClone(event.routineTrigger);
+    if (event.routineTrigger.kind !== "schedule") delete task.routineNextRunDate;
+  }
+  if (event.routineDisabledReason !== undefined) task.routineDisabledReason = event.routineDisabledReason;
   if (event.routineType !== undefined) task.routineType = event.routineType;
   if (event.routineCadence !== undefined) task.routineCadence = event.routineCadence;
   if (event.routineNextRunDate !== undefined) {

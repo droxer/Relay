@@ -68,6 +68,37 @@ truncate either projection.
 
 Automations are stored as routine tasks; the routine* field names are the wire names.
 
+An optional `routineTrigger` selects `schedule` (the default for old records),
+`task_event`, `run_event`, `webhook`, or `manual`. Event triggers require `on`:
+`created` / `status_changed` for tasks, `completed` / `failed` for runs. Optional
+AND-ed filters are `projectId`, `assignedAgentId`, `assignedTeamId`, `priority`,
+and `titleContains` (up to 120 characters). `fromStatus` and `toStatus` apply
+only to task status changes. Non-schedule triggers clear `routineNextRunDate`;
+switching back to a schedule computes it again. `POST /tasks/{id}/runs` remains
+available for every kind. Run ledger rows include nullable `triggerKind`.
+
+Inbound webhooks use `POST /api/v1/automations/{id}/webhook` with JSON and the
+`X-Relay-Automation-Token` header. A valid request returns `202 {"accepted": true}`
+and queues an occurrence for the scheduler; it does not execute an agent.
+Never place the token in the URL. Missing/wrong tokens and unknown ids return
+401; paused, deleted, or unavailable webhook automations return 409. Non-JSON
+content returns 415, malformed JSON returns 400, bodies over 64 KB return 413,
+and rate limiting returns 429 with `Retry-After`.
+
+`GET /api/v1/tasks/{id}/automation/webhook-secret` returns `configured`, `path`,
+and `header`, never the secret. `POST` on the same path generates or rotates a
+secret and returns it once with status 201. Only an owner, assignee, or admin
+can manage it. The database stores only its SHA-256 hash. Rotating invalidates
+the previous token; leaving the webhook kind deletes the stored hash.
+
+Matches arriving while an occurrence is queued or running coalesce into one
+next occurrence. Context retains up to 20 events, records overflow counts,
+and clips each webhook payload to 8 KB. Pending events expire after 24 hours.
+Automations skip their own occurrences and stop chains beyond depth 3. The
+hourly cap pauses the definition with `routineDisabledReason: "rate_limited"`;
+re-enabling clears the displayed reason without resetting its current rate window.
+
+
 ## Normalized Mutations
 
 ```text

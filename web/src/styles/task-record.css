@@ -522,3 +522,9 @@
   opacity: var(--opacity-disabled);
   cursor: default;
 }
+
+.record-run-trigger {
+  display: block;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}

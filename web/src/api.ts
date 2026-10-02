@@ -1065,3 +1065,13 @@ export function getComputerAuthorization(code: string): Promise<ComputerAuthoriz
 export function approveComputerAuthorization(code: string): Promise<{ status: string }> {
   return apiJson(`/computer-authorizations/${encodeURIComponent(code)}/approve`, { method: "POST" });
 }
+
+export type WebhookSecretStatus = { configured: boolean; path: string; header: string };
+
+export function webhookSecretStatus(taskId: string, signal?: AbortSignal): Promise<WebhookSecretStatus> {
+  return apiJson(`/tasks/${encodeURIComponent(taskId)}/automation/webhook-secret`, { signal });
+}
+
+export function rotateWebhookSecret(taskId: string): Promise<WebhookSecretStatus & { secret: string }> {
+  return apiJson(`/tasks/${encodeURIComponent(taskId)}/automation/webhook-secret`, { method: "POST" });
+}

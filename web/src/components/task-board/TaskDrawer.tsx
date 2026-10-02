@@ -1,5 +1,7 @@
 "use client";
 
+import { TriggerKindField, EventTriggerFields } from "./AutomationTriggerFields";
+import { WebhookSecretPanel } from "./WebhookSecretPanel";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
 import { effectiveStyle } from "../../lib/collaborationStyle";
@@ -116,11 +118,12 @@ function BacklogFields({ form, onChange, canRun }: {
   );
 }
 
-/** Everything that decides when a routine runs — what kind it is, how often,
- *  the next date, and whether the schedule is live — as one group. The switch
- *  used to sit at the foot of the form, three fields away from the cadence it
- *  pauses. */
-function RoutineSchedule({ form, onChange }: { form: RoutineTaskFormState; onChange: (next: TaskBoardFormState) => void }) {
+/** Everything that decides when an automation runs: trigger, filters, and
+ *  schedule controls, followed by its enabled switch. */
+function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
+  form: RoutineTaskFormState; onChange: (next: TaskBoardFormState) => void;
+  logicalAgents: EmployeeAgent[]; teams: AgentTeam[]; projects: ProjectRecord[];
+}) {
   const { t } = useTranslation();
   const typeLabelId = useId();
   const cadenceLabelId = useId();
@@ -151,56 +154,63 @@ function RoutineSchedule({ form, onChange }: { form: RoutineTaskFormState; onCha
             </SelectContent>
           </Select>
         </Field>
-        <Field label={t("routine.cadence")} labelId={cadenceLabelId} wrapper="div">
-          <Select
-            value={form.routineCadence}
-            onValueChange={(value) => {
-              if (value == null) return
-              const routineCadence = value as TaskRoutineCadence;
-              onChange({
-                ...form,
-                routineCadence,
-                routineNextRunDate: routineCadence === "custom"
-                  ? form.routineNextRunDate
-                  : nextRoutineRunDate(routineCadence),
-              })
-            }}
-          >
-            <SelectTrigger className="w-full" aria-labelledby={cadenceLabelId}>
-              <SelectValue>{(value: TaskRoutineCadence) => t(`routine.cadences.${value}`)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_ROUTINE_CADENCES.map((cadence) => (
-                <SelectItem key={cadence} value={cadence} label={t(`routine.cadences.${cadence}`)}>{t(`routine.cadences.${cadence}`)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field
-          label={t("routine.next_run")}
-          /* A cadence sets the date itself; say so, rather than leaving a
-             field that looks editable and opens nothing. */
-          hint={t(autoNextRun ? "routine.next_run_auto_hint" : "routine.next_run_hint")}
-          className="task-drawer-next-run"
-          wrapper="div"
-          labelId={nextRunLabelId}
-        >
-          <DatePicker
+        <TriggerKindField trigger={form.routineTrigger} onChange={(routineTrigger) => onChange({ ...form, routineTrigger })} />
+        {form.routineTrigger.kind === "schedule" ? <>
+          <Field label={t("routine.cadence")} labelId={cadenceLabelId} wrapper="div">
+            <Select
+              value={form.routineCadence}
+              onValueChange={(value) => {
+                if (value == null) return
+                const routineCadence = value as TaskRoutineCadence;
+                onChange({
+                  ...form,
+                  routineCadence,
+                  routineNextRunDate: routineCadence === "custom"
+                    ? form.routineNextRunDate
+                    : nextRoutineRunDate(routineCadence),
+                })
+              }}
+            >
+              <SelectTrigger className="w-full" aria-labelledby={cadenceLabelId}>
+                <SelectValue>{(value: TaskRoutineCadence) => t(`routine.cadences.${value}`)}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {TASK_ROUTINE_CADENCES.map((cadence) => (
+                  <SelectItem key={cadence} value={cadence} label={t(`routine.cadences.${cadence}`)}>{t(`routine.cadences.${cadence}`)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            label={t("routine.next_run")}
+            /* A cadence sets the date itself; say so, rather than leaving a
+               field that looks editable and opens nothing. */
+            hint={t(autoNextRun ? "routine.next_run_auto_hint" : "routine.next_run_hint")}
+            className="task-drawer-next-run"
+            wrapper="div"
             labelId={nextRunLabelId}
-            name={`${form.variant}-next-run-date`}
-            min={isoToday()}
-            required={form.routineCadence === "custom" && form.routineEnabled}
-            value={form.routineNextRunDate}
-            readOnly={autoNextRun}
-            onValueChange={(routineNextRunDate) => onChange({ ...form, routineNextRunDate })}
-          />
-        </Field>
+          >
+            <DatePicker
+              labelId={nextRunLabelId}
+              name={`${form.variant}-next-run-date`}
+              min={isoToday()}
+              required={form.routineCadence === "custom" && form.routineEnabled}
+              value={form.routineNextRunDate}
+              readOnly={autoNextRun}
+              onValueChange={(routineNextRunDate) => onChange({ ...form, routineNextRunDate })}
+            />
+          </Field>
+        </> : null}
+        <EventTriggerFields trigger={form.routineTrigger} agents={logicalAgents} teams={teams} projects={projects}
+          onChange={(routineTrigger) => onChange({ ...form, routineTrigger })} />
+        {form.routineTrigger.kind === "webhook" ? <WebhookSecretPanel key={form.id ?? "new"} taskId={form.id} /> : null}
+        {form.routineTrigger.kind === "manual" ? <p className="adm-form-hint">{t("automation.manual_hint")}</p> : null}
       </div>
       <div className="routine-toggle">
         <span className="routine-toggle-text">
           <Label render={<span />}>{t("routine.enabled")}</Label>
           <span className="adm-form-hint" id={enabledHintId}>
-            {t(cannotEnable ? "routine.enabled_needs_target" : "routine.enabled_hint")}
+            {t(!form.routineEnabled && form.routineDisabledReason === "rate_limited" ? "automation.rate_limited" : cannotEnable ? "routine.enabled_needs_target" : "routine.enabled_hint")}
           </span>
         </span>
         <Switch
@@ -502,7 +512,7 @@ export function TaskDrawer({
             inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}
             inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
         </Field> : null}
-        {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} /> : null}
+        {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} logicalAgents={logicalAgents} teams={teams} projects={projects} /> : null}
         <div className="adm-form-actions">
           {form.id && onDelete ? (
             <Button
