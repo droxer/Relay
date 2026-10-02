@@ -308,7 +308,7 @@ export function ThreadsView({
           role="status"
           tabIndex={-1}
         >
-          <RelayEmptyState
+          <RelayEmptyState feature="projects"
             fill
             title={t("project.loading")}
             body={t("project.loading_body")}
@@ -322,7 +322,7 @@ export function ThreadsView({
           role="alert"
           tabIndex={-1}
         >
-          <RelayEmptyState
+          <RelayEmptyState feature="projects"
             fill
             title={t("project.load_failed")}
             body={projectsError || t("project.load_failed_body")}
@@ -340,7 +340,7 @@ export function ThreadsView({
           aria-label={t("project.not_found")}
           tabIndex={-1}
         >
-          <RelayEmptyState
+          <RelayEmptyState feature="projects"
             fill
             title={t("project.not_found")}
             body={t("project.not_found_body")}
@@ -353,7 +353,7 @@ export function ThreadsView({
         </section>
       ) : showProjectDirectoryEmpty ? (
         <section id="chat-panel" className="chat-panel project-directory-empty" aria-label={t("project.projects")} tabIndex={-1}>
-          <RelayEmptyState
+          <RelayEmptyState feature="projects"
             fill
             title={t("project.select_title")}
             body={t("project.select_body")}

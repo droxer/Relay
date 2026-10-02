@@ -7,11 +7,9 @@ import {
   ICON,
 } from "./icons";
 
-// Shared empty-state for task boards (Backlog + Routine): the same
-// `RelayEmptyState` primitive every other zero-data surface uses, turned
-// left-aligned and inline with the page's normal content column by the
-// `relay-empty--board` modifier — no centered mark tile.
+// Task boards share the same first-use design as the feature directories.
 export function BoardEmpty({
+  feature = "tasks",
   title,
   body,
   createLabel,
@@ -19,6 +17,7 @@ export function BoardEmpty({
   clearLabel,
   onClear,
 }: {
+  feature?: "tasks" | "routines";
   title: string;
   body: string;
   createLabel?: string;
@@ -28,6 +27,7 @@ export function BoardEmpty({
 }) {
   return (
     <RelayEmptyState
+      feature={feature}
       className="relay-empty--board"
       fill
       title={title}

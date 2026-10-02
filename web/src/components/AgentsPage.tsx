@@ -275,15 +275,16 @@ export function AgentsPage({
             {t("admin.loading")}
           </div>
         ) : error && agents.length === 0 ? (
-          <RelayEmptyState
+          <RelayEmptyState feature="agents"
             title={t("workspace.load_failed")}
             body={error}
             actions={<Button type="button" variant="outline" onClick={() => void refetch()}>{t("workspace.retry")}</Button>}
           />
         ) : visibleAgents.length === 0 ? (
-          <RelayEmptyState
+          <RelayEmptyState feature="agents"
             title={activeAgents.length === 0 ? t("agents_page.empty_title") : t("agents_page.empty_filtered_title")}
             body={activeAgents.length === 0 ? t("agents_page.empty_body") : t("agents_page.empty_filtered_body")}
+            actions={activeAgents.length === 0 && currentUser.employeeId ? <Button type="button" onClick={() => setCreateOpen(true)}>{t("agents_page.create_action")}</Button> : undefined}
           />
         ) : (
           // Banded by the computer each agent runs on — the infrastructure is
@@ -340,7 +341,7 @@ export function AgentsPage({
             />
           </>
         ) : (
-          <RelayEmptyState
+          <RelayEmptyState feature="agents"
             fill
             title={t("agents_page.select_title")}
             body={t("agents_page.select_body")}

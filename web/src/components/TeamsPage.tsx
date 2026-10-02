@@ -117,15 +117,16 @@ export function TeamsPage({
           {loading ? (
             <div className="route-loading" role="status" aria-live="polite">{t("admin.loading")}</div>
           ) : error && teams.length === 0 ? (
-            <RelayEmptyState
+            <RelayEmptyState feature="teams"
               title={t("workspace.load_failed")}
               body={error}
               actions={<Button type="button" variant="outline" onClick={() => void refetch()}>{t("workspace.retry")}</Button>}
             />
           ) : visibleTeams.length === 0 ? (
-            <RelayEmptyState
+            <RelayEmptyState feature="teams"
               title={teams.length === 0 ? t("teams.empty_title") : t("teams.empty_filtered_title")}
               body={teams.length === 0 ? t("teams.empty_body") : t("teams.empty_filtered_body")}
+              actions={teams.length === 0 ? <Button type="button" onClick={() => setAddTeam(true)}>{t("teams.add")}</Button> : undefined}
             />
           ) : (
             /* A roster rail, not a table: no column header, and rows are
@@ -215,7 +216,7 @@ export function TeamsPage({
             />
           </>
         ) : (
-          <RelayEmptyState fill title={t("teams.select_title")} body={t("teams.select_body")} />
+          <RelayEmptyState feature="teams" fill title={t("teams.select_title")} body={t("teams.select_body")} />
         )}
       </div>
 

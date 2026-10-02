@@ -1,111 +1,77 @@
-/* =====================================================================
-   Relay empty states
-
-   One visual language for transcript, board, and setup zero-data surfaces.
-
-   Composed from type, spacing, and one optional mark tile — nothing else.
-   There is no decorative layer here: no dashed construction plate, no crop
-   ticks, no corner doodles, no bled watermark glyph, no orbit ring. A zero-
-   data surface is a moment where the product has nothing to show; dressing
-   it up reads as apology, and the sketch furniture was drifting anyway
-   (four call sites had to opt out of it one prop at a time).
-
-   No entrance choreography either, hero included: every surface renders
-   settled.
-   ===================================================================== */
-
-/* ── Empty state layout ───────────────────────────────────────────── */
-
+/* Feature first-use surfaces: a quiet diagram, a clear invitation, one move.
+   All paint follows the shared theme; narrow roster panels keep a small scale. */
 .relay-empty {
   position: relative;
-  isolation: isolate;
   margin: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--sp-3);
-  max-width: 440px;
-  padding: calc(var(--sp-8) + var(--sp-2)) calc(var(--sp-7) + var(--sp-2));
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;
+  padding: var(--sp-8) var(--sp-5);
   text-align: center;
   color: var(--ink-1);
-}
-
-@media (max-width: 820px) {
-  .relay-empty {
-    padding: var(--sp-6) var(--sp-5);
-  }
 }
 
 .relay-empty--fill {
   flex: 1;
   justify-content: center;
-  min-height: min(360px, 50vh);
-}
-
-/* Board variant (Backlog + Routine zero-data): the same primitive turned
-   left-aligned and inline with the page's normal content column. A board is
-   already a full-width working surface, so a centered card floating in it
-   read as a second, smaller page. Pairs with --fill. */
-.relay-empty--board {
-  align-items: flex-start;
-  gap: var(--sp-1);
-  max-width: none;
-  width: 100%;
-  padding: var(--sp-7);
-  text-align: left;
-}
-
-/* …and it stays top-anchored like the rows it stands in for: --fill's
-   vertical centering floated the block mid-panel on tall boards, which read
-   as a lost dialog rather than an empty column. */
-.relay-empty--board.relay-empty--fill {
-  justify-content: flex-start;
-}
-
-.relay-empty--board .relay-empty-body {
-  max-width: var(--measure);
-}
-
-/* Artifacts variant: the illustration slot carries a ghost ledger rather than
-   a mark tile, so the measure tightens to the ledger's own width and the
-   slot drops the tile's bottom margin — the rows ARE the spacing. */
-.relay-empty--artifacts {
-  gap: var(--sp-2);
-  max-width: 360px;
-  padding: var(--sp-8) var(--sp-7);
-  width: 100%;
-}
-
-.relay-empty--artifacts .relay-empty-illustration {
-  display: block;
-  width: 100%;
-  margin-bottom: 0;
+  min-height: min(400px, 50vh);
 }
 
 .relay-empty-illustration {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--sp-2);
-  color: var(--ink-4);
+  margin-bottom: var(--sp-4);
+  color: var(--ink-3);
 }
 
-/* The one piece of furniture an empty state keeps: a flat mark tile on the
-   next surface step, hairline only. */
+/* Connected nodes echo Relay's execution model without pretending to be data. */
+.relay-empty-diagram {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  position: relative;
+  padding: var(--sp-3) 0;
+}
+
+.relay-empty-diagram::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  inset-inline: 0;
+  border-top: 1px dashed var(--line-1);
+  z-index: 0;
+}
+
+.relay-empty-diagram-node {
+  position: relative;
+  width: var(--sp-3);
+  height: var(--sp-3);
+  border: 1px solid var(--line-1);
+  border-radius: 50%;
+  background: var(--surface-0);
+}
+
 .relay-empty-avatar {
   position: relative;
   display: grid;
   place-items: center;
-  width: var(--avatar-xl);
-  height: var(--avatar-xl);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 0.5px var(--line-2);
-  color: var(--ink-1);
+  width: var(--avatar-3xl);
+  height: var(--avatar-3xl);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  transform: rotate(-6deg);
 }
 
-.relay-empty-avatar > svg {
-  display: block;
+.relay-empty-avatar > svg,
+.relay-empty-avatar > .profile-image {
+  transform: rotate(6deg);
 }
 
 .relay-empty-avatar > .profile-image {
@@ -120,21 +86,29 @@
   letter-spacing: var(--type-title-track);
   color: var(--ink-1);
   text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 .relay-empty-body {
   margin: 0;
   max-width: var(--measure-tight);
-  color: var(--ink-2);
+  color: var(--ink-3);
   font: var(--type-body-sm);
   line-height: var(--leading-loose);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
 
 .relay-empty-hint {
-  margin: var(--sp-1) 0 0;
+  margin: var(--sp-2) 0 0;
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   color: var(--ink-3);
+}
+
+.relay-empty-kicker {
+  color: var(--ink-3);
+  font: var(--type-micro);
 }
 
 .relay-empty-actions {
@@ -142,27 +116,43 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--sp-2);
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-4);
+  max-width: 100%;
 }
 
-/* ── Transcript landing hero ──────────────────────────────────────────
-   The new-thread landing is a starting point, not a zero-data notice: it is
-   the one empty state allowed the display tier and starter prompts. It gets
-   scale and a real first move — not extra ornament. Everything below is
-   scoped under .transcript-empty so the board/setup/monitoring empties above
-   stay at the base tier. */
+/* Boards become spacious starting points while keeping filters and toolbars. */
+.relay-empty--board {
+  max-width: 640px;
+  padding: var(--sp-8) var(--sp-6);
+}
 
-/* Two classes: atelier.css re-states the shared .relay-empty measure later in
-   the layer, so the hero measure must out-specify it. */
+.relay-empty--board .relay-empty-title,
+.relay-empty--fill .relay-empty-title {
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
+}
+
+/* Artifact ledgers retain their own illustration and compact side-pane scale. */
+.relay-empty--artifacts {
+  gap: var(--sp-2);
+  max-width: 360px;
+  padding: var(--sp-7) var(--sp-5);
+}
+
+.relay-empty--artifacts .relay-empty-illustration {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--sp-3);
+}
+
 .relay-empty.transcript-empty {
   gap: var(--sp-4);
-  max-width: 560px;
+  max-width: 680px;
+  padding-block: var(--sp-8);
 }
 
-/* Kicker above the avatar; suggestion chips between the blurb and the kbd
-   hints (the shared markup renders actions last). */
 .transcript-empty .relay-empty-kicker { order: -2; }
-.transcript-empty .relay-empty-actions { order: 5; margin-top: var(--sp-4); }
+.transcript-empty .relay-empty-actions { order: 5; width: 100%; }
 .transcript-empty .relay-empty-hint { order: 6; margin-top: var(--sp-3); }
 
 .transcript-empty-kicker {
@@ -170,75 +160,62 @@
   align-items: center;
   gap: var(--sp-2);
   color: var(--ink-3);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
-}
-
-.transcript-empty .relay-empty-illustration {
-  margin-bottom: var(--sp-2);
-}
-
-.transcript-empty .relay-empty-avatar {
-  width: var(--avatar-3xl);
-  height: var(--avatar-3xl);
-  border-radius: var(--r-3);
-  /* Flat, no exception: the hero tile carries the same hairline as every
-     other plane — no halo standing in for a drop shadow. */
-  box-shadow: inset 0 0 0 0.5px var(--line-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .transcript-empty .relay-empty-title {
-  /* Pane-title tier, not the 28px display tier: this hero sits in the same
-     column as a 14px transcript and composer, and display size made the
-     empty thread louder than any thread with content in it. */
-  font: var(--type-title);
-  letter-spacing: var(--type-title-track);
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
 }
 
 .transcript-empty .relay-empty-body {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  max-width: 440px;
+  font: var(--type-body);
 }
 
-/* Starter prompts use the plane-independent control fill and a visible
-   boundary. The trailing arrow follows the prompt into the composer. */
-/* One column, equal widths: three prompts of unequal length centered as
-   free pills wrapped into a ragged stack. A stack of matched chips reads as
-   what it is — a short menu of first moves. */
 .transcript-empty-suggestions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--sp-2);
-  width: min(100%, 340px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+  width: 100%;
 }
 
 button.transcript-empty-suggestion {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-4);
+  min-height: calc(var(--control-h-lg) * 2);
+  height: auto;
+  padding: var(--sp-4);
+  white-space: normal;
   text-align: left;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--control-fill);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
   color: var(--ink-2);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   cursor: pointer;
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.transcript-empty-suggestion-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.transcript-empty-suggestion-detail {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  line-height: var(--leading-normal);
 }
 
 .transcript-empty-suggestion > svg {
-  color: var(--ink-4);
-  transition:
-    color var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+  flex-shrink: 0;
+  color: var(--ink-3);
 }
 
 button.transcript-empty-suggestion:hover {
@@ -246,14 +223,6 @@ button.transcript-empty-suggestion:hover {
   background: var(--control-fill-hover);
   color: var(--ink-1);
 }
-
-.transcript-empty-suggestion:hover > svg {
-  color: var(--ink-2);
-  transform: translate(1px, -1px);
-}
-
-/* No :active transform — base.css already presses every native button by 1px;
-   a second one here would double the travel. */
 
 .transcript-empty-hints {
   display: inline-flex;
@@ -268,10 +237,8 @@ button.transcript-empty-suggestion:hover {
   gap: var(--sp-2);
 }
 
-/* A quiet middot separates the two keyboard hints; the flex gap supplies
-   the spacing on each side. */
-.transcript-empty-hint + .transcript-empty-hint::before {
-  content: "·";
-  margin-inline-end: var(--sp-4);
-  color: var(--ink-4);
+@media (max-width: 820px) {
+  .relay-empty { padding: var(--sp-6) var(--sp-4); }
+  .transcript-empty-suggestions { grid-template-columns: 1fr; max-width: 360px; }
+  button.transcript-empty-suggestion { min-height: var(--control-h-lg); align-items: center; }
 }

@@ -205,7 +205,7 @@ export function ComputerPage({
           container — see computer.css. */}
       <div className="computer-page-body">
         {myNodes.length === 0 ? (
-          <RelayEmptyState
+          <RelayEmptyState feature="computers"
             title={t("computer.empty_title")}
             body={t("computer.empty_body")}
             illustration={<AdminNode size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}

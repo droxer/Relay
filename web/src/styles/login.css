@@ -94,6 +94,8 @@
   flex-direction: column;
   justify-content: center;
   gap: var(--sp-6);
+  background-image: radial-gradient(var(--lg-hairline-soft) 1px, transparent 1px);
+  background-size: var(--sp-6) var(--sp-6);
   /* The cover's text column stops well short of the split so the headline
      breaks on its own terms instead of against the hairline, and centres in
      its half rather than hugging the viewport edge — past ~1600px the edge
@@ -176,6 +178,10 @@
   /* Sized to hold each point on one line at the cover's measure. If a new
      point needs more room than this, shorten the point. */
   max-width: 54ch;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--lg-hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--lg-canvas);
   text-wrap: pretty;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -221,8 +227,8 @@
 
 .login-panel-title {
   margin: 0;
-  font: var(--type-title);
-  letter-spacing: var(--type-title-track);
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
   color: var(--lg-ink);
 }
 
