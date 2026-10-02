@@ -115,3 +115,12 @@ def test_secret_management_requires_owner_or_admin(monkeypatch):
         assert client.post(path).status_code in (403, 404)
         _login(client, "alice")
         assert client.post(path).status_code == 201
+
+
+def test_empty_webhook_body_is_not_json(monkeypatch):
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine, secret = _webhook_automation(client, agent)
+        response = client.post(f"/api/v1/automations/{routine['id']}/webhook", content=b"",
+                               headers={HEADER: secret, "content-type": "application/json"})
+        assert response.status_code == 400
