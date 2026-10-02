@@ -19,6 +19,10 @@ import type {
   TaskPriority,
   TaskRoutineCadence,
   TaskRoutineType,
+  RoutineTrigger,
+  RoutineTriggerKind,
+  RoutineTriggerOn,
+  RoutineTriggerFilters,
   TaskStatus,
   TokenUsage,
 } from "relay-core";
@@ -45,6 +49,10 @@ export type {
   TaskPriority,
   TaskRoutineCadence,
   TaskRoutineType,
+  RoutineTrigger,
+  RoutineTriggerKind,
+  RoutineTriggerOn,
+  RoutineTriggerFilters,
   TaskStatus,
   TokenUsage,
 };
@@ -155,6 +163,7 @@ export interface TaskEventsResponse {
  * For a plain task there is exactly one row, the task's own run.
  */
 export interface TaskRun {
+  triggerKind?: RoutineTriggerKind | null;
   /** The task that carried the run: an occurrence, or the task itself. */
   taskId: string;
   /** The day the run was scheduled for; the ledger's date column. */
@@ -220,6 +229,8 @@ export interface WorkspaceBriefTask {
   routineCadence?: TaskRoutineCadence;
   routineNextRunDate?: string;
   routineEnabled: boolean;
+  routineTrigger?: RoutineTrigger;
+  routineDisabledReason?: string;
   linkedSessionIds: string[];
   updatedAt?: string;
   createdAt?: string;
@@ -808,6 +819,8 @@ export interface TaskMutationInput {
   routineCadence?: TaskRoutineCadence;
   routineNextRunDate?: string;
   routineEnabled?: boolean;
+  routineTrigger?: RoutineTrigger;
+  routineDisabledReason?: string;
   assignedAgentId?: string | null;
   assignedTeamId?: string | null;
   /** Triage: moves an intake issue (one with no project) into a project.

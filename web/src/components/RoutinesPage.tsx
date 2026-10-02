@@ -11,6 +11,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
+import { triggerOf } from "../lib/automationTrigger";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -174,6 +175,8 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       routineCadence: task.routineCadence ?? "weekly",
       routineNextRunDate: task.routineNextRunDate ?? "",
       routineEnabled: task.routineEnabled,
+      routineTrigger: triggerOf(task),
+      routineDisabledReason: task.routineDisabledReason,
     });
   }
 

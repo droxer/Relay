@@ -5,6 +5,7 @@ import { filterRoutineTasks, latestRoutineSession, routineDueTone, routineState,
 import type { RelaySession, RelayTask } from "../src/types.js";
 
 const baseFilters: RoutineFilters = {
+  trigger: "all",
   query: "",
   type: "all",
   cadence: "all",

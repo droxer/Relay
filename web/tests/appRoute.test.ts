@@ -445,3 +445,8 @@ it("preserves team, assignment, and upcoming task filters in list and record URL
   }
   assert.equal(canonicalBrowserUrl("/backlog", "?assignment=invalid"), "/backlog");
 });
+
+it("keeps valid automation trigger filters only", () => {
+  assert.equal(canonicalBrowserUrl("/automations", "?trigger=webhook"), "/automations?trigger=webhook");
+  assert.equal(canonicalBrowserUrl("/automations", "?trigger=bogus"), "/automations");
+});

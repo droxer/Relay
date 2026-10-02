@@ -862,7 +862,8 @@
       "due": "Due today",
       "scheduled": "Scheduled",
       "unscheduled": "Unscheduled",
-      "paused": "Paused"
+      "paused": "Paused",
+      "listening": "Listening"
     },
     "meta": "Automation status",
     "no_activity": "No runs yet.",
@@ -2250,5 +2251,52 @@
     "move_count_other": "Move {{count}} to project…",
     "toast_moved_one": "Moved 1 issue to {{project}}.",
     "toast_moved_other": "Moved {{count}} issues to {{project}}."
+  },
+  "automation": {
+    "trigger": "Trigger",
+    "kinds": {
+      "schedule": "Schedule",
+      "task_event": "Task event",
+      "run_event": "Run event",
+      "webhook": "Webhook",
+      "manual": "Manual only"
+    },
+    "on": "When",
+    "on_values": {
+      "created": "A task is created",
+      "status_changed": "A task changes status",
+      "completed": "A run completes",
+      "failed": "A run fails"
+    },
+    "filters_legend": "Only when",
+    "filter_any": "Any",
+    "filter_project": "Project",
+    "filter_agent": "Agent",
+    "filter_team": "Team",
+    "filter_from_status": "From status",
+    "filter_to_status": "To status",
+    "filter_priority": "Priority",
+    "filter_title": "Title contains",
+    "manual_hint": "Runs only when someone presses Run now.",
+    "webhook_url": "Endpoint",
+    "webhook_header": "Send the secret in the {{header}} header.",
+    "webhook_save_first": "Save the automation to get its webhook endpoint.",
+    "webhook_generate": "Generate secret",
+    "webhook_rotate": "Rotate secret",
+    "webhook_configured": "A secret is set. Rotating it stops the old one immediately.",
+    "webhook_secret_once": "Copy this secret now. It will not be shown again.",
+    "webhook_copy": "Copy",
+    "webhook_error": "Could not create a secret. Try again.",
+    "rate_limited": "Paused after too many runs in an hour. Turn it back on when ready.",
+    "ledger": {
+      "schedule": "Scheduled",
+      "task_event": "Task event",
+      "run_event": "Run event",
+      "webhook": "Webhook",
+      "manual": "Manual"
+    },
+    "errors": {
+      "title_too_long": "Keep the title filter to 120 characters."
+    }
   }
 }

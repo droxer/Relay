@@ -7,6 +7,23 @@ export type TaskStatus = "backlog" | "assigned" | "running" | "waiting_for_human
 export type TaskRoutineType = "task" | "job";
 export type TaskRoutineCadence = "daily" | "weekly" | "monthly" | "custom";
 
+export type RoutineTriggerKind = "schedule" | "task_event" | "run_event" | "webhook" | "manual";
+export type RoutineTriggerOn = "created" | "status_changed" | "completed" | "failed";
+export interface RoutineTriggerFilters {
+  projectId?: string;
+  assignedAgentId?: string;
+  assignedTeamId?: string;
+  fromStatus?: TaskStatus;
+  toStatus?: TaskStatus;
+  priority?: TaskPriority;
+  titleContains?: string;
+}
+export interface RoutineTrigger {
+  kind: RoutineTriggerKind;
+  on?: RoutineTriggerOn;
+  filters?: RoutineTriggerFilters;
+}
+
 export interface TaskExecutionAttention {
   schemaVersion: 1;
   code: string;
@@ -67,6 +84,10 @@ export interface RelayTask {
   /** Date-only next routine run date in YYYY-MM-DD format. */
   routineNextRunDate?: string;
   routineEnabled: boolean;
+  routineTrigger?: RoutineTrigger;
+  routineDisabledReason?: string;
+  routineTriggerKind?: RoutineTriggerKind;
+  routineTriggerDepth?: number;
   /** Parent routine for a generated occurrence. */
   sourceRoutineId?: string;
   /** Calendar date this occurrence was generated for. */
@@ -150,6 +171,10 @@ export type RelayTaskEvent =
       routineCadence?: TaskRoutineCadence;
       routineNextRunDate?: string;
       routineEnabled?: boolean;
+      routineTrigger?: RoutineTrigger;
+      routineDisabledReason?: string;
+      routineTriggerKind?: RoutineTriggerKind;
+      routineTriggerDepth?: number;
       sourceRoutineId?: string;
       scheduledFor?: string;
     }
@@ -170,6 +195,10 @@ export type RelayTaskEvent =
       routineCadence?: TaskRoutineCadence;
       routineNextRunDate?: string;
       routineEnabled?: boolean;
+      routineTrigger?: RoutineTrigger;
+      routineDisabledReason?: string;
+      routineTriggerKind?: RoutineTriggerKind;
+      routineTriggerDepth?: number;
     }
   | {
       id: string;

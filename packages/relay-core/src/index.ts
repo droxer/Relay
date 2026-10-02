@@ -257,6 +257,10 @@ export {
   type TaskPriority,
   type TaskRoutineCadence,
   type TaskRoutineType,
+  type RoutineTrigger,
+  type RoutineTriggerKind,
+  type RoutineTriggerOn,
+  type RoutineTriggerFilters,
   type TaskStatus,
 } from "./task-store.js";
 

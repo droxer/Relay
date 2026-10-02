@@ -1,11 +1,13 @@
+import { triggerOf } from "./automationTrigger.ts";
 import { TASK_PRIORITIES } from "./backlog.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
-import type { RelaySession, RelayTaskListItem, TaskRoutineCadence, TaskRoutineType } from "../types.js";
+import type { RelaySession, RelayTaskListItem, RoutineTriggerKind, TaskRoutineCadence, TaskRoutineType } from "../types.js";
 
 export const TASK_ROUTINE_TYPES: TaskRoutineType[] = ["task", "job"];
 export const TASK_ROUTINE_CADENCES: TaskRoutineCadence[] = ["daily", "weekly", "monthly", "custom"];
 
 export interface RoutineFilters {
+  trigger: "all" | RoutineTriggerKind;
   query: string;
   type: "all" | TaskRoutineType;
   cadence: "all" | TaskRoutineCadence;
@@ -20,6 +22,7 @@ export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineF
   const running = runningRoutineIds(tasks);
   return tasks.filter((task) => {
     if (!task.isRoutine) return false;
+    if (filters.trigger !== "all" && triggerOf(task).kind !== filters.trigger) return false;
     if (filters.type !== "all" && task.routineType !== filters.type) return false;
     if (filters.cadence !== "all" && task.routineCadence !== filters.cadence) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
@@ -46,6 +49,7 @@ export type RoutineState =
   | "overdue"
   | "due"
   | "unscheduled"
+  | "listening"
   | "scheduled"
   | "paused";
 
@@ -61,6 +65,7 @@ export function routineState(
 ): RoutineState {
   if (running.has(routine.id)) return "running";
   if (!routine.routineEnabled) return "paused";
+  if (triggerOf(routine).kind !== "schedule") return "listening";
   if (!routine.routineNextRunDate) return "unscheduled";
   if (routine.routineNextRunDate < today) return "overdue";
   if (routine.routineNextRunDate === today) return "due";
@@ -78,6 +83,7 @@ export const ROUTINE_STATE_ORDER: readonly RoutineState[] = [
   "overdue",
   "due",
   "scheduled",
+  "listening",
   "unscheduled",
   "paused",
 ];

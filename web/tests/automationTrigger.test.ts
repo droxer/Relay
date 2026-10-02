@@ -44,3 +44,10 @@ describe("automation triggers", () => {
     assert.equal(routineState({ ...base, routineEnabled: false, routineTrigger: { kind: "webhook" } }, new Set()), "paused");
   });
 });
+
+it("compares filters independent of insertion order", () => {
+  assert.ok(triggersEqual(
+    { kind: "task_event", on: "created", filters: { priority: "high", projectId: "p" } },
+    { kind: "task_event", on: "created", filters: { projectId: "p", priority: "high" } },
+  ));
+});

@@ -1,4 +1,6 @@
-import type { AgentName, CollaborationStyle, CurrentUser, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../types.js";
+import type { AgentName, CollaborationStyle, CurrentUser, RoutineTrigger, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../types.js";
+
+import { SCHEDULE_TRIGGER, triggersEqual } from "./automationTrigger.js";
 
 export type TaskBoardFormBase = {
   id?: string;
@@ -28,6 +30,8 @@ export type RoutineTaskFormState = TaskBoardFormBase & {
   routineCadence: TaskRoutineCadence;
   routineNextRunDate: string;
   routineEnabled: boolean;
+  routineTrigger: RoutineTrigger;
+  routineDisabledReason?: string;
 };
 
 export type TaskBoardFormState = BacklogTaskFormState | RoutineTaskFormState;
@@ -63,6 +67,7 @@ export function emptyRoutineForm(currentUser: CurrentUser, date = new Date()): R
     routineCadence: "weekly",
     routineNextRunDate: nextRoutineRunDate("weekly", date),
     routineEnabled: false,
+    routineTrigger: { ...SCHEDULE_TRIGGER },
   };
 }
 
@@ -104,7 +109,8 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     return a.routineType === b.routineType
       && a.routineCadence === b.routineCadence
       && a.routineNextRunDate === b.routineNextRunDate
-      && a.routineEnabled === b.routineEnabled;
+      && a.routineEnabled === b.routineEnabled
+      && triggersEqual(a.routineTrigger, b.routineTrigger);
   }
   return false;
 }

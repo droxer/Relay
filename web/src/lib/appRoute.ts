@@ -315,7 +315,8 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
     cadence: new Set(["daily", "weekly", "monthly", "custom"]),
     agent: null,
     assignee: null,
-    state: new Set(["running", "overdue", "due", "scheduled", "unscheduled", "paused"]),
+    trigger: new Set(["schedule", "task_event", "run_event", "webhook", "manual"]),
+    state: new Set(["running", "overdue", "due", "scheduled", "listening", "unscheduled", "paused"]),
   },
 };
 
