@@ -132,13 +132,15 @@ describe("control height ladder", () => {
     assert.equal(new Set(heights).size, heights.length, `duplicate rungs: ${heights.join(", ")}`);
   });
 
-  it("keeps the touch target reachable from the ladder", () => {
-    // --control-h has to clear the floor on its own, or the "no coarse-pointer
-    // entry needed" claim on the token is false.
+  it("keeps compact desktop controls and expands targets on touch", () => {
     const touch = readFileSync(path.join(stylesDir, "tokens", "base.css"), "utf8")
       .match(/--touch-target:\s*(\d+)px;/)?.[1];
     assert.ok(touch, "--touch-target is not declared");
-    assert.ok(token("--control-h") >= Number(touch), "--control-h must reach --touch-target");
+    assert.equal(token("--control-h"), 36);
+    assert.equal(Number(touch), 44);
+    const a11y = readFileSync(path.join(stylesDir, "a11y.css"), "utf8");
+    assert.match(a11y, /@media \(pointer: coarse\)/);
+    assert.match(a11y, /min-height: var\(--touch-target\);/);
   });
 
   it("sizes interactive chrome from the ladder, not a raw literal", () => {

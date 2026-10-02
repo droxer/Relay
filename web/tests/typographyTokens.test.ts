@@ -72,11 +72,11 @@ describe("application typography roles", () => {
     const expectedPixels = new Map([
       ["--fs-1", 12],
       ["--fs-2", 14],
-      ["--fs-3", 15],
-      ["--fs-4", 16],
+      ["--fs-3", 14],
+      ["--fs-4", 14],
       ["--fs-code", 14],
-      ["--fs-heading", 17],
-      ["--fs-title", 19],
+      ["--fs-heading", 15],
+      ["--fs-title", 16],
       ["--fs-5", 22],
       ["--fs-6", 28],
     ]);
@@ -112,7 +112,8 @@ describe("application typography roles", () => {
       const bodies = [...readWebSource(file).matchAll(new RegExp(`(?:^|[},\\n])\\s*${escaped}\\s*\\{([^}]*)\\}`, "g"))].map((m) => m[1]);
       const sized = bodies.filter((body) => /font-size:/.test(body));
       assert.ok(sized.length > 0, `${selector} no longer sets a size`);
-      for (const body of sized) assert.match(body, /font-size:\s*var\(--fs-code\);/, `${selector} must size from --fs-code`);
+      const token = selector === ".agent-thinking code" ? "--fs-code-transcript" : "--fs-code";
+      for (const body of sized) assert.match(body, new RegExp(`font-size:\\s*var\\(${token}\\);`), `${selector} must size from ${token}`);
     }
   });
 

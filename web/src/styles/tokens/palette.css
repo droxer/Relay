@@ -391,19 +391,18 @@
                         action cluster, small toggles, segmented buttons.
        --control-h-sm   a standalone compact control — filter chips, page
                         tabs, menu rows. Not inside a row; it IS the row.
-       --control-h      form inputs and primary pills. Shares the source
-                        system's silhouette and clears the touch floor on its
-                        own, with no coarse-pointer entry needed.
+       --control-h      form inputs and primary pills. Uses a compact desktop silhouette; a11y.css expands
+                        the hit area to 44px on coarse pointers.
        --control-h-lg   one step ABOVE the pill tier, for a hero or dual-CTA
                         pair where the button carries marketing weight. The
                         only rung that exists to be loud rather than to fit.
 
      A control that wants a height not on this ladder is telling you it has
      been mis-classified; re-read the four jobs above before adding a fifth. */
-  --control-h-lg: 48px;
-  --control-h: 44px;
-  --control-h-sm: 40px;
-  --control-h-xs: 32px;
+  --control-h-lg: 40px;
+  --control-h: 36px;
+  --control-h-sm: 32px;
+  --control-h-xs: 28px;
   --control-h-2xs: 24px;
 
   /* Card heights — a record card is a frame of a known size.
@@ -599,7 +598,7 @@
   --space-w: 384px;
   --space-w-min: 288px;
   --space-w-cap: 30vw;
-  --header-h: 64px; /* the source system's top navigation height */
+  --header-h: 52px; /* compact application header */
   /* Shared inline gutter for page chrome — route PageHeaders, the thread
      rail, and the chat header/transcript all inset by this one token so the
      content edges of adjacent panes line up instead of each picking its own
@@ -647,40 +646,13 @@
 
   /* Type sizes — rem so browser font-size preference scales the UI
      (root pinned to 87.5% in base.css; 1rem = 14px at the default). */
-  /* APPLICATION LADDER, NOT THE BRAND'S MARKETING LADDER: 12 / 14 / 15 / 16 /
-     17 / 19 / 22 / 28, with the hero display on its own clamp above.
-
-     The three reading rungs (14 / 15 / 16) follow the reference docs site the
-     system faces were taken from: 14px chrome and 16px reading text. The
-     caption rung and every heading tier stay where the console set them.
-
-     The source system publishes 12/14/16/18/24/36/48 — a ladder drawn for a
-     single-column commerce page where a product title owns the viewport. This
-     app is a four-rail console: a 318px thread rail, a filter band, a
-     transcript, and a dossier, all on screen at once. Importing the brand's
-     rungs wholesale set 24px pane titles over 14px rail rows and 36px KPI
-     numerals inside admin tiles, and the whole UI read a full step too loud.
-     The rungs below are the ones this app was built against — every density
-     decision in the surface CSS (14px rail titles over 12px meta, the 15px
-     dense-prose tier, the 19px pane title) is written to them.
-
-     The brand relationship is kept where it matters and dropped where it does
-     not: the FACE, the weights, the tracking, and the role architecture in
-     roles.css are all the source system's. Only the absolute sizes are pulled
-     down to console density — which is what "adopt a design system" means for
-     an app that is not a storefront.
-
-     --fs-3 and --fs-4 are two rungs again, not an alias. They mean different
-     things (dense prose vs body copy) and the compact density scope steps
-     --fs-4 down onto --fs-3, which an alias silently made a no-op.
-
-     Most sizing flows through the --type-* roles in roles.css rather than
-     these tokens directly, so a low direct-var count does not by itself mean
-     a dead rung. Recount before deleting anything. */
+  /* Compact application typography: 12px utility text, 14px reading text,
+     15px section headings and 16px page titles. Transcript text stays 14px.
+     Higher display tiers remain reserved for KPI numerals and hero screens. */
   --fs-1: 0.8571rem; /* 12px — caption: badges, legal microcopy, compact metadata */
-  --fs-2: 1rem;      /* 14px — body-sm: labels, chrome, button and pill-tab text */
-  --fs-3: 1.0714rem; /* 15px — dense prose, the compact scope's body rung */
-  --fs-4: 1.1429rem; /* 16px — body copy: the primary reading size */
+  --fs-2: 1rem;      /* 14px — reading text and transcript */
+  --fs-3: 1rem;      /* 14px — dense prose */
+  --fs-4: 1rem;      /* 14px — body copy, matching transcript text */
   /* Code is NOT a rung of the sans ladder: the mono face is sized to its own
      metrics (wider advances, taller x-height), so it holds 14px while the
      reading rungs around it move. Every surface that shows code — fenced and
@@ -702,8 +674,8 @@
      one mono step down; the file viewer, diffs, and document previews keep
      --fs-code. */
   --fs-code-transcript: 0.9286rem;           /* 13px */
-  --fs-heading: 1.2143rem; /* 17px — subtitle-lg: section headings, in-message h1 */
-  --fs-title: 1.3571rem;   /* 19px — card titles, pane and page titles */
+  --fs-heading: 1.0714rem; /* 15px — section headings */
+  --fs-title: 1.1429rem;   /* 16px — pane and page titles */
   --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */
   --fs-6: 2rem;      /* 28px — display: section-opener display */
   /* Hero display — the one place a headline owns the viewport (login, empty
@@ -923,37 +895,13 @@ html:lang(zh-CN) {
      8px was the old value and it was too tight for the two-line rows this
      scope actually wraps — every rail that used it overrode it back. */
   --sp-row: var(--sp-3);
-  /* The dense reading tier runs one rung down: the compact scope's --fs-4
-     becomes the ladder's 15px dense-prose rung. Heading tiers are untouched —
-     density compresses rows, not hierarchy.
-
-     REDECLARING THE ROLES IS LOAD-BEARING, NOT REDUNDANT. A custom property is
-     substituted at the element where it is DECLARED, not where it is used: a
-     role declared on :root as `400 var(--fs-4)/1.5 …` has already resolved
-     --fs-4 against :root by the time it inherits down here, so overriding
-     --fs-4 alone does nothing to `font: var(--type-body)`. Restating each
-     --fs-4-derived role here re-resolves it in this scope, which is what makes
-     the substitution real. Add a line whenever a new role is built on --fs-4.
-
-     --type-body-sm shifts by the same one-rung substitution (--fs-2 → --fs-1):
-     it is the app's supporting-text tier (hints, meta lines, empty-state copy),
-     so a dense admin table would otherwise print its meta at the same size as
-     the names beside it.
-
-     --type-label and --type-label-strong are deliberately NOT restated, even
-     though they are built on --fs-2 like body-sm is. At :root the label and
-     supporting tiers share a size and separate by weight; in a dense table
-     that is not enough, so supporting text steps down and the labels hold the
-     rung. Dropping both would flatten the scope to a single 12px size and undo
-     the separation this block exists to create. The rule is therefore NOT
-     "restate everything built on --fs-2" — it is "restate the reading tiers". */
+  /* Compact surfaces keep the shared 14px reading size and 12px supporting
+     text. Restate composite roles locally so scoped leading is applied. */
   --fs-4: var(--fs-3);
   --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-name: 700 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-body-sm: 400 var(--fs-1)/var(--leading-snug) var(--font-sans);
-  /* The card ladder steps down with the type it frames — same clamps, one
-     rung less air. Restated here for the same substitution reason as the
-     roles above. */
+  /* Compact grids use shorter cards with the same text clamps. */
   --card-h-tile: 116px;
   --card-h-fleet: 196px;
 }

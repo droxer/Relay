@@ -121,8 +121,8 @@
    rungs above it and h3 and below share the body size, separating by weight
    (700 vs 400) — which is how the rest of the system already distinguishes
    roles inside one size. */
-.md-body h1 { font-size: var(--fs-4); font-weight: 700; } /* 16px */
-.md-body h2 { font-size: var(--fs-3); } /* 15px */
+.md-body h1 { font-size: var(--fs-title); font-weight: 700; } /* 16px */
+.md-body h2 { font-size: var(--fs-heading); } /* 15px */
 .md-body h3,
 .md-body h4,
 .md-body h5,
