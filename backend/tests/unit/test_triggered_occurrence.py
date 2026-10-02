@@ -56,3 +56,11 @@ def test_lists_only_enabled_event_and_webhook_automations(store) -> None:
     _automation(store, routineTrigger={"kind": "schedule"}, routineCadence="weekly", routineNextRunDate="2026-10-09")
     _automation(store, routineEnabled=False)
     assert {task["id"] for task in store.list_trigger_automations()} == {listening["id"], webhook["id"]}
+
+
+def test_schedule_and_manual_occurrences_record_their_trigger(store):
+    routine = _automation(store, routineTrigger={"kind": "schedule"}, routineCadence="daily", routineNextRunDate="2026-10-02")
+    scheduled = store.promote_due_routine(routine["id"], "2026-10-02", "2026-10-03")
+    assert scheduled["routineTriggerKind"] == "schedule"
+    manual = store.create_routine_occurrence(routine["id"], "2026-10-04")
+    assert manual["routineTriggerKind"] == "manual"
