@@ -28,7 +28,7 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 - **Agents and teams** — Give each agent a runtime, role, personality, and skills. Group agents into teams that work Solo, Build → Review, Pipeline, or Lead-led.
 - **Skills** — Publish versioned skill bundles and grant them to agents from a shared library.
 - **Computers** — Enroll employee or managed computers and see their health, runtimes, and running work.
-- **Administration** — Manage employees, computers, activity, and token usage from one control panel.
+- **Administration** — Manage employees, computers, activity, and token usage from one Admin Console.
 
 ## Product tour
 
@@ -70,7 +70,7 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/relay-admin.png" alt="Relay admin dashboard">
-      <br><strong>Control panel</strong><br>Thread volume, fleet health, and token usage.
+      <br><strong>Admin Console</strong><br>Thread volume, fleet health, and token usage.
     </td>
   </tr>
 </table>

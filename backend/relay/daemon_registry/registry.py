@@ -516,7 +516,7 @@ class DaemonNodeRegistry:
         existing = self.sandboxes.get(payload["sandboxId"])
         # A deleted node must stay deleted. Without this the daemon that was
         # still running on the machine simply re-registers itself seconds after
-        # an admin deletes it, and the node reappears in the control panel.
+        # an admin deletes it, and the node reappears in the Admin Console.
         # Re-enrolling the same machine is still possible: the admin provisions
         # a fresh record first, and registration then finds a live `existing`.
         if not self._live_node(payload["sandboxId"]):
@@ -528,8 +528,8 @@ class DaemonNodeRegistry:
                     tombstone_id=tombstone["id"],
                 )
                 raise DeletedDaemonNodeError(
-                    f"Daemon node {payload['sandboxId']} was deleted in the control panel. "
-                    "Stop this daemon, or re-enroll the machine from the control panel."
+                    f"Daemon node {payload['sandboxId']} was deleted in the Admin Console. "
+                    "Stop this daemon, or re-enroll the machine from the Admin Console."
                 )
         if (
             existing and existing.get("nodeTokenHash")
@@ -1114,7 +1114,7 @@ class DaemonNodeRegistry:
         logger.info("Daemon node deleted", sandbox_id=sandbox_id)
 
     def retire_deleted(self, sandbox_id: str) -> dict[str, Any]:
-        """Delete a node from the control panel, leaving a tombstone behind.
+        """Delete a node from the Admin Console, leaving a tombstone behind.
 
         `delete` drops the row entirely, which lets a daemon that is still
         running on the machine re-register and resurrect the node. The
@@ -4447,7 +4447,7 @@ class DaemonNodeRegistry:
             raise PermissionError("Unauthorized daemon node request.")
         if sandbox.get("status") == DAEMON_NODE_DELETED_STATUS:
             raise DeletedDaemonNodeError(
-                f"Daemon node {sandbox_id} was deleted in the control panel."
+                f"Daemon node {sandbox_id} was deleted in the Admin Console."
             )
 
     def _should_persist_seen(self, sandbox_id: str) -> bool:

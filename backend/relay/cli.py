@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> None:
             "using the persisted admin token.",
         )
     logger.info("Relay backend listening on http://{}:{}", args.host, args.port)
-    logger.info("Relay backend control panel: http://{}:{}/admin", args.host, args.port)
+    logger.info("Relay backend Admin Console: http://{}:{}/admin", args.host, args.port)
     logger.info("Relay web UI: http://{}:{}/", args.host, args.port)
     trust_proxy = deploy_config.trust_proxy_headers()
     uvicorn.run(
