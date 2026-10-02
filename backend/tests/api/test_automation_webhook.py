@@ -148,3 +148,17 @@ def test_webhook_tick_creates_a_labeled_run_in_the_api_ledger(monkeypatch):
         occurrence = client.get(f"/api/v1/tasks/{run['taskId']}").json()
         assert '"ok": true' in occurrence["description"]
         assert occurrence["sourceRoutineId"] == routine["id"]
+
+
+def test_non_owner_assignee_cannot_rotate_secret(monkeypatch):
+    from test_tasks import _create_user, _create_agent, _login
+    from test_automation_triggers_api import _routine
+    with TemporaryDirectory() as root:
+        client, _ = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        agent = _create_agent(client, "bob")
+        routine = _routine(client, agent, assigneeEmployeeId="bob", routineTrigger={"kind": "webhook"})
+        _login(client, "bob")
+        path = f"/api/v1/tasks/{routine['id']}/automation/webhook-secret"
+        assert client.get(path).status_code == 403
+        assert client.post(path).status_code == 403

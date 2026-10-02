@@ -77,3 +77,20 @@ def test_invalid_trigger_is_a_400(monkeypatch) -> None:
         })
         assert missing.status_code == 400
         assert "projectId" in missing.json()["detail"]
+
+
+def test_scope_filters_require_owner_access_on_create_and_patch(monkeypatch) -> None:
+    from test_tasks import _login
+    from issue_projects import project_for_agents
+    with TemporaryDirectory() as root:
+        client, alice_agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        bob_agent = _create_agent(client, "bob")
+        project = project_for_agents(client.app.state.project_store, "bob", [bob_agent])
+        routine = _routine(client, alice_agent, routineTrigger=ON_BLOCKED)
+        _login(client, "alice")
+        trigger = {"kind": "task_event", "on": "created", "filters": {"projectId": project["id"]}}
+        assert client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTrigger": trigger}).status_code == 403
+        response = client.post("/api/v1/tasks", json={"title": "Watch Bob", "isRoutine": True,
+            "routineTrigger": trigger, "assignedAgentId": alice_agent["id"]})
+        assert response.status_code == 403

@@ -241,3 +241,27 @@ def test_disabled_automation_discards_pending(world):
     assert automations.list_pending_states() == []
     tasks.update_task(routine["id"], {"routineEnabled": True})
     assert matcher.run() == 0
+
+
+def test_switch_to_manual_discards_queued_webhook(world) -> None:
+    tasks, automations, matcher, clock = world
+    routine = _automation(tasks, {"kind": "webhook"})
+    automations.save_state(routine["id"], {
+        **automations.get_state(routine["id"]), "pending": True,
+        "pending_since": clock.value,
+        "pending_events": [{"eventType": "webhook", "payload": {}, "depth": 0}],
+    })
+    tasks.update_task(routine["id"], {"routineTrigger": {"kind": "manual"}})
+    assert matcher.run() == 0
+    assert not automations.get_state(routine["id"])["pending"]
+    assert not _occurrences(tasks, routine["id"])
+
+
+def test_bad_stored_filter_does_not_block_other_automations(world) -> None:
+    tasks, _, matcher, _ = world
+    _automation(tasks, {"kind": "task_event", "on": "status_changed",
+                        "filters": {"titleContains": 42}})
+    good = _automation(tasks)
+    _block(tasks)
+    assert matcher.run() == 1
+    assert len(_occurrences(tasks, good["id"])) == 1
