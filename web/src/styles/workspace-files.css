@@ -189,8 +189,10 @@
   display: inline-flex;
   align-items: baseline;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  /* Size and date are metadata beside a 14px filename: the meta tier, the
+     same step the transcript's timestamps take. */
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
