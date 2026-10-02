@@ -1,16 +1,19 @@
 # Relay
 
-[English](README.md) | [简体中文](README.zh-CN.md)
-
 <p align="center">
   <img src="assets/brand/relay-logo.svg" alt="Relay 标志" width="380">
 </p>
 
 <p align="center"><strong>让每一位员工，能力倍增。</strong></p>
 
-Relay 是一个本地优先的 AI 工作控制平面。员工通过对话、议题、例行任务和项目来指挥具名 AI 智能体，组织则保有一份统一记录：谁提出了什么需求、由哪个智能体完成、在哪台计算机上运行、产出了什么。
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-智能体在工作所在之处运行。部署在员工计算机或托管计算机上的 Relay 守护进程，会在真实工作区中运行 [Claude Code](https://github.com/anthropics/claude-code)、Codex、Pi 和 Kimi——直接在主机上，或在 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中。
+Relay 帮助员工通过对话、议题、例行任务和项目与 AI 智能体协作。你可以为智能体命名、配置角色和技能，选择运行位置，并与团队共享需求、运行过程和结果。
+
+Relay 采用本地优先架构：后端协调工作，守护进程在员工计算机或托管计算机上执行。每个守护进程在主机工作区或 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中运行 [Claude Code](https://github.com/anthropics/claude-code)、Codex、Pi 或 Kimi。
 
 <p align="center">
   <img src="docs/images/relay-threads-zh-CN.png" alt="Relay 对话：一个智能体修复缺陷后交接给另一个智能体，后者的评审正在实时输出" width="960">
@@ -18,10 +21,10 @@ Relay 是一个本地优先的 AI 工作控制平面。员工通过对话、议�
 
 ## 功能特性
 
-- **对话** — 在你选择的计算机上与智能体、团队或项目协作。实时查看推理、命令和工具调用；随时停止、重试或交接。
-- **议题** — 以优先级、截止日期和智能体或团队负责人来跟踪工作，从待办到完成，并保留运行历史和产出文件。
+- **对话** — 在你选择的计算机上与智能体、团队或项目协作。实时查看推理、命令和工具调用，按需停止、重试或交接工作。
+- **议题** — 将工作分配给智能体或团队，设置优先级和截止日期，从待办跟踪到完成。每个议题保留运行历史和产出文件。
 - **例行任务** — 按每日、每周或每月安排周期性工作；Relay 会将每次运行派发给负责人。
-- **项目** — 将共享工作区和智能体名册绑定到一台计算机。
+- **项目** — 在同一台计算机上组织共享工作区和参与项目的智能体。
 - **智能体与团队** — 为每个智能体配置运行时、角色、个性和技能。将智能体组成团队，协作方式可选单人、构建 → 评审、流水线或负责人主导。
 - **技能** — 发布带版本的技能包，并通过共享技能库授予智能体。
 - **计算机** — 注册员工计算机或托管计算机，查看其健康状态、运行时和正在运行的工作。
@@ -76,7 +79,11 @@ Relay 是一个本地优先的 AI 工作控制平面。员工通过对话、议�
 
 ## 快速开始
 
-前置条件：Node.js 22.19+、npm、Python 3.12+、[uv](https://docs.astral.sh/uv/)、PostgreSQL、所需智能体 CLI 的凭据，以及（守护进程默认的 BoxLite 沙箱所需）支持硬件虚拟化的 Docker。
+你需要 Node.js 22.19+、npm、Python 3.12+、[uv](https://docs.astral.sh/uv/) 和 PostgreSQL。使用默认的 BoxLite 沙箱还需要 Docker、硬件虚拟化支持，以及所需智能体的凭据。
+
+以下命令均在仓库根目录执行。
+
+### 1. 安装与配置
 
 ```bash
 npm install
@@ -91,7 +98,9 @@ cp web/.env.example web/.env.local
 cp packages/.env.example packages/.env
 ```
 
-会话、任务、事件与产物始终存储在 PostgreSQL 中。请先创建 `backend/.env` 中 `RELAY_DATABASE_URL` 指向的数据库——示例配置期望 `localhost:5432` 上存在角色 `relay` 与数据库 `relay`——然后应用数据库结构：
+### 2. 初始化数据库和管理员账户
+
+Relay 将会话、任务、事件与产物存储在 PostgreSQL 中。先创建 `backend/.env` 中 `RELAY_DATABASE_URL` 指定的角色和数据库。示例使用 `localhost:5432` 上的角色 `relay` 和数据库 `relay`。然后运行数据库迁移：
 
 ```bash
 make backend-migrate
@@ -102,6 +111,8 @@ make backend-migrate
 ```bash
 script/init_users.sh --password 'choose-a-strong-password'
 ```
+
+### 3. 启动服务
 
 在不同终端中分别启动服务：
 
@@ -121,6 +132,7 @@ make web                         # Web 界面，监听 127.0.0.1:5000
 backend/     Python / FastAPI 控制平面：API 路由、事件溯源存储、调度器、数据库迁移
 packages/    TypeScript 工作区
   relay-core/        共享协议、智能体注册表、CLI 命令、提示词
+  relay-chat/        聊天网关及 Discord、Telegram、Lark 适配器
   relay-daemon/      执行平面：注册计算机并运行智能体 CLI
   relay-supervisor/  确保员工守护进程已部署并保持运行
 web/         Next.js Web 界面，静态导出后由后端提供服务
@@ -132,7 +144,7 @@ devbox/      沙箱内智能体所运行的 BoxLite 客户机镜像
 ## 参与贡献
 
 1. 按照[快速开始](#快速开始)在本地运行整套服务。
-2. 阅读 [`CLAUDE.md`](CLAUDE.md) 了解代码库依赖的不变式，并在 [`docs/adr/`](docs/adr/README.md) 中查阅过往的设计决策。
+2. 阅读 [`AGENTS.md`](AGENTS.md) 了解仓库指南和不变式，并在 [`docs/adr/`](docs/adr/README.md) 中查阅过往的设计决策。
 3. 提交 Pull Request 前运行 `npm test`（TypeScript 与 Python 测试）和 `make pre-commit-run`。
 4. 行为发生变化时，同步更新 [`docs/`](docs/README.zh-CN.md) 下对应的页面。
 
@@ -140,7 +152,7 @@ devbox/      沙箱内智能体所运行的 BoxLite 客户机镜像
 
 ## 部署
 
-[`docs/deployment.md`](docs/deployment.md) 介绍如何将 Web 界面部署到 Vercel、将后端和 Postgres 部署到 Railway。守护进程不部署在这两个平台上——它们运行在沙箱所在的计算机上，并主动连接后端 URL。
+[`docs/deployment.md`](docs/deployment.md) 介绍如何将 Web 界面部署到 Vercel、将后端和 Postgres 部署到 Railway。将守护进程部署在执行智能体的计算机上，通过出站 HTTP(S) 连接后端。
 
 ## 文档
 
@@ -148,4 +160,4 @@ devbox/      沙箱内智能体所运行的 BoxLite 客户机镜像
 
 ## 许可证
 
-[MIT](LICENSE)
+[AGPL-3.0-only](LICENSE)
