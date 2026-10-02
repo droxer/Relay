@@ -161,3 +161,45 @@ def test_pending_events_expire_after_a_day(world) -> None:
     clock.value += timedelta(hours=25)
     matcher.run()
     assert automations.list_pending_states() == []
+
+
+def test_pending_cap_counts_overflow(world):
+    tasks, automations, matcher, _ = world
+    routine = _automation(tasks, assignedAgentId=None, assignedAgent=None)
+    for index in range(25):
+        _block(tasks, f"burst {index}")
+    assert matcher.run() == 0
+    state = automations.get_state(routine["id"])
+    assert len(state["pending_events"]) == 20
+    assert state["pending_dropped"] == 5
+
+
+def test_failed_firing_rolls_back_outbox_and_pending(world, monkeypatch):
+    tasks, automations, matcher, clock = world
+    routine = _automation(tasks)
+    _block(tasks)
+    original = tasks.create_triggered_occurrence
+    def fail(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("interrupted")
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", fail)
+    with pytest.raises(RuntimeError):
+        matcher.run()
+    assert _occurrences(tasks, routine["id"]) == []
+    assert automations.list_pending_states() == []
+    assert len(automations.claim_outbox(10, clock())) == 2
+
+
+def test_scheduler_tick_fires_automation_through_app(monkeypatch, tmp_path):
+    import asyncio
+    from relay.app import create_app
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "test-admin")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "1")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_INTERVAL_SECONDS", "3600")
+    app = create_app(tmp_path)
+    tasks = app.state.task_store
+    routine = _automation(tasks)
+    _block(tasks)
+    result = asyncio.run(app.state.task_scheduler.tick())
+    assert result.fired == 1
+    assert len(_occurrences(tasks, routine["id"])) == 1
