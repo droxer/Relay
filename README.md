@@ -45,7 +45,7 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-automations.png" alt="Relay automations list">
+      <img src="docs/images/relay-routines.png" alt="Relay automations list">
       <br><strong>Automations</strong><br>Recurring work with its cadence, next run, and assignee.
     </td>
     <td width="50%" valign="top">
