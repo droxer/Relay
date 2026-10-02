@@ -1460,6 +1460,7 @@
     "strip_label": "产物",
     "view": "查看",
     "view_named": "查看 {{title}}",
+    "inline_files": "{{count}} 个文件",
     "open_drawer": "打开对话产物",
     "drawer_title": "产物",
     "drawer_subtitle": "{{count}} 个产物",
