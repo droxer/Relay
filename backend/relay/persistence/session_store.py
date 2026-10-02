@@ -36,6 +36,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from .automation_store import insert_outbox_rows, session_outbox_rows
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     SESSION_WORKSPACE_LAYOUT_THREAD,
@@ -1086,6 +1087,7 @@ class DatabaseSessionStore:
                     )
                 )
             )
+            insert_outbox_rows(conn, session_outbox_rows(session_id, event))
             if event.get("type") == "agent.completed":
                 self._sync_run_token_usage(
                     conn, session_pk, session, str(event.get("runId") or "")

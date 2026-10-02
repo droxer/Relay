@@ -13,6 +13,7 @@ import { RecordBand, type RecordFact } from "../workspace/RecordBand";
 import { recordBandFacts } from "./recordBandFacts";
 import { TaskRecoveryPanel } from "../ExecutionRecoveryPanel";
 import { taskRecoveryReason } from "../../lib/executionRecovery";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordArtifacts } from "./RecordArtifacts";
 import { RecordHistory } from "./RecordHistory";
@@ -42,8 +43,8 @@ import {
  * half the drawer described something the other half could not edit, under a
  * single Save button, at an address that did not exist.
  *
- * Three routes render this component: `/backlog/<id>`, `/routines/<id>`, and
- * `/routines/<id>/runs/<occurrenceId>`. The third works because an occurrence
+ * Three routes render this component: `/backlog/<id>`, `/automations/<id>`, and
+ * `/automations/<id>/runs/<occurrenceId>`. The third works because an occurrence
  * IS a task — the run view is this component under a routine breadcrumb, not
  * a fourth surface.
  *
@@ -67,6 +68,7 @@ export function TaskRecordPage({
   onOpenThread,
   onOpenRun,
   onRun,
+  onReenable,
   onCancel,
   onToggleBlock,
   onDone,
@@ -88,6 +90,7 @@ export function TaskRecordPage({
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
+  onReenable?: () => void;
   onCancel: () => void;
   onToggleBlock: () => void;
   onDone: () => void;
@@ -223,6 +226,14 @@ export function TaskRecordPage({
       <div className="workspace-body">
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
+            {!task.routineEnabled && task.routineDisabledReason === "rate_limited" ? (
+              <div className="record-automation-paused" role="status">
+                <p>{t("automation.rate_limited")}</p>
+                {onReenable && !readOnly && (currentUser.role === "admin" || task.ownerEmployeeId === currentUser.employeeId) ? (
+                  <Button variant="outline" size="sm" disabled={busyAction !== null} onClick={onReenable}>{t("automation.reenable")}</Button>
+                ) : null}
+              </div>
+            ) : null}
             <RecordRuns
               taskId={task.id}
               hrefForRun={(runTaskId) => pathForAppState({

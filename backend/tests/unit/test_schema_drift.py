@@ -361,3 +361,63 @@ def test_postgres_stream_cursor_and_scalability_migration_roundtrip(migrated_sch
     assert store.get_session(session['id'])['events'][0]['id'] == cursor
     command.upgrade(config, 'head')
     assert store.read_event_page(session['id'], after_event_id=cursor)['events'] == []
+
+
+@pytest.mark.parametrize("kind", ["webhook", "manual", "schedule"])
+def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_schema, kind):
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timezone
+    from threading import Event
+    from relay.automations.matcher import AutomationMatcher
+    from relay.persistence.automation_store import DatabaseAutomationStore
+    from relay.persistence.task_store import DatabaseTaskStore
+
+    url, _ = migrated_schema
+    tasks = DatabaseTaskStore(url)
+    sessions = DatabaseSessionStore(url)
+    automations = DatabaseAutomationStore(url)
+    routine = tasks.create_task({"title": "Hook", "isRoutine": True, "routineEnabled": True,
+                                 "assignedAgent": "codex", "routineTrigger": {"kind": kind}})
+    automations.save_state(routine["id"], {**automations.get_state(routine["id"]), "pending": True,
+                                           "pending_events": [{"eventType": "webhook" if kind == "webhook" else "manual", "depth": 0, "payload": {}}],
+                                           "pending_since": datetime.now(timezone.utc)})
+    entered, release = Event(), Event()
+    original = tasks.create_triggered_occurrence
+    def delayed(*args, **kwargs):
+        entered.set()
+        assert release.wait(10)
+        return original(*args, **kwargs)
+    tasks.create_triggered_occurrence = delayed
+    first = AutomationMatcher(task_store=tasks, session_store=sessions, automation_store=automations)
+    second = AutomationMatcher(task_store=DatabaseTaskStore(url), session_store=sessions, automation_store=automations)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        running = executor.submit(first.run)
+        assert entered.wait(10)
+        try:
+            second_result = second.run()
+        finally:
+            release.set()
+        first_result = running.result(timeout=10)
+    assert first_result + second_result == 1
+    assert len(tasks.get_task(routine["id"])["occurrenceIds"]) == 1
+    assert automations.get_state(routine["id"])["fired_count"] == 1
+
+
+def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeypatch):
+    from relay.persistence.task_store import DatabaseTaskStore
+    url, _ = migrated_schema
+    tasks = DatabaseTaskStore(url)
+    routine = tasks.create_task({"title": "Legacy routine", "isRoutine": True, "routineEnabled": True,
+                                 "routineCadence": "weekly", "routineNextRunDate": "2026-10-09"})
+    monkeypatch.setenv("RELAY_DATABASE_URL", url)
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    command.downgrade(config, "20260924_0080")
+    command.upgrade(config, "head")
+    with tasks.engine.connect() as conn:
+        kind = conn.scalar(text("SELECT routine_trigger_kind FROM tasks WHERE id = :id"), {"id": routine["id"]})
+    assert kind == "schedule"
+    restored = tasks.get_task(routine["id"])
+    assert restored["routineNextRunDate"] == "2026-10-09"
+    assert "routineTrigger" not in restored
+    assert restored["events"] == routine["events"]

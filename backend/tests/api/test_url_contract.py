@@ -148,6 +148,8 @@ def test_spa_fallback_is_allowlisted_and_never_masks_api_typos(
     for path in (
         "/agents",
         "/agents/agent_123",
+        "/automations",
+        "/automations/R-1",
         "/computer",
         "/projects",
         "/projects/project_123",

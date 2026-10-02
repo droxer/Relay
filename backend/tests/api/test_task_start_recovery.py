@@ -139,7 +139,13 @@ def test_explicit_start_retries_blocked_dispatch_without_automatic_retry(setup, 
     assert retried.status_code == 202, retried.text
     result = retried.json()
     assert result["dispatch"]["state"] == "started", result
-    assert result["task"]["id"] == failed_id
+    if scope == "routine":
+        # Run now is a fresh capped firing once an occurrence is parked in
+        # blocked; failed history remains on the previous ledger row.
+        assert result["task"]["id"] != failed_id
+        assert result["task"]["routineTriggerKind"] == "manual"
+    else:
+        assert result["task"]["id"] == failed_id
     assert not result["task"].get("blockerReason")
     again = client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).json()
     assert again["dispatch"]["code"] == (

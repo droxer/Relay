@@ -1,5 +1,7 @@
 "use client";
 
+import { triggerOf } from "../../lib/automationTrigger";
+
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -265,9 +267,11 @@ export function RoutineTable({
       {
         id: "nextRun",
         meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
-        header: () => <RoutineCells.Read>{(s) => sortHead("nextRun", s.t("routine.next_run"))}</RoutineCells.Read>,
+        header: () => <RoutineCells.Read>{(s) => sortHead("nextRun", s.t("automation.trigger"))}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
+          const kind = triggerOf(task).kind;
+          if (kind !== "schedule") return <span className="task-trigger-label">{s.t(`automation.kinds.${kind}`)}</span>;
           return (
             <TaskDueCell
               date={task.routineNextRunDate}

@@ -40,8 +40,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from ..automations.trigger import trigger_kind
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
+from .automation_store import insert_outbox_rows, task_outbox_rows
 from .protocols import TaskDispatchAssignment
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
@@ -213,10 +215,13 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "sourceRoutineId",
         "scheduledFor",
         "collaborationStyle",
+        "routineTrigger",
+        "routineTriggerKind",
+        "routineTriggerSummary",
     ):
         if payload.get(field):
             created_payload[field] = payload[field]
-    for field in ("isRoutine", "routineEnabled"):
+    for field in ("isRoutine", "routineEnabled", "routineTriggerDepth"):
         if field in payload:
             created_payload[field] = payload[field]
 
@@ -311,6 +316,8 @@ def task_update_events(
             "routineEnabled",
             "acceptancePolicy",
             "collaborationStyle",
+            "routineTrigger",
+            "routineDisabledReason",
         )
     }
     for field in ("expectedStatus", "expectedExecutionRevision"):
@@ -763,7 +770,7 @@ class LocalTaskStore:
                 return existing
             agent = routine.get("assignedAgent") or agent_override
             occurrence_events = routine_occurrence_events(
-                routine, agent, scheduled_for=scheduled_for
+                routine, agent, scheduled_for=scheduled_for, fired_by="manual"
             )
             occurrence = materialize_task_events(occurrence_events)
             self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
@@ -784,6 +791,60 @@ class LocalTaskStore:
             updated = materialize_task_events([*routine.get("events", []), event])
             _write_json(self._snapshot_path(routine_id), updated)
             return occurrence
+
+    def create_triggered_occurrence(
+        self,
+        routine_id: str,
+        *,
+        run_date: str,
+        trigger_kind: str,
+        depth: int,
+        context: str,
+        summary: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            try:
+                routine = self.get_task(routine_id)
+            except KeyError:
+                return None
+            if not triggered_occurrence_allowed(routine):
+                return None
+            occurrence_events = routine_occurrence_events(
+                routine,
+                routine.get("assignedAgent"),
+                scheduled_for=run_date,
+                trigger={"kind": trigger_kind, "depth": depth, "context": context, "summary": summary},
+            )
+            occurrence = materialize_task_events(occurrence_events)
+            self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
+            self._events_path(occurrence["id"]).write_text(
+                "".join(
+                    json.dumps(item, separators=(",", ":")) + "\n"
+                    for item in occurrence_events
+                ),
+                encoding="utf-8",
+            )
+            _write_json(self._snapshot_path(occurrence["id"]), occurrence)
+            routine_events = triggered_occurrence_routine_events(
+                routine_id, occurrence["id"], run_date, trigger_kind
+            )
+            for event in routine_events:
+                _append_jsonl(self._events_path(routine_id), event)
+            updated = materialize_task_events(
+                [*routine.get("events", []), *routine_events]
+            )
+            _write_json(self._snapshot_path(routine_id), updated)
+            return occurrence
+
+    def list_trigger_automations(self) -> list[dict[str, Any]]:
+        return [
+            task
+            for task in self.list_tasks()
+            if task.get("isRoutine")
+            and task.get("routineEnabled")
+            and not task.get("deletedAt")
+            and trigger_kind(task) in TRIGGERED_KINDS
+        ]
 
     def assign_task(
         self, task_id: str, agent: AgentName, agent_id: str | None = None
@@ -936,6 +997,7 @@ class DatabaseTaskStore:
         Column("routine_cadence", Text, nullable=True),
         Column("routine_next_run_date", Date, nullable=True),
         Column("routine_enabled", Boolean, nullable=False, default=False),
+        Column("routine_trigger_kind", Text, nullable=True),
         Column("dispatch_failure_count", Integer, nullable=False, default=0),
         Column("dispatch_next_attempt_at", DateTime(timezone=True), nullable=True),
         Column("snapshot", json_type(), nullable=False),
@@ -958,6 +1020,7 @@ class DatabaseTaskStore:
         Index("ix_tasks_is_routine", "is_routine"),
         Index("ix_tasks_routine_next_run_date", "routine_next_run_date"),
         Index("ix_tasks_routine_enabled", "routine_enabled"),
+        Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
         Index(
             "ix_tasks_dispatch_eligibility",
             "status",
@@ -1062,6 +1125,7 @@ class DatabaseTaskStore:
                         **task_event_to_row(task_row["id"], sequence, event)
                     )
                 )
+            insert_outbox_rows(conn, task_outbox_rows(None, task))
         return task
 
     def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1224,6 +1288,7 @@ class DatabaseTaskStore:
                         .where(self.task_sessions.c.task_id == task_pk)
                         .where(self.task_sessions.c.session_id == event["sessionId"])
                     )
+            insert_outbox_rows(conn, task_outbox_rows(current, task))
         logger.debug(
             "Database task events appended",
             task_id=task_id,
@@ -1851,7 +1916,7 @@ class DatabaseTaskStore:
 
             agent = routine.get("assignedAgent") or agent_override
             occurrence_events = routine_occurrence_events(
-                routine, agent, scheduled_for=scheduled_for
+                routine, agent, scheduled_for=scheduled_for, fired_by="manual"
             )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
@@ -1890,6 +1955,88 @@ class DatabaseTaskStore:
                 )
             )
         return occurrence
+
+    def create_triggered_occurrence(
+        self,
+        routine_id: str,
+        *,
+        run_date: str,
+        trigger_kind: str,
+        depth: int,
+        context: str,
+        summary: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        with store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    select(self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version)
+                    .where(self.tasks.c.id == routine_id)
+                    .with_for_update()
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                return None
+            routine = self._current_snapshot(conn, row)
+            if not triggered_occurrence_allowed(routine):
+                return None
+            occurrence_events = routine_occurrence_events(
+                routine,
+                routine.get("assignedAgent"),
+                scheduled_for=run_date,
+                trigger={"kind": trigger_kind, "depth": depth, "context": context, "summary": summary},
+            )
+            occurrence = materialize_task_events(occurrence_events)
+            occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
+            conn.execute(insert(self.tasks).values(**occurrence_row))
+            for sequence, occurrence_event in enumerate(occurrence_events):
+                conn.execute(
+                    insert(self.events).values(
+                        **task_event_to_row(
+                            occurrence_row["id"], sequence, occurrence_event
+                        )
+                    )
+                )
+            routine_events = triggered_occurrence_routine_events(
+                routine_id, occurrence["id"], run_date, trigger_kind
+            )
+            task_pk = row["id"]
+            sequence = int(row["version"] or 0)
+            for offset, event in enumerate(routine_events):
+                conn.execute(
+                    insert(self.events).values(
+                        **task_event_to_row(task_pk, sequence + offset, event)
+                    )
+                )
+            updated = apply_task_events(routine, routine_events, version=sequence)
+            conn.execute(
+                update(self.tasks)
+                .where(self.tasks.c.id == task_pk)
+                .values(
+                    **task_to_row(
+                        updated,
+                        version=sequence + len(routine_events),
+                        database_id=task_pk,
+                    )
+                )
+            )
+        return occurrence
+
+    def list_trigger_automations(self) -> list[dict[str, Any]]:
+        with store_transaction(self.engine) as conn:
+            rows = (
+                conn.execute(
+                    select(self.tasks.c.snapshot)
+                    .where(self.tasks.c.is_routine.is_(True))
+                    .where(self.tasks.c.routine_enabled.is_(True))
+                    .where(self.tasks.c.routine_trigger_kind.in_(TRIGGERED_KINDS))
+                    .order_by(self.tasks.c.created_at.asc())
+                )
+                .mappings()
+                .all()
+            )
+        return [row["snapshot"] for row in rows if not row["snapshot"].get("deletedAt")]
 
     def assign_task(
         self, task_id: str, agent: AgentName, agent_id: str | None = None
@@ -2093,6 +2240,7 @@ def task_to_row(
         "routine_cadence": task.get("routineCadence"),
         "routine_next_run_date": _parse_date(task.get("routineNextRunDate")),
         "routine_enabled": bool(task.get("routineEnabled")),
+        "routine_trigger_kind": trigger_kind(task) if task.get("isRoutine") else None,
         "dispatch_failure_count": int(
             (task.get("dispatchRetry") or {}).get("failureCount") or 0
         ),
@@ -2157,6 +2305,8 @@ def _due_date_missing_expression() -> Any:
 
 
 def routine_due_for_promotion(routine: dict[str, Any], today: str) -> bool:
+    if trigger_kind(routine) != "schedule":
+        return False
     next_run = routine.get("routineNextRunDate")
     if (
         not routine.get("isRoutine")
@@ -2175,21 +2325,39 @@ def routine_occurrence_events(
     agent: AgentName | None,
     *,
     scheduled_for: str | None = None,
+    trigger: dict[str, Any] | None = None,
+    fired_by: str = "schedule",
 ) -> list[dict[str, Any]]:
     occurrence_date = scheduled_for or routine["routineNextRunDate"]
     occurrence_id = new_database_id()
+    description = routine.get("description", "")
+    if trigger:
+        description = (
+            f"{description}\n\n{trigger['context']}"
+            if description
+            else trigger["context"]
+        )
     events = [
         relay_task_event(
             "task.created",
             occurrence_id,
             {
                 "title": routine["title"],
-                "description": routine.get("description", ""),
+                "description": description,
                 "priority": routine.get("priority", "normal"),
                 "acceptancePolicy": routine.get("acceptancePolicy", "automatic"),
                 "dueDate": occurrence_date,
                 "sourceRoutineId": routine["id"],
                 "scheduledFor": occurrence_date,
+                **(
+                    {
+                        "routineTriggerKind": trigger["kind"],
+                        "routineTriggerDepth": trigger["depth"],
+                        **({"routineTriggerSummary": trigger["summary"]} if trigger.get("summary") else {}),
+                    }
+                    if trigger
+                    else {"routineTriggerKind": fired_by, "routineTriggerDepth": 0}
+                ),
                 **(
                     {"collaborationStyle": routine["collaborationStyle"]}
                     if routine.get("collaborationStyle")
@@ -2237,6 +2405,49 @@ def routine_occurrence_events(
         relay_task_event("task.status", occurrence_id, {"status": "assigned"})
     )
     return events
+
+
+TRIGGERED_KINDS = ("task_event", "run_event", "webhook")
+
+
+def triggered_occurrence_routine_events(
+    routine_id: str, occurrence_id: str, scheduled_for: str, kind: str
+) -> list[dict[str, Any]]:
+    return [
+        relay_task_event(
+            "task.occurrence_created",
+            routine_id,
+            {
+                "occurrenceId": occurrence_id,
+                "scheduledFor": scheduled_for,
+                "triggerKind": kind,
+            },
+        ),
+        relay_task_event(
+            "task.activity",
+            routine_id,
+            {
+                "activity": {
+                    "id": new_relay_id("act"),
+                    "createdAt": now_iso(),
+                    "message": f"Automation fired by {kind}: {occurrence_id}.",
+                }
+            },
+        ),
+    ]
+
+
+def triggered_occurrence_allowed(routine: dict[str, Any]) -> bool:
+    return bool(
+        routine.get("isRoutine")
+        and routine.get("routineEnabled")
+        and not routine.get("deletedAt")
+        and (
+            routine.get("assignedAgent")
+            or routine.get("assignedTeamId")
+            or routine.get("projectId")
+        )
+    )
 
 
 def _open_routine_occurrence(

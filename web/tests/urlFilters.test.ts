@@ -61,13 +61,13 @@ describe("canonical filter params", () => {
   it("keeps the routines' own filter params", () => {
     assert.equal(
       canonicalBrowserUrl("/routines", "?type=job&state=overdue&cadence=daily"),
-      "/routines?type=job&cadence=daily&state=overdue",
+      "/automations?type=job&cadence=daily&state=overdue",
     );
   });
 
   it("drops enum values the filter cannot take", () => {
     assert.equal(canonicalBrowserUrl("/backlog", "?status=bogus&due=overdue"), "/backlog?due=overdue");
-    assert.equal(canonicalBrowserUrl("/routines", "?state=enabled"), "/routines");
+    assert.equal(canonicalBrowserUrl("/routines", "?state=enabled"), "/automations");
   });
 
   it("drops filter params on paths that do not own them", () => {

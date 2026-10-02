@@ -11,6 +11,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
+import { normalizeTriggerForSave, triggerError, triggerOf } from "../lib/automationTrigger";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -48,9 +49,9 @@ import { taskRef } from "../lib/taskRef";
 
 interface RoutinesPageProps {
   projects?: ProjectRecord[];
-  /** The routine whose record is open, from `/routines/<id>`. */
+  /** The routine whose record is open, from `/automations/<id>`. */
   recordTaskId?: string | null;
-  /** The occurrence open as a run, from `/routines/<id>/runs/<runId>`. */
+  /** The occurrence open as a run, from `/automations/<id>/runs/<runId>`. */
   recordRunId?: string | null;
   /** Opens a record; `null` returns to the board. */
   onOpenRecord: (routineId: string | null, runId?: string | null) => void;
@@ -174,12 +175,15 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       routineCadence: task.routineCadence ?? "weekly",
       routineNextRunDate: task.routineNextRunDate ?? "",
       routineEnabled: task.routineEnabled,
+      routineTrigger: triggerOf(task),
+      routineDisabledReason: task.routineDisabledReason,
     });
   }
 
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
+    if (triggerError(form.routineTrigger)) return;
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
@@ -190,9 +194,10 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         priority: form.priority,
         isRoutine: true,
         routineType: form.routineType,
-        routineCadence: form.routineCadence,
+        routineTrigger: normalizeTriggerForSave(form.routineTrigger),
+        ...(form.routineTrigger.kind === "schedule" ? { routineCadence: form.routineCadence } : {}),
         routineEnabled: form.routineEnabled,
-        ...(form.routineCadence === "custom"
+        ...(form.routineTrigger.kind === "schedule" && form.routineCadence === "custom"
           ? { routineNextRunDate: form.routineNextRunDate }
           : {}),
         ...taskAssignmentMutationFields(form),

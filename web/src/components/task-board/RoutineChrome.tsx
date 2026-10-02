@@ -14,6 +14,7 @@ import {
   TASK_ROUTINE_TYPES,
   type RoutineFilters,
 } from "../../lib/routine";
+import { TRIGGER_KINDS } from "../../lib/automationTrigger";
 import type { FilterSpec } from "../../lib/urlFilters";
 import type { EmployeeAgent } from "../../types";
 
@@ -28,6 +29,7 @@ import type { EmployeeAgent } from "../../types";
    spending a band of the surface to restate them. */
 
 export const initialRoutineFilters: RoutineFilters = {
+  trigger: "all",
   query: "",
   type: "all",
   cadence: "all",
@@ -40,6 +42,7 @@ export const initialRoutineFilters: RoutineFilters = {
    LIST_FILTER_PARAMS.routines in lib/appRoute.ts, which decides which of
    these survive canonicalization. */
 export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
+  trigger: { param: "trigger", allowed: TRIGGER_KINDS },
   query: { param: "q" },
   type: { param: "type", allowed: TASK_ROUTINE_TYPES },
   cadence: { param: "cadence", allowed: TASK_ROUTINE_CADENCES },
@@ -50,6 +53,7 @@ export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
 
 export function activeRoutineFilterCount(filters: RoutineFilters): number {
   let count = 0;
+  if (filters.trigger !== "all") count += 1;
   if (filters.type !== "all") count += 1;
   if (filters.cadence !== "all") count += 1;
   if (filters.agent !== "all") count += 1;
@@ -72,11 +76,13 @@ export function formatNextRunDate(value: string): string {
   }).format(date);
 }
 
-const ROUTINE_BAR_KEYS = ["type", "cadence", "agent", "assignee"] as const;
+const ROUTINE_BAR_KEYS = ["trigger", "type", "cadence", "agent", "assignee"] as const;
 
 export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: EmployeeAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
   const fields = useMemo<FilterBarField[]>(() => [
+    { id: "trigger", label: t("automation.trigger"), kind: "select",
+      options: TRIGGER_KINDS.map((kind) => ({ value: kind, label: t(`automation.kinds.${kind}`) })) },
     { id: "type", label: t("routine.type"), kind: "select",
       options: TASK_ROUTINE_TYPES.map((type) => ({ value: type, label: t(`routine.types.${type}`) })) },
     { id: "cadence", label: t("routine.cadence"), kind: "select",

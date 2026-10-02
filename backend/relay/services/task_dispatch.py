@@ -824,7 +824,7 @@ def _prepare_routine_occurrence(ctx: TaskDispatchContext, routine: dict[str, Any
         occurrence.get("status") == "assigned"
         and occurrence.get("linkedSessionIds")
     ):
-        existing = _existing_occurrence_result(ctx, routine, occurrence)
+        existing = existing_routine_occurrence_result(ctx, routine, occurrence)
         if existing:
             return existing
         if occurrence.get("status") in {"running", "review"}:
@@ -850,7 +850,7 @@ def _create_manual_occurrence(
     )
 
 
-def _existing_occurrence_result(
+def existing_routine_occurrence_result(
     ctx: TaskDispatchContext,
     routine: dict[str, Any],
     occurrence: dict[str, Any],

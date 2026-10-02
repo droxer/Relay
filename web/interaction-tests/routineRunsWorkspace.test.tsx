@@ -21,7 +21,7 @@ function renderRuns(onOpenRun = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <RecordRuns taskId="routine-1" hrefForRun={(id) => `/routines/routine-1/runs/${id}`} onOpenRun={onOpenRun} />
+      <RecordRuns taskId="routine-1" hrefForRun={(id) => `/automations/routine-1/runs/${id}`} onOpenRun={onOpenRun} />
     </QueryClientProvider>,
   );
   return onOpenRun;
@@ -42,7 +42,7 @@ it("still opens a run's own record from its row", async () => {
   const onOpenRun = renderRuns();
   await screen.findByTestId("run-workspace");
   const open = screen.getAllByRole("link");
-  expect(open[1]!.getAttribute("href")).toBe("/routines/routine-1/runs/run-old");
+  expect(open[1]!.getAttribute("href")).toBe("/automations/routine-1/runs/run-old");
   fireEvent.click(open[1]!);
   expect(onOpenRun).toHaveBeenCalledWith("run-old");
   // Selecting is not navigating.

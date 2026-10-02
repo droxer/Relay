@@ -12,6 +12,7 @@ from ..chat import integrations as _chat_integrations  # noqa: F401
 from ..security import device_authorization as _device_authorization  # noqa: F401
 from ..security import auth as _auth  # noqa: F401
 from . import agent_placement_store as _agent_placement_store  # noqa: F401
+from . import automation_store as _automation_store  # noqa: F401
 from . import agent_store as _agent_store  # noqa: F401
 from . import daemon_store as _daemon_store  # noqa: F401
 from . import org_settings_store as _org_settings_store  # noqa: F401

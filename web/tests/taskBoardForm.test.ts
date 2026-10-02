@@ -144,6 +144,12 @@ describe("appRoute path parsing", () => {
       mobileView: "chat",
       sessionId: "sess-1",
     });
-    assert.equal(pathForAppState({ route: "routine", mobileView: "chat", sessionId: null }), "/routines");
+    assert.equal(pathForAppState({ route: "routine", mobileView: "chat", sessionId: null }), "/automations");
   });
+});
+
+it("defaults to schedule and detects changed triggers", () => {
+  const form = emptyRoutineForm({ id: "u", username: "u", role: "user" });
+  assert.deepEqual(form.routineTrigger, { kind: "schedule" });
+  assert.equal(taskBoardFormsEqual(form, { ...form, routineTrigger: { kind: "webhook" } }), false);
 });

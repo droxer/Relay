@@ -16,6 +16,7 @@ export const ROUTINE_STATE_SHAPE: Record<RoutineState, StateShape> = {
   overdue: "ring",
   due: "solid",
   scheduled: "solid",
+  listening: "solid",
   unscheduled: "dashed",
   paused: "muted",
 };

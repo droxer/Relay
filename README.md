@@ -11,7 +11,7 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Relay helps employees work with AI agents across threads, issues, routines, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
+Relay helps employees work with AI agents across threads, issues, automations, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
 
 Relay uses a local-first architecture: the backend coordinates work, and daemons execute it on employee or managed computers. Each daemon runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, or Kimi in a workspace on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
 
@@ -23,7 +23,7 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 
 - **Threads** — Work with an agent, a team, or a project on the computer you choose. Follow streamed reasoning, commands, and tool calls. Stop, retry, or hand off work as needed.
 - **Issues** — Assign work to an agent or team, set priorities and due dates, and track it from backlog to done. Keep run history and output files with each issue.
-- **Routines** — Schedule recurring work daily, weekly, or monthly; Relay dispatches each run to its assignee.
+- **Automations** — Schedule recurring work daily, weekly, or monthly; Relay dispatches each run to its assignee.
 - **Projects** — Bring a shared workspace and a roster of agents together on one computer.
 - **Agents and teams** — Give each agent a runtime, role, personality, and skills. Group agents into teams that work Solo, Build → Review, Pipeline, or Lead-led.
 - **Skills** — Publish versioned skill bundles and grant them to agents from a shared library.
@@ -45,8 +45,8 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-routines.png" alt="Relay routines list">
-      <br><strong>Routines</strong><br>Recurring work with its cadence, next run, and assignee.
+      <img src="docs/images/relay-routines.png" alt="Relay automations list">
+      <br><strong>Automations</strong><br>Recurring work with its cadence, next run, and assignee.
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/relay-agents.png" alt="Relay agent profile">
