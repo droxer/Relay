@@ -15,8 +15,8 @@ beforeEach(() => { vi.mocked(createLocalDeviceEnrollment).mockReset(); });
 
 it("explains installation before generating a command", () => {
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a node token" }));
-  expect(screen.getByRole("button", { name: "Get install command" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
+  expect(screen.getByRole("button", { name: "Generate install command" })).toBeTruthy();
   expect(screen.getByText(/No Git or npm required/)).toBeTruthy();
 });
 
@@ -27,12 +27,12 @@ it("guides command and token steps without claiming registration means connected
     daemonCommand: "old-daemon-command",
   } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>);
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a node token" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
   fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "/Users/alice/project" } });
   fireEvent.submit(document.querySelector("form")!);
   await waitFor(() => expect(screen.getByText(/curl -fsSL/)).toBeTruthy());
   expect(screen.getByRole("heading", { name: "Run the install command" })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Paste your node token" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Enter your computer token" })).toBeTruthy();
   expect(screen.getByRole("status").textContent).toContain("Waiting for connection");
   expect(screen.queryByText(/already connected/)).toBeNull();
   expect(screen.queryByText("old-daemon-command")).toBeNull();
@@ -52,14 +52,14 @@ it("only reports connected after a fresh online status and copies the installer 
   vi.mocked(createLocalDeviceEnrollment).mockResolvedValue(response);
   const props = { open: true, onClose: vi.fn(), onConnected: vi.fn() };
   const view = render(<ConnectComputerDrawer {...props} />);
-  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a node token" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
   fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "/tmp/project" } });
   fireEvent.submit(document.querySelector("form")!);
   await screen.findByRole("heading", { name: "Run the install command" });
   expect(screen.getByRole("status").textContent).toContain("Waiting for connection");
   fireEvent.click(within(screen.getByRole("region", { name: "Run the install command" })).getByRole("button"));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith(response.installCommand));
-  fireEvent.click(within(screen.getByRole("region", { name: "Paste your node token" })).getByRole("button"));
+  fireEvent.click(within(screen.getByRole("region", { name: "Enter your computer token" })).getByRole("button"));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith("fixture-token"));
   view.rerender(<ConnectComputerDrawer {...props} nodes={[{ ...response.node, online: true, stale: false }]} />);
   expect(screen.getByRole("status").textContent).toContain("Computer connected");
@@ -69,7 +69,7 @@ it("only reports connected after a fresh online status and copies the installer 
 
 it("rejects unsupported Windows paths before registering a computer", () => {
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a node token" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
   fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "C:\\Users\\alice" } });
   fireEvent.submit(document.querySelector("form")!);
   expect(createLocalDeviceEnrollment).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ it("explains when an older backend only returns a manual command", async () => {
     node: { id: "computer-1" }, daemonEnv: {}, daemonCommand: "relay-daemon --sandbox none",
   } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>);
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a node token" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
   fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "/tmp/project" } });
   fireEvent.submit(document.querySelector("form")!);
   expect(await screen.findByText(en.computer.connect_legacy_hint)).toBeTruthy();
