@@ -575,6 +575,10 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["sourceRoutineId"] = created["sourceRoutineId"]
     if created.get("scheduledFor"):
         task["scheduledFor"] = created["scheduledFor"]
+    if created.get("routineTriggerKind"):
+        task["routineTriggerKind"] = created["routineTriggerKind"]
+    if "routineTriggerDepth" in created:
+        task["routineTriggerDepth"] = int(created["routineTriggerDepth"] or 0)
     if created.get("collaborationStyle"):
         task["collaborationStyle"] = created["collaborationStyle"]
     _apply_task_routine_fields(task, created)
@@ -767,11 +771,22 @@ def _apply_task_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> N
             task.pop("routineType", None)
             task.pop("routineCadence", None)
             task.pop("routineNextRunDate", None)
+            task.pop("routineTrigger", None)
+            task.pop("routineDisabledReason", None)
             return
     if not task.get("isRoutine"):
         return
     if "routineEnabled" in event and event["routineEnabled"] is not None:
         task["routineEnabled"] = bool(event["routineEnabled"])
+    if event.get("routineEnabled") is True:
+        task.pop("routineDisabledReason", None)
+    if "routineDisabledReason" in event and event["routineDisabledReason"] is not None:
+        if event["routineDisabledReason"]:
+            task["routineDisabledReason"] = event["routineDisabledReason"]
+        else:
+            task.pop("routineDisabledReason", None)
+    if isinstance(event.get("routineTrigger"), dict):
+        task["routineTrigger"] = dict(event["routineTrigger"])
     if "routineType" in event and event["routineType"] is not None:
         task["routineType"] = event["routineType"]
     if "routineCadence" in event and event["routineCadence"] is not None:

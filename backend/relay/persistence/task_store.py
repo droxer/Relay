@@ -40,6 +40,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from ..automations.trigger import trigger_kind
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
 from .protocols import TaskDispatchAssignment
@@ -213,10 +214,12 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "sourceRoutineId",
         "scheduledFor",
         "collaborationStyle",
+        "routineTrigger",
+        "routineTriggerKind",
     ):
         if payload.get(field):
             created_payload[field] = payload[field]
-    for field in ("isRoutine", "routineEnabled"):
+    for field in ("isRoutine", "routineEnabled", "routineTriggerDepth"):
         if field in payload:
             created_payload[field] = payload[field]
 
@@ -311,6 +314,8 @@ def task_update_events(
             "routineEnabled",
             "acceptancePolicy",
             "collaborationStyle",
+            "routineTrigger",
+            "routineDisabledReason",
         )
     }
     for field in ("expectedStatus", "expectedExecutionRevision"):
@@ -936,6 +941,7 @@ class DatabaseTaskStore:
         Column("routine_cadence", Text, nullable=True),
         Column("routine_next_run_date", Date, nullable=True),
         Column("routine_enabled", Boolean, nullable=False, default=False),
+Column("routine_trigger_kind", Text, nullable=True),
         Column("dispatch_failure_count", Integer, nullable=False, default=0),
         Column("dispatch_next_attempt_at", DateTime(timezone=True), nullable=True),
         Column("snapshot", json_type(), nullable=False),
@@ -958,6 +964,7 @@ class DatabaseTaskStore:
         Index("ix_tasks_is_routine", "is_routine"),
         Index("ix_tasks_routine_next_run_date", "routine_next_run_date"),
         Index("ix_tasks_routine_enabled", "routine_enabled"),
+Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
         Index(
             "ix_tasks_dispatch_eligibility",
             "status",
@@ -2093,6 +2100,7 @@ def task_to_row(
         "routine_cadence": task.get("routineCadence"),
         "routine_next_run_date": _parse_date(task.get("routineNextRunDate")),
         "routine_enabled": bool(task.get("routineEnabled")),
+        "routine_trigger_kind": trigger_kind(task) if task.get("isRoutine") else None,
         "dispatch_failure_count": int(
             (task.get("dispatchRetry") or {}).get("failureCount") or 0
         ),
@@ -2157,6 +2165,8 @@ def _due_date_missing_expression() -> Any:
 
 
 def routine_due_for_promotion(routine: dict[str, Any], today: str) -> bool:
+    if trigger_kind(routine) != "schedule":
+        return False
     next_run = routine.get("routineNextRunDate")
     if (
         not routine.get("isRoutine")

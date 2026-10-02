@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
+from ..automations.trigger import TriggerError, normalize_trigger, trigger_kind, trigger_of
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
 from ..persistence.stores import (
@@ -255,6 +256,7 @@ def routine_fields(
             "routineCadence",
             "routineNextRunDate",
             "routineEnabled",
+            "routineTrigger",
         )
     )
     if not has_routine_input:
@@ -275,6 +277,16 @@ def routine_fields(
         raise HTTPException(
             400, "routineCadence must be one of: daily, weekly, monthly, custom."
         )
+    trigger = None
+    if "routineTrigger" in body:
+        try:
+            trigger = normalize_trigger(body["routineTrigger"])
+        except TriggerError as error:
+            raise HTTPException(400, str(error)) from error
+    scheduled = (trigger or trigger_of(current or {}))["kind"] == "schedule"
+    became_scheduled = bool(
+        current and trigger and scheduled and trigger_kind(current) != "schedule"
+    )
     has_next_run_input = "routineNextRunDate" in body
     next_run = date_field(body, "routineNextRunDate") if has_next_run_input else None
     next_is_routine = bool(
@@ -298,9 +310,13 @@ def routine_fields(
     reenabled = bool(current and enabled is True and not current.get("routineEnabled"))
     if (
         next_is_routine
+        and scheduled
         and resolved_cadence != "custom"
         and (
-            (current is None and not has_next_run_input) or cadence_changed or reenabled
+            (current is None and not has_next_run_input)
+            or cadence_changed
+            or reenabled
+            or became_scheduled
         )
     ):
         today = calendar_date or datetime.now(timezone.utc).date()
@@ -311,8 +327,12 @@ def routine_fields(
         if has_next_run_input or next_run is not None
         else (current or {}).get("routineNextRunDate")
     )
+    if not scheduled:
+        next_run = ""
+        effective_next_run = ""
     if (
         next_is_routine
+        and scheduled
         and next_enabled
         and resolved_cadence == "custom"
         and not effective_next_run
@@ -326,7 +346,27 @@ def routine_fields(
         "routineCadence": resolved_cadence,
         "routineNextRunDate": next_run,
         "routineEnabled": next_enabled,
+        **({"routineTrigger": trigger} if trigger else {}),
     }
+
+
+def validate_trigger_scope(ctx: AppContext, trigger: dict[str, Any] | None) -> None:
+    """A filter that names a record must name one that exists."""
+    filters = (trigger or {}).get("filters") or {}
+    lookups = (
+        ("projectId", ctx.project_store.get_project),
+        ("assignedAgentId", ctx.agent_store.get_agent),
+        ("assignedTeamId", ctx.team_store.get_team),
+    )
+    for key, lookup in lookups:
+        if key not in filters:
+            continue
+        try:
+            found = lookup(filters[key])
+        except KeyError:
+            found = None
+        if not found:
+            raise HTTPException(400, f"routineTrigger filters.{key} does not exist.")
 
 
 async def start_routine_occurrence_on_ready_node(
@@ -476,6 +516,7 @@ def create_task(
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
     routine = routine_fields(body, calendar_date=ctx.today())
+    validate_trigger_scope(ctx, routine.get("routineTrigger"))
     creates_thread = body.get("createSession") is True or isinstance(
         body.get("assignments"), list
     )
@@ -623,6 +664,7 @@ def update_task(
         raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
     due_date = date_field(body, "dueDate")
     routine = routine_fields(body, current=current, calendar_date=ctx.today())
+    validate_trigger_scope(ctx, routine.get("routineTrigger"))
     assignee = (
         assignee_employee_id_for_task(actor, body, current.get("assigneeEmployeeId"))
         if "assigneeEmployeeId" in body or "assignee_employee_id" in body
