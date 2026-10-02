@@ -128,3 +128,37 @@ def test_reenable_rate_limited_automation_starts_a_fresh_window(monkeypatch) -> 
         client.post(path + "/runs", json={})
         assert store.get_task(routine["id"])["routineEnabled"]
         assert len(store.get_task(routine["id"])["occurrenceIds"]) == 2
+
+
+def test_scope_team_and_agent_filters_use_owner_not_admin_access(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        foreign = _create_agent(client, "bob")
+        team = client.app.state.team_store.create_team("bob", {
+            "name": "Bob team", "leadAgentId": foreign["id"], "memberAgentIds": [foreign["id"]],
+        })
+        routine = _routine(client, agent, routineTrigger=ON_BLOCKED)
+        for filters in ({"assignedAgentId": foreign["id"]}, {"assignedTeamId": team["id"]}):
+            response = client.patch(f"/api/v1/tasks/{routine['id']}", json={
+                "routineTrigger": {"kind": "task_event", "on": "created", "filters": filters},
+            })
+            assert response.status_code == 403
+
+
+def test_project_and_team_filters_require_same_computer(monkeypatch) -> None:
+    from issue_projects import project_for_agents
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        project = project_for_agents(client.app.state.project_store, "alice", [agent])
+        # The agent has no placement on the project's computer. Project/task
+        # admission must also be applied to scoped trigger teams.
+        team = client.app.state.team_store.create_team("alice", {
+            "name": "Unplaced team", "leadAgentId": agent["id"], "memberAgentIds": [agent["id"]],
+        })
+        routine = _routine(client, agent, routineTrigger=ON_BLOCKED)
+        response = client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTrigger": {
+            "kind": "task_event", "on": "created", "filters": {"projectId": project["id"], "assignedTeamId": team["id"]},
+        }})
+        assert response.status_code == 400
+        assert response.json()["detail"] == "project_team_off_computer"

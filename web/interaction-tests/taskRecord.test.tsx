@@ -195,3 +195,15 @@ it("offers a direct re-enable action after the rate cap pauses an automation", a
   await userEvent.setup().click(screen.getByRole("button", { name: "automation.reenable" }));
   await waitFor(() => expect(updateTask).toHaveBeenCalledWith({ taskId: "R-42", input: { routineEnabled: true } }));
 });
+
+
+it.each([
+  ["task.created", "task_event", "task_created"],
+  ["run.completed", "run_event", "run_completed"],
+  ["run.failed", "run_event", "run_failed"],
+])("names the specific %s event in the ledger", async (eventType, triggerKind, label) => {
+  listTaskRuns.mockResolvedValue({ taskId: "R-42", runs: [{ ...RUNS[0], triggerKind,
+    triggerSummary: { eventType, eventCount: 1 } }] });
+  renderRecord();
+  expect(await screen.findByText(`automation.ledger.${label}`)).toBeTruthy();
+});
