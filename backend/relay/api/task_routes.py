@@ -350,8 +350,10 @@ def routine_fields(
     }
 
 
-def validate_trigger_scope(ctx: AppContext, trigger: dict[str, Any] | None) -> None:
-    """A filter that names a record must name one that exists."""
+def validate_trigger_scope(
+    ctx: AppContext, trigger: dict[str, Any] | None, *, owner: str,
+) -> None:
+    """Filters may observe only work their owner is allowed to assign."""
     filters = (trigger or {}).get("filters") or {}
     lookups = (
         ("projectId", ctx.project_store.get_project),
@@ -367,6 +369,13 @@ def validate_trigger_scope(ctx: AppContext, trigger: dict[str, Any] | None) -> N
             found = None
         if not found:
             raise HTTPException(400, f"routineTrigger filters.{key} does not exist.")
+    owner_actor = {"employeeId": owner, "isAdmin": False}
+    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_employee_id=owner)
+    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_employee_id=owner)
+    project = project_for_owner(ctx, filters.get("projectId"), owner, require_enabled=True)
+    if project:
+        validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
+                                    assigned_team_id=filters.get("assignedTeamId"))
 
 
 async def start_routine_occurrence_on_ready_node(
@@ -516,7 +525,7 @@ def create_task(
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
     routine = routine_fields(body, calendar_date=ctx.today())
-    validate_trigger_scope(ctx, routine.get("routineTrigger"))
+    validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=owner)
     creates_thread = body.get("createSession") is True or isinstance(
         body.get("assignments"), list
     )
@@ -664,7 +673,7 @@ def update_task(
         raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
     due_date = date_field(body, "dueDate")
     routine = routine_fields(body, current=current, calendar_date=ctx.today())
-    validate_trigger_scope(ctx, routine.get("routineTrigger"))
+    validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=current["ownerEmployeeId"])
     assignee = (
         assignee_employee_id_for_task(actor, body, current.get("assigneeEmployeeId"))
         if "assigneeEmployeeId" in body or "assignee_employee_id" in body

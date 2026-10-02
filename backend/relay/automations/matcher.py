@@ -18,7 +18,7 @@ from sqlalchemy import text
 
 from ..persistence.automation_store import subject_of
 from ..persistence.store_common import store_transaction
-from .trigger import event_matches, trigger_context_block, trigger_kind, trigger_of
+from .trigger import TriggerError, event_matches, normalize_trigger, trigger_context_block, trigger_kind, trigger_of
 
 MAX_AUTOMATION_DEPTH = 3
 MAX_PENDING_EVENTS = 20
@@ -100,7 +100,16 @@ class AutomationMatcher:
         if target_id:
             target = automations.get(target_id)
             return [target] if target and trigger_kind(target) == "webhook" else []
-        return [task for task in automations.values() if event_matches(trigger_of(task), event)]
+        matched = []
+        for task in automations.values():
+            try:
+                trigger = normalize_trigger(trigger_of(task))
+            except TriggerError as error:
+                logger.warning("Invalid stored automation trigger", routine_id=task["id"], error=str(error))
+                continue
+            if event_matches(trigger, event):
+                matched.append(task)
+        return matched
 
     def _is_loop(self, automation: dict[str, Any], event: dict[str, Any]) -> bool:
         return event.get("originAutomationId") == automation["id"] or event["depth"] > self.max_depth
@@ -157,7 +166,7 @@ class AutomationMatcher:
     def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
         routine_id = state["routine_id"]
         routine = self._load(routine_id)
-        if not routine or not routine.get("routineEnabled") or trigger_kind(routine) == "schedule":
+        if not routine or not routine.get("routineEnabled") or trigger_kind(routine) in ("schedule", "manual"):
             self.automation_store.clear_state(routine_id)
             return False
         if now - _aware(state["pending_since"]) > PENDING_TTL:
