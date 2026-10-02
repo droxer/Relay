@@ -43,6 +43,7 @@ from sqlalchemy.exc import IntegrityError
 from ..automations.trigger import trigger_kind
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
+from .automation_store import insert_outbox_rows, task_outbox_rows
 from .protocols import TaskDispatchAssignment
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
@@ -941,7 +942,7 @@ class DatabaseTaskStore:
         Column("routine_cadence", Text, nullable=True),
         Column("routine_next_run_date", Date, nullable=True),
         Column("routine_enabled", Boolean, nullable=False, default=False),
-Column("routine_trigger_kind", Text, nullable=True),
+        Column("routine_trigger_kind", Text, nullable=True),
         Column("dispatch_failure_count", Integer, nullable=False, default=0),
         Column("dispatch_next_attempt_at", DateTime(timezone=True), nullable=True),
         Column("snapshot", json_type(), nullable=False),
@@ -964,7 +965,7 @@ Column("routine_trigger_kind", Text, nullable=True),
         Index("ix_tasks_is_routine", "is_routine"),
         Index("ix_tasks_routine_next_run_date", "routine_next_run_date"),
         Index("ix_tasks_routine_enabled", "routine_enabled"),
-Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
+        Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
         Index(
             "ix_tasks_dispatch_eligibility",
             "status",
@@ -1069,6 +1070,7 @@ Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
                         **task_event_to_row(task_row["id"], sequence, event)
                     )
                 )
+            insert_outbox_rows(conn, task_outbox_rows(None, task))
         return task
 
     def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1231,6 +1233,7 @@ Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
                         .where(self.task_sessions.c.task_id == task_pk)
                         .where(self.task_sessions.c.session_id == event["sessionId"])
                     )
+            insert_outbox_rows(conn, task_outbox_rows(current, task))
         logger.debug(
             "Database task events appended",
             task_id=task_id,
