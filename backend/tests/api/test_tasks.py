@@ -1309,7 +1309,8 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         assert command["type"] == "run.start"
         assert command["agent"] == "codex"
         assert command["sessionId"] == start.json()["session"]["id"]
-        assert command["taskGoal"] == "Weekly report"
+        assert command["taskGoal"].startswith("Weekly report\n")
+        assert "Fired by: Manual" in command["taskGoal"]
 
 
 def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
@@ -1357,10 +1358,13 @@ def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
         repeated = client.post(f"/api/v1/tasks/{definition['id']}/runs", json={})
 
         assert repeated.status_code == 202
-        assert repeated.json()["task"]["id"] == occurrence_id
-        assert repeated.json()["dispatch"]["code"] == "already_active"
+        # Review no longer blocks coalesced automation requests. A fresh
+        # manual occurrence starts with the requests collected while queued.
+        next_id = repeated.json()["task"]["id"]
+        assert next_id != occurrence_id
+        assert repeated.json()["task"]["routineTriggerKind"] == "manual"
         refreshed = client.get(f"/api/v1/tasks/{definition['id']}").json()
-        assert refreshed["occurrenceIds"] == [occurrence_id]
+        assert refreshed["occurrenceIds"] == [occurrence_id, next_id]
 
 
 def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) -> None:

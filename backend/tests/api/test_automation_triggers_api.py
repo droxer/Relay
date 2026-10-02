@@ -111,3 +111,20 @@ def test_run_now_queues_through_matcher_and_cap(monkeypatch) -> None:
         assert response.status_code == 202
         assert response.json()["dispatch"]["code"] == "rate_limited"
         assert not client.app.state.task_store.get_task(routine["id"])["routineEnabled"]
+
+
+def test_reenable_rate_limited_automation_starts_a_fresh_window(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        monkeypatch.setenv("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "1")
+        routine = _routine(client, agent, routineTrigger={"kind": "manual"})
+        path = f"/api/v1/tasks/{routine['id']}"
+        client.post(path + "/runs", json={})
+        store = client.app.state.task_store
+        first_id = store.get_task(routine["id"])["occurrenceIds"][0]
+        store.update_task(first_id, {"status": "done"})
+        client.post(path + "/runs", json={})
+        assert client.patch(path, json={"routineEnabled": True}).status_code == 200
+        client.post(path + "/runs", json={})
+        assert store.get_task(routine["id"])["routineEnabled"]
+        assert len(store.get_task(routine["id"])["occurrenceIds"]) == 2

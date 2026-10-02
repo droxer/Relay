@@ -304,3 +304,12 @@ def test_ledger_metadata_is_authoritative_after_replay(world) -> None:
     }
     row = run_row(SimpleNamespace(session_store=None), replayed)
     assert row["triggerSummary"] == replayed["routineTriggerSummary"]
+
+
+def test_unfiltered_automation_does_not_observe_another_owner(world) -> None:
+    tasks, _, matcher, _ = world
+    routine = _automation(tasks, ownerEmployeeId="alice", assigneeEmployeeId="alice")
+    foreign = tasks.create_task({"title": "Private Bob issue", "ownerEmployeeId": "bob"})
+    tasks.update_task(foreign["id"], {"status": "blocked", "blockerReason": "private"})
+    assert matcher.run() == 0
+    assert not _occurrences(tasks, routine["id"])
