@@ -52,7 +52,7 @@ async def receive_automation_webhook(routine_id: str, request: Request) -> dict[
         raise HTTPException(415, "Webhook body must be application/json.")
     body = await _capped_body(request)
     try:
-        payload = json.loads(body or b"null")
+        payload = json.loads(body)
     except ValueError as error:
         raise HTTPException(400, "Webhook body is not valid JSON.") from error
     try:

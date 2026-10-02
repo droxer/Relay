@@ -203,3 +203,41 @@ def test_scheduler_tick_fires_automation_through_app(monkeypatch, tmp_path):
     result = asyncio.run(app.state.task_scheduler.tick())
     assert result.fired == 1
     assert len(_occurrences(tasks, routine["id"])) == 1
+
+
+def test_run_completion_uses_linked_task_filters_and_loop_provenance(world):
+    from relay.persistence.store_common import relay_event
+    tasks, _, matcher, _ = world
+    routine = _automation(tasks, {"kind": "run_event", "on": "failed", "filters": {"priority": "high"}})
+    source = tasks.create_task({"title": "Build release", "priority": "high"})
+    session = matcher.session_store.create_session({"workspacePath": "/w", "taskGoal": "Build", "participants": ["human"]})
+    tasks.link_session(source["id"], session["id"])
+    matcher.session_store.append_event(session["id"], relay_event("agent.completed", session["id"], {
+        "runId": "run_failed", "agent": "codex", "status": "failed", "exitCode": 1, "error": "Compile failed",
+    }))
+    assert matcher.run() == 1
+    [occurrence] = _occurrences(tasks, routine["id"])
+    assert '"Build release" — run failed: Compile failed' in occurrence["description"]
+    tasks.link_session(occurrence["id"], session["id"])
+    # Use a separate session whose only linked task is the occurrence.
+    own_session = matcher.session_store.create_session({"workspacePath": "/w", "taskGoal": "Triage", "participants": ["human"]})
+    tasks.link_session(occurrence["id"], own_session["id"])
+    matcher.session_store.append_event(own_session["id"], relay_event("agent.completed", own_session["id"], {
+        "runId": "run_own", "agent": "codex", "status": "failed", "exitCode": 1,
+    }))
+    tasks.update_task(occurrence["id"], {"status": "review"})
+    assert matcher.run() == 0
+
+
+def test_disabled_automation_discards_pending(world):
+    tasks, automations, matcher, _ = world
+    routine = _automation(tasks)
+    _block(tasks)
+    matcher.run()
+    _block(tasks, "burst")
+    assert matcher.run() == 0
+    tasks.update_task(routine["id"], {"routineEnabled": False})
+    assert matcher.run() == 0
+    assert automations.list_pending_states() == []
+    tasks.update_task(routine["id"], {"routineEnabled": True})
+    assert matcher.run() == 0

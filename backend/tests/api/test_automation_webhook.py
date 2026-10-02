@@ -124,3 +124,27 @@ def test_empty_webhook_body_is_not_json(monkeypatch):
         response = client.post(f"/api/v1/automations/{routine['id']}/webhook", content=b"",
                                headers={HEADER: secret, "content-type": "application/json"})
         assert response.status_code == 400
+
+
+def test_webhook_tick_creates_a_labeled_run_in_the_api_ledger(monkeypatch):
+    import asyncio
+    from relay.app import task_scheduler_from_env
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine, secret = _webhook_automation(client, agent)
+        response = client.post(f"/api/v1/automations/{routine['id']}/webhook", json={"ok": True}, headers={HEADER: secret})
+        assert response.status_code == 202
+        monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "1")
+        state = client.app.state
+        scheduler = task_scheduler_from_env(task_store=state.task_store, session_store=state.session_store,
+                                           automation_store=state.automation_store, registry=state.registry,
+                                           backend=state.backend, team_store=state.team_store, project_store=state.project_store)
+        result = asyncio.run(scheduler.tick())
+        assert result.fired == 1
+        ledger = client.get(f"/api/v1/tasks/{routine['id']}/runs")
+        assert ledger.status_code == 200
+        [run] = ledger.json()["runs"]
+        assert run["triggerKind"] == "webhook"
+        occurrence = client.get(f"/api/v1/tasks/{run['taskId']}").json()
+        assert '"ok": true' in occurrence["description"]
+        assert occurrence["sourceRoutineId"] == routine["id"]

@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import text
 
 from ..persistence.automation_store import subject_of
 from ..persistence.store_common import store_transaction
@@ -63,7 +64,14 @@ class AutomationMatcher:
     def run(self) -> int:
         now = self._now()
         # A failed tick must not lose outbox events or leave a partially fired run.
-        with store_transaction(self.automation_store.engine):
+        with store_transaction(self.automation_store.engine) as conn:
+            # Claims partition outbox rows, but pending states are shared across
+            # ticks. One database-wide transaction lock prevents two replicas
+            # firing the same pending state; a busy replica leaves it for later.
+            if conn.dialect.name == "postgresql" and not conn.scalar(
+                text("SELECT pg_try_advisory_xact_lock(738102401)")
+            ):
+                return 0
             self._drain(now)
             return self._fire(now)
 

@@ -769,7 +769,7 @@ class LocalTaskStore:
                 return existing
             agent = routine.get("assignedAgent") or agent_override
             occurrence_events = routine_occurrence_events(
-                routine, agent, scheduled_for=scheduled_for
+                routine, agent, scheduled_for=scheduled_for, fired_by="manual"
             )
             occurrence = materialize_task_events(occurrence_events)
             self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
@@ -1914,7 +1914,7 @@ class DatabaseTaskStore:
 
             agent = routine.get("assignedAgent") or agent_override
             occurrence_events = routine_occurrence_events(
-                routine, agent, scheduled_for=scheduled_for
+                routine, agent, scheduled_for=scheduled_for, fired_by="manual"
             )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
@@ -2323,6 +2323,7 @@ def routine_occurrence_events(
     *,
     scheduled_for: str | None = None,
     trigger: dict[str, Any] | None = None,
+    fired_by: str = "schedule",
 ) -> list[dict[str, Any]]:
     occurrence_date = scheduled_for or routine["routineNextRunDate"]
     occurrence_id = new_database_id()
@@ -2351,7 +2352,7 @@ def routine_occurrence_events(
                         "routineTriggerDepth": trigger["depth"],
                     }
                     if trigger
-                    else {}
+                    else {"routineTriggerKind": fired_by, "routineTriggerDepth": 0}
                 ),
                 **(
                     {"collaborationStyle": routine["collaborationStyle"]}

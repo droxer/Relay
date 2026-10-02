@@ -399,3 +399,23 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
         first_result = running.result(timeout=10)
     assert first_result + second_result == 1
     assert len(tasks.get_task(routine["id"])["occurrenceIds"]) == 1
+
+
+def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeypatch):
+    from relay.persistence.task_store import DatabaseTaskStore
+    url, _ = migrated_schema
+    tasks = DatabaseTaskStore(url)
+    routine = tasks.create_task({"title": "Legacy routine", "isRoutine": True, "routineEnabled": True,
+                                 "routineCadence": "weekly", "routineNextRunDate": "2026-10-09"})
+    monkeypatch.setenv("RELAY_DATABASE_URL", url)
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    command.downgrade(config, "20260924_0080")
+    command.upgrade(config, "head")
+    with tasks.engine.connect() as conn:
+        kind = conn.scalar(text("SELECT routine_trigger_kind FROM tasks WHERE id = :id"), {"id": routine["id"]})
+    assert kind == "schedule"
+    restored = tasks.get_task(routine["id"])
+    assert restored["routineNextRunDate"] == "2026-10-09"
+    assert "routineTrigger" not in restored
+    assert restored["events"] == routine["events"]
