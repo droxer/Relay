@@ -36,6 +36,7 @@ import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
 import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 const SPACE_TABS: readonly SpaceTab[] = ["project", "thread"];
 
@@ -112,7 +113,7 @@ export function ThreadSpacePanel({
     setTab(defaultSpaceTab(projectId));
   }, [threadKey, projectId, setTab]);
   const selectedId = selected?.artifact.id ?? null;
-  useEffect(() => setView("preview"), [selectedId]);
+  useKeyChange(selectedId, () => setView("preview"));
   const renderMode = selected ? artifactRenderMode(selected.artifact) : "none";
   /* The project tab's open FILE, held here rather than inside the browser:
      when a file is open the panel header steps aside and the file's own header
@@ -120,7 +121,7 @@ export function ThreadSpacePanel({
      state its grandchild owns. The directory path stays inside the browser —
      the header does not care which folder you are in. */
   const [projectFile, setProjectFile] = useState("");
-  useEffect(() => setProjectFile(""), [projectId, sessionId]);
+  useKeyChange(`${projectId ?? ""}\u0000${sessionId}`, () => setProjectFile(""));
   const activeTab = resolveSpaceTab(tab, projectId, Boolean(selected));
   /* One chrome row, not two. A file's header carries the back control, the
      name, its actions and the close button, so a second row above it stating

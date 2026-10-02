@@ -1,7 +1,7 @@
 import { taskWorkflowStage } from "./taskFlow.ts";
 import type { RelayTaskListItem, TaskStatus } from "../types.js";
 
-export type TaskDropRejection = "same_status" | "needs_assignment" | "invalid_transition";
+type TaskDropRejection = "same_status" | "needs_assignment" | "invalid_transition";
 
 /**
  * Why a lane refuses a dropped task, or `null` when the move is allowed.

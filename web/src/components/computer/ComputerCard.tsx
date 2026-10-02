@@ -18,7 +18,7 @@ import {
   ActionRemove,
   AdminManageExecutors,
   ICON,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
 } from "../icons";
 import { abbreviateNodeId, formatRunElapsed } from "../../lib/computerNodes";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
@@ -82,7 +82,6 @@ export function ComputerCard({
   const status = visualStatus(node);
   const ownership = nodeOwnershipProfile(node);
   const sandbox = nodeSandboxProfile(node);
-  const OwnershipMark = nodeOwnershipIcon(ownership);
   const runtimes = visibleNodeAgentNames(node);
   const activeRuns = node.activeRuns ?? [];
   // The status pill only earns its place when it says something the presence
@@ -95,7 +94,7 @@ export function ComputerCard({
     <article className="computer-card" data-online={isNodeOnline(node) ? "true" : "false"}>
       <header className="computer-card-hero">
         <span className="computer-card-avatar" data-ownership={ownership} translate="no">
-          <OwnershipMark size={ICON.lg} aria-hidden="true" />
+          <NodeOwnershipIcon ownership={ownership} size={ICON.lg} aria-hidden="true" />
         </span>
         <div className="computer-card-identity">
           <div className="computer-card-nameline">

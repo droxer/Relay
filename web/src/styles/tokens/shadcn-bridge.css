@@ -100,13 +100,26 @@
      that maps 1:1 onto --sp-N, so it wins; the fourteen call sites that used
      names were migrated to numbers. */
 
-  /* Type sizes → text-* utilities. */
-  --text-micro: var(--fs-1);
-  --text-2xs: var(--fs-2);
-  --text-xs: var(--fs-2);
-  --text-sm: var(--fs-3);
-  --text-base: var(--fs-3);
-  --text-md: var(--fs-4);
+  /* Type sizes → text-* utilities. One name per rung, and the stock names
+     keep the sizes Tailwind gives them: xs is the 12px caption, sm the 14px
+     chrome, base the 16px reading size. The old map shifted every stock name
+     up a rung (xs 14, sm and base both 15) and added micro / 2xs / md aliases
+     beside them, so `text-xs` was larger than `text-micro` and vendored code
+     (components/reui) written against Tailwind's names rendered 2px over its
+     design. `text-dense` is the one Relay-only name: the 15px dense-prose
+     rung, which Tailwind has no word for. */
+  --text-xs: var(--fs-1);
+  --text-sm: var(--fs-2);
+  --text-dense: var(--fs-3);
+  --text-base: var(--fs-4);
+  /* Each size carries the leading of the role at that rung (micro/meta,
+     label, dense prose, body), not Tailwind's stock ratios — so a utility
+     and a --type-* role at the same size set the same line box, and
+     text-base follows the CJK scope's looser body leading. */
+  --text-xs--line-height: var(--leading-caps);
+  --text-sm--line-height: var(--leading-snug);
+  --text-dense--line-height: var(--leading-snug);
+  --text-base--line-height: var(--leading-normal);
   --text-lg: var(--fs-heading);
   --text-xl: var(--fs-title);
   --text-2xl: var(--fs-5);
@@ -166,7 +179,12 @@
   --secondary-foreground: var(--ink-1);
   --muted: var(--surface-2);
   --muted-foreground: var(--ink-3);
-  --accent: var(--surface-1); /* shadcn "accent" = subtle hover surface */
+  /* shadcn "accent" = the highlighted row in a menu, select, or list. It was
+     --surface-1, a fixed plane, and menus paint on --popover (--surface-3):
+     in light both are #ffffff, so a hovered or keyboard-highlighted item was
+     invisible, and in dark the highlight sank below the menu. The control
+     wash moves toward the ink on whatever plane it lands on (roles.css). */
+  --accent: var(--control-fill-hover);
   --accent-foreground: var(--ink-1);
   --destructive: var(--err);
   --destructive-foreground: var(--on-err);

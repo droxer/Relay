@@ -71,6 +71,7 @@ export function PresetAvatarGrid({
                   aria-label={t("profile_image.preset_option", { style: styleLabel, index: index + 1, total: urls.length })}
                   onClick={onCommit ? () => onCommit(url) : undefined}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a preset SVG avatar */}
                   <img src={url} alt="" draggable={false} />
                 </RadioGroupChoice>
               ))}

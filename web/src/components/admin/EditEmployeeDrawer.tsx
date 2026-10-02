@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { updateControlPanelEmployee } from "../../api";
 import type { EmployeeRecord } from "../../types";
@@ -17,6 +17,7 @@ import {
   parseLimitInput,
 } from "../../lib/computerLimits";
 import { Alert } from "@/components/ui/alert";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 interface EditEmployeeDrawerProps {
   open: boolean;
@@ -56,8 +57,7 @@ export function EditEmployeeDrawer({
   const initialLimit =
     employee?.maxLocalComputers != null ? String(employee.maxLocalComputers) : "";
 
-  useEffect(() => {
-    if (!open) return;
+  useOnOpen(open, () => {
     setDisplayName(initialDisplayName);
     setEmail(initialEmail);
     setMaxLocalComputers(initialLimit);
@@ -65,7 +65,7 @@ export function EditEmployeeDrawer({
     setNameError(null);
     setLimitError(null);
     setIsBusy(false);
-  }, [open, initialDisplayName, initialEmail, initialLimit]);
+  }, `${initialDisplayName}\u0000${initialEmail}\u0000${initialLimit}`);
 
   const hasUnsavedChanges =
     displayName !== initialDisplayName

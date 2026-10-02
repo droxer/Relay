@@ -6,7 +6,7 @@ import { isNodeOnline, nodeOwnershipProfile, visualStatus } from "../../lib/admi
 import { NodePresence } from "./NodePresence";
 import {
   ICON,
-  nodeOwnershipIcon,
+  NodeOwnershipIcon,
 } from "../icons";
 import { Badge } from "@/components/ui/badge";
 
@@ -38,7 +38,6 @@ export function EmployeeComputers({
     <>
       {nodes.map((node) => {
         const ownership = nodeOwnershipProfile(node);
-        const OwnershipMark = nodeOwnershipIcon(ownership);
         const status = visualStatus(node);
         const title = [
           node.displayName || node.id,
@@ -54,7 +53,7 @@ export function EmployeeComputers({
             title={title}
           >
             <NodePresence node={node} t={t} />
-            <OwnershipMark size={ICON.sm} className="adm-node-chip-mark" aria-hidden="true" />
+            <NodeOwnershipIcon ownership={ownership} size={ICON.sm} className="adm-node-chip-mark" aria-hidden="true" />
             <span className="adm-computer-chip-name" translate="no">
               {node.displayName || node.id}
             </span>

@@ -1,11 +1,11 @@
 import type { RelayArtifact } from "relay-core";
 
-export type ArtifactKind = RelayArtifact["kind"];
+type ArtifactKind = RelayArtifact["kind"];
 
-export type ArtifactStatTone = "good" | "bad" | "neutral";
+type ArtifactStatTone = "good" | "bad" | "neutral";
 
 /** A one-line, kind-aware summary derived from an artifact body. */
-export interface ArtifactStat {
+interface ArtifactStat {
   /** i18n key under `artifact.stat.*`. */
   key: string;
   /** Interpolation values for the i18n string. */

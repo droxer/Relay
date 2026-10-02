@@ -9,7 +9,7 @@ import {
   fetchControlPanelNodes,
 } from "../lib/controlPanelQueries";
 
-export interface AdminNodes {
+interface AdminNodes {
   nodes: ControlPanelDaemonNodeRecord[];
   employees: EmployeeRecord[];
 }

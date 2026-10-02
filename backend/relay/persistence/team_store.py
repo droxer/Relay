@@ -6,7 +6,6 @@ from threading import RLock
 from typing import Any
 
 from sqlalchemy import (
-    JSON,
     BigInteger,
     Boolean,
     Column,

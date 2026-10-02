@@ -946,7 +946,7 @@ function KanbanOverlay({ children, className, ...props }: KanbanOverlayProps) {
     <DragOverlay
       dropAnimation={dropAnimationConfig}
       modifiers={modifiers}
-      className={cn("z-50", activeId && "cursor-grabbing", className)}
+      className={cn("z-(--z-float)", activeId && "cursor-grabbing", className)}
       {...props}
     >
       <IsOverlayContext.Provider value={true}>

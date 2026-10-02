@@ -62,12 +62,12 @@ export function threadOriginIndex(tasks: readonly OriginTask[]): Map<string, Thr
   return index;
 }
 
-export type ProjectThreadBucket = {
+type ProjectThreadBucket = {
   project: ProjectRecord;
   threads: ThreadItem[];
 };
 
-export type ThreadDirectoryMode = "threads" | "projects";
+type ThreadDirectoryMode = "threads" | "projects";
 
 /** Threads includes task conversations; Projects scopes its own directory. */
 export function threadsForDirectory(
@@ -260,7 +260,7 @@ export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadIt
 /** Rows the rail mounts per page. A page comfortably overfills a tall rail. */
 export const RAIL_PAGE_SIZE = 60;
 
-export type LimitedThreadGroup = { items: ThreadItem[]; total: number };
+type LimitedThreadGroup = { items: ThreadItem[]; total: number };
 
 /** The first `limit` rows across the attention groups, in display order —
  *  needs you, running, idle — with each group's full count kept for its label. */

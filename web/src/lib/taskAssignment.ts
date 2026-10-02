@@ -1,4 +1,4 @@
-import type { AgentTeam, CurrentUser, EmployeeAgent, LogicalAgentAvailability, RelayTaskListItem } from "../types.js";
+import type { AgentTeam, EmployeeAgent, LogicalAgentAvailability, RelayTaskListItem } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 
 /** Can this agent/team be offered for a task assigned to `assigneeEmployeeId`?
@@ -93,44 +93,6 @@ export function isTeamRoutable(
   team: Pick<AgentTeam, "enabled" | "deletedAt" | "members" | "memberConfigs" | "leadAgentId">,
 ): boolean {
   return team.enabled && !team.deletedAt && isLogicalAgentRoutable(teamAvailability(team));
-}
-
-/** Human label for a task's assignee. `employeeNames` is the resolved employee
- *  directory (see useEmployeeNames); without it, everyone but the viewer falls
- *  back to the raw employee id, which is what the Assignee column used to show. */
-export function taskAssigneeDisplayName(
-  task: {
-    assigneeEmployeeId?: string;
-    ownerEmployeeId?: string;
-    assignedTeamId?: string;
-  },
-  currentUser: CurrentUser,
-  employeeNames?: ReadonlyMap<string, string>,
-): string | undefined {
-  const employeeId = task.assigneeEmployeeId ?? task.ownerEmployeeId;
-  if (!employeeId) return undefined;
-  if (employeeId === currentUser.employeeId || employeeId === currentUser.id) {
-    return currentUser.displayName?.trim() || currentUser.username;
-  }
-  return employeeNames?.get(employeeId) ?? employeeId;
-}
-
-/** What `taskAssigneeDisplayName` returns when the directory cannot name an
-    employee: the raw id. Display surfaces test this to substitute a real
-    label ("Unknown employee") — a UUID where a name belongs is how cards used
-    to announce an assignee called "0 064b131e-6f…". */
-export const UNRESOLVED_EMPLOYEE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** True when the task's owning employee is the viewer. Personal views
- *  (backlog/routine) suppress the redundant self chip and let the executor
- *  glyph stand in as the assignee. */
-export function isTaskAssigneeCurrentUser(
-  task: { assigneeEmployeeId?: string; ownerEmployeeId?: string },
-  currentUser: CurrentUser,
-): boolean {
-  const employeeId = task.assigneeEmployeeId ?? task.ownerEmployeeId;
-  if (!employeeId) return false;
-  return employeeId === currentUser.employeeId || employeeId === currentUser.id;
 }
 
 /** Resolve execution identity independently of the employee responsible for the task. */

@@ -15,8 +15,6 @@ TaskStatus = Literal[
 TaskRoutineType = Literal["task", "job"]
 TaskRoutineCadence = Literal["daily", "weekly", "monthly", "custom"]
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
-RunStatus = Literal["running", "completed", "failed", "cancelled"]
-CommandStatus = Literal["queued", "dispatched", "completed", "failed", "cancelled"]
 
 AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi")
 AGENT_ROLES: tuple[str, ...] = ("implementer", "reviewer", "planner", "tester", "fixer")

@@ -186,21 +186,6 @@
   transition: color var(--t-fast) var(--ease);
 }
 
-/* Aggregates a COLLAPSED project's threads into one signal — attn/run only,
-   the same vocabulary as a thread row's own state pip (design-system.md
-   status fill rules), and deliberately the same fills: hollow is already
-   spoken for as "idle" one level down, so a shape variant here would read
-   as the opposite of what it means. Expanded, the folder says nothing —
-   every row carries its own pip, so a folder dot would restate it.
-   Settled projects stay silent; there's nothing to surface. */
-/* A collapsed folder's pip is a .state-mark parked on the glyph's corner; the
-   mark owns its size, shape and pulse, so only the anchoring is local. */
-.project-folder-pip {
-  position: absolute;
-  right: -2px;
-  bottom: -1px;
-}
-
 .project-folder-select > .project-folder-name {
   min-width: 0;
   /* The name claims the row, so the leading edge is fixed whether or not the
@@ -222,87 +207,6 @@
   color: var(--ink-4);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
-}
-
-.project-folder-toggle {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 26px;
-  height: var(--control-h-2xs);
-  border: 0;
-  border-radius: var(--r-2);
-  color: var(--ink-4);
-  background: transparent;
-  cursor: pointer;
-  transition:
-    color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease);
-}
-
-/* One chevron, rotated — a transform transition reads smoother than swapping
-   between two icons. */
-.project-folder-toggle > svg {
-  transition: transform var(--t-fast) var(--ease);
-}
-
-.project-folder.collapsed .project-folder-toggle > svg {
-  transform: rotate(-90deg);
-}
-
-.project-folder-toggle:hover,
-.project-folder-toggle:focus-visible {
-  color: var(--ink-1);
-  background: var(--surface-2);
-}
-
-.project-folder-threads {
-  display: grid;
-  /* Rail hangs from the disclosure control's column — the chevron is what
-     "expanded" belongs to. Anchoring it further right, under the folder
-     icon, cost ~20px of every nested title at the default panel width for
-     an alignment nobody reads. */
-  margin-left: calc(var(--sp-1) + 26px);
-  padding-left: var(--sp-2);
-  border-left: 0.5px solid var(--line-1);
-}
-
-/* Nested rows are a sub-list, not cards: Linear-density single lines. */
-.project-folder-threads .conversation-row {
-  contain-intrinsic-size: auto 34px;
-}
-
-/* Nested threads are subordinate to the folder, so they give up the 600
-   weight to it — the label role's 500 at the same 14px rung. The step down
-   marks "subordinate", not "unimportant". */
-.project-folder-threads .conversation-name strong {
-  color: var(--ink-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-/* Selection and unread-style attention pull the title back to full ink —
-   the step down marks "subordinate", not "unimportant". */
-.project-folder-threads .conversation-row[data-selected="true"] .conversation-name strong {
-  color: var(--ink-1);
-}
-
-.project-folder-threads .conversation-row-inner {
-  min-height: var(--control-h-xs);
-  padding: var(--sp-0-5) var(--sp-2);
-  gap: var(--sp-2);
-}
-
-.project-folder-threads .conversation-row[data-selected="true"]::after {
-  top: var(--sp-2);
-  bottom: var(--sp-2);
-}
-
-.project-folder-empty {
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
-  color: var(--ink-4);
-  font: var(--type-label);
 }
 
 /* Project setup: the same flat dossier grammar as the profile page — hairlines
@@ -342,7 +246,6 @@
   color: var(--ink-1);
   font: var(--type-body);
 }
-
 
 .project-empty-hint {
   margin: 0;

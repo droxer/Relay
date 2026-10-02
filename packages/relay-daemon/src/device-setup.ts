@@ -1,6 +1,6 @@
 import { relayApiUrl } from "relay-core";
 
-export interface ComputerAuthorization {
+interface ComputerAuthorization {
   sandboxId: string;
   employeeId: string;
   workspacePath: string;

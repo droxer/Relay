@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
-from relay.persistence.store_common import new_database_id, relay_event
+from relay.persistence.store_common import new_database_id
 from relay.sessions.controller import SessionController
 
 

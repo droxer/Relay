@@ -40,7 +40,7 @@ describe("agent meta line", () => {
       assert.match(source, /<AgentMetaLine\b/, path);
       // No surface may re-derive the line's parts for itself.
       assert.doesNotMatch(source, /agentLabel\(/, path);
-      assert.doesNotMatch(source, /nodeOwnershipIcon\(/, path);
+      assert.doesNotMatch(source, /<NodeOwnershipIcon\b/, path);
     }
   });
 

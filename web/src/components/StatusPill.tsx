@@ -15,7 +15,7 @@ const TONE_VARIANT: Record<Tone, "success" | "info" | "danger" | "warning" | "ne
   neutral: "neutral",
 };
 
-export type TonePillProps = {
+type TonePillProps = {
   tone: Tone;
   label: string;
   /** Active-work pulse: --live dot + pulse-ring at the --t-pulse cadence. */

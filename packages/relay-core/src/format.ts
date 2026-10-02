@@ -43,43 +43,12 @@ export function agentLabel(name: string, accent: string): string {
   return color(name, ansi.bold, accent);
 }
 
-export function terminalWidth(): number {
-  return Math.min(Math.max(process.stdout.columns || 88, 64), 110);
-}
-
-export function wrapText(text: string, width: number): string {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if (!current) {
-      current = word;
-    } else if (current.length + word.length + 1 <= width) {
-      current += ` ${word}`;
-    } else {
-      lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.join("\n");
-}
-
 export function indent(text: string, spaces: number): string {
   const prefix = " ".repeat(spaces);
   return text
     .split("\n")
     .map((line) => `${prefix}${line}`)
     .join("\n");
-}
-
-export function promptBlock(title: string, prompt: string, accent: string): string {
-  return [
-    section(title, accent),
-    color("Prompt", ansi.dim),
-    indent(wrapText(prompt, terminalWidth() - 2), 2),
-    "",
-  ].join("\n");
 }
 
 export function emitOrPrint(sink: AgentOutputSink | undefined, text: string): void {

@@ -9,7 +9,7 @@ import {
   placementStatusTone,
   type AgentPlacementDescription,
 } from "../lib/agentPlacements";
-import { ICON, nodeOwnershipIcon } from "./icons";
+import { ICON, NodeOwnershipIcon } from "./icons";
 import { Badge } from "@/components/ui/badge";
 
 export function AgentPlacementBadge({
@@ -20,7 +20,6 @@ export function AgentPlacementBadge({
   showSandbox?: boolean;
 }) {
   const { t } = useTranslation();
-  const OwnershipIcon = nodeOwnershipIcon(description.ownership);
   const ownershipLabel = t(`admin.v2.node_ownership_${description.ownership}`);
   const sandboxLabel = t(`admin.v2.node_sandbox_${description.sandbox}`);
   const status = description.placement.status;
@@ -43,7 +42,7 @@ export function AgentPlacementBadge({
         data-ownership={description.ownership}
       >
         <StateMark tone={placementStatusTone(status)} />
-        <OwnershipIcon size={ICON.sm} aria-hidden="true" />
+        <NodeOwnershipIcon ownership={description.ownership} size={ICON.sm} aria-hidden="true" />
         <span className="agent-placement-badge-name" translate="no">
           {description.nodeName}
         </span>

@@ -7,7 +7,7 @@ import type {
   SupervisorLogger,
 } from "./types.js";
 
-export interface SupervisorOptions {
+interface SupervisorOptions {
   backend: SupervisorBackend;
   launcher: DaemonLauncher;
   workspacePathForEmployee: (employee: EmployeeRecord) => string;
@@ -16,7 +16,7 @@ export interface SupervisorOptions {
   now?: () => number;
 }
 
-export interface ReconcileResult {
+interface ReconcileResult {
   employees: number;
   provisioned: number;
   started: number;

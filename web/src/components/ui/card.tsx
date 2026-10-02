@@ -112,7 +112,7 @@ function CardDescription({
   return useRender({
     defaultTagName: "p",
     props: mergeProps<"p">(
-      { className: cn("m-0 text-xs text-muted-foreground", className) },
+      { className: cn("m-0 text-sm text-muted-foreground", className) },
       props
     ),
     render,

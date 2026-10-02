@@ -24,10 +24,14 @@ describe("Relay web theme storage", () => {
   const storage = new Map<string, string>();
   let themeAttr: string | null = null;
   let themeMeta: HTMLMetaElement | null = null;
+  let rootClasses = new Set<string>();
+  let frames: FrameRequestCallback[] = [];
 
   beforeEach(() => {
     themeAttr = null;
     themeMeta = null;
+    rootClasses = new Set<string>();
+    frames = [];
     storage.clear();
     globalThis.localStorage = {
       getItem: (key) => storage.get(key) ?? null,
@@ -41,7 +45,11 @@ describe("Relay web theme storage", () => {
       documentElement: {
         setAttribute: (_name: string, value: string) => { themeAttr = value; },
         getAttribute: () => themeAttr,
-        classList: { toggle: () => false },
+        classList: {
+          toggle: () => false,
+          add: (name: string) => { rootClasses.add(name); },
+          remove: (name: string) => { rootClasses.delete(name); },
+        },
       },
       head: {
         appendChild: (element: HTMLMetaElement) => {
@@ -70,6 +78,7 @@ describe("Relay web theme storage", () => {
   });
 
   afterEach(() => {
+    delete (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame;
     delete (globalThis as { localStorage?: Storage }).localStorage;
     delete (globalThis as { document?: Document }).document;
     delete (globalThis as { window?: Window }).window;
@@ -121,6 +130,31 @@ describe("Relay web theme storage", () => {
 
   it("exports all preference theme options", () => {
     assert.deepEqual([...SUPPORTED_THEMES], ["light", "dark", "system"]);
+  });
+
+  it("holds transitions off while the theme flips, until the new theme has painted", () => {
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    };
+    const runFrame = () => {
+      const pending = frames;
+      frames = [];
+      for (const callback of pending) callback(0);
+    };
+
+    applyTheme("light");
+    assert.equal(rootClasses.has("theme-switching"), false, "first paint is not a switch");
+
+    applyTheme("dark");
+    assert.equal(rootClasses.has("theme-switching"), true, "a real flip suspends transitions");
+    runFrame();
+    assert.equal(rootClasses.has("theme-switching"), true, "still held through the style frame");
+    runFrame();
+    assert.equal(rootClasses.has("theme-switching"), false, "released once the new theme painted");
+
+    applyTheme("dark");
+    assert.equal(rootClasses.has("theme-switching"), false, "re-applying the same theme is not a switch");
   });
 
   it("syncs browser chrome from the active CSS canvas", () => {

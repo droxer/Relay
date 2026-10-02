@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ProjectWorkspaceFileResponse } from "../../types";
 import { formatBytes } from "../../lib/workspaceFormat";
@@ -16,6 +16,7 @@ import {
 } from "../CodeView";
 import { Markdown } from "../LazyMarkdown";
 import type { ArtifactView } from "../artifact/ArtifactViewToggle";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 /** Every workspace-file response (project, node, task, …) shares this shape
  *  apart from which id field names the owner — the preview never reads that
@@ -39,9 +40,7 @@ export function useWorkspaceFileView(name: string): {
   const [view, setView] = useState<ArtifactView>(renderable ? "preview" : "source");
   // Each file opens on its own default rather than carrying the last file's
   // source view onto one the reader has not looked at yet.
-  useEffect(() => {
-    setView(renderable ? "preview" : "source");
-  }, [name, renderable]);
+  useKeyChange(name, () => setView(renderable ? "preview" : "source"));
   return { view, setView };
 }
 
@@ -86,6 +85,7 @@ export function WorkspaceFilePreview({
       <div className="workspace-preview-viewport is-bleed">
         <div className="artifact-viewer-body is-bleed">
           {media.kind === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a workspace file of unknown size
             <img className="artifact-image-preview" src={media.src} alt={name} />
           ) : (
             <iframe className="artifact-frame-preview" title={name} src={media.src} />

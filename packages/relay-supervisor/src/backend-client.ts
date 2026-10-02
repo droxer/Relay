@@ -1,14 +1,14 @@
 import { relayApiUrl, type ControlPanelDaemonNodeRecord } from "relay-core";
 import type { EmployeeRecord, ManagedNodeBackend, ManagedNodeRecord, ProvisionedDaemonNode, ProvisioningAttemptRecord, SupervisorBackend } from "./types.js";
 
-export interface SupervisorBackendClientOptions {
+interface SupervisorBackendClientOptions {
   backendUrl: string;
   adminToken?: string;
   fetchFn?: typeof fetch;
   requestTimeoutMs?: number;
 }
 
-export class SupervisorBackendRequestError extends Error {
+class SupervisorBackendRequestError extends Error {
   constructor(
     readonly method: string,
     readonly path: string,

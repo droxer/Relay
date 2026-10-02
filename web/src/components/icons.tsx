@@ -13,7 +13,6 @@ import {
   Check,
   CircleAlert,
   CircleCheck,
-  CircleStop,
   Coins,
   Copy,
   CalendarDays,
@@ -83,7 +82,6 @@ import {
   Users,
   WifiOff,
   TriangleAlert,
-  UserPlus,
   X,
   Check as LucideCheck,
   ChevronDown as LucideChevronDown,
@@ -95,7 +93,7 @@ import {
   type LucideIcon,
   type LucideProps,
 } from "lucide-react";
-import { forwardRef } from "react";
+import { createElement, forwardRef, type ComponentProps } from "react";
 
 import { IdentityMark } from "./IdentityMark";
 import { ChipGlyph, TaskListGlyph, type RelayGlyphProps } from "./navGlyphs";
@@ -271,11 +269,10 @@ export const NavBacklog = withStandardStroke(TaskListGlyph, "NavBacklog");
 // rail with a horizontal-stack outline, where the boxed alternatives all
 // collided with Threads, Computer and Control panel.
 export const NavProjects = withStandardStroke(Layers, "NavProjects");
-export const NavChannels = withStandardStroke(Hash, "NavChannels");
 // Recurrence, not a point in time. `CalendarClock` says "something is
 // scheduled"; a routine's whole content is that it happens AGAIN. The loop
-// also survives `RoutineOriginBadge`, which draws this same glyph at 14px,
-// where a calendar grid plus an overlaid clock face closes up into hatching.
+// also survives 14px, where a calendar grid plus an overlaid clock face
+// closes up into hatching.
 export const NavRoutine = withStandardStroke(Repeat, "NavRoutine");
 export const NavAgents = identityGlyph("agent", "NavAgents");
 // A team is a cluster of agent nodes — no longer *the same idea
@@ -316,7 +313,6 @@ export const ActionHandoff = withStandardStroke(Forward, "ActionHandoff");
 // matching the transcript handoff phase divider.
 export const ActionRoute = withStandardStroke(ArrowRightLeft, "ActionRoute");
 export const ActionStart = withStandardStroke(Play, "ActionStart");
-export const ActionStop = withStandardStroke(CircleStop, "ActionStop");
 // Composer stop glyph — a solid square reads as "stop" instantly at small
 // sizes, where the outline circle-stop collapses into a fuzzy ring. Solid
 // fill, no stroke, so it sits cleanly on the filled plate.
@@ -324,7 +320,6 @@ export const ComposerStop = forwardRef<SVGSVGElement, LucideProps>((props, ref) 
   <Square ref={ref} fill="currentColor" stroke="none" strokeWidth={0} aria-hidden="true" {...props} />
 ));
 ComposerStop.displayName = "ComposerStop";
-export const ActionAddPerson = withStandardStroke(UserPlus, "ActionAddPerson");
 export const ActionRemove = withStandardStroke(X, "ActionRemove");
 export const NavBack = withStandardStroke(ArrowLeft, "NavBack");
 export const ActionSearch = withStandardStroke(Search, "ActionSearch");
@@ -347,8 +342,8 @@ export const ActionImage = withStandardStroke(ImagePlus, "ActionImage");
 // ownership is an unresolved ring. The earlier container/terminal pair
 // pictured the runtime instead and read as "box" and "shell".
 export const NodeManaged = withStandardStroke(Cloud, "NodeManaged");
-export const NodeLocal = withStandardStroke(Laptop, "NodeLocal");
-export const NodePending = withStandardStroke(CircleDashed, "NodePending");
+const NodeLocal = withStandardStroke(Laptop, "NodeLocal");
+const NodePending = withStandardStroke(CircleDashed, "NodePending");
 
 /** The one map from ownership to glyph. Two call sites — the placement badge
  *  and the node profile badges — each kept a private copy of this record, so
@@ -363,9 +358,14 @@ const NODE_OWNERSHIP_ICON: Record<NodeOwnership, typeof NodeManaged> = {
 };
 
 /** The card/row avatar is a computer's logo, so it carries the ownership
- *  glyph rather than one generic machine for every computer. */
-export function nodeOwnershipIcon(ownership: NodeOwnership): typeof NodeManaged {
-  return NODE_OWNERSHIP_ICON[ownership];
+ *  glyph rather than one generic machine for every computer. One stable
+ *  component resolves the glyph, so no caller binds a looked-up glyph to a
+ *  local and renders it as a tag — that picks a component type mid-render. */
+export function NodeOwnershipIcon({
+  ownership,
+  ...props
+}: { ownership: NodeOwnership } & ComponentProps<typeof NodeManaged>) {
+  return createElement(NODE_OWNERSHIP_ICON[ownership], props);
 }
 
 // Preferences category glyphs.

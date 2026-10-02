@@ -26,9 +26,9 @@ export const projectExpansionKey = "relay-web.projectExpansion";
 /** Explicit per-project choices only. An id absent from the record has never
  *  been toggled and falls back to the archived-aware default, so a newly
  *  created project opens without needing a write. */
-export type ProjectExpansion = Record<string, boolean>;
+type ProjectExpansion = Record<string, boolean>;
 
-export type ProjectFolderTone = "attn" | "run";
+type ProjectFolderTone = "attn" | "run";
 
 /** Active projects open, archived ones stay shut — until the user says
  *  otherwise, and then their choice outranks both defaults. */
@@ -121,7 +121,7 @@ export function projectEmptyKey(
   return hasQuery ? "project.no_matching_threads" : null;
 }
 
-export type ProjectDirectoryState = "loading" | "error" | "empty" | "filtered-empty" | "ready";
+type ProjectDirectoryState = "loading" | "error" | "empty" | "filtered-empty" | "ready";
 
 /** What the projects rail should show in place of its folders.
  *

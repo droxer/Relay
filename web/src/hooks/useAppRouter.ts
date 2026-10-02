@@ -68,7 +68,7 @@ export function useAppRouter({
     }
 
     const releaseHistory = installNavigationHistory();
-    const applyCurrentLocation = () => applyLocationState(parseAppPath(window.location.pathname, window.location.search));
+    const applyCurrentLocation = () => applyLocationState(parseAppPath(window.location.pathname));
     applyCurrentLocation();
     window.addEventListener("popstate", applyCurrentLocation);
     window.addEventListener(APP_NAVIGATION_EVENT, applyCurrentLocation);

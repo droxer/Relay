@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { DaemonLaunchRequest, DaemonLauncher, ManagedDaemon, SupervisorLogger } from "./types.js";
 
-export interface LocalDaemonLauncherOptions {
+interface LocalDaemonLauncherOptions {
   backendUrl: string;
   workspaceRoot: string;
   sandboxMode?: "none" | "boxlite";
@@ -11,7 +11,7 @@ export interface LocalDaemonLauncherOptions {
   command?: string;
   logger?: SupervisorLogger;
 }
-export interface CommandTemplateLauncherOptions {
+interface CommandTemplateLauncherOptions {
   name?: string;
   command: string;
   cwd?: string;

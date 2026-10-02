@@ -1,4 +1,5 @@
 import type { CodexCollaborationEvent, CodexSubagentStatus } from "relay-core";
+import { omit } from "./omit.ts";
 
 export interface CollaborationTreeNode {
   threadId: string;
@@ -78,8 +79,7 @@ function materialize(node: MutableNode, nodes: Map<string, MutableNode>, ancesto
 }
 
 function withoutChildren(node: MutableNode): Omit<CollaborationTreeNode, "children"> {
-  const { childIds: _childIds, ...value } = node;
-  return value;
+  return omit(node, "childIds");
 }
 
 function promptLabel(prompt: string | null, threadId: string): string {

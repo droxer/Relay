@@ -21,7 +21,7 @@ type StatusTone = Exclude<Tone, "neutral">;
 
 const ANSI_PATTERN = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
 
-export function stripAnsi(value: string): string {
+function stripAnsi(value: string): string {
   return value.replace(ANSI_PATTERN, "");
 }
 
@@ -203,7 +203,7 @@ export function userVisibleAgentSegments(segments: AgentSegment[]): AgentSegment
 // settles, unless the reader has taken the disclosure over by then.
 
 /** One step of a reasoning summary: its title, and the body lines under it. */
-export type ReasoningSection = {
+type ReasoningSection = {
   /** The step's own title, or `null` for reasoning that arrived untitled. */
   title: string | null;
   lines: string[];
@@ -237,7 +237,7 @@ export function reasoningOutline(text: string): ReasoningSection[] {
   return sections;
 }
 
-export type ReasoningSummary = {
+type ReasoningSummary = {
   /** The one line the collapsed header shows. */
   label: string;
   /** Titled steps in the block — 0 when the reasoning carried no titles. */
@@ -270,7 +270,7 @@ export function reasoningSummary(
  * enough to read what the command is doing; the body opens on a click. */
 const COMMAND_PREVIEW_LINES = 6;
 
-export type CommandDisplay = {
+type CommandDisplay = {
   lines: string[];
   /** Lines withheld from the preview — 0 when the whole command is shown. */
   hidden: number;
@@ -415,10 +415,6 @@ export function hasTerminalOutcome(segments: AgentSegment[]): boolean {
     (segment) =>
       (segment.kind === "narration" && TERMINAL_SUCCESS_KEYS.has(segment.key)) || segmentTone(segment) === "bad",
   );
-}
-
-export function emptyAgentStreamSegments(_agent: AgentName, _streaming: boolean, _t: TFunction): AgentSegment[] {
-  return [];
 }
 
 export function agentMessagePlainText(

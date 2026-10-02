@@ -8,7 +8,7 @@ import type { RelaySession, RelayTaskListItem, TaskStatus } from "../types.js";
  * produced anything. This is the replacement, kept pure so the card and the
  * list row cannot drift into two different readings of the same task.
  */
-export type TaskResultLine = {
+type TaskResultLine = {
   status: TaskStatus;
   /**
    * Files the latest run produced. The board reads the last linked session

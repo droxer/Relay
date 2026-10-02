@@ -8,7 +8,7 @@ export function artifactRawHref(sessionId: string, artifactId: string): string {
   return relayApiPath(`/threads/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`);
 }
 
-export type WorkspaceFilePreviewMode = "image" | "pdf" | "html" | "text" | "none";
+type WorkspaceFilePreviewMode = "image" | "pdf" | "html" | "text" | "none";
 
 /** How a generated workspace file can be previewed, from its content type. */
 export function workspaceFilePreviewMode(contentType: string | undefined): WorkspaceFilePreviewMode {
@@ -23,7 +23,7 @@ export function workspaceFilePreviewMode(contentType: string | undefined): Works
 /** Which rendered presentation an artifact has *in addition to* its source
  *  text. "none" means the source is the only reading of it, so the panel
  *  offers no view switch. */
-export type ArtifactRenderMode = "markdown" | "html" | "none";
+type ArtifactRenderMode = "markdown" | "html" | "none";
 
 /** Artifact kinds whose bodies agents author as Markdown. The remaining text
  *  kinds (diff, command_log, test_output, agent_output) are raw streams with

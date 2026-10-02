@@ -157,21 +157,6 @@ def agent_log_for_run(session: dict[str, Any], run: dict[str, Any], store: Artif
         return None
 
 
-def latest_user_turn_timestamp(session: dict[str, Any]) -> str | None:
-    """Return the timestamp for the latest user turn in ``session``.
-
-    ``session.created`` carries the first user turn as ``taskGoal``; later
-    follow-ups are persisted as ``user.message`` events.
-    """
-    timestamps: list[str] = []
-    if session.get("createdAt"):
-        timestamps.append(session["createdAt"])
-    for event in session.get("events", []):
-        if event.get("type") == "user.message" and event.get("timestamp"):
-            timestamps.append(event["timestamp"])
-    return max(timestamps) if timestamps else None
-
-
 def latest_user_turn_marker(session: dict[str, Any]) -> tuple[str, int] | None:
     """Return ``(timestamp, event_index)`` for the latest user turn."""
     markers: list[tuple[str, int]] = []

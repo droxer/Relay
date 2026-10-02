@@ -1,6 +1,6 @@
 import type { ProjectMember, ProjectRecord, UpdateProjectInput } from "../types";
 
-export interface ProjectEditConflict {
+interface ProjectEditConflict {
   field: string;
   member?: string;
   saved: string;

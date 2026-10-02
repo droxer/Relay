@@ -324,8 +324,8 @@ describe("weight ladder", () => {
     // one reports a weight distribution the UI does not actually have — the
     // Button alone renders on 231 call sites and never appears in a stylesheet.
     //
-    // The caption and control registers (--text-micro -> --fs-1,
-    // --text-xs -> --fs-2) are 500 on the CSS side: --type-micro and
+    // The caption and control registers (--text-xs -> --fs-1,
+    // --text-sm -> --fs-2) are 500 on the CSS side: --type-micro and
     // --type-label. A primitive that sets font-bold at those sizes puts the
     // same visual register on screen at two different weights depending on
     // which layer styled it, which reads as inconsistency rather than emphasis.
@@ -333,7 +333,7 @@ describe("weight ladder", () => {
     // --type-heading rung, which is exactly right.
     const offenders: string[] = [];
     for (const { rel, text } of sources.filter((f) => f.rel.endsWith(".tsx"))) {
-      for (const m of text.matchAll(/\btext-(micro|xs)\b[^\n]*/g)) {
+      for (const m of text.matchAll(/\btext-(xs|sm)\b[^\n]*/g)) {
         if (/\bfont-(semibold|bold|extrabold|black)\b/.test(m[0])) {
           offenders.push(`${rel}: text-${m[1]} with a bold utility`);
         }

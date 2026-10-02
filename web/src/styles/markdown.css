@@ -320,7 +320,8 @@ html:lang(zh-CN) .md-body blockquote {
   overflow-x: auto;
   /* --line-1, not --line-2: this edge is where content gets clipped, so the
      frame has to be legible enough to read as a boundary rather than as the
-     table simply stopping mid-word. */
+     table simply stopping mid-word. 1px, not the 0.5px hairline, for the
+     same reason. */
   border: 1px solid var(--line-1);
   border-radius: var(--r-2);
 

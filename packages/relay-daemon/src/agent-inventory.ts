@@ -35,7 +35,7 @@ interface AgentInventorySource {
 
 // Conservative, easily-extended per-agent source map. Each path follows the
 // corresponding CLI's active home so installed skills and MCP servers surface.
-export const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
+const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
   claude: { skillsDir: ".claude/skills", mcpJson: [".claude.json", ".mcp.json"] },
   codex: { skillsDir: ".codex/skills", mcpJson: [".codex/mcp.json"], mcpToml: [".codex/config.toml"] },
   pi: { skillsDir: ".pi/skills", mcpJson: [".pi/mcp.json"] },

@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
   flexRender,
-  getCoreRowModel,
-  useReactTable,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
@@ -30,12 +29,23 @@ import {
   localComputerUsageLabel,
   type EmployeeNodeSummary,
 } from "./helpers";
+import { useManualSortTable } from "../../hooks/useManualSortTable";
+import { createCellState } from "../../lib/cellState";
 
 /** The columns the employee list can order by. Mirrors `employeeSortColumns`. */
 export type EmployeeSortKey = "employee" | "computers" | "localLimit" | "running" | "ready";
 
 /** Per-column element classes, carried through TanStack's open `meta` slot. */
 type ColumnChrome = { headClass?: string; cellClass?: string };
+
+interface EmployeeCellState {
+  t: TFunction;
+  deletePending: boolean;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
+}
+
+const EmployeeCells = createCellState<EmployeeCellState>("EmployeeGroupTable");
 
 /**
  * One status band's employees as a real table.
@@ -74,14 +84,12 @@ export function EmployeeGroupTable({
   onDelete?: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  /* flexRender mounts a column's cell function AS a component, so a column
-     def that closes over render-volatile values — `t`, the pending flag, the
-     caller's inline action callbacks — would unmount and remount every cell
-     subtree each time they change. The column defs below therefore stay
-     stable across those values and read them through this ref at render
-     time. */
-  const actionState = useRef({ t, deletePending, onEdit, onDelete });
-  actionState.current = { t, deletePending, onEdit, onDelete };
+  // `t`, the pending flag and the caller's inline action callbacks change
+  // under stable column defs; cells read them through EmployeeCells.
+  const cellState = useMemo<EmployeeCellState>(
+    () => ({ t, deletePending, onEdit, onDelete }),
+    [t, deletePending, onEdit, onDelete],
+  );
 
   const sorting = useMemo<SortingState>(
     () => (sort ? [{ id: sort.key, desc: sort.direction === "desc" }] : []),
@@ -117,7 +125,7 @@ export function EmployeeGroupTable({
       {
         id: "employee",
         meta: { headClass: "adm-emp-col-identity" } satisfies ColumnChrome,
-        header: () => sortHead("employee", actionState.current.t("admin.col_employee")),
+        header: () => <EmployeeCells.Read>{(s) => sortHead("employee", s.t("admin.col_employee"))}</EmployeeCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -136,8 +144,8 @@ export function EmployeeGroupTable({
       },
       {
         id: "computers",
-        header: () => sortHead("computers", actionState.current.t("admin.v2.col_computers"), "start", "desc"),
-        cell: ({ row }) => <EmployeeComputers nodes={row.original.nodes} t={actionState.current.t} />,
+        header: () => <EmployeeCells.Read>{(s) => sortHead("computers", s.t("admin.v2.col_computers"), "start", "desc")}</EmployeeCells.Read>,
+        cell: ({ row }) => <EmployeeCells.Read>{(s) => <EmployeeComputers nodes={row.original.nodes} t={s.t} />}</EmployeeCells.Read>,
       },
       {
         id: "localLimit",
@@ -145,8 +153,8 @@ export function EmployeeGroupTable({
            left-aligned control under a right-aligned number reads as a
            different column. */
         meta: { headClass: "w-20 text-right", cellClass: "w-20 text-right" } satisfies ColumnChrome,
-        header: () => sortHead("localLimit", actionState.current.t("admin.v2.col_local_limit"), "end", "desc"),
-        cell: ({ row }) => {
+        header: () => <EmployeeCells.Read>{(s) => sortHead("localLimit", s.t("admin.v2.col_local_limit"), "end", "desc")}</EmployeeCells.Read>,
+        cell: ({ row }) => <EmployeeCells.Read>{(s) => {
           const member = row.original;
           return (
             <div className="adm-emp-metric">
@@ -156,18 +164,18 @@ export function EmployeeGroupTable({
               {isOverLocalComputerLimit(member) ? (
                 <TonePill
                   tone="bad"
-                  label={actionState.current.t("admin.v2.emp_limit_over_short")}
-                  title={actionState.current.t("admin.v2.emp_limit_over")}
+                  label={s.t("admin.v2.emp_limit_over_short")}
+                  title={s.t("admin.v2.emp_limit_over")}
                 />
               ) : null}
             </div>
           );
-        },
+        }}</EmployeeCells.Read>,
       },
       {
         id: "running",
         meta: { headClass: "adm-emp-col-running text-right", cellClass: "adm-emp-col-running text-right" } satisfies ColumnChrome,
-        header: () => sortHead("running", actionState.current.t("admin.v2.col_running"), "end", "desc"),
+        header: () => <EmployeeCells.Read>{(s) => sortHead("running", s.t("admin.v2.col_running"), "end", "desc")}</EmployeeCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -182,7 +190,7 @@ export function EmployeeGroupTable({
       {
         id: "ready",
         meta: { headClass: "w-20 text-right", cellClass: "w-20 text-right" } satisfies ColumnChrome,
-        header: () => sortHead("ready", actionState.current.t("admin.v2.col_ready"), "end", "desc"),
+        header: () => <EmployeeCells.Read>{(s) => sortHead("ready", s.t("admin.v2.col_ready"), "end", "desc")}</EmployeeCells.Read>,
         cell: ({ row }) => {
           const member = row.original;
           return (
@@ -198,10 +206,10 @@ export function EmployeeGroupTable({
         /* Actions is not a column of data — there is nothing to order by. */
         id: "actions",
         meta: { headClass: "adm-emp-col-actions text-right", cellClass: "adm-emp-col-actions text-right" } satisfies ColumnChrome,
-        header: () => actionState.current.t("admin.v2.col_actions"),
-        cell: ({ row }) => {
+        header: () => <EmployeeCells.Read>{(s) => s.t("admin.v2.col_actions")}</EmployeeCells.Read>,
+        cell: ({ row }) => <EmployeeCells.Read>{(s) => {
           const member = row.original;
-          const { deletePending: pending, onEdit: edit, onDelete: del, t: say } = actionState.current;
+          const { deletePending: pending, onEdit: edit, onDelete: del, t: say } = s;
           if (!edit && !del) return null;
           return (
             <div className="flex items-center justify-end">
@@ -235,52 +243,47 @@ export function EmployeeGroupTable({
               ) : null}
             </div>
           );
-        },
+        }}</EmployeeCells.Read>,
       },
     ];
   }, [sort, onSort]);
 
-  const table = useReactTable({
-    data: members,
-    columns,
-    state: { sorting },
-    manualSorting: true,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (member) => member.id,
-  });
+  const table = useManualSortTable(members, columns, sorting);
 
   return (
-    <Table data-density="compact" aria-label={label}>
-      <TableHeader>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id} className="hover:bg-transparent">
-            {headerGroup.headers.map((header) => (
-              <TableHead
-                key={header.id}
-                className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
-                aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as EmployeeSortKey).ariaSort : undefined}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows.map((row) => (
-          <TableRow
-            key={row.id}
-            className={highlightedId === row.original.id ? "is-pulse" : undefined}
-            data-employee={row.original.id}
-          >
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id} className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <EmployeeCells.Provider value={cellState}>
+      <Table data-density="compact" aria-label={label}>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id} className="hover:bg-transparent">
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
+                  aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as EmployeeSortKey).ariaSort : undefined}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow
+              key={row.id}
+              className={highlightedId === row.original.id ? "is-pulse" : undefined}
+              data-employee={row.original.id}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </EmployeeCells.Provider>
   );
 }

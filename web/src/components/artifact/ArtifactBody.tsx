@@ -130,6 +130,7 @@ function WorkspaceFileBody({
   if (mode === "image") {
     return (
       <div className="artifact-viewer-body">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); an agent-produced file of unknown size */}
         <img className="artifact-image-preview" src={rawHref} alt={artifact.title} loading="lazy" decoding="async" />
       </div>
     );

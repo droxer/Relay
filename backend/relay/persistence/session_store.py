@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -76,6 +77,11 @@ def _canonical_database_session_id(session_id: str) -> str:
         return str(UUID(session_id))
     except (AttributeError, TypeError, ValueError):
         raise KeyError(session_id) from None
+
+
+def _artifact_field_sql(pg: bool, key: str) -> str:
+    """SQL text reading one string field of the artifact row `a` in either dialect."""
+    return f"a.value->>'{key}'" if pg else f"json_extract(a.value, '$.{key}')"
 
 
 class LocalSessionStore:
@@ -1434,9 +1440,7 @@ class DatabaseSessionStore:
         )
         elements = "jsonb_array_elements" if pg else "json_each"
         array_length = "jsonb_array_length" if pg else "json_array_length"
-        value = lambda key: (
-            f"a.value->>'{key}'" if pg else f"json_extract(a.value, '$.{key}')"
-        )
+        value = partial(_artifact_field_sql, pg)
         statement = select(
             self.sessions.c.id,
             self.sessions.c.version,
@@ -1477,9 +1481,7 @@ class DatabaseSessionStore:
             if pg
             else "json_each(json_extract(s.snapshot, '$.artifacts')) AS a"
         )
-        value = lambda key: (
-            f"a.value->>'{key}'" if pg else f"json_extract(a.value, '$.{key}')"
-        )
+        value = partial(_artifact_field_sql, pg)
         ordinal = "a.ordinal" if pg else "a.key"
         filters = [f"{value('kind')} = 'workspace_file'"]
         params = {"limit": max(1, limit)}

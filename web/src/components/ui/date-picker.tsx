@@ -72,7 +72,7 @@ function DatePicker({
           aria-disabled={readOnly || undefined}
           data-readonly={readOnly || undefined}
           className={cn(
-            "flex h-(--control-h) w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-start text-md text-foreground transition-[border-color]",
+            "flex h-(--control-h) w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-start text-base text-foreground transition-[border-color]",
             // Read-only reads as a value, not a control: dashed edge, no field fill.
             "data-readonly:cursor-default data-readonly:border-dashed data-readonly:bg-transparent data-readonly:text-muted-foreground",
             canClear && "pe-9"

@@ -391,7 +391,7 @@
     top: 0;
     left: 50%;
     width: var(--sp-5);
-    height: 2px;
+    height: var(--accent-bar-w);
     border-radius: 0 0 var(--r-2) var(--r-2);
     background: var(--action);
     transform: translateX(-50%);

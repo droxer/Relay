@@ -3,7 +3,7 @@ import { useRender } from "@base-ui/react/use-render"
 
 import { cn } from "@/lib/utils"
 
-/* Field label — the `--type-label` role expressed as utilities: text-xs
+/* Field label — the `--type-label` role expressed as utilities: text-sm
    resolves to --fs-2 (14px) and font-medium to 500, matching the token that the
    hand-rolled `.adm-field > span` descendant selector used to apply. Having a
    real component means a label can carry `htmlFor`, react to a disabled peer,
@@ -22,7 +22,7 @@ function Label({
     props: mergeProps<"label">(
       {
         className: cn(
-          "inline-flex items-center gap-1 text-xs leading-none font-medium text-body select-none",
+          "inline-flex items-center gap-1 text-sm leading-none font-medium text-body select-none",
           "group-data-[disabled=true]/field:pointer-events-none group-data-[disabled=true]/field:opacity-50",
           "peer-disabled:cursor-not-allowed peer-disabled:opacity-(--opacity-disabled)",
           className

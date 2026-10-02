@@ -79,7 +79,7 @@ function NumberInput({
           placeholder={placeholder}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
-          className="h-full rounded-md border border-input bg-background px-9 text-md text-foreground placeholder:text-muted-foreground aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)"
+          className="h-full rounded-md border border-input bg-background px-9 text-base text-foreground placeholder:text-muted-foreground aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-(--opacity-disabled)"
         />
         <NumberFieldIncrement aria-label={t("number_field.increase")} className={cn(stepButton, "end-0")} />
       </NumberFieldGroup>

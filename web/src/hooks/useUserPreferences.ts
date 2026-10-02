@@ -11,6 +11,7 @@ import {
   type Language,
   type Theme,
 } from "../lib/appStorage";
+import { useKeyChange } from "./useKeyChange";
 
 /**
  * Theme and language: read once on mount, applied to the document, and written
@@ -43,7 +44,7 @@ function newPreferenceRequestState(generation = 0): PreferenceRequestState {
   return { generation, latestRequestId: 0, queue: Promise.resolve() };
 }
 
-export interface UserPreferences {
+interface UserPreferences {
   theme: Theme;
   language: Language;
   /** A user choice: applied optimistically and written to the server. */
@@ -64,7 +65,7 @@ export interface UserPreferences {
   invalidate: (nextUserId: string | null) => void;
 }
 
-export interface UserPreferencesInput {
+interface UserPreferencesInput {
   /** From useClientMounted. The export is prerendered, so touching
    *  localStorage before mount mismatches hydration. */
   mounted: boolean;
@@ -89,11 +90,11 @@ export function useUserPreferences({
   const themeRequest = useRef<PreferenceRequestState>(newPreferenceRequestState());
   const languageRequest = useRef<PreferenceRequestState>(newPreferenceRequestState());
 
-  useEffect(() => {
-    if (!mounted) return;
+  useKeyChange(mounted, (isMounted) => {
+    if (!isMounted) return;
     setThemeState(readTheme());
     setLanguageState(readLanguage());
-  }, [mounted]);
+  }, { from: false });
 
   useEffect(() => {
     // Wait for the stored preference to be read before applying/persisting;

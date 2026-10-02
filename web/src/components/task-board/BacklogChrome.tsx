@@ -89,7 +89,7 @@ export function formatDueDate(value: string): string {
   }).format(date);
 }
 /** A filter one page adds to the backlog bar — the project on the backlog, the status on a project. */
-export interface ExtraBacklogFilter {
+interface ExtraBacklogFilter {
   field: FilterBarField;
   value: string;
   onChange: (value: string) => void;
@@ -116,8 +116,9 @@ export function BacklogFiltersBar({
   extraField?: ExtraBacklogFilter;
 }) {
   const { t } = useTranslation();
+  const extraFilterField = extraField?.field;
   const fields = useMemo<FilterBarField[]>(() => [
-    ...(extraField ? [extraField.field] : []),
+    ...(extraFilterField ? [extraFilterField] : []),
     { id: "priority", label: t("backlog.priority"), kind: "select",
       options: TASK_PRIORITIES.map((priority) => ({ value: priority, label: t(`backlog.priorities.${priority}`) })) },
     { id: "due", label: t("backlog.due"), kind: "select", options: [
@@ -139,7 +140,7 @@ export function BacklogFiltersBar({
       { value: "direct", label: t("backlog.source_direct") },
       { value: "routine", label: t("backlog.source_routine") },
     ] },
-  ], [agents, teams, t, extraField?.field]);
+  ], [agents, teams, t, extraFilterField]);
   const selections = {
     ...(extraField ? { [extraField.field.id]: extraField.value } : {}),
     ...selectionsFromState(filters, BACKLOG_BAR_KEYS),

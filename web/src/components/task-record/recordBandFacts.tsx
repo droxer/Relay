@@ -90,7 +90,7 @@ export function recordBandFacts(
   return facts;
 }
 
-export function recordDate(value: string | undefined, locale: string): string {
+function recordDate(value: string | undefined, locale: string): string {
   if (!value) return "—";
   return formatNextRunDate(value) || new Date(value).toLocaleDateString(locale || undefined);
 }

@@ -976,13 +976,13 @@ function FilterChipImpl<V, O>({ rule, index }: FilterChipProps<V>) {
             focusStore.set({ id: rule.id, segment: null, autoOpen: false })
         }}
       >
-        <ButtonGroupText className="bg-background dark:bg-input/30 text-muted-foreground">
+        <ButtonGroupText className="bg-background text-muted-foreground">
           {rule.path.join(actions.labels.pathSeparator)}
         </ButtonGroupText>
         <Button
           variant="outline"
           size={sizes.icon}
-          className="bg-background dark:bg-input/30"
+          className="bg-background"
           aria-label={actions.labels.remove}
           /* It had no gate at all, so the one chip whose whole purpose is to be
              removed could be removed from a bar that refuses every other edit. */
@@ -1050,7 +1050,7 @@ function FilterChipImpl<V, O>({ rule, index }: FilterChipProps<V>) {
         /* Dropped while the path is collapsed: the ellipsis inside carries the
            same sentence as a tooltip, and the two would stack. */
         title={pathCollapsed ? undefined : pathText}
-        className="bg-background dark:bg-input/30 cursor-default gap-1.5"
+        className="bg-background cursor-default gap-1.5"
       >
         {field.icon}
         {/* Zero gap INSIDE the path, so the separator's own margin is the only
@@ -1065,7 +1065,7 @@ function FilterChipImpl<V, O>({ rule, index }: FilterChipProps<V>) {
           <ButtonGroupText
             render={<button type="button" />}
             className={cn(
-              "hover:bg-accent bg-background dark:bg-input/30 cursor-default",
+              "hover:bg-accent bg-background cursor-default",
               /* The operator is connective tissue between the field and the
                  value, so it reads quieter than either - unless it is still
                  the prompt "Select condition", the one thing to act on. */
@@ -1097,7 +1097,7 @@ function FilterChipImpl<V, O>({ rule, index }: FilterChipProps<V>) {
                  more to say than the segment already says. */
               title={valueFullText === valueText ? undefined : valueFullText}
               className={cn(
-                "hover:bg-accent bg-background dark:bg-input/30 cursor-default",
+                "hover:bg-accent bg-background cursor-default",
                 valueEmpty && "text-muted-foreground"
               )}
               onPointerDown={() => focusSegment("value")}
@@ -1125,7 +1125,7 @@ function FilterChipImpl<V, O>({ rule, index }: FilterChipProps<V>) {
               /* The same surface the three text segments force. Styles whose
                  outline button is transparent in dark (sera, luma, rhea) left
                  the kebab as a notch in an otherwise filled pill. */
-              className="bg-background dark:bg-input/30"
+              className="bg-background"
               aria-label={actions.labels.chipMenu(field.label)}
               onPointerDown={() => focusSegment("menu")}
             />

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
-/** True after the first client effect — use to defer localStorage/hash reads. */
+const subscribeNever = () => () => {};
+
+/** True once the client owns the tree — use to defer localStorage/hash reads.
+ *  False while a prerendered page hydrates (the server snapshot), true for
+ *  every render after; a component first mounted on the client is never
+ *  hydrating, so it reads true straight away. */
 export function useClientMounted(): boolean {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-  return mounted;
+  return useSyncExternalStore(subscribeNever, () => true, () => false);
 }

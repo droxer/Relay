@@ -8,7 +8,6 @@ from relay.persistence.agent_store import (
     DatabaseAgentStore,
     LocalAgentStore,
 )
-from sqlalchemy import UniqueConstraint
 
 
 @pytest.mark.parametrize("store_kind", ["local", "database"])

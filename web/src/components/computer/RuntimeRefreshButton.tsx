@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getRuntimeRefresh, requestRuntimeRefresh } from "../../api";
 import { Button } from "../ui/button";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 export function RuntimeRefreshButton({ nodeId, online, supported, busy }: {
   nodeId: string; online: boolean; supported: boolean; busy: boolean;
@@ -12,9 +13,11 @@ export function RuntimeRefreshButton({ nodeId, online, supported, busy }: {
   const [status, setStatus] = useState<"idle" | "pending" | "completed" | "failed">("idle");
   const [commandId, setCommandId] = useState<string>();
   const generation = useRef(0);
-  useEffect(() => {
+  useKeyChange(nodeId, () => {
     setCommandId(undefined);
     setStatus("idle");
+  });
+  useEffect(() => {
     generation.current += 1;
     return () => { generation.current += 1; };
   }, [nodeId]);

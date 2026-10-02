@@ -11,7 +11,7 @@
 
 export type PresetAvatarKind = "agents" | "teams";
 
-export interface PresetAvatarStyle {
+interface PresetAvatarStyle {
   /** DiceBear style id, also the file-name prefix. */
   style: string;
   urls: readonly string[];

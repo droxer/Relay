@@ -15,6 +15,8 @@ import { isNodeOnline } from "../../lib/adminHelpers";
 import { Alert } from "@/components/ui/alert";
 import { ComputerDeviceSetup } from "./ComputerDeviceSetup";
 import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
+import { useOnOpen } from "@/hooks/useKeyChange";
+import { useClientMounted } from "../../hooks/useClientMounted";
 
 interface ConnectComputerDrawerProps {
   open: boolean;
@@ -46,28 +48,23 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
   const [result, setResult] = useState<CreateLocalDeviceEnrollmentResponse | null>(null);
   // Stable POSIX default for SSR/first render; the platform-specific value is
   // resolved after mount so the placeholder never hydration-mismatches.
-  const [pathPlaceholder, setPathPlaceholder] = useState("/Users/alice/project");
+  const pathPlaceholder = useClientMounted() ? workspacePathPlaceholder() : "/Users/alice/project";
   const { copiedField, copy } = useCopyFeedback();
   const workspacePathRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const hasUnsavedChanges = !result && (Boolean(workspacePath.trim()) || Boolean(displayName.trim()));
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
-  useEffect(() => {
-    if (open) {
-      setManualSetup(false);
-      setWorkspacePath("");
-      setDisplayName("");
-      setFieldError(null);
-      setError(null);
-      setIsBusy(false);
-      setResult(null);
-    }
-  }, [open]);
+  useOnOpen(open, () => {
+    setManualSetup(false);
+    setWorkspacePath("");
+    setDisplayName("");
+    setFieldError(null);
+    setError(null);
+    setIsBusy(false);
+    setResult(null);
+  });
 
-  useEffect(() => {
-    setPathPlaceholder(workspacePathPlaceholder());
-  }, []);
 
   useEffect(() => {
     if (result) resultRef.current?.focus();

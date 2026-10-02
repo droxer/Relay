@@ -5,7 +5,7 @@ export type BufferedOutput = {
   text: string;
 };
 
-export type OutputEventBufferOptions = {
+type OutputEventBufferOptions = {
   delayMs?: number;
   maxChars?: number;
   maxEntries?: number;

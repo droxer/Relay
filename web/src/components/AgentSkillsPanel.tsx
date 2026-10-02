@@ -17,7 +17,7 @@ function qualifiedName(skill: { name: string; namespace?: string }) {
   return skill.namespace ? `${skill.namespace}/${skill.name}` : skill.name;
 }
 
-export interface AgentSkillsPanelProps {
+interface AgentSkillsPanelProps {
   agent: EmployeeAgent;
   /** Whether the viewer may revoke granted skills. */
   canEdit?: boolean;

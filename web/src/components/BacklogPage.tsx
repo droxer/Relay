@@ -3,7 +3,7 @@
 
 import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useEffectEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
@@ -73,6 +73,8 @@ import {
   toggleSelected,
   type TaskSelection,
 } from "../lib/taskSelection";
+import { useClientMounted } from "../hooks/useClientMounted";
+import { useKeyChange } from "../hooks/useKeyChange";
 
 
 
@@ -167,18 +169,20 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
 
   // Keep the server and first client render deterministic, then restore the
   // browser-only preference once hydration has completed.
-  useEffect(() => {
-    setView(parseBacklogView(null));
-  }, []);
+  const mounted = useClientMounted();
+  useKeyChange(mounted, (isMounted) => {
+    if (isMounted) setView(parseBacklogView(null));
+  }, { from: false });
 
   // The `c` chord and the palette's "New task" land here: the event path
   // covers an already-mounted board, the one-shot flag covers the navigation
   // that mounts it. The form requires a project before creating.
+  const openCreateFromIntent = useEffectEvent(() => openTaskForm(emptyBacklogForm(currentUser)));
   useEffect(() => {
     const channel = taskCreateIntent();
     if (!channel) return;
     const openInlineCreate = () => {
-      if (channel.consume()) openTaskForm(emptyBacklogForm(currentUser));
+      if (channel.consume()) openCreateFromIntent();
     };
     openInlineCreate();
     return channel.subscribe(openInlineCreate);

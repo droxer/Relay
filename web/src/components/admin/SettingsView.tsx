@@ -21,6 +21,7 @@ import {
   MIN_TASK_ROUNDS,
 } from "../../lib/computerLimits";
 import { Alert } from "@/components/ui/alert";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 /** Org-wide defaults: how many personal computers an employee may enroll, and
     how many extra rounds a task may run when it keeps reporting itself
@@ -207,10 +208,9 @@ function NumberSettingCard({
 
   // Seed the field from the server once it answers, and re-seed when a refetch
   // brings a value the user has not edited away from.
-  useEffect(() => {
-    if (saved === undefined) return;
-    setValue(String(saved));
-  }, [saved]);
+  useKeyChange(saved, (next) => {
+    if (next !== undefined) setValue(String(next));
+  }, { from: undefined });
 
   // The saved confirmation only needs to acknowledge the click — let it fade
   // on its own instead of sitting beside the button indefinitely.

@@ -7,7 +7,7 @@ import type {
   SupervisorLogger,
 } from "./types.js";
 
-export interface ManagedNodeReconcilerOptions {
+interface ManagedNodeReconcilerOptions {
   backend: ManagedNodeBackend;
   providers: ManagedNodeProvider[];
   backendUrl: string;
@@ -23,7 +23,7 @@ export interface ManagedNodeReconcilerOptions {
   logger?: SupervisorLogger;
 }
 
-export interface ManagedReconcileResult {
+interface ManagedReconcileResult {
   nodes: number;
   started: number;
   skipped: number;

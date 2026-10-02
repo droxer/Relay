@@ -7,7 +7,7 @@ export type AppRoute = "main" | "projects" | "backlog" | "routine" | "agents" | 
    uses. Adding a section = one entry here plus its case in SettingsPage. */
 export type SettingsSection = "computers" | "skills" | "appearance" | "language";
 
-export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
+const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   "computers",
   "skills",
   "appearance",
@@ -27,7 +27,7 @@ export function isSettingsSection(value: string | null | undefined): value is Se
    drift. Adding a section = one entry here plus its case in AdminPage. */
 export type AdminSection = "dashboard" | "employees" | "computers" | "organization";
 
-export const ADMIN_SECTIONS: readonly AdminSection[] = [
+const ADMIN_SECTIONS: readonly AdminSection[] = [
   "dashboard",
   "employees",
   "computers",

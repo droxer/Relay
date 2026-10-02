@@ -70,7 +70,7 @@
 }
 
 /* A nonzero problem count carries a hollow-ring mark — shape carries the
-   alarm, not brightness (tokens/base.css .dot-ring). */
+   alarm, not brightness (the .state-mark ring, task-status.css). */
 .backlog-stat-mark {
   --mark-accent: var(--err);
   margin-inline-end: var(--sp-1);

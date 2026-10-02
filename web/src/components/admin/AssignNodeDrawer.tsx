@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActionAdd,
@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 /** Sentinel value for the "create a new node instead" choice, which shares
  *  the node picker's radio group but has no node id of its own. */
@@ -77,19 +78,17 @@ export function AssignNodeDrawer({
   const nodeListRef = useRef<HTMLUListElement>(null);
   const workspacePathRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setEmployeeId(defaultEmployeeId ?? "");
-      setNodeId("");
-      setCreateNew(false);
-      setNodeLocation("managed");
-      setDisplayName("");
-      setWorkspacePath("");
-      setError(null);
-      setFieldErrors({});
-      setIsBusy(false);
-    }
-  }, [open, defaultEmployeeId]);
+  useOnOpen(open, () => {
+    setEmployeeId(defaultEmployeeId ?? "");
+    setNodeId("");
+    setCreateNew(false);
+    setNodeLocation("managed");
+    setDisplayName("");
+    setWorkspacePath("");
+    setError(null);
+    setFieldErrors({});
+    setIsBusy(false);
+  }, defaultEmployeeId ?? "");
 
   function clearFieldError(field: "employeeId" | "nodeId" | "workspacePath") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));

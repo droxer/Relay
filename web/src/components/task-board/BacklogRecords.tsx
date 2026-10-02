@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, type ComponentProps, type ReactNode } from "react";
+import { useMemo, type ComponentProps, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { PriorityBadge } from "../PriorityBadge";
 import { cn } from "@/lib/utils";
@@ -8,8 +8,6 @@ import { type RelaySession, type RelayTaskListItem } from "../../types";
 import { ActionCalendar, ICON } from "../icons";
 import {
   flexRender,
-  getCoreRowModel,
-  useReactTable,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
@@ -30,6 +28,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
 import { formatDueDate } from "./BacklogChrome";
+import { useManualSortTable } from "../../hooks/useManualSortTable";
+import { createCellState } from "../../lib/cellState";
+import type { TFunction } from "i18next";
 
 /**
  * The two ways a task renders: as a card on the board and as a row in the
@@ -128,12 +129,24 @@ export function BacklogTaskCard({
 type ColumnChrome = { headClass?: string; cellClass?: string };
 
 /** What a row needs beyond the task itself, resolved by the page per record. */
-export interface BacklogRowContext {
+interface BacklogRowContext {
   projectName?: string;
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;
 }
+
+interface BacklogCellState {
+  t: TFunction;
+  onSort: (key: BacklogSortKey) => void;
+  selectAll: ReactNode;
+  selectedIds: ReadonlySet<string>;
+  onToggleSelect: (taskId: string) => void;
+  contextFor: (task: RelayTaskListItem) => BacklogRowContext;
+  onOpenTask: (taskId: string) => void;
+}
+
+const BacklogCells = createCellState<BacklogCellState>("BacklogTaskList");
 
 /**
  * The backlog's flat list: one table over the already-filtered, sorted, and
@@ -169,13 +182,12 @@ export function BacklogTaskList({
   onOpenTask: (taskId: string) => void;
 }) {
   const { t } = useTranslation();
-  /* flexRender mounts a column's cell function AS a component, so a column
-     def that closed over render-volatile values — `t`, the caller's inline
-     `contextFor`, the selection set on every toggle — would unmount and
-     remount every cell subtree each time. The defs below stay stable across
-     those values and read them through this ref at render time. */
-  const state = useRef({ t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask });
-  state.current = { t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask };
+  // Values that change under the stable column defs; cells read them
+  // through BacklogCells (see lib/cellState).
+  const cellState = useMemo<BacklogCellState>(
+    () => ({ t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask }),
+    [t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask],
+  );
   /* TanStack's controlled sorting state is a projection of the page's
      URL-backed SortState; nothing inside the table writes it back (header
      clicks go through `onSort`), which is what `manualSorting` licenses. */
@@ -187,14 +199,18 @@ export function BacklogTaskList({
   function sortHead(key: BacklogSortKey, label: string): ReactNode {
     const { active, direction } = sortIndicator(sort, key);
     return (
-      <SortColumnButton
-        label={label}
-        sortKey={key}
-        onSort={(next) => state.current.onSort(next)}
-        align="start"
-        active={active}
-        direction={direction}
-      />
+      <BacklogCells.Read>
+        {(s) => (
+          <SortColumnButton
+            label={label}
+            sortKey={key}
+            onSort={s.onSort}
+            align="start"
+            active={active}
+            direction={direction}
+          />
+        )}
+      </BacklogCells.Read>
     );
   }
 
@@ -202,10 +218,10 @@ export function BacklogTaskList({
     {
       id: "select",
       meta: { headClass: "w-4", cellClass: "w-4" } satisfies ColumnChrome,
-      header: () => state.current.selectAll,
-      cell: ({ row }) => {
+      header: () => <BacklogCells.Read>{(s) => s.selectAll}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => {
         const task = row.original;
-        const current = state.current;
+        const current = s;
         return (
           <TaskSelectCheckbox
             className="backlog-select-box"
@@ -214,18 +230,18 @@ export function BacklogTaskList({
             onCheckedChange={() => current.onToggleSelect(task.id)}
           />
         );
-      },
+      }}</BacklogCells.Read>,
     },
     {
       id: "status",
       meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
       /* Named, not blank: a columnheader with no accessible name leaves the
          cells under it reading as a column of nothing. */
-      header: () => <span className="sr-only">{state.current.t("backlog.status")}</span>,
+      header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.status")}</span>}</BacklogCells.Read>,
       /* The dot-plus-sr-only grammar AgentStateBadge uses: the shape carries
          a word for anyone who cannot see it. */
-      cell: ({ row }) => {
-        const label = state.current.t(`backlog.statuses.${row.original.status}`);
+      cell: ({ row }) => <BacklogCells.Read>{(s) => {
+        const label = s.t(`backlog.statuses.${row.original.status}`);
         /* The title gives a pointer the word the sr-only span gives a screen
            reader — the dot alone is shape and colour, not a name. */
         return (
@@ -234,21 +250,21 @@ export function BacklogTaskList({
             <span className="sr-only">{label}</span>
           </span>
         );
-      },
+      }}</BacklogCells.Read>,
     },
     {
       id: "issue-id",
       meta: { headClass: "task-col-ref", cellClass: "code task-col-ref" } satisfies ColumnChrome,
-      header: () => state.current.t("backlog.col_ref"),
+      header: () => <BacklogCells.Read>{(s) => s.t("backlog.col_ref")}</BacklogCells.Read>,
       cell: ({ row }) => taskRef(row.original.id),
     },
     {
       id: "title",
       meta: { cellClass: "task-col-title" } satisfies ColumnChrome,
-      header: () => sortHead("title", state.current.t("backlog.col_task")),
-      cell: ({ row }) => {
+      header: () => <BacklogCells.Read>{(s) => sortHead("title", s.t("backlog.col_task"))}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => {
         const task = row.original;
-        const current = state.current;
+        const current = s;
         const { projectName } = current.contextFor(task);
         return (
           <div className="backlog-row-lead-main">
@@ -266,12 +282,12 @@ export function BacklogTaskList({
             {projectName ? <span className="task-project-label">{projectName}</span> : null}
           </div>
         );
-      },
+      }}</BacklogCells.Read>,
     },
     {
       id: "due",
       meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
-      header: () => sortHead("due", state.current.t("backlog.due")),
+      header: () => <BacklogCells.Read>{(s) => sortHead("due", s.t("backlog.due"))}</BacklogCells.Read>,
       cell: ({ row }) => {
         const task = row.original;
         const tone = dueTone(task);
@@ -285,10 +301,10 @@ export function BacklogTaskList({
     {
       id: "assignee",
       meta: { headClass: "task-col-assignee", cellClass: "task-col-assignee" } satisfies ColumnChrome,
-      header: () => sortHead("assignee", state.current.t("backlog.assignee")),
-      cell: ({ row }) => {
+      header: () => <BacklogCells.Read>{(s) => sortHead("assignee", s.t("backlog.assignee"))}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => {
         const task = row.original;
-        const context = state.current.contextFor(task);
+        const context = s.contextFor(task);
         return (
           <TaskAssignee
             task={task}
@@ -297,54 +313,50 @@ export function BacklogTaskList({
             agentImageUrl={context.agentImageUrl}
           />
         );
-      },
+      }}</BacklogCells.Read>,
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [sort]);
-  const table = useReactTable({
-    data: tasks,
-    columns,
-    state: { sorting },
-    manualSorting: true,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (task) => task.id,
-  });
+  const table = useManualSortTable(tasks, columns, sorting);
 
   return (
-    <Table aria-label={t("backlog.title")}>
-      <TableHeader>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id} className="backlog-rows-head hover:bg-transparent">
-            {headerGroup.headers.map((header) => (
-              <TableHead
-                key={header.id}
-                className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
-                aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as BacklogSortKey).ariaSort : undefined}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows.map((row) => (
-          <TableRow
-            key={row.id}
-            className="backlog-row group"
-            data-status={row.original.status}
-            data-priority={row.original.priority}
-            data-selected={selectedIds.has(row.id) ? "true" : undefined}
-          >
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id} className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <BacklogCells.Provider value={cellState}>
+      <Table aria-label={t("backlog.title")}>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id} className="backlog-rows-head hover:bg-transparent">
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  className={(header.column.columnDef.meta as ColumnChrome | undefined)?.headClass}
+                  aria-sort={sort?.key === header.column.id ? sortIndicator(sort, header.column.id as BacklogSortKey).ariaSort : undefined}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow
+              key={row.id}
+              className="backlog-row group"
+              data-status={row.original.status}
+              data-priority={row.original.priority}
+              data-selected={selectedIds.has(row.id) ? "true" : undefined}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id} className={(cell.column.columnDef.meta as ColumnChrome | undefined)?.cellClass}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+    </BacklogCells.Provider>
   );
 }
 

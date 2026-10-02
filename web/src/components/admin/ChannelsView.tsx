@@ -35,6 +35,7 @@ import {
 } from "./ChannelPrimitives";
 import { ChannelDetail } from "./ChannelDetail";
 import { Alert } from "@/components/ui/alert";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 const CHAT_INTEGRATIONS_KEY = ["admin", "chat-integrations"] as const;
 
@@ -116,12 +117,17 @@ export function ChannelsView({
     onHasChannelsChange?.(hasChannels);
   }, [hasChannels, onHasChannelsChange]);
 
+  // The create drawer only exists beside a channel list; losing the last
+  // channel closes it. Local state follows in this render; a controlling
+  // parent hears about it from an effect, since its state is not ours to set
+  // mid-render.
+  const createOrphaned = !hasChannels && createOpen;
+  useKeyChange(createOrphaned, (orphaned) => {
+    if (orphaned && !createControlled) setInternalCreateOpen(false);
+  });
   useEffect(() => {
-    if (!hasChannels && createOpen) {
-      if (!createControlled) setInternalCreateOpen(false);
-      onCreateOpenChange?.(false);
-    }
-  }, [hasChannels, createOpen, createControlled, onCreateOpenChange]);
+    if (createOrphaned) onCreateOpenChange?.(false);
+  }, [createOrphaned, onCreateOpenChange]);
 
 
   function mergeIntegration(updated: ChatIntegration) {

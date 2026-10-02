@@ -59,7 +59,7 @@ export function paginate<T>(
 }
 
 /** The rendered ellipsis. Not a page — it is never a navigation target. */
-export type PageGap = "gap";
+type PageGap = "gap";
 
 /**
  * The page buttons to render: the first page, the last page, a window around

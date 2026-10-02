@@ -4,7 +4,7 @@ import { forwardRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { ComputerOwnership } from "../lib/createAgent";
 import type { ComputerOption } from "../hooks/useComputerOptions";
-import { ICON, nodeOwnershipIcon } from "./icons";
+import { ICON, NodeOwnershipIcon } from "./icons";
 import {
   Select,
   SelectContent,
@@ -15,10 +15,9 @@ import {
 
 function ComputerOptionLabel({ label, ownership }: { label: string; ownership: ComputerOwnership }) {
   const { t } = useTranslation();
-  const ComputerIcon = nodeOwnershipIcon(ownership);
   return (
     <span className="create-agent-computer-option">
-      <ComputerIcon size={ICON.sm} aria-hidden="true" />
+      <NodeOwnershipIcon ownership={ownership} size={ICON.sm} aria-hidden="true" />
       <span className="create-agent-computer-name" translate="no">{label}</span>
       <span className="create-agent-computer-kind">{t(`admin.v2.node_ownership_${ownership}`)}</span>
     </span>

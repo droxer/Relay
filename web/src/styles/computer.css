@@ -489,8 +489,8 @@ button.computer-run-open:hover {
   gap: var(--sp-2);
   padding: var(--sp-4);
   background: var(--surface-1);
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-md);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-3);
 }
 
 .computer-install-intro h3,

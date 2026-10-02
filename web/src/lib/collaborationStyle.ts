@@ -2,7 +2,7 @@ import type { AgentRun, CollaborationRoundManifest, CollaborationStyle, RelaySes
 
 // Mirrors backend/relay/collaboration/styles.py. Keep role precedence in sync.
 export const COLLABORATION_STYLES: readonly CollaborationStyle[] = ["build_review", "pipeline", "lead_led"];
-export const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
+const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
 const STAGE: Record<string, number> = { planner: 0, implementer: 1, fixer: 1, tester: 2, reviewer: 3 };
 export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };

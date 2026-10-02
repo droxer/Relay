@@ -60,10 +60,6 @@ export const AGENT_NAMES: AgentName[] = ["claude", "pi", "codex", "kimi"];
 /** Single tone vocabulary for every status surface (toasts, pills, dots, stream status, system rows). */
 export type Tone = "good" | "bad" | "warn" | "info" | "neutral";
 
-export interface SessionsResponse {
-  sessions: RelaySession[];
-}
-
 export interface SessionSummary {
   workOutcome?: RelaySession["workOutcome"] | null;
   execution?: RelaySession["execution"];
@@ -312,32 +308,6 @@ export interface TaskWorkspaceFileResponse {
   isBinary: boolean;
   bytes: number;
   content: string | null;
-  contentBase64?: string | null;
-  truncated: boolean;
-  limitBytes: number;
-  generatedAt: string;
-}
-
-export interface NodeWorkspaceFilesResponse {
-  nodeId: string;
-  scope: "shared";
-  source: "live";
-  path: string;
-  exists: boolean;
-  entries: WorkspaceFileEntry[];
-  generatedAt: string;
-}
-
-export interface NodeWorkspaceFileResponse {
-  nodeId: string;
-  scope: "shared";
-  source: "live";
-  path: string;
-  exists: boolean;
-  isBinary: boolean;
-  bytes: number;
-  content: string | null;
-  /** Raw bytes (base64, capped at limitBytes) for binary previews — images, PDFs. */
   contentBase64?: string | null;
   truncated: boolean;
   limitBytes: number;
@@ -823,15 +793,6 @@ export type TaskRunAssignment = Omit<RunInput["assignments"][number], "agent"> &
   agent?: AgentName;
 };
 
-export interface CreateSessionInput {
-  taskGoal: string;
-  /** Computer selected as the immutable runtime for the thread. */
-  daemonNodeId?: string;
-  assignments: RunInput["assignments"];
-  workspacePath?: string;
-  ownerEmployeeId?: string;
-}
-
 export interface TaskMutationInput {
   collaborationStyle?: CollaborationStyle | "" | null;
   acceptancePolicy?: "human" | "automatic";
@@ -868,10 +829,6 @@ export interface StartTaskResponse {
     code?: string;
     message?: string;
   };
-}
-
-export interface ApiErrorBody {
-  error?: string;
 }
 
 export type UserRole = "admin" | "user";

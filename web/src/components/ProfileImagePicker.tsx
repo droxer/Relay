@@ -28,6 +28,7 @@ export function ProfileImage({
 }) {
   return (
     <span className={`profile-image${className ? ` ${className}` : ""}`} data-has-image={src ? "true" : "false"}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); a user-uploaded image */}
       {src ? <img src={src} alt={alt} /> : fallback}
     </span>
   );

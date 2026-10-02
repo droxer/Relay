@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogViewport,
 } from "@/components/ui/dialog";
+import { useOnOpen } from "@/hooks/useKeyChange";
 
 /** Named panel widths — call sites pick a role, not a pixel count, so drawer
  *  sizing stays consistent across the app. `form` for single-column edit
@@ -35,9 +36,9 @@ const DRAWER_WIDTHS = {
 const DRAWER_WIDTH_MIN = 380;
 const DRAWER_WIDTH_MAX = 1600;
 
-export type DrawerWidth = keyof typeof DRAWER_WIDTHS;
+type DrawerWidth = keyof typeof DRAWER_WIDTHS;
 
-export interface DrawerProps {
+interface DrawerProps {
   open: boolean;
   onClose: () => void;
   title: ReactNode;
@@ -102,11 +103,10 @@ export function Drawer({
      what mounts, and storage reads during prerender would mismatch. */
   const widthRole = typeof width === "number" ? null : width;
   const [draggedWidth, setDraggedWidth] = useState<number | null>(null);
-  useEffect(() => {
-    if (!open || widthRole === null) return;
-    const stored = readDrawerWidth(widthRole);
+  useOnOpen(open && widthRole !== null, () => {
+    const stored = widthRole === null ? null : readDrawerWidth(widthRole);
     setDraggedWidth(stored === null ? null : Math.min(Math.max(stored, DRAWER_WIDTH_MIN), DRAWER_WIDTH_MAX));
-  }, [open, widthRole]);
+  }, widthRole ?? "");
   const onResize = useCallback((next: number, commit: boolean) => {
     setDraggedWidth(next);
     if (commit && widthRole !== null) writeDrawerWidth(widthRole, next);

@@ -8,7 +8,7 @@ import { join } from "node:path";
  * an exit code only says the CLI ran. This file is the one machine-readable
  * answer, so the control plane never has to guess from output text.
  */
-export interface RoundResult {
+interface RoundResult {
   work?: Record<string, unknown>;
   status: "done" | "continue" | "blocked";
   note?: string;

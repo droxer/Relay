@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type PendingUserMessage = { id: string; text: string };
+type PendingUserMessage = { id: string; text: string };
 
 // A thread dispatch in flight. This is deliberately not derived from
 // TanStack Query's mutation state: one dispatch spans several mutations (the

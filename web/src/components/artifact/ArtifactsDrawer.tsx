@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelayArtifact } from "relay-core";
 import { Drawer } from "@/components/ui/Drawer";
@@ -9,6 +9,8 @@ import type { ArtifactView } from "./ArtifactViewToggle";
 import { artifactRenderMode } from "../../lib/artifactPreview";
 import { ArtifactsEmpty } from "./ArtifactsEmpty";
 import { OVERLAY_TAKEOVER_QUERY } from "../../lib/breakpoints";
+import { useKeyChange, useOnOpen } from "../../hooks/useKeyChange";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 function resolveSessionId(artifact: RelayArtifact, fallback: string): string {
   return (artifact as unknown as { sessionId?: string }).sessionId ?? fallback;
@@ -34,27 +36,17 @@ export function ArtifactsDrawer({
   const [stripExpanded, setStripExpanded] = useState(false);
   /* Narrow screens lay the list out in flow above the preview; wide ones
      slide it over the preview, so there a pick should put it away again. */
-  const [listInFlow, setListInFlow] = useState(false);
+  const listInFlow = useMediaQuery(OVERLAY_TAKEOVER_QUERY);
   const [view, setView] = useState<ArtifactView>("preview");
 
-  const artifactsRef = useRef(artifacts);
-  artifactsRef.current = artifacts;
-
-  // Sync selection when the drawer opens or the initial artifact changes.
-  useEffect(() => {
-    if (!open) return;
-    setSelectedId(initialArtifactId ?? artifactsRef.current[0]?.id ?? null);
-
-    const mq = window.matchMedia(OVERLAY_TAKEOVER_QUERY);
-    setStripExpanded(mq.matches);
-    setListInFlow(mq.matches);
-    const handleChange = (event: MediaQueryListEvent) => {
-      setStripExpanded(event.matches);
-      setListInFlow(event.matches);
-    };
-    mq.addEventListener("change", handleChange);
-    return () => mq.removeEventListener("change", handleChange);
-  }, [open, initialArtifactId]);
+  // Sync selection when the drawer opens or the initial artifact changes; the
+  // strip starts expanded exactly where it sits in flow.
+  useOnOpen(open, () => {
+    setSelectedId(initialArtifactId ?? artifacts[0]?.id ?? null);
+    setStripExpanded(listInFlow);
+  }, initialArtifactId ?? "");
+  // Crossing the breakpoint re-lays the strip out, so it re-takes that default.
+  useKeyChange(listInFlow, (inFlow) => setStripExpanded(inFlow));
 
   const selectedArtifact = useMemo(
     () => artifacts.find((a) => a.id === selectedId) ?? artifacts[0] ?? null,
@@ -62,7 +54,7 @@ export function ArtifactsDrawer({
   );
 
   // Each file opens on its rendered reading, as in the thread space panel.
-  useEffect(() => setView("preview"), [selectedArtifact?.id]);
+  useKeyChange(selectedArtifact?.id, () => setView("preview"));
   const renderMode = selectedArtifact ? artifactRenderMode(selectedArtifact) : "none";
 
   function selectArtifact(id: string): void {

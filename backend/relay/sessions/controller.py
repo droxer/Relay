@@ -85,7 +85,6 @@ class SessionController:
         self,
         task_goal: str,
         participants: list[str] | None = None,
-        pending_start: bool = False,
         session_id: str | None = None,
     ) -> dict[str, Any]:
         session = self.store.create_session(

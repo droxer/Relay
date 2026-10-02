@@ -4,7 +4,7 @@ export type PlacementOwnership = "managed" | "local" | "pending";
 export type PlacementSandbox = "boxlite" | "host" | "pending";
 export type PlacementPreference = "preferred" | "alternate";
 
-export type PlacementStatusTone = "good" | "info" | "warn" | "bad" | "neutral";
+type PlacementStatusTone = "good" | "info" | "warn" | "bad" | "neutral";
 
 /**
  * The placements an agent actually runs on right now.
@@ -36,7 +36,7 @@ export interface AgentPlacementDescription {
   preference: PlacementPreference | null;
 }
 
-export interface PlacementBadgeLabels {
+interface PlacementBadgeLabels {
   nodeName: string;
   ownership: string;
   sandboxLabel: string;

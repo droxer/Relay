@@ -1,12 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
   flexRender,
-  getCoreRowModel,
-  useReactTable,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
@@ -44,6 +42,8 @@ import { NodeActionsCell, NodeEmployeeCell, NodeIdentityCell, NodeRuntimesCell }
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
 import { ListGroup } from "../ListGroup";
 import type { StateTone } from "../StateMark";
+import { useManualSortTable } from "../../hooks/useManualSortTable";
+import { createCellState } from "../../lib/cellState";
 
 interface NodesViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
@@ -89,6 +89,86 @@ function nodeBandTone(status: string): StateTone {
     `minmax(200px, 1.4fr) minmax(120px, 1fr) minmax(0, 1.6fr) 11rem`). */
 type ColumnChrome = { headClass?: string; cellClass?: string };
 
+/* `t`, the caller's inline callbacks and the employee lookup change under the
+   stable column defs (see lib/cellState); remounting a cell would also drop
+   its `useNodeDelete` state. */
+interface NodeCellState {
+  t: TFunction;
+  storedTokens: StoredNodeTokenMap;
+  colocated: boolean;
+  employeeById: Map<string, EmployeeRecord>;
+  onRevealCredentials: NodesViewProps["onRevealCredentials"];
+  onRenameNode: NodesViewProps["onRenameNode"];
+  onManageExecutors: NodesViewProps["onManageExecutors"];
+  onDeleteNode: NodesViewProps["onDeleteNode"];
+}
+
+const NodeCells = createCellState<NodeCellState>("NodeBandTable");
+const useNodeCellState = NodeCells.useCellState;
+
+function NodeSortHeader({
+  sortKey,
+  labelKey,
+  sort,
+  onSort,
+  defaultDirection,
+}: {
+  sortKey: NodeSortKey;
+  labelKey: string;
+  sort: SortState<NodeSortKey> | null;
+  onSort: (key: NodeSortKey) => void;
+  defaultDirection?: SortDirection;
+}) {
+  const { t } = useNodeCellState();
+  const { active, direction } = sortIndicator(sort, sortKey);
+  return (
+    <SortColumnButton
+      label={t(labelKey)}
+      sortKey={sortKey}
+      onSort={onSort}
+      align="start"
+      defaultDirection={defaultDirection}
+      active={active}
+      direction={direction}
+    />
+  );
+}
+
+function NodeColumnLabel({ labelKey }: { labelKey: string }) {
+  const { t } = useNodeCellState();
+  return t(labelKey);
+}
+
+function NodeIdentityColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
+  const { storedTokens, colocated, t } = useNodeCellState();
+  return <NodeIdentityCell node={node} storedTokens={storedTokens} colocated={colocated} t={t} />;
+}
+
+function NodeEmployeeColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
+  const { employeeById } = useNodeCellState();
+  const employee = node.employeeId ? employeeById.get(node.employeeId) : undefined;
+  return <NodeEmployeeCell employeeName={employee?.displayName} />;
+}
+
+function NodeRuntimesColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
+  const { t } = useNodeCellState();
+  return <NodeRuntimesCell node={node} t={t} />;
+}
+
+function NodeActionsColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
+  const state = useNodeCellState();
+  return (
+    <NodeActionsCell
+      node={node}
+      onReveal={state.onRevealCredentials}
+      onRename={state.onRenameNode}
+      onManageExecutors={state.onManageExecutors}
+      onDelete={state.onDeleteNode}
+      t={state.t}
+    />
+  );
+}
+
 /** One band of the grouped fleet list as a real table. The bands page
     independently, so each gets its own `useReactTable` over the rows already
     paged for it; sorting stays manual — the rows arrive pre-ordered by
@@ -109,14 +189,7 @@ function NodeBandTable({
   ariaLabel: string;
 }) {
   const { t } = useTranslation();
-  const table = useReactTable({
-    data: rows,
-    columns,
-    state: { sorting },
-    manualSorting: true,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (node) => node.id,
-  });
+  const table = useManualSortTable(rows, columns, sorting);
   return (
     <Table data-density="compact" aria-label={ariaLabel}>
       <TableHeader>
@@ -201,14 +274,11 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
   // so a bare `sort` would have the two tables fighting over one key.
   const { sort, toggleSort, setSort } = useListSort(sortColumns, "nodeSort");
   const { page, setPage } = usePagination("nodePage");
-  /* flexRender mounts a column's cell function AS a component, so a column
-     def that closed over render-volatile values — `t`, the caller's inline
-     callbacks, the employee lookup — would unmount and remount every cell
-     subtree (and its `useNodeDelete` state) on each parent render. The
-     column defs below therefore stay stable and read those values through
-     this ref at render time. */
-  const cellState = useRef({ t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode });
-  cellState.current = { t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode };
+  // What the stable column defs read at render time (see NodeCells).
+  const cellState = useMemo<NodeCellState>(
+    () => ({ t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode }),
+    [t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode],
+  );
   /* `useListSort` owns the sort (it persists in the URL); TanStack's
      SortingState is a read-only projection of it. Header clicks go back
      through `toggleSort`, never through the table. */
@@ -218,64 +288,39 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
   );
 
   const columns = useMemo<ColumnDef<ControlPanelDaemonNodeRecord>[]>(() => {
-    const sortHead = (key: NodeSortKey, label: string, defaultDirection?: SortDirection) => {
-      const { active, direction } = sortIndicator(sort, key);
-      return (
-        <SortColumnButton
-          label={label}
-          sortKey={key}
-          onSort={toggleSort}
-          align="start"
-          defaultDirection={defaultDirection}
-          active={active}
-          direction={direction}
-        />
-      );
-    };
+    const sortHead = (key: NodeSortKey, labelKey: string, defaultDirection?: SortDirection) => (
+      <NodeSortHeader
+        sortKey={key}
+        labelKey={labelKey}
+        sort={sort}
+        onSort={toggleSort}
+        defaultDirection={defaultDirection}
+      />
+    );
     return [
       {
         id: "node",
         meta: { headClass: "adm-node-col-identity", cellClass: "adm-node-col-identity" } satisfies ColumnChrome,
-        header: () => sortHead("node", cellState.current.t("admin.v2.col_node")),
-        cell: ({ row }) => (
-          <NodeIdentityCell
-            node={row.original}
-            storedTokens={cellState.current.storedTokens}
-            colocated={cellState.current.colocated}
-            t={cellState.current.t}
-          />
-        ),
+        header: () => sortHead("node", "admin.v2.col_node"),
+        cell: ({ row }) => <NodeIdentityColumn node={row.original} />,
       },
       {
         id: "employee",
         meta: { headClass: "adm-node-col-employee" } satisfies ColumnChrome,
-        header: () => sortHead("employee", cellState.current.t("admin.v2.col_employee")),
-        cell: ({ row }) => {
-          const node = row.original;
-          const employee = node.employeeId ? cellState.current.employeeById.get(node.employeeId) : undefined;
-          return <NodeEmployeeCell employeeName={employee?.displayName} />;
-        },
+        header: () => sortHead("employee", "admin.v2.col_employee"),
+        cell: ({ row }) => <NodeEmployeeColumn node={row.original} />,
       },
       {
         id: "runtimes",
-        header: () => sortHead("runtimes", cellState.current.t("admin.v2.node_runtimes"), "desc"),
-        cell: ({ row }) => <NodeRuntimesCell node={row.original} t={cellState.current.t} />,
+        header: () => sortHead("runtimes", "admin.v2.node_runtimes", "desc"),
+        cell: ({ row }) => <NodeRuntimesColumn node={row.original} />,
       },
       {
         /* Actions is not a column of data — there is nothing to order by. */
         id: "actions",
         meta: { headClass: "adm-node-col-actions text-right", cellClass: "text-right" } satisfies ColumnChrome,
-        header: () => cellState.current.t("admin.v2.col_actions"),
-        cell: ({ row }) => (
-          <NodeActionsCell
-            node={row.original}
-            onReveal={cellState.current.onRevealCredentials}
-            onRename={cellState.current.onRenameNode}
-            onManageExecutors={cellState.current.onManageExecutors}
-            onDelete={cellState.current.onDeleteNode}
-            t={cellState.current.t}
-          />
-        ),
+        header: () => <NodeColumnLabel labelKey="admin.v2.col_actions" />,
+        cell: ({ row }) => <NodeActionsColumn node={row.original} />,
       },
     ];
   }, [sort, toggleSort]);
@@ -422,14 +467,16 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
                 count={groupNodes.length}
                 tone={nodeBandTone(status)}
               >
-                <NodeBandTable
-                  rows={groupPage.items}
-                  columns={columns}
-                  sorting={sorting}
-                  sort={sort}
-                  highlightedNodeId={highlightedNodeId}
-                  ariaLabel={label}
-                />
+                <NodeCells.Provider value={cellState}>
+                  <NodeBandTable
+                    rows={groupPage.items}
+                    columns={columns}
+                    sorting={sorting}
+                    sort={sort}
+                    highlightedNodeId={highlightedNodeId}
+                    ariaLabel={label}
+                  />
+                </NodeCells.Provider>
                 <Pagination
                   compact
                   className="list-group-pager"

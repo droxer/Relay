@@ -1,5 +1,5 @@
 export type Theme = "light" | "dark" | "system";
-export type ResolvedTheme = Exclude<Theme, "system">;
+type ResolvedTheme = Exclude<Theme, "system">;
 
 export const SUPPORTED_THEMES = ["light", "dark", "system"] as const;
 
@@ -20,16 +20,16 @@ export function normalizeLanguage(value: unknown): Language {
 
 export type TokenMap = Record<string, string>;
 
-export const tokenStorageKey = "relay-web.tokens";
+const tokenStorageKey = "relay-web.tokens";
 export const selectedEmployeeKey = "relay-web.selectedEmployee";
-export const themeStorageKey = "relay-web.theme";
-export const languageStorageKey = "relay-web.language";
-export const threadSpaceWidthKey = "relay-web.threadSpaceWidth";
-export const threadListWidthKey = "relay-web.threadListWidth";
-export const sidenavWidthKey = "relay-web.sidenavWidth";
-export const sidenavExpandedKey = "relay-web.sidenavExpanded";
-export const threadListBesideSpaceKey = "relay-web.threadListBesideSpace";
-export const drawerWidthKeyPrefix = "relay-web.drawerWidth.";
+const themeStorageKey = "relay-web.theme";
+const languageStorageKey = "relay-web.language";
+const threadSpaceWidthKey = "relay-web.threadSpaceWidth";
+const threadListWidthKey = "relay-web.threadListWidth";
+const sidenavWidthKey = "relay-web.sidenavWidth";
+const sidenavExpandedKey = "relay-web.sidenavExpanded";
+const threadListBesideSpaceKey = "relay-web.threadListBesideSpace";
+const drawerWidthKeyPrefix = "relay-web.drawerWidth.";
 
 export function readTokens(): TokenMap {
   if (typeof window === "undefined") return {};
@@ -160,16 +160,16 @@ export function writeDrawerWidth(role: string, width: number): void {
 }
 
 /** Resolve the OS color-scheme preference; defaults to light off-DOM. */
-export function systemTheme(): "light" | "dark" {
+function systemTheme(): "light" | "dark" {
   if (typeof window === "undefined" || !window.matchMedia) return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function resolveTheme(theme: Theme): ResolvedTheme {
+function resolveTheme(theme: Theme): ResolvedTheme {
   return theme === "system" ? systemTheme() : theme;
 }
 
-export function syncThemeColor(): void {
+function syncThemeColor(): void {
   if (
     typeof window === "undefined"
     || typeof document === "undefined"
@@ -196,7 +196,23 @@ export function syncThemeColor(): void {
  *  parallel prefers-color-scheme media query). */
 export function applyTheme(theme: Theme): void {
   if (typeof document === "undefined") return;
+  const root = document.documentElement;
   const resolved = resolveTheme(theme);
-  document.documentElement.setAttribute("data-theme", resolved);
+  const previous = root.getAttribute("data-theme");
+  if (previous && previous !== resolved) suspendTransitions(root);
+  root.setAttribute("data-theme", resolved);
   syncThemeColor();
+}
+
+const THEME_SWITCHING_CLASS = "theme-switching";
+
+/** Surfaces ease their colours over --t-fast, so a theme flip would cross-fade
+ *  the whole page. tokens/base.css drops transitions under this class; hold
+ *  it for two frames — one to restyle, one to paint the new theme. */
+function suspendTransitions(root: HTMLElement): void {
+  if (typeof requestAnimationFrame !== "function" || !root.classList) return;
+  root.classList.add(THEME_SWITCHING_CLASS);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => root.classList.remove(THEME_SWITCHING_CLASS));
+  });
 }

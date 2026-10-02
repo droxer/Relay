@@ -1,8 +1,8 @@
 import type { ControlPanelDaemonNodeRecord, DaemonNodeMonitorRecord } from "../types.js";
+import { omit } from "./omit.ts";
 
 function stripControlPanelToken(node: ControlPanelDaemonNodeRecord): DaemonNodeMonitorRecord {
-  const { nodeToken: _nodeToken, ...safeNode } = node;
-  return safeNode;
+  return omit(node, "nodeToken");
 }
 
 function nodeRank(node: DaemonNodeMonitorRecord): number {

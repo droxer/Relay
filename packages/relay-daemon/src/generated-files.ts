@@ -22,7 +22,7 @@ import type { DaemonGeneratedFile } from "relay-core";
  * (backend/relay/daemon_registry/artifacts.py); change both together.
  */
 
-export const GENERATED_FILE_EXTENSIONS = new Set([
+const GENERATED_FILE_EXTENSIONS = new Set([
   ".csv",
   ".doc",
   ".docx",
@@ -48,7 +48,7 @@ const OUTPUT_FILE_TEXT_EXTENSIONS = new Set([
   ".txt",
 ]);
 
-export const GENERATED_FILE_EXCLUDED_DIRS = new Set([
+const GENERATED_FILE_EXCLUDED_DIRS = new Set([
   ".cache",
   ".git",
   ".gradle",
@@ -71,7 +71,7 @@ export const GENERATED_FILE_EXCLUDED_DIRS = new Set([
 ]);
 
 /** Dependency lockfiles churn on every install and are never a deliverable. */
-export const GENERATED_FILE_EXCLUDED_NAMES = new Set([
+const GENERATED_FILE_EXCLUDED_NAMES = new Set([
   "Cargo.lock",
   "go.sum",
   "package-lock.json",
@@ -88,11 +88,11 @@ export const GENERATED_FILE_EXCLUDED_NAMES = new Set([
  */
 export const GENERATED_FILE_LIMIT = 200;
 /** Per-file inline snapshot cap; larger files are reported metadata-only. */
-export const GENERATED_FILE_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
+const GENERATED_FILE_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
 /** Total inline content budget per run.completed event. */
-export const GENERATED_FILE_CONTENT_TOTAL_MAX_BYTES = 8 * 1024 * 1024;
+const GENERATED_FILE_CONTENT_TOTAL_MAX_BYTES = 8 * 1024 * 1024;
 /** Walk bound so a pathological workspace cannot stall the daemon. */
-export const GENERATED_FILE_WALK_MAX_ENTRIES = 50_000;
+const GENERATED_FILE_WALK_MAX_ENTRIES = 50_000;
 
 const CONTENT_TYPES: Record<string, string> = {
   ".csv": "text/csv",
@@ -126,7 +126,7 @@ const SENSITIVE_FILE_EXACT_NAMES = new Set(["id_rsa", "id_dsa", "id_ecdsa", "id_
 const SENSITIVE_FILE_EXTENSIONS = new Set([".key", ".pem", ".p12", ".pfx", ".keystore", ".jks"]);
 const LIKELY_SECRET_CONTENT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:OPENAI|ANTHROPIC|AWS|GITHUB|GOOGLE|RELAY)?_?(?:API_?KEY|ACCESS_?TOKEN|SECRET|PASSWORD)\s*["']?\s*[:=]\s*["']?[A-Za-z0-9_./+\-=]{8,}|\bsk-[A-Za-z0-9_-]{8,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAKIA[A-Z0-9]{16})/i;
 
-export interface GeneratedFileCandidate {
+interface GeneratedFileCandidate {
   path: string;
   relativePath: string;
   title: string;
@@ -137,9 +137,9 @@ export interface GeneratedFileCandidate {
   snapshotable: boolean;
 }
 
-export type GeneratedFileSnapshot = Record<string, { mtimeMs: number; bytes: number }>;
+type GeneratedFileSnapshot = Record<string, { mtimeMs: number; bytes: number }>;
 
-export interface GeneratedFileScanOptions {
+interface GeneratedFileScanOptions {
   /**
    * The running agent's own personal-home subdir (slash-separated, e.g.
    * "agents/agent-<b64>"). When set, sibling agents/* homes are skipped so a
@@ -196,7 +196,7 @@ function isExcludedByName(name: string): boolean {
  * documents only near a workspace root. Widening this widens what Relay
  * stores and serves, so it stays as narrow as it was audited.
  */
-export function isSnapshotableFile(relativePath: string, extension: string): boolean {
+function isSnapshotableFile(relativePath: string, extension: string): boolean {
   return GENERATED_FILE_EXTENSIONS.has(extension) || isTextDocumentFile(relativePath, extension);
 }
 

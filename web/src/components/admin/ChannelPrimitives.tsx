@@ -34,7 +34,7 @@ export function providerLabel(provider: ChatProvider): string {
 }
 
 /** Ink-on-neutral provider mark — silhouette carries identity without vendor chroma. */
-export function ProviderGlyph({ provider }: { provider: ChatProvider }) {
+function ProviderGlyph({ provider }: { provider: ChatProvider }) {
   if (provider === "discord") {
     return (
       <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" focusable="false">

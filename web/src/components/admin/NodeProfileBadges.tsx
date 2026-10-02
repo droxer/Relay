@@ -2,7 +2,7 @@
 
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
-import { ICON, nodeOwnershipIcon } from "../icons";
+import { ICON, NodeOwnershipIcon } from "../icons";
 import {
   nodeOwnershipProfile,
   nodeLocalityKinds,
@@ -44,7 +44,6 @@ export function NodeProfileBadges({ node, storedTokens, colocated, t, compact = 
   const localityHint = localities
     .map((locality) => t(`admin.v2.node_locality_${locality}_hint`))
     .join(" · ");
-  const OwnershipIcon = nodeOwnershipIcon(ownership);
   const showSandbox = !card && !hideSandbox;
 
   return (
@@ -64,7 +63,7 @@ export function NodeProfileBadges({ node, storedTokens, colocated, t, compact = 
         title={ownershipHint}
         translate="no"
       >
-        <OwnershipIcon size={ICON.sm} className="adm-node-profile-icon" aria-hidden="true" />
+        <NodeOwnershipIcon ownership={ownership} size={ICON.sm} className="adm-node-profile-icon" aria-hidden="true" />
         {ownershipLabel}
       </span>
       {showSandbox ? (

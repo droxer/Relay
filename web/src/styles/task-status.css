@@ -326,59 +326,12 @@
   gap: var(--sp-1);
 }
 
-/* The assigned agent, named. The mark alone is an unlabelled glyph — it
-   identifies an agent only to a reader who already knows the monogram, and a
-   card has the width the list column did not. */
-.backlog-agent {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1-5);
-  min-width: 0;
-}
 
-.backlog-agent-name {
-  min-width: 0;
-  max-width: 14ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .backlog-due.warn { color: var(--warn); }
 .backlog-due.bad { color: var(--err); }
 
 /* ── Routine provenance ────────────────────────────────────────────── */
-
-/* Provenance, stated the way the date beside it is: a glyph and a word. It
-   explains where a record came from, it does not rank it, so it must never
-   out-weigh the priority badge — and the outlined capsule it used to wear put
-   it at exactly that weight, a third bordered object on a line that already
-   had two. */
-.backlog-routine-origin {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  min-width: 0;
-  max-width: 160px;
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  line-height: var(--leading-snug);
-}
-
-.backlog-routine-origin-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The one thing a run leaves behind that the lane does not already say: how
-   many files it produced. The status word that used to sit beside it was
-   `task.status` — the lane's own name, restated on every card in it. */
-.backlog-result-files {
-  color: var(--ink-3);
-}
 
 /* Toolbar clusters — dispatch (assign + start) · navigation · state change —
    separated by a hairline so it reads as distinct groups of actions rather

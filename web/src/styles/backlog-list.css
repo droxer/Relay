@@ -163,29 +163,6 @@ tr[data-routine-state="paused"] .backlog-row-title,
   max-width: 100%;
 }
 
-.task-assignee-avatar {
-  flex: none;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--avatar-xs);
-  height: var(--avatar-xs);
-  border-radius: var(--r-full);
-  font-size: var(--fs-1);
-  font-weight: 500;
-  line-height: var(--leading-none);
-  color: var(--ink-1);
-  background: var(--surface-2);
-  border: 0.5px solid var(--line-1);
-}
-
-.task-assignee[data-unassigned="true"] .task-assignee-avatar {
-  background: transparent;
-  border-style: dashed;
-  border-color: var(--line-1);
-}
-
 .task-assignee-name {
   min-width: 0;
   overflow: hidden;
@@ -389,30 +366,6 @@ tr[data-routine-state="paused"] .backlog-row-title,
 .backlog-lane-add:hover {
   background: var(--row-hover);
   color: var(--ink-2);
-}
-
-/* Wears the thread composer's input-card chrome (composer.css
-   .composer-input-wrap): borderless --surface-3 plane at the --r-3 card
-   radius, outlined by the --shadow-2 hairline instead of a drawn border, so
-   the "type a title" field reads as the same surface in both places. The
-   global input:focus-visible contract already supplies the same
-   --focus-outline ring the composer card carries, so focus needs no rule
-   here. Height and --type-body-sm stay lane-scale — the field lives inside
-   dense lanes, not above a transcript. */
-.backlog-inline-create {
-  width: 100%;
-  min-height: 36px;
-  padding: var(--sp-2) var(--sp-4);
-  border: 0;
-  border-radius: var(--r-3);
-  background: var(--surface-3);
-  box-shadow: var(--shadow-2);
-  color: var(--ink-1);
-  font: var(--type-body-sm);
-}
-
-.backlog-inline-create::placeholder {
-  color: var(--ink-3);
 }
 
 /* ── Batch selection ───────────────────────────────────────────────── */

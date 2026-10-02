@@ -31,7 +31,7 @@ import { describeAgentPlacements, placementRuntimeNodeId } from "../lib/agentPla
 import { ProfileImagePicker } from "./ProfileImagePicker";
 import { Alert } from "@/components/ui/alert";
 
-export interface AgentProfilePanelProps {
+interface AgentProfilePanelProps {
   agent: EmployeeAgent;
   nodes?: ControlPanelDaemonNodeRecord[];
   canManage?: boolean;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   addChatAllowedConversation,
@@ -29,6 +29,7 @@ import {
   statusTone,
   TELEGRAM_CREDENTIAL_FIELDS,
 } from "./ChannelPrimitives";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 /**
  * The right-hand panel of the Channels view: everything about the ONE selected
@@ -42,7 +43,7 @@ import {
  * genuinely shared — the selection, the two mutation helpers, and the
  * view-level busy/error channels.
  */
-export interface ChannelDetailProps {
+interface ChannelDetailProps {
   selected: ChatIntegration | undefined;
   agents: EmployeeAgent[] | undefined;
   nodes: DaemonNodeMonitorRecord[] | undefined;
@@ -91,20 +92,20 @@ export function ChannelDetail({
     label: "",
   });
 
-  useEffect(() => {
-    if (!selected) return;
+  useKeyChange(selected, (next) => {
+    if (!next) return;
     setEditPublicBaseUrl(
-      typeof selected.config.publicBaseUrl === "string" ? selected.config.publicBaseUrl : "",
+      typeof next.config.publicBaseUrl === "string" ? next.config.publicBaseUrl : "",
     );
     setEditCredentials(Object.fromEntries(
       TELEGRAM_CREDENTIAL_FIELDS
         .filter((field) => !field.secret)
         .map((field) => {
-          const value = selected.config[field.key];
+          const value = next.config[field.key];
           return [field.key, typeof value === "string" ? value : ""];
         }),
     ));
-  }, [selected]);
+  }, { from: null });
 
   const identityAgentOptions = useMemo(() => {
     const agents = (agentRecords ?? []).filter((agent) => !agent.deletedAt);

@@ -1,6 +1,6 @@
 import type { RelaySession } from "../types.js";
 
-export type SendAction = { kind: "append"; sessionId: string } | { kind: "create" };
+type SendAction = { kind: "append"; sessionId: string } | { kind: "create" };
 
 type SessionLike = Pick<RelaySession, "id"> & { archived?: boolean };
 

@@ -7,7 +7,7 @@ import type {
 
 export type ProjectPageTab = "general" | "tasks" | "workspace";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
-export type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
+type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
 /* A project opens on General — what it is for and who works in it — and the
    strip lists that tab first so the default sits where the eye starts. The

@@ -36,6 +36,7 @@ import {
   ICON,
   ICON_STROKE_LARGE,
 } from "./icons";
+import { omit } from "../lib/omit";
 
 export function ComputerPage({
   nodes,
@@ -161,10 +162,7 @@ export function ComputerPage({
     try {
       await disconnectComputer(node.id);
       setRemovedIds((prev) => (prev.includes(node.id) ? prev : [...prev, node.id]));
-      setOverrides((prev) => {
-        const { [node.id]: _removed, ...rest } = prev;
-        return rest;
-      });
+      setOverrides((prev) => omit(prev, node.id));
     } catch (error) {
       const message = error instanceof RelayApiError && error.status === 409
         ? t("errors.disconnect_computer_active")

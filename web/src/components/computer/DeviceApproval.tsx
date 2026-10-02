@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { approveComputerAuthorization, getComputerAuthorization, type ComputerAuthorizationDetails } from "../../api";
 import { Button } from "../ui/button";
 import { Alert } from "../ui/alert";
+import { useKeyChange } from "../../hooks/useKeyChange";
 
 export function DeviceApproval({ code }: { code: string }) {
   const { t } = useTranslation();
@@ -11,9 +12,11 @@ export function DeviceApproval({ code }: { code: string }) {
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [approved, setApproved] = useState(false);
+  useKeyChange(code, () => {
+    setDetails(undefined); setError(false); setApproved(false);
+  });
   useEffect(() => {
     let active = true;
-    setDetails(undefined); setError(false); setApproved(false);
     void getComputerAuthorization(code).then(result => { if (active) setDetails(result); })
       .catch(() => { if (active) setError(true); });
     return () => { active = false; };

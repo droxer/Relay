@@ -266,22 +266,6 @@ def completed_cancel_record(
     return updated, event
 
 
-def terminal_database_ids_to_prune(
-    rows: list[Any], cutoff: str, per_node_limit: int
-) -> list[str]:
-    records_by_node: dict[str, list[Any]] = defaultdict(list)
-    for row in rows:
-        records_by_node[row["node_id"]].append(row)
-    database_ids: list[str] = []
-    for records in records_by_node.values():
-        records.sort(key=_database_terminal_timestamp, reverse=True)
-        for index, row in enumerate(records):
-            if index < per_node_limit and _database_terminal_timestamp(row) > cutoff:
-                continue
-            database_ids.append(row["id"])
-    return database_ids
-
-
 def _managed_runtime_identity_map(
     events: list[dict[str, Any]],
 ) -> dict[str, str]:

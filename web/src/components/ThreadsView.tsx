@@ -41,7 +41,7 @@ import { ProjectWorkspacePage } from "./ProjectWorkspacePage";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
 
-export type ThreadsViewProps = {
+type ThreadsViewProps = {
   taskThread?: boolean;
   directoryMode: "threads" | "projects";
   /** The shell's task list — the project board reads its lanes from it

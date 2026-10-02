@@ -5,7 +5,7 @@ import { activePlacements, describeAgentPlacements } from "../lib/agentPlacement
 import { agentLabel } from "../lib/plan";
 import type { AgentName, AgentPlacement } from "../types";
 import { AgentMark } from "./AgentMark";
-import { ICON, nodeOwnershipIcon } from "./icons";
+import { ICON, NodeOwnershipIcon } from "./icons";
 
 /**
  * The one line that annotates an agent: which runtime it is, and which
@@ -71,13 +71,12 @@ export function AgentMetaLine({
             <span className="agent-meta-computers">
               <span className="sr-only">{t("agents_page.computers")}: </span>
               {descriptions.map((description, index) => {
-                const ComputerIcon = nodeOwnershipIcon(description.ownership);
                 return (
                   <span key={description.placement.id} className="agent-meta-computer">
                     {index > 0 ? (
                       <span className="agent-meta-computer-separator" aria-hidden="true">,</span>
                     ) : null}
-                    <ComputerIcon size={ICON.xs} aria-hidden="true" />
+                    <NodeOwnershipIcon ownership={description.ownership} size={ICON.xs} aria-hidden="true" />
                     <span translate="no">{description.nodeName}</span>
                   </span>
                 );

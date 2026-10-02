@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { runAsAgent, shellCommand, type AgentExecutor, type DaemonRunSkillBundle, type DaemonSkippedSkill, type SkillDelivery } from "relay-core";
 
-export interface MaterializedSkills { skillPaths: string[]; env: Record<string, string>; slugs: string[]; skipped: DaemonSkippedSkill[]; }
-export interface MaterializeSkillsOptions {
+interface MaterializedSkills { skillPaths: string[]; env: Record<string, string>; slugs: string[]; skipped: DaemonSkippedSkill[]; }
+interface MaterializeSkillsOptions {
   bundle: DaemonRunSkillBundle | undefined; agentId: string; delivery: SkillDelivery;
   agentHome: string; cacheDir: string; execStream: AgentExecutor;
   fetchBlob(sha256: string): Promise<Buffer>; signal?: AbortSignal;

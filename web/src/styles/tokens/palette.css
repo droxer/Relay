@@ -1,7 +1,8 @@
 /* Relay palette — Vercel Geist-inspired neutral surfaces in both themes.
    Near-black and near-white canvases, achromatic grey elevation and borders,
-   and accessible neutral text keep the workspace quiet. Blue remains reserved
-   for actions and links; semantic hues identify status and syntax.
+   and accessible neutral text keep the workspace quiet. The primary action is
+   a neutral fill that inverts with the theme; blue is reserved for selection
+   and links; semantic hues identify status, liveness, and syntax.
    This is the only file allowed to originate a color.
    Reference: https://vercel.com/geist/colors
 
@@ -91,27 +92,34 @@
   --line-1: #333333; /* structural hairline */
   --line-2: #292929; /* soft hairline */
 
-  /* Action — cobalt, register-invariant AS A FILL. The source system reserves
-     #0064e0 for the in-product commerce CTA and gives marketing surfaces a
-     black pill instead; Relay is entirely in-product, so cobalt is THE primary
-     action on every surface, pre-auth chrome included. The black marketing
-     pill has no consumer here and is deliberately not carried as a token —
-     a second primary nobody presses is a second primary to keep in step.
-
-     The invariance proof is FILL-ONLY: white on #0064e0 measures 5.4:1 and on
-     the pressed #0457cb 6.5:1, so neither register needs its own fill. As an
-     INK the same cobalt is not register-invariant at all — on the light planes
-     it measures 4.29 (surface-2) / 4.33 (rail) / 4.75 (canvas), under the 4.5:1
-     AA floor for text. `color: var(--action)` is therefore legal only for
-     large, non-text glyphs (WCAG 1.4.11's 3:1 — its one ink consumer today is
-     the 36px runtime mark in admin-v2-drawers.css); anything that reads as
-     text and needs a blue takes --link. No disabled hex: disabled is
-     --opacity-disabled. */
-  /* Primary CTAs invert with the theme; blue remains a selection/link accent. */
+  /* Primary action — a NEUTRAL fill that inverts with the theme: near-white
+     on the charcoal canvas, near-black on the light one, with the canvas ink
+     on top. This is the Geist move: the button is the strongest contrast on
+     the page (16.9:1 dark / 17.9:1 light, 13.4 / 11.7 pressed), so it needs
+     no hue to lead, and hue stays free to mean something. shadcn's --primary
+     points here, so every default Button, the login CTA (on the pinned dark
+     values) and the primary page-header action all read it. No disabled
+     hex: disabled is --opacity-disabled or the Button's explicit disabled
+     surface. */
   --cta-fill: #ededed;
   --cta-hover: #d4d4d4;
   --cta-ink: #0a0a0a;
 
+  /* Selection — cobalt, register-invariant AS A FILL. Despite the role's
+     historical name, --action no longer marks the button to press; it marks
+     WHAT IS CHOSEN: the selected-row accent bar, the active nav marker,
+     checked checkboxes / radios / switches, the current pager page,
+     ::selection, and the skip link. One blue for "this one", so a selected
+     row and a checked box speak the same colour.
+
+     The invariance proof is FILL-ONLY: white on #0064e0 measures 5.4:1 and on
+     the pressed #0457cb 6.5:1, so neither register needs its own fill. As an
+     INK the same cobalt is not register-invariant at all — on the light planes
+     it sits under the 4.5:1 AA floor for text. `color: var(--action)` is
+     therefore legal only for large, non-text glyphs (WCAG 1.4.11's 3:1 — its
+     one ink consumer today is the 36px runtime mark in
+     admin-v2-drawers.css); anything that reads as text and needs a blue takes
+     --link. */
   --action: #0064e0;
   --action-hover: #0457cb; /* the source system's button-buy-cta-pressed */
   /* Soft-cobalt callout tint, selection wash, active nav. 10% in both
@@ -143,12 +151,12 @@
        this one holds chroma 0.19 at hue 22 and spends LIGHTNESS, not chroma,
        on the AA floor.
 
-     Worst-plane ratios: ok 5.9 · warn 6.5 · err 4.7. */
+     Worst-plane ratios: ok 6.6 · warn 7.3 · err 5.2. */
   --ok: #4ac16a;   /* success — the source system's #31a24c, lifted for the dark canvas */
   --warn: #fc9f30; /* warning — the source system's #f7b928, moved off the highlighter */
   --err: #ff6367;  /* critical — the source system's #e41e3f, lifted for the dark canvas */
   /* Text on an --err FILL (destructive hover inversion). The lifted red is
-     bright enough here that the on-fill text is the canvas ink (6.5:1). */
+     bright enough here that the on-fill text is the canvas ink (6.8:1). */
   --on-err: #0a0a0a;
 
   /* Live — work an agent is doing RIGHT NOW. The source system sanctions exactly two
@@ -156,7 +164,7 @@
      for by the primary action, so liveness takes the purple — a channel that
      can never be confused with "this is the button to press".
      Legal only where --t-pulse is used; --t-pulse-calm surfaces stay
-     neutral. 5.1:1 on --surface-3, so an elapsed timer set in --live is
+     neutral. 5.7:1 on --surface-3, so an elapsed timer set in --live is
      legible, not decorative.
      Deliberately no --live-wash companion: a wash is a fill, and this colour
      is never a fill. Tint a ring (see pulse-ring) or an ink, nothing else. */
@@ -829,7 +837,7 @@ html[data-theme="light"] {
 
   /* --action / --action-hover / --on-action are register-invariant (declared
      once on :root) — cobalt reads on both canvases without retuning. Only
-     the soft callout tint changes weight here. 10%, not 15%: at 15% every
+     the soft selection tint changes weight here. 10%, not 15%: at 15% every
      selected row, active nav item and section-rail entry was a saturated blue
      block, and beside the leading accent bar that already marks the selection
      it read as a second, louder indicator. The flat register lets the bar
@@ -843,7 +851,7 @@ html[data-theme="light"] {
      The warning follows the dark register off the golden-yellow hue onto the
      amber at 65; the critical red already sits at the saturated hue 22 the
      dark register moves to, so it is unchanged.
-     Ratios against --surface-2: ok 4.6 · warn 4.8 · err 4.7. */
+     Ratios against --surface-2: ok 4.9 · warn 5.0 · err 4.9. */
   --ok: #12752f;   /* success #31a24c, deepened */
   --warn: #8f560f; /* warning, deepened on the amber hue */
   --err: #c81232;  /* critical #e41e3f, deepened */
@@ -851,8 +859,8 @@ html[data-theme="light"] {
      (5.9:1 on this red). */
   --on-err: #ffffff;
 
-  /* Live — Oculus purple at its published value: 4.6:1 on --surface-2 and
-     5.1:1 on the canvas, so an elapsed timer set in it is legible. */
+  /* Live — Oculus purple at its published value: 4.9:1 on --surface-2 and
+     5.5:1 on the canvas, so an elapsed timer set in it is legible. */
   --live: #a121ce;
 
   --link-blue: #385898;      /* meta-link */

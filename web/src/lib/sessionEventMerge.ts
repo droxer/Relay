@@ -2,12 +2,12 @@ import type { RelaySession } from "../types.js";
 
 type RelayEvent = RelaySession["events"][number];
 
-export type SessionEventMergeResult = {
+type SessionEventMergeResult = {
   sessions: RelaySession[] | undefined;
   consumed: boolean;
 };
 
-export type SessionEventsMergeResult = {
+type SessionEventsMergeResult = {
   sessions: RelaySession[] | undefined;
   consumed: number;
 };

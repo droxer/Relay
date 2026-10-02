@@ -9,8 +9,9 @@
    The pre-auth screen stays in the pinned dark register (no theme
    preference is loaded yet). The local --lg-* names alias the always-dark
    register in tokens/palette.css so the screen stays dark whatever theme
-   the operator has saved; the one thing shared with the post-auth product
-   is the register-invariant action cobalt on the primary CTA. Spacing,
+   the operator has saved. Its primary CTA is the post-auth product's
+   neutral fill, taken from the pinned dark values rather than the active
+   theme (dark-ink plate, canvas ink on top). Spacing,
    type scale, and radii are theme-independent tokens and are used
    directly.
    ===================================================================== */
@@ -337,7 +338,7 @@
 }
 
 /* Palette-only overrides on the shared Button (variant="default" size="cta"
-   w-full): geometry (40px, --r-2, px-4), typography (14px/600), the loading
+   w-full): geometry (--control-h, --r-2), typography, the loading
    glyph, and the focus ring all come from the primitive — this block only
    re-paints the plate in the pinned pre-auth register. */
 .login-submit {
@@ -432,23 +433,7 @@
   }
 
   .login-cover > .login-brand { animation-delay: calc(var(--t-stagger) * 1); }
-  .login-cover > /* The category line — "AI Workforce Intelligence Platform". Mono caps is the
-   cover's sanctioned skin (field labels, footer meta), and the leading
-   hairline rule reads as an appositive to the wordmark rather than a second
-   name. Muted ink: the wordmark stays the only full-strength mark in the
-   row. */
-.login-tagline {
-  padding-left: var(--sp-2);
-  border-left: 0.5px solid var(--lg-hairline);
-  font-family: var(--font-mono);
-  font-size: var(--fs-2);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  line-height: var(--leading-normal);
-  color: var(--lg-muted);
-}
-
-.login-intro { animation-delay: calc(var(--t-stagger) * 2); }
+  .login-cover > .login-intro { animation-delay: calc(var(--t-stagger) * 2); }
   .login-cover > .login-points { animation-delay: calc(var(--t-stagger) * 3); }
   .login-panel-inner { animation-delay: calc(var(--t-stagger) * 3); }
   .login-foot { animation-delay: calc(var(--t-stagger) * 4); }
