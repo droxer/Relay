@@ -296,7 +296,7 @@ calls the backend origin directly with `credentials: "include"`.
 
 ### Run one replica
 
-The backend runs a background `TaskScheduler` that promotes due routines and
+The backend runs a background `TaskScheduler` that promotes due automations and
 dispatches assigned tasks. It is not leader-elected: a second replica would
 promote and dispatch the same work twice. Keep `numReplicas: 1` (as
 `railway.json` sets), and scale up only after giving the scheduler a lock — or
@@ -319,7 +319,7 @@ Railway and can keep the default.
 
 If the Railway service is allowed to sleep, the first request after idle pays
 the container start. That also stops the task scheduler while asleep, so due
-routines fire late. Keep the backend always-on for any deployment where routines
+automations fire late. Keep the backend always-on for any deployment where automations
 matter.
 
 ### Secrets

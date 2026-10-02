@@ -17,7 +17,7 @@ documentation locations, and UI metadata from the backend's shared constants.
 /issues/{taskId}
 /issues/{taskId}/threads/{threadId}
 /issues
-/routines
+/automations
 /agents
 /agents/{agentId}
 /teams
@@ -44,7 +44,7 @@ route. `/` is replaced with `/threads`.
 | :- | :- |
 | `/api/v1/auth` | Bootstrap, login, logout, current user, preferences |
 | `/api/v1/threads` | Session-backed threads, events, artifacts, decisions, handoffs |
-| `/api/v1/tasks` | Backlog and routine resources, assignment, pickups, runs |
+| `/api/v1/tasks` | Backlog and automation resources, assignment, pickups, runs |
 | `/api/v1/agents`, `/api/v1/teams` | Current-user agents and teams |
 | `/api/v1/skills` | Employee-owned catalog, immutable revisions, and agent grants |
 | `/api/v1/admin/agents`, `/api/v1/admin/agent-placements` | Admin logical-agent and placement CRUD |
@@ -66,6 +66,8 @@ and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
 instead. An optional `limit` is clamped to 1–500; omitting it does not silently
 truncate either projection.
 
+Automations are stored as routine tasks; the routine* field names are the wire names.
+
 ## Normalized Mutations
 
 ```text
@@ -85,7 +87,7 @@ DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
 An explicit `POST /api/v1/tasks/{id}/runs` retries a blocked task (or the
-routine's existing blocked occurrence) after checking that no dispatch claim or
+automation's existing blocked occurrence) after checking that no dispatch claim or
 run request owns it. It records the status change through task events. Automatic
 scheduling never reopens blocked tasks.
 
