@@ -79,3 +79,24 @@ it("reports a missing title in the drawer's own words", () => {
   expect(save).not.toHaveBeenCalled();
   expect(screen.getByText("backlog.title_required")).toBeTruthy();
 });
+
+it("shows event filters and hides cadence for task-event automations", () => {
+  render(<Form initial={{ ...emptyRoutineForm(user), routineTrigger: { kind: "task_event", on: "status_changed" } }} />);
+  expect(screen.getByText("automation.trigger")).toBeTruthy();
+  expect(screen.getByText("automation.filter_from_status")).toBeTruthy();
+  expect(screen.getByText("automation.filter_to_status")).toBeTruthy();
+  expect(screen.queryByText("routine.cadence")).toBeNull();
+  expect(screen.queryByText("routine.next_run")).toBeNull();
+});
+
+it("shows a save-first hint for a new webhook automation", () => {
+  render(<Form initial={{ ...emptyRoutineForm(user), routineTrigger: { kind: "webhook" } }} />);
+  expect(screen.getByText("automation.webhook_save_first")).toBeTruthy();
+  expect(screen.queryByText("routine.cadence")).toBeNull();
+});
+
+it("explains manual runs and rate-limited pauses", () => {
+  render(<Form initial={{ ...emptyRoutineForm(user), projectId: "p", routineTrigger: { kind: "manual" }, routineDisabledReason: "rate_limited" }} />);
+  expect(screen.getByText("automation.manual_hint")).toBeTruthy();
+  expect(enabledHint()?.textContent).toBe("automation.rate_limited");
+});
