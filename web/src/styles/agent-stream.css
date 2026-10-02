@@ -53,7 +53,7 @@
 .collaboration-label {
   overflow: hidden;
   color: var(--ink-1);
-  font-size: var(--fs-3);
+  font-size: var(--fs-transcript);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -62,7 +62,8 @@
 .collaboration-status,
 .collaboration-meta {
   color: var(--ink-3);
-  font-size: var(--fs-2);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .collaboration-node-body {
@@ -76,21 +77,18 @@
 .collaboration-node-body > p {
   margin: 0 0 var(--sp-1);
   color: var(--ink-3);
-  font-size: var(--fs-3);
+  font-size: var(--fs-transcript);
   line-height: var(--leading-normal);
 }
 
 .agent-text {
   color: var(--ink-1);
   font-family: var(--font-sans);
-  /* The body rung, prose leading — shared with the user bubble so both voices
-     in the transcript read at the same rhythm. This is the surface the product
-     is actually read on, so it takes --fs-4 (the ladder's primary reading
-     size, 16px); it once sat on the dense-prose rung with a comment naming a
-     tier (body-sm) it was never on. The reasoning tier below stays --fs-3 and
-     keeps its one-step-quieter relationship to the answer. */
-  font-size: var(--fs-4);
-  line-height: var(--leading-prose);
+  /* The transcript tokens — shared with the user bubble so both voices read
+     at the same rhythm. The reasoning tier below shares the size and steps
+     back by colour and its hairline rule instead. */
+  font-size: var(--fs-transcript);
+  line-height: var(--leading-transcript);
 }
 
 /* Markdown element rules — prose, fences, tables, footnotes, math — live in
@@ -114,7 +112,7 @@
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--type-code-track);
-  font-size: var(--fs-code);
+  font-size: var(--fs-code-transcript);
   font-weight: 500;
 }
 
@@ -212,7 +210,7 @@
   padding-left: 13.5px;
   border-left: 0.5px solid var(--line-2);
   font-family: var(--font-sans);
-  font-size: var(--fs-3);
+  font-size: var(--fs-transcript);
   line-height: var(--leading-loose);
   color: var(--ink-3);
 }
@@ -255,6 +253,12 @@
   font-size: var(--fs-2);
   line-height: var(--leading-normal);
   color: var(--ink-2);
+}
+
+/* A command line is mono (`.code`), so it takes the transcript's code size;
+   a tool line is sans and stays on the body rung. */
+.agent-command {
+  font-size: var(--fs-code-transcript);
 }
 
 /* Consecutive tool/command lines pull tight against the stream's default gap
@@ -331,11 +335,9 @@
   border-radius: var(--r-1);
   background: none;
   color: var(--ink-4);
-  font-family: var(--font-sans);
-  font-size: var(--fs-2);
+  /* Under a 13px mono command, a 14px toggle outweighed what it toggles. */
+  font: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
   font-style: normal;
-  font-weight: 400;
-  line-height: var(--leading-normal);
   text-align: left;
   cursor: pointer;
 }
@@ -438,7 +440,7 @@
   gap: var(--sp-1) var(--sp-2);
   padding: var(--sp-2) 0;
   color: var(--ink-3);
-  font-size: var(--fs-3);
+  font-size: var(--fs-transcript);
 }
 
 .artifact-plan-note-label {

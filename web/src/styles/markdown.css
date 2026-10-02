@@ -25,8 +25,8 @@
 }
 
 /* Block rhythm. A paragraph gap has to read as bigger than the leading inside
-   the paragraph or the blocks fuse into one grey slab — at 14px/1.75 the line
-   box is ~24.5px, so a 12px gap is under half a line and reads as no gap at
+   the paragraph or the blocks fuse into one grey slab — at 14px/1.65 the line
+   box is ~23px, so a 12px gap is about half a line and reads as no gap at
    all. 16px is the smallest step that separates (and matches doc-prose).
    Headings then need a gap clearly larger than that again, or a section start
    reads as one more bold sentence (h3–h6 share the body size on purpose — see
@@ -61,6 +61,14 @@
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code);
   font-weight: 500;
+}
+
+/* Transcript code — inline chips and fences — steps down with the transcript
+   body (see --fs-code-transcript). `.agent-code code` below inherits from its
+   fence, so the fence rule is what sizes block code. */
+.agent-prose code,
+.agent-prose .agent-code {
+  font-size: var(--fs-code-transcript);
 }
 
 .md-body strong {
@@ -107,18 +115,18 @@
   margin-top: 0;
 }
 
-/* In-message heading ladder stays under the 19px conversation title so a
-   content heading never visually rivals the page title: 17 / 16 / 15. The
-   transcript body is 16px, so h1 sits one step above it, h2 shares the body
-   size and h3 and below sit a rung under it, all separating by weight (700 vs
-   400) — which is how the rest of the system already distinguishes roles
-   inside one size. */
-.md-body h1 { font-size: var(--fs-heading); font-weight: 700; } /* 17px — the top rung needs weight, not just 2px over h2 */
-.md-body h2 { font-size: var(--fs-4); } /* 16px */
+/* In-message heading ladder stays well under the 19px conversation title so
+   a content heading never visually rivals the page title: 16 / 15 / 14. The
+   transcript body is 14px (--fs-transcript), so h1 and h2 sit one and two
+   rungs above it and h3 and below share the body size, separating by weight
+   (700 vs 400) — which is how the rest of the system already distinguishes
+   roles inside one size. */
+.md-body h1 { font-size: var(--fs-4); font-weight: 700; } /* 16px */
+.md-body h2 { font-size: var(--fs-3); } /* 15px */
 .md-body h3,
 .md-body h4,
 .md-body h5,
-.md-body h6 { font-size: var(--fs-3); } /* 15px — weight carries the rung */
+.md-body h6 { font-size: var(--fs-transcript); } /* 14px — weight carries the rung */
 
 .md-body ul,
 .md-body ol {
@@ -139,7 +147,7 @@
    of one item as close to the next bullet as to its own first line. */
 .md-body li {
   margin-bottom: var(--sp-2);
-  line-height: var(--leading-prose);
+  line-height: var(--leading-transcript);
 }
 
 .md-body li:last-child {
@@ -237,7 +245,7 @@ html:lang(zh-CN) .md-body blockquote {
   min-width: 100%;
   margin: 0;
   border-collapse: collapse;
-  font-size: var(--fs-3);
+  font-size: var(--fs-transcript);
   /* Cells are dense data, not prose: inheriting the transcript's prose
      leading would balloon every wrapped row. */
   line-height: var(--leading-normal);

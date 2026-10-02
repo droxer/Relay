@@ -687,6 +687,21 @@
      inline markdown code, diffs, plain artifacts, the file viewer — reads this
      token, so they cannot drift apart again. */
   --fs-code: 1rem;   /* 14px — code, diffs, file contents */
+  /* The thread transcript's reading size. The transcript is a chat column
+     read beside the thread rail and the dossier, not a standalone document:
+     on the 16px body rung with prose leading every line took ~28px and the
+     panel read oversized. Both voices (agent answer, user turn), the
+     in-message heading ladder, and the composer draft read from these two
+     tokens, so the size stays one decision. Document previews (.doc-prose)
+     keep --fs-4 and --leading-prose. */
+  --fs-transcript: var(--fs-2);              /* 14px */
+  --leading-transcript: var(--leading-loose); /* 1.65 */
+  /* Code set inside that 14px transcript. JetBrains Mono's taller x-height
+     reads a size up from the sans at the same px, so at --fs-code the chips
+     and command lines outweighed the prose they sit in. Transcript code takes
+     one mono step down; the file viewer, diffs, and document previews keep
+     --fs-code. */
+  --fs-code-transcript: 0.9286rem;           /* 13px */
   --fs-heading: 1.2143rem; /* 17px — subtitle-lg: section headings, in-message h1 */
   --fs-title: 1.3571rem;   /* 19px — card titles, pane and page titles */
   --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */

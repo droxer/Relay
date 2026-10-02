@@ -189,13 +189,16 @@
 }
 
 .transcript-empty .relay-empty-title {
-  font: var(--type-display);
-  letter-spacing: var(--type-display-track);
+  /* Pane-title tier, not the 28px display tier: this hero sits in the same
+     column as a 14px transcript and composer, and display size made the
+     empty thread louder than any thread with content in it. */
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
 }
 
 .transcript-empty .relay-empty-body {
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 /* Starter prompts use the plane-independent control fill and a visible

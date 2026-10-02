@@ -65,9 +65,11 @@
      someone's words. --type-title keeps that tier for fixed UI nouns
      (Threads, Backlog, the wordmark), where it reads as the brand's
      brand; content-derived strings take the calmer sans role. */
-  font: var(--type-title-content);
+  /* One rung under the 19px record title: the header sits over a 14px
+     transcript (--fs-transcript), and at 19px the thread name outweighed
+     every turn below it. Same calm sans voice as --type-title-content. */
+  font: 400 var(--fs-heading)/var(--leading-normal) var(--font-sans);
   letter-spacing: var(--type-title-content-track);
-  line-height: var(--leading-normal);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -330,8 +332,8 @@
   grid-column: 3;
   justify-self: end;
   color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   font-variant-numeric: tabular-nums;
 }
 
@@ -472,8 +474,9 @@
 
 .msg-time {
   color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  /* Metadata, not prose: a step under the 14px transcript and speaker name. */
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
   grid-column: 3;
   grid-row: 1;
@@ -534,9 +537,9 @@
   margin: 0;
   color: var(--ink-1);
   /* Tracks .agent-text — both transcript voices read at one size. */
-  font-size: var(--fs-4);
+  font-size: var(--fs-transcript);
   font-weight: 500;
-  line-height: var(--leading-prose);
+  line-height: var(--leading-transcript);
   word-break: break-word;
 }
 
@@ -572,8 +575,8 @@
 .msg-speaker-slot {
   margin-inline-start: var(--sp-2);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .attachment-marker {
@@ -628,7 +631,8 @@
   border: none;
   background: none;
   color: var(--ink-4);
-  font: var(--type-label);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -655,7 +659,9 @@
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-3);
-  font: var(--type-label);
+  /* Turn chrome recedes under the 14px transcript: meta, not label. */
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -683,7 +689,7 @@
 
 
 .msg-turn-action-label {
-  font: var(--type-label);
+  font: var(--type-meta);
 }
 
 @media (max-width: 820px) {

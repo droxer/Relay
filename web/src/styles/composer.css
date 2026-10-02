@@ -337,7 +337,8 @@
   min-width: 0;
   border: 0;
   padding: var(--sp-4) var(--composer-inline) var(--sp-1-5);
-  font: var(--type-body);
+  /* The draft reads at the transcript size it is about to join. */
+  font: 400 var(--fs-transcript)/var(--leading-normal) var(--font-sans);
   /* Both layers must break text identically or the pills slide off the names
      they belong to. */
   white-space: pre-wrap;
@@ -377,8 +378,9 @@
 
 /* iOS zooms any focused field under 16px; coarse pointers get the bump. The
    mirror takes the same bump or the pills stop lining up on phones. The 16px
-   must stay a hard literal floor — var(--fs-4) collapses to 15px under
-   [data-density=compact], which would reintroduce the zoom bug. */
+   must stay a hard literal floor — the desktop draft reads at
+   --fs-transcript (14px), and var(--fs-4) collapses to 15px under
+   [data-density=compact]; either would reintroduce the zoom bug. */
 @media (pointer: coarse) {
   .composer-textarea,
   .composer-highlight { font-size: 16px; }
