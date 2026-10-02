@@ -52,7 +52,10 @@ export function TranscriptEmpty({
                 className="transcript-empty-suggestion"
                 onClick={() => onSuggestion(text)}
               >
-                <span>{text}</span>
+                <span className="transcript-empty-suggestion-copy">
+                  <span>{t(`transcript.suggestion_${key}_label`)}</span>
+                  <span className="transcript-empty-suggestion-detail">{text}</span>
+                </span>
                 <ActionPrompt size={ICON.xs} />
               </Button>
             );

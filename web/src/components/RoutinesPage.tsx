@@ -382,7 +382,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         />
 
         {filteredTasks.length === 0 ? (
-          <BoardEmpty
+          <BoardEmpty feature="routines"
             title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
             body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
             createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}

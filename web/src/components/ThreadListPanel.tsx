@@ -253,7 +253,7 @@ export function ThreadListPanel({
               {t("project.loading")}
             </div>
           ) : directoryState === "error" ? (
-            <RelayEmptyState
+            <RelayEmptyState feature="threads"
               className="conversation-empty"
               title={t("project.load_failed")}
               body={projectsError || t("project.load_failed_body")}
@@ -264,12 +264,12 @@ export function ThreadListPanel({
               )}
             />
           ) : directoryState === "filtered-empty" ? (
-            <RelayEmptyState
+            <RelayEmptyState feature="threads"
               className="conversation-empty"
               title={t("thread.no_matches")}
             />
           ) : directoryState === "empty" ? (
-            <RelayEmptyState
+            <RelayEmptyState feature="threads"
               className="conversation-empty"
               title={t("project.no_projects")}
               actions={(
@@ -280,7 +280,7 @@ export function ThreadListPanel({
             />
           ) : null
         ) : threads.length === 0 ? (
-          <RelayEmptyState
+          <RelayEmptyState feature="threads"
             className="conversation-empty"
             title={query.trim() ? t("thread.no_matches") : t("thread.no_threads")}
             actions={query.trim() ? undefined : (

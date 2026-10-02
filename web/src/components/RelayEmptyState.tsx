@@ -1,11 +1,20 @@
 import { useId, type ElementType, type ReactNode } from "react";
+import { RelayMark } from "./RelayMark";
+import {
+  NavAgents, NavTeams, NavProjects, NavSkills, NavBacklog,
+  NavThreads, NavComputer, NavRoutine, ICON,
+} from "./icons";
 import { cn } from "@/lib/utils";
 
-/** The shared zero-data surface: optional mark tile, title, one line of body,
- *  optional hint and actions. There is no decorative layer — see the header
- *  of styles/empty-state.css for why the plate/doodle/watermark furniture is
- *  gone. */
+/** Shared first-use and zero-data surface. Feature marks reuse the navigation
+ * vocabulary; supplied illustrations always take precedence. */
+const FEATURE_MARKS = {
+  agents: NavAgents, teams: NavTeams, projects: NavProjects, skills: NavSkills,
+  tasks: NavBacklog, threads: NavThreads, computers: NavComputer, routines: NavRoutine,
+};
+
 type RelayEmptyStateProps = {
+  feature?: keyof typeof FEATURE_MARKS;
   title: string;
   body?: string;
   hint?: ReactNode;
@@ -21,6 +30,7 @@ type RelayEmptyStateProps = {
 };
 
 export function RelayEmptyState({
+  feature,
   title,
   body,
   hint,
@@ -32,6 +42,7 @@ export function RelayEmptyState({
   headingLevel = 2,
   fill = false,
 }: RelayEmptyStateProps) {
+  const Mark = feature ? FEATURE_MARKS[feature] : RelayMark;
   const generatedTitleId = useId();
   const resolvedTitleId = titleId ?? generatedTitleId;
   const TitleTag = `h${headingLevel}` as ElementType;
@@ -45,11 +56,15 @@ export function RelayEmptyState({
       )}
       aria-labelledby={resolvedTitleId}
     >
-      {illustration ? (
-        <div className="relay-empty-illustration" aria-hidden="true">
-          {illustration}
-        </div>
-      ) : null}
+      <div className="relay-empty-illustration" aria-hidden="true">
+        {illustration ?? (
+          <div className="relay-empty-diagram">
+            <span className="relay-empty-diagram-node" />
+            <span className="relay-empty-avatar"><Mark size={ICON.xl} /></span>
+            <span className="relay-empty-diagram-node" />
+          </div>
+        )}
+      </div>
       {kicker ? <div className="relay-empty-kicker">{kicker}</div> : null}
       <TitleTag
         id={resolvedTitleId}

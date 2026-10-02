@@ -297,7 +297,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             {t("skills.loading")}
           </div>
         ) : skillsQuery.error ? (
-          <RelayEmptyState
+          <RelayEmptyState feature="skills"
             title={t("skills.load_failed")}
             body={errorText(skillsQuery.error)}
             actions={
@@ -310,7 +310,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           /* Same split the agent and team rosters make: a library with nothing
              in it offers the create action, a library filtered down to nothing
              does not — the fix there is to change the search, not to publish. */
-          <RelayEmptyState
+          <RelayEmptyState feature="skills"
             title={skills.length ? t("skills.empty_filtered_title") : t("skills.empty_title")}
             body={skills.length ? t("skills.empty_filtered_body") : t("skills.empty_body")}
             actions={

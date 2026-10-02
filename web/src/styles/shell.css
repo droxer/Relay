@@ -145,8 +145,8 @@
    string — a team, agent, or project name. Same rung, different face; one
    variant serving both is how record names ended up reading as log lines. */
 .page-header-title--display {
-  font: var(--type-title);
-  letter-spacing: var(--type-title-track);
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
 }
 
 .page-header-title--record {
