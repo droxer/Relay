@@ -1,6 +1,6 @@
 # Automation triggers design
 
-Status: proposed (2026-10-02)
+Status: proposed (2026-10-02). Implementation plan: `docs/automation-triggers-plan.md` — read its "Deviations from the spec" section; it overrides this document where they differ.
 
 ## Goal
 
