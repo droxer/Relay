@@ -576,6 +576,34 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
+.attachment-marker {
+  justify-self: start;
+  max-width: 100%;
+  min-width: 0;
+  height: var(--control-h-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  padding: 0 var(--sp-2);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+  color: var(--ink-3);
+  font: var(--type-label);
+}
+
+.attachment-marker:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink-1);
+}
+
+.attachment-marker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .msg-turn-foot {
   display: flex;
   align-items: center;

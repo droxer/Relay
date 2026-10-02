@@ -1468,6 +1468,8 @@
     "strip_label": "Artifacts",
     "view": "View",
     "view_named": "View {{title}}",
+    "inline_files_one": "{{count}} file",
+    "inline_files_other": "{{count}} files",
     "open_drawer": "Open thread artifacts",
     "drawer_title": "Artifacts",
     "drawer_subtitle_one": "{{count}} artifact",

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AgentMark } from "./AgentMark";
 import { AgentStream } from "./AgentStream";
+import { AttachmentMarker } from "./AttachmentMarker";
 import { MarkdownContent } from "./LazyMarkdown";
 import { MessageTurnActions } from "./MessageTurnActions";
 import type { AgentName } from "../types";
@@ -250,9 +251,14 @@ export const MessageBlock = memo(function MessageBlock({
           />
           {message.attachments.length > 0 ? (
             <div className="attachment-list">
-              {message.attachments.map((artifact) => (
-                <ArtifactCard key={artifact.id} artifact={artifact} sessionId={sessionId} allArtifacts={message.attachments} onOpenArtifact={onOpenArtifact} agentDisplayNames={agentDisplayNames} />
+              {message.attachments.filter((artifact) => artifact.kind === "plan").map((artifact) => (
+                <PlanCard key={artifact.id} artifact={artifact} sessionId={sessionId} agentDisplayNames={agentDisplayNames} />
               ))}
+              <AttachmentMarker
+                artifacts={message.attachments.filter((artifact) => artifact.kind !== "plan")}
+                sessionId={sessionId}
+                onOpenArtifact={onOpenArtifact}
+              />
             </div>
           ) : null}
           <footer className="msg-turn-foot">
