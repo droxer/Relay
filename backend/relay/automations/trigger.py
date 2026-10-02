@@ -36,6 +36,7 @@ EVENT_LABELS = {
     "run.completed": "Run completed",
     "run.failed": "Run failed",
     "webhook": "Webhook",
+    "manual": "Manual",
 }
 
 
@@ -145,6 +146,8 @@ def _event_line(event: dict[str, Any]) -> str:
         where = task or f"Thread {event.get('sessionId')}"
         detail = f": {event['error']}" if event.get("error") else ""
         return f"{where} — run {outcome}{detail}"
+    if event_type == "manual":
+        return "Run now requested."
     payload = json.dumps(event.get("payload"), ensure_ascii=False, sort_keys=True)
     encoded = payload.encode()
     if len(encoded) > WEBHOOK_PAYLOAD_LIMIT:

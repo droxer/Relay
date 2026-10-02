@@ -75,7 +75,13 @@ AND-ed filters are `projectId`, `assignedAgentId`, `assignedTeamId`, `priority`,
 and `titleContains` (up to 120 characters). `fromStatus` and `toStatus` apply
 only to task status changes. Non-schedule triggers clear `routineNextRunDate`;
 switching back to a schedule computes it again. `POST /tasks/{id}/runs` remains
-available for every kind. Run ledger rows include nullable `triggerKind`.
+available for every kind to the owner or an admin. Manual requests enter the
+transactional outbox and share event coalescing and the hourly run cap. A free
+automation can dispatch immediately through the existing daemon path; a busy
+one returns `automation_pending`. Project/team/agent filters require the owner's
+assignment access. Broadcast events are scoped to work visible to that owner.
+Run ledger rows include nullable `triggerKind` and `triggerSummary`
+(`eventType`, optional `toStatus`, and `eventCount`), persisted on occurrence events.
 
 Inbound webhooks use `POST /api/v1/automations/{id}/webhook` with JSON and the
 `X-Relay-Automation-Token` header. A valid request returns `202 {"accepted": true}`
@@ -87,7 +93,7 @@ and rate limiting returns 429 with `Retry-After`.
 
 `GET /api/v1/tasks/{id}/automation/webhook-secret` returns `configured`, `path`,
 and `header`, never the secret. `POST` on the same path generates or rotates a
-secret and returns it once with status 201. Only an owner, assignee, or admin
+secret and returns it once with status 201. Only an owner or admin
 can manage it. The database stores only its SHA-256 hash. Rotating invalidates
 the previous token; leaving the webhook kind deletes the stored hash.
 
@@ -96,7 +102,8 @@ next occurrence. Context retains up to 20 events, records overflow counts,
 and clips each webhook payload to 8 KB. Pending events expire after 24 hours.
 Automations skip their own occurrences and stop chains beyond depth 3. The
 hourly cap pauses the definition with `routineDisabledReason: "rate_limited"`;
-re-enabling clears the displayed reason without resetting its current rate window.
+re-enabling clears the reason and starts a fresh rate window. The run ledger
+shows the reason and offers Re-enable to the owner or an admin.
 
 
 ## Normalized Mutations
@@ -117,10 +124,13 @@ POST   /api/v1/admin/chat-integrations/{id}/webhook-secret-rotations
 DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
-An explicit `POST /api/v1/tasks/{id}/runs` retries a blocked task (or the
-automation's existing blocked occurrence) after checking that no dispatch claim or
-run request owns it. It records the status change through task events. Automatic
-scheduling never reopens blocked tasks.
+An explicit `POST /api/v1/tasks/{id}/runs` retries a plain blocked task after
+checking that no dispatch claim or run request owns it. It records the status
+change through task events. For an automation definition, Run now queues a fresh
+capped firing once the previous occurrence is parked in review or blocked; the
+previous run retains its history. Requests during a queued/running occurrence
+coalesce into the next run, while the response may reference its existing thread.
+Automatic scheduling never reopens blocked tasks.
 
 Thread collaboration inputs are semantic. `intent` is `accomplish`, `discuss`,
 or `review`; omitting `addressAgentId` addresses the current room. Recovery

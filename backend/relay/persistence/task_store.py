@@ -217,6 +217,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "collaborationStyle",
         "routineTrigger",
         "routineTriggerKind",
+        "routineTriggerSummary",
     ):
         if payload.get(field):
             created_payload[field] = payload[field]
@@ -799,6 +800,7 @@ class LocalTaskStore:
         trigger_kind: str,
         depth: int,
         context: str,
+        summary: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         with self._lock:
             try:
@@ -811,7 +813,7 @@ class LocalTaskStore:
                 routine,
                 routine.get("assignedAgent"),
                 scheduled_for=run_date,
-                trigger={"kind": trigger_kind, "depth": depth, "context": context},
+                trigger={"kind": trigger_kind, "depth": depth, "context": context, "summary": summary},
             )
             occurrence = materialize_task_events(occurrence_events)
             self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
@@ -1962,6 +1964,7 @@ class DatabaseTaskStore:
         trigger_kind: str,
         depth: int,
         context: str,
+        summary: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
@@ -1982,7 +1985,7 @@ class DatabaseTaskStore:
                 routine,
                 routine.get("assignedAgent"),
                 scheduled_for=run_date,
-                trigger={"kind": trigger_kind, "depth": depth, "context": context},
+                trigger={"kind": trigger_kind, "depth": depth, "context": context, "summary": summary},
             )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
@@ -2350,6 +2353,7 @@ def routine_occurrence_events(
                     {
                         "routineTriggerKind": trigger["kind"],
                         "routineTriggerDepth": trigger["depth"],
+                        **({"routineTriggerSummary": trigger["summary"]} if trigger.get("summary") else {}),
                     }
                     if trigger
                     else {"routineTriggerKind": fired_by, "routineTriggerDepth": 0}

@@ -528,3 +528,22 @@
   color: var(--ink-3);
   font: var(--type-body-sm);
 }
+
+
+.record-automation-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+.record-automation-paused p {
+  margin: 0;
+}

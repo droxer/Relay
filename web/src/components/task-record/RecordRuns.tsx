@@ -36,6 +36,11 @@ import { RecordWorkspace } from "./RecordWorkspace";
 
 /** How many runs the ledger asks for before the reader asks for more. */
 const RUN_PAGE_SIZE = 25;
+const EVENT_LABEL_KEYS: Record<string, string> = {
+  "task.created": "task_created",
+  "run.completed": "run_completed",
+  "run.failed": "run_failed",
+};
 
 /** Outcome → the tone half of the state vocabulary; `StateMark` picks the shape. */
 const TONE_FOR_OUTCOME: Record<RunOutcome, StateTone> = {
@@ -213,7 +218,15 @@ function RunRow({
         <StateMark tone={TONE_FOR_OUTCOME[outcome]} shape={outcome === "pending" ? "dashed" : undefined} />
         <span className="record-run-date tnum">
           {runDate(run.scheduledFor ?? run.createdAt, locale)}
-          {run.triggerKind ? <span className="record-run-trigger">{t(`automation.ledger.${run.triggerKind}`)}</span> : null}
+          {run.triggerKind ? (
+            <span className="record-run-trigger">
+              {run.triggerSummary?.eventType === "task.status_changed"
+                ? t("automation.ledger.status_changed", { status: t(`backlog.statuses.${run.triggerSummary.toStatus}`) })
+                : t(`automation.ledger.${EVENT_LABEL_KEYS[run.triggerSummary?.eventType ?? ""] ?? run.triggerKind}`)}
+              {run.triggerSummary && run.triggerSummary.eventCount > 1
+                ? ` · ${t("automation.ledger.event_count", { count: run.triggerSummary.eventCount })}` : ""}
+            </span>
+          ) : null}
         </span>
         <span className="record-run-summary">
           <span className="record-run-outcome">{t(`backlog.runs.outcome.${outcome}`)}</span>

@@ -24,6 +24,34 @@
   accompanies the evidence report.
 
 
+## Review corrections (2026-10-02)
+
+These acceptance criteria supersede earlier examples that omit them:
+
+- Task 5: scoped filters require the automation owner's project, team, and agent
+  assignment access, including project/computer compatibility. Create and PATCH
+  enforce the same rules, even when an administrator edits another owner's record.
+- Task 8: malformed stored triggers warn with the routine id and do not block
+  other automations. Broadcast matching only observes tasks owned by or assigned
+  to the automation's owner (unlinked runs use the session owner). Pending
+  automatic events are discarded when switching to schedule or manual only;
+  explicit manual requests remain eligible for every trigger kind.
+- Tasks 8–9: Run now uses an addressed manual outbox row and the same transactional
+  matcher, cap, and coalescing as webhooks/events. Manual depth is zero. Queued
+  occurrences keep their assignment snapshot; overdue scheduled starts keep the
+  existing due-date advancement. A reviewed occurrence permits a new run.
+- Task 9: secret status/rotation and manual requests are owner/admin only.
+  Re-enabling after a rate-cap pause atomically clears pending state and resets
+  the rate window, under the matcher lock, so it can run again immediately.
+- Tasks 7, 9, 11: occurrence creation events persist `routineTriggerSummary`
+  (`eventType`, optional `toStatus`, `eventCount`, including overflow). The ledger
+  exposes it as `triggerSummary` and displays status/count labels. Old runs retain
+  generic labels. The ledger contains a pause banner with a direct Re-enable
+  action, translated in English and Chinese.
+
+Regression evidence is recorded in `docs/testing/automation-triggers.tdd.md`.
+
+
 ## Global Constraints
 
 - The backend never executes agents; triggers only create occurrences that `_dispatch_assigned_tasks` dispatches.
@@ -37,7 +65,7 @@
 
 ## Deviations from the spec (found while reading the code)
 
-1. **"Run now" already exists** (`POST /api/v1/tasks/{id}/runs`, `record.run_now` button). No new run endpoint or note field; the existing one keeps working for every trigger kind.
+1. **"Run now" already exists** (`POST /api/v1/tasks/{id}/runs`, `record.run_now` button). No new run endpoint or note field; the existing endpoint queues an addressed manual outbox row for every trigger kind, sharing matcher coalescing and the hourly cap. It may immediately dispatch a promoted occurrence through the existing daemon path when free. Owner/admin only.
 2. **Outbox is database-only.** Production builds only `DatabaseTaskStore`/`DatabaseSessionStore`; `Local*Store` are test fixtures and write no outbox rows.
 3. **Status changes come from `task.status` events**, detected by diffing the snapshot before/after a write, not from `task.updated`.
 4. **Triggered occurrences need a new store method.** `create_routine_occurrence` dedupes by date, so it would return the morning's occurrence for an afternoon event.
@@ -633,8 +661,10 @@ Run the schema-drift test if one exists (`grep -rln "target_metadata" backend/te
 Guard the auto-next-run block with `next_is_routine and scheduled and resolved_cadence != "custom" and (... or became_scheduled)`; guard the custom-date 400 with `scheduled and`. After `effective_next_run` add `if not scheduled: next_run = ""`. Add `**({"routineTrigger": trigger} if trigger else {})` to the returned dict. Add:
 
 ```python
-def validate_trigger_scope(ctx: AppContext, trigger: dict[str, Any] | None) -> None:
-    """A filter that names a record must name one that exists."""
+def validate_trigger_scope(
+    ctx: AppContext, trigger: dict[str, Any] | None, *, owner: str,
+) -> None:
+    """Filters may observe only work their owner is allowed to assign."""
     filters = (trigger or {}).get("filters") or {}
     lookups = (
         ("projectId", ctx.project_store.get_project),
@@ -642,11 +672,25 @@ def validate_trigger_scope(ctx: AppContext, trigger: dict[str, Any] | None) -> N
         ("assignedTeamId", ctx.team_store.get_team),
     )
     for key, lookup in lookups:
-        if key in filters and not lookup(filters[key]):
+        if key not in filters:
+            continue
+        try:
+            found = lookup(filters[key])
+        except KeyError:
+            found = None
+        if not found:
             raise HTTPException(400, f"routineTrigger filters.{key} does not exist.")
+    owner_actor = {"employeeId": owner, "isAdmin": False}
+    logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_employee_id=owner)
+    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_employee_id=owner)
+    project = project_for_owner(ctx, filters.get("projectId"), owner, require_enabled=True)
+    if project:
+        validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
+                                    assigned_team_id=filters.get("assignedTeamId"))
+
 ```
 
-Call `validate_trigger_scope(ctx, routine.get("routineTrigger"))` right after `routine = routine_fields(...)` in `create_task` and `update_task` (wrap lookups that raise `KeyError`).
+Call `validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=owner)` in create and pass `owner=current["ownerEmployeeId"]` in PATCH, immediately after `routine_fields(...)`.
 
 - [ ] **Step 7: Run, expect PASS.** Then `pytest tests/api/test_tasks.py tests/unit/test_task_store.py tests/unit/test_task_scheduler.py -q` → PASS.
 - [ ] **Step 8: Commit.** `git add -A backend && git commit -m "feat(backend): persist automation triggers on routines"`
@@ -1378,9 +1422,12 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import text
 
-from ..persistence.automation_store import subject_of
-from .trigger import event_matches, trigger_context_block, trigger_kind, trigger_of
+from ..persistence.automation_store import AUTOMATION_LOCK_KEY, subject_of
+from ..persistence.store_common import store_transaction
+from ..tasks import next_routine_date
+from .trigger import TriggerError, event_matches, normalize_trigger, trigger_context_block, trigger_kind, trigger_of
 
 MAX_AUTOMATION_DEPTH = 3
 MAX_PENDING_EVENTS = 20
@@ -1425,8 +1472,17 @@ class AutomationMatcher:
 
     def run(self) -> int:
         now = self._now()
-        self._drain(now)
-        return self._fire(now)
+        # A failed tick must not lose outbox events or leave a partially fired run.
+        with store_transaction(self.automation_store.engine) as conn:
+            # Claims partition outbox rows, but pending states are shared across
+            # ticks. One database-wide transaction lock prevents two replicas
+            # firing the same pending state; a busy replica leaves it for later.
+            if conn.dialect.name == "postgresql" and not conn.scalar(
+                text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY}
+            ):
+                return 0
+            self._drain(now)
+            return self._fire(now)
 
     # -- draining ---------------------------------------------------------
 
@@ -1451,15 +1507,34 @@ class AutomationMatcher:
                  automations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         target_id = row.get("target_routine_id")
         if target_id:
-            target = automations.get(target_id)
-            return [target] if target and trigger_kind(target) == "webhook" else []
-        return [task for task in automations.values() if event_matches(trigger_of(task), event)]
+            target = self._load(target_id)
+            if not target or not target.get("routineEnabled"):
+                return []
+            if row["kind"] == "manual":
+                return [target]
+            return [target] if trigger_kind(target) == "webhook" else []
+        matched = []
+        for task in automations.values():
+            owner = task.get("ownerEmployeeId")
+            subject = event.get("subject") or {}
+            if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
+                continue
+            try:
+                trigger = normalize_trigger(trigger_of(task))
+            except TriggerError as error:
+                logger.warning("Invalid stored automation trigger", routine_id=task["id"], error=str(error))
+                continue
+            if event_matches(trigger, event):
+                matched.append(task)
+        return matched
 
     def _is_loop(self, automation: dict[str, Any], event: dict[str, Any]) -> bool:
         return event.get("originAutomationId") == automation["id"] or event["depth"] > self.max_depth
 
     def _enrich(self, row: dict[str, Any]) -> dict[str, Any] | None:
         payload = row.get("payload") or {}
+        if row["kind"] == "manual":
+            return {"eventType": "manual", "depth": 0}
         if row["kind"] == "webhook":
             return {"eventType": "webhook", "payload": payload.get("body"), "depth": 0}
         if row["kind"] == "task_event":
@@ -1477,7 +1552,7 @@ class AutomationMatcher:
         run = next((item for item in session.get("agentRuns", []) if item.get("id") == payload.get("runId")), {})
         linked = [task for task in self.task_store.list_tasks_for_session(session_id) if not task.get("isRoutine")]
         task = linked[0] if linked else None
-        subject = subject_of(task) if task else {"projectId": session.get("projectId")}
+        subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerEmployeeId": session.get("ownerEmployeeId")}
         if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
             subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
         origin = task.get("sourceRoutineId") if task else None
@@ -1510,7 +1585,11 @@ class AutomationMatcher:
     def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
         routine_id = state["routine_id"]
         routine = self._load(routine_id)
-        if not routine or not routine.get("routineEnabled") or trigger_kind(routine) == "schedule":
+        events = state["pending_events"]
+        manual = any(event.get("eventType") == "manual" for event in events)
+        if not routine or not routine.get("routineEnabled") or (
+            trigger_kind(routine) in ("schedule", "manual") and not manual
+        ):
             self.automation_store.clear_state(routine_id)
             return False
         if now - _aware(state["pending_since"]) > PENDING_TTL:
@@ -1532,11 +1611,19 @@ class AutomationMatcher:
             self.automation_store.clear_state(routine_id)
             return False
         events = state["pending_events"]
+        today = self._today()
+        run_date = today.isoformat()
+        due_date = routine.get("routineNextRunDate") if manual and trigger_kind(routine) == "schedule" else None
+        if due_date and due_date <= run_date:
+            run_date = due_date
         occurrence = self.task_store.create_triggered_occurrence(
             routine_id,
-            run_date=self._today().isoformat(),
-            trigger_kind=trigger_kind(routine),
-            depth=max(int(event.get("depth") or 0) for event in events),
+            run_date=run_date,
+            trigger_kind="manual" if manual else trigger_kind(routine),
+            summary={"eventType": "manual" if manual else events[0]["eventType"],
+                     "eventCount": len(events) + int(state["pending_dropped"]),
+                     **({"toStatus": events[0]["toStatus"]} if events[0].get("toStatus") else {})},
+            depth=0 if manual else max(int(event.get("depth") or 0) for event in events),
             context=trigger_context_block(events, int(state["pending_dropped"])),
         )
         if not occurrence:
@@ -1544,6 +1631,9 @@ class AutomationMatcher:
             # assigned or they expire, and say so once.
             logger.info("Automation could not start", routine_id=routine_id)
             return False
+        if due_date and due_date <= today.isoformat():
+            next_date = next_routine_date(date.fromisoformat(due_date), routine.get("routineCadence") or "weekly", today)
+            self.task_store.update_task(routine_id, {"routineNextRunDate": next_date.isoformat() if next_date else ""})
         self.automation_store.save_state(routine_id, {
             "routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
             "pending_since": None, "fired_window_start": window_start, "fired_count": count + 1,
@@ -1559,7 +1649,7 @@ class AutomationMatcher:
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
 
     def _in_flight(self, routine: dict[str, Any]) -> bool:
-        for occurrence_id in reversed((routine.get("occurrenceIds") or [])[-5:]):
+        for occurrence_id in reversed((routine.get("occurrenceIds") or [])):
             occurrence = self._load_any(occurrence_id)
             if occurrence and not occurrence.get("deletedAt") and occurrence.get("status") in IN_FLIGHT_STATUSES:
                 return True
@@ -1814,7 +1904,7 @@ def _webhook_automation_for_actor(request: Request, ctx: AppContextDep, task_id:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     if not task.get("isRoutine") or trigger_kind(task) != "webhook":
         raise HTTPException(409, "automation_not_webhook")
-    editors = {task.get("ownerEmployeeId"), task.get("assigneeEmployeeId")} - {None}
+    editors = {task.get("ownerEmployeeId")} - {None}
     if not actor["isAdmin"] and actor.get("employeeId") not in editors:
         raise HTTPException(403, "Only the automation's owner or an admin can manage its webhook.")
     return task
@@ -2274,7 +2364,7 @@ Copy the exact import paths and the `Field`/`Input` props (`error`, `hint`, `wra
         }}</RoutineCells.Read>,
 ```
 
-- [ ] **Step 7: Ledger.** In `RecordRuns.tsx` `RunRow`, render `run.triggerKind` beside the date when present: `{run.triggerKind ? <span className="record-run-trigger">{t(`automation.ledger.${run.triggerKind}`)}</span> : null}` (style with existing muted text tokens).
+- [ ] **Step 7: Ledger.** Render stored `triggerSummary` status and event count beside each date; retain the generic label below for older rows. Add the rate-limit banner and an owner/admin Re-enable action wired to PATCH `routineEnabled: true`. Generic fallback: `{run.triggerKind ? <span className="record-run-trigger">{t(`automation.ledger.${run.triggerKind}`)}</span> : null}` (style with existing muted text tokens).
 
 - [ ] **Step 8: Verify.** `npx tsc -p web/tsconfig.json --noEmit`, `npm run lint -w web`, `npm run lint:css -w web`, `npx tsc -p packages/tsconfig.json && node --test dist/web/tests/*.test.js`, `npm run test:react -w web`, `npm run build -w web`. Then run the app (`make backend` + `make web`), and on `/automations`: create a Task-event automation (status → blocked), block an issue, wait one scheduler tick, and see the occurrence appear in the Runs tab labeled "Task event"; switch an automation to Webhook, generate a secret, `curl -X POST -H 'content-type: application/json' -H 'X-Relay-Automation-Token: <secret>' <endpoint> -d '{"ok":true}'` → 202, and see a "Webhook" run. Check zh-CN once via the language switch.
 - [ ] **Step 9: Commit.** `git add -A web && git commit -m "feat(web): edit automation triggers and webhooks"`

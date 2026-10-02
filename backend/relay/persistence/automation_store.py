@@ -23,8 +23,9 @@ from .store_common import (
 )
 from .store_common import metadata as shared_metadata
 
+AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
-SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId")
+SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerEmployeeId", "assigneeEmployeeId")
 
 automation_outbox = Table(
     "automation_outbox", shared_metadata,
@@ -125,6 +126,10 @@ class DatabaseAutomationStore:
         with store_transaction(self.engine) as conn:
             insert_outbox_rows(conn, [row])
 
+    def enqueue_manual(self, routine_id: str) -> None:
+        with store_transaction(self.engine) as conn:
+            insert_outbox_rows(conn, [_row("manual", "manual", target_routine_id=routine_id)])
+
     def claim_outbox(self, limit: int, now: datetime) -> list[dict[str, Any]]:
         claimable = or_(automation_outbox.c.claimed_at.is_(None), automation_outbox.c.claimed_at < now - STALE_CLAIM)
         claimed: list[dict[str, Any]] = []
@@ -172,6 +177,9 @@ class DatabaseAutomationStore:
         self.save_state(routine_id, {**_empty_state(routine_id),
                                      "fired_window_start": current["fired_window_start"],
                                      "fired_count": current["fired_count"]})
+
+    def reset_rate_window(self, routine_id: str) -> None:
+        self.save_state(routine_id, _empty_state(routine_id))
 
     def list_pending_states(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:

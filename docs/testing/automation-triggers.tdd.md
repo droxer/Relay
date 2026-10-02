@@ -111,7 +111,7 @@ the execution path. Dependency audit could not reach the configured npm mirror
 - Existing migrations `0081`/`0082` must run before starting the new backend.
   No data rewrite of old event logs is required; old routines default to schedule.
 - Hashes are stored, plaintext is returned once, never cached in the browser,
-  and secret management uses record access plus owner/assignee/admin checks.
+  and secret management uses record access plus owner/admin checks (tightened during review).
 - Webhook rate limiting remains process-local; replica deployments need an
   edge limiter. Pending events and retained context are bounded as in the plan.
 - Local commits preserve RED/GREEN history. Nothing was pushed or published.
@@ -124,3 +124,53 @@ the execution path. Dependency audit could not reach the configured npm mirror
   validation, occurrence labels, and workflow/migration regressions.
 - The final web/UI and documentation commit follows these checkpoints and
   includes the passing complete React suite and production build.
+
+
+## Design review fixes (2026-10-03)
+
+The six review findings are fixed in both the plan and implementation. The
+owner boundary now applies to filter scopes, broadcast matching, manual starts,
+and webhook secret management. Manual starts share the transactional matcher
+and cap; automatic pending events cannot fire a manual-only definition.
+Occurrence creation events persist structured trigger summaries for replay and
+ledger labels. The ledger offers direct rate-limit recovery, and re-enabling
+atomically resets the rate window under the matcher lock.
+
+| Finding / guarantee | Regression target | RED evidence | GREEN evidence |
+| --- | --- | --- | --- |
+| Filter scopes require the owner's assignment access; admin cannot bypass it | `test_automation_triggers_api.py` | `574514c0`: foreign project filter accepted | Owner project/agent/team checks, create/PATCH parity, and team/computer gate pass |
+| Unfiltered automation cannot observe another employee's private work | `test_automation_matcher.py` | `b99f4d7f`: foreign task fired Alice's automation | Owner/assignee visibility enforced before matching |
+| Switching to Manual only discards automatic pending events | `test_automation_matcher.py` | `574514c0`: matcher fired one unrequested occurrence | No occurrence; pending state cleared |
+| Malformed stored filter is isolated and warned | `test_automation_matcher.py` | `574514c0`: AttributeError aborted the tick | Good automation still fires |
+| Non-owner assignee cannot read secret status or rotate it | `test_automation_webhook.py` | `574514c0`: Bob received 200 | Owner/admin boundary enforced |
+| Manual requests coalesce and share the hourly cap for all trigger kinds | Matcher/API trigger tests | `9bd4f63c`: missing manual outbox; API counter stayed zero | Cap pauses the automation; running requests coalesce |
+| Re-enable permits immediate firing in a fresh rate window | API trigger test and record interaction test | `b99f4d7f`: re-enabled automation immediately paused again | Fresh firing succeeds; button invokes PATCH |
+| Ledger summaries survive authoritative event replay | `test_automation_matcher.py` | `9bd4f63c`: missing summary | Status/event count survives replay and ledger serialization |
+| Ledger identifies task-created/run-completed/run-failed events | `taskRecord.test.tsx` | `93a07fac`: three missing labels | All 12 record interaction tests pass |
+| Concurrent manual/scheduled-manual matchers produce one occurrence and one rate increment | `test_schema_drift.py` | Shared-lock regression expanded to manual requests | All 14 PostgreSQL checks pass |
+
+Compatibility checks preserve overdue schedule advancement, immutable queued
+occurrence assignments, existing active-thread responses, and daemon-only
+execution. Manual starts after review/blocked create a fresh ledger row instead
+of rewriting completed or failed history; existing expectations were updated
+for this specified behavior.
+
+Final validation:
+
+- Full backend: `RELAY_TEST_DATABASE_URL=postgresql+psycopg://relay:relay@127.0.0.1:55439/relay UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest -q --tb=short`
+  — **2098 passed**, no skips. Two additional parametrized manual concurrency
+  cases were subsequently validated in the **14-pass** schema target.
+- Compiled TypeScript/package/web node tests — **1813 passed**, no skips.
+- `npm run test:react -w web` — **391 passed / 63 files**.
+- `npm run build -w web -- --webpack` — production build and static export pass.
+- Package/web TypeScript checks, ESLint, Stylelint, and `git diff --check` pass.
+- Coverage helper — **68 focused tests pass**; executable-line coverage:
+  trigger **94.5%**, matcher **89.9%**, automation store **98.7%**, webhook routes
+  **92.8%**. PostgreSQL advisory-lock paths are verified separately.
+
+`npm test` still fails at the default Turbopack build because the sandbox denies
+its worker-port bind. Its constituent suites and the webpack production build
+pass with their required local permissions. `npm audit` could not resolve the
+configured npm mirror (`ENOTFOUND registry.npmmirror.com`). No dependency files
+were changed. No live agent or external webhook provider was invoked, and
+nothing was pushed or published.

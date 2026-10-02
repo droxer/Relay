@@ -577,6 +577,8 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["scheduledFor"] = created["scheduledFor"]
     if created.get("routineTriggerKind"):
         task["routineTriggerKind"] = created["routineTriggerKind"]
+    if created.get("routineTriggerSummary"):
+        task["routineTriggerSummary"] = created["routineTriggerSummary"]
     if "routineTriggerDepth" in created:
         task["routineTriggerDepth"] = int(created["routineTriggerDepth"] or 0)
     if created.get("collaborationStyle"):

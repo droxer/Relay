@@ -92,6 +92,16 @@ export function TaskRecordView({
     }
   }
 
+  async function reenableRecord(): Promise<void> {
+    if (busyAction || !task) return;
+    setBusyAction("run");
+    try {
+      await updateTaskMutation.mutateAsync({ taskId: task.id, input: { routineEnabled: true } });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function cancelRecord(): Promise<void> {
     if (busyAction || !task) return;
     const sessionId = task.linkedSessionIds.at(-1);
@@ -204,6 +214,7 @@ export function TaskRecordView({
           else onOpenRecord(taskId, nextId);
         }}
         onRun={() => { void runRecord(); }}
+        onReenable={() => { void reenableRecord().catch(() => undefined); }}
         onCancel={() => { void cancelRecord(); }}
         onEdit={() => onEdit(task)}
         onDelete={() => { void deleteRecord(); }}

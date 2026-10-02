@@ -178,6 +178,7 @@ class TaskStore(Protocol):
         trigger_kind: str,
         depth: int,
         context: str,
+        summary: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None: ...
     def list_trigger_automations(self) -> list[dict[str, Any]]: ...
 

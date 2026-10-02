@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
+from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
+
+from ..automations.matcher import AutomationMatcher
+from ..persistence.automation_store import AUTOMATION_LOCK_KEY
+from ..persistence.store_common import store_transaction
 
 from ..automations.trigger import TriggerError, normalize_trigger, trigger_kind, trigger_of
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
@@ -31,6 +37,7 @@ from ..services.task_deletion import (
     delete_task as delete_task_record,
 )
 from ..services.task_dispatch import (
+    existing_routine_occurrence_result,
     implicit_group_assignments_for_task,
     start_task_on_ready_node,
 )
@@ -861,7 +868,13 @@ def update_task(
         **routine,
         **assignment_patch,
     }
-    with ctx.registry.dispatch_lock:
+    reset_rate_window = (
+        current.get("routineDisabledReason") == "rate_limited"
+        and not current.get("routineEnabled") and routine.get("routineEnabled") is True
+    )
+    with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
+        if reset_rate_window and conn.dialect.name == "postgresql":
+            conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
         if status:
             try:
                 validate_manual_transition(
@@ -889,6 +902,8 @@ def update_task(
             )
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
+        if reset_rate_window:
+            request.app.state.automation_store.reset_rate_window(task_id)
         if status == "done":
             complete_linked_task_sessions(ctx, task, "Task accepted after review.")
             task = ctx.task_store.get_task(task_id)
@@ -1001,6 +1016,8 @@ def assign_task(
 
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
+    if task.get("isRoutine") and not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
+        raise HTTPException(403, "Only the automation's owner or an admin can run it.")
     ensure_task_project_writable(ctx, task)
     ensure_issue_in_project(task)
     raw_assignments = body.get("assignments")
@@ -1148,6 +1165,44 @@ def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], bo
     return task, agent, assignments
 
 
+def _request_manual_occurrence(request: Request, ctx: AppContext, task: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
+    if not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
+        raise HTTPException(403, "Only the automation's owner or an admin can run it.")
+    if not task.get("routineEnabled"):
+        return {"task": task, "session": None, "dispatch": {
+            "state": "rejected", "code": task.get("routineDisabledReason") or "automation_disabled",
+            "message": "Enable this automation before running it.",
+        }}
+    store = request.app.state.automation_store
+    store.enqueue_manual(task["id"])
+    # Use the same transactional matcher and lock as scheduler ticks. Running
+    # it here preserves the endpoint's immediate-dispatch response when free.
+    matcher = AutomationMatcher(task_store=ctx.task_store, session_store=ctx.session_store,
+        automation_store=store, today=ctx.today,
+        max_runs_per_hour=max(1, int(os.environ.get("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "6"))))
+    matcher.run()
+    refreshed = ctx.task_store.get_task(task["id"])
+    previous = set(task.get("occurrenceIds") or [])
+    new_ids = [item for item in refreshed.get("occurrenceIds", []) if item not in previous]
+    if new_ids:
+        return ctx.task_store.get_task(new_ids[-1])
+    # A queued occurrence may need waking after its computer comes online.
+    # Its assignment is immutable even if the definition was edited later.
+    for occurrence_id in reversed(refreshed.get("occurrenceIds", [])):
+        active = ctx.task_store.get_task(occurrence_id)
+        if active.get("status") in ("assigned", "running") and active.get("linkedSessionIds"):
+            existing = existing_routine_occurrence_result(ctx, refreshed, active)
+            if existing:
+                return existing
+        if active.get("status") in ("backlog", "assigned") and not active.get("linkedSessionIds"):
+            return active
+    return {"task": refreshed, "session": None, "dispatch": {
+        "state": "queued" if refreshed.get("routineEnabled") else "rejected",
+        "code": refreshed.get("routineDisabledReason") or "automation_pending",
+        "message": "Run now is coalesced with pending automation events." if refreshed.get("routineEnabled") else "Automation paused by its hourly run limit.",
+    }}
+
+
 @router.post("/tasks/{task_id}/runs", status_code=202)
 async def start_task(
     task_id: str, request: Request, ctx: AppContextDep
@@ -1159,13 +1214,18 @@ async def start_task(
         return prepared
     task, agent, assignments = prepared
     if task.get("isRoutine"):
-        result = await start_routine_occurrence_on_ready_node(
-            ctx, task, actor, agent=agent, assignments=assignments or None
+        occurrence = await run_in_threadpool(_request_manual_occurrence, request, ctx, task, actor)
+        if "dispatch" in occurrence:
+            return occurrence
+        result = await start_task_on_ready_node(
+            ctx, occurrence, actor, retry_blocked=True
         )
     else:
         result = await start_task_on_ready_node(
             ctx, task, actor, assignments=assignments or None, retry_blocked=True
         )
+    if task.get("isRoutine") and result and result.get("session"):
+        await run_in_threadpool(ctx.task_store.link_session, task["id"], result["session"]["id"])
     if not result or not result.get("session"):
         return (
             result
@@ -1736,6 +1796,7 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
         "latestSessionId": session_ids[-1] if session_ids else None,
         "artifactCount": len(artifacts),
         "triggerKind": task.get("routineTriggerKind"),
+        "triggerSummary": task.get("routineTriggerSummary"),
     }
 
 

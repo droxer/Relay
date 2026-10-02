@@ -2247,6 +2247,9 @@
     "on": "何时",
     "on_values": {
       "created": "任务被创建",
+      "task_created": "任务已创建",
+      "run_completed": "运行已完成",
+      "run_failed": "运行失败",
       "status_changed": "任务状态变更",
       "completed": "运行完成",
       "failed": "运行失败"
@@ -2270,8 +2273,11 @@
     "webhook_secret_once": "请立即复制此密钥，之后不会再次显示。",
     "webhook_copy": "复制",
     "webhook_error": "无法生成密钥，请重试。",
+    "reenable": "重新启用",
     "rate_limited": "一小时内运行次数过多，已暂停。准备好后可重新启用。",
     "ledger": {
+      "status_changed": "任务状态 → {{status}}",
+      "event_count": "{{count}} 个事件",
       "schedule": "定时",
       "task_event": "任务事件",
       "run_event": "运行事件",

@@ -363,7 +363,8 @@ def test_postgres_stream_cursor_and_scalability_migration_roundtrip(migrated_sch
     assert store.read_event_page(session['id'], after_event_id=cursor)['events'] == []
 
 
-def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_schema):
+@pytest.mark.parametrize("kind", ["webhook", "manual", "schedule"])
+def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_schema, kind):
     from concurrent.futures import ThreadPoolExecutor
     from datetime import datetime, timezone
     from threading import Event
@@ -376,9 +377,9 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
     sessions = DatabaseSessionStore(url)
     automations = DatabaseAutomationStore(url)
     routine = tasks.create_task({"title": "Hook", "isRoutine": True, "routineEnabled": True,
-                                 "assignedAgent": "codex", "routineTrigger": {"kind": "webhook"}})
+                                 "assignedAgent": "codex", "routineTrigger": {"kind": kind}})
     automations.save_state(routine["id"], {**automations.get_state(routine["id"]), "pending": True,
-                                           "pending_events": [{"eventType": "webhook", "depth": 0, "payload": {}}],
+                                           "pending_events": [{"eventType": "webhook" if kind == "webhook" else "manual", "depth": 0, "payload": {}}],
                                            "pending_since": datetime.now(timezone.utc)})
     entered, release = Event(), Event()
     original = tasks.create_triggered_occurrence
@@ -399,6 +400,7 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
         first_result = running.result(timeout=10)
     assert first_result + second_result == 1
     assert len(tasks.get_task(routine["id"])["occurrenceIds"]) == 1
+    assert automations.get_state(routine["id"])["fired_count"] == 1
 
 
 def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeypatch):

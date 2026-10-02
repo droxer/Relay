@@ -16,8 +16,9 @@ from typing import Any
 from loguru import logger
 from sqlalchemy import text
 
-from ..persistence.automation_store import subject_of
+from ..persistence.automation_store import AUTOMATION_LOCK_KEY, subject_of
 from ..persistence.store_common import store_transaction
+from ..tasks import next_routine_date
 from .trigger import TriggerError, event_matches, normalize_trigger, trigger_context_block, trigger_kind, trigger_of
 
 MAX_AUTOMATION_DEPTH = 3
@@ -69,7 +70,7 @@ class AutomationMatcher:
             # ticks. One database-wide transaction lock prevents two replicas
             # firing the same pending state; a busy replica leaves it for later.
             if conn.dialect.name == "postgresql" and not conn.scalar(
-                text("SELECT pg_try_advisory_xact_lock(738102401)")
+                text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY}
             ):
                 return 0
             self._drain(now)
@@ -98,10 +99,18 @@ class AutomationMatcher:
                  automations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         target_id = row.get("target_routine_id")
         if target_id:
-            target = automations.get(target_id)
-            return [target] if target and trigger_kind(target) == "webhook" else []
+            target = self._load(target_id)
+            if not target or not target.get("routineEnabled"):
+                return []
+            if row["kind"] == "manual":
+                return [target]
+            return [target] if trigger_kind(target) == "webhook" else []
         matched = []
         for task in automations.values():
+            owner = task.get("ownerEmployeeId")
+            subject = event.get("subject") or {}
+            if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
+                continue
             try:
                 trigger = normalize_trigger(trigger_of(task))
             except TriggerError as error:
@@ -116,6 +125,8 @@ class AutomationMatcher:
 
     def _enrich(self, row: dict[str, Any]) -> dict[str, Any] | None:
         payload = row.get("payload") or {}
+        if row["kind"] == "manual":
+            return {"eventType": "manual", "depth": 0}
         if row["kind"] == "webhook":
             return {"eventType": "webhook", "payload": payload.get("body"), "depth": 0}
         if row["kind"] == "task_event":
@@ -133,7 +144,7 @@ class AutomationMatcher:
         run = next((item for item in session.get("agentRuns", []) if item.get("id") == payload.get("runId")), {})
         linked = [task for task in self.task_store.list_tasks_for_session(session_id) if not task.get("isRoutine")]
         task = linked[0] if linked else None
-        subject = subject_of(task) if task else {"projectId": session.get("projectId")}
+        subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerEmployeeId": session.get("ownerEmployeeId")}
         if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
             subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
         origin = task.get("sourceRoutineId") if task else None
@@ -166,7 +177,11 @@ class AutomationMatcher:
     def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
         routine_id = state["routine_id"]
         routine = self._load(routine_id)
-        if not routine or not routine.get("routineEnabled") or trigger_kind(routine) in ("schedule", "manual"):
+        events = state["pending_events"]
+        manual = any(event.get("eventType") == "manual" for event in events)
+        if not routine or not routine.get("routineEnabled") or (
+            trigger_kind(routine) in ("schedule", "manual") and not manual
+        ):
             self.automation_store.clear_state(routine_id)
             return False
         if now - _aware(state["pending_since"]) > PENDING_TTL:
@@ -188,11 +203,19 @@ class AutomationMatcher:
             self.automation_store.clear_state(routine_id)
             return False
         events = state["pending_events"]
+        today = self._today()
+        run_date = today.isoformat()
+        due_date = routine.get("routineNextRunDate") if manual and trigger_kind(routine) == "schedule" else None
+        if due_date and due_date <= run_date:
+            run_date = due_date
         occurrence = self.task_store.create_triggered_occurrence(
             routine_id,
-            run_date=self._today().isoformat(),
-            trigger_kind=trigger_kind(routine),
-            depth=max(int(event.get("depth") or 0) for event in events),
+            run_date=run_date,
+            trigger_kind="manual" if manual else trigger_kind(routine),
+            summary={"eventType": "manual" if manual else events[0]["eventType"],
+                     "eventCount": len(events) + int(state["pending_dropped"]),
+                     **({"toStatus": events[0]["toStatus"]} if events[0].get("toStatus") else {})},
+            depth=0 if manual else max(int(event.get("depth") or 0) for event in events),
             context=trigger_context_block(events, int(state["pending_dropped"])),
         )
         if not occurrence:
@@ -200,6 +223,9 @@ class AutomationMatcher:
             # assigned or they expire, and say so once.
             logger.info("Automation could not start", routine_id=routine_id)
             return False
+        if due_date and due_date <= today.isoformat():
+            next_date = next_routine_date(date.fromisoformat(due_date), routine.get("routineCadence") or "weekly", today)
+            self.task_store.update_task(routine_id, {"routineNextRunDate": next_date.isoformat() if next_date else ""})
         self.automation_store.save_state(routine_id, {
             "routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
             "pending_since": None, "fired_window_start": window_start, "fired_count": count + 1,

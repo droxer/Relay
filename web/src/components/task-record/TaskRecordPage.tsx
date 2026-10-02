@@ -13,6 +13,7 @@ import { RecordBand, type RecordFact } from "../workspace/RecordBand";
 import { recordBandFacts } from "./recordBandFacts";
 import { TaskRecoveryPanel } from "../ExecutionRecoveryPanel";
 import { taskRecoveryReason } from "../../lib/executionRecovery";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordArtifacts } from "./RecordArtifacts";
 import { RecordHistory } from "./RecordHistory";
@@ -67,6 +68,7 @@ export function TaskRecordPage({
   onOpenThread,
   onOpenRun,
   onRun,
+  onReenable,
   onCancel,
   onToggleBlock,
   onDone,
@@ -88,6 +90,7 @@ export function TaskRecordPage({
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
+  onReenable?: () => void;
   onCancel: () => void;
   onToggleBlock: () => void;
   onDone: () => void;
@@ -223,6 +226,14 @@ export function TaskRecordPage({
       <div className="workspace-body">
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
+            {!task.routineEnabled && task.routineDisabledReason === "rate_limited" ? (
+              <div className="record-automation-paused" role="status">
+                <p>{t("automation.rate_limited")}</p>
+                {onReenable && !readOnly && (currentUser.role === "admin" || task.ownerEmployeeId === currentUser.employeeId) ? (
+                  <Button variant="outline" size="sm" disabled={busyAction !== null} onClick={onReenable}>{t("automation.reenable")}</Button>
+                ) : null}
+              </div>
+            ) : null}
             <RecordRuns
               taskId={task.id}
               hrefForRun={(runTaskId) => pathForAppState({

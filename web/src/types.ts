@@ -164,6 +164,7 @@ export interface TaskEventsResponse {
  */
 export interface TaskRun {
   triggerKind?: RoutineTriggerKind | null;
+  triggerSummary?: { eventType: string; toStatus?: TaskStatus; eventCount: number } | null;
   /** The task that carried the run: an occurrence, or the task itself. */
   taskId: string;
   /** The day the run was scheduled for; the ledger's date column. */

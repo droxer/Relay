@@ -21,7 +21,8 @@ def record(frame, event, arg):
 sys.settrace(record)
 threading.settrace_all_threads(record)
 status = pytest.main(['backend/tests/unit/test_automation_trigger.py', 'backend/tests/unit/test_automation_outbox.py',
-                     'backend/tests/unit/test_automation_matcher.py', 'backend/tests/api/test_automation_webhook.py', '-q'])
+                     'backend/tests/unit/test_automation_matcher.py', 'backend/tests/api/test_automation_triggers_api.py',
+                     'backend/tests/api/test_automation_webhook.py', '-q'])
 sys.settrace(None)
 threading.settrace_all_threads(None)
 for file in files:
