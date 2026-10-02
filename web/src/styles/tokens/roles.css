@@ -148,16 +148,16 @@
      signature: size carries hierarchy, weight carries emphasis. (The brand
      publishes this tier at 48px; palette.css documents why the app ladder
      runs a console-density step below the marketing one.) */
-  /* Page titles sit at 19px/500 — the tier this app uses for card titles,
+  /* Page titles sit at 16px/500 — the tier this app uses for card titles,
      pane titles, and feature-tile headers. The 22px rung above it is reserved
      for KPI numerals and subsection headlines, where an oversized figure is
      the point. */
   --type-title:        500 var(--fs-title)/var(--leading-tight) var(--font-display);
   --type-heading:      700 var(--fs-heading)/var(--leading-heading) var(--font-display);
   --type-body:         400 var(--fs-4)/var(--leading-normal) var(--font-sans);
-  --type-body-sm:      400 var(--fs-2)/var(--leading-snug) var(--font-sans);
-  --type-label:        500 var(--fs-2)/var(--leading-snug) var(--font-sans);
-  --type-label-strong: 700 var(--fs-2)/var(--leading-snug) var(--font-sans);
+  --type-body-sm:      400 var(--fs-1)/var(--leading-snug) var(--font-sans);
+  --type-label:        500 var(--fs-1)/var(--leading-snug) var(--font-sans);
+  --type-label-strong: 700 var(--fs-1)/var(--leading-snug) var(--font-sans);
   /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier.
      text-transform: uppercase is already the marking on this role — 700 on top
      of it double-marks the quietest text in the app, and at 12px in a variable
@@ -234,7 +234,7 @@
 /* CJK — reading roles want looser leading. */
 html:lang(zh-CN) {
   --type-body:   400 var(--fs-4)/var(--leading-normal) var(--font-sans);
-  --type-body-sm: 400 var(--fs-2)/var(--leading-normal) var(--font-sans);
+  --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
 }
 
 /* Resolve locally, including on pseudo-elements: a root composite would

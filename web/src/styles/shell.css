@@ -106,7 +106,7 @@
 
 .page-header--stacked {
   align-items: flex-start;
-  padding-block: var(--sp-6);
+  padding-block: var(--sp-4);
 }
 
 .page-header-lead {
