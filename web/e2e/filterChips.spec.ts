@@ -57,7 +57,7 @@ test("the chip menu offers no rule the URL cannot hold", async ({ page }) => {
 
 test("routines filter by their own fields", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/routines");
+  await page.goto("/automations");
   await page.getByRole("button", { name: "Add filter" }).click();
   await expect(page.getByRole("option")).toHaveText([/^Type/, /^Cadence/, /^Agent/, /^Assignee/]);
 });

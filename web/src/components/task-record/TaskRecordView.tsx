@@ -17,8 +17,8 @@ import { recordVariant } from "./recordVocabulary";
 /**
  * The record surface with its data and its actions attached.
  *
- * Both boards mount this, so `/backlog/<id>`, `/routines/<id>` and
- * `/routines/<id>/runs/<occurrenceId>` answer to one implementation of what a
+ * Both boards mount this, so `/backlog/<id>`, `/automations/<id>` and
+ * `/automations/<id>/runs/<occurrenceId>` answer to one implementation of what a
  * record can do. The boards keep the editing drawer — the record delegates
  * `onEdit` back to them rather than growing a second copy of the form.
  *

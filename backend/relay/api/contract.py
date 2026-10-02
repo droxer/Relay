@@ -14,6 +14,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
     {
         "admin",
         "agents",
+        "automations",
         "backlog",
         "channels",
         "computer",

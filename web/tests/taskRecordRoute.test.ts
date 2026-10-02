@@ -27,12 +27,12 @@ describe("task record routes", () => {
       ...base,
       taskId: "T-1001",
     });
-    assert.deepEqual(parseAppPath("/routines/R-42"), {
+    assert.deepEqual(parseAppPath("/automations/R-42"), {
       route: "routine",
       ...base,
       taskId: "R-42",
     });
-    assert.deepEqual(parseAppPath("/routines/R-42/runs/T-2288"), {
+    assert.deepEqual(parseAppPath("/automations/R-42/runs/T-2288"), {
       route: "routine",
       ...base,
       taskId: "R-42",
@@ -41,7 +41,7 @@ describe("task record routes", () => {
   });
 
   it("round-trips every record path through pathForAppState", () => {
-    for (const path of ["/issues/T-1001", "/routines/R-42", "/routines/R-42/runs/T-2288"]) {
+    for (const path of ["/issues/T-1001", "/automations/R-42", "/automations/R-42/runs/T-2288"]) {
       assert.equal(pathForAppState(parseAppPath(path)), path, path);
     }
   });
@@ -49,12 +49,12 @@ describe("task record routes", () => {
   it("keeps the bare list paths working", () => {
     assert.equal(parseAppPath("/backlog").route, "backlog");
     assert.equal(parseAppPath("/backlog").taskId, undefined);
-    assert.equal(parseAppPath("/routines").route, "routine");
+    assert.equal(parseAppPath("/automations").route, "routine");
   });
 
   it("encodes an id that is not URL-safe", () => {
     const path = pathForAppState({ route: "routine", ...base, taskId: "a/b" });
-    assert.equal(path, "/routines/a%2Fb");
+    assert.equal(path, "/automations/a%2Fb");
     assert.equal(parseAppPath(path).taskId, "a/b");
   });
 
@@ -71,15 +71,15 @@ describe("task record routes", () => {
     }
     for (const tab of ["definition", "artifacts"]) {
       assert.equal(
-        canonicalBrowserUrl("/routines/R-42", `?tab=${tab}`),
-        `/routines/R-42?tab=${tab}`,
+        canonicalBrowserUrl("/automations/R-42", `?tab=${tab}`),
+        `/automations/R-42?tab=${tab}`,
         `the routine record drops ?tab=${tab}`,
       );
     }
     // A run speaks the task vocabulary even though it is addressed under its routine.
     assert.equal(
-      canonicalBrowserUrl("/routines/R-42/runs/T-2288", "?tab=artifacts"),
-      "/routines/R-42/runs/T-2288?tab=artifacts",
+      canonicalBrowserUrl("/automations/R-42/runs/T-2288", "?tab=artifacts"),
+      "/automations/R-42/runs/T-2288?tab=artifacts",
     );
   });
 
@@ -88,17 +88,17 @@ describe("task record routes", () => {
   it("lands a pre-split ?tab=files link on the workspace tab", () => {
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=files"), "/backlog/T-1001?tab=workspace");
     // A routine's folders are its runs' folders, browsed from the Runs tab.
-    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=files"), "/routines/R-42");
-    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=workspace"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=files"), "/automations/R-42");
+    assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=workspace"), "/automations/R-42");
     assert.equal(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=files"), "/projects/p?task=t&recordTab=workspace");
   });
 
   it("does not advertise a tab the reader did not choose, or one that does not exist", () => {
     // The default tab carries no param.
-    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=runs"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=runs"), "/automations/R-42");
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=activity"), "/backlog/T-1001");
     // A routine has no Activity tab and a task has no Runs tab.
-    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=activity"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=activity"), "/automations/R-42");
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=runs"), "/backlog/T-1001");
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=nonsense"), "/backlog/T-1001");
   });
@@ -107,15 +107,15 @@ describe("task record routes", () => {
     // The routines record is a drawer over the board — the list beneath keeps
     // its filters, so the record route co-owns them.
     assert.equal(
-      canonicalBrowserUrl("/routines/R-42", "?state=paused&q=digest"),
-      "/routines/R-42?q=digest&state=paused",
+      canonicalBrowserUrl("/automations/R-42", "?state=paused&q=digest"),
+      "/automations/R-42?q=digest&state=paused",
     );
     assert.equal(
-      canonicalBrowserUrl("/routines/R-42/runs/T-2288", "?sort=title&page=2"),
-      "/routines/R-42/runs/T-2288?sort=title&page=2",
+      canonicalBrowserUrl("/automations/R-42/runs/T-2288", "?sort=title&page=2"),
+      "/automations/R-42/runs/T-2288?sort=title&page=2",
     );
     // Unknown params are stripped; task records preserve their list filters.
-    assert.equal(canonicalBrowserUrl("/routines/R-42", "?status=blocked"), "/routines/R-42");
+    assert.equal(canonicalBrowserUrl("/automations/R-42", "?status=blocked"), "/automations/R-42");
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?status=blocked"), "/backlog/T-1001?status=blocked");
   });
 });

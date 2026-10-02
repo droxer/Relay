@@ -28,6 +28,7 @@ describe("app pathname routes", () => {
     const routes = {
       "/backlog": "backlog",
       "/routines": "routine",
+      "/automations": "routine",
       "/agents": "agents",
       "/teams": "teams",
       "/admin": "admin",
@@ -128,7 +129,7 @@ describe("app pathname routes", () => {
     assert.equal(hrefForRoute("main", "ses_123"), "/threads/ses_123");
     assert.equal(hrefForRoute("projects"), "/projects");
     assert.equal(hrefForRoute("backlog"), "/issues");
-    assert.equal(hrefForRoute("routine"), "/routines");
+    assert.equal(hrefForRoute("routine"), "/automations");
     assert.equal(hrefForRoute("settings"), "/settings/computers");
   });
 
@@ -250,7 +251,7 @@ describe("app pathname routes", () => {
     // that does not own it has the param canonicalized straight back out, so
     // clicking a column header does nothing at all.
     assert.equal(canonicalBrowserUrl("/backlog", "?sort=-due"), "/backlog?sort=-due");
-    assert.equal(canonicalBrowserUrl("/routines", "?sort=title"), "/routines?sort=title");
+    assert.equal(canonicalBrowserUrl("/routines", "?sort=title"), "/automations?sort=title");
     // The admin page keeps two tables on one path, so each owns its own key.
     assert.equal(
       canonicalBrowserUrl("/admin", "?employeeSort=-running&nodeSort=node"),
@@ -262,12 +263,23 @@ describe("app pathname routes", () => {
     // Same trap as ?sort and ?space: unowned params are canonicalized straight
     // back out, so the pager would advance its own highlight and show page 1.
     assert.equal(canonicalBrowserUrl("/backlog", "?page=3"), "/backlog?page=3");
-    assert.equal(canonicalBrowserUrl("/routines", "?page=2"), "/routines?page=2");
+    assert.equal(canonicalBrowserUrl("/routines", "?page=2"), "/automations?page=2");
     assert.equal(canonicalBrowserUrl("/settings/computers", "?page=2"), "/settings/computers?page=2");
     assert.equal(
       canonicalBrowserUrl("/admin", "?employeePage=2&nodePage=4"),
       "/admin?employeePage=2&nodePage=4",
     );
+  });
+
+  it("redirects the retired /routines paths to /automations", () => {
+    assert.equal(canonicalBrowserUrl("/routines"), "/automations");
+    assert.equal(canonicalBrowserUrl("/routines", "?sort=title"), "/automations?sort=title");
+    assert.equal(canonicalBrowserUrl("/routines/R-42", "?tab=definition"), "/automations/R-42?tab=definition");
+    assert.equal(canonicalBrowserUrl("/routines/R-42/runs/T-9"), "/automations/R-42/runs/T-9");
+    assert.deepEqual(parseAppPath("/routines/R-42"), parseAppPath("/automations/R-42"));
+    assert.deepEqual(parseAppPath("/routines/R-42/runs/T-9"), parseAppPath("/automations/R-42/runs/T-9"));
+    // Issues keeps its own read-only alias and is not rewritten.
+    assert.equal(canonicalBrowserUrl("/backlog"), "/backlog");
   });
 
   it("keeps sort and page together, since a reader sets both", () => {
@@ -292,7 +304,7 @@ describe("app pathname routes", () => {
     // /routines does NOT group: its section rail carries schedule health, so
     // the board is one flat collection on one cursor and a lane cursor is a
     // param no control on the page can honour.
-    assert.equal(canonicalBrowserUrl("/routines", "?lanes=running:2"), "/routines");
+    assert.equal(canonicalBrowserUrl("/routines", "?lanes=running:2"), "/automations");
     assert.equal(canonicalBrowserUrl("/threads", "?lanes=running:2"), "/threads");
   });
 
@@ -348,17 +360,17 @@ describe("app pathname routes", () => {
     // beneath the drawer.
     assert.equal(
       browserUrlForAppState({ ...onBoard, taskId: "R-42" }, "/routines", "?state=paused&q=digest"),
-      "/routines/R-42?q=digest&state=paused",
+      "/automations/R-42?q=digest&state=paused",
     );
     // Closing it hands them back; the record's tab stays with the record.
     assert.equal(
       browserUrlForAppState(onBoard, "/routines/R-42", "?state=paused&tab=artifacts"),
-      "/routines?state=paused",
+      "/automations?state=paused",
     );
     // Routine to one of its runs carries both the tab and the filters.
     assert.equal(
       browserUrlForAppState({ ...onBoard, taskId: "R-42", runId: "T-2288" }, "/routines/R-42", "?state=paused&tab=artifacts"),
-      "/routines/R-42/runs/T-2288?tab=artifacts&state=paused",
+      "/automations/R-42/runs/T-2288?tab=artifacts&state=paused",
     );
     // Task records also retain their list filters.
     assert.equal(

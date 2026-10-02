@@ -42,8 +42,8 @@ import {
  * half the drawer described something the other half could not edit, under a
  * single Save button, at an address that did not exist.
  *
- * Three routes render this component: `/backlog/<id>`, `/routines/<id>`, and
- * `/routines/<id>/runs/<occurrenceId>`. The third works because an occurrence
+ * Three routes render this component: `/backlog/<id>`, `/automations/<id>`, and
+ * `/automations/<id>/runs/<occurrenceId>`. The third works because an occurrence
  * IS a task — the run view is this component under a routine breadcrumb, not
  * a fourth surface.
  *

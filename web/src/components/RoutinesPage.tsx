@@ -48,9 +48,9 @@ import { taskRef } from "../lib/taskRef";
 
 interface RoutinesPageProps {
   projects?: ProjectRecord[];
-  /** The routine whose record is open, from `/routines/<id>`. */
+  /** The routine whose record is open, from `/automations/<id>`. */
   recordTaskId?: string | null;
-  /** The occurrence open as a run, from `/routines/<id>/runs/<runId>`. */
+  /** The occurrence open as a run, from `/automations/<id>/runs/<runId>`. */
   recordRunId?: string | null;
   /** Opens a record; `null` returns to the board. */
   onOpenRecord: (routineId: string | null, runId?: string | null) => void;

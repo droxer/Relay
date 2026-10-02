@@ -100,7 +100,7 @@ it("opens a routine on its runs, each selectable and each with its own record", 
   expect(runs[0]!.textContent).toContain("dispatch refused: no ready computer");
   // A run is addressed under its routine, so it survives a reload or a paste.
   const open = screen.getAllByRole("link", { name: "record.open_run" });
-  expect(open[0]!.getAttribute("href")).toBe("/routines/R-42/runs/T-2288");
+  expect(open[0]!.getAttribute("href")).toBe("/automations/R-42/runs/T-2288");
   // No accordion: a row selects or navigates, it does not unfold.
   expect(document.querySelector("[aria-expanded]")).toBeNull();
 });
@@ -130,7 +130,7 @@ it("gives a run its own title and a breadcrumb back to its routine", async () =>
   // two records apart.
   expect(await screen.findByRole("heading", { name: "record.run_of" })).toBeTruthy();
   const back = screen.getByRole("link", { name: "Daily standup digest" });
-  expect(back.getAttribute("href")).toBe("/routines/R-42");
+  expect(back.getAttribute("href")).toBe("/automations/R-42");
 
   const user = userEvent.setup();
   await user.click(back);

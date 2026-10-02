@@ -138,7 +138,7 @@ test("composer agent picker fits its content at phone width", async ({ browser }
 
 for (const touch of [false, true]) {
   test(`filter bar controls share one height${touch ? " on touch" : ""}`, async ({ browser }) => {
-    const page = await openPage(browser, "/routines", touch);
+    const page = await openPage(browser, "/automations", touch);
     // The chip row's "Add filter" trigger sits on the same rung as the search
     // and sort. The sort menu is the narrow layout's control: above 820px the
     // column headers sort and it is not drawn at all.

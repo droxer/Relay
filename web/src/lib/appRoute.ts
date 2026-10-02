@@ -14,7 +14,7 @@ import {
 
 const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "/issues",
-  routine: "/routines",
+  routine: "/automations",
   agents: "/agents",
   teams: "/teams",
   settings: "/settings",
@@ -39,12 +39,13 @@ const WORK_ROUTES = new Map(
     .map(([route, path]) => [path, route as AppRoute]),
 );
 
-/* The route is still named `backlog` inside the app; only its address became
-   /issues. Reading the path folds that back so every `head === "backlog"`
-   below keeps one meaning, and a /backlog link from before the rename lands
-   on the same page. */
-const PATH_HEAD_ALIASES: Record<string, string> = { issues: "backlog" };
+/* Both routes keep their old heads inside the app; only their addresses
+   changed (/issues, /automations). Folding the new head back keeps every
+   `head === "backlog"` / `head === "routines"` branch below meaning one
+   thing, and old links land on the same page. */
+const PATH_HEAD_ALIASES: Record<string, string> = { issues: "backlog", automations: "routines" };
 WORK_ROUTES.set("/backlog", "backlog");
+WORK_ROUTES.set("/routines", "routine");
 
 export const APP_NAVIGATION_EVENT = "relay:navigation";
 
@@ -54,7 +55,7 @@ export type AppLocationState = {
   sessionId: string | null;
   projectId?: string | null;
   agentId?: string | null;
-  /** The task or routine whose record is open — `/backlog/<id>`, `/routines/<id>`. */
+  /** The task or routine whose record is open — `/backlog/<id>`, `/automations/<id>`. */
   taskId?: string | null;
   /** The occurrence open as a run, under the routine named by `taskId`. */
   runId?: string | null;
@@ -166,7 +167,7 @@ export function pathForAppState({
     return sessionId ? `${taskPath}/threads/${encodeURIComponent(sessionId)}` : taskPath;
   }
   if (route === "routine" && taskId) {
-    const routinePath = `/routines/${encodeURIComponent(taskId)}`;
+    const routinePath = `${WORK_PATHS.routine}/${encodeURIComponent(taskId)}`;
     return runId ? `${routinePath}/runs/${encodeURIComponent(runId)}` : routinePath;
   }
   if (route === "teams" && teamWorkspaceId) return `/teams/${encodeURIComponent(teamWorkspaceId)}`;
@@ -514,8 +515,19 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
   return encoded ? `?${encoded}` : "";
 }
 
+/* Heads renamed in the product but still linked from old threads and
+   bookmarks. Unlike PATH_HEAD_ALIASES (read-only), these rewrite the address
+   bar on arrival. /backlog is deliberately absent: its tests pin it. */
+const RENAMED_PATH_HEADS: Readonly<Record<string, string>> = { routines: "automations" };
+
+function canonicalPathname(pathname: string): string {
+  const match = /^\/([^/]+)(\/.*)?$/.exec(pathname);
+  const renamed = match ? RENAMED_PATH_HEADS[match[1]] : undefined;
+  return renamed ? `/${renamed}${match?.[2] ?? ""}` : pathname;
+}
+
 export function canonicalBrowserUrl(pathname: string, search = ""): string {
-  return `${pathname}${canonicalSearchForPath(pathname, search)}`;
+  return `${canonicalPathname(pathname)}${canonicalSearchForPath(pathname, search)}`;
 }
 
 /** Whether `?space=1` survives on this path. A surface that writes a search
