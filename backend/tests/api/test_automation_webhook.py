@@ -88,3 +88,30 @@ def test_secret_requires_a_webhook_automation(monkeypatch) -> None:
         client, agent = _client(monkeypatch, root)
         routine = _routine(client, agent)
         assert client.post(f"/api/v1/tasks/{routine['id']}/automation/webhook-secret").status_code == 409
+
+
+def test_webhook_rate_limit(monkeypatch):
+    with TemporaryDirectory() as root:
+        monkeypatch.setenv("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", "2")
+        client, agent = _client(monkeypatch, root)
+        routine, secret = _webhook_automation(client, agent)
+        url = f"/api/v1/automations/{routine['id']}/webhook"
+        for _ in range(2):
+            assert client.post(url, json={}, headers={HEADER: secret}).status_code == 202
+        response = client.post(url, json={}, headers={HEADER: secret})
+        assert response.status_code == 429
+        assert int(response.headers["Retry-After"]) > 0
+
+
+def test_secret_management_requires_owner_or_admin(monkeypatch):
+    from test_tasks import _create_user, _login
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine, _ = _webhook_automation(client, agent)
+        _create_user(client, "bob", employee_id="bob")
+        _login(client, "bob")
+        path = f"/api/v1/tasks/{routine['id']}/automation/webhook-secret"
+        assert client.get(path).status_code in (403, 404)
+        assert client.post(path).status_code in (403, 404)
+        _login(client, "alice")
+        assert client.post(path).status_code == 201

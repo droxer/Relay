@@ -18,6 +18,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .api import (
     admin_routes,
+    automation_routes,
     agent_routes,
     auth_routes,
     chat_routes,
@@ -92,6 +93,8 @@ from .services.event_notifier import (
 from .services.team_membership import reconcile_team_memberships
 from .services.workspace_query import WorkspaceQueryBroker
 from .tasks import TaskScheduler
+from .automations.matcher import AutomationMatcher
+from .persistence.automation_store import DatabaseAutomationStore
 
 load_backend_env()
 
@@ -227,6 +230,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     session_store = session_store_from_env(root_dir)
     task_store = task_store_from_env(root_dir)
+    automation_store = automation_store_from_env()
     daemon_store = daemon_store_from_env(root_dir)
     chat_store = chat_store_from_env(root_dir)
     auth_store = auth_store_from_env(root_dir)
@@ -302,7 +306,8 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     today = scheduler_today_from_env()
     scheduler = task_scheduler_from_env(
-        task_store=task_store,
+        session_store=session_store,
+        automation_store=automation_store,        task_store=task_store,
         registry=registry,
         backend=backend,
         team_store=team_store,
@@ -345,6 +350,10 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     _configure_cors(app)
     app.state.session_store = session_store
+    app.state.automation_webhook_limiter = AuthRateLimiter(
+        attempts=int(os.environ.get("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", "60")), window_seconds=60,
+    )
+    app.state.automation_store = automation_store
     app.state.task_store = task_store
     app.state.daemon_store = daemon_store
     app.state.execution_lifecycle = execution_lifecycle
@@ -395,6 +404,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         }
 
     api_routers = (
+        automation_routes.router,
         auth_routes.router,
         device_authorization_routes.router,
         agent_routes.router,
@@ -541,6 +551,11 @@ def task_store_from_env(root_dir: Path) -> Any:
     return store
 
 
+def automation_store_from_env() -> DatabaseAutomationStore:
+    url = database_url_from_env(setting="database-only automation storage")
+    return DatabaseAutomationStore(url, create_schema=url.startswith("sqlite"))
+
+
 def channels_enabled_from_env() -> bool:
     """Whether the chat channels feature is published.
 
@@ -565,6 +580,8 @@ def chat_store_from_env(root_dir: Path) -> Any:
 
 def task_scheduler_from_env(
     *,
+    session_store: Any | None = None,
+    automation_store: Any | None = None,
     task_store: Any,
     registry: DaemonNodeRegistry,
     backend: ServerDaemonNodeBackend,
@@ -578,6 +595,12 @@ def task_scheduler_from_env(
     if enabled in ("0", "false", "no", "off"):
         return None
     return TaskScheduler(
+        automation_matcher=AutomationMatcher(
+            task_store=task_store, session_store=session_store, automation_store=automation_store,
+            today=today or scheduler_today_from_env(),
+            max_runs_per_hour=max(1, int(os.environ.get("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "6"))),
+            batch=max(1, int(os.environ.get("RELAY_AUTOMATION_OUTBOX_BATCH", "200"))),
+        ) if automation_store is not None and session_store is not None else None,
         task_store=task_store,
         registry=registry,
         backend=backend,

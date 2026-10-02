@@ -159,6 +159,7 @@ def materialize_legacy_task_assignment(
 
 @dataclass(frozen=True)
 class SchedulerTickResult:
+    fired: int = 0
     promoted: int = 0
     dispatched: int = 0
     skipped: int = 0
@@ -175,10 +176,12 @@ class TaskScheduler:
         project_store: Any | None = None,
         managed_node_store: Any | None = None,
         org_settings_store: Any | None = None,
+        automation_matcher: Any | None = None,
         interval_seconds: float = 10.0,
         max_dispatches_per_tick: int = 5,
         today: Callable[[], date] = date.today,
     ) -> None:
+        self.automation_matcher = automation_matcher
         self.task_store = task_store
         self.registry = registry
         self.backend = backend
@@ -227,14 +230,25 @@ class TaskScheduler:
 
     def _tick_sync(self, loop: asyncio.AbstractEventLoop) -> SchedulerTickResult:
         with compact_task_writes():
+            fired = self._fire_automations()
             today = self._today()
             promoted, promote_skipped = self._promote_due_routines(today)
             dispatched, dispatch_skipped = self._dispatch_assigned_tasks(loop)
             return SchedulerTickResult(
+                fired=fired,
                 promoted=promoted,
                 dispatched=dispatched,
                 skipped=promote_skipped + dispatch_skipped,
             )
+
+    def _fire_automations(self) -> int:
+        if self.automation_matcher is None:
+            return 0
+        try:
+            return self.automation_matcher.run()
+        except Exception:
+            logger.exception("Automation matching failed")
+            return 0
 
     async def _run_loop(self) -> None:
         while True:

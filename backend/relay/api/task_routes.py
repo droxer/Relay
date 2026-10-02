@@ -884,6 +884,8 @@ def update_task(
             complete_linked_task_sessions(ctx, task, "Task accepted after review.")
             task = ctx.task_store.get_task(task_id)
 
+    if trigger_kind(current) == "webhook" and (not task.get("isRoutine") or trigger_kind(task) != "webhook"):
+        request.app.state.automation_store.delete_webhook_secret(task_id)
     return task
 
 
@@ -1724,6 +1726,7 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
         "sessionIds": session_ids,
         "latestSessionId": session_ids[-1] if session_ids else None,
         "artifactCount": len(artifacts),
+        "triggerKind": task.get("routineTriggerKind"),
     }
 
 
