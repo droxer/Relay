@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TaskRecordView } from "../src/components/task-record/TaskRecordView";
 
-const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask } = vi.hoisted(() => ({
+const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask, updateTask } = vi.hoisted(() => ({
+  updateTask: vi.fn(async () => ({})),
   getTask: vi.fn(),
   listTaskRuns: vi.fn(),
   listTaskArtifacts: vi.fn(async () => ({ artifacts: [] })),
@@ -31,6 +32,7 @@ vi.mock("../src/api", () => ({
 vi.mock("../src/hooks/useRelayMutations", () => ({
   useRelayMutations: () => ({
     startTaskMutation: { mutateAsync: startTask },
+    updateTaskMutation: { mutateAsync: updateTask },
     cancelRunMutation: { mutateAsync: vi.fn() },
     deleteTaskMutation: { mutateAsync: vi.fn() },
   }),
@@ -174,4 +176,22 @@ it("links a project task result to Threads and opens the same conversation on cl
   expect(link.getAttribute("href")).toBe("/threads/s-1");
   await userEvent.setup().click(link);
   expect(onOpenThread).toHaveBeenCalledWith("s-1");
+});
+
+
+it("explains coalesced status triggers in the run ledger", async () => {
+  listTaskRuns.mockResolvedValue({ taskId: "R-42", runs: [{ ...RUNS[0], triggerKind: "task_event",
+    triggerSummary: { eventType: "task.status_changed", toStatus: "blocked", eventCount: 3 } }] });
+  renderRecord();
+  expect(await screen.findByText(/automation.ledger.status_changed/)).toBeTruthy();
+  expect(screen.getByText(/automation.ledger.event_count/)).toBeTruthy();
+});
+
+it("offers a direct re-enable action after the rate cap pauses an automation", async () => {
+  getTask.mockResolvedValue({ ...ROUTINE, ownerEmployeeId: "fei", routineEnabled: false,
+    routineDisabledReason: "rate_limited" });
+  renderRecord();
+  expect(await screen.findByText("automation.rate_limited")).toBeTruthy();
+  await userEvent.setup().click(screen.getByRole("button", { name: "automation.reenable" }));
+  await waitFor(() => expect(updateTask).toHaveBeenCalledWith({ taskId: "R-42", input: { routineEnabled: true } }));
 });

@@ -94,3 +94,20 @@ def test_scope_filters_require_owner_access_on_create_and_patch(monkeypatch) -> 
         response = client.post("/api/v1/tasks", json={"title": "Watch Bob", "isRoutine": True,
             "routineTrigger": trigger, "assignedAgentId": alice_agent["id"]})
         assert response.status_code == 403
+
+
+def test_run_now_queues_through_matcher_and_cap(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine = _routine(client, agent, routineTrigger={"kind": "manual"})
+        monkeypatch.setenv("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "1")
+        response = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
+        assert response.status_code == 202
+        state = client.app.state.automation_store.get_state(routine["id"])
+        assert state["fired_count"] == 1
+        first_id = client.app.state.task_store.get_task(routine["id"])["occurrenceIds"][0]
+        client.app.state.task_store.update_task(first_id, {"status": "done"})
+        response = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
+        assert response.status_code == 202
+        assert response.json()["dispatch"]["code"] == "rate_limited"
+        assert not client.app.state.task_store.get_task(routine["id"])["routineEnabled"]

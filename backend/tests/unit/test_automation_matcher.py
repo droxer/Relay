@@ -265,3 +265,42 @@ def test_bad_stored_filter_does_not_block_other_automations(world) -> None:
     _block(tasks)
     assert matcher.run() == 1
     assert len(_occurrences(tasks, good["id"])) == 1
+
+
+@pytest.mark.parametrize("kind", ["schedule", "manual", "webhook", "task_event"])
+def test_manual_requests_share_coalescing_and_hourly_cap(world, kind) -> None:
+    tasks, automations, matcher, clock = world
+    trigger = ON_BLOCKED if kind == "task_event" else {"kind": kind}
+    routine = _automation(tasks, trigger)
+    matcher.max_runs_per_hour = 1
+    automations.enqueue_manual(routine["id"])
+    assert matcher.run() == 1
+    [first] = _occurrences(tasks, routine["id"])
+    assert first["routineTriggerKind"] == "manual"
+    assert first["routineTriggerDepth"] == 0
+    automations.enqueue_manual(routine["id"])
+    automations.enqueue_manual(routine["id"])
+    assert matcher.run() == 0
+    assert len(automations.get_state(routine["id"])["pending_events"]) == 2
+    tasks.update_task(first["id"], {"status": "done"})
+    assert matcher.run() == 0
+    assert tasks.get_task(routine["id"])["routineDisabledReason"] == "rate_limited"
+    assert len(_occurrences(tasks, routine["id"])) == 1
+
+
+def test_ledger_metadata_is_authoritative_after_replay(world) -> None:
+    from relay.persistence.store_common import materialize_task_events
+    from relay.api.task_routes import run_row
+    from types import SimpleNamespace
+    tasks, _, matcher, _ = world
+    routine = _automation(tasks)
+    _block(tasks, "one")
+    _block(tasks, "two")
+    matcher.run()
+    [occurrence] = _occurrences(tasks, routine["id"])
+    replayed = materialize_task_events(occurrence["events"])
+    assert replayed["routineTriggerSummary"] == {
+        "eventType": "task.status_changed", "toStatus": "blocked", "eventCount": 2,
+    }
+    row = run_row(SimpleNamespace(session_store=None), replayed)
+    assert row["triggerSummary"] == replayed["routineTriggerSummary"]
