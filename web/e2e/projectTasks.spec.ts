@@ -43,6 +43,14 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-general-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
+    // The Dashboard tab carries the project's issue metrics.
+    await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?tab=dashboard$/);
+    await expect(page.getByRole("group", { name: "Backlog metrics", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Flow", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
+
     // The Issues tab is the board itself, fixed to this project.
     await page.getByRole("tab", { name: "Issues", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=tasks$/);
@@ -52,7 +60,9 @@ for (const mobile of [false, true]) {
     await expect(board.getByRole("link", { name: "Write the release brief", exact: true })).toBeVisible();
     await expect(board.getByText("Another project's task")).toHaveCount(0);
     await board.getByRole("button", { name: "Board view", exact: true }).click();
-    await expect(board.locator(".backlog-stats")).toBeVisible();
+    // The board header is controls only: no metrics, and the lanes name each status.
+    await expect(board.locator(".backlog-stats")).toHaveCount(0);
+    await expect(board.locator(".backlog-project-status")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-tasks-board-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     await board.getByRole("button", { name: "List view", exact: true }).click();

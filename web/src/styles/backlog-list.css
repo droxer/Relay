@@ -279,20 +279,6 @@ tr[data-routine-state="paused"] .backlog-row-title,
     flex-shrink: 0;
   }
 
-  /* The inline "·" separators aren't wrap-safe — at phone width the row breaks
-     mid-list and strands a dot at a line end. Drop the pseudo-separators and
-     lay the four metrics out as an even two-up grid instead. */
-  .backlog-stats {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--sp-2) var(--sp-4);
-    padding-inline: var(--sp-4);
-  }
-
-  .backlog-stat:not(:last-child)::after {
-    content: none;
-  }
-
   .backlog-filter-primary,
   .backlog-filter-chips {
     padding-inline: var(--sp-4);

@@ -39,11 +39,11 @@ describe("task board interface review fixes", () => {
     assert.match(routineRecords, /<div className="backlog-action-group" role="group" aria-label/);
   });
 
-  it("exposes the stats-bar label through a group role", () => {
-    // The backlog is the only board with a stat bar: the routine board's rail
-    // already counts every schedule state, so a bar there only restated it.
-    assert.doesNotMatch(backlogChrome, /<p className="backlog-stats" aria-label/);
-    assert.match(backlogChrome, /<p className="backlog-stats" role="group" aria-label/);
+  it("keeps the issue metrics off the board header", () => {
+    // The project's Dashboard tab owns the metrics; the board header carries
+    // only the controls that act on the board.
+    assert.doesNotMatch(backlogChrome, /backlog-stats/);
+    assert.doesNotMatch(backlogPage, /BacklogStats/);
     assert.doesNotMatch(routineChrome, /backlog-stats/);
   });
 

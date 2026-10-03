@@ -70,6 +70,7 @@ describe("project page behavior", () => {
     assert.equal(parseProjectPageTab(null), "general");
     assert.equal(parseProjectPageTab("unknown"), "general");
     assert.equal(parseProjectPageTab("profile"), "general");
+    assert.equal(parseProjectPageTab("dashboard"), "dashboard");
     assert.equal(parseProjectPageTab("tasks"), "tasks");
     assert.equal(parseProjectPageTab("workspace"), "workspace");
   });

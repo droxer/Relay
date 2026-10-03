@@ -229,7 +229,7 @@ function recordTabParam(value: string | null, aliases = TASK_RECORD_TAB_ALIASES)
   return value ? aliases[value] ?? value : null;
 }
 const TEAM_TABS = new Set(["profile", "activities"]);
-const PROJECT_TABS = new Set(["general", "tasks", "workspace"]);
+const PROJECT_TABS = new Set(["general", "dashboard", "tasks", "workspace"]);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
 
 /**
