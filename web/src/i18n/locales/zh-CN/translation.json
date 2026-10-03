@@ -858,7 +858,8 @@
       "scheduled": "已排期",
       "unscheduled": "未排期",
       "paused": "已暂停",
-      "listening": "监听中"
+      "listening": "监听中",
+      "on_demand": "按需"
     },
     "meta": "自动化状态",
     "no_activity": "暂无运行记录。",
@@ -2261,7 +2262,7 @@
     "filter_team": "团队",
     "filter_from_status": "原状态",
     "filter_to_status": "新状态",
-    "filter_priority": "优先级",
+    "filter_priority": "任务优先级",
     "filter_title": "标题包含",
     "manual_hint": "仅在有人点击“立即运行”时运行。",
     "webhook_url": "端点",
@@ -2269,6 +2270,7 @@
     "webhook_save_first": "保存自动化后即可获得 Webhook 端点。",
     "webhook_generate": "生成密钥",
     "webhook_rotate": "轮换密钥",
+    "webhook_rotate_confirm": "立即轮换（旧密钥将失效）",
     "webhook_configured": "已设置密钥。轮换后旧密钥立即失效。",
     "webhook_secret_once": "请立即复制此密钥，之后不会再次显示。",
     "webhook_copy": "复制",
@@ -2282,10 +2284,18 @@
       "task_event": "任务事件",
       "run_event": "运行事件",
       "webhook": "Webhook",
-      "manual": "手动"
+      "manual": "手动",
+      "task_created": "任务已创建",
+      "run_completed": "运行已完成",
+      "run_failed": "运行失败",
+      "status_any": "任务状态已变更"
     },
     "errors": {
       "title_too_long": "标题筛选请不超过 120 个字符。"
-    }
+    },
+    "trigger_kind": "触发来源",
+    "filters_hint": "筛选保持“任意”即匹配所有任务。",
+    "webhook_copied": "已复制",
+    "webhook_secret": "密钥"
   }
 }

@@ -316,7 +316,7 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
     agent: null,
     assignee: null,
     trigger: new Set(["schedule", "task_event", "run_event", "webhook", "manual"]),
-    state: new Set(["running", "overdue", "due", "scheduled", "listening", "unscheduled", "paused"]),
+    state: new Set(["running", "overdue", "due", "scheduled", "listening", "on_demand", "unscheduled", "paused"]),
   },
 };
 

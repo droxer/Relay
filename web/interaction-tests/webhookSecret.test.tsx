@@ -18,6 +18,8 @@ it("keeps the one-time secret out of caches and clears it after unmount", async 
   const first = render(view());
   await waitFor(() => expect((screen.getByRole("button", { name: "automation.webhook_rotate" }) as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(screen.getByRole("button", { name: "automation.webhook_rotate" }));
+  expect(rotateWebhookSecret).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "automation.webhook_rotate_confirm" }));
   expect(await screen.findByText("one-time-test-secret")).toBeTruthy();
   expect(JSON.stringify(client.getQueryCache().getAll().map((q) => q.state.data))).not.toContain("one-time-test-secret");
   expect(client.getMutationCache().getAll()).toHaveLength(0);

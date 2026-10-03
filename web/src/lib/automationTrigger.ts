@@ -1,4 +1,6 @@
-import type { RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../types.js";
+import type { RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn, TaskRun } from "../types.js";
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /* What starts an automation. Mirrors backend/relay/automations/trigger.py —
    keep the kinds, `on` values, and filter rules in step with it. */
@@ -43,4 +45,43 @@ export function triggersEqual(a: RoutineTrigger, b: RoutineTrigger): boolean {
 export function triggerError(trigger: RoutineTrigger): string | null {
   const title = trigger.filters?.titleContains ?? "";
   return title.length > TITLE_CONTAINS_MAX ? "automation.errors.title_too_long" : null;
+}
+
+/* Ledger label keys under `automation.ledger`, by the event that fired a run
+   and by the `on` an event trigger listens for. */
+const FIRED_BY_KEYS: Readonly<Record<string, string>> = {
+  "task.created": "task_created",
+  "run.completed": "run_completed",
+  "run.failed": "run_failed",
+  webhook: "webhook",
+  manual: "manual",
+};
+const ON_KEYS: Readonly<Record<RoutineTriggerOn, string>> = {
+  created: "task_created",
+  status_changed: "status_any",
+  completed: "run_completed",
+  failed: "run_failed",
+};
+
+function statusLabel(status: string | undefined, t: Translate): string | null {
+  return status ? t("automation.ledger.status_changed", { status: t(`backlog.statuses.${status}`) }) : null;
+}
+
+/** What fired one run, for the run ledger — or null for a run with no trigger stamp. */
+export function runTriggerLabel(run: Pick<TaskRun, "triggerKind" | "triggerSummary">, t: Translate): string | null {
+  if (!run.triggerKind) return null;
+  const summary = run.triggerSummary;
+  const label = (summary?.eventType === "task.status_changed" ? statusLabel(summary.toStatus, t) : null)
+    ?? t(`automation.ledger.${FIRED_BY_KEYS[summary?.eventType ?? ""] ?? run.triggerKind}`);
+  return summary && summary.eventCount > 1
+    ? `${label} · ${t("automation.ledger.event_count", { count: summary.eventCount })}`
+    : label;
+}
+
+/** One short phrase for what starts an automation: the record band and the list's Trigger column. */
+export function describeTrigger(trigger: RoutineTrigger, t: Translate): string {
+  if (!isEventKind(trigger.kind)) return t(`automation.kinds.${trigger.kind}`);
+  const on = trigger.on ?? TRIGGER_ON[trigger.kind][0];
+  return (on === "status_changed" ? statusLabel(trigger.filters?.toStatus, t) : null)
+    ?? t(`automation.ledger.${ON_KEYS[on]}`);
 }

@@ -82,8 +82,9 @@ it("reports a missing title in the drawer's own words", () => {
 
 it("shows event filters and hides cadence for task-event automations", () => {
   render(<Form initial={{ ...emptyRoutineForm(user), routineTrigger: { kind: "task_event", on: "status_changed" } }} />);
-  expect(screen.getByText("automation.trigger")).toBeTruthy();
-  expect(screen.getByText("automation.filter_from_status")).toBeTruthy();
+  expect(screen.getByText("automation.trigger_kind")).toBeTruthy();
+  const filters = screen.getByRole("group", { name: "automation.filters_legend" });
+  expect(within(filters).getByText("automation.filter_from_status")).toBeTruthy();
   expect(screen.getByText("automation.filter_to_status")).toBeTruthy();
   expect(screen.queryByText("routine.cadence")).toBeNull();
   expect(screen.queryByText("routine.next_run")).toBeNull();

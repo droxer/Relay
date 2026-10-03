@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskRuns } from "../../api";
 import { RecordFailure } from "./RecordFailure";
+import { runTriggerLabel } from "../../lib/automationTrigger";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { formatRunDuration, runDurationMs, runOutcome, type RunOutcome } from "../../lib/taskRuns";
 import type { TaskRun } from "../../types";
@@ -36,11 +37,6 @@ import { RecordWorkspace } from "./RecordWorkspace";
 
 /** How many runs the ledger asks for before the reader asks for more. */
 const RUN_PAGE_SIZE = 25;
-const EVENT_LABEL_KEYS: Record<string, string> = {
-  "task.created": "task_created",
-  "run.completed": "run_completed",
-  "run.failed": "run_failed",
-};
 
 /** Outcome → the tone half of the state vocabulary; `StateMark` picks the shape. */
 const TONE_FOR_OUTCOME: Record<RunOutcome, StateTone> = {
@@ -205,6 +201,9 @@ function RunRow({
   const started = runTime(run.startedAt, locale);
   const detail = run.failureMessage
     ?? (outcome === "running" && started ? t("backlog.runs.started_at", { time: started }) : null);
+  /* What fired the run shares the outcome's second line: the date column is
+     sized for a date, and a trigger label used to spill out of it. */
+  const meta = [runTriggerLabel(run, t), detail].filter(Boolean).join(" · ") || null;
 
   return (
     <li className="record-run" data-outcome={outcome}>
@@ -216,23 +215,12 @@ function RunRow({
         onClick={onSelect}
       >
         <StateMark tone={TONE_FOR_OUTCOME[outcome]} shape={outcome === "pending" ? "dashed" : undefined} />
-        <span className="record-run-date tnum">
-          {runDate(run.scheduledFor ?? run.createdAt, locale)}
-          {run.triggerKind ? (
-            <span className="record-run-trigger">
-              {run.triggerSummary?.eventType === "task.status_changed"
-                ? t("automation.ledger.status_changed", { status: t(`backlog.statuses.${run.triggerSummary.toStatus}`) })
-                : t(`automation.ledger.${EVENT_LABEL_KEYS[run.triggerSummary?.eventType ?? ""] ?? run.triggerKind}`)}
-              {run.triggerSummary && run.triggerSummary.eventCount > 1
-                ? ` · ${t("automation.ledger.event_count", { count: run.triggerSummary.eventCount })}` : ""}
-            </span>
-          ) : null}
-        </span>
+        <span className="record-run-date tnum">{runDate(run.scheduledFor ?? run.createdAt, locale)}</span>
         <span className="record-run-summary">
           <span className="record-run-outcome">{t(`backlog.runs.outcome.${outcome}`)}</span>
           {/* A failure's reason is clipped to one line; the title carries
               the whole of it, and the run's own record quotes it in full. */}
-          {detail ? <span className="record-run-reason" title={detail}>{detail}</span> : null}
+          {meta ? <span className="record-run-reason" title={meta}>{meta}</span> : null}
         </span>
         {/* Both numeric cells always render, empty or not, so the columns
             hold their line down the ledger. */}
