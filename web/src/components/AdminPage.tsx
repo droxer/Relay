@@ -510,7 +510,8 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
         <PageHeader
           kicker={t("admin.control_panel.eyebrow")}
           title={t("admin.control_panel.title")}
-          titleVariant="display"
+          titleAs="h2"
+          titleVariant="title"
           layout="stacked"
         />
         <AdminViewToggle view={view} onChange={setView} />
@@ -520,7 +521,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
         <PageHeader
           title={viewTitle}
           titleAs="h2"
-          titleVariant="display"
+          titleVariant="title"
           count={headerCount}
           actions={hasHeaderActions ? (
             <>

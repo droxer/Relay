@@ -253,7 +253,6 @@ describe("markdown stylesheet", () => {
 
   it("moves the document variant up the type ladder", () => {
     assert.match(markdownCss, /\.doc-prose \{[^}]*font-size: var\(--fs-4\)/s);
-    assert.match(markdownCss, /\.doc-prose h1 \{ font-size: var\(--fs-title\); \}/);
     assert.match(markdownCss, /max-width: var\(--measure-wide\)/);
   });
 });

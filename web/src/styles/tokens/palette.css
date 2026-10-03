@@ -676,6 +676,7 @@
   --fs-code-transcript: 0.9286rem;           /* 13px */
   --fs-heading: 1.0714rem; /* 15px — section headings */
   --fs-title: 1.1429rem;   /* 16px — pane and page titles */
+  --fs-title-lg: 1.2143rem; /* 17px — fixed-noun titles: rails, section headers, drawers, dialogs */
   --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */
   --fs-6: 2rem;      /* 28px — display: section-opener display */
   /* Hero display — the one place a headline owns the viewport (login, empty

@@ -82,7 +82,8 @@ export function TeamsPage({
           kicker={t("nav.workforce")}
           title={t("teams.title")}
           count={t("teams.count", { count: teams.length })}
-          titleVariant="display"
+          titleAs="h2"
+          titleVariant="title"
           layout="stacked"
           actions={(
             // The shared list-header create affordance — a ghost plus, same

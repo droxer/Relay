@@ -16,6 +16,9 @@ const CLIENT_ROUTES = [
   // The Issues page lived at /backlog; old links still resolve.
   "/backlog",
   "/backlog/:path*",
+  "/automations",
+  "/automations/:path*",
+  // Routines lived at /routines before the rename to /automations.
   "/routines",
   "/routines/:path*",
   "/agents",
@@ -29,8 +32,10 @@ const CLIENT_ROUTES = [
   "/channels",
   "/admin",
   "/admin/:path*",
+  // Pre-settings-section addresses; the app canonicalizes them to /settings/*.
+  "/computer",
+  "/skills",
 ] as const;
-
 const spaFallbackRewrites = () => CLIENT_ROUTES.map((source) => ({ source, destination: "/" }));
 
 const backendProxyRewrites = () => [

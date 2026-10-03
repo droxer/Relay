@@ -22,9 +22,11 @@ export function PageHeader({
   subtitle?: ReactNode;
   toolbar?: ReactNode;
   actions?: ReactNode;
-  /** "display" is medium-weight sans for fixed UI nouns; "record" is regular sans for a name the
-   *  user or an agent authored. See .page-header-title--display in shell.css. */
-  titleVariant?: "default" | "display" | "record";
+  /** "display" is the 28px hero tier for page-owning nouns; "title" is the
+   *  19px tier for a fixed UI noun heading a subordinate pane (the thread
+   *  rail — same rung a drawer title takes); "record" is regular sans for a
+   *  name the user or an agent authored. See shell.css. */
+  titleVariant?: "default" | "display" | "title" | "record";
   /** Heading level. Nested detail panes (team/agent detail under a roster)
    *  demote to "h2" so the roster title stays the single page h1. */
   titleAs?: "h1" | "h2" | "h3";
@@ -48,9 +50,11 @@ export function PageHeader({
               "page-header-title",
               titleVariant === "display"
                 ? "page-header-title--display"
-                : titleVariant === "record"
-                  ? "page-header-title--record"
-                  : "page-header-title--inline",
+                : titleVariant === "title"
+                  ? "page-header-title--title"
+                  : titleVariant === "record"
+                    ? "page-header-title--record"
+                    : "page-header-title--inline",
             )}
           >
             {title}

@@ -339,7 +339,8 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           kicker={t("nav.workspace")}
           title={t("routine.title")}
           count={t("routine.sub", { count: routineTasks.length })}
-          titleVariant="display"
+          titleAs="h2"
+          titleVariant="title"
           layout="stacked"
         />
         <RoutineStateNav
@@ -354,7 +355,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         <PageHeader
           title={sectionLabel}
           titleAs="h2"
-          titleVariant="display"
+          titleVariant="title"
           count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
           actions={
             <TaskBoardHeaderActions

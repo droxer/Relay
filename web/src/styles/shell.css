@@ -142,12 +142,20 @@
 
 /* A page title is display-tier mono when it names a FIXED UI noun (Teams,
    Backlog, Computers) and sans when it prints a user- or agent-authored
-   string — a team, agent, or project name. Same rung, different face; one
-   variant serving both is how record names ended up reading as log lines. */
+   string — a team, agent, or project name. The h1 sits at 22px: 28px against
+   a 17px h2 made the page title shout over its own sections. */
 .page-header-title--display {
-  font: var(--type-display);
-  letter-spacing: var(--type-display-track);
+  font: var(--type-page);
+  letter-spacing: var(--type-page-track);
 }
+
+.page-header-title--title {
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
+}
+
+/* Rails carry no size override: their h2 titles read the same --type-title
+   rung (17px) as every other fixed-noun h2 — one level, one size. */
 
 .page-header-title--record {
   font: var(--type-title-content);

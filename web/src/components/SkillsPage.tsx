@@ -261,8 +261,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
         <PageHeader
           title={t("skills.title")}
           count={t("skills.count", { count: skills.length })}
-          titleVariant="display"
-          layout="stacked"
+          titleAs="h2"
+          titleVariant="title"
           actions={
             <Button
               variant="ghost"

@@ -195,10 +195,14 @@ export function ComputerPage({
 
   return (
     <section id="computer-panel" className="computer-page" aria-label={t("computer.title")} tabIndex={-1}>
+      {/* Rendered as a section of Settings (its rail h1 owns the page), so
+          the header demotes to the 16px pane-title rung, not the 28px
+          page-title tier. */}
       <PageHeader
         title={t("computer.title")}
         count={t("computer.count", { count: myNodes.length })}
-        titleVariant="display"
+        titleAs="h2"
+        titleVariant="title"
         actions={connectCta("sm")}
       />
       {/* The shell clips its children, so the roster needs its own scroll

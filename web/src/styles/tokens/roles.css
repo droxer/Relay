@@ -152,7 +152,10 @@
      pane titles, and feature-tile headers. The 22px rung above it is reserved
      for KPI numerals and subsection headlines, where an oversized figure is
      the point. */
-  --type-title:        500 var(--fs-title)/var(--leading-tight) var(--font-display);
+  --type-title:        500 var(--fs-title-lg)/var(--leading-tight) var(--font-display);
+  /* Page h1: 22px/500. 28px (--type-display) against a 17px h2 made the page
+     title shout over its own sections; 22 sits one clean rung above. */
+  --type-page:         500 var(--fs-5)/var(--leading-tight) var(--font-display);
   --type-heading:      700 var(--fs-heading)/var(--leading-heading) var(--font-display);
   --type-body:         400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-body-sm:      400 var(--fs-1)/var(--leading-snug) var(--font-sans);
@@ -221,6 +224,7 @@
   --type-heading-track:      var(--track-0);
   --type-number-track:       var(--track-display);
   --type-body-track:         var(--track-body);
+  --type-page-track:        var(--track-display);
   --type-body-sm-track:      var(--track-body-sm);
   --type-label-track:        var(--track-body-sm);
   --type-label-strong-track: var(--track-body-sm);

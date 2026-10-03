@@ -126,11 +126,9 @@
   padding: var(--sp-8) var(--sp-6);
 }
 
-.relay-empty--board .relay-empty-title,
-.relay-empty--fill .relay-empty-title {
-  font: var(--type-display);
-  letter-spacing: var(--type-display-track);
-}
+/* Empty titles stay at the base 16px pane-title rung in every variant. The
+   display-tier escalation read as a second page title beside the rail h1 —
+   and louder than the 16px section header above a board. */
 
 /* Artifact ledgers retain their own illustration and compact side-pane scale. */
 .relay-empty--artifacts {

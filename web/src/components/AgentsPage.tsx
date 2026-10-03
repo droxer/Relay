@@ -237,14 +237,14 @@ export function AgentsPage({
       tabIndex={-1}
     >
       <div className="agents-roster" aria-label={t("agents_page.title")}>
-        {/* Agents was the only primary route with no PageHeader — it rendered
-            with zero headings in the document, so the panel had no title and
-            the page had no h1 for the accessibility tree. Mirrors TeamsPage. */}
+        {/* Rail title: h2 like every list rail (the rail is a sidebar, not
+            the page's heading) at the shared 17px rail-title rung. */}
         <PageHeader
           kicker={t("nav.workforce")}
           title={t("agents_page.title")}
           count={t("agents_page.sub", { count: activeAgents.length })}
-          titleVariant="display"
+          titleAs="h2"
+          titleVariant="title"
           layout="stacked"
           actions={
             currentUser.employeeId ? (

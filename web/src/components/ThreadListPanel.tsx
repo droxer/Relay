@@ -159,7 +159,13 @@ export function ThreadListPanel({
       <PageHeader
         title={directoryMode === "projects" ? t("project.projects") : t("nav.threads")}
         count={directoryMode === "projects" ? hierarchy.projects.length : threads.length}
-        titleVariant="display"
+        titleAs="h2"
+        titleVariant="title"
+        // Projects lives in the Workspace nav section, so its rail header
+        // wears the same kicker + stacked frame as the Issues rail beside
+        // it. Threads is a top-level surface — no kicker.
+        kicker={directoryMode === "projects" ? t("nav.workspace") : undefined}
+        layout="stacked"
         actions={(() => {
           // One plus for both modes — the shared list-header create
           // affordance, in its primary tier (.page-header-icon-action, shell.css).

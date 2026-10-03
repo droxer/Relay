@@ -252,8 +252,8 @@ export function IssuesPage({
   return (
     <section id="backlog-panel" className="backlog-page issues-page sec-shell" aria-label={t("issues.title")} tabIndex={-1}>
       <div className="sec-rail">
-        <PageHeader kicker={t("nav.workspace")} title={t("issues.title")}
-          count={t("issues.sub", { count: issues.length })} titleVariant="display" layout="stacked" />
+        <PageHeader kicker={t("nav.workspace")} title={t("issues.title")} titleAs="h2"
+          count={t("issues.sub", { count: issues.length })} titleVariant="title" layout="stacked" />
         <IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />
       </div>
       <div className="sec-main">
@@ -261,7 +261,7 @@ export function IssuesPage({
           title={t(`issues.queues.${queue}`)}
           subtitle={t(`issues.queue_hints.${queue}`)}
           titleAs="h2"
-          titleVariant="display"
+          titleVariant="title"
           actions={(
             <TaskBoardHeaderActions
               refreshLabel={t("nav.refresh")}

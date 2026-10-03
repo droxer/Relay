@@ -299,19 +299,29 @@ introduces visual rest.
 
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
-| `--type-display` | 500 28/1.17 | `--track-display` (−0.02em) | hero headline, admin metric values |
-| `--type-title` | 500 19/1.25 | `--track-display` (−0.02em) | page titles and other fixed UI nouns |
-| `--type-heading` | 700 17/1.44 | `--track-0` | section heads, list labels, in-message h1 |
-| `--type-title-content` | 400 19/1.25 | `--track-display` (−0.02em) | titles whose text comes from a user or agent |
-| `--type-body` | 400 16/1.5 | `--track-body` (0) | prose, message bodies, inputs |
-| `--type-name` | 700 16/1.5 | `--track-body` (0) | the identity of the thing a row or card is about |
-| `--type-body-sm` | 400 14/1.43 | `--track-body-sm` (0) | supporting text, captions |
-| `--type-label` | 500 14/1.43 | `--track-body-sm` (0) | chrome labels, nav, metadata |
-| `--type-label-strong` | 700 14/1.43 | `--track-body-sm` (0) | bold chrome, button labels |
+| `--type-display` | 500 28/1.17 | `--track-display` (−0.02em) | hero headline (login), admin metric values |
+| `--type-page` | 500 22/1.25 | `--track-display` (−0.02em) | page h1 — one rung above the 17px h2 |
+| `--type-title` | 500 17/1.25 | `--track-display` (−0.02em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
+| `--type-heading` | 700 15/1.44 | `--track-0` | section heads, list labels |
+| `--type-title-content` | 400 16/1.25 | `--track-display` (−0.02em) | titles whose text comes from a user or agent |
+| `--type-body` | 400 14/1.5 | `--track-body` (0) | prose, message bodies, inputs |
+| `--type-name` | 700 14/1.5 | `--track-body` (0) | the identity of the thing a row or card is about |
+| `--type-body-sm` | 400 12/1.43 | `--track-body-sm` (0) | supporting text, captions |
+| `--type-label` | 500 12/1.43 | `--track-body-sm` (0) | chrome labels, nav, metadata |
+| `--type-label-strong` | 700 12/1.43 | `--track-body-sm` (0) | bold chrome, button labels |
 | `--type-micro` | 500 12/1.33 | `--track-caps` (0.03em) | structural group labels (+ uppercase), badges — separated from `--type-label` by case and size, not weight |
 | `--type-meta` | 500 12/1.33 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
 | `--type-number` | 500 22/1.28 | `--track-display` (−0.02em) | metrics |
 | `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
+
+**Heading ladders.** Chrome headings map one size per level: page h1 =
+`--type-page` (22/500); every fixed-noun h2 — list rails (thread list,
+rosters, `.sec-rail`), section headers, drawers, dialogs — = `--type-title`
+(17/500); section head h3 = `--type-heading` (15/700). Record titles
+(user/agent-authored) take `--type-title-content` (16/400). Content headings
+(`.md-body`, `.doc-prose`) run one six-rung ladder under the 17px chrome h2 —
+h1 16/700, h2 15/700, h3 14/700, h4 14/500, h5 12/700, h6 12/500 — weight
+splitting the shared sizes, so a content heading never rivals chrome.
 
 **Every role ships a paired `--type-<role>-track`.** The `font:` shorthand
 cannot carry `letter-spacing`, so a role applied as `font: var(--type-title)`

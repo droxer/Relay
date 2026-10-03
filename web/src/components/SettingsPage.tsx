@@ -76,7 +76,8 @@ export function SettingsPage({
         <PageHeader
           kicker={t("settings.eyebrow")}
           title={t("nav.settings")}
-          titleVariant="display"
+          titleAs="h2"
+          titleVariant="title"
           layout="stacked"
         />
         <SectionNav
@@ -94,7 +95,7 @@ export function SettingsPage({
           <SkillsPage currentUser={currentUser} />
         ) : (
           <>
-            <PageHeader title={sectionLabel} titleAs="h2" titleVariant="display" />
+            <PageHeader title={sectionLabel} titleAs="h2" titleVariant="title" />
             <div className="sec-section-body">
               {section === "appearance" ? (
                 <AppearanceSection theme={theme} onThemeChange={onThemeChange} />

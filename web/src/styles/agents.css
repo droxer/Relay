@@ -192,7 +192,7 @@
 .agents-roster-row-name {
   overflow: hidden;
   color: var(--ink-1);
-  /* Same 14px/700 list-rail identity as the thread rail — 16px bold names
+  /* Same 12px/700 list-rail identity as the thread rail — 14px bold names
      read too loud in a 318px roster, CJK more so. */
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);

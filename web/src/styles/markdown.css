@@ -115,18 +115,17 @@
   margin-top: 0;
 }
 
-/* In-message heading ladder stays well under the 19px conversation title so
-   a content heading never visually rivals the page title: 16 / 15 / 14. The
-   transcript body is 14px (--fs-transcript), so h1 and h2 sit one and two
-   rungs above it and h3 and below share the body size, separating by weight
-   (700 vs 400) — which is how the rest of the system already distinguishes
-   roles inside one size. */
-.md-body h1 { font-size: var(--fs-title); font-weight: 700; } /* 16px */
-.md-body h2 { font-size: var(--fs-heading); } /* 15px */
-.md-body h3,
-.md-body h4,
-.md-body h5,
-.md-body h6 { font-size: var(--fs-transcript); } /* 14px — weight carries the rung */
+/* Six content rungs, one ladder: 16/15/14/14/12/12, with weight splitting the
+   shared sizes (700 over 500). The ladder stays under the 16px pane title so
+   a content heading never rivals chrome, and h3/h4 sit at the 14px transcript
+   body where the rung is carried by weight alone — the same move the rest of
+   the system uses to separate roles inside one size. */
+.md-body h1 { font-size: var(--fs-title); } /* 16px/700 — weight from the shared rule */
+.md-body h2 { font-size: var(--fs-heading); } /* 15px/700 */
+.md-body h3 { font-size: var(--fs-transcript); } /* 14px/700 */
+.md-body h4 { font-size: var(--fs-transcript); font-weight: 500; } /* 14px/500 */
+.md-body h5 { font-size: var(--fs-1); } /* 12px/700 */
+.md-body h6 { font-size: var(--fs-1); font-weight: 500; } /* 12px/500 */
 
 .md-body ul,
 .md-body ol {
@@ -492,10 +491,10 @@ html:lang(zh-CN) .md-body blockquote {
 
 /* ---- document variant ----
    The thread space preview and the workspace file preview render whole
-   artifacts, not chat turns. The transcript's 17px h1 exists to sit under
-   the conversation title; a standalone plan has no such neighbour, so the
-   heading ladder moves up a step (19 / 17 / 16) and the body gains a reading
-   measure. Element rules above are untouched — only scale and rhythm differ. */
+   artifacts, not chat turns. The heading ladder is the same six rungs as
+   .md-body (16/15/14/14/12/12); what differs is the body — documents keep
+   --fs-4 with prose leading and gain a reading measure. Element rules above
+   are untouched — only scale and rhythm differ. */
 .doc-prose {
   max-width: var(--measure-wide);
   color: var(--ink-1);
@@ -520,12 +519,15 @@ html:lang(zh-CN) .md-body blockquote {
   margin: var(--sp-7) 0 var(--sp-2);
 }
 
-.doc-prose h1 { font-size: var(--fs-title); } /* 19px */
-.doc-prose h2 { font-size: var(--fs-heading); } /* 17px */
-.doc-prose h3,
-.doc-prose h4,
-.doc-prose h5,
-.doc-prose h6 { font-size: var(--fs-4); } /* 16px — the document body size, weight carries the rung */
+/* Same six-rung ladder as .md-body (see its comment): 16/15/14/14/12/12,
+   weight splitting the shared sizes. The document body is --fs-4, so h3/h4
+   read it here rather than the transcript alias. */
+.doc-prose h1 { font-size: var(--fs-title); font-weight: 700; } /* 16px */
+.doc-prose h2 { font-size: var(--fs-heading); } /* 15px/700 */
+.doc-prose h3 { font-size: var(--fs-4); } /* 14px/700 */
+.doc-prose h4 { font-size: var(--fs-4); font-weight: 500; } /* 14px/500 */
+.doc-prose h5 { font-size: var(--fs-1); } /* 12px/700 */
+.doc-prose h6 { font-size: var(--fs-1); font-weight: 500; } /* 12px/500 */
 
 /* A document h1 is the artifact's own title line — give it the rule that a
    chat turn cannot afford, since there it would compete with the thread name. */
