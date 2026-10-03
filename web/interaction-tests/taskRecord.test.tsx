@@ -205,5 +205,6 @@ it.each([
   listTaskRuns.mockResolvedValue({ taskId: "R-42", runs: [{ ...RUNS[0], triggerKind,
     triggerSummary: { eventType, eventCount: 1 } }] });
   renderRecord();
-  expect(await screen.findByText(`automation.ledger.${label}`)).toBeTruthy();
+  // The trigger shares the outcome's second line with the run's detail.
+  expect(await screen.findByText(new RegExp(`^automation\\.ledger\\.${label}( · |$)`))).toBeTruthy();
 });

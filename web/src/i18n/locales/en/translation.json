@@ -863,7 +863,8 @@
       "scheduled": "Scheduled",
       "unscheduled": "Unscheduled",
       "paused": "Paused",
-      "listening": "Listening"
+      "listening": "Listening",
+      "on_demand": "On demand"
     },
     "meta": "Automation status",
     "no_activity": "No runs yet.",
@@ -2278,7 +2279,7 @@
     "filter_team": "Team",
     "filter_from_status": "From status",
     "filter_to_status": "To status",
-    "filter_priority": "Priority",
+    "filter_priority": "Task priority",
     "filter_title": "Title contains",
     "manual_hint": "Runs only when someone presses Run now.",
     "webhook_url": "Endpoint",
@@ -2286,6 +2287,7 @@
     "webhook_save_first": "Save the automation to get its webhook endpoint.",
     "webhook_generate": "Generate secret",
     "webhook_rotate": "Rotate secret",
+    "webhook_rotate_confirm": "Rotate now — the old secret stops working",
     "webhook_configured": "A secret is set. Rotating it stops the old one immediately.",
     "webhook_secret_once": "Copy this secret now. It will not be shown again.",
     "webhook_copy": "Copy",
@@ -2300,10 +2302,18 @@
       "task_event": "Task event",
       "run_event": "Run event",
       "webhook": "Webhook",
-      "manual": "Manual"
+      "manual": "Manual",
+      "task_created": "Task created",
+      "run_completed": "Run completed",
+      "run_failed": "Run failed",
+      "status_any": "Task status changed"
     },
     "errors": {
       "title_too_long": "Keep the title filter to 120 characters."
-    }
+    },
+    "trigger_kind": "Started by",
+    "filters_hint": "Leave a filter on Any to match every task.",
+    "webhook_copied": "Copied",
+    "webhook_secret": "Secret"
   }
 }

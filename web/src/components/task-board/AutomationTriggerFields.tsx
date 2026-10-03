@@ -23,7 +23,7 @@ export function TriggerKindField({ trigger, onChange }: Pick<Props, "trigger" | 
   const { t } = useTranslation();
   const labelId = useId();
   return (
-    <Field label={t("automation.trigger")} labelId={labelId} wrapper="div">
+    <Field label={t("automation.trigger_kind")} labelId={labelId} wrapper="div">
       <Select value={trigger.kind} onValueChange={(value) => value && onChange(triggerForKind(value as RoutineTriggerKind))}>
         <SelectTrigger className="w-full" aria-labelledby={labelId}>
           <SelectValue>{(value: RoutineTriggerKind) => t(`automation.kinds.${value}`)}</SelectValue>
@@ -43,6 +43,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   const onId = useId();
   const errorId = useId();
   const titleLabelId = useId();
+  const filtersLabelId = useId();
   if (!isEventKind(trigger.kind)) return null;
   const filters = trigger.filters ?? {};
   const setFilter = (key: keyof RoutineTriggerFilters, value: string) =>
@@ -54,7 +55,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   const error = triggerError(trigger);
   return (
     <>
-      <Field label={t("automation.on")} labelId={onId} wrapper="div">
+      <Field label={t("automation.on")} labelId={onId} wrapper="div" className="trigger-filters-wide">
         <Select value={trigger.on} onValueChange={(value) => value && onChange({ ...trigger, on: value as RoutineTriggerOn })}>
           <SelectTrigger className="w-full" aria-labelledby={onId}>
             <SelectValue>{(value: RoutineTriggerOn) => t(`automation.on_values.${value}`)}</SelectValue>
@@ -66,21 +67,33 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
           </SelectContent>
         </Select>
       </Field>
-      {choice("projectId", t("automation.filter_project"), projects.map((p) => ({ value: p.id, label: p.name })))}
-      {choice("assignedAgentId", t("automation.filter_agent"), agents.map((a) => ({ value: a.id, label: a.displayName })))}
-      {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name })))}
-      {trigger.on === "status_changed" ? (
-        <>
-          {choice("fromStatus", t("automation.filter_from_status"), TASK_STATUSES.map((s) => ({ value: s, label: t(`backlog.statuses.${s}`) })))}
-          {choice("toStatus", t("automation.filter_to_status"), TASK_STATUSES.map((s) => ({ value: s, label: t(`backlog.statuses.${s}`) })))}
-        </>
-      ) : null}
-      {choice("priority", t("automation.filter_priority"), TASK_PRIORITIES.map((p) => ({ value: p, label: t(`backlog.priorities.${p}`) })))}
-      <Field label={t("automation.filter_title")} labelId={titleLabelId} error={error ? t(error) : undefined} errorId={errorId}>
-        <Input name="automation-title-contains" maxLength={TITLE_CONTAINS_MAX + 20}
-          aria-labelledby={titleLabelId} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? errorId : undefined}
-          value={filters.titleContains ?? ""} onChange={(event) => setFilter("titleContains", event.target.value)} />
-      </Field>
+      {/* The filters narrow the event, so they read as one group under it
+          rather than as nine peers of the trigger itself. A status change is
+          mostly about its statuses, so those lead. */}
+      <div className="trigger-filters" role="group" aria-labelledby={filtersLabelId}>
+        <div className="trigger-filters-head">
+          <span className="trigger-filters-title" id={filtersLabelId}>{t("automation.filters_legend")}</span>
+          <span className="adm-form-hint">{t("automation.filters_hint")}</span>
+        </div>
+        <div className="task-drawer-form-grid">
+          {trigger.on === "status_changed" ? (
+            <>
+              {choice("fromStatus", t("automation.filter_from_status"), TASK_STATUSES.map((s) => ({ value: s, label: t(`backlog.statuses.${s}`) })))}
+              {choice("toStatus", t("automation.filter_to_status"), TASK_STATUSES.map((s) => ({ value: s, label: t(`backlog.statuses.${s}`) })))}
+            </>
+          ) : null}
+          {choice("projectId", t("automation.filter_project"), projects.map((p) => ({ value: p.id, label: p.name })))}
+          {choice("assignedAgentId", t("automation.filter_agent"), agents.map((a) => ({ value: a.id, label: a.displayName })))}
+          {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name })))}
+          {choice("priority", t("automation.filter_priority"), TASK_PRIORITIES.map((p) => ({ value: p, label: t(`backlog.priorities.${p}`) })))}
+          <Field label={t("automation.filter_title")} labelId={titleLabelId} error={error ? t(error) : undefined} errorId={errorId}
+            className="trigger-filters-wide">
+            <Input name="automation-title-contains" maxLength={TITLE_CONTAINS_MAX + 20}
+              aria-labelledby={titleLabelId} aria-invalid={Boolean(error) || undefined} aria-describedby={error ? errorId : undefined}
+              value={filters.titleContains ?? ""} onChange={(event) => setFilter("titleContains", event.target.value)} />
+          </Field>
+        </div>
+      </div>
     </>
   );
 }

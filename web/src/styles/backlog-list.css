@@ -430,30 +430,6 @@ tr[data-selected="true"] > td:first-child {
   gap: var(--sp-2);
 }
 
-.webhook-panel {
-  display: flex;
-  flex-direction: column;
-  grid-column: 1 / -1;
-  gap: var(--sp-2);
-  min-width: 0;
-  font: var(--type-body-sm);
-}
-
-.webhook-panel-url,
-.webhook-panel-secret code {
-  overflow-wrap: anywhere;
-  font-family: var(--font-mono);
-  letter-spacing: var(--track-0);
-  color: var(--ink-2);
-}
-
-.webhook-panel-secret {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-2);
-}
-
 .task-trigger-label {
   color: var(--ink-2);
   font: var(--type-body-sm);

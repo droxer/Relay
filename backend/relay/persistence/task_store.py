@@ -1067,6 +1067,10 @@ class DatabaseTaskStore:
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
+        # Only a running matcher drains the automation outbox; without one,
+        # writing rows would grow the table forever. ``create_app`` turns this
+        # off when the scheduler is disabled.
+        self.emit_automation_events = True
         if create_schema:
             create_all_tables(self.engine)
 
@@ -1125,7 +1129,8 @@ class DatabaseTaskStore:
                         **task_event_to_row(task_row["id"], sequence, event)
                     )
                 )
-            insert_outbox_rows(conn, task_outbox_rows(None, task))
+            if self.emit_automation_events:
+                insert_outbox_rows(conn, task_outbox_rows(None, task))
         return task
 
     def append_event(self, task_id: str, event: dict[str, Any], *, execution_owner: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1288,7 +1293,8 @@ class DatabaseTaskStore:
                         .where(self.task_sessions.c.task_id == task_pk)
                         .where(self.task_sessions.c.session_id == event["sessionId"])
                     )
-            insert_outbox_rows(conn, task_outbox_rows(current, task))
+            if self.emit_automation_events:
+                insert_outbox_rows(conn, task_outbox_rows(current, task))
         logger.debug(
             "Database task events appended",
             task_id=task_id,

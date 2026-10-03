@@ -50,6 +50,15 @@ class AuthRateLimiter:
             window.attempts += 1
             return None
 
+    def retry_after(self, key: str) -> int | None:
+        """Retry-After seconds when ``key`` is blocked, without recording an attempt."""
+        now = time.monotonic()
+        with self._lock:
+            window = self._windows.get(key)
+            if window is None or window.reset_at <= now or window.attempts < self.attempts:
+                return None
+            return max(1, math.ceil(window.reset_at - now))
+
     def reset(self, key: str) -> None:
         with self._lock:
             self._windows.pop(key, None)

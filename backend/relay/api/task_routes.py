@@ -10,13 +10,12 @@ from loguru import logger
 from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
-from ..automations.matcher import AutomationMatcher
-from ..persistence.automation_store import AUTOMATION_LOCK_KEY
-from ..persistence.store_common import store_transaction
-
+from ..automations.matcher import AutomationMatcher, in_flight_occurrence
 from ..automations.trigger import TriggerError, normalize_trigger, trigger_kind, trigger_of
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
+from ..persistence.automation_store import AUTOMATION_LOCK_KEY
+from ..persistence.store_common import store_transaction
 from ..persistence.stores import (
     task_priority,
     task_routine_cadence,
@@ -358,10 +357,15 @@ def routine_fields(
 
 
 def validate_trigger_scope(
-    ctx: AppContext, trigger: dict[str, Any] | None, *, owner: str,
+    ctx: AppContext, trigger: dict[str, Any] | None, *, owner: str | None,
 ) -> None:
     """Filters may observe only work their owner is allowed to assign."""
     filters = (trigger or {}).get("filters") or {}
+    if not any(key in filters for key in ("projectId", "assignedAgentId", "assignedTeamId")):
+        return
+    if not owner:
+        # No owner means no assignment scope to check the filter against.
+        raise HTTPException(400, "Only an automation with an owner can filter by project, agent, or team.")
     lookups = (
         ("projectId", ctx.project_store.get_project),
         ("assignedAgentId", ctx.agent_store.get_agent),
@@ -680,7 +684,7 @@ def update_task(
         raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
     due_date = date_field(body, "dueDate")
     routine = routine_fields(body, current=current, calendar_date=ctx.today())
-    validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=current["ownerEmployeeId"])
+    validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=current.get("ownerEmployeeId"))
     assignee = (
         assignee_employee_id_for_task(actor, body, current.get("assigneeEmployeeId"))
         if "assigneeEmployeeId" in body or "assignee_employee_id" in body
@@ -1173,6 +1177,11 @@ def _request_manual_occurrence(request: Request, ctx: AppContext, task: dict[str
             "state": "rejected", "code": task.get("routineDisabledReason") or "automation_disabled",
             "message": "Enable this automation before running it.",
         }}
+    # A run already queued or running answers the click. Queueing a manual
+    # event behind it would start a second run the user never asked for.
+    active = in_flight_occurrence(ctx.task_store, task)
+    if active:
+        return _active_occurrence_result(ctx, task, active)
     store = request.app.state.automation_store
     store.enqueue_manual(task["id"])
     # Use the same transactional matcher and lock as scheduler ticks. Running
@@ -1186,20 +1195,28 @@ def _request_manual_occurrence(request: Request, ctx: AppContext, task: dict[str
     new_ids = [item for item in refreshed.get("occurrenceIds", []) if item not in previous]
     if new_ids:
         return ctx.task_store.get_task(new_ids[-1])
-    # A queued occurrence may need waking after its computer comes online.
-    # Its assignment is immutable even if the definition was edited later.
-    for occurrence_id in reversed(refreshed.get("occurrenceIds", [])):
-        active = ctx.task_store.get_task(occurrence_id)
-        if active.get("status") in ("assigned", "running") and active.get("linkedSessionIds"):
-            existing = existing_routine_occurrence_result(ctx, refreshed, active)
-            if existing:
-                return existing
-        if active.get("status") in ("backlog", "assigned") and not active.get("linkedSessionIds"):
-            return active
     return {"task": refreshed, "session": None, "dispatch": {
         "state": "queued" if refreshed.get("routineEnabled") else "rejected",
         "code": refreshed.get("routineDisabledReason") or "automation_pending",
         "message": "Run now is coalesced with pending automation events." if refreshed.get("routineEnabled") else "Automation paused by its hourly run limit.",
+    }}
+
+
+def _active_occurrence_result(
+    ctx: AppContext, routine: dict[str, Any], active: dict[str, Any]
+) -> dict[str, Any]:
+    """Answer Run now with the occurrence already in flight. A queued one may
+    need waking after its computer comes online; its assignment is immutable
+    even if the definition was edited later."""
+    if active.get("linkedSessionIds"):
+        existing = existing_routine_occurrence_result(ctx, routine, active)
+        if existing:
+            return existing
+    if active.get("status") in ("backlog", "assigned"):
+        return active
+    return {"task": routine, "session": None, "dispatch": {
+        "state": "queued", "code": "automation_running",
+        "message": "This automation is already running.",
     }}
 
 

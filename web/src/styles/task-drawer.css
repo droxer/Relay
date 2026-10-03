@@ -190,3 +190,78 @@
    hints that were direct field children, which made the task drawer's next-run
    hint one step larger than every other field hint in the app. Field hints now
    come through <Field hint> at the shared 13px. */
+
+/* An event trigger's filters narrow the event, so they sit as one group
+   under it instead of as peers of the trigger. */
+.trigger-filters {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 0.5px solid var(--line-1);
+}
+
+.trigger-filters-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.trigger-filters-title {
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  text-transform: uppercase;
+}
+
+.trigger-filters-wide {
+  grid-column: 1 / -1;
+}
+
+/* Webhook endpoint and secret: read-only values, each with its own Copy, and
+   one action row that keeps its place whatever state the secret is in. */
+.webhook-panel {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.webhook-panel-field {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: var(--sp-1-5);
+  min-width: 0;
+}
+
+.webhook-panel-value {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-1-5) var(--sp-1-5) var(--sp-1-5) var(--sp-3);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+}
+
+/* Sized with the form's supporting text, not the transcript's code rung:
+   a URL at code size out-shouted every label around it. */
+.webhook-panel-value code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  font-family: var(--font-mono);
+  letter-spacing: var(--type-code-track);
+}
+
+.webhook-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}

@@ -50,6 +50,7 @@ export type RoutineState =
   | "due"
   | "unscheduled"
   | "listening"
+  | "on_demand"
   | "scheduled"
   | "paused";
 
@@ -65,7 +66,10 @@ export function routineState(
 ): RoutineState {
   if (running.has(routine.id)) return "running";
   if (!routine.routineEnabled) return "paused";
-  if (triggerOf(routine).kind !== "schedule") return "listening";
+  const kind = triggerOf(routine).kind;
+  /* A manual-only automation watches for nothing; "Listening" would say it does. */
+  if (kind === "manual") return "on_demand";
+  if (kind !== "schedule") return "listening";
   if (!routine.routineNextRunDate) return "unscheduled";
   if (routine.routineNextRunDate < today) return "overdue";
   if (routine.routineNextRunDate === today) return "due";
@@ -84,6 +88,7 @@ export const ROUTINE_STATE_ORDER: readonly RoutineState[] = [
   "due",
   "scheduled",
   "listening",
+  "on_demand",
   "unscheduled",
   "paused",
 ];

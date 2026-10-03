@@ -461,6 +461,11 @@
   padding-left: var(--sp-7);
 }
 
+/* The paused notice under the band starts where the band's first fact does. */
+.record-drawer .record-automation-paused {
+  padding-inline: var(--sp-7);
+}
+
 @media (max-width: 820px) {
   .record-drawer-toolbar {
     padding: 0 var(--sp-4);
@@ -495,6 +500,10 @@
   .record-drawer .record-band-cell:first-child {
     padding-left: var(--sp-4);
   }
+
+  .record-drawer .record-automation-paused {
+    padding-inline: var(--sp-4);
+  }
 }
 
 /* ── Panel failure ────────────────────────────────────────────────── */
@@ -523,23 +532,16 @@
   cursor: default;
 }
 
-.record-run-trigger {
-  display: block;
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-}
-
-
+/* Why a paused automation is paused, as a flush row under the band: it sits
+   on the band's inset and hairline rather than boxing itself in as a card. */
 .record-automation-paused {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--sp-3);
-  padding: var(--sp-3);
-  margin-bottom: var(--sp-3);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 0.5px solid var(--line-1);
   color: var(--ink-2);
   font: var(--type-body-sm);
 }

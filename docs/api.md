@@ -77,8 +77,10 @@ only to task status changes. Non-schedule triggers clear `routineNextRunDate`;
 switching back to a schedule computes it again. `POST /tasks/{id}/runs` remains
 available for every kind to the owner or an admin. Manual requests enter the
 transactional outbox and share event coalescing and the hourly run cap. A free
-automation can dispatch immediately through the existing daemon path; a busy
-one returns `automation_pending`. Project/team/agent filters require the owner's
+automation can dispatch immediately through the existing daemon path; one
+with a run in flight answers with that run (`automation_running` when it has
+no live thread), and one whose request is coalesced with pending events
+returns `automation_pending`. Project/team/agent filters require the owner's
 assignment access. Broadcast events are scoped to work visible to that owner.
 Run ledger rows include nullable `triggerKind` and `triggerSummary`
 (`eventType`, optional `toStatus`, and `eventCount`), persisted on occurrence events.
@@ -128,8 +130,10 @@ An explicit `POST /api/v1/tasks/{id}/runs` retries a plain blocked task after
 checking that no dispatch claim or run request owns it. It records the status
 change through task events. For an automation definition, Run now queues a fresh
 capped firing once the previous occurrence is parked in review or blocked; the
-previous run retains its history. Requests during a queued/running occurrence
-coalesce into the next run, while the response may reference its existing thread.
+previous run retains its history. A request while an occurrence is queued or running answers with that
+occurrence (waking a queued one) and queues nothing, so it never starts a
+second run later. Project/team/agent filters need an owner; an ownerless
+automation may only use the other filters.
 Automatic scheduling never reopens blocked tasks.
 
 Thread collaboration inputs are semantic. `intent` is `accomplish`, `discuss`,

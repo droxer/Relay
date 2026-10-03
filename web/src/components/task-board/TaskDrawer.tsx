@@ -136,6 +136,8 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
     <fieldset className="adm-form-section">
       <legend className="adm-form-legend">{t("routine.schedule")}</legend>
       <div className="task-drawer-form-grid">
+        {/* What starts it comes first: every field below depends on it. */}
+        <TriggerKindField trigger={form.routineTrigger} onChange={(routineTrigger) => onChange({ ...form, routineTrigger })} />
         <Field label={t("routine.type")} labelId={typeLabelId} wrapper="div">
           <Select
             value={form.routineType}
@@ -154,7 +156,6 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
             </SelectContent>
           </Select>
         </Field>
-        <TriggerKindField trigger={form.routineTrigger} onChange={(routineTrigger) => onChange({ ...form, routineTrigger })} />
         {form.routineTrigger.kind === "schedule" ? <>
           <Field label={t("routine.cadence")} labelId={cadenceLabelId} wrapper="div">
             <Select

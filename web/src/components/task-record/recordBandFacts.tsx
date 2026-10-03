@@ -1,5 +1,6 @@
 "use client";
 
+import { describeTrigger, triggerOf } from "../../lib/automationTrigger";
 import { routineState } from "../../lib/routine";
 import { taskRef } from "../../lib/taskRef";
 import type { RelayTaskListItem } from "../../types";
@@ -37,16 +38,23 @@ export function recordBandFacts(
       label: t("routine.state"),
       value: <RoutineStateBadge state={routineState(task, running)} always />,
     });
-    facts.push({
-      key: "cadence",
-      label: t("routine.cadence"),
-      value: task.routineCadence ? t(`routine.cadences.${task.routineCadence}`) : "—",
-    });
-    facts.push({
-      key: "next-run",
-      label: t("routine.next_run"),
-      value: task.routineNextRunDate ? formatNextRunDate(task.routineNextRunDate) : "—",
-    });
+    const trigger = triggerOf(task);
+    if (trigger.kind === "schedule") {
+      facts.push({
+        key: "cadence",
+        label: t("routine.cadence"),
+        value: task.routineCadence ? t(`routine.cadences.${task.routineCadence}`) : "—",
+      });
+      facts.push({
+        key: "next-run",
+        label: t("routine.next_run"),
+        value: task.routineNextRunDate ? formatNextRunDate(task.routineNextRunDate) : "—",
+      });
+    } else {
+      /* An event, webhook, or manual automation keeps a stale cadence and
+         has no next run; what starts it is the fact worth a cell. */
+      facts.push({ key: "trigger", label: t("automation.trigger"), value: describeTrigger(trigger, t) });
+    }
   } else {
     facts.push({
       key: "status",

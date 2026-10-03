@@ -162,3 +162,44 @@ def test_project_and_team_filters_require_same_computer(monkeypatch) -> None:
         }})
         assert response.status_code == 400
         assert response.json()["detail"] == "project_team_off_computer"
+
+
+def test_ownerless_task_can_still_be_edited(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, _ = _client(monkeypatch, root)
+        task = client.app.state.task_store.create_task({"title": "legacy ownerless"})
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"title": "renamed"})
+        assert response.status_code == 200, response.text
+        assert response.json()["title"] == "renamed"
+
+
+def test_ownerless_automation_cannot_filter_by_scope(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine = client.app.state.task_store.create_task({
+            "title": "legacy", "isRoutine": True, "routineEnabled": True, "routineCadence": "weekly",
+            "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"],
+        })
+        scoped = {"kind": "task_event", "on": "created", "filters": {"assignedAgentId": agent["id"]}}
+        response = client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTrigger": scoped})
+        assert response.status_code == 400
+        assert "owner" in response.json()["detail"]
+        unscoped = client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTrigger": ON_BLOCKED})
+        assert unscoped.status_code == 200, unscoped.text
+
+
+def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch) -> None:
+    from relay.automations.matcher import AutomationMatcher
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine = _routine(client, agent, routineTrigger={"kind": "manual"})
+        url = f"/api/v1/tasks/{routine['id']}/runs"
+        assert client.post(url, json={}).status_code == 202
+        assert client.post(url, json={}).status_code == 202
+        store = client.app.state.task_store
+        [occurrence_id] = store.get_task(routine["id"])["occurrenceIds"]
+        assert client.app.state.automation_store.get_state(routine["id"])["pending"] is False
+        store.update_task(occurrence_id, {"status": "done"})
+        AutomationMatcher(task_store=store, session_store=client.app.state.session_store,
+                          automation_store=client.app.state.automation_store).run()
+        assert len(store.get_task(routine["id"])["occurrenceIds"]) == 1
