@@ -22,12 +22,13 @@ interface FirstAdminSetupScreenProps {
 }
 
 function AuthShell({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   return (
     <section className="adm-auth-shell">
       <div className="adm-auth-card">
         <div className="adm-auth-brand">
           <RelayMark size={ICON.xl} />
-          <span className="sr-only">Relay Admin</span>
+          <span className="sr-only">Relay · {t("nav.admin")}</span>
         </div>
         {children}
       </div>

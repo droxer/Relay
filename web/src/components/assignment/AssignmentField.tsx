@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentTeam, EmployeeAgent } from "../../types";
 import { teamAvailability } from "../../lib/taskAssignment";
+import { agentLabel } from "../../lib/plan";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
 import { navigateToAppPath } from "../../lib/appRoute";
 import { AgentMark } from "../AgentMark";
@@ -101,7 +102,7 @@ function AssignmentSummary({
         </span>
         <span className="task-assignment-summary-meta">
           {agent
-            ? t("backlog.agent_descriptor", { executor: agent.executorKind })
+            ? t("backlog.agent_descriptor", { executor: agentLabel(agent.executorKind) })
             : t("backlog.team_descriptor", {
                 count: team?.members.length ?? 0,
                 lead: leadName ?? t("backlog.team_no_lead"),

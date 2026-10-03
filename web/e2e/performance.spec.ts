@@ -150,7 +150,7 @@ test("the eager bundle ships no markdown pipeline, syntax grammars or unused loc
     KaTeX: "KaTeX parse error",
     "highlight.js": "highlightAuto",
     remark: "micromark",
-    "zh-CN catalogue": "每人在制上限",
+    "zh-CN catalogue": "进行中议题上限",
   }).filter(([, signature]) => eager.includes(signature)).map(([name]) => name);
   expect(leaked, "modules found in the eager bundle").toEqual([]);
 

@@ -94,10 +94,10 @@ describe("automation trigger labels", () => {
 
   it("names the target status and the event count", () => {
     const t = strictT("en");
-    assert.equal(runTriggerLabel({ triggerKind: "task_event", triggerSummary: RUNS[1] }, t), "Task status → Blocked · 3 events");
+    assert.equal(runTriggerLabel({ triggerKind: "task_event", triggerSummary: RUNS[1] }, t), "Issue status → Blocked · 3 events");
     assert.equal(runTriggerLabel({ triggerKind: "run_event", triggerSummary: RUNS[3] }, t), "Run failed");
-    assert.equal(describeTrigger({ kind: "task_event", on: "status_changed", filters: { toStatus: "blocked" } }, t), "Task status → Blocked");
-    assert.equal(describeTrigger({ kind: "task_event", on: "status_changed" }, t), "Task status changed");
+    assert.equal(describeTrigger({ kind: "task_event", on: "status_changed", filters: { toStatus: "blocked" } }, t), "Issue status → Blocked");
+    assert.equal(describeTrigger({ kind: "task_event", on: "status_changed" }, t), "Issue status changed");
   });
 
   it("gives a manual-only automation its own state", () => {

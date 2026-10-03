@@ -66,9 +66,7 @@ export function ArtifactPreviewHeader({
       // Clipboard unavailable (permissions, non-secure context) — surface it
       // and point at the manual fallback instead of silently doing nothing.
       announce({
-        message: t("artifact.copy_failed", {
-          defaultValue: "Couldn't copy the artifact. Download it or open the raw file and copy it manually.",
-        }),
+        message: t("artifact.copy_failed"),
         tone: "error",
       });
     }

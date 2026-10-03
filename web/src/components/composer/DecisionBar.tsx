@@ -40,7 +40,7 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
   const { confirm } = useDialogs();
   const approveRef = useRef<HTMLButtonElement>(null);
   const [pendingAction, setPendingAction] = useState<DecisionAction | null>(null);
-  const pendingLabel = t("decision.pending", { defaultValue: "Working…" });
+  const pendingLabel = t("decision.pending");
 
   // The bar mounts when a turn starts awaiting a decision; move keyboard and
   // screen-reader focus to its primary action so it is not missed.

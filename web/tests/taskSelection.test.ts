@@ -109,16 +109,23 @@ describe("batch delete surface", () => {
         routine?: BulkCopy & { select_routine?: string; select_all_routines?: string };
       };
 
+      // i18next plural categories differ per locale: zh-CN resolves every
+      // count to "other", so only the forms a locale actually renders exist.
+      const pluralForms = locale === "zh-CN" ? (["other"] as const) : (["one", "other"] as const);
       for (const section of [translation.backlog, translation.routine]) {
         assert.ok(section?.delete_selected, `${locale} is missing a batch delete action`);
-        assert.ok(section?.bulk_delete_title_one && section.bulk_delete_title_other, `${locale} is missing batch delete titles`);
+        for (const form of pluralForms) {
+          assert.ok(section?.[`bulk_delete_title_${form}` as keyof BulkCopy], `${locale} is missing batch delete titles (${form})`);
+          assert.ok(section?.[`toast_bulk_deleted_${form}` as keyof BulkCopy], `${locale} is missing batch delete feedback (${form})`);
+        }
         assert.match(section?.bulk_delete_body_other ?? "", /\{\{count\}\}/, `${locale} batch copy must name the count`);
-        assert.ok(section?.toast_bulk_deleted_one && section.toast_bulk_deleted_other, `${locale} is missing batch delete feedback`);
       }
       assert.ok(translation.backlog?.select_task, `${locale} is missing a task checkbox label`);
       assert.ok(translation.backlog?.select_all_tasks, `${locale} is missing a select-all label`);
       assert.ok(translation.backlog?.clear_selection, `${locale} is missing a clear-selection label`);
-      assert.ok(translation.backlog?.selected_one && translation.backlog.selected_other, `${locale} is missing the selection count`);
+      for (const form of pluralForms) {
+        assert.ok(translation.backlog?.[`selected_${form}` as "selected_one" | "selected_other"], `${locale} is missing the selection count (${form})`);
+      }
       assert.ok(translation.routine?.select_routine, `${locale} is missing a routine checkbox label`);
       assert.ok(translation.routine?.select_all_routines, `${locale} is missing a routine select-all label`);
     }

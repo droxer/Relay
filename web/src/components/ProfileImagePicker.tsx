@@ -97,7 +97,9 @@ export function ProfileImagePicker({
     try {
       await onUpload(await readFileAsDataUrl(file));
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : t("profile_image.failed"));
+      setError(uploadError instanceof ImageReadError
+        ? t("profile_image.read_failed")
+        : uploadError instanceof Error ? uploadError.message : t("profile_image.failed"));
     } finally {
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -222,13 +224,15 @@ export function ProfileImagePicker({
   );
 }
 
+class ImageReadError extends Error {}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Unable to read the selected image."));
+    reader.onerror = () => reject(new ImageReadError());
     reader.onload = () => {
       if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Unable to read the selected image."));
+      else reject(new ImageReadError());
     };
     reader.readAsDataURL(file);
   });

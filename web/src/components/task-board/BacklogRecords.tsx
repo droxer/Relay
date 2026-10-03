@@ -111,7 +111,7 @@ export function BacklogTaskCard({
               it. */}
           <div className="backlog-meta">
             <PriorityBadge priority={task.priority} />
-            {age !== null ? <span className="tnum">{t("backlog.work_age", { days: age.toFixed(1) })}</span> : null}
+            {age !== null ? <span className="tnum">{t("backlog.work_age", { count: Number(age.toFixed(1)) })}</span> : null}
             <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
             {task.dueDate ? (
               <span className={cn("backlog-due", tone !== "neutral" && tone)}>
@@ -395,7 +395,7 @@ export function TaskFlowDetails({ task, execution }: { task: RelayTaskListItem; 
         case "waiting":
           return <span key="waiting" className="backlog-due warn">{t("backlog.statuses.waiting_for_human")}</span>;
         case "age":
-          return <span key="age" className="tnum">{t("backlog.work_age", { days: exception.days.toFixed(1) })}</span>;
+          return <span key="age" className="tnum">{t("backlog.work_age", { count: Number(exception.days.toFixed(1)) })}</span>;
       }
     })}
   </div>;

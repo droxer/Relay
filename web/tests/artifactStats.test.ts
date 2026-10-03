@@ -30,7 +30,7 @@ describe("summarizeArtifact", () => {
     const stat = summarizeArtifact("diff", diff);
     assert.deepEqual(stat, {
       key: "diff",
-      vars: { additions: 3, deletions: 1, files: 2 },
+      vars: { additions: 3, deletions: 1, count: 2 },
       tone: "neutral",
     });
   });

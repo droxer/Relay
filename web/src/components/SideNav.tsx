@@ -138,7 +138,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (
-    <aside className="sidenav-panel" aria-label={t("nav.brand", { defaultValue: "Relay" })} data-expanded={sidenavExpanded ? "true" : "false"}>
+    <aside className="sidenav-panel" aria-label={t("nav.brand")} data-expanded={sidenavExpanded ? "true" : "false"}>
       {/* Brand only. The collapse toggle used to share this row and had to
           drop onto a second line when the rail narrowed to 72px (a 36px mark
           and a 32px control do not fit), so the button jumped ~70px out from

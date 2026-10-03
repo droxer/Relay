@@ -99,7 +99,7 @@ function PlanCard({ artifact, sessionId, agentDisplayNames }: { artifact: RelayA
       <div className="artifact-plan-note artifact-plan-note-loading">
         <span className="artifact-plan-note-label">{artifact.title}</span>
         <span className="workspace-skeleton artifact-plan-skeleton" aria-hidden="true" />
-        <span className="sr-only" role="status">{t("artifact.plan_loading", { defaultValue: "Loading…" })}</span>
+        <span className="sr-only" role="status">{t("artifact.plan_loading")}</span>
       </div>
     );
   }

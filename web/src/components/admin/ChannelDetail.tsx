@@ -221,9 +221,7 @@ export function ChannelDetail({
   async function onRotateWebhookSecret() {
     if (!selected) return;
     const ok = await confirm({
-      title: t("admin.v2.chat_rotate_confirm", {
-        defaultValue: "Rotate the webhook secret? The current secret stops working immediately.",
-      }),
+      title: t("admin.v2.chat_rotate_confirm"),
       message: t("admin.v2.chat_rotate_message"),
       confirmLabel: t("admin.v2.chat_rotate_webhook_secret"),
       tone: "danger",

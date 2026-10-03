@@ -32,7 +32,7 @@ function diffStat(text: string): ArtifactStat {
   }
   return {
     key: "diff",
-    vars: { additions, deletions, files: files.size },
+    vars: { additions, deletions, count: files.size },
     tone: "neutral",
   };
 }
