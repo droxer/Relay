@@ -66,7 +66,6 @@ import {
   Plus,
   Power,
   RefreshCw,
-  Repeat,
   RotateCcw,
   ScanEye,
   Search,
@@ -83,6 +82,7 @@ import {
   WifiOff,
   TriangleAlert,
   X,
+  Zap,
   Check as LucideCheck,
   ChevronDown as LucideChevronDown,
   ChevronLeft as LucideChevronLeft,
@@ -269,11 +269,15 @@ export const NavBacklog = withStandardStroke(TaskListGlyph, "NavBacklog");
 // rail with a horizontal-stack outline, where the boxed alternatives all
 // collided with Threads, Computer and Control panel.
 export const NavProjects = withStandardStroke(Layers, "NavProjects");
-// Recurrence, not a point in time. `CalendarClock` says "something is
-// scheduled"; a routine's whole content is that it happens AGAIN. The loop
-// also survives 14px, where a calendar grid plus an overlaid clock face
-// closes up into hatching.
-export const NavRoutine = withStandardStroke(Repeat, "NavRoutine");
+// A trigger firing work, not a point in time or a loop. The section used to
+// be Routines and drew `Repeat`, which said "this happens AGAIN" — true for
+// a schedule, but automations now also fire off a task event, a run event, a
+// webhook, or a manual click (see `routineTrigger` in the backend), and none
+// of those are recurrence. `CalendarClock` only covers the schedule case, and
+// a calendar grid plus an overlaid clock face closes up into hatching at
+// 14px anyway. `Zap` reads as "trigger → action" regardless of what tripped
+// it, and survives the same small sizes as a single solid glyph.
+export const NavRoutine = withStandardStroke(Zap, "NavRoutine");
 export const NavAgents = identityGlyph("agent", "NavAgents");
 // A team is a cluster of agent nodes — no longer *the same idea
 // as* the bespoke team IdentityMark, but that mark itself. `Users` stays with
