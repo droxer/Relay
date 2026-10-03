@@ -52,13 +52,22 @@ import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 
 import { BacklogPage } from "./BacklogPage";
+import { ProjectDashboard } from "./ProjectDashboard";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
 
 /* The header's subtitle says what the open tab is for. It used to describe
-   the tasks board on every tab, including the three that are not it. */
+   the tasks board on every tab, including the ones that are not it. */
+const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
+  general: "project.general_tab",
+  dashboard: "project.dashboard_tab",
+  tasks: "project.tasks_tab",
+  workspace: "workspace.tab_workspace",
+};
+
 const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
   general: "project.general_subtitle",
+  dashboard: "project.dashboard_subtitle",
   tasks: "project.tasks_subtitle",
   workspace: "project.tasks_workspace_subtitle",
 };
@@ -496,11 +505,7 @@ export function ProjectWorkspacePage({
                 value={tab}
                 className={`workspace-page-tab${pageTab === tab ? " is-active" : ""}`}
               >
-                {tab === "general"
-                  ? t("project.general_tab")
-                  : tab === "tasks"
-                  ? t("project.tasks_tab")
-                  : t("workspace.tab_workspace")}
+                {t(PROJECT_TAB_LABEL[tab])}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -517,6 +522,9 @@ export function ProjectWorkspacePage({
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
           />
+        </TabsContent>
+        <TabsContent value="dashboard">
+          <ProjectDashboard tasks={projectTasks} />
         </TabsContent>
         <TabsContent value="tasks" className="project-tasks-panel">
           {/* The backlog board itself, fixed to this project. */}

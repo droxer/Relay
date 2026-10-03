@@ -341,7 +341,8 @@
 }
 
 /* No title: the project header names the place. The strip carries status
-   on the left, the board's controls on the right, on one rule. */
+   on the left (list view only — the board's lanes name it) and the board's
+   controls on the right, on one rule. */
 .backlog-project-toolbar {
   display: flex;
   align-items: center;
@@ -391,8 +392,38 @@
 .backlog-project-actions {
   display: flex;
   flex: none;
+  /* Holds the right edge when the board view drops the status strip. */
+  margin-inline-start: auto;
   align-items: center;
   gap: var(--sp-2);
+}
+
+/* Dashboard: the issue and flow rails, stacked under their section titles. */
+.project-dashboard {
+  display: grid;
+  gap: var(--sp-6);
+  padding: var(--sp-5) var(--page-gutter);
+}
+
+.project-dashboard-section {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+/* The admin rail goes two-up here, but its hairlines are keyed to the admin
+   tile slots; a plain four-tile rail needs them redrawn as a 2×2 grid. */
+@media (max-width: 900px) {
+  .project-dashboard {
+    padding: var(--sp-4);
+  }
+
+  .project-dashboard .adm-dash-tile:nth-child(2n) {
+    border-right: none;
+  }
+
+  .project-dashboard .adm-dash-tile:nth-child(-n + 2) {
+    border-bottom: 0.5px solid var(--line-1);
+  }
 }
 
 /* General: the description over the crew, one document beside the rail. */

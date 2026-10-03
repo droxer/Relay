@@ -417,6 +417,9 @@ it("keeps the project tasks tab explicit and canonicalizes General as the defaul
   // The retired Agents tab id is unknown, so an old link lands on General.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p?tab=tasks");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard"), "/projects/p?tab=dashboard");
+  // The board's filters belong to the Issues tab, not the dashboard.
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p?tab=dashboard");
 });
 
 it("keeps the embedded board's filters, sort, and pages on the project tasks tab only", () => {

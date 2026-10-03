@@ -60,7 +60,7 @@ import {
   parseBacklogView,
   type BacklogView,
 } from "./task-board/backlogVocabulary";
-import { TaskStatusNav, BacklogStats, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
+import { TaskStatusNav, BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
 import { BacklogTaskList } from "./task-board/BacklogRecords";
 import { BacklogBoard } from "./task-board/BacklogBoard";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
@@ -131,10 +131,13 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
+  /* The board's lanes are the status axis, so a status section only narrows
+     the list; on the board it would empty every lane but one. */
+  const statusFilter = view === "list" ? filters.status : "all";
   const filteredTasks = useMemo(
     () => applySort(filterTasks(backlogTasks, { ...filters, status: "all" })
-      .filter((task) => filters.status === "all" || task.status === filters.status), sortColumns, sort),
-    [backlogTasks, filters, sort, sortColumns],
+      .filter((task) => statusFilter === "all" || task.status === statusFilter), sortColumns, sort),
+    [backlogTasks, filters, statusFilter, sort, sortColumns],
   );
   const grouped = useMemo(() => tasksByStatus(filteredTasks), [filteredTasks]);
   const hasFilterResults = filteredTasks.length > 0;
@@ -282,17 +285,20 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
       aria-label={t("backlog.title")}
     >
       <div className="backlog-project-main">
+        {/* The header is controls only: the metrics live on the project's
+            Dashboard tab, and on the board the lanes already name each status. */}
         <div className="backlog-project-toolbar">
-          <div className="backlog-project-status">
-            <TaskStatusNav value={filters.status} counts={sectionCounts}
-              onChange={(status) => setFilters({ ...filters, status })} />
-          </div>
+          {view === "list" ? (
+            <div className="backlog-project-status">
+              <TaskStatusNav value={filters.status} counts={sectionCounts}
+                onChange={(status) => setFilters({ ...filters, status })} />
+            </div>
+          ) : null}
           <div className="backlog-project-actions">{headerActions}</div>
         </div>
 
       {backlogTasks.length > 0 ? (
         <>
-          {view === "board" ? <BacklogStats tasks={backlogTasks} /> : null}
           <BacklogFiltersBar
             filters={filters}
             agents={logicalAgents}
