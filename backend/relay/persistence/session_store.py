@@ -700,6 +700,10 @@ class DatabaseSessionStore:
         create_schema: bool = False,
     ):
         self.engine = shared_engine(database_url)
+        # Only a running matcher drains the automation outbox; without one,
+        # writing rows would grow the table forever. ``create_app`` turns this
+        # off when the scheduler is disabled.
+        self.emit_automation_events = True
         self._affinity_lock = _shared_affinity_lock(f"database:{self.engine.url}")
         self._event_listener: Callable[[str], None] | None = None
         self._event_notification_channel: str | None = None
@@ -1087,7 +1091,8 @@ class DatabaseSessionStore:
                     )
                 )
             )
-            insert_outbox_rows(conn, session_outbox_rows(session_id, event))
+            if self.emit_automation_events:
+                insert_outbox_rows(conn, session_outbox_rows(session_id, event))
             if event.get("type") == "agent.completed":
                 self._sync_run_token_usage(
                     conn, session_pk, session, str(event.get("runId") or "")

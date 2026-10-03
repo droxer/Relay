@@ -307,7 +307,8 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     today = scheduler_today_from_env()
     scheduler = task_scheduler_from_env(
         session_store=session_store,
-        automation_store=automation_store,        task_store=task_store,
+        automation_store=automation_store,
+        task_store=task_store,
         registry=registry,
         backend=backend,
         team_store=team_store,
@@ -316,6 +317,10 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         org_settings_store=org_settings_store,
         today=today,
     )
+    if scheduler is None or scheduler.automation_matcher is None:
+        for store in (task_store, session_store):
+            if hasattr(store, "emit_automation_events"):
+                store.emit_automation_events = False
 
     from .services.execution_lifecycle import ExecutionLifecycleService
     execution_lifecycle = ExecutionLifecycleService(registry, chat_store)
@@ -352,6 +357,9 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.state.session_store = session_store
     app.state.automation_webhook_limiter = AuthRateLimiter(
         attempts=int(os.environ.get("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", "60")), window_seconds=60,
+    )
+    app.state.automation_webhook_failure_limiter = AuthRateLimiter(
+        attempts=int(os.environ.get("RELAY_AUTOMATION_WEBHOOK_FAILURE_LIMIT", "20")), window_seconds=60,
     )
     app.state.automation_store = automation_store
     app.state.task_store = task_store

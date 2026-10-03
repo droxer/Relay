@@ -313,3 +313,45 @@ def test_unfiltered_automation_does_not_observe_another_owner(world) -> None:
     tasks.update_task(foreign["id"], {"status": "blocked", "blockerReason": "private"})
     assert matcher.run() == 0
     assert not _occurrences(tasks, routine["id"])
+
+
+def test_manual_coalesced_with_a_chain_keeps_its_depth_and_label(world) -> None:
+    tasks, automations, matcher, _ = world
+    routine = _automation(tasks)
+    chained = tasks.create_task({"title": "chained", "sourceRoutineId": "other", "routineTriggerDepth": 1})
+    tasks.update_task(chained["id"], {"status": "blocked", "blockerReason": "x"})
+    automations.enqueue_manual(routine["id"])
+    assert matcher.run() == 1
+    [occurrence] = _occurrences(tasks, routine["id"])
+    assert occurrence["routineTriggerKind"] == "manual"
+    assert occurrence["routineTriggerDepth"] == 2
+    assert "Fired by: Manual (2 events)" in occurrence["description"]
+
+
+def test_in_flight_check_reads_only_recent_occurrences() -> None:
+    from relay.automations.matcher import IN_FLIGHT_LOOKBACK, in_flight_occurrence
+
+    class Store:
+        def __init__(self) -> None:
+            self.reads: list[str] = []
+
+        def get_task(self, task_id: str) -> dict:
+            self.reads.append(task_id)
+            return {"id": task_id, "status": "done"}
+
+    store = Store()
+    routine = {"occurrenceIds": [f"occ_{index}" for index in range(500)]}
+    assert in_flight_occurrence(store, routine) is None
+    assert len(store.reads) == IN_FLIGHT_LOOKBACK
+    assert store.reads[0] == "occ_499"
+
+
+@pytest.mark.parametrize("enabled, expected", [("1", True), ("0", False)])
+def test_outbox_rows_are_written_only_when_a_matcher_drains_them(monkeypatch, tmp_path, enabled, expected):
+    from relay.app import create_app
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "test-admin")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", enabled)
+    app = create_app(tmp_path)
+    _block(app.state.task_store)
+    rows = app.state.automation_store.claim_outbox(100, datetime.now(timezone.utc))
+    assert bool(rows) is expected

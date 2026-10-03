@@ -162,3 +162,27 @@ def test_non_owner_assignee_cannot_rotate_secret(monkeypatch):
         path = f"/api/v1/tasks/{routine['id']}/automation/webhook-secret"
         assert client.get(path).status_code == 403
         assert client.post(path).status_code == 403
+
+
+def test_bad_tokens_do_not_spend_the_automation_rate_limit(monkeypatch):
+    with TemporaryDirectory() as root:
+        monkeypatch.setenv("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", "2")
+        monkeypatch.setenv("RELAY_AUTOMATION_WEBHOOK_FAILURE_LIMIT", "50")
+        client, agent = _client(monkeypatch, root)
+        routine, secret = _webhook_automation(client, agent)
+        url = f"/api/v1/automations/{routine['id']}/webhook"
+        for _ in range(10):
+            assert client.post(url, json={}, headers={HEADER: "wrong"}).status_code == 401
+        assert client.post(url, json={}, headers={HEADER: secret}).status_code == 202
+
+
+def test_repeated_bad_tokens_are_limited_per_caller(monkeypatch):
+    with TemporaryDirectory() as root:
+        monkeypatch.setenv("RELAY_AUTOMATION_WEBHOOK_FAILURE_LIMIT", "2")
+        client, agent = _client(monkeypatch, root)
+        routine, _ = _webhook_automation(client, agent)
+        url = f"/api/v1/automations/{routine['id']}/webhook"
+        assert [client.post(url, json={}, headers={HEADER: "wrong"}).status_code for _ in range(3)] == [401, 401, 429]
+        response = client.post(url, json={}, headers={HEADER: "wrong"})
+        assert response.status_code == 429
+        assert int(response.headers["Retry-After"]) > 0

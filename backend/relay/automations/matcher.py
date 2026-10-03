@@ -27,6 +27,9 @@ PENDING_TTL = timedelta(hours=24)
 OUTBOX_RETENTION = timedelta(days=7)
 RATE_WINDOW = timedelta(hours=1)
 IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "running"})
+# Occurrences are appended in creation order, so an in-flight one is among the
+# newest. Bounding the scan keeps a long-lived routine's check constant-time.
+IN_FLIGHT_LOOKBACK = 10
 RATE_LIMITED = "rate_limited"
 
 
@@ -38,6 +41,18 @@ def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def in_flight_occurrence(task_store: Any, routine: dict[str, Any]) -> dict[str, Any] | None:
+    """The newest occurrence of ``routine`` still queued or running, if any."""
+    for occurrence_id in reversed((routine.get("occurrenceIds") or [])[-IN_FLIGHT_LOOKBACK:]):
+        try:
+            occurrence = task_store.get_task(occurrence_id)
+        except (KeyError, FileNotFoundError):
+            continue
+        if not occurrence.get("deletedAt") and occurrence.get("status") in IN_FLIGHT_STATUSES:
+            return occurrence
+    return None
 
 
 class AutomationMatcher:
@@ -190,7 +205,7 @@ class AutomationMatcher:
             logger.warning("Automation pending events expired", routine_id=routine_id, count=count)
             self.automation_store.clear_state(routine_id)
             return False
-        if self._in_flight(routine):
+        if in_flight_occurrence(self.task_store, routine):
             return False
         window_start = _aware(state["fired_window_start"])
         count = int(state["fired_count"])
@@ -215,8 +230,11 @@ class AutomationMatcher:
             summary={"eventType": "manual" if manual else events[0]["eventType"],
                      "eventCount": len(events) + int(state["pending_dropped"]),
                      **({"toStatus": events[0]["toStatus"]} if events[0].get("toStatus") else {})},
-            depth=0 if manual else max(int(event.get("depth") or 0) for event in events),
-            context=trigger_context_block(events, int(state["pending_dropped"])),
+            # A manual click must not reset a chain's depth: coalesced chain
+            # events would otherwise start counting again from zero.
+            depth=max(int(event.get("depth") or 0) for event in events),
+            context=trigger_context_block(events, int(state["pending_dropped"]),
+                                          fired_by="manual" if manual else None),
         )
         if not occurrence:
             # No agent, team, or project yet: keep the events until one is
@@ -239,16 +257,3 @@ class AutomationMatcher:
         except (KeyError, FileNotFoundError):
             return None
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
-
-    def _in_flight(self, routine: dict[str, Any]) -> bool:
-        for occurrence_id in reversed((routine.get("occurrenceIds") or [])):
-            occurrence = self._load_any(occurrence_id)
-            if occurrence and not occurrence.get("deletedAt") and occurrence.get("status") in IN_FLIGHT_STATUSES:
-                return True
-        return False
-
-    def _load_any(self, task_id: str) -> dict[str, Any] | None:
-        try:
-            return self.task_store.get_task(task_id)
-        except (KeyError, FileNotFoundError):
-            return None

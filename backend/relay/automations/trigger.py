@@ -123,8 +123,11 @@ def event_matches(trigger: dict[str, Any], event: dict[str, Any]) -> bool:
     return not title or title.lower() in str(subject.get("title") or "").lower()
 
 
-def trigger_context_block(events: list[dict[str, Any]], dropped: int = 0) -> str:
-    label = EVENT_LABELS.get(events[0]["eventType"], events[0]["eventType"])
+def trigger_context_block(events: list[dict[str, Any]], dropped: int = 0, *, fired_by: str | None = None) -> str:
+    """``fired_by`` names the event type that started the run when it is not
+    the first pending event, as with a Run now coalesced behind other events."""
+    first = fired_by or events[0]["eventType"]
+    label = EVENT_LABELS.get(first, first)
     total = len(events) + dropped
     if total > 1:
         label = f"{label} ({total} events" + (f", {dropped} not listed" if dropped else "") + ")"

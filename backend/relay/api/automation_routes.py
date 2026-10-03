@@ -39,15 +39,29 @@ async def _capped_body(request: Request) -> bytes:
     return bytes(body)
 
 
+def _too_many(retry_after: int) -> HTTPException:
+    return HTTPException(429, "Too many webhook calls.", headers={"Retry-After": str(retry_after)})
+
+
 @router.post("/automations/{routine_id}/webhook", status_code=202)
 async def receive_automation_webhook(routine_id: str, request: Request) -> dict[str, Any]:
-    retry_after = request.app.state.automation_webhook_limiter.consume(routine_id)
+    # Failed tokens are limited per caller and successful calls per automation,
+    # so a stranger spamming bad tokens cannot lock out the real sender.
+    failures = request.app.state.automation_webhook_failure_limiter
+    caller = request.client.host if request.client else "unknown"
+    retry_after = failures.retry_after(caller)
     if retry_after:
-        raise HTTPException(429, "Too many webhook calls.", headers={"Retry-After": str(retry_after)})
+        raise _too_many(retry_after)
     store = request.app.state.automation_store
     token = request.headers.get(WEBHOOK_TOKEN_HEADER, "")
     if not token or not await run_in_threadpool(store.verify_webhook_secret, routine_id, token):
+        retry_after = failures.consume(caller)
+        if retry_after:
+            raise _too_many(retry_after)
         raise HTTPException(401, "Invalid automation token.")
+    retry_after = request.app.state.automation_webhook_limiter.consume(routine_id)
+    if retry_after:
+        raise _too_many(retry_after)
     if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
         raise HTTPException(415, "Webhook body must be application/json.")
     body = await _capped_body(request)
