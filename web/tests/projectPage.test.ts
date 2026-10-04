@@ -75,6 +75,12 @@ describe("project page behavior", () => {
     assert.equal(parseProjectPageTab("general"), "general");
     assert.equal(parseProjectPageTab("tasks"), "tasks");
     assert.equal(parseProjectPageTab("workspace"), "workspace");
+    assert.equal(parseProjectPageTab("members"), "members");
+    assert.equal(parseProjectPageTab("settings"), "settings");
+  });
+
+  it("orders the strip from reading to managing, with settings last", () => {
+    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "general", "members", "tasks", "workspace", "settings"]);
   });
 
   it("lists the default tab first in the strip", () => {

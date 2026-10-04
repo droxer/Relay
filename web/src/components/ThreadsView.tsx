@@ -210,7 +210,6 @@ export function ThreadsView({
     .map((round) => activeSession?.agentRuns.find((run) => run.assignmentId === round.assignments[0]?.assignmentId)?.id)),
   [activeSession?.agentRuns, activeSession?.collaborationRounds]);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<ProjectRecord | null>(null);
   const { start: transcriptStart, sentinelRef } = useTranscriptWindow(activeSession?.id, displayMessages.length);
   // A thread is about to render markdown: start the pipeline download now so
   // the first turn rarely shows its plain-text fallback.
@@ -272,10 +271,7 @@ export function ThreadsView({
         selectedProjectId={selectedProjectId}
         onSelectThread={onSelectThread}
         onSelectProject={onSelectProject}
-        onCreateProject={() => {
-          setEditingProject(null);
-          setProjectDrawerOpen(true);
-        }}
+        onCreateProject={() => setProjectDrawerOpen(true)}
         onNewThread={onNewThread}
         onRenameThread={onRenameThread}
         onCloseThread={onCloseThread}
@@ -293,10 +289,7 @@ export function ThreadsView({
           computers={runtimeNodes}
           onOpenThread={onSelectThread}
           onNewThread={() => onNewThread(selectedProject.id)}
-          onOpenSettings={() => {
-            setEditingProject(selectedProject);
-            setProjectDrawerOpen(true);
-          }}
+          onDeleted={() => onSelectProject(null)}
           onBack={() => onSelectProject(null)}
         />
       ) : projectOverviewState === "loading" ? (
@@ -512,10 +505,8 @@ export function ThreadsView({
       <ProjectDrawer
         open={projectDrawerOpen}
         computers={runtimeNodes}
-        project={editingProject}
         onClose={() => setProjectDrawerOpen(false)}
         onSaved={(project) => onSelectProject(project.id)}
-        onDeleted={() => onSelectProject(null)}
       />
     </>
   );

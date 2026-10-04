@@ -85,13 +85,16 @@ describe("project thread buckets", () => {
     assert.match(sideNavSource, /<span className="sidenav-label sr-only">\{t\("nav\.backlog"\)\}<\/span>/);
   });
 
-  it("exposes project settings from the project page", async () => {
+  it("exposes project settings as a tab on the project page", async () => {
     const pageSource = await readFile(resolve("web/src/components/ProjectWorkspacePage.tsx"), "utf8");
+    const panelSource = await readFile(resolve("web/src/components/ProjectSettingsPanel.tsx"), "utf8");
     const drawerSource = await readFile(resolve("web/src/components/ProjectDrawer.tsx"), "utf8");
 
-    assert.match(pageSource, /onOpenSettings/);
-    assert.match(pageSource, /\{t\("project\.edit"\)\}/);
-    assert.match(drawerSource, /updateProjectMutation\.mutateAsync/);
-    assert.match(drawerSource, /archiveProjectMutation\.mutateAsync/);
+    assert.match(pageSource, /<TabsContent value="settings">/);
+    assert.match(pageSource, /<ProjectSettingsPanel/);
+    assert.match(panelSource, /projectSave\.save\(/);
+    assert.match(panelSource, /archiveProjectMutation\.mutateAsync/);
+    // The drawer only creates now; editing lives on the Settings tab.
+    assert.doesNotMatch(drawerSource, /updateProjectMutation/);
   });
 });

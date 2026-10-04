@@ -1,6 +1,6 @@
 import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
-import { DEFAULT_PROJECT_PAGE_TAB } from "./projectPage.ts";
+import { DEFAULT_PROJECT_PAGE_TAB, PROJECT_PAGE_TABS } from "./projectPage.ts";
 import {
   DEFAULT_ADMIN_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -229,7 +229,9 @@ function recordTabParam(value: string | null, aliases = TASK_RECORD_TAB_ALIASES)
   return value ? aliases[value] ?? value : null;
 }
 const TEAM_TABS = new Set(["profile", "activities"]);
-const PROJECT_TABS = new Set(["dashboard", "general", "tasks", "workspace"]);
+/* Derived, not restated: a tab the page offers but the route dropped would
+   canonicalize straight back out and be a dead control. */
+const PROJECT_TABS = new Set<string>(PROJECT_PAGE_TABS);
 const AGENT_AVAILABILITY = new Set(["ready", "busy", "pending", "offline"]);
 
 /**

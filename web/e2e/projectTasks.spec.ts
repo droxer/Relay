@@ -54,6 +54,20 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-general-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
+    // Members carries the crew's cards; Settings carries the edit form.
+    await page.getByRole("tab", { name: "Members", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?tab=members$/);
+    await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-members-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
+
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?tab=settings$/);
+    await expect(page.getByRole("form", { name: "Details", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Danger zone", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-settings-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
+
     // The Issues tab is the board itself, fixed to this project.
     await page.getByRole("tab", { name: "Issues", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=tasks$/);
@@ -82,16 +96,17 @@ for (const mobile of [false, true]) {
     await board.getByRole("link", { name: "Write the release brief", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef$/);
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "Files", exact: true }).click();
-    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=files$/);
+    await page.getByRole("tab", { name: "Workspace", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=workspace$/);
     // The modal drawer hides the page beneath it; the board's tab stays chosen.
     await expect(page.getByRole("tab", { name: "Issues", exact: true, includeHidden: true })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: `test-results/project-task-record-${mobile ? "mobile" : "desktop"}.png` });
 
-    // A deep link to a record's tab lands on the same drawer.
+    // A deep link to a record's tab lands on the same drawer; the retired
+    // "files" id still resolves to the Workspace tab.
     await page.goto("/projects/launch?task=task_0abcdef&recordTab=files");
-    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=files$/);
-    await expect(page.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL(/\/projects\/launch\?task=task_0abcdef&recordTab=workspace$/);
+    await expect(page.getByRole("tab", { name: "Workspace", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 }
 
@@ -121,7 +136,7 @@ test("creating the first project preserves a global task draft", async ({ page }
   const taskForm = page.getByRole("dialog", { name: "New issue", exact: true });
   await taskForm.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
   await taskForm.getByRole("button", { name: "Create project", exact: true }).click();
-  const projectForm = page.getByRole("dialog", { name: "Start a new project", exact: true });
+  const projectForm = page.getByRole("dialog", { name: "Create project", exact: true });
   await projectForm.getByRole("textbox", { name: "Project name", exact: true }).fill("First project");
   await projectForm.getByRole("combobox", { name: "Computer", exact: true }).click();
   await page.getByRole("option", { name: "Work computer", exact: true }).click();
@@ -226,9 +241,10 @@ test("renaming without a runtime node recovers from a concurrent project edit", 
     await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/projects/edit-project");
-  // The header and the identity rail both offer it; either opens the same editor.
-  await page.getByRole("button", { name: "Project settings", exact: true }).first().click();
-  const editor = page.getByRole("dialog", { name: "Project settings", exact: true });
+  // Settings is a tab on the project now, not a drawer over it.
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/\/projects\/edit-project\?tab=settings$/);
+  const editor = page.getByRole("form", { name: "Details", exact: true });
   await editor.getByRole("textbox", { name: "Project name", exact: true }).fill("My project name");
   await editor.getByRole("button", { name: "Save project", exact: true }).click();
   const conflict = page.getByRole("alertdialog", { name: "Project changed", exact: true });
@@ -236,7 +252,8 @@ test("renaming without a runtime node recovers from a concurrent project edit", 
   await expect(page.locator('input[name="project-name"]')).toHaveValue("My project name");
   await expect(page.getByRole("region", { name: "Notifications" }).getByRole("dialog")).toHaveCount(0);
   await conflict.getByRole("button", { name: "Save my changes", exact: true }).click();
-  await expect(editor).toHaveCount(0);
+  await expect(conflict).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: "Save project", exact: true })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "My project name", exact: true })).toBeVisible();
   expect(patches).toEqual([{ expectedVersion: 1, name: "My project name" }, { expectedVersion: 2, name: "My project name" }]);
 });

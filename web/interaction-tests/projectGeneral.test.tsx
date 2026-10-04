@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
+import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { CurrentUser, ProjectRecord, RelayTaskListItem } from "../src/types";
 
 const board = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
@@ -23,14 +24,16 @@ const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
 const task = (id: string, projectId: string | undefined, deletedAt?: string) =>
   ({ id, title: id, projectId, deletedAt, status: "backlog" }) as unknown as RelayTaskListItem;
 
-function renderPage(record: ProjectRecord, onOpenSettings = vi.fn()) {
+function renderPage(record: ProjectRecord) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <ProjectWorkspacePage
-        project={record} agents={[]} teams={[]} currentUser={user} computers={[]}
-        tasks={[task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02")]}
-        onOpenThread={vi.fn()} onOpenSettings={onOpenSettings} onBack={vi.fn()}
-      />
+      <DialogProvider>
+        <ProjectWorkspacePage
+          project={record} agents={[]} teams={[]} currentUser={user} computers={[]}
+          tasks={[task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02")]}
+          onOpenThread={vi.fn()} onDeleted={vi.fn()} onBack={vi.fn()}
+        />
+      </DialogProvider>
     </QueryClientProvider>,
   );
 }
@@ -55,18 +58,41 @@ it("sends the Dashboard's board link to the Issues tab", async () => {
   expect(screen.getByRole("tab", { name: "project.tasks_tab", selected: true })).toBeTruthy();
 });
 
-it("shows the description and the agents as sections on General", () => {
+it("shows the brief and a crew roll call on General, with edits a tab away", async () => {
   window.history.replaceState({}, "", "/projects/p?tab=general");
-  const onOpenSettings = vi.fn();
-  renderPage(project({ description: "Ship the GA release." }), onOpenSettings);
-  expect(screen.getByRole("tab", { name: "project.general_tab", selected: true })).toBeTruthy();
+  renderPage(project({
+    description: "Ship the GA release.",
+    leadAgentId: "a1",
+    members: [{ agentId: "a1", role: "planner", responsibilities: "Plans", enabled: true }],
+  } as Partial<ProjectRecord>));
   expect(screen.getByRole("heading", { name: "project.description" })).toBeTruthy();
   expect(screen.getByText("Ship the GA release.")).toBeTruthy();
-  expect(screen.getByRole("heading", { name: /project\.members/ })).toBeTruthy();
-  // The description is edited in Project settings, with the name.
+  const crew = screen.getByRole("region", { name: /project\.members/ });
+  expect(within(crew).getAllByRole("listitem")).toHaveLength(1);
+  // The description's pencil opens the Settings tab, not a drawer.
   const description = screen.getByRole("region", { name: "project.description" });
   fireEvent.click(within(description).getByRole("button"));
-  expect(onOpenSettings).toHaveBeenCalledOnce();
+  await waitFor(() => expect(screen.getByRole("tab", { name: "project.settings_tab", selected: true })).toBeTruthy());
+});
+
+it("sends General's crew link to the Members tab, where the cards and add live", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=general");
+  renderPage(project({
+    members: [{ agentId: "a1", role: "planner", responsibilities: "Plans the release", enabled: true }],
+  } as Partial<ProjectRecord>));
+  fireEvent.click(screen.getByRole("button", { name: /project\.members_manage/ }));
+  await waitFor(() => expect(screen.getByRole("tab", { name: "project.members_tab", selected: true })).toBeTruthy());
+  expect(screen.getByText("Plans the release")).toBeTruthy();
+  expect(screen.getByRole("button", { name: /project\.member_add/ })).toBeTruthy();
+});
+
+it("hides member management on a closed project's Members tab", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=members");
+  renderPage(project({
+    enabled: false,
+    members: [{ agentId: "a1", role: "planner", responsibilities: "Plans", enabled: true }],
+  } as Partial<ProjectRecord>));
+  expect(screen.queryByRole("button", { name: /project\.member_add/ })).toBeNull();
 });
 
 it("says so when a project has no description yet", () => {

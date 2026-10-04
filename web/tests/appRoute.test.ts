@@ -419,6 +419,8 @@ it("keeps the project tasks tab explicit and canonicalizes Dashboard as the defa
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p?tab=tasks");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p?tab=general");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members"), "/projects/p?tab=members");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=settings&status=review"), "/projects/p?tab=settings");
   // The board's filters belong to the Issues tab, not the dashboard.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p");
 });
