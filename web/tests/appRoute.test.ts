@@ -231,8 +231,9 @@ describe("app pathname routes", () => {
       "/projects/project-1?task=task-9",
     );
     // The record lives on the tasks tab; no other tab can show it.
-    // General is the default tab, so leaving the task behind leaves a bare path.
-    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=general&task=task-9"), "/projects/project-1");
+    // Dashboard is the default tab, so leaving the task behind leaves a bare path.
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=dashboard&task=task-9"), "/projects/project-1");
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=general&task=task-9"), "/projects/project-1?tab=general");
   });
 
   it("reports which paths keep the thread space params", () => {
@@ -412,14 +413,14 @@ it("preserves approval when the legacy computer path redirects to settings", () 
   assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
 });
 
-it("keeps the project tasks tab explicit and canonicalizes General as the default", () => {
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p");
-  // The retired Agents tab id is unknown, so an old link lands on General.
+it("keeps the project tasks tab explicit and canonicalizes Dashboard as the default", () => {
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard"), "/projects/p");
+  // The retired Agents tab id is unknown, so an old link lands on the Dashboard.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p?tab=tasks");
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard"), "/projects/p?tab=dashboard");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p?tab=general");
   // The board's filters belong to the Issues tab, not the dashboard.
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p?tab=dashboard");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p");
 });
 
 it("keeps the embedded board's filters, sort, and pages on the project tasks tab only", () => {

@@ -410,11 +410,120 @@
   gap: var(--sp-3);
 }
 
+/* No issues yet: one centered note and the way to the board, instead of two
+   rails of zeros. */
+.project-dashboard--empty {
+  justify-items: center;
+  align-content: start;
+  gap: 0;
+}
+
+/* Stages beside the issues that need a look — two cards, one row. Stages
+   takes the wider share so its five counts sit on one line. */
+.project-dashboard-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--sp-5);
+  align-items: stretch;
+}
+
+.project-dashboard-card {
+  min-width: 0;
+}
+
+/* Doubled class: the admin sheet loads later and sets the two-up grid. The
+   card, not the viewport, decides when five counts stop fitting one line —
+   it is narrowest beside the attention card, widest once they stack. */
+.project-dashboard-stage-card {
+  container: project-stages / inline-size;
+}
+
+.adm-dash-stat-grid.project-dashboard-stage-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@container project-stages (max-width: 480px) {
+  .adm-dash-stat-grid.project-dashboard-stage-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* The rows' hover wash bleeds past the card's text edge, so the titles
+   line up with the card heading. */
+.project-dashboard-attention {
+  display: grid;
+  margin: 0 calc(-1 * var(--sp-2));
+  padding: 0;
+  list-style: none;
+}
+
+/* Title over reason: the card is the narrower one, so the title gets the
+   whole line instead of sharing it with the date. */
+.project-dashboard-attention-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "dot title" ". reason";
+  align-items: center;
+  column-gap: var(--sp-2);
+  row-gap: var(--sp-0-5);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-2);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-1);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  text-align: start;
+  cursor: pointer;
+}
+
+.project-dashboard-attention-row:hover {
+  background: var(--row-hover);
+}
+
+/* Bad is a hollow ring, the same shape the stage and node dots use for it. */
+.project-dashboard-attention-dot {
+  grid-area: dot;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+  box-shadow: inset 0 0 0 1px var(--tone);
+}
+
+.project-dashboard-attention-title {
+  grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-dashboard-attention-reason {
+  grid-area: reason;
+  overflow: hidden;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-dashboard-attention-empty {
+  margin: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
 /* The admin rail goes two-up here, but its hairlines are keyed to the admin
    tile slots; a plain four-tile rail needs them redrawn as a 2×2 grid. */
 @media (max-width: 900px) {
   .project-dashboard {
     padding: var(--sp-4);
+  }
+
+  .project-dashboard-cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .project-dashboard .adm-dash-tile:nth-child(2n) {

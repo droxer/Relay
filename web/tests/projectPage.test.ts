@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  DEFAULT_PROJECT_PAGE_TAB,
+  PROJECT_PAGE_TABS,
   orderedProjectMembers,
   parseProjectPageTab,
   projectActivitiesState,
@@ -66,13 +68,17 @@ describe("project page behavior", () => {
      is a base-ui Tabs now, which owns arrow/Home/End itself. What stays ours
      is canonicalizing the tab named in the URL. */
   it("canonicalizes the tab named in the URL", () => {
-    // A project opens on its General tab; the retired Agents id lands there.
-    assert.equal(parseProjectPageTab(null), "general");
-    assert.equal(parseProjectPageTab("unknown"), "general");
-    assert.equal(parseProjectPageTab("profile"), "general");
-    assert.equal(parseProjectPageTab("dashboard"), "dashboard");
+    // A project opens on its Dashboard tab; the retired Agents id lands there.
+    assert.equal(parseProjectPageTab(null), "dashboard");
+    assert.equal(parseProjectPageTab("unknown"), "dashboard");
+    assert.equal(parseProjectPageTab("profile"), "dashboard");
+    assert.equal(parseProjectPageTab("general"), "general");
     assert.equal(parseProjectPageTab("tasks"), "tasks");
     assert.equal(parseProjectPageTab("workspace"), "workspace");
+  });
+
+  it("lists the default tab first in the strip", () => {
+    assert.equal(PROJECT_PAGE_TABS[0], DEFAULT_PROJECT_PAGE_TAB);
   });
 
   it("anchors the lead while preserving the remaining stored roster order", () => {

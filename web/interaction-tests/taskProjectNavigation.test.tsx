@@ -16,9 +16,9 @@ it("keeps separate Projects and Tasks destinations and selects Projects on proje
 
 it("redirects legacy project Activities tabs to tasks while preserving task details", () => {
   expect(PROJECT_PAGE_TABS).not.toContain("activities");
-  // Without a task the retired tab falls back to the default (General); with
+  // Without a task the retired tab falls back to the default (Dashboard); with
   // one it still lands on the tasks board so the record survives.
-  expect(parseProjectPageTab("activities")).toBe("general");
+  expect(parseProjectPageTab("activities")).toBe("dashboard");
   expect(canonicalBrowserUrl("/projects/p", "?tab=activities")).toBe("/projects/p");
   expect(canonicalBrowserUrl("/projects/p", "?tab=activities&task=t")).toBe("/projects/p?task=t");
   expect(canonicalBrowserUrl("/projects/p", "?task=t&recordTab=artifacts")).toBe("/projects/p?task=t&recordTab=artifacts");

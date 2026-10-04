@@ -12,14 +12,18 @@ interface KpiTileProps {
     direction: "up" | "down" | "flat";
   };
   hint?: string;
+  /** A status hue for a reading that is a problem when nonzero. Most tiles
+   *  carry none; the value stays ink. */
+  tone?: "bad" | "warn";
 }
 
-export function KpiTile({ eyebrow, value, hero, slot, delta, hint }: KpiTileProps) {
+export function KpiTile({ eyebrow, value, hero, slot, delta, hint, tone }: KpiTileProps) {
   const hasFoot = Boolean(delta || hint);
   const slotClass = slot ? ` adm-dash-tile--${slot}` : "";
+  const toneClass = tone ? ` adm-dash-tile--toned tone-${tone}` : "";
   return (
     <div
-      className={`adm-dash-tile${hero ? " adm-dash-tile--hero" : ""}${slotClass}`}
+      className={`adm-dash-tile${hero ? " adm-dash-tile--hero" : ""}${slotClass}${toneClass}`}
     >
       <div className="adm-dash-tile-eyebrow">{eyebrow}</div>
       <div className="adm-dash-tile-value tnum">{value}</div>

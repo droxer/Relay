@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { projectIssueMetrics } from "../src/lib/projectDashboard.js";
+import { projectAttentionIssues, projectIssueMetrics } from "../src/lib/projectDashboard.js";
 import type { RelayTaskListItem } from "../src/types.js";
 
 const NOW = Date.parse("2026-10-04T12:00:00Z");
@@ -44,5 +44,49 @@ describe("project issue metrics", () => {
     assert.equal(metrics.oldestAgeDays, null);
     assert.equal(metrics.averageCycleDays, null);
     assert.equal(metrics.sleIsEstimate, true);
+  });
+
+  it("spreads live issues across the board's stages and counts what is done", () => {
+    const metrics = projectIssueMetrics([
+      task({ id: "a" }),
+      task({ id: "b", status: "assigned" }),
+      task({ id: "c", status: "blocked" }),
+      task({ id: "d", status: "review" }),
+      task({ id: "e", status: "done" }),
+      task({ id: "f", status: "done" }),
+      task({ id: "g", status: "done", isRoutine: true }),
+    ], "2026-10-04", NOW);
+    assert.deepEqual(metrics.stages, { backlog: 1, assigned: 1, running: 1, review: 1, done: 2 });
+    assert.equal(metrics.done, 2);
+  });
+});
+
+describe("project attention issues", () => {
+  it("lists blocked issues first, then overdue ones by how late they are", () => {
+    const issues = projectAttentionIssues([
+      task({ id: "fine", dueDate: "2026-10-09" }),
+      task({ id: "late-2", dueDate: "2026-10-03" }),
+      task({ id: "late-1", dueDate: "2026-09-20" }),
+      task({ id: "stuck", status: "blocked" }),
+      task({ id: "done-late", status: "done", dueDate: "2026-09-01" }),
+      task({ id: "routine-late", isRoutine: true, dueDate: "2026-09-01" }),
+    ], "2026-10-04");
+    assert.deepEqual(issues.map((item) => [item.task.id, item.reason]), [
+      ["stuck", "blocked"],
+      ["late-1", "overdue"],
+      ["late-2", "overdue"],
+    ]);
+  });
+
+  it("names a blocked overdue issue once, as blocked", () => {
+    const issues = projectAttentionIssues([
+      task({ id: "both", status: "blocked", dueDate: "2026-10-01" }),
+    ], "2026-10-04");
+    assert.deepEqual(issues.map((item) => [item.reason, item.overdue]), [["blocked", true]]);
+  });
+
+  it("caps the list", () => {
+    const tasks = Array.from({ length: 8 }, (_, index) => task({ id: `b${index}`, status: "blocked" }));
+    assert.equal(projectAttentionIssues(tasks, "2026-10-04", 5).length, 5);
   });
 });
