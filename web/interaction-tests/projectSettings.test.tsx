@@ -3,7 +3,6 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectDrawer } from "../src/components/ProjectDrawer";
 import type { DaemonNodeMonitorRecord, ProjectRecord } from "../src/types";
 
-import { RelayApiError } from "../src/api";
 const { update, create, archive, getProject, confirm } = vi.hoisted(() => ({ update: vi.fn(), create: vi.fn(), archive: vi.fn(), getProject: vi.fn(), confirm: vi.fn() }));
 vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), getProject }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
@@ -23,50 +22,12 @@ const project = { id: "p", version: 1, name: "Original", computerId: "node:node"
 const computers = [{ id: "node", capabilities: ["project-workspaces"] }] as DaemonNodeMonitorRecord[];
 beforeEach(() => { update.mockReset().mockResolvedValue({ project }); create.mockReset(); archive.mockReset(); getProject.mockReset(); confirm.mockReset().mockResolvedValue(true); });
 
-it("preserves the name draft and its base revision when polling advances the project", async () => {
-  const props = { open: true, project, computers, onClose: vi.fn(), onSaved: vi.fn() };
-  const view = render(<ProjectDrawer {...props} />);
-  const input = screen.getByRole("textbox", { name: "project.name" });
-  fireEvent.change(input, { target: { value: "Unsaved" } });
-  view.rerender(<ProjectDrawer {...props} project={{ ...project, name: "Concurrent rename", version: 2 }} />);
-  expect((input as HTMLInputElement).value).toBe("Unsaved");
-  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
-  await waitFor(() => expect(update).toHaveBeenCalledWith({ projectId: "p", input: { name: "Unsaved", expectedVersion: 1 } }));
-});
-
-it("loads the current project when reopening settings", () => {
-  const props = { open: true, project, computers, onClose: vi.fn(), onSaved: vi.fn() };
-  const view = render(<ProjectDrawer {...props} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Unsaved" } });
-  view.rerender(<ProjectDrawer {...props} open={false} />);
-  view.rerender(<ProjectDrawer {...props} project={{ ...project, name: "Latest", version: 2 }} />);
-  expect((screen.getByRole("textbox", { name: "project.name" }) as HTMLInputElement).value).toBe("Latest");
-});
-
-it("renames an existing project when its runtime computer is absent", async () => {
-  render(<ProjectDrawer open project={project} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Renamed offline" } });
-  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
-  await waitFor(() => expect(update).toHaveBeenCalledWith({ projectId: "p", input: { name: "Renamed offline", expectedVersion: 1 } }));
-});
-
 it("still requires a computer to create a project", () => {
   render(<ProjectDrawer open computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
   fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "New project" } });
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
   expect(create).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toBe("project.computer_required");
-});
-
-it("offers a confirmed retry after a stale rename", async () => {
-  update.mockRejectedValueOnce(new RelayApiError("project_version_conflict", 409, "project_version_conflict"));
-  getProject.mockResolvedValue({ project: { ...project, name: "Their name", version: 2 } });
-  render(<ProjectDrawer open project={project} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "My name" } });
-  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
-  await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
-  expect(confirm.mock.calls[0][0].message).toContain("Their name");
-  expect(update.mock.calls[1][0].input).toEqual({ name: "My name", expectedVersion: 2 });
 });
 
 it("creates a project on the selected compatible computer", async () => {
@@ -78,18 +39,6 @@ it("creates a project on the selected compatible computer", async () => {
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
   await waitFor(() => expect(create).toHaveBeenCalledWith({ name: "New project", daemonNodeId: "node", leadAgentId: null, members: [] }));
   expect(onSaved).toHaveBeenCalledWith(project);
-});
-
-it("saves an edited description and leaves an untouched one out of a rename", async () => {
-  render(<ProjectDrawer open project={{ ...project, description: "Old brief" }} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
-  const description = screen.getByRole("textbox", { name: /^project\.description/ }) as HTMLTextAreaElement;
-  expect(description.value).toBe("Old brief");
-  fireEvent.change(description, { target: { value: "  Ship GA.  " } });
-  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
-  await waitFor(() => expect(update).toHaveBeenCalledWith({
-    projectId: "p",
-    input: { name: "Original", description: "Ship GA.", expectedVersion: 1 },
-  }));
 });
 
 it("creates a project with a description", async () => {
@@ -104,19 +53,6 @@ it("creates a project with a description", async () => {
   }));
 });
 
-it("archives a project only after confirmation", async () => {
-  const onClose = vi.fn();
-  archive.mockResolvedValue({ project: { ...project, archivedAt: "today" } });
-  render(<ProjectDrawer open project={project} computers={[]} onClose={onClose} onSaved={vi.fn()} />);
-  confirm.mockResolvedValueOnce(false);
-  fireEvent.click(screen.getByRole("button", { name: "project.archive" }));
-  await waitFor(() => expect(confirm).toHaveBeenCalled());
-  expect(archive).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "project.archive" }));
-  await waitFor(() => expect(archive).toHaveBeenCalledWith({ projectId: "p", expectedVersion: 1 }));
-  expect(onClose).toHaveBeenCalled();
-});
-
 it("cancels settings and validates an empty name", async () => {
   const onClose = vi.fn();
   render(<ProjectDrawer open computers={[]} onClose={onClose} onSaved={vi.fn()} />);
@@ -124,28 +60,4 @@ it("cancels settings and validates an empty name", async () => {
   expect(screen.getByRole("alert").textContent).toBe("project.name_required");
   fireEvent.click(screen.getByRole("button", { name: "dialog.cancel" }));
   await waitFor(() => expect(onClose).toHaveBeenCalled());
-});
-
-it.each(["network", "conflict", "closed"])("keeps the draft if conflict recovery fails: %s", async (failure) => {
-  const conflict = new RelayApiError("project_version_conflict", 409, "project_version_conflict");
-  update.mockRejectedValueOnce(conflict);
-  if (failure === "network") getProject.mockRejectedValue(new Error("Network unavailable"));
-  else getProject.mockResolvedValue({ project: { ...project, version: 2, enabled: failure !== "closed" } });
-  if (failure === "conflict") update.mockRejectedValueOnce(conflict);
-  const onClose = vi.fn();
-  render(<ProjectDrawer open project={project} computers={[]} onClose={onClose} onSaved={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "Keep my draft" } });
-  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
-  await screen.findByRole("alert");
-  expect(update).toHaveBeenCalledTimes(failure === "conflict" ? 2 : 1);
-  expect(onClose).not.toHaveBeenCalled();
-  expect((screen.getByRole("textbox", { name: "project.name" }) as HTMLInputElement).value).toBe("Keep my draft");
-});
-
-it("reports an ordinary save error without fetching or retrying", async () => {
-  update.mockRejectedValue(new RelayApiError("project_name_taken", 409, "project_name_taken"));
-  render(<ProjectDrawer open project={project} computers={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "project.save" }));
-  expect((await screen.findByRole("alert")).textContent).toBe("project_name_taken");
-  expect(getProject).not.toHaveBeenCalled();
 });

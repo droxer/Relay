@@ -5,15 +5,16 @@ import type {
   WorkspaceBriefResponse,
 } from "../types.js";
 
-export type ProjectPageTab = "general" | "dashboard" | "tasks" | "workspace";
+export type ProjectPageTab = "dashboard" | "general" | "members" | "tasks" | "workspace" | "settings";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
 /* A project opens on its Dashboard — how its issues are moving and what needs
    a look — and the strip lists that tab first so the default sits where the
-   eye starts. The retired "profile" id (the old Agents tab) is unknown, so it
-   lands here. */
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "general", "tasks", "workspace"];
+   eye starts. The strip reads from what the project is to what you manage on
+   it, so Settings sits last. The retired "profile" id (the old Agents tab) is
+   unknown, so it lands here. */
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "general", "members", "tasks", "workspace", "settings"];
 export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "dashboard";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */

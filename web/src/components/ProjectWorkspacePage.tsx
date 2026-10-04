@@ -1,22 +1,18 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
-import { agentLabel } from "../lib/plan";
 import {
-  orderedProjectMembers,
   DEFAULT_PROJECT_PAGE_TAB,
   parseProjectPageTab,
-  projectMemberState,
   projectPageActions,
   projectReadOnly,
-  MAX_PROJECT_MEMBERS,
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
 } from "../lib/projectPage";
-import { truncateId, formatRelativeTime } from "../lib/adminHelpers";
+import { truncateId } from "../lib/adminHelpers";
 import type {
   CurrentUser,
   DaemonNodeMonitorRecord,
@@ -25,345 +21,42 @@ import type {
   ProjectRecord,
   RelayTaskListItem,
 } from "../types";
-import { AgentStateBadge } from "./AgentStateBadge";
-import {
-  ActionAdd,
-  ActionCalendar,
-  ActionEdit,
-  ActionRetry,
-  ICON,
-  NavBack,
-  NavProjects,
-  WorkspaceFolder,
-  NodeOwnershipIcon,
-  type NodeOwnership,
-} from "./icons";
+import { ICON, NavBack } from "./icons";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "./PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProjectGeneral, type RailComputer } from "./ProjectGeneral";
+import { ProjectMark } from "./ProjectMark";
 import { ProjectMemberEditor } from "./ProjectMemberEditor";
+import { ProjectMembersPanel } from "./ProjectMembersPanel";
+import { ProjectSettingsPanel } from "./ProjectSettingsPanel";
 import { ProjectWorkspaceFiles } from "./ProjectWorkspaceFiles";
-import {
-  WorkspaceEmpty,
-} from "./workspace/WorkspacePrimitives";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
-import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
-
 import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard } from "./ProjectDashboard";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 
-
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the ones that are not it. */
 const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
-  general: "project.general_tab",
   dashboard: "project.dashboard_tab",
+  general: "project.general_tab",
+  members: "project.members_tab",
   tasks: "project.tasks_tab",
   workspace: "workspace.tab_workspace",
+  settings: "project.settings_tab",
 };
 
 const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
-  general: "project.general_subtitle",
   dashboard: "project.dashboard_subtitle",
+  general: "project.general_subtitle",
+  members: "project.members_subtitle",
   tasks: "project.tasks_subtitle",
   workspace: "project.tasks_workspace_subtitle",
+  settings: "project.settings_subtitle",
 };
-
-function ProjectMark({ size = 18 }: { size?: number }) {
-  return (
-    <span className="project-mark" aria-hidden="true">
-      <NavProjects size={size} />
-    </span>
-  );
-}
-
-function ProjectMemberLane({
-  member,
-  agent,
-  index,
-  lead,
-  onEdit,
-}: {
-  member: ProjectMember;
-  agent?: EmployeeAgent;
-  index: number;
-  lead: boolean;
-  onEdit?: () => void;
-}) {
-  const { t } = useTranslation();
-  const { available, enabled, availability } = projectMemberState(member, agent);
-  const name = agent?.displayName || t("project.member_unavailable");
-
-  return (
-    <article
-      className={`project-member-tile${lead ? " is-lead" : ""}${available ? "" : " is-missing"}`}
-      style={{ "--project-member-index": index } as CSSProperties}
-    >
-      <header className="project-member-tile-head">
-        <AgentStateBadge
-          agent={agent?.executorKind}
-          ready={enabled && availability === "ready"}
-          availability={availability}
-          imageUrl={agent?.profileImageUrl}
-          name={name}
-        />
-        <span className="project-member-tile-identity">
-          <span className="project-member-tile-name">
-            <strong>{name}</strong>
-            {lead ? <LeadBadge /> : null}
-            {/* The role is a chip beside the name, as on a team member card —
-                not the tail of the runtime line. */}
-            <TonePill tone="neutral" label={t(`project.roles.${member.role}`)} />
-            {!member.enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null}
-            {!available ? <TonePill tone="warn" label={t("project.member_missing")} /> : null}
-          </span>
-          <span className="project-member-tile-meta">
-            {agent ? agentLabel(agent.executorKind) : member.agentId}
-          </span>
-        </span>
-      </header>
-
-      <div className="project-member-tile-body">
-        <p className="project-member-tile-responsibilities">
-          {member.responsibilities}
-        </p>
-        {member.instructions ? (
-          <div className="project-member-tile-instructions">
-            <span>{t("project.instructions_short")}</span>
-            <p>{member.instructions}</p>
-          </div>
-        ) : null}
-      </div>
-
-      {onEdit ? (
-        <Button variant="ghost"
-          type="button"
-          className="project-member-tile-edit"
-          tooltip={t("project.member_edit_name", { name })}
-          onClick={onEdit}
-        >
-          <ActionEdit size={ICON.sm} aria-hidden="true" />
-        </Button>
-      ) : null}
-    </article>
-  );
-}
-
-type RailComputer = { label: string; ownership: NodeOwnership };
-
-/** The project's identity, beside its crew — the same rail the team record
- *  carries: mark, name, the computer and folder it lives in, and its stamps.
- *  The name is renamed through Project settings, which owns every edit. */
-function ProjectIdentityRail({
-  project,
-  computer,
-  onOpenSettings,
-}: {
-  project: ProjectRecord;
-  computer: RailComputer;
-  onOpenSettings?: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
-      <div className="workspace-dossier-portrait">
-        <span className="project-rail-mark" aria-hidden="true">
-          <NavProjects size={ICON.xl} />
-        </span>
-      </div>
-
-      <div className="workspace-dossier-field">
-        <span className="workspace-dossier-field-label">{t("project.name")}</span>
-        <div className="workspace-dossier-name-row">
-          <span className="workspace-dossier-name-value" translate="no">{project.name}</span>
-          {onOpenSettings ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="workspace-dossier-icon-btn"
-              tooltip={t("project.edit")}
-              onClick={onOpenSettings}
-            >
-              <ActionEdit size={ICON.sm} aria-hidden="true" />
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="workspace-dossier-field">
-        <span className="workspace-dossier-field-label">{t("project.computer")}</span>
-        <Badge className="max-w-full" title={project.computerId} translate="no">
-          <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} className="shrink-0" aria-hidden="true" />
-          <span className="truncate">{computer.label}</span>
-        </Badge>
-      </div>
-
-      {project.workspaceSubpath ? (
-        <div className="workspace-dossier-field">
-          <span className="workspace-dossier-field-label">{t("project.shared_workspace")}</span>
-          <Badge className="code max-w-full" title={project.workspaceSubpath} translate="no">
-            <WorkspaceFolder size={ICON.xs} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">{project.workspaceSubpath}</span>
-          </Badge>
-        </div>
-      ) : null}
-
-      <div className="workspace-dossier-stamp workspace-dossier-stamps">
-        <Badge render={<time dateTime={project.createdAt} />} title={project.createdAt}>
-          <ActionCalendar size={ICON.xs} aria-hidden="true" />
-          {t("admin.v2.agent_meta_created", { time: formatRelativeTime(project.createdAt, t) })}
-        </Badge>
-        <Badge render={<time dateTime={project.updatedAt} />} title={project.updatedAt}>
-          <ActionRetry size={ICON.xs} aria-hidden="true" />
-          {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
-        </Badge>
-      </div>
-    </section>
-  );
-}
-
-/** The project's brief. It is edited in Project settings with the name, so
- *  the pencil opens settings rather than editing in place. */
-function ProjectDescription({
-  project,
-  onOpenSettings,
-}: {
-  project: ProjectRecord;
-  onOpenSettings?: () => void;
-}) {
-  const { t } = useTranslation();
-  const description = project.description?.trim();
-  return (
-    <section className="project-general-section" aria-labelledby="project-general-description">
-      <div className="project-general-section-head">
-        <h2 id="project-general-description" className="workspace-dossier-section-title">
-          {t("project.description")}
-        </h2>
-        {onOpenSettings ? (
-          <Button
-            type="button"
-            variant="ghost"
-            className="workspace-dossier-icon-btn"
-            tooltip={t("project.description_edit")}
-            onClick={onOpenSettings}
-          >
-            <ActionEdit size={ICON.sm} aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
-      {description ? (
-        <p className="project-description">{description}</p>
-      ) : (
-        <p className="project-description is-empty">{t("project.description_empty")}</p>
-      )}
-    </section>
-  );
-}
-
-function ProjectGeneral({
-  project,
-  agents,
-  computer,
-  onOpenSettings,
-  onAddMember,
-  onEditMember,
-}: {
-  project: ProjectRecord;
-  agents: EmployeeAgent[];
-  computer: RailComputer;
-  onOpenSettings?: () => void;
-  onAddMember?: () => void;
-  onEditMember?: (member: ProjectMember) => void;
-}) {
-  const { t } = useTranslation();
-  const agentsById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
-  const members = useMemo(() => orderedProjectMembers(project), [project]);
-
-  return (
-    <div className="workspace-profile project-profile">
-      {/* Same dossier grammar as the team record: what the project is for and
-          who works in it are the document, its identity is the rail. */}
-      <div className="workspace-profile-dossier">
-        <div className="workspace-dossier-doc project-general-doc">
-          <ProjectDescription project={project} onOpenSettings={onOpenSettings} />
-          <section className="project-general-section" aria-labelledby="project-general-members">
-            <h2 id="project-general-members" className="workspace-dossier-section-title">
-              {t("project.members")}
-              <span className="tnum">{members.length}</span>
-            </h2>
-            <ProjectCrew
-              project={project}
-              members={members}
-              agentsById={agentsById}
-              onAddMember={onAddMember}
-              onEditMember={onEditMember}
-            />
-          </section>
-        </div>
-        <ProjectIdentityRail project={project} computer={computer} onOpenSettings={onOpenSettings} />
-      </div>
-    </div>
-  );
-}
-
-function ProjectCrew({
-  project,
-  members,
-  agentsById,
-  onAddMember,
-  onEditMember,
-}: {
-  project: ProjectRecord;
-  members: ProjectMember[];
-  agentsById: Map<string, EmployeeAgent>;
-  onAddMember?: () => void;
-  onEditMember?: (member: ProjectMember) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <>
-      {members.length ? (
-        <div className="project-member-tiles">
-          {members.map((member, index) => (
-            <ProjectMemberLane
-              key={member.agentId}
-              member={member}
-              agent={agentsById.get(member.agentId)}
-              index={index}
-              lead={member.agentId === project.leadAgentId}
-              onEdit={onEditMember ? () => onEditMember(member) : undefined}
-            />
-          ))}
-          {onAddMember && members.length < MAX_PROJECT_MEMBERS ? (
-            <Button variant="ghost" type="button" className="project-member-tile-add" onClick={onAddMember}>
-              <ActionAdd size={ICON.md} aria-hidden="true" />
-              <span>{t("project.member_add")}</span>
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="project-profile-empty">
-          <WorkspaceEmpty
-            title={t("project.profile_empty")}
-            hint={t("project.profile_empty_hint")}
-            mark={<ProjectMark />}
-          />
-          {onAddMember ? (
-            <div className="project-profile-empty-action">
-              <Button type="button" variant="outline" size="dense" onClick={onAddMember}>
-                <ActionAdd size={ICON.sm} aria-hidden="true" />
-                {t("project.member_add")}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      )}
-    </>
-  );
-}
 
 export function ProjectWorkspacePage({
   project,
@@ -372,7 +65,7 @@ export function ProjectWorkspacePage({
   currentUser,
   computers,
   onOpenThread,
-  onOpenSettings,
+  onDeleted,
   onBack,
 }: {
   project: ProjectRecord;
@@ -385,7 +78,7 @@ export function ProjectWorkspacePage({
   computers: DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string) => void;
   onNewThread?: () => void;
-  onOpenSettings: () => void;
+  onDeleted: () => void;
   onBack: () => void;
 }) {
   const { t } = useTranslation();
@@ -489,12 +182,6 @@ export function ProjectWorkspacePage({
               <NavBack size={ICON.sm} aria-hidden="true" />
               {t("project.back")}
             </Button>
-            {actions.settings ? (
-              <Button type="button" variant="outline" size="dense" onClick={onOpenSettings}>
-                <ActionEdit size={ICON.sm} aria-hidden="true" />
-                {t("project.edit")}
-              </Button>
-            ) : null}
           </>
         )}
         toolbar={(
@@ -525,7 +212,14 @@ export function ProjectWorkspacePage({
             project={project}
             agents={agents}
             computer={railComputer}
-            onOpenSettings={actions.settings ? onOpenSettings : undefined}
+            onOpenSettings={actions.settings ? () => setPageTab("settings") : undefined}
+            onOpenMembers={() => setPageTab("members")}
+          />
+        </TabsContent>
+        <TabsContent value="members">
+          <ProjectMembersPanel
+            project={project}
+            agents={agents}
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
           />
@@ -547,6 +241,14 @@ export function ProjectWorkspacePage({
         </TabsContent>
         <TabsContent value="workspace" className="workspace-inspect">
           <ProjectWorkspaceFiles projectId={project.id} />
+        </TabsContent>
+        <TabsContent value="settings">
+          <ProjectSettingsPanel
+            key={project.id}
+            project={project}
+            computerLabel={computerLabel}
+            onDeleted={onDeleted}
+          />
         </TabsContent>
       </div>
 

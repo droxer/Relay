@@ -115,34 +115,6 @@
   background: var(--surface-2);
 }
 
-/* The add tile is an invitation, not a record — dashed, quiet, centered. */
-.project-member-tile-add {
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: var(--sp-2);
-  min-height: 118px;
-  min-width: 0;
-  padding: var(--sp-4);
-  border: 1px dashed var(--line-1);
-  border-radius: var(--r-3);
-  background: transparent;
-  color: var(--ink-3);
-  font: var(--type-label);
-  cursor: pointer;
-  transition:
-    color var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease);
-}
-
-.project-member-tile-add:hover {
-  border-color: var(--line-strong);
-  background: color-mix(in srgb, var(--surface-2) 40%, transparent);
-  color: var(--ink-1);
-}
-
-
 .project-profile-empty {
   display: grid;
   justify-items: center;
@@ -573,4 +545,156 @@
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
+}
+
+/* General: the crew as a roll call — one line per agent, the cards live on
+   Members. */
+.project-crew-summary {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 0.5px solid var(--line-1);
+}
+
+.project-crew-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--sp-3);
+  min-height: var(--control-h);
+  padding: var(--sp-2) 0;
+  border-bottom: 0.5px solid var(--line-1);
+}
+
+.project-crew-row.is-missing {
+  color: var(--ink-3);
+}
+
+.project-crew-row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+}
+
+.project-crew-row-name strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-crew-row-meta,
+.project-crew-summary-more {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.project-crew-row-meta {
+  white-space: nowrap;
+}
+
+.project-crew-summary-more {
+  margin: var(--sp-2) 0 0;
+}
+
+/* Members and Settings ride .project-profile for General's gutter and its
+   heading-with-count; they only add the pane fill. */
+.project-members,
+.project-settings {
+  flex: 1;
+}
+
+/* Settings is a form, so it holds a reading measure instead of the pane. */
+.project-settings {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-7);
+}
+
+.project-settings-section {
+  display: grid;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: 640px;
+}
+
+.project-settings-head {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.project-settings-head > .workspace-dossier-section-title {
+  margin-bottom: 0;
+}
+
+.project-settings-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.project-settings-fields {
+  display: grid;
+  gap: var(--sp-4);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.project-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+/* One bordered list, each row a consequence and its button — the danger is
+   read before it is clicked. */
+.project-settings-danger {
+  display: grid;
+  border: 0.5px solid color-mix(in srgb, var(--err) 40%, var(--line-1));
+  border-radius: var(--r-3);
+}
+
+.project-settings-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+.project-settings-danger-row + .project-settings-danger-row {
+  border-top: 0.5px solid var(--line-1);
+}
+
+.project-settings-danger-copy {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.project-settings-danger-copy strong {
+  font: var(--type-label);
+  color: var(--ink-1);
+}
+
+.project-settings-danger-copy p {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+@media (max-width: 820px) {
+  .project-settings-danger-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
