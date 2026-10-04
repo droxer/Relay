@@ -233,7 +233,7 @@ describe("app pathname routes", () => {
     // The record lives on the tasks tab; no other tab can show it.
     // Dashboard is the default tab, so leaving the task behind leaves a bare path.
     assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=dashboard&task=task-9"), "/projects/project-1");
-    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=general&task=task-9"), "/projects/project-1?tab=general");
+    assert.equal(canonicalBrowserUrl("/projects/project-1", "?tab=members&task=task-9"), "/projects/project-1?tab=members");
   });
 
   it("reports which paths keep the thread space params", () => {
@@ -418,7 +418,8 @@ it("keeps the project tasks tab explicit and canonicalizes Dashboard as the defa
   // The retired Agents tab id is unknown, so an old link lands on the Dashboard.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=profile"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=tasks"), "/projects/p?tab=tasks");
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p?tab=general");
+  // The retired General tab canonicalizes to the default.
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members"), "/projects/p?tab=members");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=settings&status=review"), "/projects/p?tab=settings");
   // The board's filters belong to the Issues tab, not the dashboard.

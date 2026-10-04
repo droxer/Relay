@@ -1,18 +1,30 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { formatRelativeTime } from "../lib/adminHelpers";
 import type { ProjectRecord } from "../types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { Field } from "@/components/ui/field";
-import { AdminDelete, ICON } from "./icons";
+import {
+  ActionCalendar,
+  ActionRetry,
+  AdminDelete,
+  ICON,
+  NodeOwnershipIcon,
+  WorkspaceFolder,
+  type NodeOwnership,
+} from "./icons";
 import { ProjectDescriptionField, ProjectNameField } from "./ProjectFormFields";
 
 type Draft = { name: string; description: string };
+
+/** The computer a project lives on, as the page resolved it. */
+export type ProjectComputerSummary = { label: string; ownership: NodeOwnership };
 
 const draftOf = (project: ProjectRecord): Draft => ({
   name: project.name,
@@ -21,7 +33,8 @@ const draftOf = (project: ProjectRecord): Draft => ({
 
 /** The Settings tab: the project's identity (name, description; its computer
  *  is fixed) and its danger zone. It replaced the edit mode of the settings
- *  drawer, which now only creates projects.
+ *  drawer, which now only creates projects, and it absorbed the retired
+ *  General tab's fixed facts: computer, workspace folder, and stamps.
  *
  *  The draft is edited against a BASE — the record as it stood when editing
  *  began — so a save carries that revision and a concurrent change surfaces
@@ -29,11 +42,11 @@ const draftOf = (project: ProjectRecord): Draft => ({
  *  newer record (a poll, an archive) is adopted as the new base. */
 export function ProjectSettingsPanel({
   project,
-  computerLabel,
+  computer,
   onDeleted,
 }: {
   project: ProjectRecord;
-  computerLabel: string;
+  computer: ProjectComputerSummary;
   onDeleted: () => void;
 }) {
   const { t } = useTranslation();
@@ -44,7 +57,6 @@ export function ProjectSettingsPanel({
   const [draft, setDraft] = useState<Draft>(() => draftOf(project));
   const [nameError, setNameError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  const computerLabelId = useId();
 
   const savedDraft = draftOf(base);
   const dirty = draft.name !== savedDraft.name || draft.description !== savedDraft.description;
@@ -144,16 +156,46 @@ export function ProjectSettingsPanel({
               setNameError(null);
             }}
           />
-          <Field label={t("project.computer")} labelId={computerLabelId} wrapper="div">
-            <p className="project-computer-static" aria-labelledby={computerLabelId} translate="no">
-              {computerLabel}
-            </p>
-          </Field>
+          {/* Fixed at creation: shown for reference, never edited. */}
+          <dl className="project-settings-facts">
+            <div className="project-settings-fact">
+              <dt>{t("project.computer")}</dt>
+              <dd>
+                <Badge className="max-w-full" title={project.computerId} translate="no">
+                  <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} className="shrink-0" aria-hidden="true" />
+                  <span className="truncate">{computer.label}</span>
+                </Badge>
+              </dd>
+            </div>
+            {project.workspaceSubpath ? (
+              <div className="project-settings-fact">
+                <dt>{t("project.shared_workspace")}</dt>
+                <dd>
+                  <Badge className="code max-w-full" title={project.workspaceSubpath} translate="no">
+                    <WorkspaceFolder size={ICON.xs} className="shrink-0" aria-hidden="true" />
+                    <span className="truncate">{project.workspaceSubpath}</span>
+                  </Badge>
+                </dd>
+              </div>
+            ) : null}
+          </dl>
           <ProjectDescriptionField
             value={draft.description}
             onChange={(description) => setDraft((current) => ({ ...current, description }))}
           />
         </fieldset>
+        {project.createdAt ? (
+          <div className="project-settings-stamps">
+            <Badge render={<time dateTime={project.createdAt} />} title={project.createdAt}>
+              <ActionCalendar size={ICON.xs} aria-hidden="true" />
+              {t("admin.v2.agent_meta_created", { time: formatRelativeTime(project.createdAt, t) })}
+            </Badge>
+            <Badge render={<time dateTime={project.updatedAt} />} title={project.updatedAt}>
+              <ActionRetry size={ICON.xs} aria-hidden="true" />
+              {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
+            </Badge>
+          </div>
+        ) : null}
         {projectSave.error ? <p role="alert" className="text-destructive">{projectSave.error}</p> : null}
         <div className="project-settings-actions">
           <Button type="button" variant="ghost" disabled={!dirty || busy} onClick={() => adopt(project)}>

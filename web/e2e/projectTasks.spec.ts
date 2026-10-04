@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const mobile of [false, true]) {
-  test(`project general and issues board (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+  test(`project tabs and issues board (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
     const project = { id: "launch", name: "Autumn launch", description: "Ship the autumn release: landing page, pricing, and notes.",
@@ -45,15 +45,6 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
-    // General: the brief, then the crew, beside the identity rail.
-    await page.getByRole("tab", { name: "General", exact: true }).click();
-    await expect(page).toHaveURL(/\/projects\/launch\?tab=general$/);
-    await expect(page.getByRole("heading", { name: "Description", exact: true })).toBeVisible();
-    await expect(page.getByText(project.description)).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/project-general-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-
     // Members carries the crew's cards; Settings carries the edit form.
     await page.getByRole("tab", { name: "Members", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=members$/);
@@ -63,7 +54,11 @@ for (const mobile of [false, true]) {
 
     await page.getByRole("tab", { name: "Settings", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=settings$/);
-    await expect(page.getByRole("form", { name: "Details", exact: true })).toBeVisible();
+    const details = page.getByRole("form", { name: "Details", exact: true });
+    await expect(details).toBeVisible();
+    // The brief and the workspace folder moved here with the General tab.
+    await expect(details.getByRole("textbox", { name: "Description" })).toHaveValue(project.description);
+    await expect(details.getByText("projects/launch")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Danger zone", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-settings-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });

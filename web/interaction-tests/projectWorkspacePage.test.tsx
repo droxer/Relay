@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
@@ -58,32 +58,30 @@ it("sends the Dashboard's board link to the Issues tab", async () => {
   expect(screen.getByRole("tab", { name: "project.tasks_tab", selected: true })).toBeTruthy();
 });
 
-it("shows the brief and a crew roll call on General, with edits a tab away", async () => {
+it("has no General tab; a retired ?tab=general link lands on the Dashboard", () => {
   window.history.replaceState({}, "", "/projects/p?tab=general");
-  renderPage(project({
-    description: "Ship the GA release.",
-    leadAgentId: "a1",
-    members: [{ agentId: "a1", role: "planner", responsibilities: "Plans", enabled: true }],
-  } as Partial<ProjectRecord>));
-  expect(screen.getByRole("heading", { name: "project.description" })).toBeTruthy();
-  expect(screen.getByText("Ship the GA release.")).toBeTruthy();
-  const crew = screen.getByRole("region", { name: /project\.members/ });
-  expect(within(crew).getAllByRole("listitem")).toHaveLength(1);
-  // The description's pencil opens the Settings tab, not a drawer.
-  const description = screen.getByRole("region", { name: "project.description" });
-  fireEvent.click(within(description).getByRole("button"));
-  await waitFor(() => expect(screen.getByRole("tab", { name: "project.settings_tab", selected: true })).toBeTruthy());
+  renderPage(project());
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+    "project.dashboard_tab", "project.members_tab", "project.tasks_tab", "workspace.tab_workspace", "project.settings_tab",
+  ]);
+  expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
 });
 
-it("sends General's crew link to the Members tab, where the cards and add live", async () => {
-  window.history.replaceState({}, "", "/projects/p?tab=general");
+it("shows the crew's cards and the add action on Members", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=members");
   renderPage(project({
     members: [{ agentId: "a1", role: "planner", responsibilities: "Plans the release", enabled: true }],
   } as Partial<ProjectRecord>));
-  fireEvent.click(screen.getByRole("button", { name: /project\.members_manage/ }));
-  await waitFor(() => expect(screen.getByRole("tab", { name: "project.members_tab", selected: true })).toBeTruthy());
   expect(screen.getByText("Plans the release")).toBeTruthy();
   expect(screen.getByRole("button", { name: /project\.member_add/ })).toBeTruthy();
+});
+
+it("carries the project's fixed facts on Settings beside the editable brief", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=settings");
+  renderPage(project({ description: "Ship the GA release." }));
+  expect((screen.getByRole("textbox", { name: /^project\.description/ }) as HTMLTextAreaElement).value).toBe("Ship the GA release.");
+  expect(screen.getByText("project.shared_workspace")).toBeTruthy();
+  expect(screen.getByText("projects/p")).toBeTruthy();
 });
 
 it("hides member management on a closed project's Members tab", () => {
@@ -93,12 +91,6 @@ it("hides member management on a closed project's Members tab", () => {
     members: [{ agentId: "a1", role: "planner", responsibilities: "Plans", enabled: true }],
   } as Partial<ProjectRecord>));
   expect(screen.queryByRole("button", { name: /project\.member_add/ })).toBeNull();
-});
-
-it("says so when a project has no description yet", () => {
-  window.history.replaceState({}, "", "/projects/p?tab=general");
-  renderPage(project());
-  expect(screen.getByText("project.description_empty")).toBeTruthy();
 });
 
 it("renders the backlog board on Tasks, scoped to this project's live tasks", async () => {
@@ -123,12 +115,12 @@ it("opens a task record over the project instead of leaving for the backlog", as
   expect(screen.getByRole("tab", { name: "project.tasks_tab", selected: true })).toBeTruthy();
 });
 
-it("leaves an open task behind when the reader switches to General", async () => {
+it("leaves an open task behind when the reader switches to Members", async () => {
   window.history.replaceState({}, "", "/projects/p?task=mine");
   renderPage(project());
-  fireEvent.click(screen.getByRole("tab", { name: "project.general_tab" }));
-  await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/projects/p?tab=general"));
-  expect(screen.getByRole("tab", { name: "project.general_tab", selected: true })).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "project.members_tab" }));
+  await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/projects/p?tab=members"));
+  expect(screen.getByRole("tab", { name: "project.members_tab", selected: true })).toBeTruthy();
 });
 
 it("hands a closed project's board over read-only", () => {

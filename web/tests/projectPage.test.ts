@@ -9,7 +9,6 @@ import {
   projectActivitiesState,
   scopeProjectActivities,
   projectMemberState,
-  projectPageActions,
   projectReadOnly,
   resolveProjectOverviewState,
   showThreadChrome,
@@ -72,7 +71,8 @@ describe("project page behavior", () => {
     assert.equal(parseProjectPageTab(null), "dashboard");
     assert.equal(parseProjectPageTab("unknown"), "dashboard");
     assert.equal(parseProjectPageTab("profile"), "dashboard");
-    assert.equal(parseProjectPageTab("general"), "general");
+    // General was folded into Members and Settings; old links land on the Dashboard.
+    assert.equal(parseProjectPageTab("general"), "dashboard");
     assert.equal(parseProjectPageTab("tasks"), "tasks");
     assert.equal(parseProjectPageTab("workspace"), "workspace");
     assert.equal(parseProjectPageTab("members"), "members");
@@ -80,7 +80,7 @@ describe("project page behavior", () => {
   });
 
   it("orders the strip from reading to managing, with settings last", () => {
-    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "general", "members", "tasks", "workspace", "settings"]);
+    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "members", "tasks", "workspace", "settings"]);
   });
 
   it("lists the default tab first in the strip", () => {
@@ -109,18 +109,6 @@ describe("project page behavior", () => {
       enabled: true,
       availability: "ready",
     });
-  });
-
-  it("keeps settings available while restricting new work for archived and disabled projects", () => {
-    assert.deepEqual(projectPageActions(project()), { settings: true, newThread: true });
-    assert.deepEqual(
-      projectPageActions(project({ archivedAt: "2026-08-16T00:00:00Z" })),
-      { settings: true, newThread: false },
-    );
-    assert.deepEqual(
-      projectPageActions(project({ enabled: false })),
-      { settings: true, newThread: false },
-    );
   });
 
   it("keeps project deep links out of chat through loading, error, and missing states", () => {
