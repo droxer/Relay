@@ -103,6 +103,12 @@
   line-height: var(--leading-none);
 }
 
+/* A reading that is a problem when nonzero takes its status hue; the caller
+   only passes a tone then, so a zero stays ink. */
+.adm-dash-tile--toned .adm-dash-tile-value {
+  color: var(--tone);
+}
+
 .adm-dash-tile--hero .adm-dash-tile-value {
   font-family: var(--font-display);
   font-size: var(--fs-hero);

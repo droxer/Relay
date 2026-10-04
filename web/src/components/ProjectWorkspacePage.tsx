@@ -392,7 +392,7 @@ export function ProjectWorkspacePage({
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
   /* The tab is always written explicitly and left to canonicalization to
      drop when it is implied: an open `?task=` implies Tasks, so a bare
-     "general" would otherwise read back as Tasks and keep the task open. */
+     "dashboard" would otherwise read back as Tasks and keep the task open. */
   const [urlTab, setPageTab] = useUrlSearchState(
     "tab",
     DEFAULT_PROJECT_PAGE_TAB,
@@ -513,6 +513,13 @@ export function ProjectWorkspacePage({
       />
 
       <div className="workspace-body">
+        <TabsContent value="dashboard">
+          <ProjectDashboard
+            tasks={projectTasks}
+            onOpenRecord={(taskId) => openTaskRecord(taskId)}
+            onOpenBoard={() => setPageTab("tasks")}
+          />
+        </TabsContent>
         <TabsContent value="general">
           <ProjectGeneral
             project={project}
@@ -522,9 +529,6 @@ export function ProjectWorkspacePage({
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
           />
-        </TabsContent>
-        <TabsContent value="dashboard">
-          <ProjectDashboard tasks={projectTasks} />
         </TabsContent>
         <TabsContent value="tasks" className="project-tasks-panel">
           {/* The backlog board itself, fixed to this project. */}

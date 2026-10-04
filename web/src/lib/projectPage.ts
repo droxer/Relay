@@ -9,11 +9,12 @@ export type ProjectPageTab = "general" | "dashboard" | "tasks" | "workspace";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
-/* A project opens on General — what it is for and who works in it — and the
-   strip lists that tab first so the default sits where the eye starts. The
-   retired "profile" id (the old Agents tab) is unknown, so it lands here. */
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["general", "dashboard", "tasks", "workspace"];
-export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "general";
+/* A project opens on its Dashboard — how its issues are moving and what needs
+   a look — and the strip lists that tab first so the default sits where the
+   eye starts. The retired "profile" id (the old Agents tab) is unknown, so it
+   lands here. */
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "general", "tasks", "workspace"];
+export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "dashboard";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */
 export const MAX_PROJECT_MEMBERS = 32;

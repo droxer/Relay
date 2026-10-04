@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
 import type { CurrentUser, ProjectRecord, RelayTaskListItem } from "../src/types";
@@ -23,11 +24,15 @@ const task = (id: string, projectId: string | undefined, deletedAt?: string) =>
   ({ id, title: id, projectId, deletedAt, status: "backlog" }) as unknown as RelayTaskListItem;
 
 function renderPage(record: ProjectRecord, onOpenSettings = vi.fn()) {
-  return render(<ProjectWorkspacePage
-    project={record} agents={[]} teams={[]} currentUser={user} computers={[]}
-    tasks={[task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02")]}
-    onOpenThread={vi.fn()} onOpenSettings={onOpenSettings} onBack={vi.fn()}
-  />);
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProjectWorkspacePage
+        project={record} agents={[]} teams={[]} currentUser={user} computers={[]}
+        tasks={[task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02")]}
+        onOpenThread={vi.fn()} onOpenSettings={onOpenSettings} onBack={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -35,7 +40,23 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/projects/p");
 });
 
-it("opens on General with the description and the agents as sections", () => {
+it("opens on the Dashboard, listed first", () => {
+  renderPage(project());
+  const tabs = screen.getAllByRole("tab");
+  expect(tabs[0].textContent).toBe("project.dashboard_tab");
+  expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "project.dashboard_issues" })).toBeTruthy();
+});
+
+it("sends the Dashboard's board link to the Issues tab", async () => {
+  renderPage(project());
+  fireEvent.click(screen.getByRole("button", { name: /project\.dashboard_open_board/ }));
+  await waitFor(() => expect(screen.getByTestId("backlog-board")).toBeTruthy());
+  expect(screen.getByRole("tab", { name: "project.tasks_tab", selected: true })).toBeTruthy();
+});
+
+it("shows the description and the agents as sections on General", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=general");
   const onOpenSettings = vi.fn();
   renderPage(project({ description: "Ship the GA release." }), onOpenSettings);
   expect(screen.getByRole("tab", { name: "project.general_tab", selected: true })).toBeTruthy();
@@ -49,6 +70,7 @@ it("opens on General with the description and the agents as sections", () => {
 });
 
 it("says so when a project has no description yet", () => {
+  window.history.replaceState({}, "", "/projects/p?tab=general");
   renderPage(project());
   expect(screen.getByText("project.description_empty")).toBeTruthy();
 });
@@ -79,7 +101,7 @@ it("leaves an open task behind when the reader switches to General", async () =>
   window.history.replaceState({}, "", "/projects/p?task=mine");
   renderPage(project());
   fireEvent.click(screen.getByRole("tab", { name: "project.general_tab" }));
-  await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/projects/p"));
+  await waitFor(() => expect(window.location.pathname + window.location.search).toBe("/projects/p?tab=general"));
   expect(screen.getByRole("tab", { name: "project.general_tab", selected: true })).toBeTruthy();
 });
 

@@ -33,23 +33,26 @@ for (const mobile of [false, true]) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
 
-    // General leads: the brief, then the crew, beside the identity rail.
+    // The Dashboard leads: the project's issue metrics, stages, and the
+    // issues that need a look.
     await page.goto("/projects/launch");
-    await expect(page.getByRole("tab", { name: "General", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("group", { name: "Backlog metrics", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Flow", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Stages", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
+    await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
+
+    // General: the brief, then the crew, beside the identity rail.
+    await page.getByRole("tab", { name: "General", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/launch\?tab=general$/);
     await expect(page.getByRole("heading", { name: "Description", exact: true })).toBeVisible();
     await expect(page.getByText(project.description)).toBeVisible();
     await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
-    await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-general-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-
-    // The Dashboard tab carries the project's issue metrics.
-    await page.getByRole("tab", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL(/\/projects\/launch\?tab=dashboard$/);
-    await expect(page.getByRole("group", { name: "Backlog metrics", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Flow", exact: true })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
     // The Issues tab is the board itself, fixed to this project.
     await page.getByRole("tab", { name: "Issues", exact: true }).click();
