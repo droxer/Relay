@@ -7,7 +7,6 @@ import { computerId as stableComputerId } from "../lib/createAgent";
 import {
   DEFAULT_PROJECT_PAGE_TAB,
   parseProjectPageTab,
-  projectPageActions,
   projectReadOnly,
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
@@ -25,11 +24,10 @@ import { ICON, NavBack } from "./icons";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "./PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProjectGeneral, type RailComputer } from "./ProjectGeneral";
 import { ProjectMark } from "./ProjectMark";
 import { ProjectMemberEditor } from "./ProjectMemberEditor";
 import { ProjectMembersPanel } from "./ProjectMembersPanel";
-import { ProjectSettingsPanel } from "./ProjectSettingsPanel";
+import { ProjectSettingsPanel, type ProjectComputerSummary } from "./ProjectSettingsPanel";
 import { ProjectWorkspaceFiles } from "./ProjectWorkspaceFiles";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
 import { TonePill } from "./StatusPill";
@@ -42,7 +40,6 @@ import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
    the tasks board on every tab, including the ones that are not it. */
 const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
   dashboard: "project.dashboard_tab",
-  general: "project.general_tab",
   members: "project.members_tab",
   tasks: "project.tasks_tab",
   workspace: "workspace.tab_workspace",
@@ -51,7 +48,6 @@ const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
 
 const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
   dashboard: "project.dashboard_subtitle",
-  general: "project.general_subtitle",
   members: "project.members_subtitle",
   tasks: "project.tasks_subtitle",
   workspace: "project.tasks_workspace_subtitle",
@@ -123,13 +119,13 @@ export function ProjectWorkspacePage({
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
-  const railComputer: RailComputer = {
+  const computerSummary: ProjectComputerSummary = {
     label: computerLabel,
     ownership: !computer ? "pending" : computer.managedNodeId?.trim() ? "managed" : "local",
   };
   const state = project.archivedAt ? "archived" : project.enabled ? "active" : "disabled";
-  /* Same split as the team record: the title line carries the state and the
-     id; the computer, folder and stamps live in the General tab's rail. */
+  /* The title line carries the state and the id; the computer, folder and
+     stamps live on the Settings tab with the rest of the record's facts. */
   const bandFacts: RecordFact[] = [
     {
       key: "state",
@@ -149,7 +145,6 @@ export function ProjectWorkspacePage({
     },
   ];
 
-  const actions = projectPageActions(project);
   /* Archived/disabled projects are read-only rooms — no member management. */
   const membersReadOnly = projectReadOnly(project);
 
@@ -207,15 +202,6 @@ export function ProjectWorkspacePage({
             onOpenBoard={() => setPageTab("tasks")}
           />
         </TabsContent>
-        <TabsContent value="general">
-          <ProjectGeneral
-            project={project}
-            agents={agents}
-            computer={railComputer}
-            onOpenSettings={actions.settings ? () => setPageTab("settings") : undefined}
-            onOpenMembers={() => setPageTab("members")}
-          />
-        </TabsContent>
         <TabsContent value="members">
           <ProjectMembersPanel
             project={project}
@@ -246,7 +232,7 @@ export function ProjectWorkspacePage({
           <ProjectSettingsPanel
             key={project.id}
             project={project}
-            computerLabel={computerLabel}
+            computer={computerSummary}
             onDeleted={onDeleted}
           />
         </TabsContent>

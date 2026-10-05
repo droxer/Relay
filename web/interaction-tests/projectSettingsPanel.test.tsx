@@ -17,13 +17,14 @@ vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: 
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm }) }));
 
 const project = { id: "p", version: 1, name: "Original", computerId: "node:node", members: [], leadAgentId: null, enabled: true } as ProjectRecord;
+const computer = { label: "Work computer", ownership: "local" as const };
 const nameInput = () => screen.getByRole("textbox", { name: "project.name" }) as HTMLInputElement;
 const save = () => fireEvent.click(screen.getByRole("button", { name: "project.save" }));
 
 function renderPanel(record: ProjectRecord = project, onDeleted = vi.fn()) {
-  const view = render(<ProjectSettingsPanel project={record} computerLabel="Work computer" onDeleted={onDeleted} />);
+  const view = render(<ProjectSettingsPanel project={record} computer={computer} onDeleted={onDeleted} />);
   return { ...view, onDeleted, rerenderWith: (next: ProjectRecord) => view.rerender(
-    <ProjectSettingsPanel project={next} computerLabel="Work computer" onDeleted={onDeleted} />,
+    <ProjectSettingsPanel project={next} computer={computer} onDeleted={onDeleted} />,
   ) };
 }
 
