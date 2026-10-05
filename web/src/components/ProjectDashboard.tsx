@@ -18,6 +18,7 @@ import {
   type ProjectAttentionIssue,
 } from "../lib/projectDashboard";
 import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
+import { taskRef } from "../lib/taskRef";
 import type { RelayTaskListItem } from "../types";
 import { KpiTile } from "./admin/dashboard/KpiTile";
 import { ICON, NavProjects } from "./icons";
@@ -191,7 +192,10 @@ function AttentionCard({
                 onClick={() => onOpenRecord(task.id)}
               >
                 <span className="project-dashboard-attention-dot" aria-hidden="true" />
-                <span className="project-dashboard-attention-title">{task.title}</span>
+                <span className="project-dashboard-attention-title">
+                  <span className="code project-dashboard-attention-ref" translate="no">{taskRef(task)}</span>
+                  {task.title}
+                </span>
                 <span className="project-dashboard-attention-reason">
                   {[
                     reason === "blocked" ? t("backlog.statuses.blocked") : null,

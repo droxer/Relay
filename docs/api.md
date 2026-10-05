@@ -385,6 +385,14 @@ Project membership cannot subsequently be cleared or changed. Work with linked
 threads, routines, and routine runs cannot be moved. Clearing a legacy intake
 assignment is allowed and returns Ready intake to Backlog.
 
+Every task carries `number` and `numberScope`, assigned by the backend (never
+accepted on create or PATCH). A project's issues count within the project
+(`project:{id}`); an employee's other issues (`issue:{employeeId}`) and their
+automations (`automation:{employeeId}`) count separately. A move into a project
+takes that project's next number; numbers are never reused. Clients display
+`#{number}` for an issue and `AUTO-{number}` for an automation, and link it to
+the record; the `id` stays the key in every URL and request.
+
 Task/thread creation accepts `projectId`. Project dispatch rejects Computer,
 team, or non-member overrides; the backend resolves the fixed roster and the
 current daemon instance for the project's stable Computer identity.

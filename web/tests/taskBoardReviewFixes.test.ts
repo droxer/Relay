@@ -66,9 +66,9 @@ describe("task board review regressions", () => {
     assert.match(routineRecords, /loading=\{starting\}/);
   });
 
-  it("uses the full issue id as drawer identity on both boards", () => {
-    assert.match(backlogPage, /taskRef\(form\.id\)/);
-    assert.match(routinesPage, /taskRef\(form\.id\)/);
+  it("uses the issue's ref as drawer identity on both boards", () => {
+    assert.match(backlogPage, /taskRef\(\{ id: form\.id, number: form\.number \}\)/);
+    assert.match(routinesPage, /taskRef\(\{ id: form\.id, number: form\.number, isRoutine: true \}\)/);
     assert.match(taskDrawer, /subtitleMono=\{Boolean\(form\.id\)\}/);
   });
 });

@@ -4,6 +4,7 @@ import { SCHEDULE_TRIGGER, triggersEqual } from "./automationTrigger.ts";
 
 export type TaskBoardFormBase = {
   id?: string;
+  number?: number;
   projectId?: string;
   sourceRoutineId?: string;
   title: string;

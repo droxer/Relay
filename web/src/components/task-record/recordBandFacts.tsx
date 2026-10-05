@@ -91,7 +91,7 @@ export function recordBandFacts(
   facts.push({
     key: "ref",
     label: t("backlog.col_ref"),
-    value: taskRef(task.id),
+    value: taskRef(task),
     technical: true,
     title: task.id,
   });

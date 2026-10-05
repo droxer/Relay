@@ -161,6 +161,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
     openRoutineForm({
       variant: "routine",
       id: task.id,
+      number: task.number,
       projectId: task.projectId,
       title: task.title,
       acceptancePolicy: task.acceptancePolicy ?? "automatic",
@@ -443,7 +444,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           deleting={deleting}
           initialFocus={assignmentFocus ? "assignment" : "title"}
           title={form.id ? t("routine.edit") : t("routine.new")}
-          subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("routine.new_routine_id")}
+          subtitle={form.id ? taskRef({ id: form.id, number: form.number, isRoutine: true }) : t("routine.new_routine_id")}
           onClose={() => { void closeRoutineForm(); }}
           onClosed={releaseRoutineForm}
           onChange={(next) => {

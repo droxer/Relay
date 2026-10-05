@@ -1,4 +1,5 @@
 import { triggerOf } from "./automationTrigger.ts";
+import { taskRef } from "./taskRef.ts";
 import { TASK_PRIORITIES } from "./backlog.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
 import type { RelaySession, RelayTaskListItem, RoutineTriggerKind, TaskRoutineCadence, TaskRoutineType } from "../types.js";
@@ -29,7 +30,7 @@ export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineF
     if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
     if (filters.state !== "all" && routineState(task, running, today) !== filters.state) return false;
     if (query) {
-      const haystack = `${task.title} ${task.description} ${task.id}`.toLowerCase();
+      const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;

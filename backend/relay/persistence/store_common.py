@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import make_url
 
 from ..core.ids import new_database_id, now_iso
+from .task_numbering import NUMBERED_EVENT, apply_task_number
 from ..core.models import (
     AGENT_NAMES,
     AgentName,
@@ -584,6 +585,7 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     if created.get("collaborationStyle"):
         task["collaborationStyle"] = created["collaborationStyle"]
     _apply_task_routine_fields(task, created)
+    apply_task_number(task, created)
     for event in events:
         task["events"].append(event)
         task["updatedAt"] = event["timestamp"]
@@ -631,6 +633,7 @@ def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 def _apply_task_project_set(task: dict[str, Any], event: dict[str, Any]) -> None:
     task["projectId"] = event["projectId"]
+    apply_task_number(task, event)
 
 
 def _apply_task_assigned(task: dict[str, Any], event: dict[str, Any]) -> None:
@@ -748,6 +751,7 @@ TASK_EVENT_HANDLERS: dict[str, TaskEventHandler] = {
     "task.workspace_wait": _apply_task_workspace_wait,
     "task.updated": _apply_task_updated,
     "task.project_set": _apply_task_project_set,
+    NUMBERED_EVENT: apply_task_number,
     "task.assigned": _apply_task_assigned,
     "task.unassigned": _apply_task_unassigned,
     "task.dispatch_claimed": _apply_task_dispatch_claimed,

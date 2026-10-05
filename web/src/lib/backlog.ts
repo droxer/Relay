@@ -1,4 +1,5 @@
 import { compareTaskQueue, taskWorkflowStage } from "./taskFlow.ts";
+import { taskRef } from "./taskRef.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
 import type { AgentName, DaemonNodeMonitorRecord, EmployeeAgent, RelayTaskListItem, TaskPriority, TaskStatus } from "../types.js";
 
@@ -47,7 +48,7 @@ export function filterTasks(tasks: RelayTaskListItem[], filters: BacklogFilters,
     if (filters.assignment === "unassigned" && assigned) return false;
     if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
     if (query) {
-      const haystack = `${task.title} ${task.description} ${task.id}`.toLowerCase();
+      const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     if (filters.due === "overdue" && (!task.dueDate || task.dueDate >= today || task.status === "done")) return false;

@@ -457,6 +457,12 @@
   white-space: nowrap;
 }
 
+/* The row is the button, so the ref rides inside it as a label, not a link. */
+.project-dashboard-attention-ref {
+  margin-inline-end: var(--sp-2);
+  color: var(--ink-3);
+}
+
 .project-dashboard-attention-reason {
   grid-area: reason;
   overflow: hidden;

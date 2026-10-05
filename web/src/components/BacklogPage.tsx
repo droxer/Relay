@@ -428,7 +428,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
           deleting={deleting}
           initialFocus={assignmentFocus ? "assignment" : "title"}
           title={form.id ? t("backlog.edit_task") : t("backlog.new_task")}
-          subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("backlog.new_task_id")}
+          subtitle={form.id ? taskRef({ id: form.id, number: form.number }) : t("backlog.new_task_id")}
           onClose={() => { void closeTaskForm(); }}
           onClosed={releaseTaskForm}
           onChange={(next) => {

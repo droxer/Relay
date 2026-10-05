@@ -14,7 +14,7 @@ import {
 import { dueTone, type BacklogSortKey } from "../../lib/backlog";
 import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
 import { pathForAppState } from "../../lib/appRoute";
-import { taskRef } from "../../lib/taskRef";
+import { TaskRefLink } from "./TaskRefLink";
 
 export function hrefForTaskRecord(taskId: string): string {
   return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
@@ -93,7 +93,9 @@ export function BacklogTaskCard({
           onCheckedChange={onToggleSelect}
         />
         <div className="backlog-card-body">
-          <span className="code task-card-id" translate="no">{taskRef(task.id)}</span>
+          <span className="code task-card-id">
+            <TaskRefLink task={task} href={hrefForTaskRecord(task.id)} onOpen={onOpen} />
+          </span>
           <a
           className="backlog-task-title"
           href={hrefForTaskRecord(task.id)}
@@ -256,7 +258,9 @@ export function BacklogTaskList({
       id: "issue-id",
       meta: { headClass: "task-col-ref", cellClass: "code task-col-ref" } satisfies ColumnChrome,
       header: () => <BacklogCells.Read>{(s) => s.t("backlog.col_ref")}</BacklogCells.Read>,
-      cell: ({ row }) => taskRef(row.original.id),
+      cell: ({ row }) => <BacklogCells.Read>{(s) => (
+        <TaskRefLink task={row.original} href={hrefForTaskRecord(row.original.id)} onOpen={() => s.onOpenTask(row.original.id)} />
+      )}</BacklogCells.Read>,
     },
     {
       id: "title",

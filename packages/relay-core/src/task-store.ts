@@ -66,6 +66,11 @@ export interface RelayTask {
   blockerOwnerEmployeeId?: string;
   executionOwner?: { requestId: string; revision: number };
   id: string;
+  /** Human-facing sequence number, counted per scope: a project's issues, an
+   * employee's other issues, or an employee's automations. */
+  number?: number;
+  /** The counter `number` was drawn from, e.g. `project:<id>`. */
+  numberScope?: string;
   title: string;
   description: string;
   priority: TaskPriority;

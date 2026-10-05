@@ -36,7 +36,13 @@ vi.mock("../src/components/task-record/TaskRecordView", () => ({ TaskRecordView:
   : <div>Full page record</div> }));
 
 const projects = [{ id: "p", name: "Launch" }, { id: "q", name: "Support" }, { id: "a", name: "Archive", archivedAt: "today" }] as ProjectRecord[];
-const task = (id: string, projectId: string, status = "backlog") => ({ id, title: id, projectId, status, priority: "normal", description: "", ownerEmployeeId: "u", linkedSessionIds: [], createdAt: "2026-09-01", updatedAt: "2026-09-01" }) as RelayTaskListItem;
+/* Real tasks always carry a number; without one the ref falls back to the id,
+   which these fixtures reuse as the title. */
+let nextNumber = 0;
+/* Each row links its ref (#n) and its title to the record; these assertions
+   are about which rows show, so they read the title links. */
+const titleLinks = (links: HTMLElement[]) => links.filter((link) => !link.classList.contains("task-ref-link"));
+const task = (id: string, projectId: string, status = "backlog") => ({ id, number: ++nextNumber, title: id, projectId, status, priority: "normal", description: "", ownerEmployeeId: "u", linkedSessionIds: [], createdAt: "2026-09-01", updatedAt: "2026-09-01" }) as RelayTaskListItem;
 const tasks = [task("Ship", "p"), task("Review", "p", "review"), task("Answer", "q"), task("Old", "a")];
 function Workspace({ initialRecord = null, work = tasks, projectsStatus = "ready" }: { projectsStatus?: "ready" | "error" | "loading"; initialRecord?: string | null; work?: RelayTaskListItem[] }) {
   const [record, setRecord] = useState(initialRecord);
@@ -56,7 +62,7 @@ it("shows a table grouped into project bands with queue navigation", () => {
   expect(within(rows).getByRole("link", { name: "Ship" })).toBeTruthy();
   expect(within(rows).getByRole("link", { name: "Answer" })).toBeTruthy();
   expect(within(rows).getByRole("link", { name: "Review" })).toBeTruthy();
-  expect(within(rows).getAllByRole("link").map((link) => link.textContent)).toEqual(["Review", "Ship", "Answer"]);
+  expect(titleLinks(within(rows).getAllByRole("link")).map((link) => link.textContent)).toEqual(["Review", "Ship", "Answer"]);
   expect(within(board).queryByRole("region", { name: "backlog.statuses.backlog" })).toBeNull();
   expect(within(board).queryByRole("region", { name: "backlog.statuses.review" })).toBeNull();
   expect(within(board).queryByRole("link", { name: "Old" })).toBeNull();
@@ -86,7 +92,7 @@ it("paginates the flat list and selects only the tasks visible on the current pa
   window.history.replaceState({}, "", "/issues?page=2");
   show(undefined, work);
   const board = screen.getByRole("region", { name: "issues.title" });
-  expect(within(board).getAllByRole("link")).toHaveLength(5);
+  expect(titleLinks(within(board).getAllByRole("link"))).toHaveLength(5);
   fireEvent.click(within(board).getByRole("checkbox", { name: "issues.select_all" }));
   expect(within(board).getAllByRole("checkbox", { checked: true })).toHaveLength(6);
   expect(within(board).getByRole("table", { name: "issues.title" })).toBeTruthy();
@@ -157,14 +163,14 @@ it("offers every task filter in the chip bar and applies a chosen one to the lis
   expect(screen.getByRole("textbox", { name: "backlog.assignee_filter" })).toBeTruthy();
   fireEvent.change(screen.getByRole("combobox", { name: "backlog.assignment_filter" }), { target: { value: "unassigned" } });
   const rows = screen.getByRole("table", { name: "issues.title" });
-  expect(within(rows).getAllByRole("link").map((link) => link.textContent)).toEqual(["Unassigned"]);
+  expect(titleLinks(within(rows).getAllByRole("link")).map((link) => link.textContent)).toEqual(["Unassigned"]);
   expect(new URL(window.location.href).searchParams.get("assignment")).toBe("unassigned");
 });
 it("restores combined team and assignment filters from the URL", () => {
   window.history.replaceState({}, "", "/issues?team=team-a&assignment=assigned");
   show(undefined, [task("Unassigned", "p"), { ...task("Team A", "p"), assignedTeamId: "team-a" },
     { ...task("Team B", "p"), assignedTeamId: "team-b" }]);
-  expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Team A"]);
+  expect(titleLinks(screen.getAllByRole("link")).map((link) => link.textContent)).toEqual(["Team A"]);
 });
 it("draws a filter restored from the URL as a chip, and removing it clears the URL", () => {
   window.history.replaceState({}, "", "/issues?priority=high");
