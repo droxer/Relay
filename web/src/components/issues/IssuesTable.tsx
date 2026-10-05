@@ -16,7 +16,7 @@ import { hrefForTaskRecord } from "../task-board/BacklogRecords";
 import { dueTone } from "../../lib/backlog";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import { issueNeedsProject, NO_GROUP, type IssueGroup, type IssueGroupBy, type IssueSortKey } from "../../lib/issueQueues";
-import { taskRef } from "../../lib/taskRef";
+import { TaskRefLink } from "../task-board/TaskRefLink";
 import type { RelayTaskListItem, TaskStatus } from "../../types";
 
 /** What a row needs beyond the task itself, resolved by the page per record. */
@@ -140,7 +140,9 @@ export function IssuesTable({
                     onCheckedChange={() => onToggleSelect(task.id)}
                   />
                 </TableCell>
-                <TableCell className="code task-col-ref backlog-row-ref" translate="no">{taskRef(task.id)}</TableCell>
+                <TableCell className="code task-col-ref backlog-row-ref">
+                  <TaskRefLink task={task} href={hrefForTaskRecord(task.id)} onOpen={() => onOpenIssue(task.id)} />
+                </TableCell>
                 <TableCell className="task-col-title">
                   <div className="backlog-row-lead-main">
                     <a className="backlog-row-title" href={hrefForTaskRecord(task.id)} onClick={(event) => openIssue(event, task.id)}>

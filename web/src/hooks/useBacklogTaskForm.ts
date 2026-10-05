@@ -60,6 +60,7 @@ export function useBacklogTaskForm({
     openForm({
       variant: "backlog",
       id: task.id,
+      number: task.number,
       projectId: task.projectId,
       sourceRoutineId: task.sourceRoutineId,
       title: task.title,

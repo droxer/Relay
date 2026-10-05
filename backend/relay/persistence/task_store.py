@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date as _date
+from functools import partial
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
@@ -69,6 +70,7 @@ from .store_common import (
     metadata as shared_metadata,
 )
 from .task_execution import prepare_execution_events
+from .task_numbering import number_task_events
 from .task_lifecycle import (
     check_wip_admission,
     flow_scope,
@@ -380,7 +382,9 @@ class LocalTaskStore:
             task_id = new_database_id()
             self._task_dir(task_id).mkdir(parents=True, exist_ok=True)
             logger.debug("Creating task", task_id=task_id, title=payload.get("title"))
-            events = task_creation_events(task_id, payload)
+            events = number_task_events(
+                task_creation_events(task_id, payload), self._next_task_number
+            )
             task = materialize_task_events(events)
             self._events_path(task_id).write_text(
                 "".join(
@@ -414,6 +418,7 @@ class LocalTaskStore:
             ):
                 return current
             validate_project_move_events(current, new_events)
+            new_events = number_task_events(new_events, self._next_task_number)
             # Validate immutable facts before writing the authoritative log.
             task = materialize_task_events([*current.get("events", []), *new_events])
             if needs_wip_admission(current, task):
@@ -718,6 +723,9 @@ class LocalTaskStore:
             ):
                 return None
             occurrence_events = routine_occurrence_events(routine, agent)
+            occurrence_events = number_task_events(
+                occurrence_events, self._next_task_number
+            )
             occurrence = materialize_task_events(occurrence_events)
             self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
             self._events_path(occurrence["id"]).write_text(
@@ -772,6 +780,9 @@ class LocalTaskStore:
             occurrence_events = routine_occurrence_events(
                 routine, agent, scheduled_for=scheduled_for, fired_by="manual"
             )
+            occurrence_events = number_task_events(
+                occurrence_events, self._next_task_number
+            )
             occurrence = materialize_task_events(occurrence_events)
             self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
             self._events_path(occurrence["id"]).write_text(
@@ -814,6 +825,9 @@ class LocalTaskStore:
                 routine.get("assignedAgent"),
                 scheduled_for=run_date,
                 trigger={"kind": trigger_kind, "depth": depth, "context": context, "summary": summary},
+            )
+            occurrence_events = number_task_events(
+                occurrence_events, self._next_task_number
             )
             occurrence = materialize_task_events(occurrence_events)
             self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
@@ -935,6 +949,15 @@ class LocalTaskStore:
             execution_owner=execution_owner,
         )
 
+    def _next_task_number(self, scope: str) -> int:
+        # A counter, not max(live numbers): a number a task moved away from
+        # stays spent.
+        path = self.root_dir / "task-numbers.json"
+        counters = _read_json(path) if path.exists() else {}
+        number = int(counters.get(scope) or 0) + 1
+        _write_json(path, {**counters, scope: number})
+        return number
+
     def _task_dir(self, task_id: str) -> Path:
         return self.tasks_dir / Path(task_id).name
 
@@ -998,12 +1021,15 @@ class DatabaseTaskStore:
         Column("routine_next_run_date", Date, nullable=True),
         Column("routine_enabled", Boolean, nullable=False, default=False),
         Column("routine_trigger_kind", Text, nullable=True),
+        Column("number_scope", Text, nullable=True),
+        Column("number", Integer, nullable=True),
         Column("dispatch_failure_count", Integer, nullable=False, default=0),
         Column("dispatch_next_attempt_at", DateTime(timezone=True), nullable=True),
         Column("snapshot", json_type(), nullable=False),
         Column("version", BigInteger, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
+        UniqueConstraint("number_scope", "number", name="uq_tasks_number_scope_number"),
         Index("ix_tasks_created_at", "created_at"),
         Index("ix_tasks_updated_at", "updated_at"),
         Index("ix_tasks_status", "status"),
@@ -1050,6 +1076,12 @@ class DatabaseTaskStore:
         Index("ix_task_events_timestamp", "timestamp"),
         Index("ix_task_events_task_type_sequence", "task_id", "type", "sequence"),
     )
+    number_counters = Table(
+        "task_number_counters",
+        metadata,
+        Column("scope", Text, primary_key=True),
+        Column("last_number", Integer, nullable=False),
+    )
     task_sessions = Table(
         "task_sessions",
         metadata,
@@ -1076,7 +1108,7 @@ class DatabaseTaskStore:
 
     def verify_schema(self) -> None:
         schema = inspect(self.engine)
-        required_tables = {"tasks", "task_events", "task_sessions"}
+        required_tables = {"tasks", "task_events", "task_sessions", "task_number_counters"}
         missing = required_tables.difference(schema.get_table_names())
         if missing:
             raise RuntimeError(
@@ -1084,7 +1116,7 @@ class DatabaseTaskStore:
             )
         required_columns = {
             table.name: set(table.c.keys())
-            for table in (self.tasks, self.events, self.task_sessions)
+            for table in (self.tasks, self.events, self.task_sessions, self.number_counters)
         }
         for table_name, expected in required_columns.items():
             actual = {column["name"] for column in schema.get_columns(table_name)}
@@ -1114,13 +1146,48 @@ class DatabaseTaskStore:
                 )
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
+        for attempt in range(3):
+            try:
+                return self._create_task_once(payload)
+            except IntegrityError:
+                # A concurrent create took this scope's next number.
+                if attempt == 2:
+                    raise
+                time.sleep(0.01 * (attempt + 1))
+        raise RuntimeError("unreachable")
+
+    def _next_task_number(self, conn: Any, scope: str) -> int:
+        if self.engine.dialect.name == "postgresql":
+            conn.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 4127730619))"),
+                {"scope": scope},
+            )
+        # A counter, not max(live numbers): a number a task moved away from
+        # stays spent.
+        number = conn.scalar(
+            update(self.number_counters)
+            .where(self.number_counters.c.scope == scope)
+            .values(last_number=self.number_counters.c.last_number + 1)
+            .returning(self.number_counters.c.last_number)
+        )
+        if number is None:
+            number = 1
+            conn.execute(
+                insert(self.number_counters).values(scope=scope, last_number=number)
+            )
+        return int(number)
+
+    def _create_task_once(self, payload: dict[str, Any]) -> dict[str, Any]:
         task_id = new_database_id()
         logger.debug(
             "Creating database task", task_id=task_id, title=payload.get("title")
         )
-        events = task_creation_events(task_id, payload)
-        task = materialize_task_events(events)
         with store_transaction(self.engine) as conn:
+            events = number_task_events(
+                task_creation_events(task_id, payload),
+                partial(self._next_task_number, conn),
+            )
+            task = materialize_task_events(events)
             task_row = task_to_row(task, version=len(events))
             conn.execute(insert(self.tasks).values(**task_row))
             for sequence, event in enumerate(events):
@@ -1216,6 +1283,7 @@ class DatabaseTaskStore:
             ):
                 return current
             validate_project_move_events(current, events)
+            events = number_task_events(events, partial(self._next_task_number, conn))
             task = apply_task_events(current, events, version=sequence)
             if needs_wip_admission(current, task):
                 if self.engine.dialect.name == "postgresql":
@@ -1831,6 +1899,9 @@ class DatabaseTaskStore:
                 return None
 
             occurrence_events = routine_occurrence_events(routine, agent)
+            occurrence_events = number_task_events(
+                occurrence_events, partial(self._next_task_number, conn)
+            )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
             conn.execute(insert(self.tasks).values(**occurrence_row))
@@ -1924,6 +1995,9 @@ class DatabaseTaskStore:
             occurrence_events = routine_occurrence_events(
                 routine, agent, scheduled_for=scheduled_for, fired_by="manual"
             )
+            occurrence_events = number_task_events(
+                occurrence_events, partial(self._next_task_number, conn)
+            )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
             conn.execute(insert(self.tasks).values(**occurrence_row))
@@ -1992,6 +2066,9 @@ class DatabaseTaskStore:
                 routine.get("assignedAgent"),
                 scheduled_for=run_date,
                 trigger={"kind": trigger_kind, "depth": depth, "context": context, "summary": summary},
+            )
+            occurrence_events = number_task_events(
+                occurrence_events, partial(self._next_task_number, conn)
             )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
@@ -2247,6 +2324,8 @@ def task_to_row(
         "routine_next_run_date": _parse_date(task.get("routineNextRunDate")),
         "routine_enabled": bool(task.get("routineEnabled")),
         "routine_trigger_kind": trigger_kind(task) if task.get("isRoutine") else None,
+        "number_scope": task.get("numberScope"),
+        "number": task.get("number"),
         "dispatch_failure_count": int(
             (task.get("dispatchRetry") or {}).get("failureCount") or 0
         ),

@@ -58,7 +58,7 @@
    lengths, not scale steps: the design grid bans arbitrary bracket values in
    component classes, so the tracks live here where column geometry always
    lived. */
-.task-col-ref { width: 190px; min-width: 190px; overflow-wrap: anywhere; }
+.task-col-ref { width: 96px; min-width: 96px; white-space: nowrap; }
 .task-col-priority { width: 104px; }
 .task-col-due { width: 150px; }
 .task-col-assignee { width: 172px; }
@@ -128,6 +128,15 @@
 }
 
 .backlog-row-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* A task's ref (#12, AUTO-3) opens its record, like the title beside it. It
+   keeps the quiet ink of the cell it sits in until pointed at. */
+.task-ref-link { color: inherit; }
+.task-ref-link:hover {
+  color: var(--ink-1);
   text-decoration: underline;
   text-underline-offset: 2px;
 }

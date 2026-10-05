@@ -533,7 +533,7 @@
       "project_set": "已移入项目",
       "project_set_to": "已移入 {{name}}"
     },
-    "col_ref": "议题 ID",
+    "col_ref": "编号",
     "add_due": "设置截止日期",
     "runs": {
       "title": "运行",

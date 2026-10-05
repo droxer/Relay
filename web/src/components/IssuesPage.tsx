@@ -389,7 +389,7 @@ export function IssuesPage({
           deleting={deleting}
           initialFocus={assignmentFocus ? "assignment" : "title"}
           title={form.id ? t("issues.edit_issue") : t("issues.new_issue")}
-          subtitle={form.id ? `${t("backlog.col_ref")} ${taskRef(form.id)}` : t("backlog.new_task_id")}
+          subtitle={form.id ? taskRef({ id: form.id, number: form.number }) : t("backlog.new_task_id")}
           onClose={() => { void requestClose(); }}
           onClosed={release}
           onChange={(next) => { if (next.variant === "backlog") setForm(next); }}

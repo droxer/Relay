@@ -21,7 +21,7 @@ import { TaskSelectCheckbox } from "./TaskSelection";
 import { formatNextRunDate } from "./RoutineChrome";
 import { routineDueTone, type RoutineState } from "../../lib/routine";
 import { pathForAppState } from "../../lib/appRoute";
-import { taskRef } from "../../lib/taskRef";
+import { TaskRefLink } from "./TaskRefLink";
 import { TaskDueCell } from "./TaskDueCell";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import type { RelayTaskListItem } from "../../types";
@@ -235,7 +235,9 @@ export function RoutineTable({
         id: "ref",
         meta: { headClass: "task-col-ref", cellClass: "code task-col-ref" } satisfies ColumnChrome,
         header: () => <RoutineCells.Read>{(s) => s.t("backlog.col_ref")}</RoutineCells.Read>,
-        cell: ({ row }) => taskRef(row.original.id),
+        cell: ({ row }) => <RoutineCells.Read>{(s) => (
+          <TaskRefLink task={row.original} href={hrefForRoutineRecord(row.original.id)} onOpen={() => s.handlersFor(row.original).onOpen()} />
+        )}</RoutineCells.Read>,
       },
       {
         id: "title",
