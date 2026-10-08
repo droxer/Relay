@@ -56,7 +56,7 @@ export function NodeIdentityCell({
       </span>
       <span className="adm-node-row-identity">
         <span className="adm-node-row-nameline">
-          <span className="adm-node-card-name" translate="no">
+          <span className="adm-node-card-name" translate="no" title={nodeName}>
             {nodeName}
           </span>
           <NodePresence node={node} t={t} withLabel />

@@ -607,7 +607,15 @@
     "error_review": "Start work before sending this issue to review.",
     "error_accept": "Review this issue before accepting it.",
     "error_backlog": "Started work stays in progress. Queue more work to continue it.",
-    "error_policy": "The acceptance policy cannot change after work starts."
+    "error_policy": "The acceptance policy cannot change after work starts.",
+    "inline": {
+      "status_label": "Status: {{status}}. Change status",
+      "priority_label": "Priority: {{priority}}. Change priority",
+      "due_label": "Due {{date}}. Change due date",
+      "due_empty": "Set due date",
+      "clear_due": "Clear due date",
+      "assignee_label": "Assignee: {{name}}. Change assignee"
+    }
   },
   "workspace": {
     "title": "Workspace",

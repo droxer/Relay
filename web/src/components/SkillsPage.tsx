@@ -24,6 +24,7 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { compactDate } from "../lib/workspaceFormat";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
+import { useDialogs } from "@/components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
 import { useKeyChange } from "../hooks/useKeyChange";
 
@@ -69,6 +70,7 @@ async function encodeFiles(list: FileList): Promise<SkillFileInput[]> {
 
 export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
   const { t, i18n } = useTranslation();
+  const { confirm } = useDialogs();
   const queryClient = useQueryClient();
   const drawerId = useId();
   const skillsQuery = useSkills();
@@ -212,7 +214,13 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
     }
   }
   async function remove() {
-    if (!skill || !window.confirm(t("skills.delete_confirm", { name: skill.displayName }))) return;
+    if (!skill) return;
+    const confirmed = await confirm({
+      title: t("skills.delete_confirm", { name: skill.displayName }),
+      confirmLabel: t("skills.delete_skill"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
       await deleteSkill(skill.id);

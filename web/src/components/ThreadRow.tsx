@@ -212,7 +212,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
                 filter to ask the question for you. */}
             <StateMark {...PIP[pipTone]} />
             <span className="conversation-name">
-              <strong>{label}</strong>
+              <strong title={label}>{label}</strong>
               {/* The offline badge rides the title in both layouts: it is a
                   property of the thread itself, and the name line survives
                   the hover swap that hides the timestamp. */}

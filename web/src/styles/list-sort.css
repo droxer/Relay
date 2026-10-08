@@ -129,7 +129,7 @@
   min-width: var(--control-h-xs);
   height: var(--control-h-xs);
   padding-inline: var(--sp-2);
-  border-radius: var(--r-full);
+  border-radius: var(--r-2);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   color: var(--ink-2);

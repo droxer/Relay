@@ -222,6 +222,61 @@ tr[data-routine-state="paused"] .backlog-row-title,
 .backlog-row:hover .backlog-due-empty { color: var(--ink-3); }
 .backlog-due-empty:hover { background: var(--control-fill-hover); color: var(--ink-1); }
 
+/* Inline property controls (InlineTaskFields): the row's own marks, made
+   pressable. At rest they read exactly as the static marks did — no border,
+   no fill — and only the hovered control takes the control fill, so a list
+   of editable rows still scans as a list, not a grid of buttons. */
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  height: var(--control-h-2xs);
+  min-width: var(--control-h-2xs);
+  padding: 0 var(--sp-1);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  white-space: nowrap;
+}
+
+.inline-field--icon { justify-content: center; padding: 0; }
+
+/* The assignee trigger wears the row's own chip, so it gives up the select's
+   chevron and stays as wide as the column allows, truncating the name. */
+.inline-field--assignee { max-width: 100%; min-width: 0; justify-content: flex-start; }
+.inline-field--assignee > svg { display: none; }
+.inline-field--static { cursor: default; }
+
+button.inline-field:hover,
+button.inline-field[aria-expanded="true"] {
+  background: var(--control-fill-hover);
+  color: var(--ink-1);
+}
+
+.inline-field.warn { color: var(--warn); }
+.inline-field.bad { color: var(--err); }
+
+/* An undated row offers its date only under the pointer or keyboard focus;
+   a touch screen has no hover to reveal it, so there it always shows. */
+.inline-field[data-empty] { color: var(--ink-4); opacity: 0; }
+.backlog-row:hover .inline-field[data-empty],
+.inline-field[data-empty]:focus-visible,
+.inline-field[data-empty][aria-expanded="true"] { opacity: 1; }
+@media (hover: none) {
+  .inline-field[data-empty] { opacity: 1; }
+}
+
+.backlog-row .inline-field .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }
+
+.inline-field-popover-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--sp-1);
+  border-top: 1px solid var(--line-1);
+}
+
 /* Phone widths keep what a row is FOR — select, title, who has it. At 390px
    the desktop track set left the title ~90px between a 190px id column and
    the date, so every title cut off after a word. The id, priority and date

@@ -7,7 +7,6 @@ import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { formatRelativeTime } from "../lib/adminHelpers";
 import type { ProjectRecord } from "../types";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import {
@@ -156,25 +155,24 @@ export function ProjectSettingsPanel({
               setNameError(null);
             }}
           />
-          {/* Fixed at creation: shown for reference, never edited. */}
+          {/* Fixed at creation: a spec well between the editable fields —
+              reference facts, never inputs. */}
           <dl className="project-settings-facts">
             <div className="project-settings-fact">
-              <dt>{t("project.computer")}</dt>
-              <dd>
-                <Badge className="max-w-full" title={project.computerId} translate="no">
-                  <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} className="shrink-0" aria-hidden="true" />
-                  <span className="truncate">{computer.label}</span>
-                </Badge>
-              </dd>
+              <dt>
+                <NodeOwnershipIcon ownership={computer.ownership} size={ICON.xs} aria-hidden="true" />
+                {t("project.computer")}
+              </dt>
+              <dd title={project.computerId} translate="no">{computer.label}</dd>
             </div>
             {project.workspaceSubpath ? (
               <div className="project-settings-fact">
-                <dt>{t("project.shared_workspace")}</dt>
-                <dd>
-                  <Badge className="code max-w-full" title={project.workspaceSubpath} translate="no">
-                    <WorkspaceFolder size={ICON.xs} className="shrink-0" aria-hidden="true" />
-                    <span className="truncate">{project.workspaceSubpath}</span>
-                  </Badge>
+                <dt>
+                  <WorkspaceFolder size={ICON.xs} aria-hidden="true" />
+                  {t("project.shared_workspace")}
+                </dt>
+                <dd className="code" title={project.workspaceSubpath} translate="no">
+                  {project.workspaceSubpath}
                 </dd>
               </div>
             ) : null}
@@ -184,36 +182,38 @@ export function ProjectSettingsPanel({
             onChange={(description) => setDraft((current) => ({ ...current, description }))}
           />
         </fieldset>
-        {project.createdAt ? (
-          <div className="project-settings-stamps">
-            <Badge render={<time dateTime={project.createdAt} />} title={project.createdAt}>
-              <ActionCalendar size={ICON.xs} aria-hidden="true" />
-              {t("admin.v2.agent_meta_created", { time: formatRelativeTime(project.createdAt, t) })}
-            </Badge>
-            <Badge render={<time dateTime={project.updatedAt} />} title={project.updatedAt}>
-              <ActionRetry size={ICON.xs} aria-hidden="true" />
-              {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
-            </Badge>
+        {projectSave.error ? <p role="alert" className="project-settings-error text-destructive">{projectSave.error}</p> : null}
+        <footer className="project-settings-foot">
+          {project.createdAt ? (
+            <div className="project-settings-stamps">
+              <time dateTime={project.createdAt} title={project.createdAt}>
+                <ActionCalendar size={ICON.xs} aria-hidden="true" />
+                {t("admin.v2.agent_meta_created", { time: formatRelativeTime(project.createdAt, t) })}
+              </time>
+              <time dateTime={project.updatedAt} title={project.updatedAt}>
+                <ActionRetry size={ICON.xs} aria-hidden="true" />
+                {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
+              </time>
+            </div>
+          ) : <span />}
+          <div className="project-settings-actions">
+            <Button type="button" variant="ghost" disabled={!dirty || busy} onClick={() => adopt(project)}>
+              {t("unsaved.confirm")}
+            </Button>
+            <Button type="submit" disabled={!dirty || busy || archived} loading={projectSave.pending}>
+              {t("project.save")}
+            </Button>
           </div>
-        ) : null}
-        {projectSave.error ? <p role="alert" className="text-destructive">{projectSave.error}</p> : null}
-        <div className="project-settings-actions">
-          <Button type="button" variant="ghost" disabled={!dirty || busy} onClick={() => adopt(project)}>
-            {t("unsaved.confirm")}
-          </Button>
-          <Button type="submit" disabled={!dirty || busy || archived} loading={projectSave.pending}>
-            {t("project.save")}
-          </Button>
-        </div>
+        </footer>
       </form>
 
-      <section className="project-settings-section" aria-labelledby="project-settings-danger">
+      <section className="project-settings-section project-settings-section--danger" aria-labelledby="project-settings-danger">
         <header className="project-settings-head">
           <h2 id="project-settings-danger" className="workspace-dossier-section-title">
             {t("admin.v2.danger_zone")}
           </h2>
         </header>
-        <div className="project-settings-danger">
+        <div className="project-settings-danger-rows">
           <div className="project-settings-danger-row">
             <div className="project-settings-danger-copy">
               <strong>{t("project.archive")}</strong>

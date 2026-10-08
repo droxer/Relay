@@ -62,7 +62,7 @@ it("has no General tab; a retired ?tab=general link lands on the Dashboard", () 
   window.history.replaceState({}, "", "/projects/p?tab=general");
   renderPage(project());
   expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-    "project.dashboard_tab", "project.members_tab", "project.tasks_tab", "workspace.tab_workspace", "project.settings_tab",
+    "project.dashboard_tab", "project.tasks_tab", "workspace.tab_workspace", "project.members_tab", "project.settings_tab",
   ]);
   expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
 });

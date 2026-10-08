@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { SkillsPage } from "../src/components/SkillsPage";
+import { DialogProvider } from "../src/components/ui/DialogProvider";
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => ({ "skills.publish_first": "Publish your first skill", "skills.publish_title": "Publish a skill", "skills.close": "Close", "skills.author": "Author", "skills.upload_bundle": "Upload bundle", "skills.github": "GitHub", "skills.skill_name": "Skill name", "skills.namespace": "Namespace", "skills.description": "Description", "skills.instructions": "Instructions", "skills.publish": "Publish", "skills.cancel": "Cancel", "skills.required": "required", "skills.optional": "optional" }[key] ?? key), i18n: { language: "en" } }) }));
 
 const { createSkill } = vi.hoisted(() => ({ createSkill: vi.fn(async (input: any) => ({ id: "new-skill", ...input })) }));
@@ -28,7 +29,7 @@ it.each([
   ["too-many-files", () => Array.from({ length: 301 }, (_, i) => bundleFile(i ? `${i}.txt` : "SKILL.md"))],
 ] as const)("rejects %s before reading or publishing files", async (code, makeFiles) => {
   const user = userEvent.setup();
-  render(<QueryClientProvider client={new QueryClient()}><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></QueryClientProvider>);
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider></QueryClientProvider>);
   await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
   const files = makeFiles();
   await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, files);
@@ -40,7 +41,7 @@ it.each([
 
 it("clears a previously valid upload when replacement files cannot be read", async () => {
   const user = userEvent.setup();
-  render(<QueryClientProvider client={new QueryClient()}><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></QueryClientProvider>);
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider></QueryClientProvider>);
   await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
   await user.type(screen.getByLabelText(/^Skill name/), "release-notes");
   const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -55,7 +56,7 @@ it("clears a previously valid upload when replacement files cannot be read", asy
 
 it("ignores uploads finishing after the publish drawer is closed", async () => {
   const user = userEvent.setup();
-  render(<QueryClientProvider client={new QueryClient()}><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></QueryClientProvider>);
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider></QueryClientProvider>);
   await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
   let finish!: (bytes: ArrayBuffer) => void;
   const file = bundleFile();
@@ -70,7 +71,7 @@ it("ignores uploads finishing after the publish drawer is closed", async () => {
 
 it("publishes directory uploads relative to the selected bundle root", async () => {
   const user = userEvent.setup();
-  render(<QueryClientProvider client={new QueryClient()}><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></QueryClientProvider>);
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider></QueryClientProvider>);
   await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
   await user.click(screen.getByRole("button", { name: "Upload bundle" }));
   await user.type(screen.getByLabelText(/^Skill name/), "release-notes");
@@ -88,7 +89,7 @@ it("publishes directory uploads relative to the selected bundle root", async () 
 
 it("defaults to upload and offers no authoring mode", async () => {
   const user = userEvent.setup();
-  render(<QueryClientProvider client={new QueryClient()}><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></QueryClientProvider>);
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider></QueryClientProvider>);
   await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
   expect(screen.queryByRole("button", { name: "Author" })).toBeNull();
   expect(screen.queryByLabelText(/^Instructions/)).toBeNull();
@@ -98,7 +99,7 @@ it("defaults to upload and offers no authoring mode", async () => {
 
 it("marks which publish fields are required", async () => {
   const user = userEvent.setup();
-  render(<QueryClientProvider client={new QueryClient()}><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></QueryClientProvider>);
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider></QueryClientProvider>);
   await user.click(screen.getByRole("button", { name: "Publish your first skill" }));
   const field = (label: string) =>
     screen.getByLabelText(new RegExp(`^${label}`)).closest('[data-slot="field"]') as HTMLElement;

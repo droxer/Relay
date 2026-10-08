@@ -15,18 +15,19 @@ import { dueTone, type BacklogSortKey } from "../../lib/backlog";
 import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
 import { pathForAppState } from "../../lib/appRoute";
 import { TaskRefLink } from "./TaskRefLink";
+import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "./InlineTaskFields";
+import type { AgentTeam, EmployeeAgent, ProjectRecord } from "../../types";
+import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 
 export function hrefForTaskRecord(taskId: string): string {
   return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
 }
 import { TaskAssignee } from "../TaskAssignee";
-import { StateMark } from "../StateMark";
 import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { TaskSelectCheckbox } from "./TaskSelection";
-import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
 import { formatDueDate } from "./BacklogChrome";
 import { useManualSortTable } from "../../hooks/useManualSortTable";
 import { createCellState } from "../../lib/cellState";
@@ -99,6 +100,7 @@ export function BacklogTaskCard({
           <a
           className="backlog-task-title"
           href={hrefForTaskRecord(task.id)}
+          title={task.title}
           onClick={(event) => {
             if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
             event.preventDefault();
@@ -133,6 +135,8 @@ type ColumnChrome = { headClass?: string; cellClass?: string };
 /** What a row needs beyond the task itself, resolved by the page per record. */
 interface BacklogRowContext {
   projectName?: string;
+  /** The task's project — its computer decides who may take the task. */
+  project?: ProjectRecord | null;
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;
@@ -146,7 +150,17 @@ interface BacklogCellState {
   onToggleSelect: (taskId: string) => void;
   contextFor: (task: RelayTaskListItem) => BacklogRowContext;
   onOpenTask: (taskId: string) => void;
+  edits: InlineTaskEdits | null;
+  roster: TaskRoster;
 }
+
+/** The agents and teams a row's assignee picker chooses from. */
+export interface TaskRoster {
+  agents: readonly EmployeeAgent[];
+  teams: readonly AgentTeam[];
+}
+
+const EMPTY_ROSTER: TaskRoster = { agents: [], teams: [] };
 
 const BacklogCells = createCellState<BacklogCellState>("BacklogTaskList");
 
@@ -171,6 +185,8 @@ export function BacklogTaskList({
   onToggleSelect,
   contextFor,
   onOpenTask,
+  edits = null,
+  roster = EMPTY_ROSTER,
 }: {
   /** The current page of records, in display order. */
   tasks: RelayTaskListItem[];
@@ -182,13 +198,16 @@ export function BacklogTaskList({
   contextFor: (task: RelayTaskListItem) => BacklogRowContext;
   /** Opens the task's record. The title is a destination now, not a form. */
   onOpenTask: (taskId: string) => void;
+  /** Inline property edits; `null` renders the row's marks read-only. */
+  edits?: InlineTaskEdits | null;
+  roster?: TaskRoster;
 }) {
   const { t } = useTranslation();
   // Values that change under the stable column defs; cells read them
   // through BacklogCells (see lib/cellState).
   const cellState = useMemo<BacklogCellState>(
-    () => ({ t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask }),
-    [t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask],
+    () => ({ t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask, edits, roster }),
+    [t, onSort, selectAll, selectedIds, onToggleSelect, contextFor, onOpenTask, edits, roster],
   );
   /* TanStack's controlled sorting state is a projection of the page's
      URL-backed SortState; nothing inside the table writes it back (header
@@ -235,24 +254,30 @@ export function BacklogTaskList({
       }}</BacklogCells.Read>,
     },
     {
+      id: "priority",
+      meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
+      header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.priority")}</span>}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => (
+        <InlinePriority
+          priority={row.original.priority}
+          readOnly={!s.edits}
+          onChange={(priority) => s.edits?.changePriority(row.original, priority)}
+        />
+      )}</BacklogCells.Read>,
+    },
+    {
       id: "status",
       meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
       /* Named, not blank: a columnheader with no accessible name leaves the
          cells under it reading as a column of nothing. */
       header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.status")}</span>}</BacklogCells.Read>,
-      /* The dot-plus-sr-only grammar AgentStateBadge uses: the shape carries
-         a word for anyone who cannot see it. */
-      cell: ({ row }) => <BacklogCells.Read>{(s) => {
-        const label = s.t(`backlog.statuses.${row.original.status}`);
-        /* The title gives a pointer the word the sr-only span gives a screen
-           reader — the dot alone is shape and colour, not a name. */
-        return (
-          <span title={label}>
-            <StateMark shape={TASK_STATUS_SHAPE[row.original.status]} />
-            <span className="sr-only">{label}</span>
-          </span>
-        );
-      }}</BacklogCells.Read>,
+      cell: ({ row }) => <BacklogCells.Read>{(s) => (
+        <InlineStatus
+          task={row.original}
+          readOnly={!s.edits}
+          onChange={(status) => s.edits?.changeStatus(row.original, status)}
+        />
+      )}</BacklogCells.Read>,
     },
     {
       id: "issue-id",
@@ -292,15 +317,13 @@ export function BacklogTaskList({
       id: "due",
       meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
       header: () => <BacklogCells.Read>{(s) => sortHead("due", s.t("backlog.due"))}</BacklogCells.Read>,
-      cell: ({ row }) => {
-        const task = row.original;
-        const tone = dueTone(task);
-        return (
-          <span className={cn(tone !== "neutral" && tone)} data-empty={!task.dueDate || undefined}>
-            {task.dueDate ? formatDueDate(task.dueDate) : "—"}
-          </span>
-        );
-      },
+      cell: ({ row }) => <BacklogCells.Read>{(s) => (
+        <InlineDue
+          task={row.original}
+          readOnly={!s.edits}
+          onChange={(dueDate) => s.edits?.changeDue(row.original, dueDate)}
+        />
+      )}</BacklogCells.Read>,
     },
     {
       id: "assignee",
@@ -310,11 +333,14 @@ export function BacklogTaskList({
         const task = row.original;
         const context = s.contextFor(task);
         return (
-          <TaskAssignee
+          <InlineAssignee
             task={task}
-            ready={context.ready}
-            agentDisplayName={context.agentDisplayName}
-            agentImageUrl={context.agentImageUrl}
+            agents={s.roster.agents}
+            teams={s.roster.teams}
+            project={context.project}
+            display={{ name: context.agentDisplayName, imageUrl: context.agentImageUrl, ready: context.ready }}
+            readOnly={!s.edits}
+            onChange={(change) => s.edits?.changeAssignment(task, change)}
           />
         );
       }}</BacklogCells.Read>,

@@ -595,7 +595,15 @@
     "error_review": "请先开始工作，再将议题提交评审。",
     "error_accept": "请先评审议题，再验收。",
     "error_backlog": "已开始的议题仍属于进行中，可继续排队处理。",
-    "error_policy": "工作开始后不能更改验收策略。"
+    "error_policy": "工作开始后不能更改验收策略。",
+    "inline": {
+      "status_label": "状态：{{status}}。更改状态",
+      "priority_label": "优先级：{{priority}}。更改优先级",
+      "due_label": "截止 {{date}}。更改截止日期",
+      "due_empty": "设置截止日期",
+      "clear_due": "清除截止日期",
+      "assignee_label": "负责人：{{name}}。更改负责人"
+    }
   },
   "workspace": {
     "title": "工作区",

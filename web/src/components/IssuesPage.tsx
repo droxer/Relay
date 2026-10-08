@@ -3,6 +3,8 @@
 import { useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
+import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
+import { projectReadOnly } from "../lib/projectPage";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
@@ -102,6 +104,7 @@ export function IssuesPage({
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
   const { updateTaskMutation, deleteTasksMutation } = useRelayMutations();
+  const inlineEdits = useInlineTaskEdits();
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
 
@@ -180,8 +183,11 @@ export function IssuesPage({
 
   function rowContext(task: RelayTaskListItem): IssueRowContext {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
+    const taskProject = projects.find((project) => project.id === task.projectId) ?? null;
     return {
       projectName: task.projectId ? projectName(task.projectId) : undefined,
+      readOnly: projectReadOnly(taskProject),
+      project: taskProject,
       ready: team ? teamReady(team) : agentReadyForTask(task, nodes, logicalAgents),
       agentDisplayName: team?.name ?? taskAgentDisplayName(task, logicalAgents, teams),
       agentImageUrl: team
@@ -337,6 +343,8 @@ export function IssuesPage({
               onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
               contextFor={rowContext}
               onOpenIssue={onOpenRecord}
+              edits={inlineEdits}
+              roster={{ agents: logicalAgents, teams }}
             />
             <Pagination page={listPage} onPageChange={setPage} label={t("issues.title")} />
           </div>

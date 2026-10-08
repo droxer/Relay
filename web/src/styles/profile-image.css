@@ -103,14 +103,14 @@
 
 .profile-image-picker-action {
   position: absolute;
-  /* Corner badge: -5px lets the 25px disc straddle the tile's bottom-right
+  /* Corner badge: -5px lets the disc straddle the tile's bottom-right
      edge instead of floating inside it — the overhang is what reads as
      "attached to this image". */
   right: -5px;
   bottom: -5px;
   display: grid;
   place-items: center;
-  width: 25px;
+  width: var(--control-h-2xs);
   height: var(--control-h-2xs);
   border: 3px solid var(--surface-0);
   border-radius: var(--r-full);

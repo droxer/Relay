@@ -173,7 +173,7 @@ export const ThreadRuntimeSelect = memo(function ThreadRuntimeSelect({
               >
                 <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
                 <span className="thread-runtime-option-body">
-                  <span className="thread-runtime-option-name" translate="no">{name}</span>
+                  <span className="thread-runtime-option-name" translate="no" title={name}>{name}</span>
                   {name === node.id ? null : (
                     <span className="thread-runtime-option-meta">
                       <span className="thread-runtime-option-id code" translate="no">{node.id}</span>

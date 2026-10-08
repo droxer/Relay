@@ -6,6 +6,7 @@ import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 import { useEffect, useMemo, useState, useEffectEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
+import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
@@ -18,8 +19,7 @@ import { useLanePagination, usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { taskDropRejection } from "../lib/taskDrag";
-import { emptyBacklogForm, taskStartMutationInput } from "../lib/taskBoardForm";
+import { emptyBacklogForm } from "../lib/taskBoardForm";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
@@ -86,11 +86,8 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const { teams } = useTeams(currentUser.employeeId);
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
-  const {
-    startTaskMutation,
-    updateTaskMutation,
-    deleteTasksMutation,
-  } = useRelayMutations();
+  const { deleteTasksMutation } = useRelayMutations();
+  const inlineEdits = useInlineTaskEdits({ readOnly });
   // The filters live in the query string, so a filtered board survives
   // opening a record and coming back, and it is a link somebody can paste.
   const [filters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
@@ -118,6 +115,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
   const drawerRecordId = recordMirror.record;
   const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
+  const currentProject = projects.find((project) => project.id === projectId) ?? null;
 
   /* Sort is applied AFTER filtering, over the one list both views read — the
      board keeps its lanes and reorders WITHIN them, which is the only degree
@@ -245,26 +243,10 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
     writeViewPreference(VIEW_STORAGE_KEY, next);
   }
 
-  // The single commit path for a board drop — mouse, touch and keyboard all
-  // arrive here through the kanban's onMove.
+  // A board drop (mouse, touch, keyboard) and an inline row edit share one
+  // commit path, so they agree on which moves are allowed.
   function moveTaskToLane(task: RelayTaskListItem, status: TaskStatus) {
-    if (readOnly) return;
-    const rejection = taskDropRejection(task, status);
-    if (rejection === "needs_assignment") {
-      announce({ message: t("backlog.drop_needs_assignment"), tone: "error" });
-      return;
-    }
-    if (rejection) return;
-    if (status === "running") {
-      startTaskMutation.mutate(taskStartMutationInput(task));
-      return;
-    }
-    updateTaskMutation.mutate({ taskId: task.id, input: { status } }, {
-      onSuccess: () => announce({
-        message: t("backlog.drop_moved", { title: task.title, status: t(`backlog.statuses.${status}`) }),
-        tone: "success",
-      }),
-    });
+    inlineEdits?.changeStatus(task, status);
   }
 
   const headerActions = (
@@ -355,12 +337,15 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
             contextFor={(task) => {
               const assignment = taskAssignmentDisplay(task);
               return {
+                project: currentProject,
                 ready: assignment.ready,
                 agentDisplayName: assignment.name,
                 agentImageUrl: assignment.imageUrl,
               };
             }}
             onOpenTask={onOpenRecord}
+            edits={inlineEdits}
+            roster={{ agents: logicalAgents, teams }}
           />
           <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />
         </div>

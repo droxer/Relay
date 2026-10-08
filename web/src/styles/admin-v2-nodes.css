@@ -294,9 +294,9 @@
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 36px;
+  width: var(--control-h-sm);
   height: var(--control-h-sm);
-  border-radius: var(--r-full);
+  border-radius: var(--r-2);
   color: var(--ink-3);
   background: var(--surface-2);
   border: 0.5px solid var(--line-1);
