@@ -102,6 +102,7 @@
     "workspace_label": "Workspace",
     "manage": "Manage",
     "workforce": "Workforce",
+    "breadcrumb": "Breadcrumb",
     "backlog": "Issues",
     "routine": "Automations",
     "agents": "Agents",

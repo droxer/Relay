@@ -199,6 +199,7 @@ export function ComputerPage({
           the header demotes to the 16px pane-title rung, not the 28px
           page-title tier. */}
       <PageHeader
+        trail={[{ label: t("nav.settings") }]}
         title={t("computer.title")}
         count={t("computer.count", { count: myNodes.length })}
         titleAs="h2"

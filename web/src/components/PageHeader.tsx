@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Breadcrumb, type BreadcrumbItem } from "./Breadcrumb";
 
 export function PageHeader({
   title,
   count,
   facts,
+  trail,
   kicker,
   subtitle,
   toolbar,
@@ -18,6 +20,8 @@ export function PageHeader({
   /** Compact record facts riding the title line next to the title, for
    *  surfaces whose facts must not claim a band row above every tab. */
   facts?: ReactNode;
+  /** The title's ancestors, drawn as a location trail leading the title. */
+  trail?: BreadcrumbItem[];
   kicker?: ReactNode;
   subtitle?: ReactNode;
   toolbar?: ReactNode;
@@ -45,6 +49,7 @@ export function PageHeader({
       <div className={cn("page-header-lead", stacked && "page-header-lead--stacked")}>
         {kicker ? <span className="page-header-kicker">{kicker}</span> : null}
         <div className={cn("page-header-title-row", stacked && "page-header-title-row--wrap")}>
+          {trail?.length ? <Breadcrumb items={trail} /> : null}
           <TitleTag
             className={cn(
               "page-header-title",

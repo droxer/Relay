@@ -240,7 +240,7 @@ export function AgentsPage({
         {/* Rail title: h2 like every list rail (the rail is a sidebar, not
             the page's heading) at the shared 17px rail-title rung. */}
         <PageHeader
-          kicker={t("nav.workforce")}
+          trail={[{ label: t("nav.workforce") }]}
           title={t("agents_page.title")}
           count={t("agents_page.sub", { count: activeAgents.length })}
           titleAs="h2"

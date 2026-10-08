@@ -664,15 +664,22 @@ function componentSources(): string[] {
 }
 
 
-describe("neutral CTA palette", () => {
-  it("routes shared primary buttons through the neutral CTA palette", () => {
+describe("accent primary and neutral CTA palette", () => {
+  it("routes shared primary buttons through the cobalt accent", () => {
     const bridge = readStyle("tokens/shadcn-bridge.css");
-    assert.match(bridge, /--primary:\s*var\(--cta-fill\)/);
-    assert.match(bridge, /--primary-foreground:\s*var\(--cta-ink\)/);
-    assert.match(bridge, /--color-primary-active:\s*var\(--cta-hover\)/);
+    assert.match(bridge, /--primary:\s*var\(--action\)/);
+    assert.match(bridge, /--primary-foreground:\s*var\(--on-action\)/);
+    assert.match(bridge, /--color-primary-active:\s*var\(--action-hover\)/);
     const button = stripStyleComments(readWebSource("components/ui/button.tsx"));
     assert.match(button, /bg-primary text-primary-foreground hover:bg-primary-active/);
     assert.doesNotMatch(button, /hover:text-\(--action\)/);
+  });
+
+  it("keeps the accent primary label legible at rest and on hover", () => {
+    const ink = tokenIn(darkRegister, "--on-action");
+    for (const fill of ["--action", "--action-hover"]) {
+      assert.ok(contrast(ink, tokenIn(darkRegister, fill)) >= 4.5, `${fill} must keep its label legible`);
+    }
   });
 
   it("keeps primary labels legible in both themes at rest and on hover", () => {

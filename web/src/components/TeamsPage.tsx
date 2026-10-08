@@ -6,9 +6,11 @@ import { useTeams } from "../hooks/useTeams";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { selectedTeamForWorkspace } from "../lib/teamWorkspace";
 import { teamAvailability } from "../lib/taskAssignment";
+import { effectiveStyle } from "../lib/collaborationStyle";
 import { StatusPill, TonePill } from "./StatusPill";
-import { CollaborationStyleBadge } from "./CollaborationStyleBadge";
-import type { CurrentUser } from "../types";
+import { CollaborationStyleIcon } from "./CollaborationStyleBadge";
+import { StateMark, type StateShape, type StateTone } from "./StateMark";
+import type { CurrentUser, LogicalAgentAvailability } from "../types";
 import {
   ActionAdd,
   ICON,
@@ -22,6 +24,17 @@ import { TeamDrawer } from "./admin/TeamDrawer";
 import { TeamWorkspacePage } from "./TeamWorkspacePage";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
+
+const AVAILABILITY_PIP: Record<LogicalAgentAvailability, { tone: StateTone; shape?: StateShape }> = {
+  ready: { tone: "good" },
+  busy: { tone: "live" },
+  pending: { tone: "warn" },
+  offline: { tone: "neutral", shape: "muted" },
+};
+
+function teamPip(enabled: boolean, availability: LogicalAgentAvailability) {
+  return enabled ? AVAILABILITY_PIP[availability] : AVAILABILITY_PIP.offline;
+}
 
 export function TeamsPage({
   currentUser,
@@ -79,7 +92,7 @@ export function TeamsPage({
     >
       <div className="teams-roster">
         <PageHeader
-          kicker={t("nav.workforce")}
+          trail={[{ label: t("nav.workforce") }]}
           title={t("teams.title")}
           count={t("teams.count", { count: teams.length })}
           titleAs="h2"
@@ -151,6 +164,8 @@ export function TeamsPage({
                   ? [team.lead.displayName, supportNames].filter(Boolean).join(" · ")
                   : supportNames || t("teams.no_members");
                 const selected = team.id === selectedTeam?.id;
+                const availability = teamAvailability(team);
+                const style = effectiveStyle(team);
                 return (
                   <li
                     key={team.id}
@@ -165,26 +180,36 @@ export function TeamsPage({
                         aria-current={selected ? "page" : undefined}
                         onClick={() => onSelectTeam(team.id)}
                       >
-                        <span className="teams-list-mark" aria-hidden="true">
-                          <ProfileImage
-                            src={team.profileImageUrl}
-                            alt=""
-                            fallback={<IdentityMark kind="team" />}
-                          />
-                        </span>
+                        {/* Icon-led, like the thread and agent rails: the
+                            state pip leads the name, the style rides the meta
+                            line as a glyph, and the team's mark trails. */}
                         <span className="teams-list-identity">
-                          <span className="teams-list-title">{team.name}</span>
-                          <small className="teams-list-sub">{roster}</small>
-                          <CollaborationStyleBadge style={team.collaborationStyle} className="mt-1" />
+                          <span className="teams-list-titleline">
+                            <StateMark {...teamPip(team.enabled, availability)} />
+                            <span className="teams-list-title">{team.name}</span>
+                          </span>
+                          <span className="teams-list-sub">
+                            <span className="teams-list-style" title={t(`collab_style.${style}`)}>
+                              <CollaborationStyleIcon style={style} />
+                            </span>
+                            <span className="teams-list-roster">{roster}</span>
+                          </span>
                         </span>
                         <span className="teams-list-status">
-                          {/* "ready" is the default healthy state and stays
-                              implicit; other roster states get named. */}
+                          {/* "ready" is the default healthy state: the pip
+                              says it, so only other states get named. */}
                           {!team.enabled ? (
                             <TonePill tone="neutral" label={t("teams.disabled")} />
-                          ) : teamAvailability(team) !== "ready" ? (
-                            <StatusPill value={teamAvailability(team)} />
+                          ) : availability !== "ready" ? (
+                            <StatusPill value={availability} />
                           ) : null}
+                          <span className="teams-list-mark" aria-hidden="true">
+                            <ProfileImage
+                              src={team.profileImageUrl}
+                              alt=""
+                              fallback={<IdentityMark kind="team" />}
+                            />
+                          </span>
                         </span>
                       </Button>
                     </article>

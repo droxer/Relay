@@ -39,7 +39,7 @@
   --color-body: var(--ink-2);
   --color-muted-soft: var(--ink-4);
   --color-on-primary: var(--on-action);
-  --color-primary-active: var(--cta-hover);
+  --color-primary-active: var(--action-hover);
   --color-surface-strong: var(--surface-2);
   --color-surface-raised: var(--surface-3);
   --color-hairline: var(--line-1);
@@ -173,8 +173,10 @@
      elevation: separation comes from --shadow-2's hairline ring, never a blur. */
   --popover: var(--surface-3);
   --popover-foreground: var(--ink-1);
-  --primary: var(--cta-fill);
-  --primary-foreground: var(--cta-ink);
+  /* The primary action wears the cobalt accent — a Linear-style console
+     leads with its accent. Fill-only: see the --action proof in palette.css. */
+  --primary: var(--action);
+  --primary-foreground: var(--on-action);
   --secondary: var(--surface-2);
   --secondary-foreground: var(--ink-1);
   --muted: var(--surface-2);
