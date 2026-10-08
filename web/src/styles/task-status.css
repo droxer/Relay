@@ -126,9 +126,18 @@
 
 .priority-badge[data-priority="low"] .priority-bars > i:nth-child(-n+1),
 .priority-badge[data-priority="normal"] .priority-bars > i:nth-child(-n+2),
-.priority-badge[data-priority="high"] .priority-bars > i:nth-child(-n+3) {
+.priority-badge[data-priority="high"] .priority-bars > i:nth-child(-n+3),
+.priority-glyph[data-priority="low"] .priority-bars > i:nth-child(-n+1),
+.priority-glyph[data-priority="normal"] .priority-bars > i:nth-child(-n+2),
+.priority-glyph[data-priority="high"] .priority-bars > i:nth-child(-n+3) {
   background: var(--prio-accent);
 }
+
+/* The bars alone, for a control that names its rank in its label. Only
+   `high` takes a colour; the default and low ranks stay quiet so they do not
+   shout from every row the way the badge was taught not to. */
+.priority-glyph { --prio-accent: var(--ink-4); display: inline-flex; }
+.priority-glyph[data-priority="high"] { --prio-accent: var(--warn); }
 
 /* ── State mark — the shape half of the state vocabulary ────────────────
    Status tones stay small text/dot accents and the surfaces stay a neutral

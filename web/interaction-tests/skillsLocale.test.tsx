@@ -7,6 +7,7 @@ import { expect, it, vi } from "vitest";
 import en from "../src/i18n/locales/en/translation.json";
 import zhCN from "../src/i18n/locales/zh-CN/translation.json";
 import { SkillsPage } from "../src/components/SkillsPage";
+import { DialogProvider } from "../src/components/ui/DialogProvider";
 import { ShareSkillDrawer } from "../src/components/ShareSkillDrawer";
 import { projectMessages } from "../src/lib/projectMessages";
 
@@ -29,7 +30,7 @@ it.each([
   ["zh-CN" as const, "技能库还是空的", "发布第一个技能"],
 ])("renders the %s library workflow from the real locale resource", async (language, emptyTitle, publish) => {
   const instance = await locale(language);
-  render(providers(instance, <SkillsPage currentUser={{ employeeId: "employee-1" } as any} />));
+  render(providers(instance, <DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider>));
   expect(screen.getByRole("heading", { name: emptyTitle })).toBeTruthy();
   expect(screen.getByRole("button", { name: publish })).toBeTruthy();
   expect(screen.queryByText("Your skills library is empty")).toBeNull();

@@ -166,20 +166,36 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to create task", "errors.save_task"),
   });
 
-  // Status is applied to the cache up front so a card dragged between board
-  // lanes lands immediately instead of springing back until the PATCH returns.
-  // Only status is patched optimistically: it is a plain enum the board reads
-  // directly, whereas the drawer's other fields are normalized server-side and
-  // their latency is hidden by the drawer closing anyway.
+  // Status, priority and due date are applied to the cache up front so a drag
+  // or an inline row edit lands immediately instead of springing back until
+  // the PATCH returns. They are plain values the lists read directly; the
+  // drawer's other fields are normalized server-side and their latency is
+  // hidden by the drawer closing anyway.
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => updateTask(taskId, input),
     onMutate: async ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => {
-      const status = input.status;
-      if (!status) return { previous: undefined };
+      const { status, priority, dueDate, assignedAgentId, assignedTeamId } = input;
+      const assignmentChanged = assignedAgentId !== undefined || assignedTeamId !== undefined;
+      if (!status && !priority && dueDate === undefined && !assignmentChanged) return { previous: undefined };
       await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY });
       const previous = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY);
       queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-        (current ?? []).map((task) => (task.id === taskId ? { ...task, status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status } : task)),
+        (current ?? []).map((task) => {
+          if (task.id !== taskId) return task;
+          return {
+            ...task,
+            ...(status ? { status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status } : {}),
+            ...(priority ? { priority } : {}),
+            ...(dueDate !== undefined ? { dueDate: dueDate || undefined } : {}),
+            ...(assignmentChanged
+              ? {
+                  assignedAgentId: assignedAgentId || undefined,
+                  assignedTeamId: assignedTeamId || undefined,
+                  ...(assignedAgentId ? {} : { assignedAgent: undefined }),
+                }
+              : {}),
+          };
+        }),
       );
       return { previous };
     },

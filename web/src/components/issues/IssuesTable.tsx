@@ -6,22 +6,24 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
-import { PriorityBadge } from "../PriorityBadge";
 import { StateMark } from "../StateMark";
-import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "../task-board/TaskSelection";
 import { TASK_STATUS_SHAPE } from "../task-board/backlogVocabulary";
-import { formatDueDate } from "../task-board/BacklogChrome";
-import { hrefForTaskRecord } from "../task-board/BacklogRecords";
-import { dueTone } from "../../lib/backlog";
+import { hrefForTaskRecord, type TaskRoster } from "../task-board/BacklogRecords";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import { issueNeedsProject, NO_GROUP, type IssueGroup, type IssueGroupBy, type IssueSortKey } from "../../lib/issueQueues";
 import { TaskRefLink } from "../task-board/TaskRefLink";
-import type { RelayTaskListItem, TaskStatus } from "../../types";
+import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "../task-board/InlineTaskFields";
+import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
+import type { ProjectRecord, RelayTaskListItem, TaskStatus } from "../../types";
 
 /** What a row needs beyond the task itself, resolved by the page per record. */
 export interface IssueRowContext {
   projectName?: string;
+  /** A closed project's issue shows its properties but offers no edits. */
+  readOnly?: boolean;
+  /** The issue's project — its computer decides who may take the issue. */
+  project?: ProjectRecord | null;
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;
@@ -49,6 +51,8 @@ export function IssuesTable({
   onToggleSelect,
   contextFor,
   onOpenIssue,
+  edits = null,
+  roster = { agents: [], teams: [] },
 }: {
   /** The current page, banded. */
   groups: IssueGroup[];
@@ -62,6 +66,10 @@ export function IssuesTable({
   onToggleSelect: (taskId: string) => void;
   contextFor: (task: RelayTaskListItem) => IssueRowContext;
   onOpenIssue: (taskId: string) => void;
+  /** Inline property edits; `null` renders every row read-only. */
+  edits?: InlineTaskEdits | null;
+  /** The agents and teams a row's assignee picker chooses from. */
+  roster?: TaskRoster;
 }) {
   const { t } = useTranslation();
   const showStatus = groupBy !== "status";
@@ -122,7 +130,7 @@ export function IssuesTable({
           )}
           {group.tasks.map((task) => {
             const context = contextFor(task);
-            const tone = dueTone(task);
+            const rowEdits = context.readOnly ? null : edits;
             const intake = issueNeedsProject(task);
             return (
               <TableRow
@@ -153,10 +161,12 @@ export function IssuesTable({
                 </TableCell>
                 {showStatus ? (
                   <TableCell className="issue-col-status">
-                    <span className="issue-status">
-                      <StateMark shape={TASK_STATUS_SHAPE[task.status]} />
-                      {t(`backlog.statuses.${task.status}`)}
-                    </span>
+                    <InlineStatus
+                      task={task}
+                      labeled
+                      readOnly={!rowEdits}
+                      onChange={(status) => rowEdits?.changeStatus(task, status)}
+                    />
                   </TableCell>
                 ) : null}
                 {showProject ? (
@@ -166,19 +176,30 @@ export function IssuesTable({
                     </span>
                   </TableCell>
                 ) : null}
-                <TableCell className="task-col-priority"><PriorityBadge priority={task.priority} /></TableCell>
+                <TableCell className="task-col-priority">
+                  <InlinePriority
+                    priority={task.priority}
+                    readOnly={!rowEdits}
+                    onChange={(priority) => rowEdits?.changePriority(task, priority)}
+                  />
+                </TableCell>
                 <TableCell className="task-col-assignee">
-                  <TaskAssignee
+                  <InlineAssignee
                     task={task}
-                    ready={context.ready}
-                    agentDisplayName={context.agentDisplayName}
-                    agentImageUrl={context.agentImageUrl}
+                    agents={roster.agents}
+                    teams={roster.teams}
+                    project={context.project}
+                    display={{ name: context.agentDisplayName, imageUrl: context.agentImageUrl, ready: context.ready }}
+                    readOnly={!rowEdits}
+                    onChange={(change) => rowEdits?.changeAssignment(task, change)}
                   />
                 </TableCell>
                 <TableCell className="task-col-due">
-                  <span className={cn(tone !== "neutral" && tone)} data-empty={!task.dueDate || undefined}>
-                    {task.dueDate ? formatDueDate(task.dueDate) : "—"}
-                  </span>
+                  <InlineDue
+                    task={task}
+                    readOnly={!rowEdits}
+                    onChange={(dueDate) => rowEdits?.changeDue(task, dueDate)}
+                  />
                 </TableCell>
               </TableRow>
             );

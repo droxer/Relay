@@ -95,6 +95,7 @@ export function NodeCard({
             <span
               className={`adm-node-card-name${hasName ? "" : " code"}`}
               translate="no"
+              title={nodeName}
             >
               {nodeName}
             </span>

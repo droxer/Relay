@@ -192,7 +192,7 @@ function AttentionCard({
                 onClick={() => onOpenRecord(task.id)}
               >
                 <span className="project-dashboard-attention-dot" aria-hidden="true" />
-                <span className="project-dashboard-attention-title">
+                <span className="project-dashboard-attention-title" title={task.title}>
                   <span className="code project-dashboard-attention-ref" translate="no">{taskRef(task)}</span>
                   {task.title}
                 </span>

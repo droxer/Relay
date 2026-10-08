@@ -32,7 +32,7 @@ it("renders a table whose header and row cell counts match", () => {
   const { container } = renderList();
   const headCells = container.querySelectorAll("thead th");
   const bodyCells = container.querySelectorAll("tbody tr td");
-  expect(headCells.length).toBe(6);
+  expect(headCells.length).toBe(7);
   expect(bodyCells.length).toBe(headCells.length);
   expect(container.querySelector("td.task-col-ref")?.textContent).toBe(task.id);
 });

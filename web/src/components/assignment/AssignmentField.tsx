@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
 import {
@@ -147,6 +148,7 @@ export function AssignmentSelect({
   triggerId,
   describedBy,
   autoFocus = false,
+  inline,
 }: {
   /** `agent:<id>`, `team:<id>`, or `NO_ASSIGNMENT`. */
   value: string;
@@ -160,6 +162,9 @@ export function AssignmentSelect({
   triggerId?: string;
   describedBy?: string;
   autoFocus?: boolean;
+  /** A list row's compact trigger: the row's own assignee chip, named by
+   *  `label`, instead of the drawer's full-width field. */
+  inline?: { label: string; content: ReactNode };
 }) {
   const { t } = useTranslation();
   const selectedTab: AssignmentTab = selectedTeam ? "teams" : "agents";
@@ -188,6 +193,11 @@ export function AssignmentSelect({
         onSelect(parseTaskAssignmentValue(next));
       }}
     >
+      {inline ? (
+        <SelectTrigger className="inline-field inline-field--assignee" aria-label={inline.label}>
+          {inline.content}
+        </SelectTrigger>
+      ) : (
       <SelectTrigger
         id={triggerId}
         aria-describedby={describedBy}
@@ -203,7 +213,11 @@ export function AssignmentSelect({
           }}
         </SelectValue>
       </SelectTrigger>
+      )}
       <SelectContent
+        /* A row trigger is a chip, far narrower than the drawer's field; the
+           popup keeps the width its option rows need either way. */
+        className={inline ? "min-w-60" : undefined}
         alignItemWithTrigger={false}
         onKeyDownCapture={roster.onKeyDownCapture}
         header={roster.header}

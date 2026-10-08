@@ -130,7 +130,7 @@ export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { age
     return (
       <span className="roster-trigger">
         <TeamMark team={team} />
-        <span className="roster-trigger-name" translate="no">{team.name}</span>
+        <span className="roster-trigger-name" translate="no" title={team.name}>{team.name}</span>
       </span>
     );
   }
@@ -145,7 +145,7 @@ export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { age
           imageUrl={agent.profileImageUrl}
           name={agent.displayName}
         />
-        <span className="roster-trigger-name" translate="no">{agent.displayName}</span>
+        <span className="roster-trigger-name" translate="no" title={agent.displayName}>{agent.displayName}</span>
       </span>
     );
   }

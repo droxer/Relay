@@ -1,5 +1,7 @@
-import type { AgentTeam, EmployeeAgent, LogicalAgentAvailability, RelayTaskListItem } from "../types.js";
+import type { AgentTeam, EmployeeAgent, LogicalAgentAvailability, ProjectRecord, RelayTaskListItem, TaskMutationInput } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
+import { issueNeedsProject } from "./issueQueues.ts";
+import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
 
 /** Can this agent/team be offered for a task assigned to `assigneeEmployeeId`?
  *
@@ -66,6 +68,74 @@ export function teamSharesOneComputer(
   const first = agents.find((agent) => agent.id === team.memberAgentIds?.[0]);
   if (!first) return false;
   return [...agentComputerIds(first)].some((computerId) => teamOnComputer(team, agents, computerId));
+}
+
+/**
+ * The agents and teams a task may be given — the one rule the task drawer and
+ * an inline row picker share. A project owns a computer and everyone on it
+ * shares the project workspace, so a project task offers every agent (and
+ * every team whose whole roster) lives there, plus the project's enabled
+ * members. Outside a project a team still runs on one computer, so only a
+ * co-located roster is offered. The current pick always stays listed so a
+ * trigger can name it.
+ */
+export function taskAssignmentOptions({
+  project,
+  agents,
+  teams,
+  assigneeEmployeeId,
+  assignedAgentId,
+  assignedTeamId,
+}: {
+  project?: Pick<ProjectRecord, "computerId" | "members"> | null;
+  agents: readonly EmployeeAgent[];
+  teams: readonly AgentTeam[];
+  assigneeEmployeeId: string;
+  assignedAgentId?: string;
+  assignedTeamId?: string;
+}): { agents: EmployeeAgent[]; teams: AgentTeam[] } {
+  const agentOnTaskComputer = (agent: EmployeeAgent) => !project
+    || project.members.some((member) => member.agentId === agent.id && member.enabled)
+    || agentOnComputer(agent, project.computerId);
+  const teamOnTaskComputer = (team: AgentTeam) => project
+    ? teamOnComputer(team, agents, project.computerId)
+    : teamSharesOneComputer(team, agents);
+  return {
+    agents: agents.filter((agent) => (agent.id === assignedAgentId || agentOnTaskComputer(agent))
+      && assignmentOptionVisible(agent.supervisorEmployeeId, assigneeEmployeeId, agent.id === assignedAgentId)),
+    teams: teams.filter((team) => (team.id === assignedTeamId || teamOnTaskComputer(team))
+      && assignmentOptionVisible(team.ownerEmployeeId, assigneeEmployeeId, team.id === assignedTeamId)),
+  };
+}
+
+/** Assignment is decided before work starts. A started task keeps its crew,
+ *  and an intake issue has nowhere to run, so neither offers a picker. */
+export function taskAssignmentEditable(task: RelayTaskListItem): boolean {
+  return (task.status === "backlog" || task.status === "assigned") && !issueNeedsProject(task);
+}
+
+export type TaskAssignmentChange = TaskAssignmentSelection;
+
+/** The PATCH an assignment change sends — the same fields the task drawer
+ *  submits. The server derives the assignee from the agent's supervisor. */
+export function taskAssignmentPatch(task: RelayTaskListItem, change: TaskAssignmentChange): TaskMutationInput {
+  if (change.kind === "team") {
+    return {
+      assignedAgentId: null,
+      assignedTeamId: change.id,
+      collaborationStyle: task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle ?? "",
+    };
+  }
+  if (change.kind === "agent") {
+    return { assignedAgentId: change.id, assignedTeamId: null, collaborationStyle: "" };
+  }
+  return {
+    assignedAgentId: null,
+    assignedTeamId: null,
+    collaborationStyle: "",
+    // A Ready task with nobody on it is not ready.
+    ...(task.status === "assigned" ? { status: "backlog" as const } : {}),
+  };
 }
 
 export function teamReady(team: Pick<AgentTeam, "enabled" | "members" | "memberConfigs" | "leadAgentId">): boolean {

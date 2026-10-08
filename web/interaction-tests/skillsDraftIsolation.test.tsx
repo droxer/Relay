@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { SkillsPage } from "../src/components/SkillsPage";
+import { DialogProvider } from "../src/components/ui/DialogProvider";
 
 const LABELS: Record<string, string> = {
   "skills.publish_skill": "Publish skill",
@@ -59,7 +60,7 @@ it("keeps the publish draft out of the selected skill's editor", async () => {
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <SkillsPage currentUser={{ employeeId: "employee-1" } as any} />
+      <DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider>
     </QueryClientProvider>,
   );
   const editorName = () => screen.getByLabelText(/^Display name/) as HTMLInputElement;
@@ -91,7 +92,7 @@ it("marks the editor's required fields and gates Save on them", async () => {
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <SkillsPage currentUser={{ employeeId: "employee-1" } as any} />
+      <DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider>
     </QueryClientProvider>,
   );
   const field = (label: string) =>

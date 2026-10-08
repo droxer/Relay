@@ -49,7 +49,7 @@ export function EmployeeCard({
           {identityMonogram(member.displayName)}
         </span>
         <div className="adm-node-card-identity">
-          <span className="adm-node-card-name" translate="no">{member.displayName}</span>
+          <span className="adm-node-card-name" translate="no" title={member.displayName}>{member.displayName}</span>
           <span className="adm-node-card-handle code" translate="no">@{employeeHandleOf(member)}</span>
           {/* Department belongs to identity, not to status. Sharing the status
               column meant it rendered on line 1 when the pill was absent and
