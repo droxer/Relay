@@ -213,8 +213,8 @@
 }
 
 .teams-list-mark .profile-image {
-  width: 28px;
-  height: var(--control-h-xs);
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
   border-radius: inherit;
 }
 

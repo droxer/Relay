@@ -135,6 +135,52 @@
   flex-wrap: wrap;
 }
 
+/* Location trail — the title's ancestors on the title's own line and rung,
+   receded to --ink-3 so the heading after it stays the loudest word. The row
+   gap is the title↔count step; the trail pulls back to a pairing gap so the
+   last chevron binds to the title it introduces. */
+.breadcrumb {
+  min-width: 0;
+  margin-inline-end: calc(var(--sp-1-5) - var(--sp-3));
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
+}
+
+.breadcrumb-list {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.breadcrumb-separator {
+  flex: none;
+  color: var(--ink-4);
+}
+
+.breadcrumb-link {
+  padding: 0;
+  border-radius: var(--r-1);
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.breadcrumb-link:hover {
+  color: var(--ink-1);
+}
+
 .page-header-title {
   margin: 0;
   color: var(--ink-1);
@@ -239,15 +285,15 @@
 }
 
 .page-header-icon-action--primary {
-  color: var(--cta-ink);
-  background: var(--cta-fill);
-  border-color: var(--cta-fill);
+  color: var(--on-action);
+  background: var(--action);
+  border-color: var(--action);
 }
 
 .page-header-icon-action--primary:hover:not(:disabled) {
-  color: var(--cta-ink);
-  background: var(--cta-hover);
-  border-color: var(--cta-hover);
+  color: var(--on-action);
+  background: var(--action-hover);
+  border-color: var(--action-hover);
 }
 
 .page-header-icon-action--primary:disabled {

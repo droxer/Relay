@@ -94,25 +94,23 @@
   --line-1: #333333; /* structural hairline */
   --line-2: #292929; /* soft hairline */
 
-  /* Primary action — a NEUTRAL fill that inverts with the theme: near-white
-     on the charcoal canvas, near-black on the light one, with the canvas ink
-     on top. This is the Geist move: the button is the strongest contrast on
-     the page (16.9:1 dark / 17.9:1 light, 13.4 / 11.7 pressed), so it needs
-     no hue to lead, and hue stays free to mean something. shadcn's --primary
-     points here, so every default Button, the login CTA (on the pinned dark
-     values) and the primary page-header action all read it. No disabled
-     hex: disabled is --opacity-disabled or the Button's explicit disabled
-     surface. */
+  /* Neutral inverted fill — near-white on the charcoal canvas, near-black on
+     the light one, with the canvas ink on top (16.9:1 dark / 17.9:1 light).
+     No longer the primary action: shadcn's --primary now points at --action
+     (shadcn-bridge.css), so the default Button leads with the accent. These
+     remain for the few emphasis fills that read them directly (the profile
+     image picker's hover disc). No disabled hex: disabled is
+     --opacity-disabled or the Button's explicit disabled surface. */
   --cta-fill: #ededed;
   --cta-hover: #d4d4d4;
   --cta-ink: #0a0a0a;
 
-  /* Selection — cobalt, register-invariant AS A FILL. Despite the role's
-     historical name, --action no longer marks the button to press; it marks
-     WHAT IS CHOSEN: the selected-row accent bar, the active nav marker,
-     checked checkboxes / radios / switches, the current pager page,
-     ::selection, and the skip link. One blue for "this one", so a selected
-     row and a checked box speak the same colour.
+  /* Accent — cobalt, register-invariant AS A FILL. It has two jobs, both
+     fills: the button to press (shadcn's --primary, the page-header create
+     action) and WHAT IS CHOSEN (the selected-row accent bar, the active nav
+     marker, checked checkboxes / radios / switches, the current pager page,
+     ::selection, the skip link). Selection stays calm — a 10% wash plus the
+     bar, never a solid fill — so a selected row never reads as a button.
 
      The invariance proof is FILL-ONLY: white on #0064e0 measures 5.4:1 and on
      the pressed #0457cb 6.5:1, so neither register needs its own fill. As an

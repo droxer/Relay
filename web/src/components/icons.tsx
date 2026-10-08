@@ -459,6 +459,9 @@ export const PageNext = withStandardStroke(LucideChevronRight, "PageNext");
 // (a routine's run ledger) — says "this opens" without a second target.
 export const RowOpen = withStandardStroke(LucideChevronRight, "RowOpen");
 
+// Between the levels of a page header's location trail.
+export const BreadcrumbSeparator = withStandardStroke(LucideChevronRight, "BreadcrumbSeparator");
+
 // Generic actions not covered above.
 export const ActionAdd = withStandardStroke(Plus, "ActionAdd");
 export const ActionSubtract = withStandardStroke(Minus, "ActionSubtract");

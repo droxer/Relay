@@ -113,11 +113,9 @@
 
 .teams-list-row-select {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  /* --sp-2, the mark-to-name gap the agent roster uses; --sp-3 here left the
-     team name starting further right than the agent name one route over. */
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   width: 100%;
   min-width: 0;
   /* Geometry beats the Button base utilities (h-(--control-h)). */
@@ -133,12 +131,14 @@
   text-align: left;
 }
 
+/* The team's mark trails the row, where an assignee's face sits in a
+   Linear-style list — identity, not the row's lead. */
 .teams-list-mark {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: var(--control-h-xs);
-  border-radius: var(--r-2);
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  border-radius: var(--r-1);
   background: var(--surface-2);
   color: var(--ink-1);
   box-shadow: inset 0 0 0 0.5px var(--line-2);
@@ -199,18 +199,48 @@
 /* The row's meta line, in the same voice as .conversation-subline and
    .agents-roster-row-meta — label role at the compact metadata rung. It read
    as body copy here while the two rails beside it read as labels. */
+.teams-list-titleline {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* Indented past the pip so the meta line starts under the name, not the dot. */
 .teams-list-sub {
-  overflow: hidden;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--sp-1-5);
+  padding-inline-start: calc(var(--dot) + var(--sp-2));
   color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
+}
+
+.teams-list-style {
+  display: inline-flex;
+  flex: none;
+  color: var(--ink-4);
+}
+
+.teams-list-style svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.teams-list-roster {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .teams-list-status {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--sp-2);
 }
 
 .team-profile-inline-form {
