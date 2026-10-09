@@ -1054,6 +1054,60 @@ describe("agent stream parsing", () => {
     assert.deepEqual(accumulator.update(`${turn}\n${turn}`), [{ kind: "text", text: "One answer." }]);
   });
 
+  // Claude Code emits one `assistant` frame per content block, all sharing the
+  // message id: thinking, then the answer, then a tool call. Recorded from a
+  // run whose 2206-char answer vanished, leaving only the closing line.
+  const perBlockClaudeTurn = [
+    JSON.stringify({ type: "stream_event", event: { type: "message_start", message: { id: "msg_1" } } }),
+    JSON.stringify({
+      type: "assistant",
+      message: { id: "msg_1", role: "assistant", content: [{ type: "thinking", thinking: "" }] },
+    }),
+    JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_start", index: 1, content_block: { type: "text", text: "" } },
+    }),
+    JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "The full answer." } },
+    }),
+    JSON.stringify({ type: "stream_event", event: { type: "content_block_stop", index: 1 } }),
+    JSON.stringify({
+      type: "assistant",
+      message: { id: "msg_1", role: "assistant", content: [{ type: "text", text: "The full answer." }] },
+    }),
+    JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_start", index: 2, content_block: { type: "tool_use", id: "tool_1", name: "Bash", input: {} } },
+    }),
+    JSON.stringify({ type: "stream_event", event: { type: "content_block_stop", index: 2 } }),
+    JSON.stringify({
+      type: "assistant",
+      message: { id: "msg_1", role: "assistant", content: [{ type: "tool_use", id: "tool_1", name: "Bash", input: { command: "ls" } }] },
+    }),
+  ];
+
+  it("keeps every content block of a Claude message emitted as separate assistant frames", () => {
+    assert.deepEqual(parseAgentStream("claude", perBlockClaudeTurn.join("\n")), [
+      { kind: "text", text: "The full answer." },
+      { kind: "tool", id: "tool_1", name: "Bash", target: "ls" },
+    ]);
+  });
+
+  it("keeps every content block of a per-block Claude message while streaming", () => {
+    const accumulator = new AgentStreamAccumulator("claude");
+    let raw = "";
+    for (const line of perBlockClaudeTurn) {
+      raw += `${line}\n`;
+      accumulator.update(raw);
+    }
+
+    assert.deepEqual(accumulator.update(raw), [
+      { kind: "text", text: "The full answer." },
+      { kind: "tool", id: "tool_1", name: "Bash", target: "ls" },
+    ]);
+  });
+
   it("does not duplicate Claude result text when the result frame checkpoints separately", () => {
     const assistantFrame = JSON.stringify({
       type: "assistant",
