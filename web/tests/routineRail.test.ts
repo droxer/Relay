@@ -6,24 +6,22 @@ import { describe, it } from "node:test";
 const read = (path: string) => readFile(resolve("web", path), "utf8");
 
 /**
- * The routine board's schedule states.
+ * The routine board's section rail.
  *
  * Schedule health used to do three jobs on this page at once — a select in
  * the filter bar, the bands the list grouped on, and a sort column — so the
- * same dimension was answered in three different grammars. The state nav is
- * now the one control for it. It was a 240px rail beside the board; it is
- * now view tabs on the page header (SectionNav `tabs`), so the table keeps
- * the full width.
+ * same dimension was answered in three different grammars. The rail is now
+ * the one control for it: `sec-shell` beside the board, the same
+ * rail-and-content shape the control panel and personal settings use.
  */
 describe("routine section rail", () => {
-  it("is header view tabs in the shared SectionNav grammar, not a rail", async () => {
+  it("is the shared rail-and-content shell, not a private layout", async () => {
     const source = await read("src/components/RoutinesPage.tsx");
-    const chrome = await read("src/components/task-board/RoutineChrome.tsx");
 
-    assert.match(source, /className="routine-page"/);
-    assert.doesNotMatch(source, /sec-rail|sec-shell/);
-    assert.match(source, /views=\{\(\s*<RoutineStateNav\b/);
-    assert.match(chrome, /variant="tabs"/);
+    assert.match(source, /className="routine-page sec-shell"/);
+    assert.match(source, /className="sec-rail"/);
+    assert.match(source, /className="sec-main"/);
+    assert.match(source, /<RoutineStateNav\b/);
   });
 
   it("drives the rail off the URL's own state filter", async () => {

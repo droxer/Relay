@@ -2,6 +2,8 @@
 
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { StateMark, shapeForCount } from "../StateMark";
+import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
@@ -112,8 +114,8 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
 type RoutineSection = "all" | RoutineState;
 
 /**
- * The routine board's schedule states — view tabs on the page header, in the
- * shared `SectionNav` grammar (its `tabs` variant).
+ * The routine board's section rail — schedule health as a list of
+ * destinations beside the board, in the shared `SectionNav` grammar.
  *
  * It is the ONE control for this dimension now. Schedule health used to be a
  * select in the filter bar AND the bands the list grouped on AND a sort
@@ -138,6 +140,7 @@ export function RoutineStateNav({
     ...ROUTINE_STATE_ORDER.map((state) => ({
       id: state,
       label: t(`routine.states.${state}`),
+      mark: <StateMark shape={shapeForCount(ROUTINE_STATE_SHAPE[state], counts[state] ?? 0)} />,
       count: counts[state] ?? 0,
     })),
   ];
@@ -148,7 +151,6 @@ export function RoutineStateNav({
       value={value}
       onChange={onChange}
       label={t("routine.state")}
-      variant="tabs"
     />
   );
 }

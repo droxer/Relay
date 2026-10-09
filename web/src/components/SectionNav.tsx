@@ -51,9 +51,8 @@ export function SectionNav<Id extends string>({
   label: string;
   /**
    * `rail` is the vertical section list of a rail-and-content surface.
-   * `tabs` lays the same sections out as a row of view tabs in a page header
-   * — the issue queues and the automation states — so a list keeps the full
-   * width instead of giving a 240px column to its own filters. A tab drops
+   * `tabs` lays the same sections out as a horizontal strip in a toolbar
+   * (a project's status strip over its issue list). A tab drops
    * the destination glyph (`Icon`) but keeps a state `mark` — a status tab
    * still wears its status icon.
    */
@@ -62,15 +61,15 @@ export function SectionNav<Id extends string>({
   const tabs = variant === "tabs";
   const navRef = useRef<HTMLElement>(null);
 
-  /* A tab strip scrolls sideways when the header is narrow (a phone, a
-     squeezed pane), and the selected queue can sit past its edge — "All open"
-     selected with only "Awaiting your input" in view. Keep the active tab
-     visible. `nearest` on both axes so the page itself never jumps. */
+  /* A section list scrolls sideways wherever it runs as a strip — the tabs
+     variant, and the rail itself on phones (section-rail.css folds it) — and
+     the selected section can sit past the edge: "All open" selected with only
+     "Awaiting your input" in view. Keep it visible. `nearest` on both axes,
+     so a rail already showing it, and the page itself, never move. */
   useEffect(() => {
-    if (!tabs) return;
     const active = navRef.current?.querySelector<HTMLElement>('[data-active="true"]');
     active?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [tabs, value]);
+  }, [value]);
   /* The Button primitive types its handler against a <button>, and `render`
      does not re-type it — the fields read here (the modifier keys and the
      mouse button) are on the base MouseEvent either way. */

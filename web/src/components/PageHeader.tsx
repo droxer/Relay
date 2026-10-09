@@ -10,7 +10,6 @@ export function PageHeader({
   kicker,
   subtitle,
   toolbar,
-  views,
   actions,
   titleVariant = "default",
   titleAs = "h1",
@@ -26,8 +25,6 @@ export function PageHeader({
   kicker?: ReactNode;
   subtitle?: ReactNode;
   toolbar?: ReactNode;
-  /** View tabs riding the title line after the count (see SectionNav `tabs`). */
-  views?: ReactNode;
   actions?: ReactNode;
   /** "display" is the 28px hero tier for page-owning nouns; "title" is the
    *  19px tier for a fixed UI noun heading a subordinate pane (the thread
@@ -71,7 +68,6 @@ export function PageHeader({
             <span className="page-header-count">{count}</span>
           ) : null}
           {facts ? <div className="page-header-facts">{facts}</div> : null}
-          {views ? <div className="page-header-views">{views}</div> : null}
         </div>
         {subtitle ? <p className="page-header-subtitle">{subtitle}</p> : null}
         {toolbar ? <div className="page-header-toolbar">{toolbar}</div> : null}
