@@ -1732,6 +1732,8 @@
     "create_runtime_required": "Choose a runtime.",
     "model_label": "Model",
     "model_hint": "Runtime default uses whatever model this computer's runtime is configured for.",
+    "model_hint_custom_endpoint": "This computer sends this runtime's requests to a custom endpoint, so enter a model id that endpoint serves.",
+    "model_hint_pi": "Pi uses this computer's provider unless the id names one, e.g. openai/gpt-5.",
     "model_default": "Runtime default",
     "model_custom": "Custom model…",
     "model_custom_label": "Custom model id",

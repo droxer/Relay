@@ -33,6 +33,8 @@ export interface SandboxRecord {
   }>>;
   disabledAgents?: AgentName[];
   agentInventory?: Partial<Record<AgentName, DaemonAgentInventory>>;
+  /** Runtimes whose model calls go to a custom endpoint, not the vendor API. */
+  customModelEndpoints?: AgentName[];
   agentRoleDefaults?: Partial<Record<AgentName, AgentRole>>;
   agentRoleOverrides?: Partial<Record<AgentName, AgentRole>>;
   maxConcurrentRuns?: number;

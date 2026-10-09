@@ -4,8 +4,8 @@ import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { createAgent } from "../../api";
-import { computerCanSelectModel, runtimesForComputer } from "../../lib/createAgent";
-import { modelIdProblem, modelPolicyFor } from "../../lib/agentModels.ts";
+import { computerCanSelectModel, computerUsesCustomModelEndpoint, runtimesForComputer } from "../../lib/createAgent";
+import { modelHintKey, modelIdProblem, modelPolicyFor } from "../../lib/agentModels.ts";
 import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
 import { ComputerSelect } from "../ComputerSelect";
@@ -132,6 +132,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   // An outdated daemon would fail every run of a pinned model, so on such a
   // computer the agent is created on the runtime default.
   const canSelectModel = !executorKind || computerCanSelectModel(nodeLikes, computerId, executorKind);
+  const customEndpoint = Boolean(executorKind) && computerUsesCustomModelEndpoint(nodeLikes, computerId, executorKind);
   const model = canSelectModel && executorKind && modelPick.kind === executorKind ? modelPick.model : "";
   const modelProblem = modelIdProblem(model);
 
@@ -286,13 +287,14 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
               label={t("agents_page.model_label")}
               labelId={modelLabelId}
               wrapper="div"
-              hint={canSelectModel ? t("agents_page.model_hint") : t("agents_page.model_daemon_outdated")}
+              hint={canSelectModel ? t(modelHintKey(executorKind, { customEndpoint })) : t("agents_page.model_daemon_outdated")}
               error={fieldErrors.model}
               errorId="create-agent-model-error"
             >
               <AgentModelField
                 key={executorKind}
                 executorKind={executorKind}
+                customEndpoint={customEndpoint}
                 value={model}
                 onChange={(next) => {
                   setModelPick({ kind: executorKind, model: next });

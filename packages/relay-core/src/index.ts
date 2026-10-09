@@ -153,6 +153,7 @@ export {
   codexCliConfigOverrides,
   agentCredentialEnv,
   agentCredentialEnvNames,
+  customModelEndpointAgents,
   allAgentCredentialEnvNames,
   GUEST_AGENT_SYNC_SCRIPT,
   guestAgentEnv,

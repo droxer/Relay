@@ -140,6 +140,24 @@ export function agentCredentialEnv(agent: AgentName): Array<[string, string]> {
   return AGENT_CREDENTIAL_ENV[agent]();
 }
 
+/** The base-URL key that points a runtime away from its vendor's own API. */
+const MODEL_ENDPOINT_ENV: Partial<Record<AgentName, string>> = {
+  claude: "ANTHROPIC_BASE_URL",
+  codex: "OPENAI_BASE_URL",
+};
+
+/**
+ * Runtimes whose model calls go to a custom endpoint on this node. The vendor
+ * model ids the web suggests may not exist there, so the daemon reports these
+ * and the model picker asks for an id the endpoint serves instead. Read from
+ * the env a run actually receives, so local and managed nodes answer alike.
+ */
+export function customModelEndpointAgents(): AgentName[] {
+  return (Object.entries(MODEL_ENDPOINT_ENV) as Array<[AgentName, string]>).filter(
+    ([agent, key]) => agentCredentialEnv(agent).some(([name, value]) => name === key && value),
+  ).map(([agent]) => agent);
+}
+
 /** The credential/provider keys {@link agentCredentialEnv} may return for an agent. */
 export function agentCredentialEnvNames(agent: AgentName): readonly string[] {
   return [...new Set([...AGENT_CREDENTIAL_ENV_NAMES[agent], ...NATIVE_CREDENTIAL_ENV_NAMES[agent]])];

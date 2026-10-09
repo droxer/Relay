@@ -13,6 +13,8 @@ export interface NodeLike {
   disabledAgents?: string[];
   /** Daemon capabilities, e.g. "agent-model". */
   capabilities?: readonly string[];
+  /** Runtimes whose model calls go to a custom endpoint on this node. */
+  customModelEndpoints?: readonly string[];
   status?: string;
 }
 
@@ -76,4 +78,14 @@ export function computerCanSelectModel(nodes: NodeLike[], target: string, kind: 
     && (node.supportedAgents ?? []).includes(kind)
     && !(node.disabledAgents ?? []).includes(kind));
   return runners.every((node) => node.capabilities?.includes("agent-model"));
+}
+
+/**
+ * Whether `kind` on this computer calls a custom model endpoint (a proxy or a
+ * compatible provider), where the vendor ids the picker suggests may not exist.
+ */
+export function computerUsesCustomModelEndpoint(nodes: NodeLike[], target: string, kind: string): boolean {
+  return nodes.some((node) => computerId(node) === target
+    && LIVE_NODE_STATUSES.has(node.status ?? "")
+    && (node.customModelEndpoints ?? []).includes(kind));
 }

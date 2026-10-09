@@ -394,6 +394,7 @@ def _agent_with_placements(ctx: AppContextDep, agent: dict[str, Any]) -> dict[st
         "placements": placements,
         "skills": _agent_skills(ctx, agent, placements),
         "canSelectModel": _can_select_model(ctx, placements),
+        "customModelEndpoint": _custom_model_endpoint(ctx, agent, placements),
     }
 
 
@@ -414,6 +415,27 @@ def _can_select_model(ctx: AppContextDep, placements: list[dict[str, Any]]) -> b
         return True
     return all(
         DAEMON_CAPABILITY_AGENT_MODEL in (node.get("capabilities") or [])
+        for node in ctx.registry.monitor_nodes()
+        if node["id"] in node_ids
+    )
+
+
+def _custom_model_endpoint(
+    ctx: AppContextDep, agent: dict[str, Any], placements: list[dict[str, Any]]
+) -> bool:
+    """Whether this agent's runtime calls a custom model endpoint on its node.
+
+    The vendor model ids the web suggests may not exist behind a proxy or a
+    compatible provider, so the picker then asks for an id that endpoint serves.
+    """
+    executor_kind = agent.get("executorKind")
+    node_ids = {
+        placement["runtimeNodeId"]
+        for placement in placements
+        if placement.get("runtimeNodeId")
+    }
+    return any(
+        executor_kind in (node.get("customModelEndpoints") or [])
         for node in ctx.registry.monitor_nodes()
         if node["id"] in node_ids
     )

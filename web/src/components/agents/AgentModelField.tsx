@@ -29,6 +29,8 @@ interface AgentModelFieldProps {
   triggerRef?: Ref<HTMLButtonElement>;
   /** Commits a typed custom id (Enter in the custom input). */
   onSubmitCustom?: () => void;
+  /** The runtime calls a custom endpoint, so vendor ids are not suggested. */
+  customEndpoint?: boolean;
 }
 
 /**
@@ -46,10 +48,11 @@ export function AgentModelField({
   error = false,
   triggerRef,
   onSubmitCustom,
+  customEndpoint = false,
 }: AgentModelFieldProps) {
   const { t } = useTranslation();
   const customInputId = useId();
-  const suggestions = suggestedModels(executorKind);
+  const suggestions = suggestedModels(executorKind, { customEndpoint });
   const [customPicked, setCustomPicked] = useState(false);
   const isCustom = customPicked || (value !== "" && !suggestions.includes(value));
   const choice = isCustom ? CUSTOM_CHOICE : value || DEFAULT_CHOICE;
