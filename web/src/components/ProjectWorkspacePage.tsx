@@ -157,7 +157,6 @@ export function ProjectWorkspacePage({
       onValueChange={(value) => setPageTab(value as ProjectPageTab)}
     >
       <PageHeader
-        kicker={t("project.page_kicker")}
         /* The record's common facts ride the title line on every tab instead
            of claiming a band row above the tab body, so each panel keeps the
            full height under the header. */

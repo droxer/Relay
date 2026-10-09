@@ -21,7 +21,10 @@
 
 .backlog-filter-bar {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--page-gutter);
   border-bottom: 0.5px solid var(--line-2);
   background: var(--surface-0);
 }
@@ -29,24 +32,26 @@
 .backlog-filter-primary {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-4) var(--page-gutter);
+  gap: var(--sp-2);
+  margin-left: auto;
 }
 
+/* The search is a compact field at the toolbar's trailing end, not a band of
+   its own: ⌘K finds anything, so this box only narrows the list in view. */
 .backlog-filter-search-wrap {
-  flex: 1;
+  flex: none;
+  width: 240px;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  /* A height, not a floor: it shares a row with the sort menu, and the chip
-     row below it is on the same --control-h-sm rung. As a min-height the padded input
-     plus the hairline border pushed the box to 40.5px, off its neighbours. */
+  /* The toolbar's one rung: the Add filter button and the group menu beside
+     it are --control-h-sm, so the search box is too. */
   height: var(--control-h-sm);
-  padding: 0 var(--sp-3);
+  padding: 0 var(--sp-2);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
-  background: var(--surface-2);
+  background: var(--surface-1);
   color: var(--ink-3);
 }
 
@@ -93,15 +98,16 @@
   border-radius: var(--r-2);
 }
 
-/* The chip row under the search: ReUI Filters ("Add filter" + one chip per
+/* The toolbar's leading group: ReUI Filters ("Add filter" + one chip per
    filter), then Clear. Chips wrap rather than scroll — a filter hidden past
    the edge is a filter the reader forgets is applied. */
 .backlog-filter-chips {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
-  padding: 0 var(--page-gutter) var(--sp-3);
+  min-width: 0;
 }
 
 /* ── Pipeline board ──────────────────────────────────────────────────── */
@@ -207,28 +213,27 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--sp-2);
-  padding: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   border-bottom: 0.5px solid var(--line-2);
   background: var(--surface-0);
 }
 
-/* No colored lane rail: the caps label + count carry lane identity, and the
-   hairline column separators carry the board structure. Seven accent bars
-   read as decoration, not information. */
+/* No colored lane rail: the status icon, the label and the count sit together
+   at the lane's leading edge, the way a group band reads in the list. The
+   label is sentence case — capitals made five column names shout louder than
+   the cards under them. */
 .backlog-lane-label {
   color: var(--ink-1);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
+  font: var(--type-label);
+  font-weight: 500;
 }
 
 .backlog-lane-count {
   font-family: var(--font-sans);
   font-size: var(--fs-3);
-  font-weight: 500;
-  color: var(--ink-3);
+  font-weight: 400;
+  color: var(--ink-4);
 }
 
 .backlog-task-list {
@@ -264,9 +269,7 @@
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
-  /* --sp-5, not --sp-4: the card view is the one that trades density for
-     legibility (that is why both views exist), so it takes the wider inset. */
-  padding: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
   transition: border-color var(--t-fast) var(--ease);
 }
 
@@ -300,11 +303,13 @@
    already carry rank, so the old 3px colored card edge was double signaling
    (and painted a red stripe down every high-priority card). */
 
-/* The card is a control gutter and a text column, and nothing else. The
-   checkbox holds the gutter because it is the card's handle — a selection
-   control that moves with the content is unusable — and the title and the
-   facts line share the column's single left edge. */
+/* The card is a text column: ID, title, one facts line. The selection
+   checkbox no longer holds a gutter of its own — it sits in the top-right
+   corner and appears on hover, on keyboard focus, or once anything on the
+   board is selected (see the selection rules in backlog-list.css), so a lane
+   at rest reads as titles, not as a column of empty boxes. */
 .backlog-card-head {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
@@ -327,14 +332,16 @@
   color: var(--ink-3);
   font: var(--type-label);
   overflow-wrap: anywhere;
+  /* Room for the corner checkbox when it appears, so it never covers the ID. */
+  padding-right: var(--sp-6);
 }
 
-/* The checkbox is 16px against a ~20px line; nudge it onto the title's
-   optical centre rather than its box top. */
 .backlog-card-head .backlog-select-box {
-  flex: none;
-  margin-top: 2px;
+  position: absolute;
+  top: 0;
+  right: 0;
 }
+
 .backlog-blocker {
   min-width: 0;
   overflow-wrap: anywhere;

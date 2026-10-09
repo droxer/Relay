@@ -211,7 +211,6 @@
   gap: var(--sp-2);
   margin: 0 0 var(--sp-3);
   color: var(--ink-3);
-  text-transform: uppercase;
 }
 
 .computer-card-count {

@@ -77,7 +77,7 @@ function Field({
           </span>
         ) : null}
         {optional ? (
-          <span className="text-xs font-medium tracking-(--track-caps) text-muted-foreground uppercase">
+          <span className="text-xs font-medium text-muted-foreground">
             {optional}
           </span>
         ) : null}

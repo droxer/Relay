@@ -35,12 +35,13 @@ export function RecordBand({
   label: string;
   /** "band" is the full-width row under the header; "title" packs the same
       facts onto the header's title line, for pages whose tab panels need the
-      vertical room the band row would take. */
-  variant?: "band" | "title";
+      vertical room the band row would take; "panel" stacks them as label/value
+      rows in a record's properties column (see RecordLayout). */
+  variant?: "band" | "title" | "panel";
 }) {
   if (!facts.length) return null;
   return (
-    <dl className={variant === "title" ? "record-band record-band--title" : "record-band"} aria-label={label}>
+    <dl className={variant === "band" ? "record-band" : `record-band record-band--${variant}`} aria-label={label}>
       {facts.map((fact) => (
         <div className="record-band-cell" key={fact.key}>
           <dt className="record-band-label">{fact.label}</dt>

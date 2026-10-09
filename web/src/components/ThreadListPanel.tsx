@@ -161,10 +161,8 @@ export function ThreadListPanel({
         count={directoryMode === "projects" ? hierarchy.projects.length : threads.length}
         titleAs="h2"
         titleVariant="title"
-        // Projects lives in the Workspace nav section, so its rail header
-        // wears the same kicker + stacked frame as the Issues rail beside
-        // it. Threads is a top-level surface — no kicker.
-        kicker={directoryMode === "projects" ? t("nav.workspace") : undefined}
+        // No "Workspace" kicker over Projects: the sidebar group already
+        // says where the reader is, and the eyebrow cost every rail a line.
         layout="stacked"
         actions={(() => {
           // One plus for both modes — the shared list-header create

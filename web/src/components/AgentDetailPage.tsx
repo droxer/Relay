@@ -21,7 +21,8 @@ import {
   WorkspaceActivities,
   WorkspaceError,
 } from "./workspace/WorkspacePrimitives";
-import { RecordBand, type RecordFact } from "./workspace/RecordBand";
+import type { RecordFact } from "./workspace/RecordBand";
+import { RecordLayout } from "./workspace/RecordLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ICON } from "./icons";
 
@@ -116,7 +117,6 @@ export function AgentDetailPage({
       onValueChange={(value) => setPageTab(value as AgentDetailTab)}
     >
       <PageHeader
-        kicker={t("nav.workforce")}
         title={(
           <span className="workspace-header-title">
             <span className="workspace-header-mark" aria-hidden="true">
@@ -153,38 +153,38 @@ export function AgentDetailPage({
         )}
       />
 
-      <RecordBand facts={bandFacts} label={t("agents_page.record_label")} />
-
-      <div className="workspace-body">
-        <TabsContent value="profile" className="workspace-profile">
-          <AgentProfilePanel
-            agent={agent}
-            canEditMeta={canEditMeta}
-            onDirtyChange={onProfileDirtyChange}
-          />
-        </TabsContent>
-        <TabsContent value="skills" className="workspace-profile">
-          <AgentSkillsPanel agent={agent} canEdit={canEditMeta} />
-        </TabsContent>
-        <TabsContent value="activities">
-          {activitiesLoading ? (
-            <ActivitiesSkeleton />
-          ) : activitiesError ? (
-            <WorkspaceError
-              message={activitiesError}
-              eyebrow={t("agents_page.activities_load_failed")}
-              onRetry={() => void activityQuery.refetch()}
+      <RecordLayout facts={bandFacts} label={t("agents_page.record_label")}>
+        <div className="workspace-body">
+          <TabsContent value="profile" className="workspace-profile">
+            <AgentProfilePanel
+              agent={agent}
+              canEditMeta={canEditMeta}
+              onDirtyChange={onProfileDirtyChange}
             />
-          ) : (
-            <WorkspaceActivities
-              brief={brief}
-              emptyPulse
-              onOpenThread={onOpenThread}
-              agents={[agent]}
-            />
-          )}
-        </TabsContent>
-      </div>
+          </TabsContent>
+          <TabsContent value="skills" className="workspace-profile">
+            <AgentSkillsPanel agent={agent} canEdit={canEditMeta} />
+          </TabsContent>
+          <TabsContent value="activities">
+            {activitiesLoading ? (
+              <ActivitiesSkeleton />
+            ) : activitiesError ? (
+              <WorkspaceError
+                message={activitiesError}
+                eyebrow={t("agents_page.activities_load_failed")}
+                onRetry={() => void activityQuery.refetch()}
+              />
+            ) : (
+              <WorkspaceActivities
+                brief={brief}
+                emptyPulse
+                onOpenThread={onOpenThread}
+                agents={[agent]}
+              />
+            )}
+          </TabsContent>
+        </div>
+      </RecordLayout>
     </Tabs>
   );
 }

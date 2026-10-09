@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
-import { StateMark } from "../StateMark";
+import { TaskStatusIcon } from "../TaskStatusIcon";
 import { TaskSelectCheckbox } from "../task-board/TaskSelection";
-import { TASK_STATUS_SHAPE } from "../task-board/backlogVocabulary";
 import { hrefForTaskRecord, type TaskRoster } from "../task-board/BacklogRecords";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import { issueNeedsProject, NO_GROUP, type IssueGroup, type IssueGroupBy, type IssueSortKey } from "../../lib/issueQueues";
@@ -98,7 +97,7 @@ export function IssuesTable({
   }
 
   return (
-    <Table aria-label={t("issues.title")} className="issues-table">
+    <Table aria-label={t("issues.title")} className="issues-table task-table">
       <TableHeader>
         <TableRow className="backlog-rows-head hover:bg-transparent">
           <TableHead className="w-4">{selectAll}</TableHead>
@@ -118,7 +117,7 @@ export function IssuesTable({
               data-intake={groupBy === "project" && group.key === NO_GROUP ? "true" : undefined}>
               <TableCell colSpan={columnCount}>
                 <span className="issues-band-inner">
-                  {groupBy === "status" ? <StateMark shape={TASK_STATUS_SHAPE[group.key as TaskStatus]} /> : null}
+                  {groupBy === "status" ? <TaskStatusIcon status={group.key as TaskStatus} /> : null}
                   <span className="list-group-name">{bandLabel(group)}</span>
                   <span className="list-group-count tnum">{groupTotals.get(group.key) ?? group.tasks.length}</span>
                   {groupBy === "project" && group.key === NO_GROUP ? (

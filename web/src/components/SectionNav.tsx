@@ -27,6 +27,8 @@ export type SectionNavItem<Id extends string> = {
    * its own to link to, so it stays a button like the rest of that filter bar.
    */
   href?: string;
+  /** One line on what the section holds — the tab's tooltip. */
+  hint?: string;
 };
 
 /**
@@ -41,12 +43,23 @@ export function SectionNav<Id extends string>({
   value,
   onChange,
   label,
+  variant = "rail",
 }: {
   items: readonly SectionNavItem<Id>[];
   value: Id;
   onChange: (next: Id) => void;
   label: string;
+  /**
+   * `rail` is the vertical section list of a rail-and-content surface.
+   * `tabs` lays the same sections out as a row of view tabs in a page header
+   * — the issue queues and the automation states — so a list keeps the full
+   * width instead of giving a 240px column to its own filters. A tab drops
+   * the destination glyph (`Icon`) but keeps a state `mark` — a status tab
+   * still wears its status icon.
+   */
+  variant?: "rail" | "tabs";
 }) {
+  const tabs = variant === "tabs";
   /* The Button primitive types its handler against a <button>, and `render`
      does not re-type it — the fields read here (the modifier keys and the
      mouse button) are on the base MouseEvent either way. */
@@ -61,7 +74,7 @@ export function SectionNav<Id extends string>({
   }
 
   return (
-    <nav className="sec-nav" aria-label={label}>
+    <nav className={tabs ? "sec-nav sec-nav--tabs" : "sec-nav"} aria-label={label}>
       <ul className="sec-nav-list">
         {items.map((item) => {
           const active = value === item.id;
@@ -80,9 +93,10 @@ export function SectionNav<Id extends string>({
                 data-active={active ? "true" : "false"}
                 data-empty={item.count === 0 ? "true" : undefined}
                 aria-current={active ? "page" : undefined}
+                title={item.hint}
                 onClick={(event) => handleClick(event, item.id)}
               >
-                {Icon ? <Icon size={ICON.sm} aria-hidden="true" /> : item.mark}
+                {Icon && !tabs ? <Icon size={ICON.sm} aria-hidden="true" /> : item.mark}
                 <span className="sec-nav-label">{item.label}</span>
                 {item.count === undefined ? null : (
                   <span className="sec-nav-count">{item.count}</span>

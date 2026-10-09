@@ -6,8 +6,7 @@ import { taskRef } from "../../lib/taskRef";
 import type { RelayTaskListItem } from "../../types";
 import { formatNextRunDate } from "../task-board/RoutineChrome";
 import { RoutineStateBadge } from "../RoutineStateBadge";
-import { StateMark } from "../StateMark";
-import { TASK_STATUS_SHAPE } from "../task-board/backlogVocabulary";
+import { TaskStatusIcon } from "../TaskStatusIcon";
 import type { RecordFact } from "../workspace/RecordBand";
 
 /**
@@ -61,7 +60,7 @@ export function recordBandFacts(
       label: t("backlog.status"),
       value: (
         <span className="record-band-inline">
-          <StateMark shape={TASK_STATUS_SHAPE[task.status]} />
+          <TaskStatusIcon status={task.status} />
           {t(`backlog.statuses.${task.status}`)}
         </span>
       ),

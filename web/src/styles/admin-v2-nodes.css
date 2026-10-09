@@ -81,7 +81,6 @@
   background: var(--surface-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   white-space: nowrap;
   color: var(--ink-2);
   max-width: 100%;
@@ -123,7 +122,6 @@
 .adm-node-card-employee-badge-text {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   white-space: nowrap;
   color: var(--ink-2);
   max-width: 160px;
@@ -215,7 +213,6 @@
   border-radius: var(--r-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   white-space: nowrap;
 }
 

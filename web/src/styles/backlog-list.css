@@ -343,17 +343,18 @@ button.inline-field[aria-expanded="true"] {
     flex-shrink: 0;
   }
 
-  .backlog-filter-primary,
-  .backlog-filter-chips {
+  .backlog-filter-bar {
     padding-inline: var(--sp-4);
   }
 
   .backlog-filter-primary {
-    flex-wrap: wrap;
+    flex: 1 1 100%;
+    margin-left: 0;
   }
 
   .backlog-filter-search-wrap {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+    width: auto;
   }
 
   .backlog-page {
@@ -483,4 +484,56 @@ tr[data-selected="true"] > td:first-child {
 .task-trigger-label {
   color: var(--ink-2);
   font: var(--type-body-sm);
+}
+
+/* ── Selection checkboxes appear on demand ─────────────────────────────
+   Every row and card used to carry a visible checkbox, which put a column of
+   empty boxes beside every list. A checkbox now shows on its own row's hover,
+   whenever it (or anything in its row) holds keyboard focus, and on every row
+   at once as soon as one record is selected — so a batch, once started, is
+   visible in full. Opacity rather than display keeps the box in the tab order
+   and keeps the column from reflowing. Touch has no hover, so coarse pointers
+   always see them. */
+@media (hover: hover) {
+  .backlog-select-box:not([data-checked]) {
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+
+  tr:hover .backlog-select-box,
+  .backlog-task:hover .backlog-select-box,
+  .backlog-select-box:focus-visible,
+  :is(table, .backlog-board):has([data-selected="true"]) .backlog-select-box {
+    opacity: 1;
+  }
+
+  /* The select-all box in a header follows the same rule: it is offered once
+     the pointer is in the header or a selection exists. */
+  thead [data-slot="checkbox"]:not([data-checked]):not([data-indeterminate]) {
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+
+  thead:hover [data-slot="checkbox"],
+  thead [data-slot="checkbox"]:focus-visible,
+  table:has([data-selected="true"]) thead [data-slot="checkbox"] {
+    opacity: 1;
+  }
+}
+
+/* ── Task table density ────────────────────────────────────────────────
+   Issues, a project's list, and automations share one row height: 36px — a
+   28px inline control plus 4px above and below — instead of the primitive's
+   8px cell padding, which put rows at 46px and fit about two-thirds as many
+   records in a screen. The column header is a quiet caption, not a row of
+   labels as loud as the data. */
+.task-table td[data-slot="table-cell"] {
+  padding-block: var(--sp-1);
+}
+
+.task-table th[data-slot="table-head"] {
+  height: var(--control-h-sm);
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }

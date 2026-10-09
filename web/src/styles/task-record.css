@@ -61,7 +61,6 @@
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--track-0);
-  text-transform: uppercase;
 }
 
 .record-run-head > span {
@@ -285,7 +284,6 @@
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--track-0);
-  text-transform: uppercase;
 }
 
 .record-facts {

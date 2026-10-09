@@ -170,7 +170,6 @@
   color: var(--ink-4);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 /* Band values sit a tier below the page title on purpose: these are the
@@ -418,7 +417,6 @@
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .workspace-activity-head > span {
@@ -543,7 +541,6 @@
   color: var(--ink-4);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .workspace-dossier-field-value {
@@ -646,7 +643,6 @@
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .workspace-profile .adm-cred-value {
@@ -664,4 +660,116 @@
 
 .workspace-profile .adm-drawer-section {
   margin-top: var(--sp-6);
+}
+
+/* ── Record layout — body left, properties right ───────────────────────
+   See RecordLayout.tsx. The page is the query container, so the column folds
+   by the width the record actually has (it sits beside a roster and the app
+   rail), not by the viewport. */
+.workspace-page {
+  container: record-page / inline-size;
+}
+
+/* A record page fills its pane, so the properties column's rule runs the full
+   height instead of stopping where the shortest tab's content does. */
+.workspace-page:has(> .record-layout) {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-self: stretch;
+}
+
+.record-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--record-aside-w, 288px);
+}
+
+/* A tab that carries its properties elsewhere (the team profile's identity
+   rail) passes no facts; the body then takes the whole width. */
+.record-layout:not(:has(> .record-layout-aside)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.record-layout > .workspace-body {
+  min-width: 0;
+  min-height: 0;
+}
+
+.record-layout-aside {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-5) var(--sp-4);
+  border-left: 0.5px solid var(--line-1);
+}
+
+/* Panel variant: one row per fact, the label in a fixed column so the values
+   share a left edge — Linear's properties sidebar. No caps, no cells, no
+   hairlines between rows. */
+.record-band--panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  border-bottom: 0;
+}
+
+.record-band--panel .record-band-cell {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0;
+  border: 0;
+}
+
+.record-band--panel .record-band-label {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.record-band--panel .record-band-value.code {
+  font-size: var(--fs-code-transcript);
+}
+
+@container record-page (max-width: 768px) {
+  .record-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .record-layout-aside {
+    order: -1;
+    padding: var(--sp-3) var(--page-gutter);
+    border-left: 0;
+    border-bottom: 0.5px solid var(--line-1);
+  }
+
+  .record-band--panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-6);
+  }
+
+  .record-band--panel .record-band-cell {
+    display: flex;
+    gap: var(--sp-2);
+  }
+}
+
+/* A fact is text in the properties column, never a chip: a status keeps its
+   mark and a computer its glyph, but the box around them goes. The placement's
+   kind and sandbox are in its tooltip; the column has room for the name. */
+.record-band--panel [data-slot="badge"],
+.record-band--title [data-slot="badge"] {
+  height: auto;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.record-band--panel .agent-placement-badge-kind,
+.record-band--panel .agent-placement-badge-sandbox {
+  display: none;
 }

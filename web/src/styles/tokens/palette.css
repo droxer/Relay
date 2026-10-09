@@ -900,7 +900,7 @@ html:lang(zh-CN) {
      text. Restate composite roles locally so scoped leading is applied. */
   --fs-4: var(--fs-3);
   --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
-  --type-name: 700 var(--fs-4)/var(--leading-snug) var(--font-sans);
+  --type-name: 500 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-body-sm: 400 var(--fs-1)/var(--leading-snug) var(--font-sans);
   /* Compact grids use shorter cards with the same text clamps. */
   --card-h-tile: 116px;

@@ -311,7 +311,6 @@ html:lang(zh-CN) .md-body blockquote {
   color: var(--ink-4);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 /* ---- table scroll region ----
@@ -468,7 +467,6 @@ html:lang(zh-CN) .md-body blockquote {
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .md-body a[data-footnote-backref] {

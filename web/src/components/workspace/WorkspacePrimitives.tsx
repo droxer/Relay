@@ -6,8 +6,7 @@ import { agentLabel } from "../../lib/plan";
 import { compactDate, compactDueDate, taskAssigneeName } from "../../lib/workspaceFormat";
 import type { WorkspaceBriefResponse, WorkspaceBriefSession, WorkspaceBriefTask } from "../../types";
 import { PriorityBadge } from "../PriorityBadge";
-import { StateMark } from "../StateMark";
-import { TASK_STATUS_SHAPE } from "../task-board/backlogVocabulary";
+import { TaskStatusIcon } from "../TaskStatusIcon";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { Button } from "@/components/ui/button";
 
@@ -188,7 +187,7 @@ function ActivityTaskCard({
   ].filter(Boolean).join(" · ");
   const body = (
     <>
-      <StateMark shape={task.status ? TASK_STATUS_SHAPE[task.status] : "dashed"} />
+      <TaskStatusIcon status={task.status ?? "backlog"} />
       <span className="workspace-task-card-main">
         <span className="workspace-pick-title">{taskTitle(task)}</span>
         <span className="workspace-pick-meta tnum">{meta}</span>

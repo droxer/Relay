@@ -110,9 +110,9 @@ function useFilterLabels(): Partial<FilterLabels> {
 }
 
 /**
- * Every list's filter band: a search box, then the filters as chips (ReUI
- * Filters) — "Add filter" picks a field, then a value; a chip edits or
- * removes it.
+ * Every list's filter toolbar: the filters as chips (ReUI Filters) — "Add
+ * filter" picks a field, then a value; a chip edits or removes it — then the
+ * search box and the page's arrangement controls.
  *
  * The page keeps its filter state as before — one value per field, in the
  * URL — and this bar translates at the edge (lib/filterSelections): a chip
@@ -204,13 +204,17 @@ export function FiltersBar({
       </div>
     );
   }
+  /* One toolbar row under the page header: what narrows the list on the
+     left (Add filter, the chips, Clear), and how it is found and arranged on
+     the right (search, group, sort). Search, a lone "Add filter" and the list
+     used to take three bands between them. */
   return (
     <div className="backlog-filter-bar" role="group" aria-label={ariaLabel}>
+      {chips}
       <div className="backlog-filter-primary">
         {search}
         {trailing}
       </div>
-      {chips}
     </div>
   );
 }

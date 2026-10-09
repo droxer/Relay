@@ -16,12 +16,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ActionCalendar, CheckIcon, ICON } from "../icons";
-import { PriorityBadge } from "../PriorityBadge";
-import { StateMark } from "../StateMark";
+import { PriorityBadge, PriorityGlyph } from "../PriorityBadge";
+import { TaskStatusIcon } from "../TaskStatusIcon";
 import { TASK_PRIORITIES, dueTone } from "../../lib/backlog";
 import { TASK_FLOW_STAGES } from "../../lib/taskFlow";
 import { taskDropRejection } from "../../lib/taskDrag";
-import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
 import { formatDueDate } from "./BacklogChrome";
 import { TaskAssignee } from "../TaskAssignee";
 import { AssignmentSelect } from "../assignment/AssignmentField";
@@ -56,7 +55,7 @@ export function InlineStatus({
 }) {
   const { t } = useTranslation();
   const label = t(`backlog.statuses.${task.status}`);
-  const mark = <StateMark shape={TASK_STATUS_SHAPE[task.status]} />;
+  const mark = <TaskStatusIcon status={task.status} />;
 
   if (readOnly) {
     return (
@@ -95,7 +94,7 @@ export function InlineStatus({
               disabled={rejection === "invalid_transition"}
               onClick={() => { if (!current) onChange(stage); }}
             >
-              <StateMark shape={TASK_STATUS_SHAPE[stage]} />
+              <TaskStatusIcon status={stage} />
               <span className="flex-1">{t(`backlog.statuses.${stage}`)}</span>
               {current ? <CheckIcon size={ICON.sm} aria-hidden="true" /> : null}
             </DropdownMenuItem>
@@ -103,14 +102,6 @@ export function InlineStatus({
         })}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function PriorityGlyph({ priority }: { priority: TaskPriority }) {
-  return (
-    <span className="priority-glyph" data-priority={priority} aria-hidden="true">
-      <span className="priority-bars"><i /><i /><i /></span>
-    </span>
   );
 }
 

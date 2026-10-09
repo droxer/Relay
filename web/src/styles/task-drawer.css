@@ -212,7 +212,6 @@
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .trigger-filters-wide {

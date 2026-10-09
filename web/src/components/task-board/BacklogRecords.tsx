@@ -351,7 +351,7 @@ export function BacklogTaskList({
 
   return (
     <BacklogCells.Provider value={cellState}>
-      <Table aria-label={t("backlog.title")}>
+      <Table aria-label={t("backlog.title")} className="task-table">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="backlog-rows-head hover:bg-transparent">

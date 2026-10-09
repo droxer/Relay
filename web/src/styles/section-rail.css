@@ -197,3 +197,57 @@
 @media (max-width: 640px) {
   .sec-section-body { padding: var(--sp-4); }
 }
+
+/* ── Tabs variant — the same sections as view tabs in a page header ──────
+   Issues and Automations used to give a 240px rail to their queues, which
+   cost the table its trailing column at 1440px. The queues now ride the
+   header's title line as compact tabs: label + dim count, the active one on
+   the same --action-soft "you are here" fill the rail used. The strip scrolls
+   sideways rather than wrapping when the header is narrow. */
+.page-header-views {
+  min-width: 0;
+  flex: 1;
+  align-self: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.page-header-views::-webkit-scrollbar { display: none; }
+
+.sec-nav--tabs { padding: 0; }
+
+.sec-nav--tabs .sec-nav-list {
+  flex-direction: row;
+  gap: var(--sp-0-5);
+}
+
+.sec-nav--tabs .sec-nav-item { flex: none; }
+
+.sec-nav--tabs .sec-nav-btn {
+  gap: var(--sp-1-5);
+  width: auto;
+  height: var(--control-h-xs);
+  min-height: var(--control-h-xs);
+  padding: 0 var(--sp-2);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.sec-nav--tabs .sec-nav-label { flex: none; }
+
+.sec-nav--tabs .sec-nav-count { color: var(--ink-4); }
+
+.sec-nav--tabs .sec-nav-btn[data-active="true"] .sec-nav-count { color: var(--ink-3); }
+
+/* A header carrying tabs is a single line: the title, its count, the tabs,
+   then the actions. */
+.page-header:has(.page-header-views) .page-header-lead {
+  flex: 1;
+  align-items: center;
+}
+
+.page-header:has(.page-header-views) .page-header-title-row {
+  flex: 1;
+  align-items: center;
+  gap: var(--sp-4);
+}

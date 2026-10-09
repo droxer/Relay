@@ -72,39 +72,14 @@
   opacity: var(--opacity-ghost);
 }
 
-/* ── Priority badge — rank, not status ──────────────────────────────────
-   Three ascending bars filled to the level (low 1 / normal 2 / high 3) so
-   priority reads as a rank at a glance, distinct from the leading-dot status
-   badges. The accent escalates muted → ink → danger to match the card rail. */
-/* The chip geometry is the `state` Badge variant's; this rule used to redraw
-   it. `state` is the right variant precisely because priority's tone scale is
-   not one of the five semantic ones — it runs low → normal → high on its own
-   --prio-accent ramp, which is what the rules below set.
-
-   The inline padding is asymmetric on purpose: the leading signal bars are
-   narrower than a text cap, so the badge's even --sp-2 pad would read as a gap
-   before them. Only the leading side is pulled in. */
+/* ── Priority glyph — rank, not status ──────────────────────────────────
+   Three ascending bars filled to the level (low 1 / normal 2 / high 3). One
+   glyph on every surface (see PriorityBadge.tsx); the word is in the tooltip.
+   `.priority-badge` is only the tooltip's hover target around the glyph. */
 .priority-badge {
-  --prio-accent: var(--ink-4);
-  /* Explicit border-color, NOT a --tone-line override: roles.css derives
-     --tone-line from --tone, so pinning it here would also pin the high tier,
-     whose whole signal is that derivation turning warn. */
-  border-color: var(--line-1);
-  padding-left: var(--sp-1-5);
-  color: var(--ink-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-.priority-badge[data-priority="normal"] {
-  --prio-accent: var(--ink-1);
-}
-
-.priority-badge[data-priority="high"] {
-  --prio-accent: var(--warn);
-  --tone: var(--warn);
-  border-color: var(--tone-line);
-  color: var(--warn);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
 }
 
 .priority-bars {
@@ -124,9 +99,6 @@
 .priority-bars > i:nth-child(2) { height: 7px; }
 .priority-bars > i:nth-child(3) { height: 11px; }
 
-.priority-badge[data-priority="low"] .priority-bars > i:nth-child(-n+1),
-.priority-badge[data-priority="normal"] .priority-bars > i:nth-child(-n+2),
-.priority-badge[data-priority="high"] .priority-bars > i:nth-child(-n+3),
 .priority-glyph[data-priority="low"] .priority-bars > i:nth-child(-n+1),
 .priority-glyph[data-priority="normal"] .priority-bars > i:nth-child(-n+2),
 .priority-glyph[data-priority="high"] .priority-bars > i:nth-child(-n+3) {
@@ -412,3 +384,38 @@
   font: var(--type-body-sm);
   text-align: center;
 }
+
+/* An empty lane at rest is just an empty column — the head already says 0,
+   and a dashed "No issues" box in every idle lane was the loudest shape on a
+   quiet board. The box comes back only while a card is being dragged, where
+   it is the drop target. It stays in the accessibility tree either way. */
+.backlog-board:not([data-dragging="true"]) .backlog-empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+}
+
+/* ── Task status icon — progress in the fill, tone in the hue ───────────
+   See TaskStatusIcon.tsx. The shape already separates every status, so the hue
+   only has to say where on the road the work is: grey before it starts, --live
+   while an agent has it, --warn when it waits on a person, --ok once it is
+   reviewable or done, --err when it is stuck. */
+.task-status-icon {
+  flex: none;
+  display: block;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-4);
+}
+
+.task-status-icon[data-status="assigned"] { color: var(--ink-3); }
+.task-status-icon[data-status="running"] { color: var(--live); }
+.task-status-icon[data-status="waiting_for_human"] { color: var(--warn); }
+.task-status-icon[data-status="review"],
+.task-status-icon[data-status="done"] { color: var(--ok); }
+.task-status-icon[data-status="blocked"] { color: var(--err); }

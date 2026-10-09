@@ -90,7 +90,6 @@
 .adm-dash-tile-eyebrow {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-4);
 }
 
@@ -333,7 +332,6 @@
    only the uppercase micro voice is this tag's own. */
 .adm-dash-empty-tag {
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-3);
   background: var(--surface-1);
 }

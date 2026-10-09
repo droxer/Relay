@@ -175,7 +175,6 @@ tr.is-pulse > td:first-child::after {
 .adm-emp-metric-label {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -288,7 +287,6 @@ tr.is-pulse > td:first-child::after {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   margin: 0;
-  text-transform: uppercase;
 }
 
 .adm-node-history-head p {
@@ -444,7 +442,6 @@ tr.is-pulse > td:first-child::after {
 .adm-emp-card-dept {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

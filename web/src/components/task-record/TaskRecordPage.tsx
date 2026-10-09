@@ -9,7 +9,8 @@ import { projectReadOnly } from "../../lib/projectPage";
 import { navigateRecordBack, recordBackHref } from "../../lib/recordBack";
 import type { CurrentUser, RelayTaskListItem } from "../../types";
 import { PageHeader } from "../PageHeader";
-import { RecordBand, type RecordFact } from "../workspace/RecordBand";
+import type { RecordFact } from "../workspace/RecordBand";
+import { RecordLayout } from "../workspace/RecordLayout";
 import { recordBandFacts } from "./recordBandFacts";
 import { TaskRecoveryPanel } from "../ExecutionRecoveryPanel";
 import { taskRecoveryReason } from "../../lib/executionRecovery";
@@ -221,8 +222,7 @@ export function TaskRecordPage({
         />
       )}
 
-      <RecordBand facts={facts} label={t("record.record_label")} />
-
+      <RecordLayout facts={facts} label={t("record.record_label")}>
       <div className="workspace-body">
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
@@ -268,6 +268,7 @@ export function TaskRecordPage({
           <RecordArtifacts taskId={task.id} />
         </TabsContent>
       </div>
+      </RecordLayout>
     </Tabs>
   );
 }

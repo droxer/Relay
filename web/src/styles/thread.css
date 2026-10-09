@@ -470,7 +470,7 @@
   padding-inline: var(--sp-1-5);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
-  color: var(--ink-2);
+  color: var(--ink-3);
 }
 
 /* Badges a thread whose computer is unreachable. Sits inside the name line
@@ -616,7 +616,6 @@
   padding: var(--sp-2) var(--sp-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -650,7 +649,17 @@
 .conversation-project {
   flex: 0 1 auto;
   min-width: 0;
-  color: var(--ink-2);
+  color: var(--ink-3);
+}
+
+/* The project and origin read as the row's meta line — dim text behind a
+   glyph — not as bordered chips. A chip on every row of the rail made the
+   least important fact the most boxed-in shape in it. */
+.conversation-project,
+.conversation-origin-kind {
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
 }
 
 .conversation-project > svg {
