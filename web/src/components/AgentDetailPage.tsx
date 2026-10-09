@@ -16,6 +16,7 @@ import { ProfileImage } from "./ProfileImagePicker";
 import { StatusPill } from "./StatusPill";
 import { describeAgentPlacements } from "../lib/agentPlacements";
 import { truncateId } from "../lib/adminHelpers";
+import { agentModel } from "../lib/agentModels.ts";
 import {
   ActivitiesSkeleton,
   WorkspaceActivities,
@@ -74,6 +75,7 @@ export function AgentDetailPage({
     ({ placement }) => placement.desiredState === "active",
   ) ?? placementDescriptions[0];
 
+  const model = agentModel(agent);
   const bandFacts: RecordFact[] = [
     {
       key: "runtime",
@@ -84,6 +86,14 @@ export function AgentDetailPage({
           {agentLabel(agent.executorKind)}
         </span>
       ),
+    },
+    {
+      key: "model",
+      label: t("agents_page.model_label"),
+      value: model || (
+        <span className="record-band-value--empty">{t("agents_page.model_default")}</span>
+      ),
+      technical: Boolean(model),
     },
     {
       key: "computer",

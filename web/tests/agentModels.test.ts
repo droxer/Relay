@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { agentModel, modelIdProblem, modelPolicyFor, suggestedModels } from "../src/lib/agentModels.js";
 
@@ -29,5 +31,22 @@ describe("agent model selection", () => {
     assert.equal(modelIdProblem("gpt 5"), "invalid");
     assert.equal(modelIdProblem("-m"), "invalid");
     assert.equal(modelIdProblem("x".repeat(129)), "too_long");
+  });
+});
+
+describe("agent model on the agent record", () => {
+  it("prints the model in the record panel beside the runtime, for every viewer", async () => {
+    const detail = await readFile(resolve("web/src/components/AgentDetailPage.tsx"), "utf8");
+    const runtime = detail.indexOf('key: "runtime"');
+    const model = detail.indexOf('key: "model"');
+    assert.ok(runtime >= 0 && model > runtime, "model fact must follow the runtime fact");
+    assert.match(detail, /agentModel\(agent\)/);
+    assert.match(detail, /agents_page\.model_default/);
+  });
+
+  it("keeps the profile's model row for editing only, so readers don't see it twice", async () => {
+    const profile = await readFile(resolve("web/src/components/AgentProfilePanel.tsx"), "utf8");
+    assert.match(profile, /\{canEditProfile \? \(\s*<div className="workspace-dossier-field">\s*<span[^>]*id=\{modelLabelId\}/);
+    assert.doesNotMatch(profile, /savedModel \|\| t\("agents_page\.model_default"\)/);
   });
 });
