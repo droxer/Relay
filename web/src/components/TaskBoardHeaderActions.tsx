@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { MobileTopbarActions } from "./MobileTopbarSlot";
 import {
   ActionAdd,
   ICON,
@@ -16,6 +17,7 @@ export function TaskBoardHeaderActions({
   onRefresh,
   onCreate,
   leading,
+  topbar = false,
 }: {
   refreshLabel: string;
   createLabel: string;
@@ -25,10 +27,12 @@ export function TaskBoardHeaderActions({
   /** Omitted where nothing may be created (a read-only project). */
   onCreate?: () => void;
   leading?: ReactNode;
+  /** On a phone, refresh and create move into the top bar; `leading` (a view
+   *  toggle) stays where it is. For a toolbar that is not a PageHeader. */
+  topbar?: boolean;
 }) {
-  return (
+  const buttons = (
     <>
-      {leading}
       {onRefresh ? <Button
         type="button"
         variant="ghost"
@@ -53,6 +57,12 @@ export function TaskBoardHeaderActions({
       >
         <ActionAdd size={ICON.md} />
       </Button> : null}
+    </>
+  );
+  return (
+    <>
+      {leading}
+      {topbar ? <MobileTopbarActions>{buttons}</MobileTopbarActions> : buttons}
     </>
   );
 }

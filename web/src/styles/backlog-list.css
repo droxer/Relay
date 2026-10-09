@@ -277,33 +277,6 @@ button.inline-field[aria-expanded="true"] {
   border-top: 1px solid var(--line-1);
 }
 
-/* Phone widths keep what a row is FOR — select, title, who has it. At 390px
-   the desktop track set left the title ~90px between a 190px id column and
-   the date, so every title cut off after a word. The id, priority and date
-   are all on the record one tap away. */
-@media (max-width: 820px) {
-  .task-col-ref,
-  .task-col-priority,
-  .task-col-due { display: none; }
-  .task-col-assignee { width: 128px; }
-
-  /* With the title the only flexible track, a trailing chip ("Needs project")
-     beside it left the title one letter and an ellipsis. Here the chip drops
-     under the title, and the title takes two lines before it truncates. */
-  .task-col-title .backlog-row-lead-main {
-    flex-wrap: wrap;
-    row-gap: var(--sp-1);
-  }
-
-  .task-col-title .backlog-row-title {
-    display: -webkit-box;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   /* Pulse rings live on pseudos now — hide them outright under reduced
      motion (animation: none alone would leave the ring at full opacity). */
@@ -565,4 +538,198 @@ tr[data-selected="true"] > td:first-child {
   color: var(--ink-4);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
+}
+
+/* Touch at table widths (a tablet): a11y.css gives every link a 44px floor,
+   and the title's text sat at the top of that box — every title rode ~12px
+   above the status, assignee and due beside it. The target keeps its 44px;
+   the text is centred inside it instead. */
+@media (pointer: coarse) {
+  .task-table .backlog-row-title {
+    min-height: 0;
+    padding-block: calc((var(--touch-target) - 20px) / 2);
+  }
+}
+
+/* ── Phone: task tables become stacked rows ────────────────────────────
+   Issues, a project's list and automations all read the same way on a phone:
+   no table header, no selection column, and each record as two lines —
+
+     ◐  Fix billing export race condition          [actions]
+        #1 · ▮▮▮ · Platform Guild · Oct 10
+
+   The status (or schedule-state) mark leads, the title gets the full width
+   and wraps to two lines, and the meta line underneath carries the ref,
+   priority, assignee and due date. The desktop columns squeezed the title to
+   ~100px ("Add per-…"). The whole row opens the record: the title link is
+   stretched over it, and the page passes read-only cells (inline edits live
+   in the record on a phone). Sorting stays in the toolbar's sort menu.
+   Last in the file on purpose: it must outrank the 36px row floor above. */
+@media (max-width: 820px) {
+  .task-table,
+  .task-table > tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .task-table > thead,
+  .task-selection-bar {
+    display: none;
+  }
+
+  .task-table > tbody > tr:not(.issues-band) {
+    --row-mark-w: 22px;
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    /* Top-aligned, so the pinned mark lines up with the title's first line
+       even when the row's 44px actions make line one taller than the text. */
+    align-items: flex-start;
+    row-gap: var(--sp-1);
+    /* The mark sits in this left padding (absolutely, below), so the title
+       and the meta line share one left edge and never compete with it for
+       width. */
+    padding: var(--sp-3) var(--sp-4) var(--sp-3) calc(var(--sp-4) + var(--row-mark-w));
+    border-bottom: 0.5px solid var(--line-2);
+  }
+
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"] {
+    display: block;
+    width: auto;
+    max-width: none;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  /* Same specificity as the cell rule above, plus the class, so it wins. */
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-select {
+    display: none;
+  }
+
+  /* Line one: the mark, then the title taking every remaining pixel — its
+     basis fills the line, so the meta cells after it wrap to line two. */
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"]:is(.task-col-mark, .issue-col-status) {
+    position: absolute;
+    /* (20px title line − 14px status icon) / 2 */
+    top: calc(var(--sp-3) + 3px);
+    left: var(--sp-4);
+    width: auto;
+    line-height: 0;
+  }
+
+  /* An automation's schedule state is the 8px dot, not the 14px icon. */
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-mark:has(.state-mark) {
+    top: calc(var(--sp-3) + 6px);
+  }
+
+  .task-table .task-col-title {
+    order: 2;
+    flex: 1 0 calc(100% - var(--row-actions-w, 0px));
+    min-width: 0;
+  }
+
+  .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-actions {
+    order: 3;
+    flex: none;
+    width: var(--row-actions-w);
+    text-align: right;
+  }
+
+  .task-table > tbody > tr:has(.task-col-actions) {
+    --row-actions-w: 88px;
+  }
+
+  /* Line two: the meta, indented under the title. */
+  .task-table .task-col-ref,
+  .task-table .issue-col-project,
+  .task-table .task-col-priority,
+  .task-table .task-col-mark--priority,
+  .task-table .task-col-assignee,
+  .task-table .task-col-due {
+    display: block;
+    flex: none;
+    width: auto;
+    margin-right: var(--sp-3);
+    color: var(--ink-3);
+    font: var(--type-body-sm);
+  }
+
+  .task-table > tbody > tr > td[data-slot="table-cell"].task-col-ref { order: 10; min-width: 0; }
+  .task-table .task-col-mark--priority,
+  .task-table .task-col-priority { order: 11; }
+  .task-table .task-col-assignee { order: 12; }
+  .task-table .task-col-due { order: 13; }
+  .task-table .issue-col-project { order: 14; }
+
+  /* The status column's word is the mark's tooltip here; the mark leads. */
+  .task-table .issue-col-status .inline-field > span:not(.sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .task-table .issue-col-project .issue-project--none { display: none; }
+
+  .task-table .task-col-title .backlog-row-lead-main {
+    flex-wrap: wrap;
+    row-gap: var(--sp-1);
+  }
+
+  .task-table .task-col-title .backlog-row-title {
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* The title link covers the row, so a tap anywhere opens the record. The
+     ref link and the routine actions sit above it and stay their own. */
+  .task-table .task-col-title .backlog-row-title::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  /* The stretched link makes the whole row (well over 44px) the tap target,
+     so the title itself drops the 44px floor a11y.css gives every link —
+     a one-line title in a 44px box left a blank band under it. */
+  .task-table .task-col-title .backlog-row-title {
+    min-height: 0;
+    padding-block: 0;
+  }
+
+  .task-table .task-col-actions {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* The ref is read here, not pressed: the row already opens the record, and
+     as a link it took the 44px touch floor (a11y.css) and stretched the meta
+     line into a blank band under the title. */
+  .task-table .task-col-ref a {
+    min-height: 0;
+    pointer-events: none;
+  }
+
+  .task-table .task-col-assignee .task-assignee .agent-state {
+    width: var(--avatar-xs);
+    height: var(--avatar-xs);
+  }
+
+  /* No column header above the bands now, so a band sticks to the top. */
+  .issues-rows { --list-head-h: 0px; }
+
+  .issues-band,
+  .issues-band > td {
+    display: block;
+  }
+
+  .issues-band > td {
+    padding-inline: var(--sp-4);
+  }
 }

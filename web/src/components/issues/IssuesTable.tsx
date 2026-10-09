@@ -100,7 +100,7 @@ export function IssuesTable({
     <Table aria-label={t("issues.title")} className="issues-table task-table">
       <TableHeader>
         <TableRow className="backlog-rows-head hover:bg-transparent">
-          <TableHead className="w-4">{selectAll}</TableHead>
+          <TableHead className="w-4 task-col-select">{selectAll}</TableHead>
           <TableHead className="task-col-ref">{t("backlog.col_ref")}</TableHead>
           {head("title", t("issues.col_issue"))}
           {showStatus ? head("status", t("backlog.status"), "issue-col-status") : null}
@@ -139,7 +139,7 @@ export function IssuesTable({
                 data-priority={task.priority}
                 data-selected={selectedIds.has(task.id) ? "true" : undefined}
               >
-                <TableCell className="w-4">
+                <TableCell className="w-4 task-col-select">
                   <TaskSelectCheckbox
                     className="backlog-select-box"
                     checked={selectedIds.has(task.id)}

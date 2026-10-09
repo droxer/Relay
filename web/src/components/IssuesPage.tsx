@@ -13,6 +13,8 @@ import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { usePagination } from "../hooks/usePagination";
 import { useListSort } from "../hooks/useListSort";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Pagination } from "@/components/ui/Pagination";
 import { SortMenu } from "@/components/ui/SortMenu";
@@ -105,6 +107,10 @@ export function IssuesPage({
   const { announce, confirm } = useDialogs();
   const { updateTaskMutation, deleteTasksMutation } = useRelayMutations();
   const inlineEdits = useInlineTaskEdits();
+  /* A phone list is read, not edited in place: rows are stacked and a tap
+     opens the record, where every property is a full-size control. Inline
+     chips there were 28px targets crowded onto one meta line. */
+  const phone = useMediaQuery(PHONE_QUERY);
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
 
@@ -256,115 +262,118 @@ export function IssuesPage({
   const creatable = queue === "open" || queue === "untriaged";
 
   return (
-    <section id="backlog-panel" className="backlog-page issues-page" aria-label={t("issues.title")} tabIndex={-1}>
-      {/* One header line: the surface, its count, the queues as view tabs,
-          then the actions. The queues used to fill a 240px rail, which cost
-          the table its Due column at 1440px with the sidebar open. */}
-      <PageHeader
-        title={t("issues.title")}
-        titleAs="h2"
-        titleVariant="title"
-        count={t("issues.sub", { count: issues.length })}
-        views={<IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />}
-        actions={(
-          <TaskBoardHeaderActions
-            refreshLabel={t("nav.refresh")}
-            createLabel={t("issues.new_issue")}
-            isRefreshing={isRefreshing}
-            onRefresh={onRefresh ? () => void onRefresh() : undefined}
-            onCreate={openCreate}
+    <section id="backlog-panel" className="backlog-page issues-page sec-shell" aria-label={t("issues.title")} tabIndex={-1}>
+      <div className="sec-rail">
+        <PageHeader title={t("issues.title")} titleAs="h2"
+          count={t("issues.sub", { count: issues.length })} titleVariant="title" layout="stacked" />
+        <IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />
+      </div>
+      <div className="sec-main">
+        <PageHeader
+          title={t(`issues.queues.${queue}`)}
+          titleAs="h2"
+          titleVariant="title"
+          topbarActions
+          actions={(
+            <TaskBoardHeaderActions
+              refreshLabel={t("nav.refresh")}
+              createLabel={t("issues.new_issue")}
+              isRefreshing={isRefreshing}
+              onRefresh={onRefresh ? () => void onRefresh() : undefined}
+              onCreate={openCreate}
+            />
+          )}
+        />
+        {projectNotice}
+        <BacklogFiltersBar
+          filters={filters}
+          extraField={projectField}
+          agents={logicalAgents}
+          teams={teams}
+          onChange={(next) => { setFilters(next); setPage(1); }}
+          sortMenu={(
+            <>
+              <Select value={groupBy} onValueChange={(value) => { if (value) setGroupBy(parseIssueGroupBy(value)); }}>
+                <SelectTrigger className="issues-group-by" aria-label={t("issues.group_by")}>
+                  <SelectValue>{(value: IssueGroupBy) => t("issues.group_by_value", { value: t(`issues.groupings.${value}`) })}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {ISSUE_GROUPINGS.map((value) => (
+                    <SelectItem key={value} value={value}>{t(`issues.groupings.${value}`)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <SortMenu
+                options={[
+                  { key: "title", label: t("issues.col_issue") },
+                  { key: "status", label: t("backlog.status") },
+                  { key: "project", label: t("issues.col_project") },
+                  { key: "priority", label: t("backlog.priority") },
+                  { key: "assignee", label: t("backlog.assignee") },
+                  { key: "due", label: t("backlog.due") },
+                  { key: "updated", label: t("issues.col_updated"), defaultDirection: "desc" },
+                ]}
+                sort={sort}
+                onSortChange={setSort}
+                label={t("backlog.sort_label")}
+              />
+            </>
+          )}
+        />
+
+        {visible.length === 0 ? (
+          <BoardEmpty
+            title={filtered ? t("backlog.no_match_title") : t(`issues.empty.${queue}`)}
+            body={filtered ? t("backlog.no_match_body") : t("issues.empty_body")}
+            createLabel={filtered || !creatable ? undefined : t("issues.new_issue")}
+            onCreate={filtered || !creatable ? undefined : openCreate}
+            clearLabel={filtered ? t("backlog.clear_filters") : undefined}
+            onClear={filtered ? () => { setFilters(initialFilters); setProjectFilter(null); } : undefined}
           />
+        ) : (
+          <div className="backlog-rows issues-rows" data-density="compact">
+            <IssuesTable
+              groups={groups}
+              groupBy={groupBy}
+              groupTotals={groupTotals}
+              sort={sort}
+              onSort={toggleSort}
+              selectAll={(
+                <TaskSelectAllCheckbox
+                  state={selectionCheckState(visibleSelection, visibleIds)}
+                  label={t("issues.select_all")}
+                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+                />
+              )}
+              selectedIds={visibleSelection}
+              onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+              contextFor={rowContext}
+              onOpenIssue={onOpenRecord}
+              edits={phone ? null : inlineEdits}
+              roster={{ agents: logicalAgents, teams }}
+            />
+            <Pagination page={listPage} onPageChange={setPage} label={t("issues.title")} />
+          </div>
         )}
-      />
-      {projectNotice}
-      <BacklogFiltersBar
-        filters={filters}
-        extraField={projectField}
-        agents={logicalAgents}
-        teams={teams}
-        onChange={(next) => { setFilters(next); setPage(1); }}
-        sortMenu={(
-          <>
-            <Select value={groupBy} onValueChange={(value) => { if (value) setGroupBy(parseIssueGroupBy(value)); }}>
-              <SelectTrigger className="issues-group-by" aria-label={t("issues.group_by")}>
-                <SelectValue>{(value: IssueGroupBy) => t("issues.group_by_value", { value: t(`issues.groupings.${value}`) })}</SelectValue>
+
+        <TaskSelectionBar
+          count={visibleSelection.size}
+          deleting={batchBusy}
+          deleteLabel={t("backlog.delete_selected")}
+          onDelete={() => { void deleteSelected(); }}
+          onClear={() => setSelection(EMPTY_TASK_SELECTION)}
+          actions={movable.length ? (
+            <Select value="" onValueChange={(value) => { if (value) void moveSelected(value); }}>
+              <SelectTrigger className="issues-move" aria-label={t("issues.move_to_project")} disabled={batchBusy || !openProjects.length}>
+                <SelectValue>{() => t("issues.move_count", { count: movable.length })}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {ISSUE_GROUPINGS.map((value) => (
-                  <SelectItem key={value} value={value}>{t(`issues.groupings.${value}`)}</SelectItem>
-                ))}
+                {openProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <SortMenu
-              options={[
-                { key: "title", label: t("issues.col_issue") },
-                { key: "status", label: t("backlog.status") },
-                { key: "project", label: t("issues.col_project") },
-                { key: "priority", label: t("backlog.priority") },
-                { key: "assignee", label: t("backlog.assignee") },
-                { key: "due", label: t("backlog.due") },
-                { key: "updated", label: t("issues.col_updated"), defaultDirection: "desc" },
-              ]}
-              sort={sort}
-              onSortChange={setSort}
-              label={t("backlog.sort_label")}
-            />
-          </>
-        )}
-      />
-
-      {visible.length === 0 ? (
-        <BoardEmpty
-          title={filtered ? t("backlog.no_match_title") : t(`issues.empty.${queue}`)}
-          body={filtered ? t("backlog.no_match_body") : t("issues.empty_body")}
-          createLabel={filtered || !creatable ? undefined : t("issues.new_issue")}
-          onCreate={filtered || !creatable ? undefined : openCreate}
-          clearLabel={filtered ? t("backlog.clear_filters") : undefined}
-          onClear={filtered ? () => { setFilters(initialFilters); setProjectFilter(null); } : undefined}
+          ) : null}
         />
-      ) : (
-        <div className="backlog-rows issues-rows" data-density="compact">
-          <IssuesTable
-            groups={groups}
-            groupBy={groupBy}
-            groupTotals={groupTotals}
-            sort={sort}
-            onSort={toggleSort}
-            selectAll={(
-              <TaskSelectAllCheckbox
-                state={selectionCheckState(visibleSelection, visibleIds)}
-                label={t("issues.select_all")}
-                onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-              />
-            )}
-            selectedIds={visibleSelection}
-            onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
-            contextFor={rowContext}
-            onOpenIssue={onOpenRecord}
-            edits={inlineEdits}
-            roster={{ agents: logicalAgents, teams }}
-          />
-          <Pagination page={listPage} onPageChange={setPage} label={t("issues.title")} />
-        </div>
-      )}
-
-      <TaskSelectionBar
-        count={visibleSelection.size}
-        deleting={batchBusy}
-        deleteLabel={t("backlog.delete_selected")}
-        onDelete={() => { void deleteSelected(); }}
-        onClear={() => setSelection(EMPTY_TASK_SELECTION)}
-        actions={movable.length ? (
-          <Select value="" onValueChange={(value) => { if (value) void moveSelected(value); }}>
-            <SelectTrigger className="issues-move" aria-label={t("issues.move_to_project")} disabled={batchBusy || !openProjects.length}>
-              <SelectValue>{() => t("issues.move_count", { count: movable.length })}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {openProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        ) : null}
-      />
+      </div>
 
       {drawerRecordId ? (
         <TaskRecordView
