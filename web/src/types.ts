@@ -664,6 +664,8 @@ export interface CreateAgentInput {
   defaultRole: AgentRole;
   displayName?: string;
   instructions?: string;
+  /** Omitted (or `{}`) runs the runtime's default model. */
+  modelPolicy?: { model?: string };
   /** A preset from `lib/presetAvatars.ts`; uploads happen after creation. */
   profileImageUrl?: string;
 }

@@ -261,14 +261,15 @@ export function guestPiModelsJson(): string {
   return JSON.stringify({ providers: { [provider]: providerConfig } });
 }
 
-export function codexCliConfigOverrides(): string[] {
+/** `pinnedModel` is passed with `-m` instead, so the env default is left out. */
+export function codexCliConfigOverrides(pinnedModel?: string): string[] {
   if (isLocalAgentExecution()) return [];
   const multiAgent = codexMultiAgentEnabled();
   const argv = [
     "-c",
     `features.multi_agent=${multiAgent}`,
   ];
-  const model = openaiModel();
+  const model = pinnedModel ? undefined : openaiModel();
   const baseUrl = openaiBaseUrl();
   if (model) argv.push("-c", `model=${JSON.stringify(model)}`);
   if (baseUrl) {

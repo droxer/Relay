@@ -11,15 +11,18 @@ import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { AgentState } from "./state.js";
 
 export function buildCodexCommand(state: AgentState, workspacePath?: string): string {
-  const argv = [...codexBaseArgv({ workspacePath }), nativeSkillPrompt(codexTaskPrompt(state), state)];
+  const argv = [
+    ...codexBaseArgv({ workspacePath, model: state.agent_model }),
+    nativeSkillPrompt(codexTaskPrompt(state), state),
+  ];
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CODEX_HOME"), workspacePath);
 }
 
-function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): string[] {
+function codexBaseArgv({ workspacePath, model: pinned }: { workspacePath?: string; model?: string } = {}): string[] {
   const workspace = workspacePath ?? agentWorkspacePath();
   const argv = [
     ...agentArgv("codex"),
-    ...codexCliConfigOverrides(),
+    ...codexCliConfigOverrides(pinned),
     "-C",
     workspace,
     "exec",
@@ -27,7 +30,7 @@ function codexBaseArgv({ workspacePath }: { workspacePath?: string } = {}): stri
     "--skip-git-repo-check",
     ...(trustedExecution() ? ["--dangerously-bypass-approvals-and-sandbox"] : []),
   ];
-  const model = isLocalAgentExecution() ? undefined : openaiModel();
+  const model = runtimeModel(pinned, openaiModel);
   if (model) argv.push("-m", model);
   return argv;
 }
@@ -52,16 +55,21 @@ function buildClaudeInvocation(
     "stream-json",
     "--include-partial-messages",
   ];
-  const model = isLocalAgentExecution() ? undefined : anthropicModel();
+  const model = runtimeModel(state.agent_model, anthropicModel);
   if (model) argv.push("--model", model);
   argv.push(prompt);
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
 }
 
 export function buildPiCommand(state: AgentState, workspacePath?: string): string {
-  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath);
+  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model);
 }
-function buildPiInvocation(prompt: string, skillPaths: string[] | undefined, workspacePath?: string): string {
+function buildPiInvocation(
+  prompt: string,
+  skillPaths: string[] | undefined,
+  workspacePath?: string,
+  pinnedModel?: string,
+): string {
   const argv = [...agentArgv("pi"), "--no-session"];
   if (skillPaths !== undefined) {
     argv.push("--no-skills");
@@ -69,7 +77,7 @@ function buildPiInvocation(prompt: string, skillPaths: string[] | undefined, wor
   }
   const provider = isLocalAgentExecution() ? undefined : piProvider();
   if (provider) argv.push("--provider", provider);
-  const model = isLocalAgentExecution() ? undefined : piModel();
+  const model = runtimeModel(pinnedModel, piModel);
   if (model) argv.push("--model", model);
   const jsonCommand = shellCommand([...argv, "--mode", "json", prompt]);
   const streamingCommand = shellCommand([...argv, "-P", prompt]);
@@ -87,20 +95,33 @@ function buildPiInvocation(prompt: string, skillPaths: string[] | undefined, wor
 // Kimi (Moonshot AI) CLI. Flags verified against kimi-code 0.39; re-check
 // `--auto`/`--output-format` against the installed version when bumping it.
 export function buildKimiCommand(state: AgentState, workspacePath?: string): string {
-  return buildKimiInvocation(kimiTaskPrompt(state), state.skill_paths, workspacePath);
+  return buildKimiInvocation(kimiTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model);
 }
-function buildKimiInvocation(prompt: string, skillPaths: string[] | undefined, workspacePath?: string): string {
+function buildKimiInvocation(
+  prompt: string,
+  skillPaths: string[] | undefined,
+  workspacePath?: string,
+  pinnedModel?: string,
+): string {
   // Kimi asks before tool calls by default. The run is headless, so nothing can
   // answer and the agent would stall; --auto is its equivalent of Claude's
   // bypassPermissions and Codex's approval bypass.
   const argv = ["kimi", ...(trustedExecution() ? ["--auto"] : [])];
   for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
-  const model = isLocalAgentExecution() ? undefined : kimiModel();
-  if (model && !kimiApiKey() && !process.env.KIMI_MODEL_NAME) argv.push("--model", model);
+  // With an API key (or KIMI_MODEL_NAME) the model is configured through the
+  // KIMI_MODEL_* environment rather than --model, so a pinned model overrides
+  // KIMI_MODEL_NAME there instead of adding a flag Kimi would not resolve.
+  const envConfigured = Boolean(kimiApiKey() || process.env.KIMI_MODEL_NAME);
+  const model = runtimeModel(pinnedModel, kimiModel);
+  if (model && !envConfigured) argv.push("--model", model);
   // stream-json emits one JSON message object per stdout line (parsed by
   // KimiStreamRenderer) and keeps thinking + the resume notice off stdout.
   argv.push("--output-format", "stream-json", "--prompt", prompt);
-  return runAsAgent(shellCommand(argv), workspacePath);
+  const command = shellCommand(argv);
+  return runAsAgent(
+    pinnedModel && envConfigured ? `export KIMI_MODEL_NAME=${shellQuote(pinnedModel)} && ${command}` : command,
+    workspacePath,
+  );
 }
 
 function withSkillEnv(command: string, state: AgentState, allowedKey: string): string {
@@ -129,6 +150,16 @@ export function buildPiPreflightCommand(): string {
     modelCheck = shellCommand(listModelsArgv);
   }
   return runAsAgent(["node --version", "command -v pi", "pi --version", modelCheck].join(" && "));
+}
+
+/**
+ * A model the agent pins wins everywhere, local execution included — the owner
+ * chose it for this agent. Otherwise the daemon's env default applies, except
+ * on a local node, which keeps the user's own CLI configuration.
+ */
+function runtimeModel(pinned: string | undefined, envDefault: () => string | undefined): string | undefined {
+  if (pinned) return pinned;
+  return isLocalAgentExecution() ? undefined : envDefault();
 }
 
 function agentArgv(agent: string): string[] {

@@ -28,11 +28,12 @@ from .helpers import (
 router = APIRouter()
 
 
-# Employees can adjust their agent's personality at any time; the birth
-# certificate (computerId / executorKind / defaultRole) is fixed at creation
-# — changing the role is like swapping in a different coworker, so it should
-# be a new agent, not an edit.
-AGENT_META_FIELDS = frozenset({"displayName", "instructions"})
+# Employees can adjust their agent's personality and model at any time; the
+# birth certificate (computerId / executorKind / defaultRole) is fixed at
+# creation — changing the role is like swapping in a different coworker, so it
+# should be a new agent, not an edit. The model is tuning within the runtime
+# the agent was born with, not a different coworker.
+AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy"})
 
 
 @router.get("/agents")

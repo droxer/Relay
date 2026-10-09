@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..core.agent_names import generate_agent_name
 from ..core.ids import new_database_id, now_iso
+from ..core.model_policy import normalize_model_policy
 from ..core.models import AGENT_NAMES, AGENT_ROLES
 from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
@@ -970,6 +971,8 @@ def _policy(payload: dict[str, Any], field: str) -> dict[str, Any]:
         return {}
     if not isinstance(value, dict):
         raise ValueError(f"{field} must be an object.")
+    if field == "modelPolicy":
+        return normalize_model_policy(value)
     if value and field != "skillPolicy":
         raise ValueError(
             f"{field} is reserved until runtime enforcement is available; "

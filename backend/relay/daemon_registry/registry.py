@@ -201,6 +201,8 @@ DAEMON_CAPABILITY_THREAD_WORKSPACES = "thread-workspaces"
 DAEMON_CAPABILITY_PROJECT_WORKSPACES = "project-workspaces"
 DAEMON_CAPABILITY_ROUND_RESULT = "round-result"
 DAEMON_CAPABILITY_PRODUCED_FILES = "produced-files"
+# The daemon passes an agent's pinned model to its runtime CLI.
+DAEMON_CAPABILITY_AGENT_MODEL = "agent-model"
 DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
@@ -217,6 +219,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_ROUND_RESULT,
         DAEMON_CAPABILITY_PRODUCED_FILES,
         DAEMON_CAPABILITY_HANDOFF_VALIDATION,
+        DAEMON_CAPABILITY_AGENT_MODEL,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -3156,6 +3159,17 @@ class DaemonNodeRegistry:
             state["agent_display_name"] = assignment["agentDisplayName"]
         if assignment.get("agentInstructions"):
             state["agent_instructions"] = assignment["agentInstructions"]
+        if assignment.get("agentModel"):
+            # A daemon that cannot pass the model on would silently run the
+            # runtime default — the agent's setup would be a lie, so refuse.
+            if DAEMON_CAPABILITY_AGENT_MODEL not in (sandbox.get("capabilities") or []):
+                self._fail_run_request(
+                    run_request,
+                    f"This agent pins the model {assignment['agentModel']}, "
+                    "but its computer's daemon cannot select models. Update the daemon.",
+                )
+                return run_request
+            state["agent_model"] = assignment["agentModel"]
         if assignment.get("brief"):
             state["assignment_brief"] = assignment["brief"]
         state["assignment_id"] = assignment["assignmentId"]

@@ -621,6 +621,20 @@
   gap: var(--sp-1);
 }
 
+/* The model row edits in place: a select, plus an input and save/cancel only
+   while a custom id is being typed. Capped so it reads as a field, not a bar. */
+.agent-model-setting {
+  display: grid;
+  max-width: 22rem;
+  gap: var(--sp-2);
+}
+
+.agent-model-setting-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
 .agent-dossier-identity-meta .workspace-dossier-stamp {
   padding-top: 0;
   border-top: 0;
