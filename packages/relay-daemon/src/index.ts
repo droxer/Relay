@@ -63,6 +63,7 @@ import {
   GUEST_WORKSPACE,
   agentHomePath,
   agentCredentialEnv,
+  customModelEndpointAgents,
   DAEMON_CAPABILITY_GENERATED_FILES,
   DAEMON_CAPABILITY_AGENT_SKILLS,
   DAEMON_CAPABILITY_HANDOFF_VALIDATION,
@@ -321,6 +322,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     ],
     agentHealth,
     ...(Object.keys(agentInventory).length > 0 ? { agentInventory } : {}),
+    customModelEndpoints: customModelEndpointAgents(),
     maxConcurrentRuns,
     status: status ?? (activeRuns.size > 0 ? "busy" : "ready"),
   });

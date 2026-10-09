@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { computerCanSelectModel, computerName, runtimesForComputer, computersForEmployee } from "../src/lib/createAgent.js";
+import { computerCanSelectModel, computerName, computerUsesCustomModelEndpoint, runtimesForComputer, computersForEmployee } from "../src/lib/createAgent.js";
 
 describe("create agent options", () => {
   it("shows the computer name and never substitutes its workspace path", () => {
@@ -82,5 +82,14 @@ describe("model selection on a computer", () => {
 
   it("does not block when no live node is known", () => {
     assert.equal(computerCanSelectModel([{ ...live, id: "n1", status: "stopped" }], "device:alice:mac", "claude"), true);
+  });
+
+  it("flags a runtime its live node routes to a custom model endpoint", () => {
+    const target = "device:alice:mac";
+    const proxied = { ...live, id: "n1", customModelEndpoints: ["claude"] };
+    assert.equal(computerUsesCustomModelEndpoint([proxied], target, "claude"), true);
+    assert.equal(computerUsesCustomModelEndpoint([proxied], target, "codex"), false);
+    assert.equal(computerUsesCustomModelEndpoint([{ ...proxied, status: "stopped" }], target, "claude"), false);
+    assert.equal(computerUsesCustomModelEndpoint([{ ...live, id: "n1" }], target, "claude"), false);
   });
 });

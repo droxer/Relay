@@ -177,6 +177,8 @@ export interface DaemonNodeRegistration {
   capabilities?: DaemonNodeCapability[];
   agentHealth?: Partial<Record<AgentName, DaemonAgentHealth>>;
   agentInventory?: Partial<Record<AgentName, DaemonAgentInventory>>;
+  /** Runtimes whose model calls go to a custom endpoint, not the vendor API. */
+  customModelEndpoints?: AgentName[];
   maxConcurrentRuns?: number;
   status?: DaemonNodeStatus;
 }

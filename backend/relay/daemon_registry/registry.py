@@ -357,6 +357,14 @@ def agent_inventory_state(
     return inventory
 
 
+def custom_model_endpoints_state(payload: dict[str, Any]) -> list[str]:
+    """Runtimes the daemon says call a custom model endpoint, known agents only."""
+    raw = payload.get("customModelEndpoints")
+    if not isinstance(raw, list):
+        return []
+    return [agent for agent in AGENT_NAMES if agent in raw]
+
+
 def daemon_command_payload(record: dict[str, Any]) -> dict[str, Any]:
     return {
         **{
@@ -560,6 +568,7 @@ class DaemonNodeRegistry:
             if isinstance(item, dict) and item.get("executorKind") in AGENT_NAMES
         ]
         agent_inventory = agent_inventory_state(payload)
+        custom_model_endpoints = custom_model_endpoints_state(payload)
         prior_disabled = list((existing or {}).get("disabledAgents") or [])
         prior_role_defaults = dict((existing or {}).get("agentRoleDefaults") or {})
         prior_role_overrides = dict((existing or {}).get("agentRoleOverrides") or {})
@@ -648,6 +657,11 @@ class DaemonNodeRegistry:
             ),
             **({"agentDetails": agent_details} if agent_details else {}),
             **({"agentInventory": agent_inventory} if agent_inventory else {}),
+            **(
+                {"customModelEndpoints": custom_model_endpoints}
+                if custom_model_endpoints
+                else {}
+            ),
             **({"displayName": prior_display_name} if prior_display_name else {}),
             **({"disabledAgents": prior_disabled} if prior_disabled else {}),
             **(

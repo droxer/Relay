@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
-import { modelIdProblem, suggestedModels } from "../../lib/agentModels.ts";
+import { modelHintKey, modelIdProblem, suggestedModels } from "../../lib/agentModels.ts";
 import type { AgentName } from "../../types";
 import { AgentModelField } from "./AgentModelField";
 
@@ -16,6 +16,8 @@ interface AgentModelSettingProps {
   saving: boolean;
   /** False when the agent's daemon cannot pass a model on; resetting stays allowed. */
   canSelectModel?: boolean;
+  /** The runtime calls a custom model endpoint on its computer. */
+  customEndpoint?: boolean;
   onSave: (model: string) => Promise<void>;
 }
 
@@ -31,6 +33,7 @@ export function AgentModelSetting({
   labelId,
   saving,
   canSelectModel = true,
+  customEndpoint = false,
   onSave,
 }: AgentModelSettingProps) {
   const { t } = useTranslation();
@@ -42,7 +45,8 @@ export function AgentModelSetting({
   const locked = !canSelectModel && !savedModel;
   const problem = modelIdProblem(draft);
   const dirty = draft.trim() !== savedModel;
-  const suggestions = suggestedModels(executorKind);
+  const suggestions = suggestedModels(executorKind, { customEndpoint });
+  const hintKey = modelHintKey(executorKind, { customEndpoint });
 
   function commit(model: string) {
     if (modelIdProblem(model) || model.trim() === savedModel) return;
@@ -59,6 +63,7 @@ export function AgentModelSetting({
           if (next === "" || suggestions.includes(next)) commit(next);
         }}
         onSubmitCustom={() => commit(draft)}
+        customEndpoint={customEndpoint}
         labelId={labelId}
         disabled={saving || locked}
         error={Boolean(problem)}
@@ -69,6 +74,9 @@ export function AgentModelSetting({
         <p id={hintId} className="adm-form-hint">
           {savedModel ? t("agents_page.model_daemon_outdated_pinned") : t("agents_page.model_daemon_outdated")}
         </p>
+      ) : hintKey !== "agents_page.model_hint" ? (
+        // The default hint restates the picker; only runtime-specific advice shows here.
+        <p id={hintId} className="adm-form-hint">{t(hintKey)}</p>
       ) : null}
       {dirty && draft.trim() && !suggestions.includes(draft.trim()) ? (
         <div className="agent-model-setting-actions">

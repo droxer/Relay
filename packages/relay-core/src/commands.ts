@@ -6,7 +6,7 @@ import {
   kimiTaskPrompt,
   piTaskPrompt,
 } from "./prompts.js";
-import { kimiApiKey, kimiModel } from "./env.js";
+import { kimiApiKey, kimiModel, localRuntimeEnvironment } from "./env.js";
 import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { AgentState } from "./state.js";
 
@@ -75,7 +75,9 @@ function buildPiInvocation(
     argv.push("--no-skills");
     for (const path of skillPaths) argv.push("--skill", path);
   }
-  const provider = isLocalAgentExecution() ? undefined : piProvider();
+  // A provider-qualified pin ("openai/gpt-5") names its own provider; adding
+  // the node's --provider would make Pi read it as a custom id of that one.
+  const provider = isLocalAgentExecution() || isProviderQualified(pinnedModel) ? undefined : piProvider();
   if (provider) argv.push("--provider", provider);
   const model = runtimeModel(pinnedModel, piModel);
   if (model) argv.push("--model", model);
@@ -111,7 +113,7 @@ function buildKimiInvocation(
   // With an API key (or KIMI_MODEL_NAME) the model is configured through the
   // KIMI_MODEL_* environment rather than --model, so a pinned model overrides
   // KIMI_MODEL_NAME there instead of adding a flag Kimi would not resolve.
-  const envConfigured = Boolean(kimiApiKey() || process.env.KIMI_MODEL_NAME);
+  const envConfigured = kimiModelFromEnvironment();
   const model = runtimeModel(pinnedModel, kimiModel);
   if (model && !envConfigured) argv.push("--model", model);
   // stream-json emits one JSON message object per stdout line (parsed by
@@ -122,6 +124,25 @@ function buildKimiInvocation(
     pinnedModel && envConfigured ? `export KIMI_MODEL_NAME=${shellQuote(pinnedModel)} && ${command}` : command,
     workspacePath,
   );
+}
+
+/**
+ * Whether the run's Kimi model comes from the KIMI_MODEL_* environment. It must
+ * ask the environment the run actually receives: a local node passes only the
+ * native KIMI_MODEL_* keys, so a KIMI_API_KEY in the daemon's own shell does not
+ * configure the model there — trusting it would route the pin into an env var
+ * Kimi ignores and silently run the user's default.
+ */
+function kimiModelFromEnvironment(): boolean {
+  if (isLocalAgentExecution()) {
+    const env = localRuntimeEnvironment();
+    return Boolean(env.KIMI_MODEL_API_KEY || env.KIMI_MODEL_NAME);
+  }
+  return Boolean(kimiApiKey() || process.env.KIMI_MODEL_NAME);
+}
+
+function isProviderQualified(model: string | undefined): boolean {
+  return Boolean(model?.includes("/"));
 }
 
 function withSkillEnv(command: string, state: AgentState, allowedKey: string): string {

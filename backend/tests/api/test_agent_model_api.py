@@ -23,9 +23,10 @@ def _bootstrap(client: TestClient) -> None:
     )
 
 
-def _register_node(app, capabilities: list[str]) -> None:
+def _register_node(app, capabilities: list[str], **extra) -> None:
     app.state.registry.register(
         {
+            **extra,
             "sandboxId": "node_a",
             "employeeId": "alice",
             "token": "node_token",
@@ -196,3 +197,30 @@ def test_agent_reports_whether_its_daemon_can_select_models(
     record = client.get(f"/api/v1/admin/agents/{agent['id']}").json()["agent"]
 
     assert record["canSelectModel"] is expected
+
+
+@pytest.mark.parametrize(
+    ("endpoints", "expected"),
+    [(["codex"], True), (["claude"], False), ([], False), ("codex", False)],
+)
+def test_agent_reports_whether_its_runtime_calls_a_custom_model_endpoint(
+    env, endpoints, expected: bool
+) -> None:
+    app, client = env
+    _register_node(app, ["agent-model"], customModelEndpoints=endpoints)
+    agent = _create_agent(client)
+
+    record = client.get(f"/api/v1/admin/agents/{agent['id']}").json()["agent"]
+
+    assert record["customModelEndpoint"] is expected
+
+
+def test_registration_keeps_only_known_runtimes_as_custom_endpoints(env) -> None:
+    app, _client = env
+    _register_node(
+        app, ["agent-model"], customModelEndpoints=["codex", "gpt", 7, "claude"]
+    )
+
+    node = app.state.registry.get("node_a")
+
+    assert node["customModelEndpoints"] == ["claude", "codex"]

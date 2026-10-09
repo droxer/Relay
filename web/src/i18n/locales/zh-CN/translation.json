@@ -1694,6 +1694,8 @@
     "create_runtime_required": "请选择运行时。",
     "model_label": "模型",
     "model_hint": "运行时默认：使用这台电脑上该运行时已配置的模型。",
+    "model_hint_custom_endpoint": "这台电脑将该运行时的请求发送到自定义端点，请输入该端点提供的模型 ID。",
+    "model_hint_pi": "Pi 使用这台电脑配置的提供商，除非模型 ID 指定了提供商，例如 openai/gpt-5。",
     "model_default": "运行时默认",
     "model_custom": "自定义模型…",
     "model_custom_label": "自定义模型 ID",

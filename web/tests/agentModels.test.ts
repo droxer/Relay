@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { agentModel, modelIdProblem, modelPolicyFor, suggestedModels } from "../src/lib/agentModels.js";
+import { agentModel, modelHintKey, modelIdProblem, modelPolicyFor, suggestedModels } from "../src/lib/agentModels.js";
 
 describe("agent model selection", () => {
   it("suggests models only for the selected runtime", () => {
@@ -11,6 +11,22 @@ describe("agent model selection", () => {
     assert.ok(suggestedModels("codex").every((model) => model.startsWith("gpt-")));
     assert.deepEqual(suggestedModels(""), []);
     assert.deepEqual(suggestedModels("pi"), []);
+  });
+
+  it("suggests no vendor ids behind a custom endpoint and says what to enter instead", () => {
+    assert.deepEqual(suggestedModels("codex", { customEndpoint: true }), []);
+    assert.equal(modelHintKey("codex", { customEndpoint: true }), "agents_page.model_hint_custom_endpoint");
+    assert.equal(modelHintKey("pi"), "agents_page.model_hint_pi");
+    assert.equal(modelHintKey("claude"), "agents_page.model_hint");
+  });
+
+  it("has a translation for every model hint", async () => {
+    for (const locale of ["en", "zh-CN"]) {
+      const strings = JSON.parse(await readFile(resolve(`web/src/i18n/locales/${locale}/translation.json`), "utf8"));
+      for (const key of ["model_hint", "model_hint_custom_endpoint", "model_hint_pi"]) {
+        assert.ok(strings.agents_page[key], `${locale} ${key}`);
+      }
+    }
   });
 
   it("reads the pinned model and treats an empty policy as the runtime default", () => {
