@@ -220,6 +220,8 @@ export function getControlPanelAgent(agentId: string, signal?: AbortSignal): Pro
 export type EmployeeAgentMetaPatch = {
   displayName?: string;
   instructions?: string;
+  /** `{}` returns the agent to its runtime's default model. */
+  modelPolicy?: { model?: string };
   /** null clears the role, so an agent can go back to no specialization. */
   defaultRole?: AgentRole | null;
 };

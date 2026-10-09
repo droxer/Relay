@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,6 +30,8 @@ import { PlacementList } from "./PlacementList";
 import { describeAgentPlacements, placementRuntimeNodeId } from "../lib/agentPlacements";
 import { ProfileImagePicker } from "./ProfileImagePicker";
 import { Alert } from "@/components/ui/alert";
+import { AgentModelSetting } from "./agents/AgentModelSetting";
+import { agentModel, modelPolicyFor } from "../lib/agentModels.ts";
 
 interface AgentProfilePanelProps {
   agent: EmployeeAgent;
@@ -55,6 +57,8 @@ export function AgentProfilePanel({
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
   const canEditProfile = canManage || canEditMeta;
+  const modelLabelId = useId();
+  const savedModel = agentModel(agent);
 
   const [nameDraft, setNameDraft] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -111,6 +115,7 @@ export function AgentProfilePanel({
     return updateOwnEmployeeAgent(agent.id, {
       ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
       ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}),
+      ...(patch.modelPolicy !== undefined ? { modelPolicy: patch.modelPolicy } : {}),
     });
   }
 
@@ -150,6 +155,20 @@ export function AgentProfilePanel({
       applyAgentUpdate(result.agent);
       setEditingProfile(false);
       onDirtyChange?.(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleModelSave(model: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await patchAgent({ modelPolicy: modelPolicyFor(model) });
+      if (!result) return;
+      applyAgentUpdate(result.agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -292,6 +311,25 @@ export function AgentProfilePanel({
                 ? t(`admin.v2.agent_role.${agent.defaultRole}`, { defaultValue: agent.defaultRole })
                 : t("admin.v2.agent_role_none")}
             </span>
+          </div>
+          <div className="workspace-dossier-field">
+            <span className="workspace-dossier-field-label" id={modelLabelId}>
+              {t("agents_page.model_label")}
+            </span>
+            {canEditProfile ? (
+              <AgentModelSetting
+                key={`${agent.id}:${savedModel}`}
+                executorKind={agent.executorKind}
+                savedModel={savedModel}
+                labelId={modelLabelId}
+                saving={saving}
+                onSave={handleModelSave}
+              />
+            ) : (
+              <span className="workspace-dossier-field-value" aria-labelledby={modelLabelId} translate={savedModel ? "no" : undefined}>
+                {savedModel || t("agents_page.model_default")}
+              </span>
+            )}
           </div>
           <p className="workspace-dossier-stamp">
             {t("admin.v2.agent_meta_version", { version: agent.version })}

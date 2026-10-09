@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..core.computer_identity import computer_id
+from ..core.model_policy import policy_model
 from ..daemon_registry.scheduling import node_accepts_run
 from ..persistence.agent_placement_store import placement_status
 from ..sessions.controller import SessionController
@@ -169,12 +170,7 @@ def resolve_agent_assignments(
             raise AgentRoutingError(
                 "agent_disabled", f"Agent {agent['displayName']} is disabled."
             )
-        policy_fields = [
-            field
-            for field in ("toolPolicy", "modelPolicy")
-            if agent.get(field)
-        ]
-        if policy_fields:
+        if agent.get("toolPolicy"):
             raise AgentRoutingError(
                 "agent_policy_unsupported",
                 f"Agent {agent['displayName']} has policy metadata that this runtime cannot enforce.",
@@ -244,6 +240,11 @@ def resolve_agent_assignments(
                 **(
                     {"agentInstructions": agent["instructions"]}
                     if agent.get("instructions")
+                    else {}
+                ),
+                **(
+                    {"agentModel": model}
+                    if (model := policy_model(agent))
                     else {}
                 ),
                 "placementId": placement["id"],

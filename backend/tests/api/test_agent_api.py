@@ -392,7 +392,7 @@ def test_agent_policies_are_rejected_until_runtime_enforcement_exists(
         ).json()["agent"]
         rejected_update = client.patch(
             f"/api/v1/admin/agents/{agent['id']}",
-            json={"modelPolicy": {"model": "example"}},
+            json={"toolPolicy": {"allowedTools": ["read"]}},
         )
         assert rejected_update.status_code == 400
         assert "runtime enforcement" in rejected_update.json()["detail"]

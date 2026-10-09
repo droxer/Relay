@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
 from ..core.computer_identity import computer_id
+from ..core.model_policy import policy_model
 from ..daemon_registry import (
     provisioned_sandbox_record,
     public_sandbox_record,
@@ -219,6 +220,7 @@ def _resolve_legacy_assignment(
         **assignment,
         "agentId": agent["id"],
         "agentVersion": agent["version"],
+        **({"agentModel": model} if (model := policy_model(agent)) else {}),
         "placementId": placement["id"],
         "daemonNodeId": sandbox_id,
     }

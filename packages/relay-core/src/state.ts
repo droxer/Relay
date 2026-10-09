@@ -25,6 +25,8 @@ export interface AgentState {
   agent_display_name?: string;
   /** Durable personality profile for the selected logical agent identity. */
   agent_instructions?: string;
+  /** Model the selected logical agent pins; absent means the runtime default. */
+  agent_model?: string;
   /** The job this run is doing within its team, e.g. "reviewer". */
   agent_role?: string;
   /** Concrete scope owned by this member within the shared team goal. */

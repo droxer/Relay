@@ -64,6 +64,13 @@
   white-space: nowrap;
 }
 
+/* Shared by the create drawer and the profile row: the custom-id input sits
+   directly under the select it was revealed by. */
+.agent-model-field {
+  display: grid;
+  gap: var(--sp-2);
+}
+
 .create-agent-runtime-picker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

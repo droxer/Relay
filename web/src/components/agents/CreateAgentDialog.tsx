@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { createAgent } from "../../api";
 import { runtimesForComputer } from "../../lib/createAgent";
+import { modelIdProblem, modelPolicyFor } from "../../lib/agentModels.ts";
+import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
 import { ComputerSelect } from "../ComputerSelect";
 import { EMPLOYEE_AGENTS_QUERY_KEY } from "../../hooks/useEmployeeAgents";
@@ -54,12 +56,14 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const computerLabelId = useId();
   const runtimeLabelId = useId();
   const roleLabelId = useId();
+  const modelLabelId = useId();
   const avatarLabelId = useId();
   const placementHeadingId = useId();
   const identityHeadingId = useId();
   const computerTriggerRef = useRef<HTMLButtonElement>(null);
   const runtimeTriggerRef = useRef<HTMLButtonElement>(null);
   const roleTriggerRef = useRef<HTMLButtonElement>(null);
+  const modelTriggerRef = useRef<HTMLButtonElement>(null);
 
   const computers = useComputerOptions(employeeId, open);
   const { nodeLikes, options: computerOptions } = computers;
@@ -67,17 +71,21 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   const [computerId, setComputerId] = useState("");
   const [pickedExecutorKind, setExecutorKind] = useState<AgentName | "">("");
   const [defaultRole, setDefaultRole] = useState<AgentRole | "">("");
+  // A model belongs to the runtime it was picked for; switching runtimes
+  // drops it rather than sending a Claude model to Codex.
+  const [modelPick, setModelPick] = useState<{ kind: AgentName | ""; model: string }>({ kind: "", model: "" });
   const [displayName, setDisplayName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("agents"));
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     computerId?: string;
     executorKind?: string;
+    model?: string;
     defaultRole?: string;
   }>({});
   const [isBusy, setIsBusy] = useState(false);
 
-  function clearFieldError(field: "computerId" | "executorKind" | "defaultRole") {
+  function clearFieldError(field: "computerId" | "executorKind" | "model" | "defaultRole") {
     setFieldErrors((previous) => {
       if (!(field in previous)) return previous;
       const next = { ...previous };
@@ -105,6 +113,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
     setComputerId("");
     setExecutorKind("");
     setDefaultRole("");
+    setModelPick({ kind: "", model: "" });
     setDisplayName("");
     setProfileImageUrl(randomPresetAvatar("agents"));
     setError(null);
@@ -120,9 +129,11 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
     pickedExecutorKind && runtimeOptions.includes(pickedExecutorKind)
       ? pickedExecutorKind
       : runtimeOptions.length === 1 ? runtimeOptions[0] : "";
+  const model = executorKind && modelPick.kind === executorKind ? modelPick.model : "";
+  const modelProblem = modelIdProblem(model);
 
   const hasUnsavedChanges = Boolean(
-    computerId || executorKind || defaultRole || displayName.trim(),
+    computerId || executorKind || defaultRole || model.trim() || displayName.trim(),
   );
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
@@ -139,16 +150,18 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!computerId || !executorKind || !defaultRole) {
+    if (!computerId || !executorKind || modelProblem || !defaultRole) {
       const nextErrors: typeof fieldErrors = {};
       if (!computerId) nextErrors.computerId = t("agents_page.create_computer_required");
       if (!executorKind) nextErrors.executorKind = t("agents_page.create_runtime_required");
+      if (modelProblem) nextErrors.model = t(`agents_page.model_error_${modelProblem}`);
       if (!defaultRole) nextErrors.defaultRole = t("agents_page.create_role_required");
       setFieldErrors(nextErrors);
       // Move focus to the first invalid control so keyboard and
       // screen-reader users land on the problem, not back at the top.
       if (!computerId) computerTriggerRef.current?.focus();
       else if (!executorKind) runtimeTriggerRef.current?.focus();
+      else if (modelProblem) modelTriggerRef.current?.focus();
       else roleTriggerRef.current?.focus();
       return;
     }
@@ -160,6 +173,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
         computerId,
         executorKind,
         defaultRole,
+        ...(model.trim() ? { modelPolicy: modelPolicyFor(model) } : {}),
         displayName: displayName.trim() || undefined,
         profileImageUrl,
       });
@@ -263,6 +277,32 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
               <p className="adm-form-hint">{t("agents_page.create_runtime_empty")}</p>
             ) : null}
           </Field>
+
+          {executorKind ? (
+            <Field
+              label={t("agents_page.model_label")}
+              labelId={modelLabelId}
+              wrapper="div"
+              hint={t("agents_page.model_hint")}
+              error={fieldErrors.model}
+              errorId="create-agent-model-error"
+            >
+              <AgentModelField
+                key={executorKind}
+                executorKind={executorKind}
+                value={model}
+                onChange={(next) => {
+                  setModelPick({ kind: executorKind, model: next });
+                  clearFieldError("model");
+                }}
+                labelId={modelLabelId}
+                triggerRef={modelTriggerRef}
+                disabled={isBusy}
+                error={Boolean(fieldErrors.model)}
+                errorId="create-agent-model-error"
+              />
+            </Field>
+          ) : null}
         </section>
 
         <section className="adm-provision-section" aria-labelledby={identityHeadingId}>

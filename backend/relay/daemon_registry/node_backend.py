@@ -173,7 +173,7 @@ class ServerDaemonNodeBackend:
         agent = self.agent_store.get_agent(assignment.get("agentId"))
         if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
             raise ValueError("logical agent is disabled or missing")
-        if any(agent.get(field) for field in ("toolPolicy", "modelPolicy")):
+        if agent.get("toolPolicy"):
             raise ValueError(
                 "agent_policy_unsupported: logical agent policy is not enforceable by this runtime"
             )
