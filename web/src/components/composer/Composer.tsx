@@ -217,41 +217,6 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); triggerSend(); }}>
-      {/* Targets rail: who runs this round, and on which computer. It sits
-          above the input card rather than in its footer so both answers read
-          before the draft, and the card below is left to the draft and its one
-          commit control.
-
-          The two are not peers. A thread is pinned to its computer the moment
-          it starts — the workspace belongs to the thread — while the agent
-          stays switchable for the thread's whole life, because every agent on
-          that computer shares that workspace. So the rail leads with whichever
-          one the author can still act on: the computer picker while staging
-          (it gates which agents exist at all), the agent picker afterwards,
-          with the settled computer trailing it as quiet context. */}
-      <div className="composer-targets">
-        {initializingThread ? computerSlot : null}
-        <AgentSelect
-          logicalAgents={logicalAgents}
-          activeLogicalAgentId={addressedLogicalAgentId ?? activeLogicalAgentId}
-          onLogicalAgentPicked={pickLogicalAgent}
-          teams={projectName ? [] : teams}
-          activeTeamId={projectName || addressedLogicalAgentId ? null : activeTeamId}
-          onTeamPicked={pickTeam}
-          teamOptionsEnabled={!projectName}
-          room={projectName ? projectRoom : null}
-          roomSelected={roomSelected}
-          onRoomPicked={pickRoom}
-          running={running}
-        />
-        {initializingThread ? null : computerSlot}
-        {activeTeamId && !projectName && !addressedLogicalAgentId ? (
-          <CollaborationStyleSelect compact aria-label={t("collab_style.composer_label")}
-            value={style} onChange={setStyle} disabled={running || sendPending || readOnly}
-            inheritStyle={effectiveStyle(teams?.find((team) => team.id === activeTeamId))}
-            inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams?.find((team) => team.id === activeTeamId))}`) })} />
-        ) : null}
-      </div>
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>
@@ -316,6 +281,33 @@ const ComposerView = forwardRef<ComposerHandle, {
           </div>
           </MentionPopup>
           <div className="composer-footer">
+            {/* Who runs this round sits inside the card, beside the send
+                control — the agent is the choice the author keeps making for
+                the thread's whole life, so it lives where the hand already is
+                (the model picker's slot in Claude and Codex). Where the round
+                runs is environment, not a per-message choice: it trails the
+                card in the context row below. */}
+            <div className="composer-targets">
+              <AgentSelect
+                logicalAgents={logicalAgents}
+                activeLogicalAgentId={addressedLogicalAgentId ?? activeLogicalAgentId}
+                onLogicalAgentPicked={pickLogicalAgent}
+                teams={projectName ? [] : teams}
+                activeTeamId={projectName || addressedLogicalAgentId ? null : activeTeamId}
+                onTeamPicked={pickTeam}
+                teamOptionsEnabled={!projectName}
+                room={projectName ? projectRoom : null}
+                roomSelected={roomSelected}
+                onRoomPicked={pickRoom}
+                running={running}
+              />
+              {activeTeamId && !projectName && !addressedLogicalAgentId ? (
+                <CollaborationStyleSelect compact aria-label={t("collab_style.composer_label")}
+                  value={style} onChange={setStyle} disabled={running || sendPending || readOnly}
+                  inheritStyle={effectiveStyle(teams?.find((team) => team.id === activeTeamId))}
+                  inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams?.find((team) => team.id === activeTeamId))}`) })} />
+              ) : null}
+            </div>
             {/* One mounted element for send↔stop so keyboard focus survives
                 the run starting; the glyph cross-fades instead. */}
             {/* Button's default size carries h-(--control-h) and px-6, which
@@ -344,6 +336,11 @@ const ComposerView = forwardRef<ComposerHandle, {
           </div>
         </div>
       </div>
+      {/* Context row: the computer the round runs on. A picker while the
+          thread is being staged (it gates which agents exist at all), a
+          settled readout afterwards — and that readout stands down wherever
+          the thread header already states it. */}
+      <div className="composer-meta">{computerSlot}</div>
     </form>
   );
 });

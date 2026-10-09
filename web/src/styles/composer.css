@@ -1,10 +1,19 @@
 /* ============================ composer ============================ */
-/* Operational assign surface: borderless elevated card (--shadow-2),
-   tight control radii matching conversation-new / ink plates, transcript
-   dissolve scrim. Not a ChatGPT-style pill dock. Colors via tokens. */
+/* The agent-app composer, in the shape Claude, Codex and Manus converged on:
+   one roomy card holding the draft, with its controls docked along the
+   bottom edge — who runs the round on the left, the one commit control on
+   the right — and the environment (the computer) as a quiet line under it.
+   Flat like the rest of the system: a hairline and a surface step, no shadow.
+   Colors via tokens. */
 
 .composer {
-  --composer-inline: var(--sp-6);
+  --composer-inline: var(--sp-4);
+  /* The card is the one container allowed past --r-3: it is the app's
+     largest single control, and at 8px a 100px-tall field reads as a form
+     box rather than a place to talk. 20px is the docked-composer radius
+     those apps share, and it stays concentric with the 32px send disc
+     inset --sp-2 + its border from the corner. */
+  --composer-radius: calc(var(--r-3) * 2.5);
   position: relative;
   display: grid;
   /* Side padding matters now that the card floats on shadow alone (no
@@ -200,62 +209,97 @@
   .thread-runtime-select { max-width: 100%; }
 }
 
-/* Targets rail — who runs the round, and on which computer. It sits above
-   the input card, on the panel ground rather than on the card, so the two
-   answers read before the draft instead of trailing it. Same measure and
-   centering as the card so the controls line up with its left edge. */
+/* Who runs the round — the agent, team, or project room, plus a team's
+   collaboration style — docked at the card's bottom-left. */
 .composer-targets {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+/* Context row under the card: the computer the round runs on. Inset by the
+   same amount as the footer so its first glyph lines up with the agent
+   chip's above it. No height of its own — a started thread's readout stands
+   down on desktop (the header states it), and the row must vanish with it
+   rather than leave a 28px gap under the card. */
+.composer-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-2);
   width: min(100%, var(--thread-measure));
   min-width: 0;
-  /* Matches the compact tier its triggers now sit at (see below), so the rail
-     reserves exactly the height it draws instead of padding 8px of air above
-     the card. */
-  min-height: var(--control-h-xs);
-  margin: 0 auto var(--sp-2);
+  margin: 0 auto;
+  padding-inline: calc(var(--composer-inline) - var(--sp-2));
 }
 
-/* Rail density — the whole rail is dense in-row chrome, not a form.
-   Both pickers came in at the standalone-control tier (--control-h-sm, 40px,
-   a 24px identity mark, body type), which is the size a filter chip or a page
-   tab gets when it IS the row. Here they are not: they sit on the panel ground
-   as the two-line preamble to a draft, beside a chrome-less "Runs on <machine>"
-   readout set in --type-label. At 40px the pair out-weighed the card they
-   describe — two plates the height of the send disc, stacked above a 56px
-   field — and the picker type read a full rung larger than the fact next to it.
+.composer-meta > * {
+  margin-top: var(--sp-1-5);
+}
 
-   --control-h-xs is the ladder's entry for exactly this ("dense in-row chrome,
-   small toggles, segmented buttons"), and it is safe to drop to on desktop
-   because a11y.css raises every [data-slot="select-trigger"] back to
-   --touch-target on coarse pointers. Scoped to .composer-targets so the same
-   primitives keep their normal size in the drawers and forms. */
-.composer-targets [data-slot="select-trigger"] {
+/* Docked chrome — dense in-row controls, not a form. --control-h-xs is the
+   ladder's entry for exactly this, and a11y.css raises every
+   [data-slot="select-trigger"] back to --touch-target on coarse pointers.
+
+   Ghost chrome: no hairline, no fill at rest; the ink wash arrives on hover
+   or while the list is open — the toolbar idiom of the model picker in
+   Claude and Codex. The chevron is what still says "this is a choice", so
+   the settled readouts (no chevron) stay distinguishable. Scoped to the
+   composer so the same primitives keep their normal chrome in drawers. */
+:is(.composer-targets, .composer-meta) [data-slot="select-trigger"] {
   height: var(--control-h-xs);
   gap: var(--sp-1-5);
   padding-inline: var(--sp-2);
-  /* One type size across the rail: the picker and the readout beside it now
-     agree, and the pickable one separates by weight rather than by scale. */
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-2);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+:is(.composer-targets, .composer-meta) [data-slot="select-trigger"]:not(:disabled):hover,
+:is(.composer-targets, .composer-meta) [data-slot="select-trigger"][data-popup-open] {
+  background: color-mix(in srgb, var(--ink-1) 7%, transparent);
+  color: var(--ink-1);
+}
+
+/* The environment line is context, so it speaks a step quieter than the
+   agent chip inside the card: regular weight, --ink-3. */
+.composer-meta [data-slot="select-trigger"] {
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 /* The trigger's own glyphs — the computer's ownership mark and the chevron —
    step down with it. Direct children only: an identity mark's artwork is
    nested inside .agent-state and takes its size from that box. */
-.composer-targets [data-slot="select-trigger"] > svg {
+:is(.composer-targets, .composer-meta) [data-slot="select-trigger"] > svg {
   width: var(--icon-sm);
   height: var(--icon-sm);
+}
+
+:is(.composer-targets, .composer-meta) [data-slot="select-trigger"] > svg:last-child {
+  color: var(--ink-4);
+}
+
+/* The lead-in word sits flush against its picker, which already carries its
+   own inline padding. */
+.composer-meta .thread-runtime-rail {
+  gap: 0;
 }
 
 /* The identity mark drops to the dense-row avatar rung, and its presence pip
    with it — --dot-lg on a 20px box is a quarter of the mark. Same
    half-on/half-off corner straddle as .agent-state::after, re-struck for the
-   smaller dot. */
-/* Mark-to-name gap follows the mark down a rung: --sp-2 was struck for the
-   24px box and leaves the 20px one looking detached from its name. */
+   smaller dot. Mark-to-name gap follows the mark down a rung. */
 .composer-targets .roster-trigger {
   gap: var(--sp-1-5);
 }
@@ -272,41 +316,42 @@
   height: var(--dot);
 }
 
-/* The settled readout sits on the same 32px line as the pickers without
-   forcing the rail taller. */
+/* The settled readout sits on the same 28px line as the pickers; the inline
+   pad lines its text up with a ghost trigger's label. */
 .composer-context {
   min-height: var(--control-h-xs);
+  padding-inline: var(--sp-2);
 }
 
+/* The card. A full hairline rather than the 0.5px float ring: it is the one
+   surface on the screen that takes input, and the edge is what says so. */
 .composer-input-wrap {
   position: relative;
   width: min(100%, var(--thread-measure));
   margin: 0 auto;
-  border: 0;
-  border-radius: var(--r-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--composer-radius);
   background: var(--surface-3);
-  box-shadow: var(--shadow-2);
-  transition: box-shadow var(--t-fast) var(--ease);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
 }
 
-/* Ring only — the shadow is deliberately NOT restated here. `:has()` takes the
-   specificity of its argument, so this selector scores (0,3,0) against
-   `[data-running]`'s (0,2,0); restating the resting `--shadow-2` therefore beat
-   the running rule below and swallowed its accent hairline for exactly as long
-   as the composer had focus. Since a user typing the next message while a run
-   streams is the normal case, the running state was invisible most of the time
-   it mattered. Leaving box-shadow alone lets whichever of the two states is
-   actually true keep painting it. */
-.composer-input-wrap:has(.composer-input:focus-within) {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
+/* Focus darkens the card's own edge instead of drawing the blue outline
+   around it — the caret is already the strongest focus cue a text field has,
+   and a 2px ring on a 20px-radius card read as an error state. Keyed to the
+   field, not the card: a focused picker in the footer draws its own ring
+   (base.css), and lighting the whole card for it would double that ring.
+   border-color, not box-shadow, so it never fights the running hairline. */
+.composer-input-wrap:has(.composer-textarea:focus) {
+  border-color: var(--ink-4);
 }
 
-/* Running state — quiet action hairline at the one accent-edge strength
-   (--tone-line); send→stop carries the state change. */
+/* Running state — quiet action hairline outside the edge at the one
+   accent-edge strength (--tone-line); send→stop carries the state change. */
 .composer-input-wrap[data-running] {
   --tone: var(--action);
-  box-shadow: 0 0 0 0.5px var(--tone-line), var(--shadow-2);
+  box-shadow: 0 0 0 1px var(--tone-line);
 }
 
 .composer-input {
@@ -336,7 +381,7 @@
   grid-area: 1 / 1;
   min-width: 0;
   border: 0;
-  padding: var(--sp-4) var(--composer-inline) var(--sp-1-5);
+  padding: var(--sp-4) var(--composer-inline) var(--sp-1);
   /* The draft reads at the transcript size it is about to join. */
   font: 400 var(--fs-transcript)/var(--leading-normal) var(--font-sans);
   /* Both layers must break text identically or the pills slide off the names
@@ -346,7 +391,7 @@
 }
 
 .composer-textarea {
-  min-height: 56px;
+  min-height: 52px;
   max-height: 200px;
   resize: none;
   overflow-y: hidden;
@@ -390,54 +435,67 @@
   color: var(--ink-3);
 }
 
-/* The footer now carries the send control alone — the targets moved above
-   the card — so it packs right instead of splitting a two-sided row. */
+/* Footer: the targets docked bottom-left, the one commit control
+   bottom-right. Inset --sp-2 on both sides, so a ghost trigger's own --sp-2
+   padding puts its mark on the draft's --composer-inline text edge, and the
+   send disc sits the same distance from the right edge as from the bottom. */
 .composer-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--sp-3);
-  min-height: var(--control-h-sm);
-  /* Symmetric with .composer-textarea's inline padding on BOTH edges. The
-     right edge was --sp-3 while the draft above it was inset --composer-inline
-     (24px), so the send disc hung 12px closer to the card edge than the text
-     it commits — the one vertical line the eye can check on this card, off by
-     half its own inset. */
-  padding: var(--sp-1) var(--composer-inline) var(--sp-3);
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2) var(--sp-2);
 }
 
-/* Primary assign plate — a --control-h-sm cobalt disc, the one place
-   "commit" still earns the action fill now that list headers all carry the
-   ghost plus. The plate itself (action background, on-action ink, hover,
-   focus ring, transparent border) comes from Button's default variant in
-   Composer.tsx, and the size overrides there (h-/w-/px-0) are what keep
-   Button's default h-(--control-h)/px-6 from stretching the disc into an
-   oval; this file keeps only the icon layout and the cancel restyle.
-   Circular, like the source system's button-icon-circular: an icon-only action in
-   this system is a circle, never a rounded square. */
+.composer-footer > .send-button {
+  flex: none;
+  margin-left: auto;
+}
+
+/* Send — a 32px disc in the neutral inverted fill (near-black on light,
+   near-white on dark), the commit control of every agent app it is modelled
+   on. Cobalt is the selection colour; on the composer it read as one more
+   status hue next to the agent's presence pip. Overrides the Button default
+   variant's paint (this layer outranks Tailwind's utilities); Button still
+   supplies size, focus, and the icon layout.
+
+   A true circle (equal width and height, an icon at the centre), not
+   --r-full standing in as a control radius; a11y.css squares it up to
+   --touch-target on coarse pointers, where it stays a circle. */
 .send-button {
   display: grid;
   place-items: center;
-  /* The circle the comment above has always claimed. Nothing was actually
-     rounding it: Button's base carries `rounded-md`, and no rule here overrode
-     that, so the send control shipped as a 6px rounded square — the one shape
-     this system reserves for text buttons, on its only icon-only commit. This
-     is a true-circle case (equal width and height, an icon at the centre), not
-     --r-full standing in as a control radius; a11y.css squares it up to
-     --touch-target on coarse pointers, where it stays a circle. */
+  border-color: transparent;
   border-radius: var(--r-full);
+  background: var(--cta-fill);
+  color: var(--cta-ink);
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
 }
 
-/* Stop state keeps the same solid plate as send — the send↔stop transition
-   is only a glyph swap, so the composer's primary control never changes
-   silhouette. Button's default variant supplies that identical plate, so the
-   only stop-specific chrome left is the danger focus ring. */
+.send-button:not(:disabled):hover {
+  background: var(--cta-hover);
+}
+
+.send-button:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+/* Nothing to send yet: a quiet wash, not the faded plate — the disc should
+   wait in the corner, not look broken. */
+.send-button:disabled {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink-1) 8%, transparent);
+  color: var(--ink-4);
+  opacity: 1;
+}
+
+/* Stop keeps the send plate — the send↔stop transition is only a glyph
+   swap, so the composer's primary control never changes silhouette. The
+   only stop-specific chrome is the danger focus ring. */
 .send-button.send-button-cancel:focus-visible {
   outline: var(--focus-outline-danger);
   outline-offset: var(--focus-offset);
