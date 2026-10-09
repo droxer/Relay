@@ -151,10 +151,15 @@ def test_spa_fallback_is_allowlisted_and_never_masks_api_typos(
         "/automations",
         "/automations/R-1",
         "/computer",
+        "/issues",
+        "/issues/T-1",
         "/projects",
         "/projects/project_123",
         "/teams",
         "/teams/team_123",
+        "/settings",
+        # The device-authorization verificationUrl the installer opens.
+        "/settings/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw",
     ):
         browser_route = client.get(path, headers={"accept": "text/html"})
         assert browser_route.status_code == 200
