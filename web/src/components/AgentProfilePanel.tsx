@@ -326,6 +326,7 @@ export function AgentProfilePanel({
                 savedModel={savedModel}
                 labelId={modelLabelId}
                 saving={saving}
+                canSelectModel={agent.canSelectModel !== false}
                 onSave={handleModelSave}
               />
             </div>

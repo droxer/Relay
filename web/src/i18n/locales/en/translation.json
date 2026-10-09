@@ -1737,6 +1737,8 @@
     "model_custom_label": "Custom model id",
     "model_custom_placeholder": "Model id, e.g. provider/model-name",
     "model_save": "Save model",
+    "model_daemon_outdated": "This computer's daemon is too old to choose a model, so agents here use the runtime default. Update the daemon to choose one.",
+    "model_daemon_outdated_pinned": "This computer's daemon can't pass the chosen model on, so runs fail until you update the daemon or reset to the runtime default.",
     "model_error_invalid": "Use letters, digits, and . _ : / @ [ ] + - only, starting with a letter or digit.",
     "model_error_too_long": "Model ids are at most 128 characters.",
     "create_role_placeholder": "Select a role…",

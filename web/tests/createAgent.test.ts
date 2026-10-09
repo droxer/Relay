@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { computerName, runtimesForComputer, computersForEmployee } from "../src/lib/createAgent.js";
+import { computerCanSelectModel, computerName, runtimesForComputer, computersForEmployee } from "../src/lib/createAgent.js";
 
 describe("create agent options", () => {
   it("shows the computer name and never substitutes its workspace path", () => {
@@ -58,5 +58,29 @@ describe("create agent options", () => {
       { id: "n1", employeeId: "bob", workspaceId: "m1", supportedAgents: ["claude"] },
     ];
     assert.deepEqual(computersForEmployee(nodes, "alice"), []);
+  });
+});
+
+describe("model selection on a computer", () => {
+  const live = { employeeId: "alice", workspaceId: "mac", supportedAgents: ["claude"], status: "ready" };
+
+  it("allows a model only when the live daemon running the runtime can pass it on", () => {
+    const target = "device:alice:mac";
+    assert.equal(computerCanSelectModel([{ ...live, id: "n1", capabilities: ["agent-model"] }], target, "claude"), true);
+    assert.equal(computerCanSelectModel([{ ...live, id: "n1", capabilities: [] }], target, "claude"), false);
+  });
+
+  it("ignores stale node records and nodes that do not run the runtime", () => {
+    const target = "device:alice:mac";
+    const nodes = [
+      { ...live, id: "new", capabilities: ["agent-model"] },
+      { ...live, id: "old", status: "stopped", capabilities: [] },
+      { ...live, id: "other", supportedAgents: ["codex"], capabilities: [] },
+    ];
+    assert.equal(computerCanSelectModel(nodes, target, "claude"), true);
+  });
+
+  it("does not block when no live node is known", () => {
+    assert.equal(computerCanSelectModel([{ ...live, id: "n1", status: "stopped" }], "device:alice:mac", "claude"), true);
   });
 });

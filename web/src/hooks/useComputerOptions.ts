@@ -38,6 +38,8 @@ function toNodeLike(sandbox: SandboxWithWorkspace): NodeLike {
     managedNodeId: sandbox.managedNodeId,
     supportedAgents: readyRuntimes,
     disabledAgents: sandbox.disabledAgents,
+    capabilities: sandbox.capabilities,
+    status: sandbox.status,
   };
 }
 

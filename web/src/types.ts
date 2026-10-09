@@ -642,6 +642,8 @@ export interface EmployeeAgent {
   skillPolicy: Record<string, unknown>;
   toolPolicy: Record<string, unknown>;
   modelPolicy: Record<string, unknown>;
+  /** False when the daemon the agent runs on is too old to pass a model on. */
+  canSelectModel?: boolean;
   /** Skills installed for this agent's runtime on the computers it runs on.
       Node-reported inventory resolved on read, never a stored agent field. */
   skills?: DaemonAgentSkill[];

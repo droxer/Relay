@@ -14,6 +14,8 @@ interface AgentModelSettingProps {
   savedModel: string;
   labelId: string;
   saving: boolean;
+  /** False when the agent's daemon cannot pass a model on; resetting stays allowed. */
+  canSelectModel?: boolean;
   onSave: (model: string) => Promise<void>;
 }
 
@@ -23,10 +25,21 @@ interface AgentModelSettingProps {
  * waits for Enter or Save. Mount with `key={savedModel}` so a saved change
  * resets the draft.
  */
-export function AgentModelSetting({ executorKind, savedModel, labelId, saving, onSave }: AgentModelSettingProps) {
+export function AgentModelSetting({
+  executorKind,
+  savedModel,
+  labelId,
+  saving,
+  canSelectModel = true,
+  onSave,
+}: AgentModelSettingProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(savedModel);
   const errorId = `${labelId}-error`;
+  const hintId = `${labelId}-hint`;
+  // With nothing pinned there is nothing to change on an outdated daemon; a
+  // pinned model stays editable so the owner can reset it to the default.
+  const locked = !canSelectModel && !savedModel;
   const problem = modelIdProblem(draft);
   const dirty = draft.trim() !== savedModel;
   const suggestions = suggestedModels(executorKind);
@@ -47,11 +60,16 @@ export function AgentModelSetting({ executorKind, savedModel, labelId, saving, o
         }}
         onSubmitCustom={() => commit(draft)}
         labelId={labelId}
-        disabled={saving}
+        disabled={saving || locked}
         error={Boolean(problem)}
         errorId={errorId}
       />
       {problem ? <FieldError id={errorId}>{t(`agents_page.model_error_${problem}`)}</FieldError> : null}
+      {!canSelectModel ? (
+        <p id={hintId} className="adm-form-hint">
+          {savedModel ? t("agents_page.model_daemon_outdated_pinned") : t("agents_page.model_daemon_outdated")}
+        </p>
+      ) : null}
       {dirty && draft.trim() && !suggestions.includes(draft.trim()) ? (
         <div className="agent-model-setting-actions">
           <Button type="button" variant="ghost" size="dense" onClick={() => setDraft(savedModel)} disabled={saving}>

@@ -11,7 +11,12 @@ export interface NodeLike {
   managedNodeId?: string;
   supportedAgents?: string[];
   disabledAgents?: string[];
+  /** Daemon capabilities, e.g. "agent-model". */
+  capabilities?: readonly string[];
+  status?: string;
 }
+
+const LIVE_NODE_STATUSES = new Set(["ready", "busy"]);
 
 export type ComputerOwnership = "local" | "managed";
 
@@ -56,4 +61,19 @@ export function runtimesForComputer(nodes: NodeLike[], target: string): string[]
     for (const kind of node.disabledAgents ?? []) disabled.add(kind);
   }
   return [...supported].filter((kind) => !disabled.has(kind));
+}
+
+/**
+ * Whether a model picked for `kind` on this computer would reach the runtime.
+ * Only live nodes running that runtime count: a stale record left behind by
+ * re-provisioning says nothing about the daemon that will take the run. With
+ * no live node it answers true — nothing is known, and the backend's dispatch
+ * gate still refuses an outdated daemon.
+ */
+export function computerCanSelectModel(nodes: NodeLike[], target: string, kind: string): boolean {
+  const runners = nodes.filter((node) => computerId(node) === target
+    && LIVE_NODE_STATUSES.has(node.status ?? "")
+    && (node.supportedAgents ?? []).includes(kind)
+    && !(node.disabledAgents ?? []).includes(kind));
+  return runners.every((node) => node.capabilities?.includes("agent-model"));
 }
