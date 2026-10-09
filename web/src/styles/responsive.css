@@ -115,9 +115,21 @@
 
   /* The leading slot holds a back control on a nested screen and nothing
      otherwise; empty, it collapses and the title takes the inset. */
+  /* Each part has its own column, so the layout never depends on which
+     parts are present: auto-placement put the tools under the title the
+     moment the leading slot dropped out. */
   .mobile-topbar-lead {
+    grid-column: 1;
     display: flex;
     align-items: center;
+  }
+
+  .mobile-topbar-heading {
+    grid-column: 2;
+  }
+
+  .mobile-topbar-tools {
+    grid-column: 3;
   }
 
   .mobile-topbar-lead:empty {
@@ -150,6 +162,7 @@
   }
 
   .mobile-topbar-heading {
+    grid-row: 1;
     display: flex;
     align-items: center;
     min-width: 0;
@@ -193,7 +206,6 @@
   }
 
   .mobile-topbar-tools [data-variant="icon"],
-  .mobile-topbar-tools .mobile-settings,
   .mobile-topbar-tools .page-header-icon-action {
     position: relative;
     width: var(--touch-target);
