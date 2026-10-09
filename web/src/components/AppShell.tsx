@@ -2,12 +2,12 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { MobileTopbarSlotContext } from "./MobileTopbarSlot";
 import { useTranslation } from "react-i18next";
 import {
   ICON,
   NavPreferences,
   NavBack,
-  NavThreads,
 } from "./icons";
 import type { Theme } from "@/lib/appStorage";
 import { SideNav } from "./SideNav";
@@ -18,9 +18,8 @@ import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { buildCommands, type CommandId } from "@/lib/commandMenu";
 import { taskCreateIntent } from "@/lib/taskCreateIntent";
 import type { ShortcutAction } from "@/lib/shortcuts";
-import type { AppRoute, MobileView, SettingsSection } from "@/lib/viewTypes";
+import type { AppRoute, MobileView } from "@/lib/viewTypes";
 import type { CurrentUser } from "@/types";
-import { useRelayStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 
 const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
@@ -31,21 +30,6 @@ const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, stri
   settings: "nav.settings",
   channels: "nav.channels",
   admin: "nav.admin",
-};
-
-/** The section a settings path is showing, for the mobile topbar's title. */
-const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsSection, string> = {
-  computers: "computer.title",
-  skills: "skills.title",
-  appearance: "pref.appearance",
-  language: "pref.language",
-};
-
-/** Routes that name themselves in the topbar's eyebrow rather than taking the
- *  generic product word — the two surfaces whose title line is a section. */
-const MOBILE_EYEBROW_KEYS: Partial<Record<AppRoute, string>> = {
-  admin: "nav.admin",
-  settings: "nav.settings",
 };
 
 type MobileChatChrome = {
@@ -62,9 +46,6 @@ type AppShellProps = {
   taskWorkspace?: boolean;
   taskThread?: boolean;
   onNewTask?: () => void;
-  /** The open settings section, so the mobile topbar can name it the way it
-   *  names the control panel's — both are rail-and-content surfaces. */
-  settingsSection: SettingsSection;
   route: AppRoute;
   onNavigateRoute: (route: AppRoute) => void;
   hrefForRoute: (route: AppRoute) => string;
@@ -126,7 +107,6 @@ export function AppShell({
   taskThread = false,
   onNewTask,
   route,
-  settingsSection,
   onNavigateRoute,
   hrefForRoute,
   mobileView,
@@ -154,7 +134,6 @@ export function AppShell({
   onThemeChange,
 }: AppShellProps) {
   const { t } = useTranslation();
-  const adminView = useRelayStore((state) => state.adminView);
   const isAdmin = user.role === "admin";
   const [commandOpen, setCommandOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -227,19 +206,24 @@ export function AppShell({
 
   const isThreadRoute = taskThread || route === "main" || (route === "projects" && !taskWorkspace);
   const directoryLabel = taskThread ? t("thread.back_to_task") : route === "projects" ? t("project.projects") : t("nav.threads");
-  /* A rail-and-content surface names its SECTION here — the strip under the
-     topbar is the only other place the section appears, and the route name is
-     already the eyebrow. Both consumers of the rail read the same way. */
-  const mobileRouteTitle = taskWorkspace ? t("nav.backlog") : route === "admin"
-    ? t(`admin.v2.title_${adminView}`)
-    : route === "settings"
-      ? t(SETTINGS_SECTION_LABEL_KEYS[settingsSection])
-      : isThreadRoute
-        ? directoryLabel
-        : t(WORK_ROUTE_LABEL_KEYS[route as keyof typeof WORK_ROUTE_LABEL_KEYS]);
   const isMobileChat = isThreadRoute && mobileView === "chat";
+  /* One title line on every route: the open thread in a conversation, the
+     directory ("Threads", "Projects") over its list, and the route's own
+     name everywhere else. Admin and settings name the SURFACE here — the
+     section strip right under the bar already marks the section. */
+  const mobileTitle = isMobileChat
+    ? activeThreadLabel
+    : isThreadRoute
+      ? directoryLabel
+      : taskWorkspace
+        ? t("nav.backlog")
+        : t(WORK_ROUTE_LABEL_KEYS[route as keyof typeof WORK_ROUTE_LABEL_KEYS]);
+  const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
+  const [leadSlot, setLeadSlot] = useState<HTMLDivElement | null>(null);
+  const topbarSlots = useMemo(() => ({ actions: actionsSlot, lead: leadSlot }), [actionsSlot, leadSlot]);
 
   return (
+    <MobileTopbarSlotContext.Provider value={topbarSlots}>
     <div
       className="messenger-shell"
       data-mobile-view={mobileView}
@@ -260,68 +244,45 @@ export function AppShell({
     >
       <a className="skip-link" href={skipLinkHref}>{t("skip_to_content")}</a>
 
-      <div
-        className={`mobile-topbar ${isThreadRoute ? "mobile-topbar--chat" : "mobile-topbar--route"}`}
-      >
-        {isThreadRoute ? (
-          isMobileChat ? (
-            <>
-              <Button
-                variant="ghost"
-                type="button"
-                className="mobile-topbar-back"
-                aria-label={directoryLabel}
-                onClick={() => onMobileViewChange("threads")}
-              >
-                {taskThread ? <NavBack size={ICON.md} /> : <NavThreads size={ICON.md} />}
-              </Button>
-              <div className="mobile-topbar-chat-title" title={activeThreadLabel}>
-                <span className="mobile-topbar-title">{activeThreadLabel}</span>
-              </div>
-              <div className="mobile-topbar-chat-tools">
-                {mobileChatChrome ? (
-                  <ArtifactNavButton
-                    artifactCount={mobileChatChrome.artifactCount}
-                    inProject={mobileChatChrome.inProject}
-                    onOpenArtifacts={mobileChatChrome.onToggleSpace}
-                    expanded={mobileChatChrome.spaceOpen}
-                    disabled={mobileChatChrome.spaceDisabled}
-                  />
-                ) : null}
-                <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
-              </div>
-            </>
-          ) : (
-            <>
-              <Button variant="ghost"
-                type="button"
-                className={mobileView === "threads" ? "active" : ""}
-                aria-label={directoryLabel}
-                aria-pressed={mobileView === "threads"}
-                onClick={() => onMobileViewChange("threads")}
-              >
-                <NavThreads size={ICON.md} /><span>{directoryLabel}</span>
-              </Button>
-              <Button variant="ghost"
-                type="button"
-                className={mobileView === "chat" ? "active" : ""}
-                aria-pressed={mobileView === "chat"}
-                onClick={() => onMobileViewChange("chat")}
-              >
-                <span>{activeThreadLabel}</span>
-              </Button>
-              <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
-            </>
-          )
-        ) : (
-          <>
-            <div className="mobile-topbar-route">
-              <span className="mobile-topbar-eyebrow">{t(MOBILE_EYEBROW_KEYS[route] ?? "nav.mobile_section")}</span>
-              <span className="mobile-topbar-title">{mobileRouteTitle}</span>
-            </div>
-            <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
-          </>
-        )}
+      {/* The phone top bar: one shape on every route — a back control when
+          the screen is nested, a single title line, then the screen's own
+          actions (portaled into the slot by MobileTopbarActions) and the
+          settings gear. It used to be three shapes: a centred two-line
+          "Relay / Issues" label, a full-width pill naming the thread
+          directory, and a chat-bubble glyph standing in for "back". */}
+      <div className="mobile-topbar">
+        {/* The leading slot: the thread's back control, or a nested route
+            screen's, portaled in by MobileTopbarBack. Empty, it takes no
+            width. */}
+        <div className="mobile-topbar-lead" ref={setLeadSlot}>
+          {isMobileChat ? (
+            <Button
+              variant="ghost"
+              type="button"
+              className="mobile-topbar-back"
+              aria-label={directoryLabel}
+              onClick={() => onMobileViewChange("threads")}
+            >
+              <NavBack size={ICON.md} />
+            </Button>
+          ) : null}
+        </div>
+        <div className="mobile-topbar-heading" title={mobileTitle}>
+          <span className="mobile-topbar-title">{mobileTitle}</span>
+        </div>
+        <div className="mobile-topbar-tools">
+          {isMobileChat && mobileChatChrome ? (
+            <ArtifactNavButton
+              artifactCount={mobileChatChrome.artifactCount}
+              inProject={mobileChatChrome.inProject}
+              onOpenArtifacts={mobileChatChrome.onToggleSpace}
+              expanded={mobileChatChrome.spaceOpen}
+              disabled={mobileChatChrome.spaceDisabled}
+            />
+          ) : null}
+          <div className="mobile-topbar-actions" ref={setActionsSlot} />
+          <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
+        </div>
       </div>
 
       <SideNav
@@ -357,6 +318,7 @@ export function AppShell({
         onClose={() => setShortcutsOpen(false)}
       />
     </div>
+    </MobileTopbarSlotContext.Provider>
   );
 }
 

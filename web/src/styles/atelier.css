@@ -50,8 +50,7 @@
   background: var(--surface-header-bg);
 }
 
-.page-header-kicker,
-.mobile-topbar-eyebrow {
+.page-header-kicker {
   color: var(--ink-3);
   font: var(--type-micro);
   /* Deliberately --track-0, not --type-micro-track: kickers/eyebrows are

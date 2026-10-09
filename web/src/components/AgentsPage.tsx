@@ -16,6 +16,7 @@ import {
 } from "./icons";
 import { StatusPill, TonePill } from "./StatusPill";
 import { AgentDetailPage } from "./AgentDetailPage";
+import { MobileTopbarBack } from "./MobileTopbarSlot";
 import { PageHeader } from "./PageHeader";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
@@ -245,6 +246,7 @@ export function AgentsPage({
           titleAs="h2"
           titleVariant="title"
           layout="stacked"
+          topbarActions={detailAgent ? "inactive" : true}
           actions={
             currentUser.employeeId ? (
               // The shared list-header create affordance, same as the
@@ -323,15 +325,23 @@ export function AgentsPage({
       <div className="agents-detail">
         {detailAgent ? (
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              className="agents-mobile-back"
-              onClick={() => void handleBackToAgents()}
-            >
-              <NavBack size={ICON.sm} aria-hidden="true" />
-              {t("agents_page.title")}
-            </Button>
+            {/* On a phone this is the top bar's back control ("← Agents"),
+                not a second row under it. */}
+            <MobileTopbarBack
+              label={t("agents_page.title")}
+              onBack={() => void handleBackToAgents()}
+              fallback={(
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="agents-mobile-back"
+                  onClick={() => void handleBackToAgents()}
+                >
+                  <NavBack size={ICON.sm} aria-hidden="true" />
+                  {t("agents_page.title")}
+                </Button>
+              )}
+            />
             <AgentDetailPage
               key={detailAgent.id}
               agent={detailAgent}

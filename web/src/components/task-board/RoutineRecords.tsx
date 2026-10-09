@@ -197,7 +197,7 @@ export function RoutineTable({
     () => [
       {
         id: "select",
-        meta: { headClass: "w-4", cellClass: "w-4" } satisfies ColumnChrome,
+        meta: { headClass: "w-4 task-col-select", cellClass: "w-4 task-col-select" } satisfies ColumnChrome,
         header: () => <RoutineCells.Read>{(s) => s.selectAll}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
@@ -214,7 +214,7 @@ export function RoutineTable({
       },
       {
         id: "state",
-        meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
+        meta: { headClass: "w-2 task-col-mark", cellClass: "w-2 task-col-mark" } satisfies ColumnChrome,
         /* Named, not blank: a columnheader with no accessible name leaves the
            cells under it reading as a column of nothing. */
         header: () => <RoutineCells.Read>{(s) => <span className="sr-only">{s.t("routine.state")}</span>}</RoutineCells.Read>,

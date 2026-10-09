@@ -680,7 +680,6 @@ export function App() {
       route={route}
       taskWorkspace={isTasksWorkspace}
       taskThread={isTaskThread}
-      settingsSection={settingsSection}
       onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
       mobileView={mobileView}

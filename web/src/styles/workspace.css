@@ -746,15 +746,24 @@
     border-bottom: 0.5px solid var(--line-1);
   }
 
+  /* Folded above the body, the facts stay a left-aligned label/value list —
+     the same rows as the column, just tighter. A wrapping line of cells
+     inherited the band's centred cell and read as a scattered grid. */
   .record-band--panel {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--sp-2) var(--sp-6);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-1-5);
   }
 
   .record-band--panel .record-band-cell {
-    display: flex;
-    gap: var(--sp-2);
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    justify-content: start;
+    text-align: start;
+  }
+
+  .record-band--panel .record-band-value {
+    justify-content: flex-start;
   }
 }
 

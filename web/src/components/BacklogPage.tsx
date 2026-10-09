@@ -11,6 +11,8 @@ import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { TASK_STATUSES, agentReadyForTask, backlogSortColumns, filterTasks, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
@@ -88,6 +90,10 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
   const { announce, confirm } = useDialogs();
   const { deleteTasksMutation } = useRelayMutations();
   const inlineEdits = useInlineTaskEdits({ readOnly });
+  /* A phone list is read, not edited in place: rows are stacked and a tap
+     opens the record, where every property is a full-size control. Inline
+     chips there were 28px targets crowded onto one meta line. */
+  const phone = useMediaQuery(PHONE_QUERY);
   // The filters live in the query string, so a filtered board survives
   // opening a record and coming back, and it is a link somebody can paste.
   const [filters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
@@ -251,6 +257,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
 
   const headerActions = (
     <TaskBoardHeaderActions
+      topbar
       leading={<BacklogViewToggle view={view} onChange={changeView} />}
       refreshLabel={t("nav.refresh")}
       createLabel={t("backlog.new_task")}
@@ -354,7 +361,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
               };
             }}
             onOpenTask={onOpenRecord}
-            edits={inlineEdits}
+            edits={phone ? null : inlineEdits}
             roster={{ agents: logicalAgents, teams }}
           />
           <Pagination page={listPage} onPageChange={setPage} label={t("backlog.title")} />

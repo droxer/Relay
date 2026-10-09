@@ -13,6 +13,8 @@ import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { usePagination } from "../hooks/usePagination";
 import { useListSort } from "../hooks/useListSort";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Pagination } from "@/components/ui/Pagination";
 import { SortMenu } from "@/components/ui/SortMenu";
@@ -105,6 +107,10 @@ export function IssuesPage({
   const { announce, confirm } = useDialogs();
   const { updateTaskMutation, deleteTasksMutation } = useRelayMutations();
   const inlineEdits = useInlineTaskEdits();
+  /* A phone list is read, not edited in place: rows are stacked and a tap
+     opens the record, where every property is a full-size control. Inline
+     chips there were 28px targets crowded onto one meta line. */
+  const phone = useMediaQuery(PHONE_QUERY);
   const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
   const { teams } = useTeams(currentUser.employeeId);
 
@@ -267,6 +273,7 @@ export function IssuesPage({
           title={t(`issues.queues.${queue}`)}
           titleAs="h2"
           titleVariant="title"
+          topbarActions
           actions={(
             <TaskBoardHeaderActions
               refreshLabel={t("nav.refresh")}
@@ -342,7 +349,7 @@ export function IssuesPage({
               onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
               contextFor={rowContext}
               onOpenIssue={onOpenRecord}
-              edits={inlineEdits}
+              edits={phone ? null : inlineEdits}
               roster={{ agents: logicalAgents, teams }}
             />
             <Pagination page={listPage} onPageChange={setPage} label={t("issues.title")} />
