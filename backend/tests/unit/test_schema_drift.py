@@ -421,3 +421,102 @@ def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeyp
     assert restored["routineNextRunDate"] == "2026-10-09"
     assert "routineTrigger" not in restored
     assert restored["events"] == routine["events"]
+
+
+def test_schema_review_backfills_derived_columns_and_projections(migrated_schema):
+    from relay.persistence.daemon_store import DatabaseDaemonStore
+    from relay.persistence.store_common import relay_event
+    from relay.persistence.task_store import DatabaseTaskStore
+
+    url, _ = migrated_schema
+    owner = str(uuid.uuid4())
+    sessions = DatabaseSessionStore(url)
+    tasks = DatabaseTaskStore(url)
+    daemons = DatabaseDaemonStore(url)
+    session = sessions.create_session(
+        {"taskGoal": "Backfill", "workspacePath": "/work", "ownerEmployeeId": owner}
+    )
+    sid = session["id"]
+    for artifact_id, name, created in (
+        ("a1", "a.txt", "2026-10-01T00:00:01.000Z"),
+        ("b1", "b.txt", None),
+        ("a2", "a.txt", "2026-10-01T00:00:09.000Z"),
+        ("a3", "a.txt", "2026-10-01T00:00:02.000Z"),
+    ):
+        artifact = {"id": artifact_id, "kind": "workspace_file", "title": name,
+                    "workspaceRelativePath": name}
+        if created:
+            artifact["createdAt"] = created
+        sessions.append_event(sid, relay_event("artifact.created", sid, {"artifact": artifact}))
+    sessions.append_event(sid, relay_event("session.deletion_requested", sid, {"requestedBy": "x"}))
+    task = tasks.create_task({"title": "Gone", "ownerEmployeeId": owner})
+    tasks.link_session(task["id"], sid)
+    tasks.delete_task(task["id"])
+    daemons.register_node({"id": str(uuid.uuid4()), "workspacePath": "/w",
+                           "workspaceId": "repo", "status": "ready", "agents": {"codex": "ready"},
+                           "createdAt": "2026-10-01T00:00:00.000Z",
+                           "updatedAt": "2026-10-01T00:00:00.000Z"})
+    node_id = daemons.list_nodes()[0]["id"]
+    request_id = str(uuid.uuid4())
+    daemons.stage_command(node_id, {"id": str(uuid.uuid4()), "type": "run.start", "sessionId": sid,
+                                    "runId": str(uuid.uuid4()), "agent": "codex", "taskGoal": "g",
+                                    "_runRequestId": request_id})
+    before = sessions.list_artifact_summaries(owner_employee_id=owner, limit=10)
+
+    config = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    command.downgrade(config, "20261010_0084")
+    command.upgrade(config, "head")
+
+    after = sessions.list_artifact_summaries(owner_employee_id=owner, limit=10)
+    assert [a["id"] for a in after] == [a["id"] for a in before] == ["a2", "b1"]
+    assert [s["id"] for s in sessions.list_pending_deletions()] == [sid]
+    assert tasks.list_task_summaries(employee_id=owner) == []
+    assert daemons.pending_command_for_run_request(request_id)["command"]["_runRequestId"] == request_id
+    with sessions.engine.connect() as conn:
+        links = conn.execute(text("SELECT count(*) FROM task_sessions")).scalar_one()
+        valid = conn.execute(text(
+            "SELECT convalidated FROM pg_constraint WHERE conname = 'task_sessions_session_id_fkey'"
+        )).scalar_one()
+    assert links == 1 and valid is True
+    sessions.delete_session(sid)
+    with sessions.engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM task_sessions")).scalar_one() == 0
+
+
+def test_postgres_output_compaction_redacts_in_place(migrated_schema):
+    from datetime import datetime, timedelta, timezone
+
+    from relay.persistence.store_common import relay_event
+
+    url, _ = migrated_schema
+    sessions = DatabaseSessionStore(url)
+    sid = sessions.create_session({"taskGoal": "Old", "workspacePath": "/work"})["id"]
+    run = {"runId": "run", "agent": "codex"}
+    sessions.append_event(sid, relay_event("agent.started", sid, run))
+    sessions.append_event(
+        sid, relay_event("agent.output", sid, {**run, "stream": "stdout", "text": "x" * 500}),
+        hydrate_events=False,
+    )
+    sessions.append_event(
+        sid,
+        relay_event("agent.output.batch", sid, {**run, "entries": [
+            {"stream": "stderr", "text": "y" * 500, "sequence": 4}]}),
+        hydrate_events=False,
+    )
+    sessions.append_event(sid, relay_event("agent.completed", sid, {
+        **run, "status": "completed", "exitCode": 0, "agentLog": "final"}))
+    later = datetime.now(timezone.utc) + timedelta(seconds=1)
+
+    assert sessions.compact_completed_run_output(older_than=later) == 2
+    assert sessions.compact_completed_run_output(older_than=later) == 0
+
+    events = sessions.get_session(sid)["events"]
+    output, batch = [e for e in events if e["type"].startswith("agent.output")]
+    assert output["text"] == "" and output["compacted"] is True and output["stream"] == "stdout"
+    assert batch["entries"] == [{"stream": "stderr", "text": "", "sequence": 4}]
+    with sessions.engine.connect() as conn:
+        position = conn.execute(text(
+            "SELECT position FROM maintenance_cursors WHERE name = 'session_output_compaction'"
+        )).scalar_one()
+    assert position["id"] == sid

@@ -34,12 +34,16 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from .automation_store import insert_outbox_rows, session_outbox_rows
+from .session_output_compaction import compact_completed_run_output
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
     SESSION_WORKSPACE_LAYOUT_THREAD,
+    SNAPSHOT_NEUTRAL_SESSION_EVENTS,
     _append_jsonl,
     _format_iso,
     _parse_iso,
@@ -374,6 +378,17 @@ class LocalSessionStore:
     def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         return [s for s in self.list_sessions() if s.get("deletionRequestedAt")][offset:offset + limit]
 
+    def list_session_snapshots(
+        self, *, owner_employee_id: str, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        return [
+            session
+            for session in self.list_session_summaries(
+                owner_employee_id=owner_employee_id, limit=2**31
+            )
+            if project_id is None or session.get("projectId") == project_id
+        ]
+
     def list_session_summaries(
         self, *, owner_employee_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
@@ -570,7 +585,7 @@ class LocalSessionStore:
 
 
 class DatabaseSessionStore:
-    REQUIRED_SCHEMA_REVISION = "20260815_0063"
+    REQUIRED_SCHEMA_REVISION = "20261010_0086"
     metadata = shared_metadata
 
     sessions = Table(
@@ -597,12 +612,20 @@ class DatabaseSessionStore:
         Column("version", BigInteger, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
+        # Derived from snapshot.deletionRequestedAt so the deletion sweep can
+        # find its few rows without reading every snapshot.
+        Column("deletion_requested_at", DateTime(timezone=True), nullable=True),
         Index("ix_sessions_updated_at", "updated_at"),
         Index("ix_sessions_created_at", "created_at"),
-        Index("ix_sessions_owner_employee_id", "owner_employee_id"),
         Index("ix_sessions_project_id", "project_id"),
         Index("ix_sessions_owner_updated_at", "owner_employee_id", "updated_at"),
-        Index("ix_sessions_status", "status"),
+        Index(
+            "ix_sessions_pending_deletion",
+            "updated_at",
+            "id",
+            postgresql_where=text("deletion_requested_at IS NOT NULL"),
+            sqlite_where=text("deletion_requested_at IS NOT NULL"),
+        ),
     )
     events = Table(
         "session_events",
@@ -618,12 +641,11 @@ class DatabaseSessionStore:
         Column("type", Text, nullable=False),
         Column("timestamp", DateTime(timezone=True), nullable=False),
         Column("payload", json_type(), nullable=False),
+        # The unique (session_id, sequence) index serves every per-session
+        # read and the FK cascade; nothing reads events by time or type.
         UniqueConstraint(
             "session_id", "sequence", name="uq_session_events_session_sequence"
         ),
-        Index("ix_session_events_session_id", "session_id"),
-        Index("ix_session_events_timestamp", "timestamp"),
-        Index("ix_session_events_type_timestamp", "type", "timestamp"),
     )
     artifacts = Table(
         "session_artifacts",
@@ -680,6 +702,39 @@ class DatabaseSessionStore:
         Index("ix_session_agent_runs_logical_agent", "logical_agent_id"),
         Index("ix_session_agent_runs_placement", "placement_id"),
     )
+    # One row per (thread, workspace file): the newest workspace_file artifact
+    # for that path. It is a projection of artifact.created events, kept so the
+    # artifact index is an indexed range read instead of a walk over every
+    # session snapshot's artifact array.
+    workspace_files = Table(
+        "session_workspace_files",
+        metadata,
+        Column(
+            "session_id",
+            entity_uuid_type(),
+            ForeignKey("sessions.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
+        Column("file_key", Text, primary_key=True),
+        Column("artifact_id", Text, nullable=True),
+        Column("owner_employee_id", entity_uuid_type(), nullable=True),
+        Column("workspace_path", Text, nullable=False),
+        # A missing or unreadable createdAt ranks oldest (the epoch), matching
+        # helpers.workspace_artifacts, so the column is never NULL.
+        Column("created_at", DateTime(timezone=True), nullable=False),
+        Column("artifact", json_type(), nullable=False),
+        Index(
+            "ix_session_workspace_files_owner_recent",
+            "owner_employee_id",
+            "created_at",
+        ),
+        Index(
+            "ix_session_workspace_files_workspace_recent",
+            "workspace_path",
+            "created_at",
+        ),
+        Index("ix_session_workspace_files_recent", "created_at"),
+    )
     tombstones = Table(
         "session_tombstones",
         metadata,
@@ -726,6 +781,7 @@ class DatabaseSessionStore:
             "session_run_token_usage",
             "session_agent_runs",
             "session_tombstones",
+            "session_workspace_files",
         }
         missing = required_tables.difference(schema.get_table_names())
         if missing:
@@ -741,6 +797,7 @@ class DatabaseSessionStore:
                 self.run_token_usage,
                 self.agent_runs,
                 self.tombstones,
+                self.workspace_files,
             )
         }
         for table_name, expected in required_columns.items():
@@ -955,6 +1012,9 @@ class DatabaseSessionStore:
                     )
                 )
             )
+        self._index_workspace_files(
+            conn, session_row["id"], session, session.get("artifacts", [])
+        )
         for run in session.get("agentRuns", []):
             if run.get("id"):
                 self._insert_agent_run(conn, session_row["id"], run)
@@ -1050,6 +1110,8 @@ class DatabaseSessionStore:
     def _append_event_once(
         self, session_id: str, event: dict[str, Any]
     ) -> dict[str, Any]:
+        if event.get("type") in SNAPSHOT_NEUTRAL_SESSION_EVENTS:
+            return self._append_neutral_event(session_id, event)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
@@ -1093,6 +1155,8 @@ class DatabaseSessionStore:
             )
             if self.emit_automation_events:
                 insert_outbox_rows(conn, session_outbox_rows(session_id, event))
+            if event.get("type") == "artifact.created":
+                self._index_workspace_files(conn, session_pk, session, [event["artifact"]])
             if event.get("type") == "agent.completed":
                 self._sync_run_token_usage(
                     conn, session_pk, session, str(event.get("runId") or "")
@@ -1120,6 +1184,39 @@ class DatabaseSessionStore:
             event_type=event.get("type"),
         )
         return session
+
+    def _append_neutral_event(
+        self, session_id: str, event: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Append an event that changes no projection field.
+
+        Bumping ``version`` in place both reserves the sequence and takes the
+        same row lock the full path takes, without reading or rewriting the
+        snapshot. ``version`` is unindexed, so PostgreSQL can apply it as a HOT
+        update. Returns only the identity and new event count; callers that
+        want the session ask for it with ``hydrate_events``.
+        """
+        with store_transaction(self.engine) as conn:
+            version = conn.scalar(
+                update(self.sessions)
+                .where(self.sessions.c.id == session_id)
+                .values(version=self.sessions.c.version + 1)
+                .returning(self.sessions.c.version)
+            )
+            if version is None:
+                raise KeyError(session_id)
+            conn.execute(
+                insert(self.events).values(
+                    **session_event_to_row(session_id, int(version) - 1, event)
+                )
+            )
+            publish_database_notification(
+                conn,
+                self.engine,
+                self._event_notification_channel,
+                f"session:{session_id}",
+            )
+        return {"id": session_id, "eventCount": int(version)}
 
     def _notify_event(self, session_id: str) -> None:
         if not self._event_listener:
@@ -1402,7 +1499,7 @@ class DatabaseSessionStore:
         with store_transaction(self.engine) as conn:
             rows = conn.execute(
                 select(self.sessions.c.snapshot)
-                .where(self.sessions.c.snapshot["deletionRequestedAt"].as_string().is_not(None))
+                .where(self.sessions.c.deletion_requested_at.is_not(None))
                 .order_by(self.sessions.c.updated_at, self.sessions.c.id).offset(offset).limit(limit)
             ).scalars().all()
         return list(rows)
@@ -1475,47 +1572,67 @@ class DatabaseSessionStore:
             for row in rows
         ]
 
+    def compact_completed_run_output(
+        self, *, older_than: datetime, limit: int = 20
+    ) -> int:
+        """Redact streamed output of completed runs; see session_output_compaction."""
+        return compact_completed_run_output(self, older_than=older_than, limit=limit)
+
+    def list_session_snapshots(
+        self, *, owner_employee_id: str, project_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """One employee's threads as projections, newest first, with no events.
+
+        For views that need runs and artifacts but not the log: owner and
+        project filter in SQL through their indexes, and completed run logs
+        stay out of the snapshot already.
+        """
+        statement = (
+            select(self.sessions.c.snapshot, self.sessions.c.version)
+            .where(self.sessions.c.owner_employee_id == owner_employee_id)
+            .order_by(self.sessions.c.updated_at.desc(), self.sessions.c.id.desc())
+        )
+        if project_id is not None:
+            statement = statement.where(self.sessions.c.project_id == project_id)
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+        return [
+            {**(row["snapshot"] or {}), "eventCount": int(row["version"] or 0)}
+            for row in rows
+        ]
+
     def list_artifact_summaries(
         self, *, owner_employee_id: str | None = None,
         workspace_path: str | None = None, limit: int = 200
     ) -> list[dict[str, Any]]:
-        # Read the derived artifact array, including event-only/imported artifacts
-        # that have no content row in session_artifacts. Never load event histories
-        # or run logs. Rank regenerated files before applying the global limit.
-        pg = self.engine.dialect.name == "postgresql"
-        elements = (
-            "jsonb_array_elements(s.snapshot->'artifacts') WITH ORDINALITY AS a(value, ordinal)"
-            if pg
-            else "json_each(json_extract(s.snapshot, '$.artifacts')) AS a"
+        # One indexed range read over the per-file projection: regenerated
+        # files are already collapsed to their newest record, and no snapshot,
+        # event history, or run log is touched.
+        files, sessions = self.workspace_files, self.sessions
+        statement = (
+            select(
+                files.c.artifact,
+                files.c.session_id,
+                files.c.owner_employee_id,
+                files.c.workspace_path,
+                sessions.c.title,
+                sessions.c.task_goal,
+                sessions.c.updated_at,
+            )
+            .select_from(files.join(sessions, sessions.c.id == files.c.session_id))
+            .order_by(
+                files.c.created_at.desc(),
+                files.c.session_id.desc(),
+                files.c.artifact_id.desc(),
+            )
+            .limit(max(1, limit))
         )
-        value = partial(_artifact_field_sql, pg)
-        ordinal = "a.ordinal" if pg else "a.key"
-        filters = [f"{value('kind')} = 'workspace_file'"]
-        params = {"limit": max(1, limit)}
         if owner_employee_id is not None:
-            filters.append("s.owner_employee_id = :owner")
-            params["owner"] = owner_employee_id
+            statement = statement.where(files.c.owner_employee_id == owner_employee_id)
         if workspace_path is not None:
-            filters.append("s.workspace_path = :workspace")
-            params["workspace"] = workspace_path
-        statement = text(f"""
-            SELECT * FROM (
-                SELECT a.value AS artifact, s.id AS session_id, s.title, s.task_goal,
-                       s.owner_employee_id, s.workspace_path, s.updated_at,
-                       {value("createdAt")} AS artifact_created_at,
-                       {value("id")} AS artifact_id,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY s.id, COALESCE(NULLIF({value("workspaceRelativePath")}, ''),
-                               NULLIF({value("path")}, ''), {value("id")})
-                           ORDER BY {value("createdAt")} DESC, {ordinal} DESC
-                       ) AS file_rank
-                FROM sessions s CROSS JOIN {elements}
-                WHERE {" AND ".join(filters)}
-            ) ranked WHERE file_rank = 1
-            ORDER BY artifact_created_at DESC, session_id DESC, artifact_id DESC LIMIT :limit
-        """)
+            statement = statement.where(files.c.workspace_path == workspace_path)
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(statement, params).mappings().all()
+            rows = conn.execute(statement).mappings().all()
         result = []
         for row in rows:
             artifact = (
@@ -1589,31 +1706,20 @@ class DatabaseSessionStore:
         day = func.date(self.sessions.c.created_at)
         completed = func.sum(case((self.sessions.c.status == "completed", 1), else_=0))
         failed = func.sum(case((self.sessions.c.status == "failed", 1), else_=0))
+        created = self.sessions.c.created_at
         with store_transaction(self.engine) as conn:
-            total = int(
-                conn.scalar(select(func.count()).select_from(self.sessions)) or 0
-            )
-            last_24h = int(
-                conn.scalar(
-                    select(func.count())
-                    .select_from(self.sessions)
-                    .where(self.sessions.c.created_at >= one_day)
-                )
-                or 0
-            )
-            last_7d = int(
-                conn.scalar(
-                    select(func.count())
-                    .select_from(self.sessions)
-                    .where(self.sessions.c.created_at >= seven_days)
-                )
-                or 0
-            )
+            # Totals, both windows, and the status breakdown in one grouped pass.
             status_rows = conn.execute(
-                select(self.sessions.c.status, func.count()).group_by(
-                    self.sessions.c.status
-                )
+                select(
+                    self.sessions.c.status,
+                    func.count(),
+                    func.sum(case((created >= one_day, 1), else_=0)),
+                    func.sum(case((created >= seven_days, 1), else_=0)),
+                ).group_by(self.sessions.c.status)
             ).all()
+            total = sum(int(row[1] or 0) for row in status_rows)
+            last_24h = sum(int(row[2] or 0) for row in status_rows)
+            last_7d = sum(int(row[3] or 0) for row in status_rows)
             employee_rows = conn.execute(
                 select(self.sessions.c.owner_employee_id, func.count().label("count"))
                 .where(self.sessions.c.owner_employee_id.is_not(None))
@@ -1648,7 +1754,7 @@ class DatabaseSessionStore:
             "total": total,
             "last24h": last_24h,
             "last7d": last_7d,
-            "statusCounts": {str(status): int(count) for status, count in status_rows},
+            "statusCounts": {str(row[0]): int(row[1]) for row in status_rows},
             "dailyCounts": [
                 {
                     "date": (window_start + timedelta(days=offset)).isoformat(),
@@ -1865,6 +1971,7 @@ class DatabaseSessionStore:
                     )
                 )
             )
+            self._index_workspace_files(conn, session_pk, session, [artifact])
         return self.get_session(session_id)
 
     def read_artifact_content(self, session_id: str, artifact_id: str) -> bytes | None:
@@ -1904,6 +2011,37 @@ class DatabaseSessionStore:
         if row and row["content"] is not None:
             return row["content"]
         raise KeyError(f"Unknown artifact {artifact_id} in session {session_id}.")
+
+    def _index_workspace_files(
+        self,
+        conn: Any,
+        session_pk: str,
+        session: dict[str, Any],
+        artifacts: list[dict[str, Any]],
+    ) -> None:
+        """Keep session_workspace_files at the newest artifact per file.
+
+        Artifacts are visited in log order, so on a createdAt tie the later
+        one wins -- the same rank ``helpers.workspace_artifacts`` uses.
+        """
+        dialect_insert = (
+            postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
+        )
+        files = self.workspace_files
+        for artifact in artifacts:
+            row = workspace_file_row(session_pk, session, artifact)
+            if row is None:
+                continue
+            statement = dialect_insert(files).values(**row)
+            statement = statement.on_conflict_do_update(
+                index_elements=[files.c.session_id, files.c.file_key],
+                set_={
+                    key: statement.excluded[key]
+                    for key in ("artifact_id", "created_at", "artifact")
+                },
+                where=statement.excluded.created_at >= files.c.created_at,
+            )
+            conn.execute(statement)
 
     def _session_pk(self, conn: Any, session_id: str, *, lock: bool = False) -> str:
         statement = select(self.sessions.c.id).where(self.sessions.c.id == session_id)
@@ -1972,6 +2110,50 @@ def session_to_row(
         "version": version,
         "created_at": _parse_iso(session["createdAt"]),
         "updated_at": _parse_iso(session["updatedAt"]),
+        "deletion_requested_at": _parse_optional_iso(
+            session.get("deletionRequestedAt")
+        ),
+    }
+
+
+def _parse_optional_iso(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return _parse_iso(value)
+    except ValueError:
+        return None
+
+
+WORKSPACE_FILE_UNDATED = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def workspace_file_key(artifact: dict[str, Any]) -> str | None:
+    """The file identity the artifact index dedupes on (mirrors helpers.py)."""
+    for key in ("workspaceRelativePath", "path", "id"):
+        value = artifact.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def workspace_file_row(
+    session_pk: str, session: dict[str, Any], artifact: dict[str, Any]
+) -> dict[str, Any] | None:
+    if artifact.get("kind") != "workspace_file":
+        return None
+    file_key = workspace_file_key(artifact)
+    if file_key is None:
+        return None
+    return {
+        "session_id": session_pk,
+        "file_key": file_key,
+        "artifact_id": artifact.get("id"),
+        "owner_employee_id": session.get("ownerEmployeeId"),
+        "workspace_path": session.get("workspacePath") or "",
+        "created_at": _parse_optional_iso(artifact.get("createdAt"))
+        or WORKSPACE_FILE_UNDATED,
+        "artifact": artifact,
     }
 
 
@@ -2100,7 +2282,9 @@ def compact_database_session_snapshot(session: dict[str, Any], *, event_count: i
 def hydrate_session_logs(snapshot: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
     logs = {event["runId"]: event["agentLog"] for event in events
             if event.get("type") == "agent.completed" and "agentLog" in event}
-    return {**snapshot, "events": events, "agentRuns": [
+    # Neutral events (streamed output) bump the row's version but not the
+    # snapshot, so the snapshot's own eventCount can lag the log it sits on.
+    return {**snapshot, "events": events, "eventCount": len(events), "agentRuns": [
         {**run, **({"agentLog": logs[run["id"]]} if run["id"] in logs else {})}
         for run in snapshot.get("agentRuns", [])
     ]}

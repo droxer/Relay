@@ -347,11 +347,12 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
     sessions = [
         session
-        for session in ctx.session_store.list_sessions()
-        if session.get("ownerEmployeeId") == employee_id
-        and (not agent or session_uses_agent(session, agent["id"]))
+        for session in ctx.session_store.list_session_snapshots(
+            owner_employee_id=employee_id,
+            project_id=project["id"] if project else None,
+        )
+        if (not agent or session_uses_agent(session, agent["id"]))
         and (not team or session.get("teamId") == team["id"])
-        and (not project or session.get("projectId") == project["id"])
     ]
     sessions = ensure_sessions_managed_affinity(ctx, sessions)
     scoped_session_ids = (
@@ -407,12 +408,8 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     ]
     tasks = [
         task
-        for task in ctx.task_store.list_tasks()
-        if (
-            task.get("ownerEmployeeId") == employee_id
-            or task.get("assigneeEmployeeId") == employee_id
-        )
-        and (not agent or task.get("assignedAgentId") == agent["id"])
+        for task in ctx.task_store.list_task_summaries(employee_id=employee_id)
+        if (not agent or task.get("assignedAgentId") == agent["id"])
         and (not team or task.get("assignedTeamId") == team["id"])
         and (not project or task.get("projectId") == project["id"])
     ]

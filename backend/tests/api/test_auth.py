@@ -569,6 +569,11 @@ def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
         })
         assert bob_session.status_code == 201
 
+        def whole_history_read(*_args, **_kwargs):
+            raise AssertionError("workspace brief loaded every thread or task history")
+
+        monkeypatch.setattr(app.state.session_store, "list_sessions", whole_history_read)
+        monkeypatch.setattr(app.state.task_store, "list_tasks", whole_history_read)
         brief_response = alice_client.get("/api/v1/workspace/brief")
         assert brief_response.status_code == 200
         brief = brief_response.json()
