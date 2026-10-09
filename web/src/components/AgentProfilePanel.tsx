@@ -312,11 +312,14 @@ export function AgentProfilePanel({
                 : t("admin.v2.agent_role_none")}
             </span>
           </div>
-          <div className="workspace-dossier-field">
-            <span className="workspace-dossier-field-label" id={modelLabelId}>
-              {t("agents_page.model_label")}
-            </span>
-            {canEditProfile ? (
+          {/* The record band prints the model for everyone; this row exists
+              only to change it, so readers without edit rights don't see the
+              same fact twice. */}
+          {canEditProfile ? (
+            <div className="workspace-dossier-field">
+              <span className="workspace-dossier-field-label" id={modelLabelId}>
+                {t("agents_page.model_label")}
+              </span>
               <AgentModelSetting
                 key={`${agent.id}:${savedModel}`}
                 executorKind={agent.executorKind}
@@ -325,12 +328,8 @@ export function AgentProfilePanel({
                 saving={saving}
                 onSave={handleModelSave}
               />
-            ) : (
-              <span className="workspace-dossier-field-value" aria-labelledby={modelLabelId} translate={savedModel ? "no" : undefined}>
-                {savedModel || t("agents_page.model_default")}
-              </span>
-            )}
-          </div>
+            </div>
+          ) : null}
           <p className="workspace-dossier-stamp">
             {t("admin.v2.agent_meta_version", { version: agent.version })}
             {" · "}
