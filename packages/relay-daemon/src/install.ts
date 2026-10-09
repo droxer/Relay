@@ -4,8 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { homedir, hostname } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createInterface } from 'node:readline/promises';
-import { createReadStream, createWriteStream, statSync, accessSync, constants } from 'node:fs';
+import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment } from 'relay-core';
@@ -104,15 +103,8 @@ async function install(): Promise<void> {
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
   }
   if (options.deviceSetup) {
-    if (!options.workspace) {
-      const input = createReadStream('/dev/tty');
-      const output = createWriteStream('/dev/tty');
-      const prompt = createInterface({ input, output });
-      try {
-        const selected = await prompt.question('Local workspace directory (absolute path): ');
-        options.workspace = selected.startsWith('~/') ? join(homedir(), selected.slice(2)) : selected.trim();
-      } finally { prompt.close(); input.destroy(); output.end(); }
-    }
+    // install.sh prompts for it; reading /dev/tty from Node dies on EINTR under sudo.
+    if (!options.workspace) throw new Error('Pass --workspace <absolute path> to choose the local workspace directory.');
     if (!isAbsolute(options.workspace) || !statSync(options.workspace).isDirectory()) throw new Error('Choose an existing absolute workspace directory.');
     accessSync(options.workspace, constants.R_OK | constants.W_OK);
     options.workspace = resolve(options.workspace);

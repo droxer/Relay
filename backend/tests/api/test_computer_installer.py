@@ -113,7 +113,8 @@ def test_piped_installer_preserves_paths_and_does_not_print_token(tmp_path):
 
 def test_bare_installer_supplies_the_backend_it_was_served_from(tmp_path):
     source, env = _shell_fixture(tmp_path)
-    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True)
+    # No controlling terminal: the workspace prompt is skipped, not left blocking.
+    result = subprocess.run(["bash"], input=source, env=env, text=True, capture_output=True, start_new_session=True)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "args").read_text().splitlines()[1:] == ["--backend-url", "https://relay.example.com"]
 
@@ -231,6 +232,52 @@ def test_token_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
         assert process.returncode == 0, output
         assert b"INSTALL_STARTED" in output
         assert b"test-token" not in output
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+def test_workspace_prompt_uses_controlling_tty_with_piped_stdin(tmp_path):
+    # Node's fs read of /dev/tty dies with EINTR under sudo's terminal relay, so
+    # the shell asks and hands the client --workspace.
+    import os
+    import select
+    import sys
+    import time
+
+    source, env = _shell_fixture(tmp_path)
+    script = tmp_path / "installer.sh"
+    script.write_text(source)
+    command = f"cat {shlex.quote(str(script))} | sh -s -- --foreground"
+    argv = (["script", "-q", "/dev/null", "sh", "-c", command] if sys.platform == "darwin"
+            else ["script", "-q", "-c", command, "/dev/null"])
+    process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, env=env)
+
+    def read_until(marker: bytes, output: bytes) -> bytes:
+        deadline = time.monotonic() + 10
+        while marker not in output and time.monotonic() < deadline:
+            if select.select([process.stdout], [], [], 0.2)[0]:
+                chunk = os.read(process.stdout.fileno(), 8192)
+                if not chunk:
+                    break
+                output += chunk
+        return output
+
+    try:
+        assert process.stdout is not None and process.stdin is not None
+        output = read_until(b"Local workspace directory", b"")
+        assert b"Local workspace directory" in output, output
+        process.stdin.write(b"~/my work\n")
+        process.stdin.flush()
+        output = read_until(b"INSTALL_STARTED", output)
+        assert b"INSTALL_STARTED" in output, output
+        tail, _ = process.communicate(timeout=10)
+        assert process.returncode == 0, output + tail
+        assert (tmp_path / "args").read_text().splitlines()[1:] == [
+            "--backend-url", "https://relay.example.com", "--foreground",
+            "--workspace", f"{env['HOME']}/my work"]
     finally:
         if process.poll() is None:
             process.kill()

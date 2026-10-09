@@ -91,6 +91,20 @@ install_relay() {
         printf '\n' >/dev/tty
     fi
     [ "$legacy_setup" != true ] || [ -n "${RELAY_DAEMON_NODE_TOKEN:-}" ] || fail 'Node token must not be empty.'
+    # The workspace prompt lives here too: read(1) retries the EINTR that sudo's
+    # terminal relay causes, while Node's fs read of /dev/tty crashes on it.
+    workspace_given=false
+    for arg in "$@"; do [ "$arg" != '--workspace' ] || workspace_given=true; done
+    if [ "$legacy_setup" != true ] && [ "$workspace_given" != true ] && (: </dev/tty) 2>/dev/null; then
+        printf 'Local workspace directory (absolute path): ' >/dev/tty
+        read -r relay_workspace </dev/tty || fail 'Could not read the workspace directory.'
+        case "$relay_workspace" in
+            '~') relay_workspace=$HOME ;;
+            '~/'*) relay_workspace="$HOME/${relay_workspace#'~/'}" ;;
+        esac
+        [ -n "$relay_workspace" ] || fail 'Workspace directory must not be empty.'
+        set -- "$@" --workspace "$relay_workspace"
+    fi
     export RELAY_DAEMON_NODE_TOKEN
     "$relay_node" "$release/node_modules/relay-daemon/dist/install.js" "$@"
 }
