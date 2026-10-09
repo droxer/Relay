@@ -60,6 +60,9 @@ class SessionStore(Protocol):
     def list_session_summaries(
         self, *, owner_employee_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]: ...
+    def list_session_snapshots(
+        self, *, owner_employee_id: str, project_id: str | None = None
+    ) -> list[dict[str, Any]]: ...
     def create_artifact(
         self, session_id: str, payload: dict[str, Any]
     ) -> tuple[dict[str, Any], dict[str, Any]]: ...

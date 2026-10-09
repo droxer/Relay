@@ -61,14 +61,50 @@ def _positive_env_number(name: str, default: str, cast: Any) -> Any:
     return value
 
 
+def _non_negative_env_int(name: str, default: str) -> int:
+    raw = os.environ.get(name, default).strip()
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"{name} must be a non-negative integer.") from error
+    if value < 0:
+        raise ValueError(f"{name} must be a non-negative integer.")
+    return value
+
+
+def _session_timeout_options(url: Any) -> str:
+    """Server-side guards so one stuck request cannot pin a connection or lock.
+
+    Applied to the application engine only; Alembic builds its own engine, so a
+    long backfill is never cut off. 0 disables a guard. Any ``options`` already
+    in the URL (a test's search_path, say) is kept, because psycopg's
+    ``connect_args`` would otherwise replace it.
+    """
+    guards = [
+        ("statement_timeout", "RELAY_DB_STATEMENT_TIMEOUT_MS", "30000"),
+        (
+            "idle_in_transaction_session_timeout",
+            "RELAY_DB_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+            "60000",
+        ),
+    ]
+    parts = [str(url.query["options"])] if url.query.get("options") else []
+    for setting, env_name, default in guards:
+        value = _non_negative_env_int(env_name, default)
+        if value:
+            parts.append(f"-c {setting}={value}")
+    return " ".join(parts)
+
+
 def database_engine_options(database_url: str) -> dict[str, Any]:
     """Build bounded per-replica pool settings for server databases."""
-    if make_url(database_url).get_backend_name() == "sqlite":
+    url = make_url(database_url)
+    if url.get_backend_name() == "sqlite":
         return {}
     pre_ping = os.environ.get("RELAY_DB_POOL_PRE_PING", "true").strip().lower()
     if pre_ping not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
         raise ValueError("RELAY_DB_POOL_PRE_PING must be a boolean.")
-    return {
+    options: dict[str, Any] = {
         "pool_size": _positive_env_number("RELAY_DB_POOL_SIZE", "10", int),
         "max_overflow": _positive_env_number("RELAY_DB_MAX_OVERFLOW", "20", int),
         "pool_timeout": _positive_env_number(
@@ -80,6 +116,10 @@ def database_engine_options(database_url: str) -> dict[str, Any]:
         "pool_pre_ping": pre_ping in {"1", "true", "yes", "on"},
         "pool_use_lifo": True,
     }
+    timeouts = _session_timeout_options(url)
+    if timeouts:
+        options["connect_args"] = {"options": timeouts}
+    return options
 
 
 def shared_engine(database_url: str) -> Any:
@@ -539,6 +579,15 @@ SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
     "session.deletion_requested": _apply_deletion_requested,
     "thread.participants_joined": _apply_participants_joined,
 }
+
+# Streamed run output has no reducer: it changes nothing in the projection, so
+# the database store appends it without reading or rewriting the snapshot (the
+# snapshot carries every run and artifact, and rewriting it per chunk was the
+# hottest write in the system). Such an event deliberately does not bump the
+# session's updatedAt; the run's agent.started/agent.completed already do.
+SNAPSHOT_NEUTRAL_SESSION_EVENTS = frozenset(
+    {"agent.output", "agent.output.batch", "agent.collaboration"}
+)
 
 
 def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:

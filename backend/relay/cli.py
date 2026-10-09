@@ -15,6 +15,7 @@ from .core.storage_config import database_url_from_env
 from .persistence.employee_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
 from .persistence.session_store import DatabaseSessionStore
+from .persistence.storage_report import storage_report
 
 load_backend_env()
 
@@ -60,6 +61,7 @@ def main(argv: list[str] | None = None) -> None:
             "migrate-local-sessions",
             "migrate-local-operational-state",
             "rehearse-employee-handles",
+            "storage-report",
         ],
     )
     parser.add_argument("--host", default=deploy_config.bind_host())
@@ -96,6 +98,13 @@ def main(argv: list[str] | None = None) -> None:
         report = rehearse_employee_handles(
             database_url_from_env(setting="rehearse-employee-handles")
         )
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "storage-report":
+        # Reads only: table sizes plus the bytes stored inline as artifact
+        # snapshots, skill blobs, and profile images. See storage_report.py
+        # for when that content should move to an object store.
+        report = storage_report(database_url_from_env(setting="storage-report"))
         print(json.dumps(report, indent=2))
         return
     app = create_app(args.data_dir) if args.data_dir else create_app()

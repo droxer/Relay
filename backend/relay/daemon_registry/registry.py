@@ -120,6 +120,18 @@ DAEMON_COMMAND_LEASE_SECONDS = float(
 DAEMON_COMMAND_RETENTION_SECONDS = float(
     os.environ.get("RELAY_DAEMON_COMMAND_RETENTION_SECONDS", str(6 * 60 * 60))
 )
+# Opt-in: after this many days, streamed output of a completed run is redacted
+# down to its agent.completed log. 0 (the default) keeps every chunk.
+SESSION_OUTPUT_RETENTION_DAYS = float(
+    os.environ.get("RELAY_SESSION_OUTPUT_RETENTION_DAYS", "0")
+)
+# Terminal run requests are also the idempotency record a retried dispatch
+# finds, so they outlive commands by a wide margin.
+DAEMON_RUN_REQUEST_RETENTION_SECONDS = float(
+    os.environ.get(
+        "RELAY_DAEMON_RUN_REQUEST_RETENTION_SECONDS", str(7 * 24 * 60 * 60)
+    )
+)
 DAEMON_TERMINAL_RECORD_LIMIT = int(
     os.environ.get("RELAY_DAEMON_TERMINAL_RECORD_LIMIT", "500")
 )
@@ -2905,7 +2917,29 @@ class DaemonNodeRegistry:
         self.daemon_store.prune_terminal_records(
             retention_seconds=DAEMON_COMMAND_RETENTION_SECONDS,
             per_node_limit=DAEMON_TERMINAL_RECORD_LIMIT,
+            run_request_retention_seconds=DAEMON_RUN_REQUEST_RETENTION_SECONDS,
         )
+        self._maybe_compact_session_output()
+
+    def _maybe_compact_session_output(self) -> None:
+        """Opt-in: redact streamed output of runs completed long ago.
+
+        Off unless RELAY_SESSION_OUTPUT_RETENTION_DAYS is set. A failed sweep
+        is logged and retried on the next tick; it must never stop reaping.
+        """
+        compact = getattr(self.store, "compact_completed_run_output", None)
+        if SESSION_OUTPUT_RETENTION_DAYS <= 0 or compact is None:
+            return
+        older_than = datetime.now(timezone.utc) - timedelta(
+            days=SESSION_OUTPUT_RETENTION_DAYS
+        )
+        try:
+            redacted = compact(older_than=older_than)
+        except Exception:  # noqa: BLE001 - maintenance must not break reaping
+            logger.exception("Session output compaction sweep failed")
+            return
+        if redacted:
+            logger.info("Compacted streamed run output", events=redacted)
 
     def _note_command_lease_progress(self, sandbox_id: str, command_id: str) -> None:
         """Treat a renewed command lease as progress on the run it belongs to."""

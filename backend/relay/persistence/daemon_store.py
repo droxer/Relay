@@ -65,7 +65,13 @@ TERMINAL_DAEMON_STATUSES = frozenset({"completed", "failed", "cancelled"})
 # events are otherwise kept indefinitely: `delete_node` hard-deletes the node
 # row, which makes the event log the only surviving record of a node incarnation
 # (see `historical_managed_runtime_ids`).
-PRUNABLE_DAEMON_EVENT_PREFIXES = ("daemon.command.", "daemon.workspace.")
+PRUNABLE_DAEMON_EVENT_PREFIXES = (
+    "daemon.command.",
+    "daemon.workspace.",
+    # Run-request transitions describe rows retention also removes, and are
+    # written several times per run; nothing reads them back.
+    "daemon.run_request.",
+)
 # `daemon.node.seen` is the exception. It was appended per heartbeat by a path
 # that has since stopped emitting it, nothing has ever read it, and it carries no
 # node payload -- so unlike `daemon.node.registered` it records nothing about an
@@ -1239,8 +1245,13 @@ class LocalDaemonStore:
                 self.append_daemon_event(completion_event)
 
     def prune_terminal_records(
-        self, retention_seconds: float, per_node_limit: int
+        self,
+        retention_seconds: float,
+        per_node_limit: int,
+        *,
+        run_request_retention_seconds: float | None = None,
     ) -> dict[str, int]:
+        del run_request_retention_seconds  # Run-request retention is database-only.
         cutoff = _format_iso(
             _parse_iso(now_iso()) - timedelta(seconds=max(0.0, retention_seconds))
         )
@@ -1511,8 +1522,9 @@ class DatabaseDaemonStore:
         Column("updated_at", DateTime(timezone=True), nullable=False),
         Column("last_seen_at", DateTime(timezone=True), nullable=True),
         Index("ix_daemon_nodes_employee_id", "employee_id"),
-        Index("ix_daemon_nodes_updated_at", "updated_at"),
-        Index("ix_daemon_nodes_last_seen_at", "last_seen_at"),
+        # updated_at and last_seen_at are deliberately unindexed: every
+        # heartbeat rewrites both, and leaving them out of every index is what
+        # lets PostgreSQL apply that write as a HOT update.
         Index("ix_daemon_nodes_managed_node_id", "managed_node_id"),
         Index("ix_daemon_nodes_workspace_id", "workspace_id"),
         Index("ix_daemon_nodes_retired_at", "retired_at"),
@@ -1594,9 +1606,17 @@ class DatabaseDaemonStore:
         Column("lease_expires_at", DateTime(timezone=True), nullable=True),
         Column("attempt", Integer, nullable=False, default=0),
         Column("completed_at", DateTime(timezone=True), nullable=True),
+        # Derived from command._runRequestId (text: legacy ids are not uuids).
+        Column("run_request_id", Text, nullable=True),
         Index("ix_daemon_commands_node_status", "node_id", "status"),
         Index("ix_daemon_commands_created_at", "created_at"),
         Index("ix_daemon_commands_lease_expires_at", "lease_expires_at"),
+        Index(
+            "ix_daemon_commands_run_request_id",
+            "run_request_id",
+            postgresql_where=text("run_request_id IS NOT NULL"),
+            sqlite_where=text("run_request_id IS NOT NULL"),
+        ),
     )
     runs = Table(
         "daemon_runs",
@@ -1627,6 +1647,9 @@ class DatabaseDaemonStore:
         Column("completed_at", DateTime(timezone=True), nullable=True),
         Index("ix_daemon_runs_node_status", "node_id", "status"),
         Index("ix_daemon_runs_session_id", "session_id"),
+        # Backs the ON DELETE SET NULL from daemon_commands (retention deletes
+        # commands in bulk) and the run lookups by command.
+        Index("ix_daemon_runs_command_id", "command_id"),
     )
     run_requests = Table(
         "daemon_run_requests",
@@ -1687,6 +1710,7 @@ class DatabaseDaemonStore:
         Index("ix_daemon_events_node_id", "node_id"),
         Index("ix_daemon_events_command_id", "command_id"),
         Index("ix_daemon_events_timestamp", "timestamp"),
+        Index("ix_daemon_events_type_timestamp", "type", "timestamp"),
     )
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
@@ -1884,6 +1908,8 @@ class DatabaseDaemonStore:
     def mark_node_seen(
         self, node_id: str, patch: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
+        if not patch:
+            return self._touch_node_liveness(node_id)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
@@ -1915,6 +1941,31 @@ class DatabaseDaemonStore:
             # several times per second per node, and `lastSeenAt` on the node
             # record is the only thing anything reads.
         return updated
+
+    def _touch_node_liveness(self, node_id: str) -> dict[str, Any] | None:
+        """The idle heartbeat: advance the two liveness columns and nothing else.
+
+        No row lock and no read-modify-write of the other 20 columns or the
+        per-agent rows -- a heartbeat with nothing to report cannot change
+        them. Neither column is indexed, so this stays a HOT update.
+        """
+        now = _parse_iso(now_iso())
+        with store_transaction(self.engine) as conn:
+            row = (
+                conn.execute(
+                    update(self.nodes)
+                    .where(self.nodes.c.id == node_id)
+                    .values(updated_at=now, last_seen_at=now)
+                    .returning(*self.nodes.c)
+                )
+                .mappings()
+                .first()
+            )
+            if not row:
+                return None
+            node_pk = str(row["id"])
+            agents = self._node_agents_by_node(conn, [node_pk])
+        return apply_node_agents(row_to_node(row), agents.get(node_pk, []))
 
     def assign_node_employee(self, node_id: str, employee_id: str) -> dict[str, Any]:
         node = self.get_node(node_id)
@@ -2869,22 +2920,18 @@ class DatabaseDaemonStore:
 
     def pending_command_for_run_request(self, request_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
-            rows = (
+            row = (
                 conn.execute(
-                    select(self.commands).where(self.commands.c.status == "pending")
+                    select(self.commands)
+                    .where(self.commands.c.run_request_id == str(request_id))
+                    .where(self.commands.c.status == "pending")
+                    .order_by(self.commands.c.created_at, self.commands.c.id)
+                    .limit(1)
                 )
                 .mappings()
-                .all()
+                .first()
             )
-        return next(
-            (
-                record
-                for row in rows
-                if (record := row_to_command(row))["command"].get("_runRequestId")
-                == request_id
-            ),
-            None,
-        )
+        return row_to_command(row) if row else None
 
     def claim_terminal_run_request(
         self,
@@ -3225,14 +3272,24 @@ class DatabaseDaemonStore:
                 )
                 self._append_daemon_event(conn, completion_event)
 
-    def prune_terminal_records(self, retention_seconds: float, per_node_limit: int) -> dict[str, int]:
+    def prune_terminal_records(
+        self,
+        retention_seconds: float,
+        per_node_limit: int,
+        *,
+        run_request_retention_seconds: float | None = None,
+    ) -> dict[str, int]:
         """Bound each retention transaction and transfer IDs only.
 
         Visit at most 100 nodes per pass and remove at most 1000 records from
         each table. Keyset rotation prevents quiet nodes from starving.
+        Terminal run requests double as idempotency records for dispatch
+        retries, so they get their own, longer window and are skipped when it
+        is None.
         """
-        cutoff = _parse_iso(now_iso()) - timedelta(seconds=max(0.0, retention_seconds))
-        counts = {"commands": 0, "runs": 0, "events": 0}
+        now = _parse_iso(now_iso())
+        cutoff = now - timedelta(seconds=max(0.0, retention_seconds))
+        counts = {"commands": 0, "runs": 0, "events": 0, "runRequests": 0}
         with store_transaction(self.engine) as conn:
             cursors = getattr(self, "_prune_cursors", {})
             self._prune_cursors = cursors
@@ -3267,6 +3324,32 @@ class DatabaseDaemonStore:
                 self.events.c.timestamp <= cutoff,
             ).order_by(self.events.c.timestamp, self.events.c.id).limit(1000)
             counts["events"] = conn.execute(delete(self.events).where(self.events.c.id.in_(event_ids))).rowcount or 0
+            if run_request_retention_seconds is not None:
+                request_cutoff = now - timedelta(
+                    seconds=max(0.0, run_request_retention_seconds)
+                )
+                request_ids = list(
+                    conn.scalars(
+                        select(self.run_requests.c.id)
+                        .where(
+                            self.run_requests.c.status.not_in(
+                                ACTIVE_RUN_REQUEST_STATUSES
+                            ),
+                            self.run_requests.c.updated_at <= request_cutoff,
+                        )
+                        .order_by(self.run_requests.c.updated_at, self.run_requests.c.id)
+                        .limit(1000)
+                    )
+                )
+                if request_ids:
+                    counts["runRequests"] = (
+                        conn.execute(
+                            delete(self.run_requests).where(
+                                self.run_requests.c.id.in_(request_ids)
+                            )
+                        ).rowcount
+                        or 0
+                    )
         return counts
 
     def append_daemon_event(self, event: dict[str, Any]) -> None:
@@ -3626,6 +3709,7 @@ def command_to_row(
         "lease_expires_at": _parse_iso(record.get("leaseExpiresAt")),
         "attempt": int(record.get("attempt") or 0),
         "completed_at": _parse_iso(record.get("completedAt")),
+        "run_request_id": record["command"].get("_runRequestId"),
     }
 
 
@@ -3816,6 +3900,13 @@ def terminal_time_expression(table: Any) -> Any:
     return func.coalesce(table.c.completed_at, table.c.started_at)
 
 
+Index("ix_daemon_run_requests_current_command", DatabaseDaemonStore.run_requests.c.current_command_id,
+      postgresql_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+      sqlite_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+Index("ix_daemon_run_requests_terminal_retention", DatabaseDaemonStore.run_requests.c.updated_at,
+      DatabaseDaemonStore.run_requests.c.id,
+      postgresql_where=DatabaseDaemonStore.run_requests.c.status.not_in(ACTIVE_RUN_REQUEST_STATUSES),
+      sqlite_where=DatabaseDaemonStore.run_requests.c.status.not_in(ACTIVE_RUN_REQUEST_STATUSES))
 Index("ix_daemon_run_requests_recovery", DatabaseDaemonStore.run_requests.c.recovery_after,
       DatabaseDaemonStore.run_requests.c.id,
       postgresql_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),

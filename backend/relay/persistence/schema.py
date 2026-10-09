@@ -18,6 +18,7 @@ from . import daemon_store as _daemon_store  # noqa: F401
 from . import org_settings_store as _org_settings_store  # noqa: F401
 from . import project_store as _project_store  # noqa: F401
 from . import session_store as _session_store  # noqa: F401
+from . import session_output_compaction as _session_output_compaction  # noqa: F401
 from . import skill_store as _skill_store  # noqa: F401
 from . import task_store as _task_store  # noqa: F401
 from . import team_store as _team_store  # noqa: F401

@@ -1029,32 +1029,50 @@ class DatabaseTaskStore:
         Column("version", BigInteger, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
+        # Derived from snapshot.deletedAt so list and dispatch reads filter on
+        # a column instead of a JSON path.
+        Column("deleted_at", DateTime(timezone=True), nullable=True),
         UniqueConstraint("number_scope", "number", name="uq_tasks_number_scope_number"),
-        Index("ix_tasks_created_at", "created_at"),
+        # Every task event rewrites this row, so each index here is paid on
+        # every write. Low-cardinality single columns (status, priority, the
+        # routine booleans) are left out on purpose: the partial indexes below
+        # cover the scheduler's queues, and owner/assignee reads lead with the
+        # composite recency indexes.
         Index("ix_tasks_updated_at", "updated_at"),
-        Index("ix_tasks_status", "status"),
-        Index("ix_tasks_assigned_agent", "assigned_agent"),
         Index("ix_tasks_assigned_agent_id", "assigned_agent_id"),
         Index("ix_tasks_assigned_team_id", "assigned_team_id"),
         Index("ix_tasks_project_id", "project_id"),
-        Index("ix_tasks_owner_employee_id", "owner_employee_id"),
-        Index("ix_tasks_assignee_employee_id", "assignee_employee_id"),
         Index("ix_tasks_owner_updated_at", "owner_employee_id", "updated_at"),
         Index("ix_tasks_assignee_updated_at", "assignee_employee_id", "updated_at"),
-        Index("ix_tasks_due_date", "due_date"),
-        Index("ix_tasks_priority", "priority"),
-        Index("ix_tasks_is_routine", "is_routine"),
-        Index("ix_tasks_routine_next_run_date", "routine_next_run_date"),
-        Index("ix_tasks_routine_enabled", "routine_enabled"),
-        Index("ix_tasks_routine_trigger_kind", "routine_trigger_kind"),
         Index(
-            "ix_tasks_dispatch_eligibility",
-            "status",
-            "is_routine",
-            "dispatch_next_attempt_at",
-            "priority",
+            "ix_tasks_dispatch_queue",
             "due_date",
             "created_at",
+            "id",
+            postgresql_where=text(
+                "status = 'assigned' AND is_routine IS false AND deleted_at IS NULL"
+            ),
+            sqlite_where=text(
+                "status = 'assigned' AND is_routine IS 0 AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_tasks_due_routines",
+            "routine_next_run_date",
+            postgresql_where=text("is_routine IS true AND routine_enabled IS true"),
+            sqlite_where=text("is_routine IS 1 AND routine_enabled IS 1"),
+        ),
+        Index(
+            "ix_tasks_triggered_routines",
+            "created_at",
+            postgresql_where=text(
+                "is_routine IS true AND routine_enabled IS true"
+                " AND routine_trigger_kind IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "is_routine IS 1 AND routine_enabled IS 1"
+                " AND routine_trigger_kind IS NOT NULL"
+            ),
         ),
     )
     events = Table(
@@ -1071,9 +1089,8 @@ class DatabaseTaskStore:
         Column("type", Text, nullable=False),
         Column("timestamp", DateTime(timezone=True), nullable=False),
         Column("payload", json_type(), nullable=False),
+        # (task_id, sequence) serves history reads and the FK cascade.
         UniqueConstraint("task_id", "sequence", name="uq_task_events_task_sequence"),
-        Index("ix_task_events_task_id", "task_id"),
-        Index("ix_task_events_timestamp", "timestamp"),
         Index("ix_task_events_task_type_sequence", "task_id", "type", "sequence"),
     )
     number_counters = Table(
@@ -1092,9 +1109,15 @@ class DatabaseTaskStore:
             ForeignKey("tasks.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        Column("session_id", entity_uuid_type(), nullable=False),
+        Column(
+            "session_id",
+            entity_uuid_type(),
+            ForeignKey("sessions.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         Column("created_at", DateTime(timezone=True), nullable=False),
         UniqueConstraint("task_id", "session_id", name="uq_task_sessions_task_session"),
+        Index("ix_task_sessions_session_id", "session_id"),
     )
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
@@ -1316,7 +1339,7 @@ class DatabaseTaskStore:
                         scope_filter,
                         self.tasks.c.status != "done",
                         self.tasks.c.is_routine.is_(False),
-                        self.tasks.c.snapshot["deletedAt"].as_string().is_(None),
+                        self.tasks.c.deleted_at.is_(None),
                         or_(
                             self.tasks.c.snapshot["startedAt"].as_string().is_not(None),
                             self.tasks.c.status.in_(
@@ -1453,7 +1476,7 @@ class DatabaseTaskStore:
     ) -> list[dict[str, Any]]:
         statement = (
             select(self.tasks.c.id, self.tasks.c.snapshot)
-            .where(self.tasks.c.snapshot["deletedAt"].as_string().is_(None))
+            .where(self.tasks.c.deleted_at.is_(None))
             .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
         )
         if employee_id is not None:
@@ -1514,7 +1537,7 @@ class DatabaseTaskStore:
                 self.tasks.c.snapshot.label("summary"),
                 self.tasks.c.version,
             )
-            .where(self.tasks.c.snapshot["deletedAt"].as_string().is_(None))
+            .where(self.tasks.c.deleted_at.is_(None))
             .order_by(self.tasks.c.updated_at.desc())
         )
         if employee_id is not None:
@@ -1627,7 +1650,7 @@ class DatabaseTaskStore:
             )
         )
         statement = statement.where(
-            self.tasks.c.snapshot["deletedAt"].as_string().is_(None)
+            self.tasks.c.deleted_at.is_(None)
         )
         if after is not None:
             # The same total ordering as the candidate query, including NULL due dates.
@@ -2336,6 +2359,7 @@ def task_to_row(
         "version": version,
         "created_at": _parse_iso(task["createdAt"]),
         "updated_at": _parse_iso(task["updatedAt"]),
+        "deleted_at": _parse_iso(task.get("deletedAt")),
     }
 
 
