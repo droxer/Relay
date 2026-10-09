@@ -585,9 +585,19 @@ function agentCheckpoints(agent: AgentName, raw: string, offset: number): AgentC
 }
 
 function agentCheckpointId(agent: AgentName, event: Record<string, unknown>): string | undefined {
-  if (agent !== "claude" || event.type !== "assistant") return undefined;
-  const messageId = asRecord(event.message).id;
-  return typeof messageId === "string" && messageId ? `assistant:${messageId}` : undefined;
+  if (agent !== "claude") return undefined;
+  return claudeAssistantFrameId(event);
+}
+
+// Claude Code emits one `assistant` frame per content block — thinking, text,
+// tool_use — all under the same message id, so the id alone cannot tell a new
+// block from a replay. A frame is a replay only when the same message carries
+// the same content again.
+function claudeAssistantFrameId(event: Record<string, unknown>): string | undefined {
+  if (event.type !== "assistant") return undefined;
+  const message = asRecord(event.message);
+  if (typeof message.id !== "string" || !message.id) return undefined;
+  return `assistant:${message.id}:${JSON.stringify(message.content ?? null)}`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -722,7 +732,7 @@ function parseClaude(raw: string): AgentSegment[] {
   const streamedTextByIndex = new Map<number, string>();
   const streamedTextWithoutIndex = new Set<string>();
   const toolSegmentById = new Map<string, number>();
-  const seenAssistantMessageIds = new Set<string>();
+  const seenAssistantFrameIds = new Set<string>();
   let activeTextIndex: number | undefined;
   let turnStartIndex = 0;
 
@@ -784,13 +794,13 @@ function parseClaude(raw: string): AgentSegment[] {
     }
     if (event.type === "assistant") {
       const message = asRecord(event.message);
-      const messageId = typeof message.id === "string" ? message.id : undefined;
-      if (messageId && seenAssistantMessageIds.has(messageId)) {
+      const frameId = claudeAssistantFrameId(event);
+      if (frameId && seenAssistantFrameIds.has(frameId)) {
         out.splice(turnStartIndex);
         resetTurnState();
         continue;
       }
-      if (messageId) seenAssistantMessageIds.add(messageId);
+      if (frameId) seenAssistantFrameIds.add(frameId);
       const content = Array.isArray(message.content) ? message.content : [];
       for (const item of content) {
         const block = asRecord(item);

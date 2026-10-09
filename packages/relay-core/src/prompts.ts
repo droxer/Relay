@@ -121,6 +121,7 @@ function promptPreludes(state: AgentState): string[] {
           : []),
         '"done" means the requested work is complete, "continue" means real work remains, "blocked" means you cannot proceed without a human.',
         "This file records the work outcome independently of process exit. Missing required reports need attention. Tasks may continue within their round budget; a thread-only run records unfinished work for the next turn.",
+        "It is a private control record for Relay, not part of your answer. Do not mention this file, its path, or that you wrote it in your reply; end with the answer itself.",
       ].join("\n"),
     );
   }

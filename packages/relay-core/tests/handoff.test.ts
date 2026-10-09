@@ -330,6 +330,9 @@ describe("prompts", () => {
     assert.match(prompt, /\[Finishing\]\nWhen you stop, write `\.relay\/round-result\.json`/);
     assert.match(prompt, /"status": "done" \| "continue" \| "blocked"/);
     assert.match(prompt, /"runId": "run_current"/);
+    // The verdict file is Relay's control record, not part of the answer:
+    // agents otherwise close their reply with "wrote .relay/round-result.json".
+    assert.match(prompt, /Do not mention this file, its path, or that you wrote it in your reply/);
 
     assert.match(buildClaudeCommand(roundState), /\[Finishing\]/);
   });
