@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..core.agent_names import generate_agent_name
 from ..core.ids import new_database_id, now_iso
-from ..core.model_policy import normalize_model_policy
+from ..core.model_policy import normalize_model_policy, policy_model
 from ..core.models import AGENT_NAMES, AGENT_ROLES
 from ..core.preset_avatars import validate_profile_image_url
 from .store_common import (
@@ -323,6 +323,8 @@ class DatabaseAgentStore:
         Column("display_name", Text, nullable=False),
         Column("display_name_key", Text, nullable=True),
         Column("executor_kind", Text, nullable=False),
+        # Mirrors snapshot.modelPolicy.model; NULL is the runtime default.
+        Column("model", Text, nullable=True),
         Column("compatibility_key", Text, nullable=True),
         Column("enabled", Boolean, nullable=False),
         Column("agent_version", BigInteger, nullable=False),
@@ -925,6 +927,7 @@ def _agent_row(
         # partial index, so a soft delete no longer has to erase its own keys.
         "display_name_key": agent["displayName"].strip().casefold(),
         "executor_kind": agent["executorKind"],
+        "model": policy_model(agent),
         "compatibility_key": agent.get("compatibilityKey"),
         "enabled": agent.get("enabled", True),
         "agent_version": int(agent.get("version") or 1),
