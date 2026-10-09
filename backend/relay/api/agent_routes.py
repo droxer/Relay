@@ -9,6 +9,7 @@ from ..collaboration.models import RunIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.computer_identity import computer_id
+from ..daemon_registry.registry import DAEMON_CAPABILITY_AGENT_MODEL
 from ..persistence.agent_placement_store import create_node_placement, placement_status
 from ..security.auth import require_admin_session
 from ..services.agent_binding import binding_status
@@ -392,7 +393,30 @@ def _agent_with_placements(ctx: AppContextDep, agent: dict[str, Any]) -> dict[st
         "availability": availability,
         "placements": placements,
         "skills": _agent_skills(ctx, agent, placements),
+        "canSelectModel": _can_select_model(ctx, placements),
     }
+
+
+def _can_select_model(ctx: AppContextDep, placements: list[dict[str, Any]]) -> bool:
+    """Whether the daemon this agent runs on can pass a pinned model on.
+
+    False only when a runtime node is known and lacks the capability — the
+    web then says "update the daemon" instead of letting the owner pick a
+    model every run would fail on. With no known node it stays True: the
+    dispatch gate in the registry still refuses an outdated daemon.
+    """
+    node_ids = {
+        placement["runtimeNodeId"]
+        for placement in placements
+        if placement.get("runtimeNodeId")
+    }
+    if not node_ids:
+        return True
+    return all(
+        DAEMON_CAPABILITY_AGENT_MODEL in (node.get("capabilities") or [])
+        for node in ctx.registry.monitor_nodes()
+        if node["id"] in node_ids
+    )
 
 
 def _agent_skills(

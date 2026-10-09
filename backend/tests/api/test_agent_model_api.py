@@ -171,3 +171,28 @@ def test_daemon_without_model_support_fails_the_run_instead_of_ignoring_it(
     assert session["status"] == "failed"
     failure = next(e for e in session["events"] if e["type"] == "session.failed")
     assert "cannot select models" in failure["outcome"]
+
+
+def test_computer_list_reports_whether_the_daemon_can_select_models(env) -> None:
+    app, client = env
+    _register_node(app, ["agent-model"])
+
+    sandboxes = client.get("/api/v1/sandboxes").json()["sandboxes"]
+
+    node = next(item for item in sandboxes if item["id"] == "node_a")
+    assert "agent-model" in node["capabilities"]
+
+
+@pytest.mark.parametrize(
+    ("capabilities", "expected"), [(["agent-model"], True), ([], False)]
+)
+def test_agent_reports_whether_its_daemon_can_select_models(
+    env, capabilities: list[str], expected: bool
+) -> None:
+    app, client = env
+    _register_node(app, capabilities)
+    agent = _create_agent(client)
+
+    record = client.get(f"/api/v1/admin/agents/{agent['id']}").json()["agent"]
+
+    assert record["canSelectModel"] is expected

@@ -4,7 +4,7 @@ import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { createAgent } from "../../api";
-import { runtimesForComputer } from "../../lib/createAgent";
+import { computerCanSelectModel, runtimesForComputer } from "../../lib/createAgent";
 import { modelIdProblem, modelPolicyFor } from "../../lib/agentModels.ts";
 import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
@@ -129,7 +129,10 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
     pickedExecutorKind && runtimeOptions.includes(pickedExecutorKind)
       ? pickedExecutorKind
       : runtimeOptions.length === 1 ? runtimeOptions[0] : "";
-  const model = executorKind && modelPick.kind === executorKind ? modelPick.model : "";
+  // An outdated daemon would fail every run of a pinned model, so on such a
+  // computer the agent is created on the runtime default.
+  const canSelectModel = !executorKind || computerCanSelectModel(nodeLikes, computerId, executorKind);
+  const model = canSelectModel && executorKind && modelPick.kind === executorKind ? modelPick.model : "";
   const modelProblem = modelIdProblem(model);
 
   const hasUnsavedChanges = Boolean(
@@ -283,7 +286,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
               label={t("agents_page.model_label")}
               labelId={modelLabelId}
               wrapper="div"
-              hint={t("agents_page.model_hint")}
+              hint={canSelectModel ? t("agents_page.model_hint") : t("agents_page.model_daemon_outdated")}
               error={fieldErrors.model}
               errorId="create-agent-model-error"
             >
@@ -297,7 +300,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
                 }}
                 labelId={modelLabelId}
                 triggerRef={modelTriggerRef}
-                disabled={isBusy}
+                disabled={isBusy || !canSelectModel}
                 error={Boolean(fieldErrors.model)}
                 errorId="create-agent-model-error"
               />

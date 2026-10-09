@@ -1699,6 +1699,8 @@
     "model_custom_label": "自定义模型 ID",
     "model_custom_placeholder": "模型 ID，例如 provider/model-name",
     "model_save": "保存模型",
+    "model_daemon_outdated": "这台电脑的守护进程版本过旧，无法选择模型，因此此处的智能体使用运行时默认模型。更新守护进程后即可选择。",
+    "model_daemon_outdated_pinned": "这台电脑的守护进程无法传递所选模型，在更新守护进程或恢复为运行时默认之前，运行都会失败。",
     "model_error_invalid": "只能使用字母、数字和 . _ : / @ [ ] + -，且须以字母或数字开头。",
     "model_error_too_long": "模型 ID 最多 128 个字符。",
     "create_role_placeholder": "选择角色…",
