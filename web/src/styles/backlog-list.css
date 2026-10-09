@@ -347,14 +347,30 @@ button.inline-field[aria-expanded="true"] {
     padding-inline: var(--sp-4);
   }
 
+  /* Phones: two rows. The search takes the first row whole; Add filter and
+     the group/sort menus share the second. `display: contents` lets the
+     search and its neighbours wrap as siblings of the chip group instead of
+     as one block — on one row the search was crushed to its icon. */
   .backlog-filter-primary {
-    flex: 1 1 100%;
-    margin-left: 0;
+    display: contents;
   }
 
   .backlog-filter-search-wrap {
-    flex: 1 1 auto;
+    order: -1;
+    flex: 1 1 100%;
     width: auto;
+    min-width: 0;
+  }
+
+  .backlog-filter-chips {
+    flex: 0 1 auto;
+  }
+
+  /* Selectors still see the DOM: the group/sort menus are children of the
+     (display: contents) primary block, not of the bar. */
+  .backlog-filter-primary > :not(.backlog-filter-search-wrap) {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .backlog-page {
@@ -528,7 +544,20 @@ tr[data-selected="true"] > td:first-child {
    records in a screen. The column header is a quiet caption, not a row of
    labels as loud as the data. */
 .task-table td[data-slot="table-cell"] {
-  padding-block: var(--sp-1);
+  padding-block: var(--sp-0-5);
+}
+
+/* One row height whatever the row holds. Padding alone let a row with an
+   assignee avatar (a 24px inline-flex chip sitting on the text baseline, which
+   adds the line box's descender gap) stand 4px taller than a row without one,
+   so the table read as ragged. The height is a floor (table rows treat it so)
+   and every inline chip centres on the row instead of on the baseline. */
+.task-table tbody tr:not(.issues-band) > td[data-slot="table-cell"] {
+  height: var(--control-h);
+}
+
+.task-table td[data-slot="table-cell"] > :is(span, a, button, div) {
+  vertical-align: middle;
 }
 
 .task-table th[data-slot="table-head"] {

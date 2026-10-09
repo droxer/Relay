@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ICON, type GlyphProps } from "./icons";
 
@@ -60,6 +60,17 @@ export function SectionNav<Id extends string>({
   variant?: "rail" | "tabs";
 }) {
   const tabs = variant === "tabs";
+  const navRef = useRef<HTMLElement>(null);
+
+  /* A tab strip scrolls sideways when the header is narrow (a phone, a
+     squeezed pane), and the selected queue can sit past its edge — "All open"
+     selected with only "Awaiting your input" in view. Keep the active tab
+     visible. `nearest` on both axes so the page itself never jumps. */
+  useEffect(() => {
+    if (!tabs) return;
+    const active = navRef.current?.querySelector<HTMLElement>('[data-active="true"]');
+    active?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [tabs, value]);
   /* The Button primitive types its handler against a <button>, and `render`
      does not re-type it — the fields read here (the modifier keys and the
      mouse button) are on the base MouseEvent either way. */
@@ -74,7 +85,7 @@ export function SectionNav<Id extends string>({
   }
 
   return (
-    <nav className={tabs ? "sec-nav sec-nav--tabs" : "sec-nav"} aria-label={label}>
+    <nav ref={navRef} className={tabs ? "sec-nav sec-nav--tabs" : "sec-nav"} aria-label={label}>
       <ul className="sec-nav-list">
         {items.map((item) => {
           const active = value === item.id;
