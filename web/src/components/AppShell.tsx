@@ -6,7 +6,6 @@ import { MobileTopbarSlotContext } from "./MobileTopbarSlot";
 import { useTranslation } from "react-i18next";
 import {
   ICON,
-  NavPreferences,
   NavBack,
 } from "./icons";
 import type { Theme } from "@/lib/appStorage";
@@ -76,31 +75,6 @@ type AppShellProps = {
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
 };
-
-/** The mobile topbar's settings affordance. Settings is a route now — the
- *  same one the rail's gear opens — so this navigates rather than toggling a
- *  modal. */
-function SettingsButton({ route, href, onNavigate }: { route: AppRoute; href: string; onNavigate: () => void }) {
-  const { t } = useTranslation();
-  const active = route === "settings";
-  return (
-    <Button
-      variant="ghost"
-      render={<a href={href} />}
-      nativeButton={false}
-      className={`mobile-settings ${active ? "active" : ""}`}
-      aria-label={t("nav.settings")}
-      aria-current={active ? "page" : undefined}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-        event.preventDefault();
-        onNavigate();
-      }}
-    >
-      <NavPreferences size={ICON.md} />
-    </Button>
-  );
-}
 
 export function AppShell({
   taskWorkspace = false,
@@ -246,8 +220,10 @@ export function AppShell({
 
       {/* The phone top bar: one shape on every route — a back control when
           the screen is nested, a single title line, then the screen's own
-          actions (portaled into the slot by MobileTopbarActions) and the
-          settings gear. It used to be three shapes: a centred two-line
+          actions (portaled into the slot by MobileTopbarActions). Settings is
+          not here: it lives in the tab bar's More menu with the other
+          secondary destinations, so the bar carries only what the screen
+          itself does. It used to be three shapes: a centred two-line
           "Relay / Issues" label, a full-width pill naming the thread
           directory, and a chat-bubble glyph standing in for "back". */}
       <div className="mobile-topbar">
@@ -281,7 +257,6 @@ export function AppShell({
             />
           ) : null}
           <div className="mobile-topbar-actions" ref={setActionsSlot} />
-          <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
         </div>
       </div>
 
