@@ -245,6 +245,7 @@ export function AgentsPage({
           titleAs="h2"
           titleVariant="title"
           layout="stacked"
+          topbarActions={detailAgent ? "inactive" : true}
           actions={
             currentUser.employeeId ? (
               // The shared list-header create affordance, same as the

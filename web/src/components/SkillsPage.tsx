@@ -271,6 +271,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
           count={t("skills.count", { count: skills.length })}
           titleAs="h2"
           titleVariant="title"
+          topbarActions
           actions={
             <Button
               variant="ghost"

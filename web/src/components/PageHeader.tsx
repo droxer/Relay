@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Breadcrumb, type BreadcrumbItem } from "./Breadcrumb";
+import { MobileTopbarActions } from "./MobileTopbarSlot";
 
 export function PageHeader({
   title,
@@ -11,6 +12,7 @@ export function PageHeader({
   subtitle,
   toolbar,
   actions,
+  topbarActions = false,
   titleVariant = "default",
   titleAs = "h1",
   layout = "inline",
@@ -26,6 +28,12 @@ export function PageHeader({
   subtitle?: ReactNode;
   toolbar?: ReactNode;
   actions?: ReactNode;
+  /** On a phone, move `actions` into the top bar (MobileTopbarActions) instead
+   *  of keeping a header band for them. `true` for a list surface's own
+   *  header; `"inactive"` where the list stays mounted under its open detail,
+   *  so its actions leave the bar. Off by default — record and drawer headers
+   *  keep their actions in place. */
+  topbarActions?: boolean | "inactive";
   /** "display" is the 28px hero tier for page-owning nouns; "title" is the
    *  19px tier for a fixed UI noun heading a subordinate pane (the thread
    *  rail — same rung a drawer title takes); "record" is regular sans for a
@@ -73,9 +81,17 @@ export function PageHeader({
         {toolbar ? <div className="page-header-toolbar">{toolbar}</div> : null}
       </div>
       {actions ? (
-        <div className={cn("page-header-actions", stacked && "page-header-actions--stacked")}>
-          {actions}
-        </div>
+        topbarActions ? (
+          <MobileTopbarActions active={topbarActions !== "inactive"}>
+            <div className={cn("page-header-actions", stacked && "page-header-actions--stacked")}>
+              {actions}
+            </div>
+          </MobileTopbarActions>
+        ) : (
+          <div className={cn("page-header-actions", stacked && "page-header-actions--stacked")}>
+            {actions}
+          </div>
+        )
       ) : null}
     </header>
   );

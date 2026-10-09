@@ -97,6 +97,7 @@ export function TeamsPage({
           titleAs="h2"
           titleVariant="title"
           layout="stacked"
+          topbarActions={selectedTeam ? "inactive" : true}
           actions={(
             // The shared list-header create affordance — a ghost plus, same
             // as the projects/threads rail.

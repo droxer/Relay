@@ -238,7 +238,7 @@ export function BacklogTaskList({
   const columns = useMemo<ColumnDef<RelayTaskListItem>[]>(() => [
     {
       id: "select",
-      meta: { headClass: "w-4", cellClass: "w-4" } satisfies ColumnChrome,
+      meta: { headClass: "w-4 task-col-select", cellClass: "w-4 task-col-select" } satisfies ColumnChrome,
       header: () => <BacklogCells.Read>{(s) => s.selectAll}</BacklogCells.Read>,
       cell: ({ row }) => <BacklogCells.Read>{(s) => {
         const task = row.original;
@@ -255,7 +255,7 @@ export function BacklogTaskList({
     },
     {
       id: "priority",
-      meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
+      meta: { headClass: "w-2 task-col-mark--priority", cellClass: "w-2 task-col-mark--priority" } satisfies ColumnChrome,
       header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.priority")}</span>}</BacklogCells.Read>,
       cell: ({ row }) => <BacklogCells.Read>{(s) => (
         <InlinePriority
@@ -267,7 +267,7 @@ export function BacklogTaskList({
     },
     {
       id: "status",
-      meta: { headClass: "w-2", cellClass: "w-2" } satisfies ColumnChrome,
+      meta: { headClass: "w-2 task-col-mark", cellClass: "w-2 task-col-mark" } satisfies ColumnChrome,
       /* Named, not blank: a columnheader with no accessible name leaves the
          cells under it reading as a column of nothing. */
       header: () => <BacklogCells.Read>{(s) => <span className="sr-only">{s.t("backlog.status")}</span>}</BacklogCells.Read>,

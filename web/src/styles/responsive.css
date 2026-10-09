@@ -96,47 +96,30 @@
     display: none;
   }
 
-  .mobile-topbar--chat {
-    grid-template-columns: 1fr 1fr var(--touch-target);
-  }
-
-  .mobile-topbar--route {
-    grid-template-columns: minmax(0, 1fr) var(--touch-target);
-  }
-
+  /* One top bar on every route (AppShell): [back] · title · tools. The back
+     control only exists on a nested screen, so the grid takes its leading
+     track only then. */
   .mobile-topbar {
     display: grid;
     grid-row: 1;
     grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--sp-2);
+    gap: var(--sp-1);
     min-width: 0;
-    padding: max(env(safe-area-inset-top), var(--sp-2)) max(env(safe-area-inset-right), var(--sp-4)) var(--sp-2) max(env(safe-area-inset-left), var(--sp-4));
+    padding: max(env(safe-area-inset-top), var(--sp-1)) max(env(safe-area-inset-right), var(--sp-2)) var(--sp-1) max(env(safe-area-inset-left), var(--sp-4));
     border-bottom: 0.5px solid var(--line-1);
     background: var(--surface-0);
     z-index: var(--z-drawer);
   }
 
-  /* Chat route — one contextual segment per mobile view (not two competing
-     toggles plus a duplicate title in the chat header). */
-  .messenger-shell[data-mobile-view="threads"] .mobile-topbar--chat {
-    grid-template-columns: minmax(0, 1fr) var(--touch-target);
-  }
-
-  .messenger-shell[data-mobile-view="threads"] .mobile-topbar--chat > button:first-of-type {
-    justify-self: stretch;
-  }
-
-  .messenger-shell[data-mobile-view="threads"] .mobile-topbar--chat > button:nth-of-type(2) {
-    display: none;
-  }
-
-  /* Open conversation: single header = back + title + tools/settings.
-     The in-panel .chat-header is hidden so we reclaim ~64px of transcript. */
-  .messenger-shell[data-mobile-view="chat"] .mobile-topbar--chat {
+  .mobile-topbar[data-nested] {
     grid-template-columns: var(--touch-target) minmax(0, 1fr) auto;
+    padding-left: max(env(safe-area-inset-left), var(--sp-1));
   }
 
+  /* Open conversation: the top bar replaces the in-panel .chat-header, which
+     reclaims ~64px of transcript. */
   .messenger-shell[data-mobile-view="chat"] .chat-header {
     display: none;
   }
@@ -156,67 +139,11 @@
     justify-self: start;
   }
 
-  .mobile-topbar-chat-title {
-    min-width: 0;
+  .mobile-topbar-heading {
     display: flex;
     align-items: center;
-    justify-content: center;
-    min-height: var(--touch-target);
-    padding-inline: var(--sp-2);
-    text-align: center;
-  }
-
-  .mobile-topbar-chat-title .mobile-topbar-title {
-    max-width: 100%;
-  }
-
-  .mobile-topbar-chat-tools {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-1);
-    justify-self: end;
-  }
-
-  /* The top bar has room for glyphs, not words: the output pill drops back to
-     its icon here and the count chip rides beside it. */
-  .mobile-topbar-chat-tools .chat-artifacts-label {
-    display: none;
-  }
-
-  /* Icon-only here, so it needs the floor on both axes: at its own padding
-     the glyph-only button measured 34px wide beside 44px neighbours. */
-  .mobile-topbar-chat-tools .chat-artifacts-button {
-    min-width: var(--touch-target);
-    min-height: var(--touch-target);
-    padding-inline: var(--sp-2);
-  }
-
-  .mobile-topbar-chat-tools [data-variant="icon"],
-  .mobile-topbar-chat-tools .mobile-settings {
-    position: relative;
-    width: var(--touch-target);
-    height: var(--touch-target);
-    padding: 0;
-  }
-
-  .mobile-topbar-route {
-    grid-column: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--sp-1);
     min-width: 0;
     min-height: var(--touch-target);
-    padding-inline: var(--sp-2);
-    text-align: center;
-  }
-
-  .mobile-topbar-eyebrow {
-    /* Eyebrow grammar (type, tracking, caps, color) is canonical in
-       atelier.css, shared with .page-header-kicker; mobile only tightens
-       the leading. */
-    line-height: var(--leading-none);
   }
 
   .mobile-topbar-title {
@@ -225,18 +152,94 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--ink-1);
-    font: var(--type-label-strong);
-    line-height: var(--leading-tight);
+    font: var(--type-title);
+    letter-spacing: var(--type-title-track);
   }
 
-  .mobile-topbar .mobile-settings {
+  .mobile-topbar-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    justify-self: end;
+  }
+
+  /* The screen's own actions, portaled in by MobileTopbarActions. */
+  .mobile-topbar-actions {
+    display: contents;
+  }
+
+  /* The top bar has room for glyphs, not words: the output pill drops back to
+     its icon here and the count chip rides beside it. */
+  .mobile-topbar-tools .chat-artifacts-label {
+    display: none;
+  }
+
+  /* Every top bar control is a 44px square glyph button. The create "+" keeps
+     its neutral fill so it still reads as the screen's primary action. */
+  .mobile-topbar-tools .chat-artifacts-button {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    padding-inline: var(--sp-2);
+  }
+
+  .mobile-topbar-tools [data-variant="icon"],
+  .mobile-topbar-tools .mobile-settings,
+  .mobile-topbar-tools .page-header-icon-action {
+    position: relative;
     width: var(--touch-target);
+    height: var(--touch-target);
     padding: 0;
   }
 
-  .mobile-topbar--route .mobile-settings,
-  .messenger-shell[data-mobile-view="threads"] .mobile-topbar--chat .mobile-settings {
-    grid-column: -1;
+  .mobile-topbar-tools .page-header-icon-action--primary {
+    width: calc(var(--touch-target) - var(--sp-2));
+    height: calc(var(--touch-target) - var(--sp-2));
+    margin-inline: var(--sp-1);
+  }
+
+  /* A page's actions, portaled into the top bar (MobileTopbarActions), keep
+     their header wrapper — it lays out inline here, not as a band. */
+  .mobile-topbar-actions > .page-header-actions {
+    display: contents;
+  }
+
+  /* With its actions in the top bar, a list header whose title is hidden
+     (the top bar names the route) holds nothing: drop the band. Record
+     routes keep theirs — their lead carries the record's tabs. */
+  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="agents"], [data-route="teams"], [data-route="projects"])) .page-header:not(:has(.page-header-actions, .page-header-toolbar)):not(#task-record-panel .page-header) {
+    display: none;
+  }
+
+  /* A skill's detail header names a record, not the route, so it keeps its
+     lead — otherwise "Share" sat alone in a band with no skill name beside
+     it. Same exception the record routes above take. */
+  .messenger-shell[data-route="settings"] .skill-detail .page-header-lead {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .messenger-shell[data-route="settings"] .skill-detail .page-header {
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  /* A project's state and id ride its title line on desktop; on a phone that
+     line is one more band above the issues, and both facts are on the
+     project's Settings tab. */
+  .project-workspace-page .page-header-facts {
+    display: none;
+  }
+
+  /* The roster rails' headers would only repeat the top bar ("Agents") once
+     their "+" has moved up there. */
+  .agents-roster > .page-header,
+  .teams-roster > .page-header {
+    display: none;
   }
 
   /* Work routes — mobile topbar already names the page; drop the in-page

@@ -354,6 +354,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           title={sectionLabel}
           titleAs="h2"
           titleVariant="title"
+          topbarActions
           count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
           actions={
             <TaskBoardHeaderActions
