@@ -16,6 +16,7 @@ import {
   ICON,
   NavBack,
 } from "./icons";
+import { MobileTopbarBack } from "./MobileTopbarSlot";
 import { PageHeader } from "./PageHeader";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { IdentityMark } from "./IdentityMark";
@@ -224,15 +225,23 @@ export function TeamsPage({
       <div className="teams-detail">
         {selectedTeam ? (
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              className="teams-mobile-back"
-              onClick={() => onSelectTeam(null)}
-            >
-              <NavBack size={ICON.sm} aria-hidden="true" />
-              {t("teams.title")}
-            </Button>
+            {/* On a phone this is the top bar's back control ("← Teams"),
+                not a second row under it. */}
+            <MobileTopbarBack
+              label={t("teams.title")}
+              onBack={() => onSelectTeam(null)}
+              fallback={(
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="teams-mobile-back"
+                  onClick={() => onSelectTeam(null)}
+                >
+                  <NavBack size={ICON.sm} aria-hidden="true" />
+                  {t("teams.title")}
+                </Button>
+              )}
+            />
             <TeamWorkspacePage
               key={selectedTeam.id}
               team={selectedTeam}

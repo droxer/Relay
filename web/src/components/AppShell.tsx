@@ -218,10 +218,12 @@ export function AppShell({
       : taskWorkspace
         ? t("nav.backlog")
         : t(WORK_ROUTE_LABEL_KEYS[route as keyof typeof WORK_ROUTE_LABEL_KEYS]);
-  const [topbarSlot, setTopbarSlot] = useState<HTMLDivElement | null>(null);
+  const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
+  const [leadSlot, setLeadSlot] = useState<HTMLDivElement | null>(null);
+  const topbarSlots = useMemo(() => ({ actions: actionsSlot, lead: leadSlot }), [actionsSlot, leadSlot]);
 
   return (
-    <MobileTopbarSlotContext.Provider value={topbarSlot}>
+    <MobileTopbarSlotContext.Provider value={topbarSlots}>
     <div
       className="messenger-shell"
       data-mobile-view={mobileView}
@@ -248,18 +250,23 @@ export function AppShell({
           settings gear. It used to be three shapes: a centred two-line
           "Relay / Issues" label, a full-width pill naming the thread
           directory, and a chat-bubble glyph standing in for "back". */}
-      <div className="mobile-topbar" data-nested={isMobileChat || undefined}>
-        {isMobileChat ? (
-          <Button
-            variant="ghost"
-            type="button"
-            className="mobile-topbar-back"
-            aria-label={directoryLabel}
-            onClick={() => onMobileViewChange("threads")}
-          >
-            <NavBack size={ICON.md} />
-          </Button>
-        ) : null}
+      <div className="mobile-topbar">
+        {/* The leading slot: the thread's back control, or a nested route
+            screen's, portaled in by MobileTopbarBack. Empty, it takes no
+            width. */}
+        <div className="mobile-topbar-lead" ref={setLeadSlot}>
+          {isMobileChat ? (
+            <Button
+              variant="ghost"
+              type="button"
+              className="mobile-topbar-back"
+              aria-label={directoryLabel}
+              onClick={() => onMobileViewChange("threads")}
+            >
+              <NavBack size={ICON.md} />
+            </Button>
+          ) : null}
+        </div>
         <div className="mobile-topbar-heading" title={mobileTitle}>
           <span className="mobile-topbar-title">{mobileTitle}</span>
         </div>
@@ -273,7 +280,7 @@ export function AppShell({
               disabled={mobileChatChrome.spaceDisabled}
             />
           ) : null}
-          <div className="mobile-topbar-actions" ref={setTopbarSlot} />
+          <div className="mobile-topbar-actions" ref={setActionsSlot} />
           <SettingsButton route={route} href={hrefForRoute("settings")} onNavigate={() => onNavigateRoute("settings")} />
         </div>
       </div>

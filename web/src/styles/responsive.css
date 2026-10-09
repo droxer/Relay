@@ -103,7 +103,7 @@
     display: grid;
     grid-row: 1;
     grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--sp-1);
     min-width: 0;
@@ -113,8 +113,18 @@
     z-index: var(--z-drawer);
   }
 
-  .mobile-topbar[data-nested] {
-    grid-template-columns: var(--touch-target) minmax(0, 1fr) auto;
+  /* The leading slot holds a back control on a nested screen and nothing
+     otherwise; empty, it collapses and the title takes the inset. */
+  .mobile-topbar-lead {
+    display: flex;
+    align-items: center;
+  }
+
+  .mobile-topbar-lead:empty {
+    display: none;
+  }
+
+  .mobile-topbar:has(> .mobile-topbar-lead:not(:empty)) {
     padding-left: max(env(safe-area-inset-left), var(--sp-1));
   }
 
