@@ -13,8 +13,7 @@ import { Button } from "@/components/ui/button";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
-import { TASK_STATUS_SHAPE } from "./backlogVocabulary";
-import { StateMark, shapeForCount } from "../StateMark";
+import { TaskStatusIcon } from "../TaskStatusIcon";
 
 import { initialFilters, type BacklogView } from "./backlogVocabulary";
 
@@ -158,9 +157,9 @@ export function TaskStatusNav({ value, counts, onChange }: {
     ...TASK_STATUSES.map((status) => ({
       id: status,
       label: t(`backlog.statuses.${status}`),
-      mark: <StateMark shape={shapeForCount(TASK_STATUS_SHAPE[status], counts[status])} />,
+      mark: <TaskStatusIcon status={status} />,
       count: counts[status],
     })),
   ];
-  return <SectionNav items={items} value={value} onChange={onChange} label={t("backlog.status")} />;
+  return <SectionNav items={items} value={value} onChange={onChange} label={t("backlog.status")} variant="tabs" />;
 }

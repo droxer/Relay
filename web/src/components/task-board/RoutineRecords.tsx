@@ -326,7 +326,7 @@ export function RoutineTable({
 
   return (
     <RoutineCells.Provider value={cellState}>
-      <Table aria-label={ariaLabel}>
+      <Table aria-label={ariaLabel} className="task-table">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent">

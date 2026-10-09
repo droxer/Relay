@@ -394,7 +394,20 @@ function task({ ref, title, description = "", priority = "normal", status, due, 
   };
 }
 
-export const tasks = [
+/* Numbers the way the backend's task_number_scope does — per project for
+   project issues, per employee for unfiled issues, and separately for
+   automations — so the tables show `#3` and `AUTO-2`, not raw ids. */
+function numbered(list) {
+  const counters = new Map();
+  return list.map((item) => {
+    const scope = item.isRoutine ? "automations" : item.projectId ?? "intake";
+    const number = (counters.get(scope) ?? 0) + 1;
+    counters.set(scope, number);
+    return { ...item, number };
+  });
+}
+
+export const tasks = numbered([
   task({ ref: "B7D349", title: "Audit webhook retry backoff", priority: "low", status: "backlog", due: 9, minutes: 300 }),
   task({ ref: "B32E83", title: "Draft Q4 capacity plan for shared runners", status: "backlog", projectId: "project_infra", due: 12, agentId: "agent_scout", minutes: 22 * 60 }),
   task({ ref: "C0FBA2", title: "Document the export job runbook", priority: "low", status: "backlog", minutes: 900 }),
@@ -415,7 +428,7 @@ export const tasks = [
   task({ ref: "7A35D0", title: "Monthly access review", description: "List every service account and token that has not been used in 30 days.", priority: "high", status: "backlog", agentId: "agent_forge", minutes: 11 * DAY / MINUTE, routine: { cadence: "monthly", next: 19 }, note: "4 stale tokens flagged." }),
   task({ ref: "8B42E1", title: "Daily standup digest", description: "Collect what every agent finished, is doing, and is blocked on since yesterday.", priority: "low", status: "backlog", agentId: "agent_scout", minutes: 8 * 60, routine: { cadence: "daily", next: 1 }, note: "Posted to #platform." }),
   task({ ref: "5E13B7", title: "Friday release notes draft", description: "Draft customer-facing notes from everything merged this week.", priority: "low", status: "backlog", agentId: "agent_aria", minutes: 4 * DAY / MINUTE, routine: { cadence: "weekly", next: 3, enabled: false } }),
-];
+]);
 
 /* ------------------------------------------------------------------ */
 /* Computers as the API serves them                                    */

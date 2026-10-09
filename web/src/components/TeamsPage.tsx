@@ -92,7 +92,6 @@ export function TeamsPage({
     >
       <div className="teams-roster">
         <PageHeader
-          trail={[{ label: t("nav.workforce") }]}
           title={t("teams.title")}
           count={t("teams.count", { count: teams.length })}
           titleAs="h2"

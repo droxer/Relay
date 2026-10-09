@@ -620,7 +620,6 @@
   color: var(--ink-4);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .team-work-member-outputs ul {

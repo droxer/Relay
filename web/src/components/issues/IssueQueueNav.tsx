@@ -25,7 +25,8 @@ const QUEUE_ICONS = {
   done: StatusOk,
 } satisfies Record<IssueQueue, SectionNavItem<IssueQueue>["Icon"]>;
 
-/** The Issues rail: one row per queue, each with its count under the filters. */
+/** The Issues queues: view tabs on the page header, each with its count. The
+ *  queue's one-line hint is the tab's tooltip. */
 export function IssueQueueNav({ value, counts, onChange }: {
   value: IssueQueue;
   counts: Record<IssueQueue, number>;
@@ -37,6 +38,7 @@ export function IssueQueueNav({ value, counts, onChange }: {
     label: t(`issues.queues.${queue}`),
     Icon: QUEUE_ICONS[queue],
     count: counts[queue],
+    hint: t(`issues.queue_hints.${queue}`),
   }));
-  return <SectionNav items={items} value={value} onChange={onChange} label={t("issues.queues_label")} />;
+  return <SectionNav items={items} value={value} onChange={onChange} label={t("issues.queues_label")} variant="tabs" />;
 }

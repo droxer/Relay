@@ -33,7 +33,6 @@
   color: var(--ink-4);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 /* Crew as a card grid, not a table: each card is one agent's charter —
@@ -602,7 +601,6 @@
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
 }
 
 .project-settings-fact dd {

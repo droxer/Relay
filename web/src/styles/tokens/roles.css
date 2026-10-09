@@ -173,7 +173,13 @@
      fourth weight cannot creep back in, and dimensionScales.test.ts pins the
      set. Sharing 500 with --type-label is fine: micro is separated from it by
      CASE and size, which is the separator this role has always led with. */
-  --type-micro:        500 var(--fs-1)/var(--leading-caps) var(--font-sans); /* + uppercase */
+  /* Group labels are SENTENCE CASE now (2026-10-09). Forty-odd rules set
+     their lane, band and field labels in tracked capitals — BACKLOG, RUNTIME,
+     TEAM ROLE — so the quietest structure on a page was its loudest shape, and
+     Han copy had no case to transform anyway. Micro keeps its size and weight;
+     the dimmer ink, not the case, is what separates it from a label. The caps
+     track stays declared for any future caps role but nothing reads it. */
+  --type-micro:        500 var(--fs-1)/var(--leading-caps) var(--font-sans);
   --type-number:       500 var(--fs-5)/var(--leading-number) var(--font-display);
   /* Code sizes to the mono face's metrics, not the sans ladder. --fs-code
      (14px) sits two pixels under the 16px body rung: mono advances are wider
@@ -208,7 +214,12 @@
      on the same size: they are generic containers for arbitrary translated
      copy, where forced uppercase is a localization hazard. That carve-out is
      pinned by typographyTokens.test.ts — do not "converge" it. */
-  --type-name:          700 var(--fs-4)/var(--leading-normal) var(--font-sans);
+  /* --type-name runs 500, not 700 (2026-10-09). Every row and card in a list
+     carries a name, so at 700 a whole table of titles was bold and nothing in
+     it could stand out — the "Needs project" flag and an overdue date had no
+     quieter text to rise from. Names lead by ink (--ink-1 against --ink-3
+     meta) and position; 700 is back to being scarce emphasis. */
+  --type-name:          500 var(--fs-4)/var(--leading-normal) var(--font-sans);
   /* --type-meta  supporting text at the caption size, in SENTENCE case: row
      meta lines ("3 agents · updated 2h ago"), eyebrows, kickers. It shares the
      box with --type-micro and differs in TRACKING, which is the whole point —
@@ -228,7 +239,7 @@
   --type-body-sm-track:      var(--track-body-sm);
   --type-label-track:        var(--track-body-sm);
   --type-label-strong-track: var(--track-body-sm);
-  --type-micro-track:        var(--track-caps);
+  --type-micro-track:        var(--track-0);
   --type-code-track:         var(--track-0); /* never tighten a monospace column */
   --type-name-track:          var(--track-body);
   --type-meta-track:          var(--track-body-sm);

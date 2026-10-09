@@ -260,6 +260,11 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
     />
   );
 
+  /* The board view has no status strip (the lanes are the statuses), so its
+     toolbar band held nothing but the view toggle and the plus. Those ride the
+     filter toolbar instead whenever it is showing — one band, not two. */
+  const actionsInFilterBar = view === "board" && backlogTasks.length > 0;
+
   return (
     <section
       className="backlog-page backlog-page--project"
@@ -269,15 +274,17 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
       <div className="backlog-project-main">
         {/* The header is controls only: the metrics live on the project's
             Dashboard tab, and on the board the lanes already name each status. */}
-        <div className="backlog-project-toolbar">
-          {view === "list" ? (
-            <div className="backlog-project-status">
-              <TaskStatusNav value={filters.status} counts={sectionCounts}
-                onChange={(status) => setFilters({ ...filters, status })} />
-            </div>
-          ) : null}
-          <div className="backlog-project-actions">{headerActions}</div>
-        </div>
+        {actionsInFilterBar ? null : (
+          <div className="backlog-project-toolbar">
+            {view === "list" ? (
+              <div className="backlog-project-status">
+                <TaskStatusNav value={filters.status} counts={sectionCounts}
+                  onChange={(status) => setFilters({ ...filters, status })} />
+              </div>
+            ) : null}
+            <div className="backlog-project-actions">{headerActions}</div>
+          </div>
+        )}
 
       {backlogTasks.length > 0 ? (
         <>
@@ -287,18 +294,21 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
             teams={teams}
             onChange={setFilters}
             sortMenu={
-              <SortMenu
-                /* Status belongs to the section navigation. */
-                options={[
-                  { key: "title", label: t("backlog.col_task") },
-                  { key: "priority", label: t("backlog.priority") },
-                  { key: "assignee", label: t("backlog.assignee") },
-                  { key: "due", label: t("backlog.due") },
-                ]}
-                sort={sort}
-                onSortChange={setSort}
-                label={t("backlog.sort_label")}
-              />
+              <>
+                <SortMenu
+                  /* Status belongs to the section navigation. */
+                  options={[
+                    { key: "title", label: t("backlog.col_task") },
+                    { key: "priority", label: t("backlog.priority") },
+                    { key: "assignee", label: t("backlog.assignee") },
+                    { key: "due", label: t("backlog.due") },
+                  ]}
+                  sort={sort}
+                  onSortChange={setSort}
+                  label={t("backlog.sort_label")}
+                />
+                {actionsInFilterBar ? <div className="backlog-project-actions">{headerActions}</div> : null}
+              </>
             }
           />
         </>

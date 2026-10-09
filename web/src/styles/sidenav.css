@@ -375,7 +375,11 @@
   /* Lets the label's min-width:0 take effect: without it the row floors at
      its content width and the ellipsis never engages. */
   min-width: 0;
-  height: var(--control-h);
+  /* 32px, not 36: the open rail is a list of places, read at a glance, and
+     the taller rows spread nine destinations over more of the column than
+     the content they lead to. Coarse pointers still get --touch-target
+     (a11y.css). */
+  height: var(--control-h-sm);
   padding: 0 var(--sp-3);
   justify-content: flex-start;
   text-align: left;

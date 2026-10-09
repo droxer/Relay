@@ -198,7 +198,6 @@
   margin: 0;
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 

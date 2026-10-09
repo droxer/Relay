@@ -9,7 +9,7 @@
 
 /* The band is a row, so it sticks on its cell (sticky on <tr> is unreliable)
    and clears the hoisted header the same way the list-group band does. */
-.issues-rows { --list-head-h: 40px; }
+.issues-rows { --list-head-h: var(--control-h-sm); }
 
 .issues-band > td {
   position: sticky;
@@ -76,6 +76,9 @@
   width: auto;
   min-width: 0;
 }
+
+/* On the toolbar's --control-h-sm rung with the search and Add filter. */
+.issues-group-by { height: var(--control-h-sm); }
 
 @media (max-width: 820px) {
   .issue-col-project,

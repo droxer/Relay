@@ -25,7 +25,6 @@ import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import {
-  activeRoutineFilterCount,
   initialRoutineFilters,
   ROUTINE_FILTER_SPEC,
   RoutineFiltersBar,
@@ -298,12 +297,6 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
     ? t("routine.all_states")
     : t(`routine.states.${filters.state}`);
 
-  /* The rail already carries the selected section's count, so the board's own
-     header restates it whenever the bar is clear. It earns the number only
-     once a filter or the search box has narrowed the section below what the
-     rail says. */
-  const sectionNarrowed = activeRoutineFilterCount(filters) > 0 || filters.query.trim().length > 0;
-
   // Quick-assign entry from a card/row: same drawer, focus on the picker.
   function assignTask(task: RelayTaskListItem) {
     setAssignmentFocus(true);
@@ -327,102 +320,87 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
   }
 
   return (
-    <section id="routine-panel" className="routine-page sec-shell" aria-label={t("routine.title")} tabIndex={-1}>
-      {/* The rail names the surface and lists its sections; the board's own
-          header names the section being read. Same rail-and-content shape as
-          the control panel and personal settings — see section-rail.css. */}
-      <div className="sec-rail">
-        {/* Kicker + title + count, like every other rail in the app. The count
-            rides beside the title rather than under it: a third line is the
-            one shape that cannot sit on the surface's shared header step
-            (--sec-header-h in section-rail.css). */}
-        <PageHeader
-          kicker={t("nav.workspace")}
-          title={t("routine.title")}
-          count={t("routine.sub", { count: routineTasks.length })}
-          titleAs="h2"
-          titleVariant="title"
-          layout="stacked"
-        />
-        <RoutineStateNav
-          value={filters.state}
-          counts={sectionCounts}
-          total={sectionTotal}
-          onChange={(state) => setFilters({ ...filters, state })}
-        />
-      </div>
-
-      <div className="sec-main">
-        <PageHeader
-          title={sectionLabel}
-          titleAs="h2"
-          titleVariant="title"
-          count={sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
-          actions={
-            <TaskBoardHeaderActions
-              refreshLabel={t("nav.refresh")}
-              createLabel={t("routine.new")}
-              isRefreshing={isRefreshing}
-              onRefresh={() => void onRefresh()}
-              onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
-            />
-          }
-        />
-
-        <RoutineFiltersBar
-          filters={filters}
-          agents={logicalAgents}
-          onChange={setFilters}
-          sortMenu={
-            <SortMenu
-              options={[
-                { key: "title", label: t("backlog.col_task") },
-                { key: "priority", label: t("backlog.priority") },
-                { key: "assignee", label: t("backlog.assignee") },
-                { key: "nextRun", label: t("routine.next_run") },
-              ]}
-              sort={sort}
-              onSortChange={setSort}
-              label={t("routine.sort_label")}
-            />
-          }
-        />
-
-        {filteredTasks.length === 0 ? (
-          <BoardEmpty feature="routines"
-            title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
-            body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
-            createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
-            onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+    <section id="routine-panel" className="routine-page" aria-label={t("routine.title")} tabIndex={-1}>
+      {/* One header line: the surface, its count, the schedule states as view
+          tabs, then the actions. The states used to fill a 240px rail beside
+          the table — see the tabs variant in section-rail.css. */}
+      <PageHeader
+        title={t("routine.title")}
+        count={t("routine.sub", { count: routineTasks.length })}
+        titleAs="h2"
+        titleVariant="title"
+        views={(
+          <RoutineStateNav
+            value={filters.state}
+            counts={sectionCounts}
+            total={sectionTotal}
+            onChange={(state) => setFilters({ ...filters, state })}
           />
-        ) : (
-          /* One table, one header, no bands: the rail beside this list has
-             already said which schedule state is on screen. Sorting and
-             pagination stay outside it — the table receives the already
-             ordered, already paged rows. */
-          <>
-            <RoutineTable
-              rows={pagedTasks.items}
-              sort={sort}
-              onSort={toggleSort}
-              ariaLabel={sectionLabel}
-              selectAll={
-                <TaskSelectAllCheckbox
-                  state={selectionCheckState(visibleSelection, visibleIds)}
-                  label={t("routine.select_all_routines")}
-                  onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
-                />
-              }
-              selection={visibleSelection}
-              onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
-              stateFor={(task) => routineState(task, runningIds)}
-              assignmentFor={taskAssignmentDisplay}
-              handlersFor={routineHandlers}
-            />
-            <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
-          </>
         )}
-      </div>
+        actions={
+          <TaskBoardHeaderActions
+            refreshLabel={t("nav.refresh")}
+            createLabel={t("routine.new")}
+            isRefreshing={isRefreshing}
+            onRefresh={() => void onRefresh()}
+            onCreate={() => openRoutineForm(emptyRoutineForm(currentUser))}
+          />
+        }
+      />
+
+      <RoutineFiltersBar
+        filters={filters}
+        agents={logicalAgents}
+        onChange={setFilters}
+        sortMenu={
+          <SortMenu
+            options={[
+              { key: "title", label: t("backlog.col_task") },
+              { key: "priority", label: t("backlog.priority") },
+              { key: "assignee", label: t("backlog.assignee") },
+              { key: "nextRun", label: t("routine.next_run") },
+            ]}
+            sort={sort}
+            onSortChange={setSort}
+            label={t("routine.sort_label")}
+          />
+        }
+      />
+
+      {filteredTasks.length === 0 ? (
+        <BoardEmpty feature="routines"
+          title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
+          body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
+          createLabel={routineTasks.length === 0 ? t("routine.new") : undefined}
+          onCreate={routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+        />
+      ) : (
+        /* One table, one header, no bands: the rail beside this list has
+           already said which schedule state is on screen. Sorting and
+           pagination stay outside it — the table receives the already
+           ordered, already paged rows. */
+        <>
+          <RoutineTable
+            rows={pagedTasks.items}
+            sort={sort}
+            onSort={toggleSort}
+            ariaLabel={sectionLabel}
+            selectAll={
+              <TaskSelectAllCheckbox
+                state={selectionCheckState(visibleSelection, visibleIds)}
+                label={t("routine.select_all_routines")}
+                onToggle={() => setSelection((current) => toggleAllSelected(current, visibleIds))}
+              />
+            }
+            selection={visibleSelection}
+            onToggleSelect={(taskId) => setSelection((current) => toggleSelected(current, taskId))}
+            stateFor={(task) => routineState(task, runningIds)}
+            assignmentFor={taskAssignmentDisplay}
+            handlersFor={routineHandlers}
+          />
+          <Pagination page={pagedTasks} onPageChange={setPage} label={sectionLabel} />
+        </>
+      )}
 
       <TaskSelectionBar
         count={visibleSelection.size}

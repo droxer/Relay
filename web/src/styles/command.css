@@ -87,7 +87,6 @@
   padding: var(--sp-2) var(--sp-3) var(--sp-1);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
-  text-transform: uppercase;
   color: var(--ink-4);
 }
 

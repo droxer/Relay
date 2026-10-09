@@ -171,7 +171,9 @@ describe("application typography roles", () => {
     assert.match(roles, /--type-heading:\s+700[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-number:\s+500[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-label-strong:\s+700[^;]+var\(--font-sans\);/);
-    assert.match(roles, /--type-name:\s+700[^;]+var\(--font-sans\);/);
+    // A name is not emphasis: every row carries one, so at 700 a list was a
+    // wall of bold. Names lead by ink instead (see roles.css).
+    assert.match(roles, /--type-name:\s+500[^;]+var\(--font-sans\);/);
     // Micro is deliberately NOT on the emphasis weight: uppercase already marks
     // it, and it is the most-applied role in the app, so putting it at 700 made
     // 42% of all typed elements bold and the emphasis tier stopped reading. It

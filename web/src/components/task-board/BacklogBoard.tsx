@@ -21,6 +21,7 @@ import { BacklogTaskCard } from "./BacklogRecords";
 import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../../lib/taskFlow";
 import { laneForDropTarget, taskDropRejection } from "../../lib/taskDrag";
 import type { Page } from "../../lib/pagination";
+import { TaskStatusIcon } from "../TaskStatusIcon";
 import type { RelayTaskListItem } from "../../types";
 
 type CardProps = Omit<ComponentProps<typeof BacklogTaskCard>, keyof ComponentProps<"article">>;
@@ -146,6 +147,7 @@ function BoardLanes({ value, lanes, laneTotals, cardProps, onCreateInLane, onLan
           aria-label={laneLabel(status)}
         >
           <header className="backlog-lane-head">
+            <TaskStatusIcon status={status} />
             <span className="backlog-lane-label">{laneLabel(status)}</span>
             <span className="backlog-lane-count tnum">{laneTotals[status]}</span>
           </header>

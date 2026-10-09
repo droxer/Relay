@@ -24,7 +24,6 @@ export function ChannelsPage() {
       tabIndex={-1}
     >
       <PageHeader
-        kicker={t("nav.manage")}
         title={t("admin.v2.title_channels")}
         subtitle={t("admin.v2.sub_channels")}
         titleVariant="display"

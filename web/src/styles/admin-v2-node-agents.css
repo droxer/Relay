@@ -256,7 +256,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  text-transform: uppercase;
   color: var(--ink-1);
 }
 
