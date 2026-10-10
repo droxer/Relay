@@ -19,6 +19,7 @@ import {
   resolveBoxliteHome,
   resolveSandboxMode,
   runRelayDaemon,
+  DEFAULT_MAX_CONCURRENT_RUNS,
   runRelayDaemonDoctor,
   shutdownBoxliteRuntime,
   type DaemonExecutionEnvironment,
@@ -42,7 +43,7 @@ import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/wor
 import { isMainModule } from "../src/cli.js";
 import { consumeRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
 import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
-import type { DaemonNodeCommand, DaemonNodeEvent, DaemonNodeRegistration, DaemonNodeRunCommand, StreamExecResult } from "relay-core";
+import type { AgentName, DaemonNodeCommand, DaemonNodeEvent, DaemonNodeRegistration, DaemonNodeRunCommand, StreamExecResult } from "relay-core";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -60,9 +61,12 @@ function testLogger(): DaemonLogger {
   };
 }
 
+/** Readiness as the fake sees it: discovery passes no workspace, a run passes its own. */
+type FakeEnsure = (agent: AgentName, signal?: AbortSignal, workspace?: string) => Promise<void>;
+
 function fakeEnvironment(input: {
   exec?: DaemonExecutionEnvironment["execStream"];
-  ensure?: DaemonExecutionEnvironment["ensureAgentReady"];
+  ensure?: FakeEnsure;
 } = {}): DaemonExecutionEnvironment {
   return {
     sandboxMode: "none",
@@ -74,6 +78,16 @@ function fakeEnvironment(input: {
       options?.sink?.(rendered);
       return { exit_code: 0, stdout: "done\n", stderr: "" };
     }),
+    // Resolves through `this` so a test that overrides ensureAgentReady or
+    // execStream after spreading this fake still sees its run use them.
+    async acquireWorkspace(this: DaemonExecutionEnvironment, workspace: string) {
+      const ensure = this.ensureAgentReady as FakeEnsure;
+      return {
+        ensureAgentReady: (agent, signal) => ensure(agent, signal, workspace),
+        execStream: (cmd, args, options) => this.execStream(cmd, args, options),
+        release: () => undefined,
+      };
+    },
     close: async () => undefined,
   };
 }
@@ -2139,6 +2153,108 @@ test("relay daemon bounds cancellation event retry during shutdown", async () =>
   assert.equal(closeCount, 1);
 });
 
+test("relay daemon reports a cancel for a run it never received as cancelled", async () => {
+  // The run.start was leased into a poll response this daemon never read, so
+  // the backend believes the run is executing here. Staying silent would leave
+  // the stop unacknowledged forever and the run holding the node's slot.
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  let cancelServed = false;
+  let agentRuns = 0;
+  const lost = runCommand("cmd_lost_start");
+  const cancelCommand = {
+    id: "cmd_lost_cancel",
+    type: "run.cancel",
+    leaseId: "lease_cancel",
+    commandId: lost.id,
+    sessionId: lost.sessionId,
+    runId: lost.runId,
+    agent: lost.agent,
+    reason: "Thread deletion requested.",
+  } satisfies DaemonNodeCommand;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_test",
+    employeeId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    pollIntervalMs: 5,
+    shutdownGraceMs: 50,
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      exec: async (_cmd, args) => {
+        if (!isInventoryProbe(args)) agentRuns += 1;
+        return { exit_code: 0, stdout: "", stderr: "" };
+      },
+    }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+      if (path.endsWith("/commands")) {
+        const commands = cancelServed ? [] : [cancelCommand];
+        cancelServed = true;
+        return jsonResponse({ commands });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        events.push(event);
+        if (event.type === "run.cancelled") stop.abort();
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  assert.equal(agentRuns, 0);
+  assert.deepEqual(events, [{
+    type: "run.cancelled",
+    commandId: lost.id,
+    sessionId: lost.sessionId,
+    runId: lost.runId,
+    agent: lost.agent,
+    reason: "Thread deletion requested.",
+  }]);
+});
+
+test("relay daemon advertises three concurrent runs by default", async () => {
+  const previous = captureEnv(["RELAY_DAEMON_MAX_CONCURRENT_RUNS"]);
+  delete process.env.RELAY_DAEMON_MAX_CONCURRENT_RUNS;
+  const stop = new AbortController();
+  let registration: DaemonNodeRegistration | undefined;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test",
+      sandboxId: "sbx_test",
+      employeeId: "alice",
+      workspacePath: process.cwd(),
+      token: "node_token",
+      pollIntervalMs: 5,
+      shutdownGraceMs: 50,
+      logger: testLogger(),
+      signal: stop.signal,
+      environment: fakeEnvironment(),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") {
+          registration ??= await jsonBody<DaemonNodeRegistration>(init);
+          stop.abort();
+          return jsonResponse({ ok: true });
+        }
+        if (path.endsWith("/commands")) return jsonResponse({ commands: [] });
+        return jsonResponse({ ok: true });
+      },
+    });
+  } finally {
+    restoreCapturedEnv(previous);
+  }
+
+  assert.equal(registration?.maxConcurrentRuns, DEFAULT_MAX_CONCURRENT_RUNS);
+  assert.equal(DEFAULT_MAX_CONCURRENT_RUNS, 3);
+});
+
 test("relay daemon retries normal run.cancel terminal event while running", async () => {
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
@@ -2313,6 +2429,8 @@ test("relay daemon rejects a second distinct run while busy", async () => {
     token: "node_token",
     pollIntervalMs: 5,
     shutdownGraceMs: 100,
+    // A single slot, so the second distinct run is the one refused.
+    maxConcurrentRuns: 1,
     logger: testLogger(),
     signal: stop.signal,
     environment: fakeEnvironment({
@@ -2427,6 +2545,8 @@ test("relay daemon stops while retrying a busy-command rejection event", async (
     token: "node_token",
     pollIntervalMs: 5,
     shutdownGraceMs: 50,
+    // A single slot, so the second distinct run is the one refused.
+    maxConcurrentRuns: 1,
     logger: testLogger(),
     signal: stop.signal,
     environment: {

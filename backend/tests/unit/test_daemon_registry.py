@@ -7941,3 +7941,118 @@ def test_late_output_from_completed_lease_is_recovered_without_reactivating_run(
             with pytest.raises(PermissionError):
                 registry.handle_event("sbx_alice", {**event, "leaseId": "wrong-lease"}, "node_token")
     asyncio.run(flow())
+
+
+def _lapse_dispatch(registry: Any, command: dict[str, Any], monkeypatch: Any, *, long_ago: bool) -> None:
+    """Expire a delivered run.start's lease as if no daemon had renewed it.
+
+    Stores never write a lease in the past, so "long ago" shrinks the grace a
+    lapsed lease must outlast instead of backdating the lease.
+    """
+    registry.daemon_store.renew_command_leases(
+        "sbx_alice", [(command["id"], command["leaseId"])], lease_seconds=0
+    )
+    time.sleep(0.005)
+    if long_ago:
+        monkeypatch.setattr("relay.daemon_registry.registry.LOST_DISPATCH_GRACE_SECONDS", 0)
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_reaper_settles_a_stopped_run_whose_start_never_reached_the_daemon(store_factory, monkeypatch):
+    """A lost poll response leaves run.start dispatched but executing nowhere.
+
+    run.start is never redelivered, and a daemon that never received it never
+    acknowledges the stop, so without settlement the run holds the node's only
+    slot forever and every agent on it reports capacity_exhausted.
+    """
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Lost dispatch"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            registry.daemon_store.request_run_stop(request["id"], command["id"], "human cancelled")
+            SessionController(sessions).cancel_session(command["sessionId"], "human cancelled")
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+
+            registry.reap_stale_runs()
+
+            assert registry.daemon_store.get_command(command["id"])["status"] == "cancelled"
+            assert registry.daemon_store.list_active_runs("sbx_alice") == []
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+            assert sessions.get_session(command["sessionId"])["status"] == "cancelled"
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_reaper_fails_a_live_run_whose_start_never_reached_the_daemon(store_factory, monkeypatch):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Lost dispatch"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+
+            registry.reap_stale_runs()
+
+            assert registry.daemon_store.get_command(command["id"])["status"] == "failed"
+            assert registry.daemon_store.list_active_runs("sbx_alice") == []
+            assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("lapse", ["recent", "node_offline"])
+def test_reaper_keeps_a_lapsed_dispatch_without_evidence_the_daemon_dropped_it(lapse, monkeypatch):
+    """Exit evidence is a live daemon that stopped renewing, not an old lease.
+
+    A lease only just past expiry may still be renewed by the next heartbeat,
+    and an offline node cannot renew anything, so neither case proves the run
+    is not executing; the reservation stays until the daemon answers.
+    """
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            task = tasks.create_task({"title": "Not lost yet"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            if lapse == "recent":
+                _lapse_dispatch(registry, command, monkeypatch, long_ago=False)
+            else:
+                _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+                monkeypatch.setattr(registry, "_liveness", lambda _sandbox: {"online": False, "stale": True})
+
+            registry.reap_stale_runs()
+
+            assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+            assert len(registry.daemon_store.list_active_runs("sbx_alice")) == 1
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_reaper_never_relabels_a_run_that_executed_as_lost(store_factory, monkeypatch):
+    """A finished run whose terminal event is still retrying stops renewing.
+
+    The daemon drops a run from lease renewal once its result is queued for
+    delivery, so a slow /events endpoint leaves a lapsed lease on a live node.
+    That run showed it executed; settling it would replace its real result
+    with "never started" and the late run.completed would then be dropped.
+    """
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Result still in flight"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            registry.handle_event("sbx_alice", {
+                "type": "run.executing", "commandId": command["id"], "leaseId": command["leaseId"],
+                "sessionId": command["sessionId"], "runId": command["runId"], "agent": "codex",
+            }, "node_token")
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+
+            registry.reap_stale_runs()
+
+            assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+            assert len(registry.daemon_store.list_active_runs("sbx_alice")) == 1
+
+    asyncio.run(run_flow())

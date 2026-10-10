@@ -27,15 +27,15 @@ import {
   ensureAgentReady as ensureSandboxAgentReady,
   resolveBoxliteHome,
   BoxliteRuntimeOwner,
-  type ActiveOrchestratorSession,
 } from "./sandbox-session.js";
+import { GuestPool, type GuestLease } from "./guest-pool.js";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
 import { consumeRoundResult } from "./round-result.js";
 import { validateHandoffWorkspace } from "./handoff-validation.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
 import { discoverAgentModels, type ProviderListMemory } from "./agent-models.js";
-import { defaultExecutionManager, type ExecutionManager } from "./execution.js";
+import { BoxLiteExecutionManager, type ExecutionManager } from "./execution.js";
 import { ensureLocalDevboxOci, hasHostKimiCodeAuth, prepareHostAgentSkills, prepareHostKimiCodeHome } from "./box.js";
 
 async function verifyBoxlitePrerequisites(sandboxId: string): Promise<void> {
@@ -95,6 +95,8 @@ import { materializeSkills } from "./agent-skills.js";
 
 export type DaemonSandboxMode = DaemonNodeSandboxMode;
 const DEFAULT_DAEMON_SANDBOX_MODE: DaemonSandboxMode = "boxlite";
+/** Runs one daemon executes at once; override with RELAY_DAEMON_MAX_CONCURRENT_RUNS. */
+export const DEFAULT_MAX_CONCURRENT_RUNS = 3;
 
 export interface DaemonRuntimeOptions {
   backendUrl?: string;
@@ -270,7 +272,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const configuredLivenessHeartbeatIntervalMs = options.livenessHeartbeatIntervalMs
     ?? positiveIntEnv("RELAY_DAEMON_LIVENESS_HEARTBEAT_MS");
   const inventoryDiscoveryTimeoutMs = options.inventoryDiscoveryTimeoutMs ?? positiveIntEnv("RELAY_DAEMON_INVENTORY_TIMEOUT_MS") ?? 10_000;
-  const environment = options.environment ?? createExecutionEnvironment(sandboxMode, sandboxId, workspacePath, logger);
+  // Each concurrent run on a BoxLite node boots its own guest (one VM per
+  // running thread), so this also bounds the node's guest memory.
+  const maxConcurrentRuns = options.maxConcurrentRuns
+    ?? positiveIntEnv("RELAY_DAEMON_MAX_CONCURRENT_RUNS")
+    ?? DEFAULT_MAX_CONCURRENT_RUNS;
+  const environment = options.environment
+    ?? createExecutionEnvironment(sandboxMode, sandboxId, workspacePath, logger, maxConcurrentRuns);
   if (sandboxMode === "boxlite" && !options.environment) {
     await verifyBoxlitePrerequisites(sandboxId);
   }
@@ -290,14 +298,6 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     });
   }
   setHealth("starting", { employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
-  const requestedMaxConcurrentRuns = options.maxConcurrentRuns
-    ?? positiveIntEnv("RELAY_DAEMON_MAX_CONCURRENT_RUNS")
-    ?? 1;
-  // The BoxLite adapter owns one active guest at a time. Serializing runs also
-  // lets each guest mount only its active thread instead of the whole node root.
-  const maxConcurrentRuns = sandboxMode === "boxlite" && !options.environment
-    ? 1
-    : requestedMaxConcurrentRuns;
   const activeRuns = new Map<string, { command: DaemonNodeRunCommand; controller: AbortController; promise: Promise<void> }>();
   const shutdownGraceMs = options.shutdownGraceMs ?? positiveIntEnv("RELAY_DAEMON_SHUTDOWN_GRACE_MS") ?? 10_000;
   const shutdownController = new AbortController();
@@ -746,7 +746,35 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             runId: command.runId,
             agent: command.agent,
           });
-          activeRuns.get(command.commandId)?.controller.abort(command.reason);
+          const target = activeRuns.get(command.commandId);
+          if (target) {
+            target.controller.abort(command.reason);
+          } else {
+            // Nothing to stop: the start never reached this daemon (its poll
+            // response was lost) or the daemon restarted since. The daemon is
+            // the only party that knows the run is not executing, so it must
+            // say so; otherwise the backend holds the run's slot forever.
+            logger.warn("cancel for a run this daemon is not executing; reporting it cancelled", {
+              sandboxId,
+              commandId: command.commandId,
+              sessionId: command.sessionId,
+              runId: command.runId,
+            });
+            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+              type: "run.cancelled",
+              commandId: command.commandId,
+              sessionId: command.sessionId,
+              runId: command.runId,
+              agent: command.agent,
+              reason: command.reason || "Run was not executing on this computer.",
+            } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+              logger.error("cancel acknowledgement post failed", {
+                sandboxId,
+                commandId: command.commandId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
+          }
         } else if (command.type === "workspace.delete") {
           try {
             if (command.workspaceLayout !== "project" || command.path !== "") {
@@ -1035,145 +1063,118 @@ async function executeCommand(
   if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
   // Discard control state from an interrupted previous run before execution.
   consumeRoundResult(threadWorkspace.hostPath);
-  await environment.ensureAgentReady(command.agent, signal, threadWorkspace.hostPath);
-  if (signal?.aborted) {
-    return runCancelledEvent(command, signal.reason);
+  // The lease pins the guest that mounts this workspace for the whole run, so
+  // a concurrent run on another thread cannot recycle it mid-execution.
+  const execution = await environment.acquireWorkspace(threadWorkspace.hostPath, signal);
+  try {
+    return await runInWorkspace(execution);
+  } finally {
+    execution.release();
   }
-  logger.info("agent ready", commandLogFields(sandboxId, command));
-  const executionAgentHome = environment.sandboxMode === "boxlite" ? "/home/agent" : agentHomePath();
-  const delivery = getAgent(command.agent).skillDelivery;
-  const materialized = await materializeSkills({
-    bundle: command.skills,
-    agentId: command.logicalAgentId ?? `${command.agent}:${command.sessionId}`,
-    delivery: environment.sandboxMode === "none" && delivery.kind === "config-dir"
-      ? { kind: "prompt-paths" }
-      : delivery,
-    agentHome: executionAgentHome,
-    cacheDir: join(executionAgentHome, ".relay", "managed-skills"),
-    execStream: environment.execStream,
-    signal,
-    fetchBlob: async (sha) => {
-      const url = relayApiUrl(
-        backendUrl,
-        `/daemon-nodes/${encodeURIComponent(sandboxId)}/skill-blobs/${sha}?commandId=${encodeURIComponent(command.id)}`,
-      );
-      const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) });
-      if (!response.ok) throw new Error(`skill blob unavailable (${response.status})`);
-      return Buffer.from(await response.arrayBuffer());
-    },
-  });
-  let outputSequence = 0;
-  let outputPostFailure: Error | undefined;
-  const maxOutputBacklogBytes = positiveIntEnv("RELAY_DAEMON_OUTPUT_BACKLOG_BYTES") ?? 16_777_216;
-  const outputPostQueue: Array<{ post: () => Promise<void>; fields: DaemonLogFields; bytes: number }> = [];
-  let outputPostHead = 0;
-  let outputPostBacklogBytes = 0;
-  let outputPostDrain: Promise<void> | undefined;
-  const drainOutputPosts = async (): Promise<void> => {
-    while (outputPostHead < outputPostQueue.length && !outputPostFailure) {
-      const item = outputPostQueue[outputPostHead++];
-      try {
-        await item.post();
-      } catch (error) {
-        outputPostFailure = error instanceof Error ? error : new Error(String(error));
-        logger.error("event post exhausted retries", {
-          ...commandLogFields(sandboxId, command),
-          ...item.fields,
-          error: outputPostFailure.message,
-        });
-      } finally {
-        outputPostBacklogBytes = Math.max(0, outputPostBacklogBytes - item.bytes);
+
+  async function runInWorkspace(execution: WorkspaceExecution): Promise<DaemonNodeEvent> {
+    await execution.ensureAgentReady(command.agent, signal);
+    if (signal?.aborted) {
+      return runCancelledEvent(command, signal.reason);
+    }
+    logger.info("agent ready", commandLogFields(sandboxId, command));
+    const executionAgentHome = environment.sandboxMode === "boxlite" ? "/home/agent" : agentHomePath();
+    const delivery = getAgent(command.agent).skillDelivery;
+    const materialized = await materializeSkills({
+      bundle: command.skills,
+      agentId: command.logicalAgentId ?? `${command.agent}:${command.sessionId}`,
+      delivery: environment.sandboxMode === "none" && delivery.kind === "config-dir"
+        ? { kind: "prompt-paths" }
+        : delivery,
+      agentHome: executionAgentHome,
+      cacheDir: join(executionAgentHome, ".relay", "managed-skills"),
+      execStream: execution.execStream,
+      signal,
+      fetchBlob: async (sha) => {
+        const url = relayApiUrl(
+          backendUrl,
+          `/daemon-nodes/${encodeURIComponent(sandboxId)}/skill-blobs/${sha}?commandId=${encodeURIComponent(command.id)}`,
+        );
+        const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal: requestSignal(signal) });
+        if (!response.ok) throw new Error(`skill blob unavailable (${response.status})`);
+        return Buffer.from(await response.arrayBuffer());
+      },
+    });
+    let outputSequence = 0;
+    let outputPostFailure: Error | undefined;
+    const maxOutputBacklogBytes = positiveIntEnv("RELAY_DAEMON_OUTPUT_BACKLOG_BYTES") ?? 16_777_216;
+    const outputPostQueue: Array<{ post: () => Promise<void>; fields: DaemonLogFields; bytes: number }> = [];
+    let outputPostHead = 0;
+    let outputPostBacklogBytes = 0;
+    let outputPostDrain: Promise<void> | undefined;
+    const drainOutputPosts = async (): Promise<void> => {
+      while (outputPostHead < outputPostQueue.length && !outputPostFailure) {
+        const item = outputPostQueue[outputPostHead++];
+        try {
+          await item.post();
+        } catch (error) {
+          outputPostFailure = error instanceof Error ? error : new Error(String(error));
+          logger.error("event post exhausted retries", {
+            ...commandLogFields(sandboxId, command),
+            ...item.fields,
+            error: outputPostFailure.message,
+          });
+        } finally {
+          outputPostBacklogBytes = Math.max(0, outputPostBacklogBytes - item.bytes);
+        }
+        // Output held back while this post was in flight goes out as one batch.
+        if (outputPostHead >= outputPostQueue.length && !outputPostFailure) outputBuffer.resume();
       }
-      // Output held back while this post was in flight goes out as one batch.
-      if (outputPostHead >= outputPostQueue.length && !outputPostFailure) outputBuffer.resume();
-    }
-    outputPostQueue.length = 0;
-    outputPostHead = 0;
-  };
-  const startOutputDrain = (): void => {
-    if (outputPostDrain || outputPostFailure || outputPostQueue.length === 0) return;
-    outputPostDrain = drainOutputPosts().finally(() => {
-      outputPostDrain = undefined;
-      startOutputDrain();
-    });
-  };
-  const enqueueOutputPost = (
-    post: () => Promise<void>,
-    fields: DaemonLogFields,
-    bytes: number,
-  ): void => {
-    if (outputPostFailure) return;
-    if (outputPostBacklogBytes + bytes > maxOutputBacklogBytes) {
-      outputPostFailure = new Error(
-        `Output delivery backlog exceeded ${maxOutputBacklogBytes} bytes.`,
-      );
-      outputPostQueue.length = outputPostHead;
-      return;
-    }
-    outputPostBacklogBytes += bytes;
-    outputPostQueue.push({ post, fields, bytes });
-    startOutputDrain();
-  };
-  const waitForOutputPosts = async (): Promise<void> => {
-    while (outputPostDrain) await outputPostDrain;
-  };
-  const emitOutputBatch = (agent: AgentName, buffered: BufferedOutput[]): void => {
-    const entries = buffered.map(({ stream, text }) => {
-      const sequence = outputSequence++;
-      logger.output({
-        ...commandLogFields(sandboxId, command),
-        agent,
-        stream,
-        text,
-        sequence,
+      outputPostQueue.length = 0;
+      outputPostHead = 0;
+    };
+    const startOutputDrain = (): void => {
+      if (outputPostDrain || outputPostFailure || outputPostQueue.length === 0) return;
+      outputPostDrain = drainOutputPosts().finally(() => {
+        outputPostDrain = undefined;
+        startOutputDrain();
       });
-      return { stream, text, sequence };
-    });
-    const event = {
-          type: "run.output.batch",
-          commandId: command.id,
-          ...commandLeaseEventFields(command),
-          sessionId: command.sessionId,
-          runId: command.runId,
+    };
+    const enqueueOutputPost = (
+      post: () => Promise<void>,
+      fields: DaemonLogFields,
+      bytes: number,
+    ): void => {
+      if (outputPostFailure) return;
+      if (outputPostBacklogBytes + bytes > maxOutputBacklogBytes) {
+        outputPostFailure = new Error(
+          `Output delivery backlog exceeded ${maxOutputBacklogBytes} bytes.`,
+        );
+        outputPostQueue.length = outputPostHead;
+        return;
+      }
+      outputPostBacklogBytes += bytes;
+      outputPostQueue.push({ post, fields, bytes });
+      startOutputDrain();
+    };
+    const waitForOutputPosts = async (): Promise<void> => {
+      while (outputPostDrain) await outputPostDrain;
+    };
+    const emitOutputBatch = (agent: AgentName, buffered: BufferedOutput[]): void => {
+      const entries = buffered.map(({ stream, text }) => {
+        const sequence = outputSequence++;
+        logger.output({
+          ...commandLogFields(sandboxId, command),
           agent,
-          entries,
-        } satisfies DaemonNodeEvent;
-    if (outputPostFailure) return;
-    try { persistTerminalEvent(fetchFn, event); } catch (error) {
-      outputPostFailure = error instanceof Error ? error : new Error(String(error));
-      return;
-    }
-    enqueueOutputPost(
-      () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
-      { agent, sequence: entries[0]?.sequence },
-      entries.reduce((total, entry) => total + Buffer.byteLength(entry.text), 0),
-    );
-  };
-  // Batches are posted one at a time. While one is in flight the buffer keeps
-  // collecting, so a slow backend gets fewer, larger posts instead of a queue
-  // that grows by one post (and one durable record) every latency window.
-  const outputBuffer = new OutputEventBuffer(
-    (entries) => emitOutputBatch(command.agent, entries),
-    { isBusy: () => outputPostDrain !== undefined },
-  );
-  const eventSink = {
-    agentOutput: (_runId: string, _agent: AgentName, stream: "stdout" | "stderr", text: string): void => {
-      outputBuffer.push(stream, text);
-    },
-    agentCollaboration: (_runId: string, agent: AgentName, collaboration: CodexCollaborationEvent): void => {
-      // Keep structured collaboration events behind all output that preceded
-      // them in the agent's JSONL stream.
-      outputBuffer.flush();
-      const sequence = outputSequence++;
+          stream,
+          text,
+          sequence,
+        });
+        return { stream, text, sequence };
+      });
       const event = {
-            type: "run.collaboration",
+            type: "run.output.batch",
             commandId: command.id,
             ...commandLeaseEventFields(command),
             sessionId: command.sessionId,
             runId: command.runId,
             agent,
-            collaboration,
-            sequence,
+            entries,
           } satisfies DaemonNodeEvent;
       if (outputPostFailure) return;
       try { persistTerminalEvent(fetchFn, event); } catch (error) {
@@ -1182,116 +1183,154 @@ async function executeCommand(
       }
       enqueueOutputPost(
         () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
-        { agent, sequence },
-        Buffer.byteLength(JSON.stringify(collaboration)),
+        { agent, sequence: entries[0]?.sequence },
+        entries.reduce((total, entry) => total + Buffer.byteLength(entry.text), 0),
       );
-    },
-  };
-  // Runs in one thread collaborate through that thread's directory. Different
-  // threads never share a writable cwd. Each logical agent keeps a private
-  // subdirectory inside the thread workspace.
-  const agentHomeSubdir = command.logicalAgentId
-    ? agentWorkspaceSubpath(command.logicalAgentId).split(sep).join("/")
-    : undefined;
-  if (command.logicalAgentId) {
-    ensureAgentWorkspaceDir(threadWorkspace.hostPath, command.logicalAgentId);
-  }
-  const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir };
-  const options = {
-    execStream: environment.execStream,
-    eventSink,
-    runId: command.runId,
-    agent: command.agent,
-    signal,
-    workspacePath: threadWorkspace.executionPath,
-    // A no-op sink keeps rendered agent text off the daemon's own stdout and
-    // stderr; live output still flows through eventSink to the backend and the
-    // JSONL run log. Supervisors set this so their logs stay lifecycle-only.
-    ...(echoAgentOutput ? {} : { sink: () => undefined }),
-  };
-  const skillState = command.skills === undefined
-    ? state
-    : { ...state, skill_paths: materialized.skillPaths, skill_env: materialized.env };
-  const runState = agentHomeSubdir
-    ? { ...skillState, agent_home_subdir: agentHomeSubdir }
-    : skillState;
-  // Snapshot document-type workspace files so a successful run can report
-  // exactly what it created or changed (see generated-files.ts).
-  const workspaceSnapshot = snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
-  let patch;
-  try {
-    if (command.reportExecutionStarted) {
-      await postJsonWithRetry(fetchFn, eventUrl, {
-        type: "run.executing",
+    };
+    // Batches are posted one at a time. While one is in flight the buffer keeps
+    // collecting, so a slow backend gets fewer, larger posts instead of a queue
+    // that grows by one post (and one durable record) every latency window.
+    const outputBuffer = new OutputEventBuffer(
+      (entries) => emitOutputBatch(command.agent, entries),
+      { isBusy: () => outputPostDrain !== undefined },
+    );
+    const eventSink = {
+      agentOutput: (_runId: string, _agent: AgentName, stream: "stdout" | "stderr", text: string): void => {
+        outputBuffer.push(stream, text);
+      },
+      agentCollaboration: (_runId: string, agent: AgentName, collaboration: CodexCollaborationEvent): void => {
+        // Keep structured collaboration events behind all output that preceded
+        // them in the agent's JSONL stream.
+        outputBuffer.flush();
+        const sequence = outputSequence++;
+        const event = {
+              type: "run.collaboration",
+              commandId: command.id,
+              ...commandLeaseEventFields(command),
+              sessionId: command.sessionId,
+              runId: command.runId,
+              agent,
+              collaboration,
+              sequence,
+            } satisfies DaemonNodeEvent;
+        if (outputPostFailure) return;
+        try { persistTerminalEvent(fetchFn, event); } catch (error) {
+          outputPostFailure = error instanceof Error ? error : new Error(String(error));
+          return;
+        }
+        enqueueOutputPost(
+          () => postJsonWithRetry(fetchFn, eventUrl, event, token, signal),
+          { agent, sequence },
+          Buffer.byteLength(JSON.stringify(collaboration)),
+        );
+      },
+    };
+    // Runs in one thread collaborate through that thread's directory. Different
+    // threads never share a writable cwd. Each logical agent keeps a private
+    // subdirectory inside the thread workspace.
+    const agentHomeSubdir = command.logicalAgentId
+      ? agentWorkspaceSubpath(command.logicalAgentId).split(sep).join("/")
+      : undefined;
+    if (command.logicalAgentId) {
+      ensureAgentWorkspaceDir(threadWorkspace.hostPath, command.logicalAgentId);
+    }
+    const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir };
+    const options = {
+      execStream: execution.execStream,
+      eventSink,
+      runId: command.runId,
+      agent: command.agent,
+      signal,
+      workspacePath: threadWorkspace.executionPath,
+      // A no-op sink keeps rendered agent text off the daemon's own stdout and
+      // stderr; live output still flows through eventSink to the backend and the
+      // JSONL run log. Supervisors set this so their logs stay lifecycle-only.
+      ...(echoAgentOutput ? {} : { sink: () => undefined }),
+    };
+    const skillState = command.skills === undefined
+      ? state
+      : { ...state, skill_paths: materialized.skillPaths, skill_env: materialized.env };
+    const runState = agentHomeSubdir
+      ? { ...skillState, agent_home_subdir: agentHomeSubdir }
+      : skillState;
+    // Snapshot document-type workspace files so a successful run can report
+    // exactly what it created or changed (see generated-files.ts).
+    const workspaceSnapshot = snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
+    let patch;
+    try {
+      if (command.reportExecutionStarted) {
+        await postJsonWithRetry(fetchFn, eventUrl, {
+          type: "run.executing",
+          commandId: command.id,
+          ...commandLeaseEventFields(command),
+          sessionId: command.sessionId,
+          runId: command.runId,
+          agent: command.agent,
+          ...((command.skillsSkipped?.length || materialized.skipped.length) ? {
+            skillsSkipped: [...(command.skillsSkipped ?? []), ...materialized.skipped],
+          } : {}),
+        } satisfies DaemonNodeEvent, token, signal);
+      }
+      patch = await runAgentNode(command.agent, runState, options);
+    } catch (error) {
+      consumeRoundResult(threadWorkspace.hostPath);
+      throw error;
+    } finally {
+      outputBuffer.close();
+      await waitForOutputPosts();
+    }
+    const next = mergeAgentState(state, patch);
+    const agentLog = next.agent_logs.slice(-1)[0] ?? "";
+    // Consume on every terminal path, including cancellation and delivery failure.
+    const roundResult = consumeRoundResult(threadWorkspace.hostPath, command.runId);
+    if (signal?.aborted) {
+      logger.info("run cancelled", {
+        ...commandLogFields(sandboxId, command),
+        exitCode: next.last_exit_code,
+      });
+      return runCancelledEvent(command, signal.reason, agentLog, next.token_usage);
+    }
+    // Output delivery can fail after the agent process has successfully written
+    // its deliverables. Preserve those files on the terminal failure event so
+    // the backend can still index them for the thread Space.
+    const generatedFiles = next.last_exit_code === 0
+      ? diffGeneratedFiles(threadWorkspace.hostPath, workspaceSnapshot, scanOptions)
+      : [];
+    if (outputPostFailure) {
+      return {
+        type: "run.failed",
         commandId: command.id,
         ...commandLeaseEventFields(command),
         sessionId: command.sessionId,
         runId: command.runId,
         agent: command.agent,
-        ...((command.skillsSkipped?.length || materialized.skipped.length) ? {
-          skillsSkipped: [...(command.skillsSkipped ?? []), ...materialized.skipped],
-        } : {}),
-      } satisfies DaemonNodeEvent, token, signal);
+        error: `Daemon lost agent output: ${outputPostFailure.message}`,
+        agentLog,
+        exitCode: next.last_exit_code || 1,
+        ...(next.token_usage ? { tokenUsage: next.token_usage } : {}),
+        ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+      } satisfies DaemonNodeEvent;
     }
-    patch = await runAgentNode(command.agent, runState, options);
-  } catch (error) {
-    consumeRoundResult(threadWorkspace.hostPath);
-    throw error;
-  } finally {
-    outputBuffer.close();
-    await waitForOutputPosts();
-  }
-  const next = mergeAgentState(state, patch);
-  const agentLog = next.agent_logs.slice(-1)[0] ?? "";
-  // Consume on every terminal path, including cancellation and delivery failure.
-  const roundResult = consumeRoundResult(threadWorkspace.hostPath, command.runId);
-  if (signal?.aborted) {
-    logger.info("run cancelled", {
+    logger.info("run completed", {
       ...commandLogFields(sandboxId, command),
       exitCode: next.last_exit_code,
+      agentLogBytes: agentLog.length,
+      generatedFileCount: generatedFiles.length,
     });
-    return runCancelledEvent(command, signal.reason, agentLog, next.token_usage);
-  }
-  // Output delivery can fail after the agent process has successfully written
-  // its deliverables. Preserve those files on the terminal failure event so
-  // the backend can still index them for the thread Space.
-  const generatedFiles = next.last_exit_code === 0
-    ? diffGeneratedFiles(threadWorkspace.hostPath, workspaceSnapshot, scanOptions)
-    : [];
-  if (outputPostFailure) {
     return {
-      type: "run.failed",
+      type: "run.completed",
       commandId: command.id,
       ...commandLeaseEventFields(command),
       sessionId: command.sessionId,
       runId: command.runId,
       agent: command.agent,
-      error: `Daemon lost agent output: ${outputPostFailure.message}`,
+      exitCode: next.last_exit_code,
       agentLog,
-      exitCode: next.last_exit_code || 1,
-      ...(next.token_usage ? { tokenUsage: next.token_usage } : {}),
+      tokenUsage: next.token_usage,
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+      ...(roundResult ? { roundResult } : {}),
     } satisfies DaemonNodeEvent;
   }
-  logger.info("run completed", {
-    ...commandLogFields(sandboxId, command),
-    exitCode: next.last_exit_code,
-    agentLogBytes: agentLog.length,
-    generatedFileCount: generatedFiles.length,
-  });
-  return {
-    type: "run.completed",
-    commandId: command.id,
-    ...commandLeaseEventFields(command),
-    sessionId: command.sessionId,
-    runId: command.runId,
-    agent: command.agent,
-    exitCode: next.last_exit_code,
-    agentLog,
-    tokenUsage: next.token_usage,
-    ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
-    ...(roundResult ? { roundResult } : {}),
-  } satisfies DaemonNodeEvent;
 }
 
 function runCancelledEvent(
@@ -1317,10 +1356,21 @@ function commandLeaseEventFields(command: DaemonNodeRunCommand): { leaseId?: str
   return command.leaseId ? { leaseId: command.leaseId } : {};
 }
 
+/** One run's hold on the execution context that mounts its workspace. */
+export interface WorkspaceExecution {
+  ensureAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void>;
+  execStream: typeof localProcessExecStream;
+  release(): void;
+}
+
 export interface DaemonExecutionEnvironment {
   readonly sandboxMode: DaemonSandboxMode;
-  ensureAgentReady(agent: AgentName, signal?: AbortSignal, hostWorkspace?: string): Promise<void>;
+  /** Workspace-agnostic preflight, used by capability discovery. */
+  ensureAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void>;
+  /** Workspace-agnostic exec, used by inventory and model discovery. */
   execStream: typeof localProcessExecStream;
+  /** Hold the execution context for one run's workspace until release(). */
+  acquireWorkspace(hostWorkspace: string, signal?: AbortSignal): Promise<WorkspaceExecution>;
   close(): Promise<void>;
 }
 
@@ -1361,15 +1411,21 @@ function createExecutionEnvironment(
   sandboxId: string,
   workspacePath: string,
   logger: DaemonLogger,
+  maxConcurrentRuns = 1,
 ): DaemonExecutionEnvironment {
-  if (mode === "boxlite") return createBoxliteEnvironment(sandboxId, workspacePath, logger);
+  if (mode === "boxlite") {
+    return createBoxliteEnvironment(sandboxId, workspacePath, logger, { maxGuests: maxConcurrentRuns });
+  }
   return createLocalRuntime();
 }
 
 export interface BoxliteEnvironmentOptions {
   boxliteHome?: string;
+  /** Shared by every guest; tests inject one. Production makes one per guest. */
   executionManager?: ExecutionManager;
   runtimeOwner?: BoxliteRuntimeOwner;
+  /** Guests booted at once — one per concurrently running workspace. */
+  maxGuests?: number;
 }
 
 export function createBoxliteEnvironment(
@@ -1378,58 +1434,47 @@ export function createBoxliteEnvironment(
   logger: DaemonLogger,
   options: BoxliteEnvironmentOptions = {},
 ): DaemonExecutionEnvironment {
-  let starting: Promise<ActiveOrchestratorSession> | undefined;
-  let mountedWorkspace: string | undefined;
   const boxliteHome = resolveBoxliteHome(workspacePath, options.boxliteHome, sandboxId);
-  const executionManager = options.executionManager ?? defaultExecutionManager;
   const runtimeOwner = options.runtimeOwner ?? new BoxliteRuntimeOwner(boxliteHome);
-  const stop = async (): Promise<void> => {
-    if (!starting) return;
-    const pending = starting;
-    starting = undefined;
-    mountedWorkspace = undefined;
-    try {
-      const active = await pending;
-      await active.close();
-    } catch {
-      // The sandbox never came up; nothing to tear down.
-    }
-  };
-  // A new guest is started when work moves to another thread. Its only
-  // workspace volume is that thread's host directory.
-  const start = async (hostWorkspace = workspacePath): Promise<ActiveOrchestratorSession> => {
-    const nextWorkspace = resolve(hostWorkspace);
-    if (starting && mountedWorkspace === nextWorkspace) return starting;
-    if (starting) await stop();
-    mountedWorkspace = nextWorkspace;
-    starting = startOrchestratorSession((text) => {
+  // Every guest mounts only its own workspace, so concurrent runs on
+  // different threads each get a guest. All guests share the one native
+  // runtime: a BoxLite home admits a single runtime per process.
+  const pool = new GuestPool({
+    capacity: options.maxGuests ?? 1,
+    boxName: (slot) => boxNameForSandbox(sandboxId, slot),
+    createManager: () => options.executionManager ?? new BoxLiteExecutionManager(),
+    start: ({ workspace, boxName, manager }) => startOrchestratorSession((text) => {
       logger.info("sandbox", { sandboxId, text: text.trimEnd() });
     }, {
-      boxName: boxNameForSandbox(sandboxId),
-      workspacePath: nextWorkspace,
+      boxName,
+      workspacePath: workspace,
       boxliteHome,
       runtimeOwner,
-      executionManager,
-    }).catch((error: unknown) => {
-      starting = undefined;
-      mountedWorkspace = undefined;
-      throw error;
-    });
-    return starting;
+      executionManager: manager,
+    }),
+  });
+  const workspaceExecution = (lease: GuestLease): WorkspaceExecution => ({
+    ensureAgentReady: (agent, signal) => ensureSandboxAgentReady(agent, undefined, signal, lease.manager),
+    execStream: (cmd, args = [], execOptions = {}) => lease.manager.execStream(cmd, args, execOptions),
+    release: lease.release,
+  });
+  const withAnyGuest = async <T>(signal: AbortSignal | undefined, work: (execution: WorkspaceExecution) => Promise<T>): Promise<T> => {
+    const execution = workspaceExecution(await pool.acquireAny(workspacePath, signal));
+    try {
+      return await work(execution);
+    } finally {
+      execution.release();
+    }
   };
   return {
     sandboxMode: "boxlite",
-    async ensureAgentReady(agent, signal, hostWorkspace) {
-      await start(hostWorkspace);
-      await ensureSandboxAgentReady(agent, undefined, signal, executionManager);
-    },
-    execStream: async (cmd, args = [], options = {}) => {
-      await start(mountedWorkspace ?? workspacePath);
-      return executionManager.execStream(cmd, args, options);
-    },
+    ensureAgentReady: (agent, signal) => withAnyGuest(signal, (execution) => execution.ensureAgentReady(agent, signal)),
+    execStream: (cmd, args = [], execOptions = {}) =>
+      withAnyGuest(execOptions.signal, (execution) => execution.execStream(cmd, args, execOptions)),
+    acquireWorkspace: async (hostWorkspace, signal) => workspaceExecution(await pool.acquire(hostWorkspace, signal)),
     async close() {
       try {
-        await stop();
+        await pool.close();
       } finally {
         await runtimeOwner.close();
       }
@@ -1437,8 +1482,10 @@ export function createBoxliteEnvironment(
   };
 }
 
-function boxNameForSandbox(sandboxId: string): string {
-  return `relay-${sandboxId.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48)}`;
+function boxNameForSandbox(sandboxId: string, slot = 0): string {
+  const base = `relay-${sandboxId.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48)}`;
+  // Slot 0 keeps the historical name so an upgraded daemon reclaims its box.
+  return slot === 0 ? base : `${base}-${slot}`;
 }
 
 

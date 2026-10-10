@@ -1,11 +1,11 @@
 import type { AgentName, AgentOutputSink, StreamExecResult } from "relay-core";
 
 import {
+  activeBox,
   ensureLocalDevboxOci,
   prepareGuestAgentAuth,
   prepareGuestAgentSkills,
   prepareGuestWorkspace,
-  setSessionBox,
   stopSessionBox,
   supervisedBoxExec,
   type DevboxOciOptions,
@@ -59,7 +59,14 @@ export interface ExecutionManager {
   runShell(command: string, signal?: AbortSignal, env?: Record<string, string>): Promise<StreamExecResult>;
 }
 
+/**
+ * One manager drives one guest. The daemon keeps a manager per pooled guest so
+ * concurrent runs each exec into their own VM; a manager with no guest of its
+ * own falls back to the process-wide session box used by single-guest callers.
+ */
 export class BoxLiteExecutionManager implements ExecutionManager {
+  private sandbox: ExecutionSandbox | null = null;
+
   ensureImage(sink?: AgentOutputSink, options?: DevboxOciOptions): string {
     return ensureLocalDevboxOci(sink, options);
   }
@@ -76,11 +83,14 @@ export class BoxLiteExecutionManager implements ExecutionManager {
   }
 
   setActiveSandbox(sandbox: ExecutionSandbox | null): void {
-    setSessionBox(sandbox?.raw ?? null);
+    this.sandbox = sandbox;
   }
 
   async stopActiveSandbox(): Promise<void> {
-    await stopSessionBox();
+    const sandbox = this.sandbox;
+    this.sandbox = null;
+    if (sandbox) await sandbox.raw.stop();
+    else await stopSessionBox();
   }
 
   async removeSandbox(runtime: BoxLiteRuntime, boxName: string): Promise<void> {
@@ -91,15 +101,15 @@ export class BoxLiteExecutionManager implements ExecutionManager {
   }
 
   async prepareWorkspace(hostWorkspace: string): Promise<[number, number]> {
-    return prepareGuestWorkspace(hostWorkspace);
+    return prepareGuestWorkspace(hostWorkspace, this.box());
   }
 
   async prepareAgentAuth(agents: Iterable<AgentName>, signal?: AbortSignal): Promise<void> {
-    await prepareGuestAgentAuth(agents, signal);
+    await prepareGuestAgentAuth(agents, signal, this.sandbox?.raw);
   }
 
   async prepareAgentSkills(signal?: AbortSignal): Promise<void> {
-    await prepareGuestAgentSkills(signal);
+    await prepareGuestAgentSkills(signal, this.sandbox?.raw);
   }
 
   async execStream(
@@ -117,11 +127,15 @@ export class BoxLiteExecutionManager implements ExecutionManager {
     if (options.signal?.aborted) {
       return { exit_code: -1, stdout: "", stderr: "", error_message: "Execution cancelled before start." };
     }
-    return supervisedBoxExec(cmd, args, options);
+    return supervisedBoxExec(cmd, args, options, false, this.box());
   }
 
   async runShell(command: string, signal?: AbortSignal, env?: Record<string, string>): Promise<StreamExecResult> {
-    return supervisedBoxExec("bash", ["-c", command], { signal, env });
+    return supervisedBoxExec("bash", ["-c", command], { signal, env }, false, this.box());
+  }
+
+  private box(): BoxLiteBox {
+    return this.sandbox?.raw ?? activeBox();
   }
 }
 

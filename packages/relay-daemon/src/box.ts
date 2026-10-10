@@ -174,9 +174,9 @@ function isErrno(error: unknown, code: string): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code;
 }
 
-export async function prepareGuestWorkspace(hostWorkspace: string): Promise<[number, number]> {
+export async function prepareGuestWorkspace(hostWorkspace: string, box: any = activeBox()): Promise<[number, number]> {
   const [uid, gid] = hostWorkspaceOwner(hostWorkspace);
-  const result = await collectExecution(await activeBox().exec("bash", ["-c", GUEST_AGENT_SYNC_SCRIPT]));
+  const result = await collectExecution(await box.exec("bash", ["-c", GUEST_AGENT_SYNC_SCRIPT]));
   if (result.exit_code !== 0) {
     const detail = (result.stderr || result.stdout).trim();
     throw new Error(`Failed to sync workspace ownership for host access. uid=${uid} gid=${gid}. ${detail}`);
@@ -310,7 +310,7 @@ export function prepareHostAgentSkills(targetDir: string): void {
 }
 
 /** Inject the configured host skills into the guest VM (`boxlite` mode). */
-export async function prepareGuestAgentSkills(signal?: AbortSignal): Promise<void> {
+export async function prepareGuestAgentSkills(signal?: AbortSignal, box?: any): Promise<void> {
   if (signal?.aborted) throw new Error("Skill provisioning cancelled.");
   const sourceDir = resolveSkillSource();
   if (!sourceDir) return;
@@ -337,14 +337,18 @@ export async function prepareGuestAgentSkills(signal?: AbortSignal): Promise<voi
   }
   script.push(`chown -R agent:agent ${GUEST_AGENT_SKILLS_DIRS.map(shellQuote).join(" ")}`);
   const command = script.join("; ");
-  const result = await collectExecution(await activeBox().exec("bash", ["-c", command]), false, undefined, undefined, undefined, signal);
+  const result = await collectExecution(await (box ?? activeBox()).exec("bash", ["-c", command]), false, undefined, undefined, undefined, signal);
   if (result.exit_code !== 0) {
     const detail = (result.stderr || result.stdout).trim();
     throw new Error(`Failed to install agent skills in the guest. ${detail}`);
   }
 }
 
-export async function prepareGuestAgentAuth(agents: Iterable<AgentName> = ["codex", "pi"], signal?: AbortSignal): Promise<void> {
+export async function prepareGuestAgentAuth(
+  agents: Iterable<AgentName> = ["codex", "pi"],
+  signal?: AbortSignal,
+  box?: any,
+): Promise<void> {
   if (signal?.aborted) throw new Error("Agent auth setup cancelled.");
   const selectedAgents = new Set(agents);
   const script = [
@@ -385,7 +389,7 @@ export async function prepareGuestAgentAuth(agents: Iterable<AgentName> = ["code
   }
   if (script.length === 1) return;
   const command = script.join("; ");
-  const result = await collectExecution(await activeBox().exec("bash", ["-c", command]), false, undefined, undefined, undefined, signal);
+  const result = await collectExecution(await (box ?? activeBox()).exec("bash", ["-c", command]), false, undefined, undefined, undefined, signal);
   if (result.exit_code !== 0) {
     const detail = (result.stderr || result.stdout).trim();
     throw new Error(`Failed to configure agent auth in the guest. ${detail}`);
@@ -409,9 +413,10 @@ export async function supervisedBoxExec(
   cmd: string, args: string[] = [],
   options: { cwd?: string; stdoutRenderer?: StreamRenderer; stderrRenderer?: StreamRenderer; sink?: AgentOutputSink; signal?: AbortSignal; env?: Record<string, string> } = {},
   echo = false,
+  box?: any,
 ): Promise<StreamExecResult> {
   if (options.signal?.aborted) return { exit_code: -1, stdout: "", stderr: "", error_message: "Execution cancelled before start." };
-  const execution = await activeBox().exec("node", ["-e", GUEST_PROCESS_SUPERVISOR, cmd, ...args],
+  const execution = await (box ?? activeBox()).exec("node", ["-e", GUEST_PROCESS_SUPERVISOR, cmd, ...args],
     options.env ? Object.entries(options.env) : null, false, null, null, options.cwd ?? null);
   return collectExecution(execution, echo, options.stdoutRenderer, options.stderrRenderer, options.sink, options.signal, {
     streamDrainMs: 5000,

@@ -99,7 +99,18 @@ export class BoxliteRuntimeOwner {
   }
 }
 
-const readyAgents = new Set<AgentName>();
+// Readiness is a property of one guest: a pooled guest booted fresh has none
+// of the auth files another guest's preflight installed.
+let readyAgentsByManager = new WeakMap<ExecutionManager, Set<AgentName>>();
+
+function readyAgentsFor(executionManager: ExecutionManager): Set<AgentName> {
+  let ready = readyAgentsByManager.get(executionManager);
+  if (!ready) {
+    ready = new Set<AgentName>();
+    readyAgentsByManager.set(executionManager, ready);
+  }
+  return ready;
+}
 
 /**
  * A BoxLite home admits exactly one runtime at a time, so the home is the
@@ -129,8 +140,9 @@ export function resolveBoxliteHome(
   return join(homedir(), ".relay", "boxlite", digest);
 }
 
-export function resetAgentReadiness(): void {
-  readyAgents.clear();
+export function resetAgentReadiness(executionManager?: ExecutionManager): void {
+  if (executionManager) readyAgentsByManager.delete(executionManager);
+  else readyAgentsByManager = new WeakMap();
 }
 
 export async function shutdownBoxliteRuntime(runtime: BoxliteRuntimeLifecycle): Promise<void> {
@@ -147,7 +159,8 @@ export async function ensureAgentReady(
   signal?: AbortSignal,
   executionManager: ExecutionManager = defaultExecutionManager,
 ): Promise<void> {
-  if (readyAgents.has(agent)) return;
+  const ready = readyAgentsFor(executionManager);
+  if (ready.has(agent)) return;
   if (signal?.aborted) throw new Error(`${agent} readiness cancelled.`);
   const def = getAgent(agent);
   if (def.needsGuestAuth) {
@@ -164,7 +177,7 @@ export async function ensureAgentReady(
     const detail = (result.stderr || result.stdout).trim();
     throw new Error(`${def.preflight.label} preflight failed. ${detail}`);
   }
-  readyAgents.add(agent);
+  ready.add(agent);
 }
 
 export async function startOrchestratorSession(
@@ -177,7 +190,7 @@ export async function startOrchestratorSession(
   if (options.runtimeOwner && resolve(options.runtimeOwner.home) !== boxliteHome) {
     throw new Error("BoxLite runtime owner does not match the session home.");
   }
-  resetAgentReadiness();
+  resetAgentReadiness(executionManager);
   if (!sink) {
     console.log(section("Relay", ansi.cyan));
     console.log(keyValue("image", DEVBOX_IMAGE));
@@ -193,7 +206,7 @@ export async function startOrchestratorSession(
   const boxName = options.boxName ?? "relay";
   const close = async (): Promise<void> => {
     try {
-      resetAgentReadiness();
+      resetAgentReadiness(executionManager);
       if (runtime) {
         await executionManager.stopActiveSandbox();
         await executionManager.removeSandbox(runtime, boxName);
