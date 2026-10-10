@@ -14,9 +14,9 @@ documentation locations, and UI metadata from the backend's shared constants.
 /threads/{threadId}
 /projects
 /projects/{projectId}
-/issues/{taskId}
-/issues/{taskId}/threads/{threadId}
-/issues
+/tasks/{taskId}
+/tasks/{taskId}/threads/{threadId}
+/tasks
 /automations
 /agents
 /agents/{agentId}
@@ -358,21 +358,21 @@ that project's recent Threads, active tasks, active runs, artifacts, and bound
 Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
-Projects and Issues are separate browser destinations. `/projects` opens the
+Projects and Tasks are separate browser destinations. `/projects` opens the
 project directory; `/projects/{id}` opens General, and `?tab=tasks` opens the
-project's Issues tab with its board/list views. `?task={taskId}` opens an issue
+project's Tasks tab with its board/list views. `?task={taskId}` opens a task
 record over that project; `recordTab` selects a section of that record.
 
-`/issues` is a list-only table across projects, grouped by project, status,
+`/tasks` is a list-only table across projects, grouped by project, status,
 assignee, or no grouping (`?group=`). Its queue rail selects `needs_me`,
 `untriaged`, `blocked`, `running`, `overdue`, `open` (default), or `done`
 (`?queue=`). `?project={id}` is a filter, not a separate project workspace.
-Deleted issues and routine templates are excluded; routine runs remain visible.
-Archived projects are hidden unless explicitly selected. `/issues/{taskId}`
+Deleted tasks and routine templates are excluded; routine runs remain visible.
+Archived projects are hidden unless explicitly selected. `/tasks/{taskId}`
 opens a record drawer; `?tab=definition` and `?tab=files` select its sections.
-Old `/backlog` paths and record/thread deep links continue to resolve.
+Old `/backlog` and `/issues` paths and record/thread deep links continue to resolve.
 
-An issue without a project is intake: it cannot receive an agent or team,
+A task without a project is intake: it cannot receive an agent or team,
 become Ready, create a thread, be picked up, or start. These requests return
 409 `issue_needs_project`. The scheduler and agent claim paths also hold legacy
 projectless work. Routine templates and their `sourceRoutineId` runs are exempt;

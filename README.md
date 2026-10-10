@@ -11,7 +11,7 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Relay helps employees work with AI agents across threads, issues, automations, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
+Relay helps employees work with AI agents across threads, tasks, automations, and projects. Give agents names, roles, and skills, choose where they run, and keep a shared record of requests, runs, and results.
 
 Relay uses a local-first architecture: the backend coordinates work, and daemons execute it on employee or managed computers. Each daemon runs [Claude Code](https://github.com/anthropics/claude-code), Codex, Pi, or Kimi in a workspace on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
 
@@ -22,7 +22,7 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 ## Features
 
 - **Threads** — Work with an agent, a team, or a project on the computer you choose. Follow streamed reasoning, commands, and tool calls. Stop, retry, or hand off work as needed.
-- **Issues** — Assign work to an agent or team, set priorities and due dates, and track it from backlog to done. Keep run history and output files with each issue.
+- **Tasks** — Assign work to an agent or team, set priorities and due dates, and track it from backlog to done. Keep run history and output files with each task.
 - **Automations** — Schedule recurring work daily, weekly, or monthly; Relay dispatches each run to its assignee.
 - **Projects** — Bring a shared workspace and a roster of agents together on one computer.
 - **Agents and teams** — Give each agent a runtime, role, personality, and skills. Group agents into teams that work Solo, Build → Review, Pipeline, or Lead-led.
@@ -35,8 +35,8 @@ Relay uses a local-first architecture: the backend coordinates work, and daemons
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/relay-issues.png" alt="Relay issues table grouped by project">
-      <br><strong>Issues</strong><br>Open issues across projects, with queues for work that needs your attention.
+      <img src="docs/images/relay-issues.png" alt="Relay tasks table grouped by project">
+      <br><strong>Tasks</strong><br>Open tasks across projects, with queues for work that needs your attention.
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/relay-projects.png" alt="Relay project board">

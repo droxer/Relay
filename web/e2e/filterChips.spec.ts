@@ -24,20 +24,20 @@ async function mockApi(page: Page, extra: Record<string, unknown> = {}) {
 
 test("a filter is added as a chip, lands in the URL, and filters the list", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/issues");
+  await page.goto("/tasks");
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("option", { name: /^Priority/ }).click();
   // One condition ("is"), so the value list opens straight away.
   await page.getByRole("option", { name: "High" }).click();
   await expect(page).toHaveURL(/[?&]priority=high\b/);
-  const list = page.getByRole("table", { name: "Issues", exact: true });
+  const list = page.getByRole("table", { name: "Tasks", exact: true });
   await expect(list.getByRole("link", { name: "Urgent fix" })).toBeVisible();
   await expect(list.getByRole("link", { name: "Tidy docs" })).toHaveCount(0);
 });
 
 test("a filter in the URL is drawn as a chip, and Clear removes it", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/issues?priority=low");
+  await page.goto("/tasks?priority=low");
   const chips = page.locator(".backlog-filter-chips");
   await expect(chips.getByRole("button", { name: "Low" })).toBeVisible();
   await chips.getByRole("button", { name: "Clear" }).click();
@@ -48,7 +48,7 @@ test("a filter in the URL is drawn as a chip, and Clear removes it", async ({ pa
 
 test("the chip menu offers no rule the URL cannot hold", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/issues?priority=high");
+  await page.goto("/tasks?priority=high");
   await page.getByRole("button", { name: "Priority filter options" }).click();
   await expect(page.getByRole("menuitem", { name: "Remove" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Duplicate" })).toHaveCount(0);

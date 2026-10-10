@@ -153,6 +153,8 @@ def test_spa_fallback_is_allowlisted_and_never_masks_api_typos(
         "/computer",
         "/issues",
         "/issues/T-1",
+        "/tasks",
+        "/tasks/T-1",
         "/projects",
         "/projects/project_123",
         "/teams",

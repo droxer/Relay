@@ -255,7 +255,7 @@ class TaskDispatcher:
                 self.task["id"],
                 "rejected",
                 code=ISSUE_NEEDS_PROJECT,
-                message="Move this issue into a project before it can run.",
+                message="Move this task into a project before it can run.",
             )
         if (
             self.retry_blocked

@@ -13,7 +13,7 @@ import {
 } from "./viewTypes.ts";
 
 const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
-  backlog: "/issues",
+  backlog: "/tasks",
   routine: "/automations",
   agents: "/agents",
   teams: "/teams",
@@ -40,11 +40,12 @@ const WORK_ROUTES = new Map(
 );
 
 /* Both routes keep their old heads inside the app; only their addresses
-   changed (/issues, /automations). Folding the new head back keeps every
+   changed (/tasks, /automations). Folding the new head back keeps every
    `head === "backlog"` / `head === "routines"` branch below meaning one
-   thing, and old links land on the same page. */
-const PATH_HEAD_ALIASES: Record<string, string> = { issues: "backlog", automations: "routines" };
+   thing, and old links (/issues, /backlog) land on the same page. */
+const PATH_HEAD_ALIASES: Record<string, string> = { tasks: "backlog", issues: "backlog", automations: "routines" };
 WORK_ROUTES.set("/backlog", "backlog");
+WORK_ROUTES.set("/issues", "backlog");
 WORK_ROUTES.set("/routines", "routine");
 
 export const APP_NAVIGATION_EVENT = "relay:navigation";
@@ -520,8 +521,9 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
 
 /* Heads renamed in the product but still linked from old threads and
    bookmarks. Unlike PATH_HEAD_ALIASES (read-only), these rewrite the address
-   bar on arrival. /backlog is deliberately absent: its tests pin it. */
-const RENAMED_PATH_HEADS: Readonly<Record<string, string>> = { routines: "automations" };
+   bar on arrival (/issues was the Tasks page's address before /tasks).
+   /backlog is deliberately absent: its tests pin it. */
+const RENAMED_PATH_HEADS: Readonly<Record<string, string>> = { routines: "automations", issues: "tasks" };
 
 function canonicalPathname(pathname: string): string {
   const match = /^\/([^/]+)(\/.*)?$/.exec(pathname);
