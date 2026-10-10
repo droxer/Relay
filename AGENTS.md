@@ -118,6 +118,10 @@ Node.js 22.19 or newer is required.
   no longer used.
 - Completed-run agent log tail cap: `RELAY_AGENT_RESULT_LOG_LIMIT` (default
   `262144` chars) — the fallback transcript keeps the head of long output.
+- Daemon terminal echo of rendered agent output:
+  `RELAY_DAEMON_ECHO_AGENT_OUTPUT` (default on). The supervisor sets it to `0`
+  for every daemon it launches so supervisor logs stay lifecycle-only; output
+  still streams to the backend and the daemon's JSONL run logs.
 - Stop Relay and BoxLite processes: `make stop`.
 - Install pre-commit hooks: `make pre-commit-install`.
 - Run pre-commit hooks on all files: `make pre-commit-run`.

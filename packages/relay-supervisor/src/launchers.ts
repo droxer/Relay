@@ -72,6 +72,9 @@ export class LocalDaemonLauncher implements DaemonLauncher {
         RELAY_DAEMON_NODE_TOKEN: requiredToken(request),
         RELAY_WORKSPACE: request.workspacePath,
         RELAY_SANDBOX_MODE: this.sandboxMode,
+        // Child stdout is inherited, so keep rendered agent responses out of
+        // it; they belong to the backend stream and the daemon's run logs.
+        RELAY_DAEMON_ECHO_AGENT_OUTPUT: "0",
       },
       stdio: "inherit",
     });
@@ -108,7 +111,13 @@ export class CommandTemplateLauncher implements DaemonLauncher {
     });
     const child = spawn(rendered, {
       cwd: this.cwd ?? process.cwd(),
-      env: { ...process.env, ...request.env },
+      env: {
+        ...process.env,
+        ...request.env,
+        // Child stdout is inherited; keep rendered agent responses out of the
+        // supervisor's logs (see LocalDaemonLauncher).
+        RELAY_DAEMON_ECHO_AGENT_OUTPUT: "0",
+      },
       shell: true,
       stdio: "inherit",
     });

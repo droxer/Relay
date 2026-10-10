@@ -271,6 +271,9 @@ export function managedDaemonEnv(input: EnsureManagedNodeInput): NodeJS.ProcessE
     RELAY_WORKSPACE: input.workspacePath,
     RELAY_WORKSPACE_ID: input.workspaceId,
     RELAY_SANDBOX_MODE: input.node.sandboxMode,
+    // Child stdout is inherited; keep rendered agent responses out of the
+    // supervisor's logs. Output still reaches the backend and run logs.
+    RELAY_DAEMON_ECHO_AGENT_OUTPUT: "0",
   };
 }
 

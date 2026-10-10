@@ -1423,6 +1423,134 @@ test("relay daemon fails safely when undelivered output exceeds its memory budge
   assert.equal(terminalType, "run.failed");
 });
 
+test("RELAY_DAEMON_ECHO_AGENT_OUTPUT=0 keeps the agent response off the daemon terminal", async () => {
+  const previous = process.env.RELAY_DAEMON_ECHO_AGENT_OUTPUT;
+  process.env.RELAY_DAEMON_ECHO_AGENT_OUTPUT = "0";
+  const stop = new AbortController();
+  const command = runCommand("cmd_no_echo");
+  let served = false;
+  let terminalType = "";
+  let runHadSink: boolean | undefined;
+  const streamed: string[] = [];
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test",
+      sandboxId: "sbx_no_echo",
+      sandbox: "none",
+      employeeId: "alice",
+      workspacePath: process.cwd(),
+      token: "node_token",
+      pollIntervalMs: 1,
+      shutdownGraceMs: 50,
+      logger: testLogger(),
+      signal: stop.signal,
+      environment: fakeEnvironment({
+        exec: async (_cmd, args, options) => {
+          if (!isInventoryProbe(args)) {
+            runHadSink = typeof options?.sink === "function";
+            // Mirror collectExecution: rendered text goes to the sink when one
+            // is provided, otherwise to the daemon's own stdout.
+            const rendered = options?.stdoutRenderer?.("agent response\n") ?? "agent response\n";
+            options?.sink?.(rendered);
+          }
+          return { exit_code: 0, stdout: "agent response\n", stderr: "" };
+        },
+      }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (!served) {
+            served = true;
+            return jsonResponse({ commands: [command] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent & { entries?: Array<{ text: string }> }>(init);
+          if (event.type === "run.output.batch") {
+            for (const entry of event.entries ?? []) streamed.push(entry.text);
+          }
+          if (event.type === "run.completed" || event.type === "run.failed") {
+            terminalType = event.type;
+            queueMicrotask(() => stop.abort());
+          }
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+  } finally {
+    restoreEnv("RELAY_DAEMON_ECHO_AGENT_OUTPUT", previous);
+  }
+
+  assert.equal(terminalType, "run.completed");
+  assert.equal(runHadSink, true);
+  // Swallowing the terminal echo must not starve the backend output stream.
+  assert.equal(streamed.join(""), "agent response\n");
+});
+
+test("agent response echoes to the daemon terminal by default", async () => {
+  const previous = process.env.RELAY_DAEMON_ECHO_AGENT_OUTPUT;
+  delete process.env.RELAY_DAEMON_ECHO_AGENT_OUTPUT;
+  const stop = new AbortController();
+  const command = runCommand("cmd_echo_default");
+  let served = false;
+  let terminalType = "";
+  let runHadSink: boolean | undefined;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test",
+      sandboxId: "sbx_echo_default",
+      sandbox: "none",
+      employeeId: "alice",
+      workspacePath: process.cwd(),
+      token: "node_token",
+      pollIntervalMs: 1,
+      shutdownGraceMs: 50,
+      logger: testLogger(),
+      signal: stop.signal,
+      environment: fakeEnvironment({
+        exec: async (_cmd, args, options) => {
+          if (!isInventoryProbe(args)) {
+            runHadSink = typeof options?.sink === "function";
+            options?.stdoutRenderer?.("agent response\n");
+          }
+          return { exit_code: 0, stdout: "agent response\n", stderr: "" };
+        },
+      }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (!served) {
+            served = true;
+            return jsonResponse({ commands: [command] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          if (event.type === "run.completed" || event.type === "run.failed") {
+            terminalType = event.type;
+            queueMicrotask(() => stop.abort());
+          }
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+  } finally {
+    restoreEnv("RELAY_DAEMON_ECHO_AGENT_OUTPUT", previous);
+  }
+
+  assert.equal(terminalType, "run.completed");
+  // No sink: the executor falls back to writing rendered output to stdout.
+  assert.equal(runHadSink, false);
+});
+
 test("daemon logger flushes non-blocking node and run logs", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "relay-daemon-logger-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

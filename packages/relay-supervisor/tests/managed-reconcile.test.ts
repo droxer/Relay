@@ -1017,6 +1017,8 @@ test("managed daemon env drops ambient identity that would bypass enrollment", (
     assert.equal(env.RELAY_EMPLOYEE_ID, undefined);
     assert.equal(env.RELAY_ENROLLMENT_TOKEN, "grant.secret");
     assert.equal(env.RELAY_WORKSPACE_ID, "employee:alice:home");
+    // Inherited child stdout keeps supervisor logs lifecycle-only.
+    assert.equal(env.RELAY_DAEMON_ECHO_AGENT_OUTPUT, "0");
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];

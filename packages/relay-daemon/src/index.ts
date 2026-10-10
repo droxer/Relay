@@ -129,6 +129,10 @@ export interface DaemonRuntimeOptions {
   maxConcurrentRuns?: number;
   environment?: DaemonExecutionEnvironment;
   preflight?: boolean;
+  /** Echo rendered agent output to the daemon's own stdout/stderr. Defaults
+   * to true; RELAY_DAEMON_ECHO_AGENT_OUTPUT overrides. Supervisors disable it
+   * so their logs carry lifecycle events only, not full agent responses. */
+  echoAgentOutput?: boolean;
 }
 
 export type DaemonHealthState = "starting" | "registered" | "polling" | "busy" | "stopping" | "stopped";
@@ -225,6 +229,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   });
   const token = tokenResolution.token;
   const pollIntervalMs = options.pollIntervalMs ?? 1000;
+  const echoAgentOutput = options.echoAgentOutput ?? booleanEnv("RELAY_DAEMON_ECHO_AGENT_OUTPUT") ?? true;
   const commandPollWaitMs = boundedNumber(
     options.commandPollWaitMs ?? positiveIntEnv("RELAY_DAEMON_COMMAND_POLL_WAIT_MS") ?? DEFAULT_COMMAND_POLL_WAIT_MS,
     0,
@@ -645,6 +650,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               threadWorkspaces,
               environment,
               controller.signal,
+              echoAgentOutput,
             ), command.reportWorkspaceStatus ? {
               sessionId: command.sessionId,
               onWaiting: async (blockingSessionId) => {
@@ -982,6 +988,7 @@ async function executeCommand(
   threadWorkspaces: ThreadWorkspaceManager,
   environment: DaemonExecutionEnvironment,
   signal?: AbortSignal,
+  echoAgentOutput = true,
 ): Promise<DaemonNodeEvent> {
   const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
   const state = { ...(command.state ?? initialAgentState(command.taskGoal)), round_result_run_id: command.runId };
@@ -1171,6 +1178,10 @@ async function executeCommand(
     agent: command.agent,
     signal,
     workspacePath: threadWorkspace.executionPath,
+    // A no-op sink keeps rendered agent text off the daemon's own stdout and
+    // stderr; live output still flows through eventSink to the backend and the
+    // JSONL run log. Supervisors set this so their logs stay lifecycle-only.
+    ...(echoAgentOutput ? {} : { sink: () => undefined }),
   };
   const skillState = command.skills === undefined
     ? state
@@ -1427,6 +1438,14 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 function positiveIntEnv(name: string): number | undefined {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+function booleanEnv(name: string): boolean | undefined {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (!value) return undefined;
+  if (["1", "true", "yes", "on"].includes(value)) return true;
+  if (["0", "false", "no", "off"].includes(value)) return false;
+  return undefined;
 }
 
 function boundedNumber(value: number, minimum: number, maximum: number): number {
