@@ -36,6 +36,7 @@ after(() => {
   else process.env.RELAY_DAEMON_STATE_DIR = previousDaemonStateDir;
   rmSync(testDaemonStateDir, { recursive: true, force: true });
 });
+import { ExecutionJournal } from "../src/execution-journal.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
 import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/workspace-read.js";
@@ -3839,7 +3840,7 @@ test("doctor authenticates without registering or persisting credentials", async
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("local process cleanup has a deadline and reports failure", async (t) => {
+test("local process cleanup retains execution after its warning deadline", async (t) => {
   const originalKill = process.kill;
   let expired = false;
   const release = setTimeout(() => { expired = true; }, 200);
@@ -3854,8 +3855,8 @@ test("local process cleanup has a deadline and reports failure", async (t) => {
     const result = await localProcessExecStream(process.execPath, ["-e", ""], {
       cleanupTimeoutMs: 20,
     });
-    assert.equal(result.exit_code, -1);
-    assert.match(result.error_message ?? "", /cleanup.*timed out/i);
+    assert.equal(expired, true, "cleanup deadline must not be treated as exit evidence");
+    assert.equal(result.exit_code, 0);
   } finally { clearTimeout(release); }
 });
 
@@ -3924,4 +3925,52 @@ test("managed daemon reuses durable enrollment after grant expiry", async () => 
     }
     assert.equal(enrollments, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("daemon restart fences a retained execution instead of running it again", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-restart-fence-"));
+  const stop = new AbortController();
+  const command = runCommand();
+  new ExecutionJournal(join(root, "executions")).record(command);
+  let executions = 0;
+  let polls = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "restart-fence", employeeId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      signal: stop.signal, logger: testLogger(),
+      environment: fakeEnvironment({ exec: async (_cmd, args) => {
+        if (!isInventoryProbe(args)) executions++;
+        return { exit_code: 0, stdout: "", stderr: "" };
+      }}),
+      fetchFn: async (url) => {
+        if (new URL(String(url)).pathname.endsWith("/commands")) {
+          if (polls++) { stop.abort(); return jsonResponse({commands: []}); }
+          return jsonResponse({commands: [command]});
+        }
+        return jsonResponse({ok: true});
+      },
+    });
+    assert.equal(executions, 0);
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(command.id), true);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("local execution cleans up descendants before waiting for inherited pipes", {skip: process.platform === "win32", timeout: 10000}, async () => {
+  let childPid = 0;
+  let ready!: () => void;
+  const childReady = new Promise<void>(resolve => { ready = resolve; });
+  const childCode = 'process.send("ready");setInterval(()=>{},1000)';
+  const parentCode = `const{spawn}=require("node:child_process");const child=spawn(process.execPath,["-e",${JSON.stringify(childCode)}],{stdio:["ignore","inherit","inherit","ipc"]});child.on("message",()=>{console.log(child.pid);process.exit(0)});`;
+  const running = localProcessExecStream(process.execPath, ["-e", parentCode], {sink: text => { childPid = Number(text.trim()); ready(); }});
+  try {
+    await childReady;
+    const result = await Promise.race([running, new Promise<null>(resolve => setTimeout(()=>resolve(null),1000))]);
+    assert.notEqual(result, null, "parent exit must trigger child cleanup without waiting for pipe EOF");
+    assert.throws(()=>process.kill(childPid,0),/ESRCH/);
+  } finally {
+    if(childPid>0) {try {process.kill(childPid,"SIGKILL");} catch {}}
+    await running;
+  }
 });

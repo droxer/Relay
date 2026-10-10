@@ -26,7 +26,9 @@ import { shellQuote } from "relay-core";
 import { hostWorkspaceOwner } from "relay-core";
 import type { AgentName, AgentOutputSink, StreamExecResult } from "relay-core";
 import { assertKimiConfigured } from "./agent-auth.js";
-import { BoundedTextCapture } from "./bounded-text.js";
+import { collectExecution } from "./execution-capture.js";
+export { collectExecution } from "./execution-capture.js";
+import { GUEST_PROCESS_SUPERVISOR } from "./guest-process-supervisor.js";
 
 export type BoxLiteModule = typeof import("@boxlite-ai/boxlite");
 type StreamRenderer = (chunk: string) => string;
@@ -402,104 +404,26 @@ export async function execStream(
   if (options.signal?.aborted) {
     return { exit_code: -1, stdout: "", stderr: "", error_message: "Execution cancelled before start." };
   }
-  const box = activeBox();
-  const execution = await box.exec(cmd, args, options.env ? Object.entries(options.env) : null, false, null, null, options.cwd ?? null);
-  return collectExecution(execution, true, options.stdoutRenderer, options.stderrRenderer, options.sink, options.signal);
+  return supervisedBoxExec(cmd, args, options, true);
 }
 
-export async function collectExecution(
-  execution: any,
+/** The guest supervisor retains the SDK execution until descendant cleanup
+ * is verified. Never SIGKILL that supervisor: it owns the exit evidence. */
+export async function supervisedBoxExec(
+  cmd: string, args: string[] = [],
+  options: { cwd?: string; stdoutRenderer?: StreamRenderer; stderrRenderer?: StreamRenderer; sink?: AgentOutputSink; signal?: AbortSignal; env?: Record<string, string> } = {},
   echo = false,
-  stdoutRenderer?: StreamRenderer,
-  stderrRenderer?: StreamRenderer,
-  sink?: AgentOutputSink,
-  signal?: AbortSignal,
+  box?: any,
 ): Promise<StreamExecResult> {
-  const stdoutCapture = new BoundedTextCapture();
-  const stderrCapture = new BoundedTextCapture();
-  let cancelled = false;
-  const abortExecution = (): void => {
-    cancelled = true;
-    void execution.kill?.().catch(() => undefined);
-  };
-  if (signal?.aborted) abortExecution();
-  signal?.addEventListener("abort", abortExecution, { once: true });
-
-  async function waitForConfirmedExit(): Promise<any> {
-    let warned = false;
-    for (;;) {
-      try { return await execution.wait(); } catch {
-        if (!warned) {
-          process.stderr.write("[relay] Cannot confirm sandbox execution exit; retaining the run.\n");
-          warned = true;
-        }
-        await execution.kill?.().catch(() => undefined);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    }
-  }
-
-  async function readStream(name: "stdout" | "stderr", capture: BoundedTextCapture): Promise<void> {
-    const reader = await execution[name]();
-    const decoder = new TextDecoder("utf-8");
-    const renderer = name === "stderr" ? stderrRenderer : stdoutRenderer;
-    const pushText = (text: string): void => {
-      if (!text) return;
-      capture.append(text);
-      // Renderers carry the live event feed, so they see every chunk; `echo`
-      // only decides whether output without a sink reaches this terminal.
-      const rendered = renderer ? renderer(text) : text;
-      if (sink) {
-        if (rendered) sink(rendered);
-        return;
-      }
-      if (!echo || !rendered) return;
-      if (name === "stderr") {
-        process.stderr.write(rendered);
-      } else {
-        process.stdout.write(rendered);
-      }
-    };
-    while (true) {
-      const chunk = await reader.next();
-      if (chunk === null) break;
-      const text = typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
-      pushText(text);
-    }
-    pushText(decoder.decode());
-  }
-
-  try {
-    await closeExecutionStdin(execution);
-    try {
-      await Promise.all([readStream("stdout", stdoutCapture), readStream("stderr", stderrCapture)]);
-    } catch (error) {
-      // A broken output stream is not proof that its writer has exited.
-      await execution.kill?.().catch(() => undefined);
-      await waitForConfirmedExit();
-      throw error;
-    }
-    const result = await waitForConfirmedExit();
-    return {
-      exit_code: result.exitCode ?? -1,
-      stdout: stdoutCapture.toString(),
-      stderr: stderrCapture.toString(),
-      error_message: cancelled ? "Execution cancelled." : result.errorMessage,
-    };
-  } finally {
-    signal?.removeEventListener("abort", abortExecution);
-  }
+  if (options.signal?.aborted) return { exit_code: -1, stdout: "", stderr: "", error_message: "Execution cancelled before start." };
+  const execution = await (box ?? activeBox()).exec("node", ["-e", GUEST_PROCESS_SUPERVISOR, cmd, ...args],
+    options.env ? Object.entries(options.env) : null, false, null, null, options.cwd ?? null);
+  return collectExecution(execution, echo, options.stdoutRenderer, options.stderrRenderer, options.sink, options.signal, {
+    streamDrainMs: 5000,
+    terminate: async () => { await execution.signal(15); },
+  });
 }
 
-async function closeExecutionStdin(execution: any): Promise<void> {
-  if (typeof execution.stdin !== "function") return;
-  try {
-    const stdin = await execution.stdin();
-    await stdin?.close?.();
-  } catch {
-    // Some BoxLite runtimes may not expose stdin for every execution.
-  }
-}
 
 export function dockerImageId(image: string, options: DevboxOciOptions = {}): string | undefined {
   const runCommand = options.runCommand ?? spawnSync;

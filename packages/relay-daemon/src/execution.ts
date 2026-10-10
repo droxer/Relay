@@ -2,12 +2,12 @@ import type { AgentName, AgentOutputSink, StreamExecResult } from "relay-core";
 
 import {
   activeBox,
-  collectExecution,
   ensureLocalDevboxOci,
   prepareGuestAgentAuth,
   prepareGuestAgentSkills,
   prepareGuestWorkspace,
   stopSessionBox,
+  supervisedBoxExec,
   type DevboxOciOptions,
 } from "./box.js";
 
@@ -127,16 +127,11 @@ export class BoxLiteExecutionManager implements ExecutionManager {
     if (options.signal?.aborted) {
       return { exit_code: -1, stdout: "", stderr: "", error_message: "Execution cancelled before start." };
     }
-    const env = options.env ? Object.entries(options.env) : null;
-    const execution = await this.box().exec(cmd, args, env, false, null, null, options.cwd ?? null);
-    // Daemon runs stream to the backend, not the daemon's terminal — the same
-    // as local execution, which never echoes.
-    return collectExecution(execution, false, options.stdoutRenderer, options.stderrRenderer, options.sink, options.signal);
+    return supervisedBoxExec(cmd, args, options, false, this.box());
   }
 
   async runShell(command: string, signal?: AbortSignal, env?: Record<string, string>): Promise<StreamExecResult> {
-    const execution = await this.box().exec("bash", ["-c", command], env ? Object.entries(env) : null);
-    return collectExecution(execution, false, undefined, undefined, undefined, signal);
+    return supervisedBoxExec("bash", ["-c", command], { signal, env }, false, this.box());
   }
 
   private box(): BoxLiteBox {

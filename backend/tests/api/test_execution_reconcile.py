@@ -260,3 +260,23 @@ def test_reconcile_cannot_discard_a_retained_terminal_result(monkeypatch):
         assert status["canReportGone"] is False
         assert client.post(f"/api/v1/threads/{session_id}/execution/reconcile").status_code == 409
         assert store.get_run_request(run["request"]["id"]) == before
+
+
+def test_online_heartbeat_is_separate_from_unconfirmed_exit_in_detail_and_list(monkeypatch):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+        _stop_requested_long_ago(app, run["request"]["id"])
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["computerOnline"] is True
+        assert status["canDelete"] is False
+        detail = client.get(f"/api/v1/threads/{session_id}").json()
+        assert detail["execution"]["computerOnline"] is True
+        response = client.get("/api/v1/threads").json()
+        listed = next(session for session in response["sessions"] if session["id"] == session_id)
+        assert listed["execution"]["computerOnline"] is True
+        assert listed["execution"]["canDelete"] is False

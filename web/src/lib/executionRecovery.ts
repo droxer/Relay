@@ -1,4 +1,4 @@
-import type { RelaySession, RelayTaskListItem } from "../types";
+import type { RelaySession, RelayTaskListItem } from "../types.js";
 
 /** `tone` drives the panel rail: attention is the default, `info` is for the
  *  states that are the normal course of work (a result awaiting review, a
@@ -32,6 +32,7 @@ export function executionRecoveryGuide(execution?: RelaySession["execution"]): R
   const recovering = execution.phase === "recovery_required";
   return {
     ...guide,
+    ...(execution.computerOnline && ["execution_unconfirmed", "termination_unconfirmed"].includes(reason) ? { key: "online_exit_unconfirmed" } : {}),
     ...(recovering && (execution.canReportGone ?? Boolean(reportGone)) ? { reportGone: true as const } : {}),
     ...(recovering && (execution.canRetrySave ?? reason === "finalization_failed") ? { retrySave: true as const } : {}),
   };
