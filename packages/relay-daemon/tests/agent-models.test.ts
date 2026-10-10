@@ -10,6 +10,7 @@ import {
   codexCatalogModels,
   discoverAgentModels,
   kimiConfigModels,
+  kimiListedModels,
   parseAgentModels,
   piListedModels,
 } from "../src/agent-models.js";
@@ -191,6 +192,26 @@ describe("agent model discovery", () => {
       ["anthropic/claude-haiku-4-5", "openai/gpt-5"],
     );
     assert.deepEqual(piListedModels("No models available."), []);
+  });
+
+  it("asks the Kimi CLI for its models, default first, ahead of its config file", () => {
+    const listed = `"models": {
+  "kimi-code/kimi-for-coding": { "provider": "managed:kimi-code", "model": "kimi-for-coding" },
+  "kimi-code/k3": { "provider": "managed:kimi-code", "model": "k3" },
+  "kimi-code/k3-256k": { "provider": "managed:kimi-code", "model": "k3-256k" }
+ }
+}`;
+    assert.deepEqual(kimiListedModels(listed), ["kimi-code/kimi-for-coding", "kimi-code/k3", "kimi-code/k3-256k"]);
+    assert.deepEqual(kimiListedModels("not json"), []);
+    const stdout = record("models", listed) + record("default", "Default model: kimi-code/k3\n") + record("config", KIMI_CONFIG);
+    assert.deepEqual(parseAgentModels("kimi", stdout), ["kimi-code/k3", "kimi-code/kimi-for-coding", "kimi-code/k3-256k"]);
+  });
+
+  it("keeps Kimi's provider credentials out of the sweep", () => {
+    const script = buildModelDiscoveryScript("kimi");
+    assert.match(script, /kimi provider list --json/);
+    // Only the `models` object onward is emitted; `providers` (keys, oauth) comes first and is cut.
+    assert.match(script, /sed -n '\/"models"/);
   });
 
   it("lists Kimi's config aliases with the default first and skips subtables", () => {

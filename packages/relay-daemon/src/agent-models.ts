@@ -17,7 +17,10 @@ import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentNa
 //           KB), so the sweep keeps only the slug/visibility/priority keys —
 //           process output is tail-bounded and would lose the head.
 //   pi      `pi --list-models` — only providers it can authenticate.
-//   kimi    the `[models."<alias>"]` tables in its config.toml.
+//   kimi    `kimi provider list` — its configured models and default; the
+//           `[models."<alias>"]` tables in config.toml only when the CLI is
+//           missing. The JSON form also carries each provider's credentials,
+//           so the sweep keeps only the `models` object that follows them.
 //
 // A runtime behind a custom endpoint (a proxy or a compatible provider such
 // as DeepSeek) reports only the models that endpoint lists: its vendor's ids
@@ -100,7 +103,13 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
   ],
   // Pi prints its table on stderr.
   pi: ["if command -v pi >/dev/null 2>&1; then pi --list-models 2>&1 | emit list; fi"],
-  kimi: ['f="${KIMI_CODE_HOME:-$HOME/.kimi-code}/config.toml"; if [ -f "$f" ]; then emit config < "$f"; fi'],
+  kimi: [
+    "if command -v kimi >/dev/null 2>&1; then",
+    `  kimi provider list --json 2>/dev/null | sed -n '/"models"[[:space:]]*:/,$p' | emit models`,
+    "  kimi provider list 2>/dev/null | grep -E '^Default model:' | emit default",
+    'else f="${KIMI_CODE_HOME:-$HOME/.kimi-code}/config.toml"; if [ -f "$f" ]; then emit config < "$f"; fi',
+    "fi",
+  ],
 };
 
 export function buildModelDiscoveryScript(agent: AgentName): string {
@@ -187,7 +196,7 @@ export function parseAgentModels(
     case "pi":
       return validModels(texts("list").flatMap(piListedModels));
     case "kimi":
-      return validModels(texts("config").flatMap(kimiConfigModels));
+      return validModels(kimiModels(texts("models"), texts("default"), texts("config")));
   }
 }
 
@@ -290,6 +299,19 @@ export function piListedModels(text: string): string[] {
     if (provider && model) models.push(`${provider}/${model}`);
   }
   return models;
+}
+
+function kimiModels(listed: string[], defaults: string[], configs: string[]): string[] {
+  const models = listed.flatMap(kimiListedModels);
+  if (models.length === 0) return configs.flatMap(kimiConfigModels);
+  const fallback = defaults.flatMap((text) => /^Default model:\s*(\S+)/m.exec(text)?.[1] ?? []);
+  return [...fallback, ...models];
+}
+
+/** The aliases in `kimi provider list --json`, from its `"models": {…}` object on. */
+export function kimiListedModels(text: string): string[] {
+  const models = parseJsonObject(`{${text}`)?.models;
+  return models && typeof models === "object" && !Array.isArray(models) ? Object.keys(models) : [];
 }
 
 /** Kimi's `--model` takes a config alias: `default_model` first, then each `[models.<alias>]`. */
