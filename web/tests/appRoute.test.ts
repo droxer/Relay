@@ -128,7 +128,7 @@ describe("app pathname routes", () => {
     assert.equal(pathForAppState({ route: "teams", mobileView: "chat", sessionId: null, teamWorkspaceId: "team 1" }), "/teams/team%201");
     assert.equal(hrefForRoute("main", "ses_123"), "/threads/ses_123");
     assert.equal(hrefForRoute("projects"), "/projects");
-    assert.equal(hrefForRoute("backlog"), "/issues");
+    assert.equal(hrefForRoute("backlog"), "/tasks");
     assert.equal(hrefForRoute("routine"), "/automations");
     assert.equal(hrefForRoute("settings"), "/settings/computers");
   });
@@ -279,7 +279,7 @@ describe("app pathname routes", () => {
     assert.equal(canonicalBrowserUrl("/routines/R-42/runs/T-9"), "/automations/R-42/runs/T-9");
     assert.deepEqual(parseAppPath("/routines/R-42"), parseAppPath("/automations/R-42"));
     assert.deepEqual(parseAppPath("/routines/R-42/runs/T-9"), parseAppPath("/automations/R-42/runs/T-9"));
-    // Issues keeps its own read-only alias and is not rewritten.
+    // Tasks keeps its own read-only alias and is not rewritten.
     assert.equal(canonicalBrowserUrl("/backlog"), "/backlog");
   });
 
@@ -375,26 +375,34 @@ describe("app pathname routes", () => {
     );
     // Task records also retain their list filters.
     assert.equal(
-      browserUrlForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: "T-1001" }, "/issues", "?status=blocked"),
-      "/issues/T-1001?status=blocked",
+      browserUrlForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: "T-1001" }, "/tasks", "?status=blocked"),
+      "/tasks/T-1001?status=blocked",
     );
   });
 });
 
-describe("the Issues address", () => {
-  it("writes /issues and still reads a /backlog link from before the rename", () => {
-    assert.deepEqual(parseAppPath("/issues"), parseAppPath("/backlog"));
-    assert.equal(parseAppPath("/issues").route, "backlog");
+describe("the Tasks address", () => {
+  it("writes /tasks and still reads /backlog and /issues links from before the renames", () => {
+    assert.deepEqual(parseAppPath("/tasks"), parseAppPath("/backlog"));
+    assert.deepEqual(parseAppPath("/tasks"), parseAppPath("/issues"));
+    assert.equal(parseAppPath("/tasks").route, "backlog");
     assert.equal(parseAppPath("/backlog/T-1001").taskId, "T-1001");
-    assert.equal(pathForAppState(parseAppPath("/backlog/T-1001")), "/issues/T-1001");
+    assert.equal(parseAppPath("/issues/T-1001").taskId, "T-1001");
+    assert.equal(pathForAppState(parseAppPath("/backlog/T-1001")), "/tasks/T-1001");
+    assert.equal(pathForAppState(parseAppPath("/issues/T-1001")), "/tasks/T-1001");
+  });
+
+  it("rewrites an /issues address bar to /tasks on arrival, keeping its filters", () => {
+    assert.equal(canonicalBrowserUrl("/issues/T-1001", "?status=blocked"), "/tasks/T-1001?status=blocked");
+    assert.equal(canonicalBrowserUrl("/issues", "?queue=untriaged"), "/tasks?queue=untriaged");
   });
 
   it("keeps the queue, grouping, and new sort keys, and only valid values", () => {
     assert.equal(
-      canonicalBrowserUrl("/issues", "?queue=untriaged&group=assignee&sort=-updated&project=p1"),
-      "/issues?sort=-updated&project=p1&queue=untriaged&group=assignee",
+      canonicalBrowserUrl("/tasks", "?queue=untriaged&group=assignee&sort=-updated&project=p1"),
+      "/tasks?sort=-updated&project=p1&queue=untriaged&group=assignee",
     );
-    assert.equal(canonicalBrowserUrl("/issues", "?queue=bogus&group=bogus"), "/issues");
+    assert.equal(canonicalBrowserUrl("/tasks", "?queue=bogus&group=bogus"), "/tasks");
   });
 
   it("leaves the queue and grouping off a project's Tasks tab", () => {

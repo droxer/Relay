@@ -53,9 +53,9 @@ function Workspace({ initialRecord = null, work = tasks, projectsStatus = "ready
 function show(initialRecord?: string, work?: RelayTaskListItem[]) {
   return render(<QueryClientProvider client={new QueryClient()}><Workspace initialRecord={initialRecord} work={work} /></QueryClientProvider>);
 }
-beforeEach(() => { window.history.replaceState({}, "", "/issues"); window.localStorage.clear(); });
+beforeEach(() => { window.history.replaceState({}, "", "/tasks"); window.localStorage.clear(); });
 it("shows a table grouped into project bands with queue navigation", () => {
-  window.history.replaceState({}, "", "/issues?sort=title");
+  window.history.replaceState({}, "", "/tasks?sort=title");
   show();
   const board = screen.getByRole("region", { name: "issues.title" });
   const rows = within(board).getByRole("table", { name: "issues.title" });
@@ -77,7 +77,7 @@ it("keeps the flat list behind the execution drawer and restores the list on clo
   expect(within(screen.getByRole("region", { name: "issues.title" })).getByRole("link", { name: "Ship" })).toBeTruthy();
 });
 it("shows a project filter even for an empty project and preserves the search when changing scope", async () => {
-  window.history.replaceState({}, "", "/issues?q=Ship&project=q");
+  window.history.replaceState({}, "", "/tasks?q=Ship&project=q");
   show();
   const board = screen.getByRole("region", { name: "issues.title" });
   const filter = within(board).getByRole("combobox", { name: "project.projects" });
@@ -89,7 +89,7 @@ it("shows a project filter even for an empty project and preserves the search wh
 
 it("paginates the flat list and selects only the tasks visible on the current page", () => {
   const work = Array.from({ length: 55 }, (_, index) => task(`Task ${index}`, index < 51 ? "p" : "q"));
-  window.history.replaceState({}, "", "/issues?page=2");
+  window.history.replaceState({}, "", "/tasks?page=2");
   show(undefined, work);
   const board = screen.getByRole("region", { name: "issues.title" });
   expect(titleLinks(within(board).getAllByRole("link"))).toHaveLength(5);
@@ -117,7 +117,7 @@ it("keeps the project list quiet and puts execution actions in the drawer", () =
 });
 
 it("queue navigation preserves project scope and counts other queues", () => {
-  window.history.replaceState({}, "", "/issues?project=p");
+  window.history.replaceState({}, "", "/tasks?project=p");
   show();
   const nav = screen.getByRole("navigation", { name: "issues.queues_label" });
   const review = within(nav).getByRole("button", { name: "issues.queues.needs_me 1" });
@@ -132,7 +132,7 @@ it("queue navigation preserves project scope and counts other queues", () => {
 });
 
 it("keeps blocked tasks separate from their underlying workflow stage", () => {
-  window.history.replaceState({}, "", "/issues?queue=running");
+  window.history.replaceState({}, "", "/tasks?queue=running");
   show(undefined, [task("Running", "p", "running"), { ...task("Blocked", "p", "blocked"), workflowStage: "running" }]);
   expect(screen.getByRole("link", { name: "Running" })).toBeTruthy();
   expect(screen.queryByRole("link", { name: "Blocked" })).toBeNull();
@@ -141,7 +141,7 @@ it("keeps blocked tasks separate from their underlying workflow stage", () => {
   expect(screen.queryByRole("link", { name: "Running" })).toBeNull();
 });
 it("clearing filters keeps the selected queue", () => {
-  window.history.replaceState({}, "", "/issues?queue=needs_me&priority=high");
+  window.history.replaceState({}, "", "/tasks?queue=needs_me&priority=high");
   show();
   fireEvent.click(screen.getAllByRole("button", { name: "backlog.clear_filters" })[0]);
   expect(new URL(window.location.href).searchParams.get("queue")).toBe("needs_me");
@@ -167,13 +167,13 @@ it("offers every task filter in the chip bar and applies a chosen one to the lis
   expect(new URL(window.location.href).searchParams.get("assignment")).toBe("unassigned");
 });
 it("restores combined team and assignment filters from the URL", () => {
-  window.history.replaceState({}, "", "/issues?team=team-a&assignment=assigned");
+  window.history.replaceState({}, "", "/tasks?team=team-a&assignment=assigned");
   show(undefined, [task("Unassigned", "p"), { ...task("Team A", "p"), assignedTeamId: "team-a" },
     { ...task("Team B", "p"), assignedTeamId: "team-b" }]);
   expect(titleLinks(screen.getAllByRole("link")).map((link) => link.textContent)).toEqual(["Team A"]);
 });
 it("draws a filter restored from the URL as a chip, and removing it clears the URL", () => {
-  window.history.replaceState({}, "", "/issues?priority=high");
+  window.history.replaceState({}, "", "/tasks?priority=high");
   show();
   const priority = screen.getByRole("combobox", { name: "backlog.priority" }) as HTMLSelectElement;
   expect(priority.value).toBe("high");

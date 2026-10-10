@@ -11,9 +11,11 @@ const CLIENT_ROUTES = [
   "/login",
   "/threads",
   "/threads/:path*",
+  "/tasks",
+  "/tasks/:path*",
+  // The Tasks page lived at /backlog, then /issues; old links still resolve.
   "/issues",
   "/issues/:path*",
-  // The Issues page lived at /backlog; old links still resolve.
   "/backlog",
   "/backlog/:path*",
   "/automations",

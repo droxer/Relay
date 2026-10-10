@@ -168,6 +168,6 @@ test("a Chinese-language user still gets the lazily loaded catalogue", async ({ 
       : { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/issues");
+  await page.goto("/tasks");
   await expect(page.getByRole("heading", { name: "没有未完成的议题" })).toBeVisible();
 });

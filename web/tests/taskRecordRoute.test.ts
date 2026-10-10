@@ -41,7 +41,7 @@ describe("task record routes", () => {
   });
 
   it("round-trips every record path through pathForAppState", () => {
-    for (const path of ["/issues/T-1001", "/automations/R-42", "/automations/R-42/runs/T-2288"]) {
+    for (const path of ["/tasks/T-1001", "/automations/R-42", "/automations/R-42/runs/T-2288"]) {
       assert.equal(pathForAppState(parseAppPath(path)), path, path);
     }
   });
