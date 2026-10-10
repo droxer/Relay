@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -104,4 +104,20 @@ test("output quota preserves existing evidence and still allows terminal results
     assert.deepEqual(received, ["chunk"]);
     assert.equal(outbox.pending().length, 0);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("re-retaining live output does not read the record back from disk", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-outbox-"));
+  try {
+    const outbox = new TerminalOutbox(root);
+    const event = { type: "run.output.batch", commandId: "cmd", leaseId: "lease", entries: [{ stream: "stdout", text: "x", sequence: 3 }] };
+    outbox.retain(event);
+    const [name] = readdirSync(root).filter((file) => file.endsWith(".json"));
+    // Output identity covers its sequence, so the stored copy is this event;
+    // a read-back would only cost a parse on every live post.
+    writeFileSync(join(root, name!), "not json");
+    assert.deepEqual(outbox.retain(event).event, event);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

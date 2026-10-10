@@ -451,6 +451,33 @@ test("collectExecution preserves UTF-8 split across byte chunks", async () => {
   assert.equal(rendered.some((chunk) => chunk.includes("\uFFFD")), false);
 });
 
+test("collectExecution feeds renderers without echoing to the daemon terminal", async (t) => {
+  const stdoutChunks: Array<string | null> = ["agent jsonl\n", null];
+  const stderrChunks: Array<string | null> = ["warning\n", null];
+  const seen: string[] = [];
+  const execution = {
+    stdout: async () => ({ next: async () => stdoutChunks.shift() ?? null }),
+    stderr: async () => ({ next: async () => stderrChunks.shift() ?? null }),
+    wait: async () => ({ exitCode: 0 }),
+  };
+  const stdoutWrite = t.mock.method(process.stdout, "write", () => true);
+  const stderrWrite = t.mock.method(process.stderr, "write", () => true);
+
+  const result = await collectExecution(
+    execution,
+    false,
+    (chunk) => { seen.push(`stdout:${chunk}`); return chunk; },
+    (chunk) => { seen.push(`stderr:${chunk}`); return chunk; },
+  );
+  stdoutWrite.mock.restore();
+  stderrWrite.mock.restore();
+
+  assert.equal(result.stdout, "agent jsonl\n");
+  assert.deepEqual(seen.sort(), ["stderr:warning\n", "stdout:agent jsonl\n"]);
+  assert.equal(stdoutWrite.mock.callCount(), 0);
+  assert.equal(stderrWrite.mock.callCount(), 0);
+});
+
 test("execution stream failures wait for termination before returning", async () => {
   let finish!: (value: { exitCode: number }) => void;
   const exited = new Promise<{ exitCode: number }>((resolve) => { finish = resolve; });

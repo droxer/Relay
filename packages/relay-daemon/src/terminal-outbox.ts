@@ -63,6 +63,10 @@ export class TerminalOutbox {
       if (output) { this.sizes.set(key, bytes); this.outputBytes += bytes; }
     }
     this.order.set(key, { owner: owner(event), sequence: sequence(event) });
+    // Output identity includes its type and sequence, so the stored record is
+    // this event; skip the read-back on the live path. A terminal record keys
+    // on the command alone, and the first one stored must win.
+    if (output) return { key, event };
     if (terminalTypes.has(String(event.type))) this.onTerminal?.(String(event.commandId));
     return { key, event: JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown> };
   }
