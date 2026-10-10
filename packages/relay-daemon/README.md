@@ -75,8 +75,9 @@ Optional:
   the backend. Defaults to 90 seconds and is renewed by command polls while the
   daemon still owns the run; values are capped at one hour.
 - `RELAY_DAEMON_MAX_CONCURRENT_RUNS`: maximum concurrent runs on this node.
-  Defaults to 1; BoxLite mode always serializes runs because the adapter owns
-  one active guest at a time.
+  Defaults to 3. In BoxLite mode each concurrently running thread gets its own
+  guest VM (mounting only that thread's workspace), so this also caps how many
+  guests the node boots; runs in the same workspace still run one at a time.
 - `RELAY_DAEMON_SHUTDOWN_GRACE_MS`: max time to wait for active runs to report
   cancellation during shutdown.
 

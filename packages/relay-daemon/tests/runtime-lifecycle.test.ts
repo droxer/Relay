@@ -47,7 +47,9 @@ test("the daemon environment reuses one native runtime across thread workspace s
   for (const name of ["thread-a", "thread-b", "thread-a"]) {
     const workspace = join(root, name);
     mkdirSync(workspace, { recursive: true });
-    await environment.ensureAgentReady("codex", undefined, workspace);
+    const lease = await environment.acquireWorkspace(workspace);
+    await lease.ensureAgentReady("codex");
+    lease.release();
     assert.equal(shutdowns, 0);
     assert.throws(() => acquireBoxliteHomeLock(home), /Another Relay orchestrator/);
   }
@@ -58,6 +60,75 @@ test("the daemon environment reuses one native runtime across thread workspace s
   assert.equal(shutdowns, 1);
   await assert.rejects(owner.get(), /closed/);
   assert.throws(() => acquireBoxliteHomeLock(home), /Another Relay orchestrator/);
+});
+
+test("concurrent runs on different threads each hold their own guest on the one runtime", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-runtime-pool-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const home = join(root, "runtime");
+  let created = 0;
+  const owner = new BoxliteRuntimeOwner(home, async () => {
+    created++;
+    return { shutdown: async () => {}, close() {} };
+  });
+  const booted: Array<{ box: string; mount: string }> = [];
+  let stopped = 0;
+  const manager = {
+    ensureImage: () => "/unused-rootfs",
+    createSandbox: async (_runtime, input) => {
+      booted.push({ box: input.boxName, mount: input.volumes[0]!.hostPath });
+      return { name: input.boxName, raw: {} };
+    },
+    setActiveSandbox() {},
+    stopActiveSandbox: async () => { stopped++; },
+    removeSandbox: async () => {},
+    prepareWorkspace: async () => [501, 20],
+    prepareAgentAuth: async () => {},
+    prepareAgentSkills: async () => {},
+    execStream: async () => { throw new Error("unused"); },
+    runShell: async () => ({ exit_code: 0, stdout: "", stderr: "" }),
+  } as ExecutionManager;
+  const logger = { info() {}, warn() {}, error() {}, output() {} } satisfies DaemonLogger;
+  const environment = createBoxliteEnvironment("sandbox-a", root, logger, {
+    boxliteHome: home, executionManager: manager, runtimeOwner: owner, maxGuests: 2,
+  });
+  const [a, b, c] = ["thread-a", "thread-b", "thread-c"].map((name) => {
+    const workspace = join(root, name);
+    mkdirSync(workspace, { recursive: true });
+    return workspace;
+  });
+
+  // Two threads run at once: two guests, each mounting only its own thread.
+  const [leaseA, leaseB] = await Promise.all([environment.acquireWorkspace(a!), environment.acquireWorkspace(b!)]);
+  assert.deepEqual(booted, [
+    { box: "relay-sandbox-a", mount: a },
+    { box: "relay-sandbox-a-1", mount: b },
+  ]);
+  assert.equal(created, 1);
+
+  // A second run on a busy thread shares that thread's guest.
+  const againA = await environment.acquireWorkspace(a!);
+  assert.equal(booted.length, 2);
+  againA.release();
+
+  // A third thread waits for a slot instead of stopping a guest in use.
+  let leaseC: Awaited<ReturnType<typeof environment.acquireWorkspace>> | undefined;
+  const waiting = environment.acquireWorkspace(c!).then((lease) => { leaseC = lease; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(leaseC, undefined);
+  assert.equal(stopped, 0);
+
+  // Freeing thread A recycles its slot (and box name) for thread C.
+  leaseA.release();
+  await waiting;
+  assert.equal(stopped, 1);
+  assert.deepEqual(booted[2], { box: "relay-sandbox-a", mount: c });
+
+  leaseB.release();
+  leaseC!.release();
+  await environment.close();
+  assert.equal(stopped, 3);
+  assert.equal(created, 1);
 });
 
 test("runtime initialization is shared and can retry after a constructor failure", async (t) => {

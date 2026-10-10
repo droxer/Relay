@@ -120,6 +120,10 @@ DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS = float(
 DAEMON_COMMAND_LEASE_SECONDS = float(
     os.environ.get("RELAY_DAEMON_COMMAND_LEASE_SECONDS", "60")
 )
+# How long past expiry a delivered run.start's lease must sit unrenewed on a
+# live node before the reaper treats the start as lost. One full lease period
+# leaves room for heartbeats delayed by a slow poll or a backend restart.
+LOST_DISPATCH_GRACE_SECONDS = DAEMON_COMMAND_LEASE_SECONDS
 DAEMON_COMMAND_RETENTION_SECONDS = float(
     os.environ.get("RELAY_DAEMON_COMMAND_RETENTION_SECONDS", str(6 * 60 * 60))
 )
@@ -2765,6 +2769,8 @@ class DaemonNodeRegistry:
                     if command_record and command_record.get("status") in ("completed", "failed", "cancelled") and isinstance(terminal_event, dict):
                         self._claim_and_advance_run_request(terminal_event)
                         continue
+                    if command_record and self._settle_lost_dispatch(request, command_record, stopping=True):
+                        continue
                     staged = command_record or self.daemon_store.pending_command_for_run_request(request["id"])
                     reason = f"Collaboration delivery was suppressed because the session is {session['status']}."
                     patch = {"status": session["status"], "error": reason}
@@ -2893,6 +2899,12 @@ class DaemonNodeRegistry:
                         request, f"Daemon node {request['nodeId']} disappeared."
                     )
                     continue
+                if command_record and self._settle_lost_dispatch(
+                    request,
+                    command_record,
+                    stopping=bool((request.get("state") or {}).get("_relay_stop_command_id")),
+                ):
+                    continue
                 # A node heartbeat can land on a different backend replica from
                 # this reaper. Command leases are the durable ownership signal,
                 # so replica-local liveness must not make the run terminal.
@@ -2903,6 +2915,82 @@ class DaemonNodeRegistry:
                     continue
             except Exception:
                 logger.exception("Run recovery failed", run_request_id=request.get("id"))
+
+    def _settle_lost_dispatch(
+        self, request: dict[str, Any], command_record: dict[str, Any], *, stopping: bool
+    ) -> bool:
+        """Close a delivered run.start that no daemon is executing.
+
+        A poll response the daemon never read leaves run.start dispatched with
+        nobody running it. It is never redelivered (that could run the agent
+        twice) and a daemon that never saw it never acknowledges a stop, so the
+        run would hold its node's slot forever.
+
+        Timeout and lost liveness are not exit evidence, but this is: the run
+        never showed a sign of life (no lease renewal, run.executing, or output
+        ever stamped `currentProgressAt`) and its lease lapsed a full lease
+        period ago on a node that is still heartbeating. A run the daemon did
+        receive always leaves progress behind, including one whose terminal
+        event is still retrying (the daemon stops renewing those), so a
+        finished run is never relabelled as lost. The reaper records the
+        terminal event that daemon would have sent.
+        """
+        if not self._looks_lost(request, command_record):
+            return False
+        self._refresh_persisted_liveness(request["nodeId"])
+        sandbox = self.sandboxes.get(request["nodeId"])
+        if not sandbox or not self._liveness(sandbox)["online"]:
+            return False
+        # Re-read after the liveness refresh: a heartbeat that landed since the
+        # reaper's first read renews the lease and records progress.
+        fresh_request = self.daemon_store.get_run_request(request["id"])
+        fresh_command = self.daemon_store.get_command(command_record["id"])
+        if (
+            not fresh_request
+            or not fresh_command
+            or fresh_command.get("leaseExpiresAt") != command_record.get("leaseExpiresAt")
+            or not self._looks_lost(fresh_request, fresh_command)
+        ):
+            return False
+        command = fresh_command.get("command") or {}
+        reason = "The run never started: its computer did not receive it."
+        event = {
+            "type": "run.cancelled" if stopping else "run.failed",
+            "commandId": command["id"],
+            "sessionId": command["sessionId"],
+            "runId": command["runId"],
+            "agent": command["agent"],
+            **({"reason": reason} if stopping else {"error": reason, "exitCode": 1}),
+        }
+        mark_terminal = (
+            self.daemon_store.mark_command_cancelled
+            if stopping
+            else self.daemon_store.mark_command_failed
+        )
+        if not mark_terminal(request["nodeId"], event):
+            return False
+        logger.warning(
+            "Settled a run.start its daemon never received",
+            node_id=request["nodeId"],
+            command_id=command["id"],
+            run_id=command["runId"],
+            outcome=event["type"],
+        )
+        self.active_commands.pop(command["id"], None)
+        self.daemon_store.mark_cancel_commands_completed(request["nodeId"], command["id"])
+        if not self._claim_and_advance_run_request(event):
+            self.clear_run_output(command["runId"])
+        return True
+
+    def _looks_lost(self, request: dict[str, Any], command_record: dict[str, Any]) -> bool:
+        lease_expires_at = command_record.get("leaseExpiresAt")
+        return bool(
+            command_record.get("status") == "dispatched"
+            and (command_record.get("command") or {}).get("type") == "run.start"
+            and not request.get("currentProgressAt")
+            and lease_expires_at
+            and self._age_ms(lease_expires_at) > LOST_DISPATCH_GRACE_SECONDS * 1000
+        )
 
     def _stale_run_outcome(self, request: dict[str, Any]) -> str | None:
         """Name why a run should be reaped, or None while it is still allowed to run.

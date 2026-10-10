@@ -10,6 +10,12 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
     sandboxMode: "none",
     ensureAgentReady: ensureLocalAgentReady,
     execStream: localProcessExecStream,
+    // Host processes share the machine; any number of runs can execute at once.
+    acquireWorkspace: async () => ({
+      ensureAgentReady: ensureLocalAgentReady,
+      execStream: localProcessExecStream,
+      release: () => undefined,
+    }),
     close: async () => undefined,
   };
 }
