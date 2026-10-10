@@ -27,12 +27,6 @@ export function TranscriptEmpty({
     <RelayEmptyState
       className="transcript-empty"
       titleId="transcript-empty-headline"
-      kicker={(
-        <span className="transcript-empty-kicker">
-          <RelayMark size={ICON.xs} />
-          {t("thread.new_thread")}
-        </span>
-      )}
       title={headline}
       body={t("transcript.landing_body")}
       illustration={(
@@ -52,11 +46,11 @@ export function TranscriptEmpty({
                 className="transcript-empty-suggestion"
                 onClick={() => onSuggestion(text)}
               >
-                <span className="transcript-empty-suggestion-copy">
-                  <span>{t(`transcript.suggestion_${key}_label`)}</span>
-                  <span className="transcript-empty-suggestion-detail">{text}</span>
+                <span className="transcript-empty-suggestion-label">
+                  {t(`transcript.suggestion_${key}_label`)}
+                  <ActionPrompt size={ICON.xs} />
                 </span>
-                <ActionPrompt size={ICON.xs} />
+                <span className="transcript-empty-suggestion-detail">{text}</span>
               </Button>
             );
           })}

@@ -106,11 +106,6 @@
   color: var(--ink-3);
 }
 
-.relay-empty-kicker {
-  color: var(--ink-3);
-  font: var(--type-micro);
-}
-
 .relay-empty-actions {
   display: flex;
   flex-wrap: wrap;
@@ -149,18 +144,8 @@
   padding-block: var(--sp-8);
 }
 
-.transcript-empty .relay-empty-kicker { order: -2; }
 .transcript-empty .relay-empty-actions { order: 5; width: 100%; }
 .transcript-empty .relay-empty-hint { order: 6; margin-top: var(--sp-3); }
-
-.transcript-empty-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
 
 .transcript-empty .relay-empty-title {
   font: var(--type-display);
@@ -179,47 +164,59 @@
   width: 100%;
 }
 
+/* Starters are flat outline tiles (border at rest, fill on hover) — the same
+   single layer of chrome as outline buttons; a fill plus a border read as a
+   second card stack under the hero. The prompt arrow rides the label and
+   only lights up under the pointer. */
 button.transcript-empty-suggestion {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  min-height: calc(var(--control-h-lg) * 2);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--sp-1);
   height: auto;
-  padding: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   white-space: normal;
   text-align: left;
   border: 1px solid var(--line-1);
   border-radius: var(--r-3);
-  background: var(--surface-1);
-  color: var(--ink-2);
+  background: transparent;
+  color: var(--ink-1);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   cursor: pointer;
   transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
 
-.transcript-empty-suggestion-copy {
+.transcript-empty-suggestion-label {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--sp-2);
+  min-width: 0;
+}
+
+.transcript-empty-suggestion-label > svg {
+  flex-shrink: 0;
+  color: var(--ink-4);
+  transition: color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
 }
 
 .transcript-empty-suggestion-detail {
   color: var(--ink-3);
   font: var(--type-body-sm);
   line-height: var(--leading-normal);
-}
-
-.transcript-empty-suggestion > svg {
-  flex-shrink: 0;
-  color: var(--ink-3);
+  text-wrap: balance;
 }
 
 button.transcript-empty-suggestion:hover {
   border-color: var(--line-strong);
   background: var(--control-fill-hover);
+}
+
+button.transcript-empty-suggestion:hover .transcript-empty-suggestion-label > svg {
   color: var(--ink-1);
+  transform: translate(1px, -1px);
 }
 
 .transcript-empty-hints {
@@ -238,5 +235,12 @@ button.transcript-empty-suggestion:hover {
 @media (max-width: 820px) {
   .relay-empty { padding: var(--sp-6) var(--sp-4); }
   .transcript-empty-suggestions { grid-template-columns: 1fr; max-width: 360px; }
-  button.transcript-empty-suggestion { min-height: var(--control-h-lg); align-items: center; }
+  /* A phone has no room above the composer for the decorative tile; the
+     headline and the starters are the landing. */
+  .transcript-empty .relay-empty-illustration { display: none; }
+}
+
+/* Keyboard hints mean nothing without a keyboard. */
+@media (hover: none) and (pointer: coarse) {
+  .transcript-empty .relay-empty-hint { display: none; }
 }
