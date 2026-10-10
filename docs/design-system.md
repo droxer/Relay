@@ -28,9 +28,10 @@ cloud-canvas commerce register, which superseded Fieldnotes and Phosphor.
   `Button`, the primary page-header action, and the login CTA (on the pinned
   dark values) read it. There is no disabled hex — disabled is opacity, or the
   Button's explicit disabled surface for filled variants.
-- **Cobalt marks selection.** `--action` (`#0064e0`, pressed `--action-hover`
-  `#0457cb`, white `--on-action` at 5.4:1 / 6.5:1) is **register-invariant**
-  and says *this one*: the selected-row accent bar, the active nav marker,
+- **Cobalt marks selection.** `--action` is **tuned per register** — light
+  `#4c9aff` with dark `--on-action` (6.95:1) on the dark canvas, deep `#0052b8`
+  with white (7.2:1) on the light one; `--action-hover` moves away from the
+  canvas (`#6aaeff` / `#00449a`) — and says *this one*: the selected-row accent bar, the active nav marker,
   checked checkboxes, radios and switches, the current pager page,
   `::selection`, and the skip link. The token keeps its historical name.
   Links are **not** `--action`: they take `--link`, reserved for wayfinding —
@@ -166,8 +167,9 @@ Dark register / light register:
 | `--line-2` | `#292929` | `#e5e5e5` | soft hairline |
 | `--cta-fill` / `--cta-hover` | `#ededed` / `#d4d4d4` | `#171717` / `#383838` | primary action fill — inverts with the theme |
 | `--cta-ink` | `#0a0a0a` | `#ffffff` | text on the primary action |
-| `--action` | `#0064e0` | `#0064e0` | selection — register-invariant |
-| `--action-hover` | `#0457cb` | `#0457cb` | pressed selection fill — register-invariant |
+| `--action` | `#4c9aff` | `#0052b8` | primary action + selection — light blue on dark, deep cobalt on light |
+| `--action-hover` | `#6aaeff` | `#00449a` | pressed fill — moves away from the canvas |
+| `--on-action` | `#0a0a0a` | `#ffffff` | ink on the action fill |
 | `--action-soft` | 10% cobalt wash | 10% cobalt wash | selection wash, active nav |
 | `--on-action` | `#ffffff` | `#ffffff` | text on the cobalt fill |
 | `--link` / `--link-hover` | `#8ab4f8` / `#b9d3fb` | `#385898` / `#0457cb` | anchors in prose, focus ring |

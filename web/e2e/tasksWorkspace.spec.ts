@@ -68,7 +68,7 @@ for (const mobile of [false, true]) {
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole("tab", { name: "Activity", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(drawer.getByRole("tab", { name: "Workspace", exact: true })).toBeVisible();
-    await expect(drawer.getByRole("tab", { name: "Artifacts", exact: true })).toBeVisible();
+    await expect(drawer.getByRole("tab", { name: "Files", exact: true })).toBeVisible();
     await expect(drawer).toHaveCSS("opacity", "1");
     await page.screenshot({ path: `/tmp/relay-task-drawer-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();

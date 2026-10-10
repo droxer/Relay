@@ -105,28 +105,28 @@
   --cta-hover: #d4d4d4;
   --cta-ink: #0a0a0a;
 
-  /* Accent — cobalt, register-invariant AS A FILL. It has two jobs, both
-     fills: the button to press (shadcn's --primary, the page-header create
-     action) and WHAT IS CHOSEN (the selected-row accent bar, the active nav
-     marker, checked checkboxes / radios / switches, the current pager page,
+  /* Accent — cobalt, tuned PER REGISTER. It has two jobs, both fills: the
+     button to press (shadcn's --primary, the page-header create action) and
+     WHAT IS CHOSEN (the selected-row accent bar, the active nav marker,
+     checked checkboxes / radios / switches, the current pager page,
      ::selection, the skip link). Selection stays calm — a 10% wash plus the
      bar, never a solid fill — so a selected row never reads as a button.
 
-     The invariance proof is FILL-ONLY: white on #0064e0 measures 5.4:1 and on
-     the pressed #0457cb 6.5:1, so neither register needs its own fill. As an
-     INK the same cobalt is not register-invariant at all — on the light planes
-     it sits under the 4.5:1 AA floor for text. `color: var(--action)` is
-     therefore legal only for large, non-text glyphs (WCAG 1.4.11's 3:1 — its
-     one ink consumer today is the 36px runtime mark in
-     admin-v2-drawers.css); anything that reads as text and needs a blue takes
-     --link. */
-  --action: #0064e0;
-  --action-hover: #0457cb; /* the source system's button-buy-cta-pressed */
+     One cobalt for both canvases read as a mid-tone that sank into the
+     charcoal and never quite led on white. So each register gets its own
+     weight: a light sky blue here, carrying the dark canvas ink, and a deep
+     cobalt with white ink in the light register. Hover moves AWAY from the
+     canvas — lighter here, deeper there. Ratios, ink on fill: 6.95:1
+     (#4c9aff) and 8.6:1 on hover (#6aaeff). As an ink on the planes it
+     clears 4.5:1 too (6.95 / 6.29 / 5.79 on --surface-0/1/2), but text that
+     needs a blue still takes --link: --action means "act" or "chosen". */
+  --action: #4c9aff;
+  --action-hover: #6aaeff;
   /* Soft-cobalt callout tint, selection wash, active nav. 10% in both
      registers: at 15% the selected rail row was a saturated blue block on the
      neutral charcoal, louder than the accent bar that already marks it. */
-  --action-soft: color-mix(in srgb, #0091ff 10%, transparent);
-  --on-action: #ffffff;
+  --action-soft: color-mix(in srgb, #4c9aff 10%, transparent);
+  --on-action: #0a0a0a; /* the canvas ink — white measures 2.85:1 here */
 
   /* Status — the source system's semantic hues. The published values are BADGE FILL
      colors (white text on a saturated pill), and Relay renders status as ink
@@ -823,14 +823,17 @@ html[data-theme="light"] {
   --line-1: #d4d4d4; /* hairline */
   --line-2: #e5e5e5; /* hairline-soft */
 
-  /* --action / --action-hover / --on-action are register-invariant (declared
-     once on :root) — cobalt reads on both canvases without retuning. Only
-     the soft selection tint changes weight here. 10%, not 15%: at 15% every
+  /* Deep cobalt with white ink: 7.24:1, 9.2:1 on the pressed #00449a, and
+     6.08:1 as an ink on --surface-2 (see the :root note). The soft selection
+     tint follows the fill. 10%, not 15%: at 15% every
      selected row, active nav item and section-rail entry was a saturated blue
      block, and beside the leading accent bar that already marks the selection
      it read as a second, louder indicator. The flat register lets the bar
      lead and the wash only confirm it. */
-  --action-soft: color-mix(in srgb, #0064e0 10%, transparent);
+  --action: #0052b8;
+  --action-hover: #00449a;
+  --action-soft: color-mix(in srgb, #0052b8 10%, transparent);
+  --on-action: #ffffff;
 
   /* Light status — the same three hues, deepened until each clears 4.5:1 as
      small text on the worst plane here (--surface-2). The source system's own values
