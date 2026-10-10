@@ -631,11 +631,16 @@ live execution reservation or treat an unreachable computer as stopped. Missing
 terminal evidence and unconfirmed execution require restoration of the execution
 host/evidence; retrying finalization cannot manufacture proof of exit.
 
-Stop requests that remain unconfirmed for 60 seconds while the daemon still holds
-its lease surface `recovery_required` / `termination_unconfirmed`. They retain
-execution ownership. A disconnected daemon instead surfaces `unresponsive`.
-The watchdog cannot confirm exit after the daemon itself crashes; neither the
-recovery endpoint nor deletion treats that silence as termination.
+Stop requests that remain unconfirmed for 60 seconds surface `recovery_required` /
+`termination_unconfirmed`, whether or not the daemon still holds its lease. They
+retain execution ownership. A disconnected daemon surfaces `unresponsive`; once
+the delivered command's lease has been expired for
+`RELAY_EXECUTION_UNRESPONSIVE_RECOVERY_SECONDS` (default 600) and the computer is
+not online, it surfaces `recovery_required` / `execution_lost`. A daemon that
+restarts and reports a journaled command it will not resume surfaces
+`recovery_required` / `execution_interrupted`. None of these release anything on
+their own: silence is never treated as termination, so a person must still
+report the agent gone (reconcile or deletion) to release the reservation.
 
 ## Team responsibilities and work acceptance
 

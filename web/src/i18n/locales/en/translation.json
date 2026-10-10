@@ -2097,6 +2097,14 @@
       "title": "Computer is not responding",
       "body": "Check the assigned computer and restore its daemon connection. The agent may still be running. Relay must receive exit evidence before releasing the execution or completing deletion — if the computer is never coming back, report the agent as gone."
     },
+    "execution_lost": {
+      "title": "Computer has been offline too long",
+      "body": "The assigned computer stopped responding and has not come back. Relay never received exit evidence for this run. If you know the computer is gone or the agent is no longer running, report the agent as gone to release this execution; otherwise restore the computer’s daemon connection."
+    },
+    "execution_interrupted": {
+      "title": "Computer restarted during this run",
+      "body": "The computer’s daemon restarted while this run was in progress and will not resume it. Check the workspace for partial work, then report the agent as gone to release this execution before starting a new run."
+    },
     "awaiting_dispatch": {
       "title": "Waiting to start",
       "body": "The request is queued. Check computer availability and execution capacity if the wait continues. Avoid submitting the same work again."

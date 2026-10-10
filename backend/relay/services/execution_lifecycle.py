@@ -6,6 +6,7 @@ Only terminal command evidence releases a delivered execution reservation.
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import Any
@@ -24,6 +25,17 @@ TERMINAL = {"completed", "failed", "cancelled"}
 RECONCILED_ERROR = (
     "Execution reported gone by an operator; the computer never sent exit evidence."
 )
+STOP_GRACE_SECONDS = 60
+# How long a delivered run's lease may stay dead on an offline computer before
+# Relay gives up waiting and lets a person report the agent gone. Nothing is
+# released automatically: liveness loss is never exit evidence on its own.
+UNRESPONSIVE_RECOVERY_SECONDS = float(
+    os.environ.get("RELAY_EXECUTION_UNRESPONSIVE_RECOVERY_SECONDS", "600")
+)
+
+
+def _parse_time(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
@@ -35,9 +47,12 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
     confirmed = False
     lease = (command or {}).get("leaseExpiresAt")
     live = False
+    lease_dead_for = None
     if lease:
         try:
-            live = datetime.fromisoformat(lease.replace("Z", "+00:00")) > now
+            expires = _parse_time(lease)
+            live = expires > now
+            lease_dead_for = (now - expires).total_seconds()
         except (ValueError, TypeError):
             pass
     if request:
@@ -62,13 +77,19 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         # guess based on a completed/failed session label.
         if session.get("status") != "cancelled":
             phase, reason = "recovery_required", "orphaned_run"
-    if phase == "stopping" and state.get("_relay_stop_requested_at"):
+    # A stop sent to a computer that already died never gets a live lease
+    # back, so the grace applies whether or not the lease is still live.
+    if phase in ("stopping", "unresponsive") and state.get("_relay_stop_requested_at"):
         try:
-            stopped_at = datetime.fromisoformat(state["_relay_stop_requested_at"].replace("Z", "+00:00"))
-            if (now - stopped_at).total_seconds() >= 60:
+            stopped_at = _parse_time(state["_relay_stop_requested_at"])
+            if (now - stopped_at).total_seconds() >= STOP_GRACE_SECONDS:
                 phase, reason = "recovery_required", "termination_unconfirmed"
         except (ValueError, TypeError):
             phase, reason = "recovery_required", "termination_unconfirmed"
+    if (phase == "unresponsive" and computer_online is not True
+            and lease_dead_for is not None
+            and lease_dead_for >= UNRESPONSIVE_RECOVERY_SECONDS):
+        phase, reason = "recovery_required", "execution_lost"
     return {
         "phase": phase, "executionConfirmed": confirmed,
         "computerOnline": computer_online,
@@ -89,6 +110,7 @@ class ExecutionLifecycleService:
         self.registry = registry
         self.chat_store = chat_store
         self.interval_seconds = interval_seconds
+        self.clock = lambda: datetime.now(timezone.utc)
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
 
@@ -106,7 +128,7 @@ class ExecutionLifecycleService:
         node_id = (request or {}).get("nodeId") or (command or {}).get("nodeId")
         node = store.get_node(node_id) if node_id else None
         online = self.registry._liveness(node)["online"] if node else None
-        return execution_status(session, request, command, computer_online=online)
+        return execution_status(session, request, command, now=self.clock(), computer_online=online)
 
     def annotate(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         store = self.registry.daemon_store
@@ -132,6 +154,7 @@ class ExecutionLifecycleService:
         node_ids = {r.get("nodeId") for r in [*requests.values(), *legacy.values()] if r.get("nodeId")}
         nodes = {n["id"]: n for n in store.list_nodes() if n["id"] in node_ids} if node_ids else {}
         result = []
+        now = self.clock()
         for session in sessions:
             request = requests.get(session["id"])
             command_id = (request or {}).get("currentCommandId") or (legacy.get(session["id"]) or {}).get("commandId")
@@ -141,7 +164,7 @@ class ExecutionLifecycleService:
             node_id = (request or {}).get("nodeId") or (legacy.get(session["id"]) or {}).get("nodeId")
             node = nodes.get(node_id)
             online = self.registry._liveness(node)["online"] if node else None
-            result.append({**session, "execution": execution_status(session, request, command, computer_online=online)})
+            result.append({**session, "execution": execution_status(session, request, command, now=now, computer_online=online)})
         return result
 
     def admission_scope(self):

@@ -215,7 +215,8 @@ Key modules:
   (`POST /threads/{id}/execution/reconcile`) and thread deletion itself once
   the execution requires recovery (`canReportGone`); both append
   `session.execution_reconciled` with the actor, so the log never reads as
-  observed exit.
+  observed exit. A dead computer's run becomes reportable (`execution_lost`,
+  `execution_interrupted`, or a stop past its grace) but never self-releases.
 - Event logs are authoritative. All session/task state changes go through the
   Python `SessionStore.append_event` or `TaskStore.append_event`; database
   snapshots and materialized fields are derived.
