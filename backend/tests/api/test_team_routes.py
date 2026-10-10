@@ -2893,6 +2893,168 @@ def test_task_recovery_preserves_round_verdict(
     assert store.get_task(task["id"]) == updated
 
 
+def _waiting_task_thread(recovery_team_thread):
+    from relay.sessions.controller import SessionController
+
+    client, _team_controller, _team_session, _team, reviewer = recovery_team_thread
+    # A single-agent thread: a team round would add its own evidence gate.
+    controller = SessionController(
+        client.app.state.session_store,
+        owner_employee_id="alice",
+        owner_agent_id=reviewer["id"],
+        daemon_node_id="test_node_alice",
+        workspace_layout="thread",
+    )
+    session = controller.create_session("Rotate the staging keys")
+    client.app.state.registry.register(
+        {
+            "sandboxId": "test_node_alice",
+            "employeeId": "alice",
+            "workspaceId": "machine-alice",
+            "token": "node_token",
+            "workspacePath": "/workspace/alice",
+            "protocolVersion": 1,
+            "supportedAgents": ["codex"],
+            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "work-results"],
+            "status": "ready",
+        }
+    )
+    store = client.app.state.task_store
+    task = store.create_task({"title": "Rotate keys", "ownerEmployeeId": "alice"})
+    store.link_session(task["id"], session["id"])
+    controller.record_collaboration_round_started(
+        session["id"],
+        {
+            "roundId": "asking-round",
+            "collaborationId": "asking-work",
+            "workScope": {"kind": "task", "taskId": task["id"]},
+        },
+    )
+    controller.task_store = store
+    controller.task_id = task["id"]
+    controller.complete_session(
+        session["id"],
+        "The round reported it is blocked. Which vault holds the staging key?",
+        task_status="waiting_for_human",
+        work_outcome="blocked",
+    )
+    return client, session, store, task
+
+
+def test_a_waiting_task_records_what_it_is_waiting_for(recovery_team_thread):
+    _client, _session, store, task = _waiting_task_thread(recovery_team_thread)
+
+    waiting = store.get_task(task["id"])
+    assert waiting["status"] == "waiting_for_human"
+    assert waiting["waitingReason"] == (
+        "The round reported it is blocked. Which vault holds the staging key?"
+    )
+
+
+@pytest.mark.parametrize(
+    "verdict,expected",
+    [("done", "review"), ("continue", "assigned"), ("blocked", "waiting_for_human")],
+)
+def test_replying_to_a_waiting_task_resumes_it(
+    recovery_team_thread, verdict, expected
+):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    registry = client.app.state.registry
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Use the ops vault.", "idempotencyKey": "answer-1"},
+    )
+
+    assert response.status_code == 202, response.text
+    assert response.json()["collaborationRounds"][-1]["workScope"] == {
+        "kind": "task",
+        "taskId": task["id"],
+    }
+    resumed = store.get_task(task["id"])
+    # Queued until the daemon reports the agent running — never still waiting.
+    assert resumed["status"] in ("assigned", "running")
+    assert "waitingReason" not in resumed
+    # A team round runs its turns in sequence; answer each as it is queued.
+    while commands := registry.take_commands("test_node_alice", "node_token"):
+        command = commands[0]
+        registry.handle_event(
+            "test_node_alice",
+            {
+                "type": "run.completed",
+                "commandId": command["id"],
+                "sessionId": session["id"],
+                "runId": command["runId"],
+                "agent": command["agent"],
+                "exitCode": 0,
+                "agentLog": "Rotated.",
+                "leaseId": command.get("leaseId"),
+                "roundResult": {
+                    "status": verdict,
+                    "note": "Rotated keys",
+                    "work": {"status": verdict, "evidence": ["vault read ok"], "note": "Rotated keys"},
+                },
+            },
+            "node_token",
+        )
+    # The answered round's verdict, not the old wait, now decides the task.
+    finished = store.get_task(task["id"])
+    assert finished["status"] == expected
+    if verdict == "blocked":
+        assert "Rotated keys" in finished["waitingReason"]
+
+
+@pytest.mark.parametrize("intent", ["discuss", "review"])
+def test_non_action_reply_preserves_a_waiting_task(recovery_team_thread, intent):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    waiting = store.get_task(task["id"])
+    registry = client.app.state.registry
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Explain the risks before I decide.", "intent": intent},
+    )
+
+    assert response.status_code == 202, response.text
+    assert response.json()["collaborationRounds"][-1]["workScope"] == {"kind": "thread"}
+    assert store.get_task(task["id"]) == waiting
+    while commands := registry.take_commands("test_node_alice", "node_token"):
+        for command in commands:
+            registry.handle_event(
+                "test_node_alice",
+                {
+                    "type": "run.completed",
+                    "commandId": command["id"],
+                    "sessionId": session["id"],
+                    "runId": command["runId"],
+                    "agent": command["agent"],
+                    "exitCode": 0,
+                    "leaseId": command.get("leaseId"),
+                    "agentLog": "Risk assessment complete.",
+                    **_successful_work_report(command),
+                },
+                "node_token",
+            )
+    assert store.get_task(task["id"]) == waiting
+
+
+def test_replying_to_a_finished_task_thread_stays_a_conversation(
+    recovery_team_thread,
+):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    store.update_task(task["id"], {"status": "done"})
+    done = store.get_task(task["id"])
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Thanks, what changed?", "idempotencyKey": "chat-1"},
+    )
+
+    assert response.status_code == 202, response.text
+    assert response.json()["collaborationRounds"][-1]["workScope"] == {"kind": "thread"}
+    assert store.get_task(task["id"]) == done
+
+
 def test_recovery_rejects_ambiguous_task_links(recovery_team_thread):
     client, _controller, session, _team, reviewer = recovery_team_thread
     store = client.app.state.task_store

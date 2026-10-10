@@ -69,6 +69,7 @@
 @import "./styles/task-record.css" layer(relay);
 @import "./styles/record-panels.css" layer(relay);
 @import "./styles/recovery.css" layer(relay);
+@import "./styles/awaiting-input.css" layer(relay);
 @import "./styles/list-sort.css" layer(relay);
 @import "./styles/list-group.css" layer(relay);
 @import "./styles/backlog-list.css" layer(relay);

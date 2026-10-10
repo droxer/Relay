@@ -66,6 +66,10 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             task["blockerOwnerEmployeeId"] = event.get("actorEmployeeId") or flow_scope(
                 task
             )
+        else:
+            # What the agent asked for, so a surface can quote the question
+            # instead of only saying that input is needed.
+            task["waitingReason"] = event.get("reason") or UNKNOWN_REASON
         # A wait after execution is still in progress; an impediment in review stays there.
         if stage not in ("backlog", "assigned", "running", "review") or (
             status == "waiting_for_human" and stage == "backlog"
@@ -87,6 +91,7 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             task.pop(field, None)
     if status != "waiting_for_human":
         task.pop("waitingFromStatus", None)
+        task.pop("waitingReason", None)
     if status in ("running", "review", "waiting_for_human") and not task.get(
         "isRoutine"
     ):

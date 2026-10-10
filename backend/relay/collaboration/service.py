@@ -545,6 +545,16 @@ class CollaborationConductor:
                 task = self.ctx.task_store.get_task(scope["taskId"])
                 manifest["sourceTaskRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
             manifest["workScope"] = scope
+        elif session and intent.source == "message" and intent.purpose == "accomplish":
+            # A reply to a task that is waiting on its human is the answer the
+            # task asked for: run it as the task's next round, so the verdict
+            # moves the task instead of leaving it parked forever. Discussion
+            # and review messages keep their conversational scope.
+            task = self._awaiting_task(session)
+            if task:
+                parsed["taskId"] = task["id"]
+                manifest["sourceTaskRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
+                manifest["workScope"] = {"kind": "task", "taskId": task["id"]}
         if session and intent.decision and intent.decision.get("kind") == "handoff":
             prepared = (
                 self.ctx.registry.daemon_store.active_run_request_for_session_any_node(
@@ -598,6 +608,36 @@ class CollaborationConductor:
             parsed["decision"] = _validated_decision(intent.decision, resolved[0])
         dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
         return self._admit_addressed_agents(dispatched, resolved, actor)
+
+    def _awaiting_task(self, session: dict[str, Any]) -> dict[str, Any] | None:
+        """The task this thread's active round left waiting on a human, if any."""
+        source_round = next(
+            (
+                item
+                for item in session.get("collaborationRounds", [])
+                if item.get("roundId") == session.get("activeRoundId")
+            ),
+            {},
+        )
+        scope = source_round.get("workScope")
+        if not (
+            isinstance(scope, dict)
+            and scope.get("kind") == "task"
+            and isinstance(scope.get("taskId"), str)
+            and scope["taskId"]
+        ):
+            return None
+        try:
+            task = self.ctx.task_store.get_task(scope["taskId"])
+        except KeyError:
+            return None
+        if (
+            task.get("deletedAt")
+            or task.get("isRoutine")
+            or task.get("status") != "waiting_for_human"
+        ):
+            return None
+        return task
 
     def _recovery_work_scope(self, session: dict[str, Any]) -> dict[str, str]:
         source_round = next(

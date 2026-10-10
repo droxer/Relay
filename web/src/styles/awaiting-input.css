@@ -1,0 +1,138 @@
+/* ============================ awaiting input ============================ */
+/* A thread parked on its human. The prompt docks onto the composer card's
+   top edge — a slip tucked under the reply box — because the reply box IS
+   the answer. It is inset by the card's corner radius so its sides land where
+   the card's straight top edge begins, and it has no bottom edge of its own:
+   the card's hairline closes it.
+
+   One loud thing: the agent's words, at the transcript's reading size behind
+   an accent rail. Cobalt, because this is the one place in the thread asking
+   the reader to act (--action means "act"); a gate stop rather than a
+   question takes the caution rail. Everything else is neutral ink. */
+
+.awaiting-input {
+  --awaiting-inset: var(--composer-radius, var(--sp-5));
+  --awaiting-rail: var(--action);
+  display: grid;
+  gap: var(--sp-2);
+  width: min(100% - var(--awaiting-inset) * 2, var(--thread-measure) - var(--awaiting-inset) * 2);
+  margin: 0 auto -1px;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + 1px);
+  border: 0.5px solid var(--line-1);
+  border-bottom: 0;
+  border-radius: var(--r-3) var(--r-3) 0 0;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  animation: awaiting-input-dock var(--t-slow) var(--ease) both;
+}
+
+.awaiting-input[data-kind="check"] { --awaiting-rail: var(--warn); }
+
+/* Rises out from behind the card: the one motion, and it says where the
+   prompt belongs. Reduced motion is handled globally (a11y.css). */
+@keyframes awaiting-input-dock {
+  from { opacity: 0; transform: translateY(var(--sp-2)); }
+  to { opacity: 1; transform: none; }
+}
+
+.awaiting-input-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Agents are squares (see .rail-node): the silhouette, not a fill, says
+   machine. */
+.awaiting-input-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+  overflow: hidden;
+  border: 0.5px solid var(--ink-4);
+  border-radius: var(--r-1);
+  background: var(--surface-3);
+  color: var(--ink-1);
+}
+
+.awaiting-input-avatar .profile-image,
+.awaiting-input-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.awaiting-input-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.awaiting-input-task {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font: var(--type-label);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.awaiting-input-task:hover {
+  color: var(--ink-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The agent's words: the composer's own reading size, so the question and
+   the answer being typed under it read as one exchange. Long notes scroll
+   inside the slip rather than shoving the composer off the screen. */
+.awaiting-input-quote {
+  max-height: calc(var(--fs-transcript) * 1.6 * 6);
+  margin: 0;
+  padding: 0 0 0 var(--sp-3);
+  overflow-y: auto;
+  border-inline-start: var(--accent-bar-block-w) solid var(--awaiting-rail);
+  color: var(--ink-1);
+  font: 400 var(--fs-transcript)/var(--leading-transcript, var(--leading-normal)) var(--font-sans);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* No question recorded: say so in the quiet voice, not as the agent's words. */
+.awaiting-input-quote[data-empty="true"] {
+  color: var(--ink-3);
+}
+
+.awaiting-input-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.awaiting-input-hint {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+@media (max-width: 820px) {
+  .awaiting-input {
+    --awaiting-inset: var(--sp-3);
+    padding-inline: var(--sp-3);
+  }
+}
+
+/* The task record quotes the same words in its recovery panel. There the
+   panel's own rail already carries the tone, so the quote keeps the action
+   rail only when it is a question. */
+.recovery-panel .awaiting-input-quote { --awaiting-rail: var(--action); }
+.recovery-panel[data-waiting="check"] .awaiting-input-quote { --awaiting-rail: var(--warn); }

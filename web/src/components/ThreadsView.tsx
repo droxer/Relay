@@ -22,6 +22,8 @@ import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel } from "./ThreadListPanel";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
+import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
+import { awaitingInput } from "../lib/awaitingInput";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMeta } from "./ThreadMeta";
 import { TranscriptEmpty } from "./TranscriptEmpty";
@@ -240,6 +242,12 @@ export function ThreadsView({
     () => activeLogicalAgent?.displayName ?? displayNameForExecutor(activeAgent, logicalAgents),
     [activeAgent, activeLogicalAgent, logicalAgents],
   );
+  // A thread parked on its human: the composer carries the question, and
+  // sending the reply is what resumes the work.
+  const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
+  const waitingAgentName = waiting?.run
+    ? labelForAgentRun({ agent: waiting.run.agent, agentId: waiting.run.logicalAgentId }, logicalAgentNames, agentDisplayNames)
+    : activeAgentDisplayName;
   const bandAgentName = useMemo(
     () => activeSession
       ? threadAgentName(activeSession, activeAgentDisplayName, logicalAgentNames, agentDisplayNames)
@@ -497,6 +505,16 @@ export function ThreadsView({
           running={running}
           onSend={onSend}
           onCancelRun={onCancelRun}
+          placeholder={waiting ? t("awaiting.placeholder", { agent: waitingAgentName }) : undefined}
+          prompt={waiting ? (
+            <AwaitingInputPrompt
+              key={activeSession?.id}
+              waiting={waiting}
+              agentName={waitingAgentName}
+              agentImage={waiting.run?.logicalAgentId ? logicalAgentImages[waiting.run.logicalAgentId] : undefined}
+              onReply={() => composerRef.current?.focus()}
+            />
+          ) : null}
         />
       </section>
       )}
