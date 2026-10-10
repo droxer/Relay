@@ -1230,7 +1230,7 @@ test("relay daemon retries terminal event posts across backend failures", async 
   assert.equal(terminalAttempts, 2);
 });
 
-test("relay daemon preserves final agent log and generated files when output event post fails", async (t) => {
+test("relay daemon completes a successful run whose output batch the backend rejected", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "relay-output-post-failed-"));
   const stop = new AbortController();
   const command = {
@@ -1291,12 +1291,15 @@ test("relay daemon preserves final agent log and generated files when output eve
     new Promise((_, reject) => setTimeout(() => reject(new Error("daemon did not post terminal event")), 1000)),
   ]);
 
-  const failed = events.find((event) => event.type === "run.failed");
-  assert.equal(failed?.type, "run.failed");
-  if (!failed || failed.type !== "run.failed") throw new Error("missing run.failed event");
-  assert.equal(failed.agentLog, "[Codex Exit 0]\nstdout:\n  done\n\n");
-  assert.match(failed.error, /Daemon lost agent output/);
-  assert.deepEqual(failed.generatedFiles?.map((file) => file.relativePath), ["agent-loop-guide.md"]);
+  // A 4xx on one output batch is a bad batch, not a failed agent: the run's
+  // exit status and deliverables stand, and the gap is flagged instead.
+  assert.equal(events.some((event) => event.type === "run.failed"), false);
+  const completed = events.find((event) => event.type === "run.completed");
+  if (!completed || completed.type !== "run.completed") throw new Error("missing run.completed event");
+  assert.equal(completed.exitCode, 0);
+  assert.equal(completed.outputTruncated, true);
+  assert.equal(completed.agentLog, "[Codex Exit 0]\nstdout:\n  done\n\n");
+  assert.deepEqual(completed.generatedFiles?.map((file) => file.relativePath), ["agent-loop-guide.md"]);
   assert.equal(existsSync(controlPath), false);
 });
 

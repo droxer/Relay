@@ -1114,6 +1114,9 @@ async function executeCommand(
     });
     let outputSequence = 0;
     let outputPostFailure: Error | undefined;
+    // Batches the backend refused outright. A refusal is about the batch, not
+    // the run, so the run keeps its exit status and is only flagged as gappy.
+    let outputBatchesRejected = 0;
     const maxOutputBacklogBytes = positiveIntEnv("RELAY_DAEMON_OUTPUT_BACKLOG_BYTES") ?? 16_777_216;
     const outputPostQueue: Array<{ post: () => Promise<void>; fields: DaemonLogFields; bytes: number }> = [];
     let outputPostHead = 0;
@@ -1125,12 +1128,22 @@ async function executeCommand(
         try {
           await item.post();
         } catch (error) {
-          outputPostFailure = error instanceof Error ? error : new Error(String(error));
-          logger.error("event post exhausted retries", {
-            ...commandLogFields(sandboxId, command),
-            ...item.fields,
-            error: outputPostFailure.message,
-          });
+          if (isRejectedOutputBatch(error)) {
+            outputBatchesRejected += 1;
+            logger.warn("output batch rejected; continuing without it", {
+              ...commandLogFields(sandboxId, command),
+              ...item.fields,
+              status: error.status,
+              error: error.message,
+            });
+          } else {
+            outputPostFailure = error instanceof Error ? error : new Error(String(error));
+            logger.error("event post exhausted retries", {
+              ...commandLogFields(sandboxId, command),
+              ...item.fields,
+              error: outputPostFailure.message,
+            });
+          }
         } finally {
           outputPostBacklogBytes = Math.max(0, outputPostBacklogBytes - item.bytes);
         }
@@ -1341,6 +1354,7 @@ async function executeCommand(
       tokenUsage: next.token_usage,
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
+      ...(outputBatchesRejected > 0 ? { outputTruncated: true } : {}),
     } satisfies DaemonNodeEvent;
   }
 }
@@ -1818,6 +1832,16 @@ function validHeartbeatSettings(
   if (!value || !Number.isFinite(value.intervalMs) || value.intervalMs <= 0) return undefined;
   if (!Number.isFinite(value.timeoutMs) || value.timeoutMs <= value.intervalMs) return undefined;
   return value;
+}
+
+/**
+ * A definite refusal of one output batch (a 4xx other than the transient or
+ * credential ones). postJsonWithRetry already retried everything else.
+ */
+function isRejectedOutputBatch(error: unknown): error is DaemonHttpError {
+  return error instanceof DaemonHttpError
+    && error.status >= 400 && error.status < 500
+    && ![401, 408, 410, 429].includes(error.status);
 }
 
 const EVENT_POST_RETRY_INITIAL_DELAY_MS = 200;

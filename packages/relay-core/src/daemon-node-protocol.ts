@@ -400,6 +400,8 @@ export type DaemonNodeEvent =
       tokenUsage?: TokenUsage;
       generatedFiles?: DaemonGeneratedFile[];
       roundResult?: DaemonRoundResult;
+      /** The backend rejected at least one output batch; the streamed log has gaps. */
+      outputTruncated?: boolean;
     }
   | {
       type: "run.failed";
