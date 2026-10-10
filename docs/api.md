@@ -638,7 +638,10 @@ the delivered command's lease has been expired for
 `RELAY_EXECUTION_UNRESPONSIVE_RECOVERY_SECONDS` (default 600) and the computer is
 not online, it surfaces `recovery_required` / `execution_lost`. A daemon that
 restarts and reports a journaled command it will not resume surfaces
-`recovery_required` / `execution_interrupted`. None of these release anything on
+`recovery_required` / `execution_interrupted`: a daemon advertising
+`execution-journal-report` sends `journaledCommandIds` on registration, and the
+response's `acknowledgedJournalIds` lists the ones the backend accounted for so
+the daemon can drop their journal records. None of these release anything on
 their own: silence is never treated as termination, so a person must still
 report the agent gone (reconcile or deletion) to release the reservation.
 

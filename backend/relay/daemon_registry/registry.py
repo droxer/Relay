@@ -49,7 +49,7 @@ from ..core.models import (
     AGENT_NAMES,
     DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS,
 )
-from ..persistence.daemon_store import ACTIVE_RUN_REQUEST_STATUSES
+from ..persistence.daemon_store import ACTIVE_RUN_REQUEST_STATUSES, EXECUTION_INTERRUPTED_STATE_KEY
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.task_execution import request_execution_owner
 from ..persistence.stores import (
@@ -124,6 +124,9 @@ DAEMON_COMMAND_LEASE_SECONDS = float(
 # live node before the reaper treats the start as lost. One full lease period
 # leaves room for heartbeats delayed by a slow poll or a backend restart.
 LOST_DISPATCH_GRACE_SECONDS = DAEMON_COMMAND_LEASE_SECONDS
+# Bound one registration's journal report; the daemon sends the rest next time.
+JOURNAL_REPORT_LIMIT = 200
+DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT = "execution-journal-report"
 DAEMON_COMMAND_RETENTION_SECONDS = float(
     os.environ.get("RELAY_DAEMON_COMMAND_RETENTION_SECONDS", str(6 * 60 * 60))
 )
@@ -242,6 +245,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_HANDOFF_VALIDATION,
         DAEMON_CAPABILITY_AGENT_MODEL,
         DAEMON_CAPABILITY_ENDPOINT_MODELS,
+        DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -752,6 +756,41 @@ class DaemonNodeRegistry:
             agents={agent: status for agent, status in sandbox["agents"].items()},
         )
         return sandbox
+
+    def account_journaled_commands(
+        self, sandbox_id: str, command_ids: list[str]
+    ) -> list[str]:
+        """Record runs a restarted daemon admitted but will not resume.
+
+        The daemon journals each run.start before executing it and refuses to
+        run a journaled command again after a crash. Its report is not exit
+        evidence -- a host-mode agent may outlive its daemon -- so a still
+        delivered run is only marked interrupted, which a person can then
+        report gone. Returns the ids this node may forget: ones marked here,
+        already settled, or unknown. Another node's commands are ignored.
+        """
+        acknowledged: list[str] = []
+        with self.dispatch_scope([sandbox_id]):
+            for command_id in command_ids[:JOURNAL_REPORT_LIMIT]:
+                record = self.daemon_store.get_command(command_id)
+                if not record:
+                    acknowledged.append(command_id)
+                    continue
+                if record.get("nodeId") != sandbox_id:
+                    continue
+                if record.get("status") == "dispatched":
+                    request = self.daemon_store.run_request_for_command(command_id)
+                    if request and request.get("status") in ACTIVE_RUN_REQUEST_STATUSES:
+                        state = dict(request.get("state") or {})
+                        state.setdefault(EXECUTION_INTERRUPTED_STATE_KEY, now_iso())
+                        self.daemon_store.update_run_request(request["id"], {"state": state})
+                        logger.warning(
+                            "Daemon restarted with a run it will not resume",
+                            node_id=sandbox_id, command_id=command_id,
+                            run_id=(record.get("command") or {}).get("runId"),
+                        )
+                acknowledged.append(command_id)
+        return acknowledged
 
     def _live_node(self, sandbox_id: str) -> dict[str, Any] | None:
         """The node row for `sandbox_id`, unless it is a deletion tombstone."""
@@ -2953,7 +2992,14 @@ class DaemonNodeRegistry:
         ):
             return False
         command = fresh_command.get("command") or {}
-        reason = "The run never started: its computer did not receive it."
+        # A daemon that reports its journal at registration would have named
+        # this run if it had admitted it, so its silence means never received.
+        # Older daemons cannot say, so claim only what Relay observed.
+        reason = (
+            "The run never started: its computer did not receive it."
+            if DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT in (sandbox.get("capabilities") or [])
+            else "The computer stopped responding before the run reported progress."
+        )
         event = {
             "type": "run.cancelled" if stopping else "run.failed",
             "commandId": command["id"],
@@ -2988,6 +3034,8 @@ class DaemonNodeRegistry:
             command_record.get("status") == "dispatched"
             and (command_record.get("command") or {}).get("type") == "run.start"
             and not request.get("currentProgressAt")
+            # The daemon said it received this run; it was not lost in transit.
+            and not (request.get("state") or {}).get(EXECUTION_INTERRUPTED_STATE_KEY)
             and lease_expires_at
             and self._age_ms(lease_expires_at) > LOST_DISPATCH_GRACE_SECONDS * 1000
         )

@@ -433,3 +433,26 @@ def test_delete_releases_a_run_whose_computer_died(monkeypatch) -> None:
 
         assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
         assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+
+
+def test_a_restarted_daemon_names_the_run_it_will_not_resume(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+
+        response = TestClient(app).post("/api/v1/daemon-node-registrations", json={
+            "sandboxId": "sbx_alice", "token": "node_token", "protocolVersion": 1,
+            "supportedAgents": ["claude"], "status": "ready",
+            "capabilities": ["execution-journal-report"],
+            "journaledCommandIds": [run["command"]["id"]],
+        })
+
+        assert response.status_code == 200
+        assert response.json()["acknowledgedJournalIds"] == [run["command"]["id"]]
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["blockingReason"] == "execution_interrupted"
+        assert status["canReportGone"] is True

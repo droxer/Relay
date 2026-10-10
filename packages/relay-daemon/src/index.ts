@@ -77,6 +77,7 @@ import {
   DAEMON_CAPABILITY_WORK_RESULTS,
   DAEMON_CAPABILITY_AGENT_MODEL,
   DAEMON_CAPABILITY_ENDPOINT_MODELS,
+  DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
   DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
   DAEMON_CAPABILITY_TASK_WORKSPACES,
   DAEMON_CAPABILITY_THREAD_WORKSPACES,
@@ -240,6 +241,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     if (["run.completed", "run.failed", "run.cancelled"].includes(String(record.event.type))) executionJournal.confirmExit(String(record.event.commandId));
   }
   const unconfirmedExecutions = new Set(executionJournal.pending().map(record => record.id));
+  // Retained executions the backend has not yet accounted for. Reported at
+  // registration until acknowledged; unconfirmedExecutions keeps fencing them.
+  const unreportedExecutions = new Set(unconfirmedExecutions);
   fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
@@ -339,6 +343,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ...(agentInventory[executorKind as AgentName] ? { inventory: agentInventory[executorKind as AgentName] } : {}),
     })),
     runtimeRefreshCommands: refreshedCommands,
+    ...(unreportedExecutions.size > 0 ? { journaledCommandIds: [...unreportedExecutions].slice(0, JOURNAL_REPORT_LIMIT) } : {}),
     capabilities: [
       "runtime-refresh",
       DAEMON_CAPABILITY_AGENT_SKILLS,
@@ -355,6 +360,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   DAEMON_CAPABILITY_WORK_RESULTS,
       DAEMON_CAPABILITY_AGENT_MODEL,
       DAEMON_CAPABILITY_ENDPOINT_MODELS,
+      DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
     ],
     agentHealth,
     ...(Object.keys(agentInventory).length > 0 ? { agentInventory } : {}),
@@ -368,6 +374,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
       fetchFn, url, buildRegistration(), undefined, runtimeSignal,
     );
+    for (const id of response.acknowledgedJournalIds ?? []) {
+      if (!unreportedExecutions.delete(id)) continue;
+      // The backend now holds the run as interrupted (or already settled), so
+      // the record has served its purpose. The fence stays for this process.
+      executionJournal.confirmExit(id);
+    }
     return validHeartbeatSettings(response.heartbeat);
   };
   if (options.preflight !== false) {
@@ -1660,6 +1672,8 @@ const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 5_000;
 const MAX_COMMAND_LEASE_SECONDS = 60 * 60;
 const DEFAULT_COMMAND_LEASE_SECONDS = 90;
+/** Matches the backend's per-registration journal report bound. */
+const JOURNAL_REPORT_LIMIT = 200;
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);

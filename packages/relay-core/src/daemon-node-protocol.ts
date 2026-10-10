@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -95,6 +95,12 @@ export const DAEMON_CAPABILITY_AGENT_MODEL: DaemonNodeCapability = "agent-model"
  */
 export const DAEMON_CAPABILITY_ENDPOINT_MODELS: DaemonNodeCapability = "endpoint-models";
 export const DAEMON_CAPABILITY_ROUND_RESULT: DaemonNodeCapability = "round-result";
+/**
+ * At registration the daemon names the runs it admitted before a restart and
+ * will not resume (`journaledCommandIds`), so the backend can mark them
+ * interrupted instead of guessing the start never arrived.
+ */
+export const DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT: DaemonNodeCapability = "execution-journal-report";
 /**
  * "produced-files" means the daemon reports every file a run changed, not only
  * document types, and states why any file arrived without a snapshot. A daemon
@@ -172,6 +178,8 @@ export interface DaemonSkippedSkill {
 
 export interface DaemonNodeRegistration {
   runtimeRefreshCommands?: Array<{ commandId: string; leaseId: string }>;
+  /** Runs admitted before a daemon restart that this daemon will not resume. */
+  journaledCommandIds?: string[];
   sandboxId: string;
   employeeId?: string;
   token: string;
@@ -208,6 +216,8 @@ export interface DaemonNodeHeartbeat {
 
 export interface DaemonNodeRegistrationResponse {
   heartbeat?: DaemonNodeHeartbeatSettings;
+  /** Journaled runs the backend has accounted for; the daemon may forget them. */
+  acknowledgedJournalIds?: string[];
 }
 
 export interface DaemonNodeHeartbeatResponse {

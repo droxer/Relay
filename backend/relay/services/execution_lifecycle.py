@@ -14,6 +14,7 @@ from typing import Any
 from loguru import logger
 
 from ..persistence.daemon_store import (
+    EXECUTION_INTERRUPTED_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
@@ -62,7 +63,12 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
             phase, reason = "finalizing", "saving_results"
         elif (command or {}).get("status") == "dispatched":
             confirmed = live
-            if not live:
+            if state.get(EXECUTION_INTERRUPTED_STATE_KEY):
+                # The daemon restarted and said it will not resume this run;
+                # the lease it was handed before the crash proves nothing.
+                confirmed = False
+                phase, reason = "recovery_required", "execution_interrupted"
+            elif not live:
                 phase, reason = "unresponsive", "execution_unconfirmed"
             elif state.get("_relay_stop_command_id") or session.get("deletionRequestedAt"):
                 phase, reason = "stopping", "awaiting_termination"
@@ -219,7 +225,8 @@ class ExecutionLifecycleService:
             # Drop the retry/claim bookkeeping too, or finalization keeps
             # waking up for a run nobody is going to report on.
             for key in (TERMINAL_CLAIM_ID_STATE_KEY, TERMINAL_CLAIM_EXPIRES_STATE_KEY,
-                        "_relay_recovery_required", "_relay_finalization_retry_at"):
+                        "_relay_recovery_required", "_relay_finalization_retry_at",
+                        EXECUTION_INTERRUPTED_STATE_KEY):
                 state.pop(key, None)
             self.registry.daemon_store.update_run_request(request["id"], {
                 "status": "cancelled", "state": state,

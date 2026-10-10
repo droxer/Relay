@@ -8056,3 +8056,87 @@ def test_reaper_never_relabels_a_run_that_executed_as_lost(store_factory, monkey
             assert len(registry.daemon_store.list_active_runs("sbx_alice")) == 1
 
     asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_a_restarted_daemon_reporting_a_journaled_run_marks_it_interrupted(store_factory, monkeypatch):
+    """A daemon that crashed mid-run comes back knowing it will not resume the
+    run. Saying so turns a silent, indefinite reservation into one a person
+    can see and release, and keeps the reaper from calling it never-received."""
+    from relay.services.execution_lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Interrupted"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+
+            acknowledged = registry.account_journaled_commands("sbx_alice", [command["id"]])
+
+            assert acknowledged == [command["id"]]
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            assert request["state"].get("_relay_execution_interrupted_at")
+            status = ExecutionLifecycleService(registry, None).status(sessions.get_session(command["sessionId"]))
+            assert status["phase"] == "recovery_required"
+            assert status["blockingReason"] == "execution_interrupted"
+            assert status["canReportGone"] is True
+
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+            registry.reap_stale_runs()
+            assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+
+    asyncio.run(run_flow())
+
+
+def test_journal_report_acknowledges_settled_or_unknown_runs_and_ignores_other_nodes():
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            registry.register({
+                "sandboxId": "sbx_bob", "employeeId": "bob", "token": "bob_token",
+                "workspacePath": "/workspace/bob", "protocolVersion": 1,
+                "supportedAgents": ["codex"], "status": "ready",
+            })
+            task = tasks.create_task({"title": "Settled"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            registry.handle_event("sbx_alice", {
+                "type": "run.failed", "commandId": command["id"], "leaseId": command["leaseId"],
+                "sessionId": command["sessionId"], "runId": command["runId"], "agent": "codex",
+                "error": "boom", "exitCode": 1,
+            }, "node_token")
+            other = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Live"})["id"])
+
+            assert registry.account_journaled_commands("sbx_alice", [command["id"], "cmd_unknown"]) == [command["id"], "cmd_unknown"]
+            # Another node cannot mark this node's run interrupted.
+            assert registry.account_journaled_commands("sbx_bob", [other["id"]]) == []
+            request = registry.daemon_store.run_request_for_command(other["id"])
+            assert not request["state"].get("_relay_execution_interrupted_at")
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("reports_journal", [True, False])
+def test_lost_dispatch_says_never_received_only_when_the_daemon_could_have_said_otherwise(reports_journal, monkeypatch):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            if reports_journal:
+                registry.register({
+                    "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                    "workspacePath": "/workspace/alice", "protocolVersion": 1,
+                    "supportedAgents": ["codex"], "status": "ready",
+                    "capabilities": ["task-workspaces", "thread-workspaces", "round-result",
+                                     "execution-journal-report"],
+                })
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Lost"})["id"])
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+
+            registry.reap_stale_runs()
+
+            error = registry.daemon_store.get_command(command["id"])["error"]
+            if reports_journal:
+                assert error == "The run never started: its computer did not receive it."
+            else:
+                assert error == "The computer stopped responding before the run reported progress."
+
+    asyncio.run(run_flow())

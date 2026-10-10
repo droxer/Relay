@@ -3957,6 +3957,49 @@ test("daemon restart fences a retained execution instead of running it again", a
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
+test("daemon reports retained executions at registration and forgets them once acknowledged", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-journal-report-"));
+  const stop = new AbortController();
+  const command = runCommand();
+  new ExecutionJournal(join(root, "executions")).record(command);
+  const reported: unknown[] = [];
+  let capabilities: unknown[] = [];
+  let executions = 0;
+  let polls = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "journal-report", employeeId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      signal: stop.signal, logger: testLogger(),
+      environment: fakeEnvironment({ exec: async (_cmd, args) => {
+        if (!isInventoryProbe(args)) executions++;
+        return { exit_code: 0, stdout: "", stderr: "" };
+      }}),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/v1/daemon-node-registrations") {
+          const body = JSON.parse(String(init?.body));
+          if (body.status !== "stopped") {
+            reported.push(body.journaledCommandIds);
+            capabilities = body.capabilities;
+          }
+          return jsonResponse({ acknowledgedJournalIds: body.journaledCommandIds ?? [] });
+        }
+        if (path.endsWith("/commands")) {
+          if (polls++) { stop.abort(); return jsonResponse({commands: []}); }
+          return jsonResponse({commands: [command]});
+        }
+        return jsonResponse({ok: true});
+      },
+    });
+    assert.deepEqual(reported[0], [command.id]);
+    assert.ok(capabilities.includes("execution-journal-report"));
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(command.id), false);
+    // Forgetting the record never makes the run eligible to start again.
+    assert.equal(executions, 0);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
 test("local execution cleans up descendants before waiting for inherited pipes", {skip: process.platform === "win32", timeout: 10000}, async () => {
   let childPid = 0;
   let ready!: () => void;

@@ -93,6 +93,10 @@ DISPATCH_CLAIM_ID_STATE_KEY = "_relay_dispatch_claim_id"
 DISPATCH_CLAIM_EXPIRES_STATE_KEY = "_relay_dispatch_claim_expires_at"
 TERMINAL_EVENT_STATE_KEY = "_relay_terminal_event"
 TERMINAL_CLAIM_ID_STATE_KEY = "_relay_terminal_claim_id"
+# Set when a restarted daemon reports it admitted this run and will not resume
+# it. Kept apart from _relay_recovery_required, which marks a stuck save and
+# makes finalization stand down; a late exit report must still finalize.
+EXECUTION_INTERRUPTED_STATE_KEY = "_relay_execution_interrupted_at"
 TERMINAL_CLAIM_EXPIRES_STATE_KEY = "_relay_terminal_claim_expires_at"
 
 
