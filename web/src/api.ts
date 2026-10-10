@@ -1021,15 +1021,16 @@ export function cancelRun(sessionId: string, token?: string, reason?: string): P
 
 export function recordDecision(
   sessionId: string,
-  kind: "approve" | "reject" | "rerun" | "mark_done",
+  // Rerun and handoff dispatch an agent, so they go through /agent-runs; this
+  // route records decisions that need no new turn.
+  kind: "approve" | "reject" | "mark_done",
   note?: string,
   token?: string,
-  targetAgent?: AgentName,
 ): Promise<RelaySession> {
   return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/decisions`, {
     method: "POST",
     token,
-    body: { kind, note, ...(targetAgent ? { targetAgent } : {}) },
+    body: { kind, note },
   });
 }
 

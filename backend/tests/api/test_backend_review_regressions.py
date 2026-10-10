@@ -270,3 +270,132 @@ def test_terminal_occurrence_keeps_routine_schedule_and_deleted_history(
     assert store.get_task(task["id"]) == task_before
     assert store.get_task(routine["id"]) == routine_before
     assert store.get_task(deleted["id"]) == deleted_before
+
+
+def _undelivered_task_round(app, title: str) -> tuple[dict, dict]:
+    """A task round its thread admitted that no daemon has received yet."""
+    app.state.registry.register({
+        "sandboxId": "node_admin", "employeeId": "admin", "workspaceId": "machine-admin",
+        "token": "node_token", "workspacePath": "/workspace/admin",
+        "protocolVersion": 1, "supportedAgents": ["codex"],
+        "capabilities": ["thread-workspaces"], "status": "ready",
+    })
+    task = app.state.task_store.create_task({
+        "title": title, "ownerEmployeeId": "admin", "acceptancePolicy": "automatic",
+        "assignedAgent": "codex", "assignedAgentId": "agt_codex", "status": "assigned",
+    })
+    session = SessionController(
+        app.state.session_store, workspace_path="/workspace/admin",
+        owner_employee_id="admin",
+    ).create_session(title, ["human"])
+    request = app.state.registry.daemon_store.create_run_request({
+        "nodeId": "node_admin", "sessionId": session["id"], "taskId": task["id"],
+        "taskGoal": title, "assignments": [{"executorKind": "codex", "mode": "action"}],
+        "state": {"_relay_task_source_revision": 0, "_relay_task_source_status": "assigned"},
+        "status": "prepared",
+    })
+    app.state.registry.ensure_task_execution_claim(request)
+    return app.state.task_store.get_task(task["id"]), session
+
+
+@pytest.mark.parametrize(
+    "endpoint,body,session_status,task_status",
+    [
+        ("cancellations", {}, "cancelled", "blocked"),
+        ("decisions", {"kind": "cancel"}, "cancelled", "blocked"),
+        ("decisions", {"kind": "mark_done"}, "completed", "done"),
+    ],
+)
+def test_stopping_an_undelivered_task_round_settles_its_task(
+    review_app, review_client, endpoint, body, session_status, task_status
+):
+    task, session = _undelivered_task_round(review_app, "Queued work")
+
+    response = review_client.post(f"/api/v1/threads/{session['id']}/{endpoint}", json=body)
+
+    assert response.status_code in (200, 202)
+    assert response.json()["status"] == session_status
+    store = review_app.state.task_store
+    assert store.get_task(task["id"])["status"] == task_status
+    # The scheduler must not start the work the person just stopped.
+    assert task["id"] not in [item["id"] for item in store.list_dispatchable_tasks()]
+
+
+@pytest.mark.parametrize(
+    "kind,session_status,task_status",
+    [("cancel", "cancelled", "blocked"), ("mark_done", "completed", "done")],
+)
+def test_thread_decision_on_awaiting_task_round_speaks_for_its_task(
+    review_app, review_client, kind, session_status, task_status
+):
+    """A thread parked on its human belongs to the task its active round scopes."""
+    app = review_app
+    task = app.state.task_store.create_task({
+        "title": "Asked a question", "ownerEmployeeId": "admin",
+        "acceptancePolicy": "automatic",
+    })
+    controller = SessionController(
+        app.state.session_store, task_store=app.state.task_store, task_id=task["id"],
+        workspace_path="/workspace", owner_employee_id="admin",
+    )
+    session = controller.create_session("Asked a question", ["human"])
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "round_1", "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    controller.complete_session(
+        session["id"], "The round reported it is blocked. Which branch?",
+        task_status="waiting_for_human", work_outcome="blocked",
+    )
+    assert app.state.task_store.get_task(task["id"])["status"] == "waiting_for_human"
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": kind}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == session_status
+    assert app.state.task_store.get_task(task["id"])["status"] == task_status
+
+
+@pytest.mark.parametrize("kind", ["rerun", "handoff"])
+def test_dispatching_decisions_are_refused_without_a_dispatch(review_client, review_app, kind):
+    session = SessionController(
+        review_app.state.session_store, workspace_path="/workspace",
+        owner_employee_id="admin",
+    ).create_session("Finished", ["human"])
+    SessionController(review_app.state.session_store).complete_session(session["id"], "Done.")
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions",
+        json={"kind": kind, "targetAgent": "codex"},
+    )
+
+    assert response.status_code == 400
+    assert review_app.state.session_store.get_session(session["id"])["status"] == "completed"
+
+
+@pytest.mark.parametrize("kind", ["cancel", "mark_done"])
+def test_old_round_cannot_settle_newer_task_execution(review_app, review_client, kind):
+    from relay.persistence.store_common import relay_task_event
+
+    app = review_app
+    task = app.state.task_store.create_task({"title": "Shared task", "ownerEmployeeId": "admin"})
+    task = app.state.task_store.append_event(task["id"], relay_task_event(
+        "task.execution.claimed", task["id"], {"requestId": "old_request", "expectedRevision": 0},
+    ))
+    controller = SessionController(app.state.session_store, task_store=app.state.task_store,
+                                   task_id=task["id"], task_execution_owner=task["executionOwner"],
+                                   owner_employee_id="admin")
+    session = controller.create_session("Old thread")
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "old_round", "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    controller.complete_session(session["id"], "Question?", task_status="waiting_for_human", work_outcome="blocked")
+    app.state.task_store.append_event(task["id"], relay_task_event(
+        "task.execution.claimed", task["id"], {"requestId": "new_request", "expectedRevision": 1},
+    ))
+    app.state.task_store.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "running"}))
+    before = app.state.task_store.get_task(task["id"])
+    response = review_client.post(f"/api/v1/threads/{session['id']}/decisions", json={"kind": kind})
+    assert response.status_code == 200
+    assert app.state.task_store.get_task(task["id"]) == before

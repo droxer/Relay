@@ -1,4 +1,5 @@
 import type { ThreadItem } from "./threads.js";
+import { isAwaitingHuman } from "./workflow.ts";
 
 export type ThreadGroups = {
   needsYou: ThreadItem[];
@@ -19,7 +20,7 @@ export function groupThreads(
   for (const item of items) {
     if (item.session.execution && item.session.execution.phase !== "terminal") {
       running.push(item);
-    } else if (item.session.status === "waiting_for_human") {
+    } else if (isAwaitingHuman(item.session)) {
       needsYou.push(item);
     } else if (!item.session.execution && (item.session.status === "running" || item.runningAgent)) {
       running.push(item);

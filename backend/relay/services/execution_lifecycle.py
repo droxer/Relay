@@ -17,8 +17,8 @@ from ..persistence.daemon_store import (
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
 from ..persistence.store_common import relay_event
-from ..persistence.task_execution import request_execution_owner
 from ..sessions.controller import SessionController
+from ..sessions.task_scope import thread_task_scope
 
 TERMINAL = {"completed", "failed", "cancelled"}
 RECONCILED_ERROR = (
@@ -197,10 +197,12 @@ class ExecutionLifecycleService:
             if session.get("status") not in TERMINAL:
                 # Same seam deletion uses, so task execution bookkeeping is
                 # released exactly once and in one place.
+                task_id, task_owner = thread_task_scope(
+                    session, request, self.registry.task_store, self.registry.daemon_store
+                )
                 controller = SessionController(
                     self.registry.store, task_store=self.registry.task_store,
-                    task_id=(request or {}).get("taskId") or session.get("taskId"),
-                    task_execution_owner=request_execution_owner(request) if request else None,
+                    task_id=task_id, task_execution_owner=task_owner,
                 )
                 session = controller.cancel_session(session_id, RECONCILED_ERROR)
             logger.info("Execution reconciled by assertion", session_id=session_id,
@@ -222,9 +224,11 @@ class ExecutionLifecycleService:
             if not session.get("deletionRequestedAt"):
                 return self.status(session)
             request = self.registry.daemon_store.active_run_request_for_session_any_node(session_id)
+            task_id, task_owner = thread_task_scope(
+                session, request, self.registry.task_store, self.registry.daemon_store
+            )
             controller = SessionController(self.registry.store, task_store=self.registry.task_store,
-                                           task_id=(request or {}).get("taskId") or session.get("taskId"),
-                                           task_execution_owner=request_execution_owner(request) if request else None)
+                                           task_id=task_id, task_execution_owner=task_owner)
             if request:
                 if request.get("status") != "finalizing":
                     cancelled = self.registry.cancel_run_request_before_delivery(request["id"], "Thread deletion requested.")

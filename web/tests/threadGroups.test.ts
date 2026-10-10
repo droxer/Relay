@@ -64,3 +64,24 @@ describe("groupThreads", () => {
     assert.deepEqual(needsYou.map((c) => c.session.id), ["x", "z"]);
   });
 });
+
+describe("groupThreads awaiting an answer", () => {
+  function settled(id: string, status: RelaySession["status"]): ThreadItem {
+    const base = item(id, status);
+    return { ...base, session: { ...base.session, workOutcome: "blocked" } };
+  }
+
+  it("routes a round that stopped to ask to needsYou", () => {
+    // The backend closes such a session `completed` with workOutcome
+    // "blocked"; it is waiting on its human, not finished.
+    const { needsYou, idle } = groupThreads([settled("a", "completed")]);
+    assert.deepEqual(needsYou.map((c) => c.session.id), ["a"]);
+    assert.equal(idle.length, 0);
+  });
+
+  it("keeps a failed thread idle even though its outcome reads blocked", () => {
+    const { needsYou, idle } = groupThreads([settled("a", "failed")]);
+    assert.equal(needsYou.length, 0);
+    assert.deepEqual(idle.map((c) => c.session.id), ["a"]);
+  });
+});
