@@ -29,6 +29,9 @@ export type ComposerHandle = {
   getText: () => string;
   /** Put text back in the box — used to return a message a failed send ate. */
   setText: (text: string) => void;
+  /** Send this text as the message, as if typed and submitted — a picked
+   *  answer goes through exactly the path a typed one does. */
+  send: (text: string) => Promise<boolean>;
 };
 
 // Message composer: textarea, agent control, and the send/cancel
@@ -149,18 +152,25 @@ const ComposerView = forwardRef<ComposerHandle, {
     || !composerText.trim()
     || parsed.blocked
     || (initializingThread && !projectName && !runtimeNodeId);
-  const triggerSend = () => {
-    if (running || sendPending) return;
+  const triggerSend = async (): Promise<boolean> => {
+    if (running || sendPending) return false;
     // The send button is disabled on a mention that resolves to nobody, and on
     // a staged thread with no computer, but the keyboard shortcut bypasses the
     // button — a blocked draft sent anyway would address the whole room instead
     // of the agent the author named, and one with no computer has nowhere to run.
-    if (cannotSend) return;
+    if (cannotSend) return false;
     setSendPending(true);
-    Promise.resolve(onSend(activeTeamId && !projectName && !addressedLogicalAgentId ? style ?? undefined : undefined))
-      .then((sent) => { if (sent !== false) setStyle(null); })
-      .catch(() => { /* Dispatch owns error reporting; preserve the override for retry. */ })
-      .finally(() => setSendPending(false));
+    try {
+      const sent = await onSend(activeTeamId && !projectName && !addressedLogicalAgentId ? style ?? undefined : undefined);
+      if (sent === false) return false;
+      setStyle(null);
+      return true;
+    } catch {
+      // Dispatch owns error reporting; preserve the override for retry.
+      return false;
+    } finally {
+      setSendPending(false);
+    }
   };
   useEffect(() => {
     if (!sendPending) return;
@@ -175,11 +185,38 @@ const ComposerView = forwardRef<ComposerHandle, {
     return () => clearTimeout(timer);
   }, [sendPending, running]);
 
+  // A picked answer lands in the box first, then sends once the box (and the
+  // handle dispatch reads it through) holds it.
+  const queuedSendRef = useRef<{ text: string; resolve: (sent: boolean) => void } | null>(null);
+  const triggerSendRef = useRef(triggerSend);
+  // Declared first so the queued send below sees this render's closure.
+  useEffect(() => { triggerSendRef.current = triggerSend; });
+  useEffect(() => {
+    const queued = queuedSendRef.current;
+    if (!queued || queued.text !== composerText) return;
+    queuedSendRef.current = null;
+    void triggerSendRef.current().then(queued.resolve);
+  }, [composerText]);
+  useEffect(() => () => {
+    queuedSendRef.current?.resolve(false);
+    queuedSendRef.current = null;
+  }, []);
   useImperativeHandle(ref, () => ({
     clear: () => setComposerText(""),
     focus: () => textareaRef.current?.focus(),
     getText: () => composerText,
     setText: (text: string) => setComposerText(text),
+    send: (text: string) => {
+      queuedSendRef.current?.resolve(false);
+      queuedSendRef.current = null;
+      if (text === composerText) {
+        return triggerSendRef.current();
+      }
+      return new Promise<boolean>((resolve) => {
+        queuedSendRef.current = { text, resolve };
+        setComposerText(text);
+      });
+    },
   }), [composerText, setComposerText, textareaRef]);
 
   // A project room owns its computer and its workspace, so the room names

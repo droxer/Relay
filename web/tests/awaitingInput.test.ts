@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { awaitingInput } from "../src/lib/awaitingInput.js";
+import { awaitingInput, readWaitingReason } from "../src/lib/awaitingInput.js";
 import type { RelaySession, RelayTaskListItem } from "../src/types.js";
 
 function session(partial: Partial<RelaySession> = {}): RelaySession {
@@ -62,14 +62,54 @@ describe("awaitingInput", () => {
     assert.equal(waiting?.text, null);
   });
 
-  it("treats a gated round as a check, keeping the recorded reason", () => {
-    const waiting = awaitingInput(
-      session({ workOutcome: "blocked", finalOutcome: "Work needs attention. Work a1 is not accepted: missing." }),
+  it("treats a gated round as a check and words it without internal ids", () => {
+    const legacy = awaitingInput(
+      session({ workOutcome: "blocked", finalOutcome: "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing." }),
       [],
     );
-    assert.equal(waiting?.kind, "check");
-    assert.equal(waiting?.text, "Work needs attention. Work a1 is not accepted: missing.");
+    assert.equal(legacy?.kind, "check");
+    assert.equal(legacy?.text, "A required step ended without reporting what it did.");
+    assert.deepEqual(legacy?.options, []);
+    const current = awaitingInput(
+      session({ workOutcome: "blocked", finalOutcome: "The work can't be accepted yet. A required step failed to run." }),
+      [],
+    );
+    assert.equal(current?.text, "A required step failed to run.");
   });
+
+  it("rewords each legacy gate reason", () => {
+    assert.equal(
+      readWaitingReason("Work needs attention. Required contribution a1 failed. Work b2 is not accepted: tests still red. Unresolved finding on b2: crash on empty input").text,
+      "A required step failed to run. A required step is not finished: tests still red. A review found a problem that is still open: crash on empty input",
+    );
+    // A reason that is not a gate stop is quoted as recorded.
+    assert.equal(readWaitingReason("Execution needs attention.").text, "Execution needs attention.");
+  });
+
+  it("offers the answers the agent gave", () => {
+    const waiting = awaitingInput(session({
+      workOutcome: "blocked",
+      finalOutcome: "The round reported it is blocked. Rotate staging only, or prod too?",
+      inputOptions: ["Staging only", "Staging and prod", "Staging only"],
+    }), []);
+    assert.equal(waiting?.text, "Rotate staging only, or prod too?");
+    assert.deepEqual(waiting?.options, ["Staging only", "Staging and prod"]);
+  });
+
+  for (const text of [
+    "Which vault holds the key?\n1. ops-vault\n2) shared-vault",
+    "Please provide these details:\n- Deployment region\n- Project name",
+    "Which environment?\n" + Array.from({ length: 7 }, (_, i) => `${i + 1}. env-${i + 1}`).join("\n"),
+  ]) {
+    it(`preserves an unstructured list: ${text.split("\n")[0]}`, () => {
+      const waiting = awaitingInput(session({
+        workOutcome: "blocked",
+        finalOutcome: `The round reported it is blocked. ${text}`,
+      }), []);
+      assert.equal(waiting?.text, text);
+      assert.deepEqual(waiting?.options, []);
+    });
+  }
 
   it("stays quiet while running, after a failure, finished work, or a pending feedback decision", () => {
     assert.equal(awaitingInput(session({ status: "running", workOutcome: "blocked" }), [task()]), null);

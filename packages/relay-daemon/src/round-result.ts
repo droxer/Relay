@@ -12,6 +12,8 @@ interface RoundResult {
   work?: Record<string, unknown>;
   status: "done" | "continue" | "blocked";
   note?: string;
+  /** Answers a blocked round offers its human; the backend validates them. */
+  options?: string[];
 }
 
 /** Workspace-relative path the agent writes. `.relay/` is excluded from the
@@ -21,6 +23,8 @@ export const ROUND_RESULT_RELATIVE_PATH = join(".relay", "round-result.json");
 const ROUND_RESULT_MAX_BYTES = 64 * 1024;
 const ROUND_RESULT_STATUSES = new Set(["done", "continue", "blocked"]);
 const NOTE_MAX_CHARS = 2000;
+const OPTIONS_MAX = 6;
+const OPTION_MAX_CHARS = 200;
 
 /**
  * Read and consume the round result a run left behind, if any.
@@ -57,7 +61,7 @@ export function parseRoundResult(raw: string, expectedRunId?: string): RoundResu
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
-  const { status, note, runId, work } = parsed as { status?: unknown; note?: unknown; runId?: unknown; work?: unknown };
+  const { status, note, runId, work, options } = parsed as { status?: unknown; note?: unknown; runId?: unknown; work?: unknown; options?: unknown };
   if (expectedRunId !== undefined && runId !== expectedRunId) return undefined;
   if (typeof status !== "string" || !ROUND_RESULT_STATUSES.has(status)) {
     return undefined;
@@ -67,6 +71,9 @@ export function parseRoundResult(raw: string, expectedRunId?: string): RoundResu
     ...(work && typeof work === "object" && !Array.isArray(work) ? { work: work as Record<string, unknown> } : {}),
     ...(typeof note === "string" && note.trim()
       ? { note: note.trim().slice(0, NOTE_MAX_CHARS) }
+      : {}),
+    ...(status === "blocked" && Array.isArray(options)
+      ? { options: options.filter((item): item is string => typeof item === "string").slice(0, OPTIONS_MAX).map((item) => item.slice(0, OPTION_MAX_CHARS)) }
       : {}),
   };
 }

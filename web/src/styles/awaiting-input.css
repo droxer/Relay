@@ -110,6 +110,81 @@
   color: var(--ink-3);
 }
 
+/* The answers: one click each sends the reply. Full-width rows rather than
+   chips, because an offered answer is often a sentence and a chip would
+   truncate the very words being chosen. The index is a quiet key, not a
+   badge; the send glyph shows on intent so the row says what a click does. */
+.awaiting-input-choices {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.awaiting-input-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-2);
+  background: var(--control-fill);
+  color: var(--ink-1);
+  font: var(--type-body);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
+}
+
+.awaiting-input-choice-key {
+  min-width: 1.5ch;
+  color: var(--ink-3);
+  font: 500 var(--fs-code)/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.awaiting-input-choice-label {
+  overflow-wrap: anywhere;
+}
+
+.awaiting-input-choice-send {
+  color: var(--action);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.awaiting-input-choice:hover:not(:disabled),
+.awaiting-input-choice:focus-visible,
+.awaiting-input-choice[data-chosen] {
+  border-color: var(--action);
+  background: var(--action-soft);
+}
+
+.awaiting-input-choice:hover:not(:disabled) .awaiting-input-choice-key,
+.awaiting-input-choice:focus-visible .awaiting-input-choice-key,
+.awaiting-input-choice[data-chosen] .awaiting-input-choice-key {
+  color: var(--action);
+}
+
+.awaiting-input-choice:hover:not(:disabled) .awaiting-input-choice-send,
+.awaiting-input-choice:focus-visible .awaiting-input-choice-send,
+.awaiting-input-choice[data-chosen] .awaiting-input-choice-send {
+  opacity: 1;
+}
+
+/* Once one is picked the rest step back; the pick stays lit while it sends. */
+.awaiting-input-choice:disabled { cursor: default; }
+.awaiting-input-choice:disabled:not([data-chosen]) { opacity: var(--opacity-disabled); }
+
+/* A gate stop's next steps are suggestions, not the agent's words: neutral
+   until intent, with the caution tone kept for the rail alone. */
+.awaiting-input[data-kind="check"] .awaiting-input-choice { color: var(--ink-2); }
+
 .awaiting-input-foot {
   display: flex;
   align-items: center;

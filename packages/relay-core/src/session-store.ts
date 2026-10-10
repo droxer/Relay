@@ -267,6 +267,8 @@ export interface RelaySession {
   events: RelayEvent[];
   finalOutcome?: string;
   workOutcome?: WorkOutcome;
+  /** Answers a blocked round offered its human, set while the thread waits. */
+  inputOptions?: string[];
   archived?: boolean;
   tokenUsage?: TokenUsage;
 }
@@ -434,6 +436,7 @@ export type RelayEvent =
       timestamp: string;
       outcome: string;
       workOutcome?: WorkOutcome;
+      inputOptions?: string[];
     }
   | {
       id: string;
@@ -530,6 +533,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       if (event.status !== "completed" && event.status !== "failed") {
         delete session.finalOutcome;
         delete session.workOutcome;
+        delete session.inputOptions;
       }
     } else if (event.type === "collaboration.round.started") {
       if (!session.collaborationRounds.some((round) => round.roundId === event.manifest.roundId)) {
@@ -540,6 +544,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.activeRoundId = event.manifest.roundId;
     } else if (event.type === "agent.started") {
       delete session.workOutcome;
+      delete session.inputOptions;
       // Threads created before node pinning adopt the computer their first
       // stamped run executed on.
       if (event.daemonNodeId && !session.daemonNodeId) session.daemonNodeId = event.daemonNodeId;
@@ -601,6 +606,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
         session.status = "cancelled";
         session.phase = "cancelled";
         delete session.workOutcome;
+        delete session.inputOptions;
         delete session.pendingDecision;
       }
     } else if (event.type === "session.completed") {
@@ -608,6 +614,8 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.phase = "completed";
       session.finalOutcome = event.outcome;
       session.workOutcome = event.workOutcome ?? "unverified";
+      if (event.inputOptions?.length) session.inputOptions = [...event.inputOptions];
+      else delete session.inputOptions;
       session.currentAgent = undefined;
       delete session.pendingDecision;
     } else if (event.type === "session.failed") {
@@ -615,6 +623,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
       session.phase = "failed";
       session.finalOutcome = event.outcome;
       session.workOutcome = "blocked";
+      delete session.inputOptions;
       session.currentAgent = undefined;
       delete session.pendingDecision;
     } else if (event.type === "session.archived") {

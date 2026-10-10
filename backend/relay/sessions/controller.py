@@ -205,19 +205,23 @@ class SessionController:
 
     def complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
-        *, work_outcome: str = "unverified",
+        *, work_outcome: str = "unverified", input_options: list[str] | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
-            return self._complete_session(session_id, outcome, task_status, work_outcome)
+            return self._complete_session(
+                session_id, outcome, task_status, work_outcome, input_options
+            )
 
     def _complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
-        work_outcome: str = "unverified",
+        work_outcome: str = "unverified", input_options: list[str] | None = None,
     ) -> dict[str, Any]:
         session = self._append(
             session_id,
             relay_event("session.completed", session_id, {
                 "outcome": outcome, "workOutcome": work_outcome,
+                # The answers the agent offered for its question.
+                **({"inputOptions": list(input_options)} if input_options else {}),
             }),
         )
         self._update_task_status(task_status, outcome, {"sessionId": session_id})

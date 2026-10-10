@@ -2001,7 +2001,15 @@
     "hint_thread": "回复后将继续这项工作。",
     "reply": "回复",
     "placeholder": "回答 {{agent}}…",
-    "open_task": "打开任务 {{ref}}"
+    "open_task": "打开任务 {{ref}}",
+    "choices": "可选回答",
+    "choice_continue": "继续并汇报结果",
+    "choice_continue_reply": "请继续完成这项工作。停下时说明你做了什么、如何验证的。",
+    "choice_status": "说明已完成和剩余的部分",
+    "choice_status_reply": "继续之前，请告诉我哪些已完成、还剩什么，以及需要我提供什么。",
+    "hint_choices_task": "选择一项以继续 {{ref}}，或自己填写回答。",
+    "hint_choices_thread": "选择一项以继续，或自己填写回答。",
+    "write_own": "自己填写"
   },
   "recovery": {
     "title": "后续操作",

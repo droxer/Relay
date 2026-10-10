@@ -198,7 +198,7 @@ def completion_blockers(
     blockers = [state[WORK_PLAN_ERROR]] if state.get(WORK_PLAN_ERROR) else []
     for failure in state.get("_relay_participant_failures") or []:
         if failure.get("assignmentId") in required:
-            blockers.append(f"Required contribution {failure['assignmentId']} failed.")
+            blockers.append("A required step failed to run.")
     if require_evidence:
         required_work = {
             item.get("workItemId") or key for key, item in required.items()
@@ -206,9 +206,7 @@ def completion_blockers(
         for report in (state.get(WORK_RESULTS) or {}).values():
             for finding in report.get("findings", []):
                 if finding["workItemId"] in required_work:
-                    blockers.append(
-                        f"Unresolved finding on {finding['workItemId']}: {finding['note']}"
-                    )
+                    blockers.append(f"A review found a problem that is still open: {finding['note']}")
         for assignment_id in required:
             result = (state.get(WORK_RESULTS) or {}).get(assignment_id) or {}
             # A valid unfinished report may request another bounded task round.
@@ -220,10 +218,29 @@ def completion_blockers(
             ):
                 continue
             if result.get("status") != "done" or not result.get("evidence"):
-                blockers.append(
-                    f"Work {assignment_id} is not accepted: {result.get('note') or result.get('status') or 'missing evidence'}."
-                )
+                blockers.append(unaccepted_work_reason(result))
     return blockers
+
+
+# The preamble a gate stop puts before its reasons. The web strips it (the
+# prompt's title already says the work stopped) — keep the two in step.
+WORK_NEEDS_ATTENTION = "The work can't be accepted yet."
+
+
+def unaccepted_work_reason(result: dict[str, Any]) -> str:
+    """Why one required step cannot be accepted, in words a person can act on.
+
+    These sentences are what the thread quotes to its human, so they name no
+    internal ids: an assignment id means nothing to the reader."""
+    status = result.get("status")
+    note = result.get("note")
+    if status in (None, "missing"):
+        return "A required step ended without reporting what it did."
+    if status == "done":
+        return "A required step says it is done but showed no checks to back that up."
+    if status == "blocked":
+        return f"A required step is blocked: {note}" if note else "A required step is blocked."
+    return f"A required step is not finished: {note}" if note else "A required step is not finished."
 
 
 def repair_transition(

@@ -251,3 +251,11 @@ def test_predecessor_context_is_bounded_and_marks_truncated_evidence():
     assert len(json.dumps(context)) < 24000
     assert all(item["evidenceTruncated"] for item in context.values())
     assert set(context) == set(state[WORK_RESULTS])
+
+
+def test_blocker_reasons_name_no_internal_ids():
+    items = assignments()
+    state = record_work_result({}, items[1], None)
+    reasons = completion_blockers([items[1]], state, require_evidence=True)
+    assert reasons == ["A required step ended without reporting what it did."]
+    assert all(item["assignmentId"] not in " ".join(reasons) for item in items)
