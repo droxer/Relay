@@ -70,16 +70,25 @@ describe("Meta commerce palette tokens", () => {
     }
   });
 
-  it("makes --action the source system's cobalt, register-invariant down to the pressed state", () => {
-    // The primary action is the same cobalt on both canvases, and so is its
-    // pressed state: white clears AA on both fills, so neither register needs
-    // its own. Only the soft callout tint retunes per register.
-    assert.match(darkRegister, /--action:\s*#0064e0;/);
-    assert.doesNotMatch(lightRegister, /--action:\s*#/, "light register must not redeclare --action — it is register-invariant");
-    assert.match(darkRegister, /--on-action:\s*#ffffff;/);
-    assert.doesNotMatch(lightRegister, /--on-action:\s*#/, "--on-action is register-invariant too");
-    assert.match(darkRegister, /--action-hover:\s*#0457cb;/, "the pressed state is the source system's primary-deep");
-    assert.doesNotMatch(lightRegister, /--action-hover:\s*#/, "the pressed state is register-invariant too");
+  it("tunes --action per register: light blue on the dark canvas, deep cobalt on the light one", () => {
+    // One mid-tone cobalt sank into the charcoal and never quite led on white,
+    // so each register declares its own fill, pressed state and ink.
+    for (const name of ["--action", "--action-hover", "--on-action"]) {
+      assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `dark register is missing ${name}`);
+      assert.match(lightRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `light register is missing ${name}`);
+    }
+    // Contrast against black rises with luminance, so it orders the fills.
+    const brightness = (hex: string) => contrast(hex, "#000000");
+    const darkFill = brightness(tokenIn(darkRegister, "--action"));
+    const lightFill = brightness(tokenIn(lightRegister, "--action"));
+    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter blue");
+    // Hover moves away from the canvas: lighter on dark, deeper on light.
+    assert.ok(brightness(tokenIn(darkRegister, "--action-hover")) > darkFill);
+    assert.ok(brightness(tokenIn(lightRegister, "--action-hover")) < lightFill);
+    for (const register of [darkRegister, lightRegister]) {
+      const [r, , b] = channels(tokenIn(register, "--action"));
+      assert.ok(b > r, "--action stays a blue");
+    }
     assert.match(lightRegister, /--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} \d+%, transparent\);/);
   });
 
@@ -99,13 +108,13 @@ describe("Meta commerce palette tokens", () => {
     }
   });
 
-  it("keeps --on-action legible on the fill and its pressed state", () => {
-    // The whole action triple is register-invariant (declared once, on :root),
-    // so one measurement covers both canvases.
-    const onAction = tokenIn(darkRegister, "--on-action");
-    for (const fill of ["--action", "--action-hover"]) {
-      const ratio = contrast(onAction, tokenIn(darkRegister, fill));
-      assert.ok(ratio >= 4.5, `--on-action on ${fill} is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
+  it("keeps --on-action legible on the fill and its pressed state in both registers", () => {
+    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
+      const onAction = tokenIn(register, "--on-action");
+      for (const fill of ["--action", "--action-hover"]) {
+        const ratio = contrast(onAction, tokenIn(register, fill));
+        assert.ok(ratio >= 4.5, `${label}: --on-action on ${fill} is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
+      }
     }
   });
 
