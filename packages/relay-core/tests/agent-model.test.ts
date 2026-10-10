@@ -110,3 +110,18 @@ test("custom model endpoints are reported for the runtimes whose base URL is ove
     assert.deepEqual(customModelEndpointAgents(), []);
   });
 });
+
+test("a base URL naming the vendor's own API is not a custom endpoint", () => {
+  withEnv({ ...LOCAL, ANTHROPIC_BASE_URL: "https://api.anthropic.com" }, () => {
+    assert.deepEqual(customModelEndpointAgents(), []);
+  });
+  withEnv({ ...LOCAL, ANTHROPIC_BASE_URL: "HTTPS://API.ANTHROPIC.COM/" }, () => {
+    assert.deepEqual(customModelEndpointAgents(), []);
+  });
+  withEnv({ OPENAI_BASE_URL: "https://api.openai.com/v1" }, () => {
+    assert.deepEqual(customModelEndpointAgents(), []);
+  });
+  withEnv({ OPENAI_BASE_URL: "https://api.openai.com.proxy.example/v1" }, () => {
+    assert.deepEqual(customModelEndpointAgents(), ["codex"]);
+  });
+});

@@ -5,8 +5,12 @@ import { agentCredentialEnv, runAsAgent, type AgentName } from "relay-core";
 // what this node's CLI can actually run instead of a catalog baked into the
 // web app. Every runtime answers from its own source:
 //
-//   claude  `claude --help` names the aliases it resolves (fable, opus, …);
-//           settings.json `availableModels` restricts them, `model` adds one.
+//   claude  The provider's `/v1/models` gives versioned ids (claude-opus-5-5)
+//           when the agent has a key or token; otherwise `claude --help`'s
+//           aliases (fable, opus, …) and settings.json `model` stand in.
+//           `.claude.json` adds the extra options the signed-in account
+//           offers, and settings.json `availableModels` is an allowlist that
+//           replaces all of it.
 //   codex   `codex debug models`, or the CLI's own models_cache.json.
 //           The catalog carries each model's full instructions (hundreds of
 //           KB), so the sweep keeps only the slug/visibility/priority keys —
@@ -31,14 +35,46 @@ const MODEL_ID_MAX_LENGTH = 128;
 export const MAX_MODELS_PER_AGENT = 200;
 const DEFAULT_MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
 const RECORD_SEPARATOR = "\t";
+const PROVIDER_LIST_TIMEOUT_SECONDS = 8;
 
 // Each source prints one `<source>\t<base64 payload>` record. The commands are
 // constants; nothing caller-supplied reaches the shell.
 const EMIT = `emit() { payload=$(base64 | tr -d '\\n'); if [ -n "$payload" ]; then printf '%s\\t%s\\n' "$1" "$payload"; fi; }`;
+// Credentials reach curl as a header on stdin (`-H @-`), never in argv. With
+// no key or token in the env, a local computer falls back to Claude Code's own
+// saved login — its credentials file, or on macOS the keychain item it writes —
+// so the employee's existing setup is enough. The token only ever lives in a
+// shell variable; nothing from it is emitted.
+const CLAUDE_SAVED_LOGIN_TOKEN = [
+  "claude_login_token() {",
+  '  creds=""; f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json"',
+  '  if [ -f "$f" ]; then creds=$(cat "$f")',
+  '  elif [ "$(uname)" = Darwin ] && command -v security >/dev/null 2>&1; then creds=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null); fi',
+  `  printf '%s' "$creds" | grep -oE '"accessToken"[[:space:]]*:[[:space:]]*"[^"]+"' | head -n 1 | sed -E 's/.*"([^"]+)"$/\\1/'`,
+  "}",
+].join("\n");
+
+const ANTHROPIC_MODELS_REQUEST = [
+  CLAUDE_SAVED_LOGIN_TOKEN,
+  'base="${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"; base="${base%/}"',
+  `models() { curl -fsS --max-time ${PROVIDER_LIST_TIMEOUT_SECONDS} -H @- -H 'anthropic-version: 2023-06-01' "$@" "$base/v1/models?limit=1000" 2>/dev/null | emit api; }`,
+  "oauth() { printf 'authorization: Bearer %s\\n' \"$1\" | models -H 'anthropic-beta: oauth-2025-04-20'; }",
+  "if command -v curl >/dev/null 2>&1; then",
+  "  if [ -n \"${ANTHROPIC_API_KEY:-}\" ]; then printf 'x-api-key: %s\\n' \"$ANTHROPIC_API_KEY\" | models",
+  "  elif [ -n \"${CLAUDE_CODE_OAUTH_TOKEN:-}\" ]; then oauth \"$CLAUDE_CODE_OAUTH_TOKEN\"",
+  "  elif [ -n \"${ANTHROPIC_AUTH_TOKEN:-}\" ]; then printf 'authorization: Bearer %s\\n' \"$ANTHROPIC_AUTH_TOKEN\" | models",
+  "  else token=$(claude_login_token); if [ -n \"$token\" ]; then oauth \"$token\"; fi",
+  "  fi",
+  "fi",
+].join("\n");
+
 const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
   claude: [
     "if command -v claude >/dev/null 2>&1; then claude --help 2>/dev/null | emit help; fi",
     'f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; if [ -f "$f" ]; then emit settings < "$f"; fi',
+    // `.claude.json` also holds project history; keep only the cached options.
+    'f="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"; if [ -f "$f" ]; then tr -d \'\\n\' < "$f" | grep -oE \'"additionalModelOptionsCache":[[:space:]]*\\[([^][]|\\[[^][]*\\])*\\]\' | emit account; fi',
+    ANTHROPIC_MODELS_REQUEST,
   ],
   codex: [
     'catalog=""; if command -v codex >/dev/null 2>&1; then catalog=$(codex debug models 2>/dev/null); fi',
@@ -55,6 +91,14 @@ export function buildModelDiscoveryScript(agent: AgentName): string {
 }
 
 /**
+ * The last model list each provider returned, kept for the daemon's lifetime.
+ * A local computer's saved login is short-lived and refreshed only when its
+ * runtime runs, so a sweep can find it expired; reusing the last good list
+ * keeps the picker on versioned ids instead of flipping back to aliases.
+ */
+export type ProviderListMemory = Map<AgentName, string>;
+
+/**
  * Ask each of `agents` which models it offers. Agents that report nothing are
  * omitted. Best-effort: never throws.
  */
@@ -63,6 +107,7 @@ export async function discoverAgentModels(
   agents: readonly AgentName[],
   signal?: AbortSignal,
   timeoutMs = DEFAULT_MODEL_DISCOVERY_TIMEOUT_MS,
+  providerLists: ProviderListMemory = new Map(),
 ): Promise<Partial<Record<AgentName, string[]>>> {
   if (signal?.aborted) return {};
   const entries = await Promise.all(agents.map(async (agent) => {
@@ -73,7 +118,10 @@ export async function discoverAgentModels(
         signal: discoverySignal,
         env: Object.fromEntries(agentCredentialEnv(agent)),
       });
-      return [agent, result.exit_code === 0 ? parseAgentModels(agent, result.stdout) : []] as const;
+      if (result.exit_code !== 0) return [agent, []] as const;
+      const fresh = providerListText(result.stdout);
+      if (fresh) providerLists.set(agent, fresh);
+      return [agent, parseAgentModels(agent, result.stdout, providerLists.get(agent))] as const;
     } catch {
       return [agent, []] as const;
     }
@@ -81,13 +129,31 @@ export async function discoverAgentModels(
   return Object.fromEntries(entries.filter(([, models]) => models.length > 0));
 }
 
-/** Turn one agent's sweep output into its model ids, in the runtime's order. */
-export function parseAgentModels(agent: AgentName, stdout: string): string[] {
+/** The provider's model list in a sweep, when it returned one with any ids. */
+export function providerListText(stdout: string): string | undefined {
+  return decodeRecords(stdout)
+    .filter((record) => record.source === "api" && anthropicApiModels(record.text).length > 0)
+    .map((record) => record.text)
+    .at(-1);
+}
+
+/**
+ * Turn one agent's sweep output into its model ids, in the runtime's order.
+ * `rememberedProviderList` stands in when this sweep could not reach the provider.
+ */
+export function parseAgentModels(agent: AgentName, stdout: string, rememberedProviderList?: string): string[] {
   const records = decodeRecords(stdout);
   const texts = (source: string) => records.filter((record) => record.source === source).map((record) => record.text);
   switch (agent) {
     case "claude":
-      return validModels(claudeModels(texts("help"), texts("settings")));
+      return validModels(claudeModels({
+        helps: texts("help"),
+        settingsFiles: texts("settings"),
+        accounts: texts("account"),
+        providerLists: providerListText(stdout)
+          ? texts("api")
+          : rememberedProviderList ? [rememberedProviderList] : [],
+      }));
     case "codex":
       return validModels(texts("catalog").flatMap(codexCatalogModels));
     case "pi":
@@ -107,13 +173,43 @@ function decodeRecords(stdout: string): Array<{ source: string; text: string }> 
   return records;
 }
 
-function claudeModels(helps: string[], settingsFiles: string[]): string[] {
-  const settings = settingsFiles.map(parseJsonObject);
+function claudeModels(sources: {
+  helps: string[];
+  settingsFiles: string[];
+  accounts: string[];
+  providerLists: string[];
+}): string[] {
+  const settings = sources.settingsFiles.map(parseJsonObject);
   // `availableModels` is the runtime's own allowlist; when set it is the menu.
   const allowed = settings.flatMap((entry) => stringArray(entry?.availableModels));
   if (allowed.length > 0) return allowed;
+  const accountModels = sources.accounts.flatMap(claudeAccountModels);
+  // The provider's list names each model with its version (claude-opus-5-5);
+  // the bare aliases only say "latest", so they are the fallback.
+  const versioned = sources.providerLists.flatMap(anthropicApiModels);
+  if (versioned.length > 0) return [...versioned, ...accountModels];
   const configured = settings.map((entry) => entry?.model).filter((model): model is string => typeof model === "string");
-  return [...helps.flatMap(claudeHelpAliases), ...configured];
+  return [...sources.helps.flatMap(claudeHelpAliases), ...configured, ...accountModels];
+}
+
+/** The `value`s of the model options Claude caches for the signed-in account. */
+export function claudeAccountModels(text: string): string[] {
+  const options = parseJsonObject(`{${text}}`)?.additionalModelOptionsCache;
+  if (!Array.isArray(options)) return [];
+  return options.flatMap((option: unknown) => {
+    const value = option && typeof option === "object" ? (option as Record<string, unknown>).value : undefined;
+    return typeof value === "string" ? [value] : [];
+  });
+}
+
+/** The ids in a `/v1/models` page. */
+export function anthropicApiModels(text: string): string[] {
+  const data = parseJsonObject(text)?.data;
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((model: unknown) => {
+    const id = model && typeof model === "object" ? (model as Record<string, unknown>).id : undefined;
+    return typeof id === "string" ? [id] : [];
+  });
 }
 
 /** The quoted aliases in the `--model` option's description. */

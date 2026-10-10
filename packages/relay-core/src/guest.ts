@@ -146,6 +146,17 @@ const MODEL_ENDPOINT_ENV: Partial<Record<AgentName, string>> = {
   codex: "OPENAI_BASE_URL",
 };
 
+/** The vendor's own API, which a base-URL key may name without making it custom. */
+const VENDOR_MODEL_ENDPOINTS: Partial<Record<AgentName, readonly string[]>> = {
+  claude: ["https://api.anthropic.com", "https://api.anthropic.com/v1"],
+  codex: ["https://api.openai.com", "https://api.openai.com/v1"],
+};
+
+function isCustomModelEndpoint(agent: AgentName, url: string): boolean {
+  const normalized = url.trim().replace(/\/+$/, "").toLowerCase();
+  return normalized !== "" && !(VENDOR_MODEL_ENDPOINTS[agent] ?? []).includes(normalized);
+}
+
 /**
  * Runtimes whose model calls go to a custom endpoint on this node. The vendor
  * model ids the web suggests may not exist there, so the daemon reports these
@@ -154,7 +165,7 @@ const MODEL_ENDPOINT_ENV: Partial<Record<AgentName, string>> = {
  */
 export function customModelEndpointAgents(): AgentName[] {
   return (Object.entries(MODEL_ENDPOINT_ENV) as Array<[AgentName, string]>).filter(
-    ([agent, key]) => agentCredentialEnv(agent).some(([name, value]) => name === key && value),
+    ([agent, key]) => agentCredentialEnv(agent).some(([name, value]) => name === key && isCustomModelEndpoint(agent, value)),
   ).map(([agent]) => agent);
 }
 
