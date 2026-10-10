@@ -27,7 +27,8 @@ RECONCILED_ERROR = (
 
 
 def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
-                     command: dict[str, Any] | None, *, now: datetime | None = None) -> dict[str, Any]:
+                     command: dict[str, Any] | None, *, now: datetime | None = None,
+                     computer_online: bool | None = None) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     state = (request or {}).get("state") or {}
     phase, reason = "terminal", None
@@ -70,6 +71,7 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
             phase, reason = "recovery_required", "termination_unconfirmed"
     return {
         "phase": phase, "executionConfirmed": confirmed,
+        "computerOnline": computer_online,
         "deletionRequested": bool(session.get("deletionRequestedAt")),
         "canDelete": phase == "terminal", "blockingReason": reason,
         "canRetrySave": phase == "recovery_required" and request is not None
@@ -101,7 +103,10 @@ class ExecutionLifecycleService:
                 command = store.get_command(run["commandId"])
                 if command and command.get("status") not in TERMINAL:
                     request = {"status": "running", "state": {}}
-        return execution_status(session, request, command)
+        node_id = (request or {}).get("nodeId") or (command or {}).get("nodeId")
+        node = store.get_node(node_id) if node_id else None
+        online = self.registry._liveness(node)["online"] if node else None
+        return execution_status(session, request, command, computer_online=online)
 
     def annotate(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         store = self.registry.daemon_store
@@ -124,6 +129,8 @@ class ExecutionLifecycleService:
             r["commandId"] for r in legacy.values() if r.get("commandId")
         )
         commands = store.get_commands(command_ids)
+        node_ids = {r.get("nodeId") for r in [*requests.values(), *legacy.values()] if r.get("nodeId")}
+        nodes = {n["id"]: n for n in store.list_nodes() if n["id"] in node_ids} if node_ids else {}
         result = []
         for session in sessions:
             request = requests.get(session["id"])
@@ -131,7 +138,10 @@ class ExecutionLifecycleService:
             command = commands.get(command_id) if command_id else None
             if not request and command and command.get("status") not in TERMINAL:
                 request = {"status": "running", "state": {}}
-            result.append({**session, "execution": execution_status(session, request, command)})
+            node_id = (request or {}).get("nodeId") or (legacy.get(session["id"]) or {}).get("nodeId")
+            node = nodes.get(node_id)
+            online = self.registry._liveness(node)["online"] if node else None
+            result.append({**session, "execution": execution_status(session, request, command, computer_online=online)})
         return result
 
     def admission_scope(self):

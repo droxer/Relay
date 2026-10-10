@@ -88,6 +88,7 @@ import { workspaceCommandEvent } from "./workspace-read.js";
 import { ThreadWorkspaceManager } from "./thread-workspace.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { ExecutionWatchdog } from "./execution-watchdog.js";
+import { ExecutionJournal } from "./execution-journal.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeSkills } from "./agent-skills.js";
@@ -226,7 +227,17 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
   const executionWatchdog = new ExecutionWatchdog();
   const terminalCommands = new Set<string>();
-  const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => { terminalCommands.add(id); executionWatchdog.forget(id); });
+  const executionJournal = new ExecutionJournal(join(stateDir, "executions"));
+  const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => {
+    executionJournal.confirmExit(id);
+    terminalCommands.add(id);
+    executionWatchdog.forget(id);
+  });
+  // A crash may land between durable terminal storage and journal removal.
+  for (const record of terminalOutbox.pending()) {
+    if (["run.completed", "run.failed", "run.cancelled"].includes(String(record.event.type))) executionJournal.confirmExit(String(record.event.commandId));
+  }
+  const unconfirmedExecutions = new Set(executionJournal.pending().map(record => record.id));
   fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
@@ -272,6 +283,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     logger.info("daemon health", { sandboxId, health: next, ...fields });
   };
   logger.info("daemon starting", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
+  for (const execution of executionJournal.pending()) {
+    logger.warn("Execution exit unconfirmed after daemon restart; retained identity requires reconciliation", {
+      sandboxId, commandId: execution.id, runId: execution.runId,
+      sessionId: execution.sessionId, leaseId: execution.leaseId,
+    });
+  }
   setHealth("starting", { employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
   const requestedMaxConcurrentRuns = options.maxConcurrentRuns
     ?? positiveIntEnv("RELAY_DAEMON_MAX_CONCURRENT_RUNS")
@@ -593,6 +610,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             });
             continue;
           }
+          if (unconfirmedExecutions.has(command.id)) {
+            logger.warn("Unconfirmed execution will not be restarted", commandLogFields(sandboxId, command));
+            continue;
+          }
           if (!canStartCommand(activeRuns, maxConcurrentRuns, terminalCommands)) {
             const detail = "Daemon node has no available execution slot for this run.";
             logger.warn("command rejected while daemon busy", { ...commandLogFields(sandboxId, command), error: detail });
@@ -636,6 +657,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           }
           logger.info("command received", commandLogFields(sandboxId, command));
           setHealth("busy", commandLogFields(sandboxId, command));
+          executionJournal.record(command);
           const controller = new AbortController();
           if (command.leaseId) executionWatchdog.track(command.id, commandLeaseSeconds * 1000,
             () => controller.abort("Execution lease expired; stopping until ownership can be confirmed."));

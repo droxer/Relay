@@ -617,3 +617,29 @@ full `npm test`.
   both through stream renderers instead of printing raw JSON.
 - Pi versions differ: use `-P` only when `pi --help` advertises `-P` or
   `--print-streaming`; otherwise fall back to `-p`.
+
+
+### Diagnosing cancellation without discarding exit evidence
+
+A connected computer can still have an unconfirmed agent exit. Check daemon
+logs for termination-request failures, overdue cancellation, process-group
+cleanup, and output-drain warnings. The daemon watches exit concurrently with
+output collection. It retries stop requests and escalates cancellation after
+five seconds. The BoxLite guest supervisor owns a separate process group and
+stays alive until its executing members have stopped; a stop timeout is never
+terminal evidence. Host process cleanup follows the same reservation rule.
+
+Private `executions/` records under the daemon state directory retain command,
+run, thread, and lease identities before work starts. On restart, unresolved
+identities are logged and their starts are fenced against duplicate execution.
+They are removed only after terminal evidence reaches the durable outbox.
+Output and terminal events already in `terminal-events/` replay after reconnect.
+A journal entry alone does not establish whether a process is alive or dead and
+is not sufficient to finish a pending deletion. Do not delete private journal
+or outbox files to unblock work.
+
+This supervision covers the owned process group. Workloads that deliberately
+create another session need separate reconciliation; neither a heartbeat nor
+silence can certify that those processes stopped. Deploy the updated daemon
+for new executions; an agent already running under an older daemon does not
+acquire the new supervisor retroactively.

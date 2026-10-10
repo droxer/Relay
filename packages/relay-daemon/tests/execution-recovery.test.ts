@@ -59,3 +59,47 @@ test("cancellation escalates from TERM to KILL and stops retries after confirmed
   assert.ok(signals.includes(9));
   assert.equal(signals.length, count);
 });
+
+
+test("verified exit permits bounded stream draining and preserves captured output", async () => {
+  const warnings: string[] = [];
+  let first = true;
+  const result = await collectExecution({
+    stdout: async () => ({next: async () => { if (first) {first = false; return "saved output";} return new Promise(() => {}); }}),
+    stderr: closed, wait: async () => ({exitCode: 0}),
+  }, false, undefined, undefined, undefined, undefined, {streamDrainMs: 5, warn: message => warnings.push(message)});
+  assert.equal(result.stdout, "saved output");
+  assert.equal(result.exit_code, 0);
+  assert.match(warnings[0]!, /exit confirmed.*drain timed out/);
+});
+
+test("failed exit queries retry without fabricating terminal evidence", async () => {
+  let waits = 0;
+  let kills = 0;
+  const warnings: string[] = [];
+  const result = await collectExecution({
+    stdout: closed, stderr: closed, kill: async () => { kills++; },
+    wait: async () => { if (++waits < 3) throw new Error("guest unavailable"); return {exitCode: 1}; },
+  }, false, undefined, undefined, undefined, undefined, {retryMs: 5, warn: message => warnings.push(message)});
+  assert.equal(waits, 3);
+  assert.ok(kills > 0);
+  assert.equal(result.exit_code, 1);
+  assert.ok(warnings.some(message => message.includes("Cannot confirm")));
+});
+
+test("cancellation watchdog warns without completing an unconfirmed execution", async () => {
+  const controller = new AbortController();
+  const warnings: string[] = [];
+  let finish!: (value: {exitCode: number}) => void;
+  const exit = new Promise<{exitCode: number}>(resolve => { finish = resolve; });
+  let settled = false;
+  const pending = collectExecution({stdout: closed, stderr: closed, wait: async () => exit, kill: async () => {}},
+    false, undefined, undefined, undefined, controller.signal, {graceMs: 5,retryMs: 5,warn: message => warnings.push(message)})
+    .finally(()=>{settled = true;});
+  controller.abort();
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(settled,false);
+  assert.ok(warnings.some(message=>message.includes("Cancellation overdue")));
+  finish({exitCode: 137});
+  await pending;
+});
