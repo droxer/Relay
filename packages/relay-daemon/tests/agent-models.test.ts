@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import type { AgentName } from "relay-core";
 import {
   MAX_MODELS_PER_AGENT,
+  anthropicApiModels,
   buildModelDiscoveryScript,
+  claudeAccountModels,
   claudeHelpAliases,
   codexCatalogModels,
   discoverAgentModels,
@@ -28,6 +30,18 @@ const CLAUDE_HELP = `Options:
                                         model's full name.
   --permission-mode <mode>              Permission mode (e.g. 'plan')
 `;
+
+/** What the sweep's grep keeps from Claude's `.claude.json`. */
+const CLAUDE_ACCOUNT_CACHE = `"additionalModelOptionsCache": [    {      "value": "claude-fable-5-1[1m]",      "label": "Fable",      "description": "Fable 5.1"    },    {"value":"claude-opus-5-5","label":"Opus"}  ]`;
+
+const ANTHROPIC_MODELS = JSON.stringify({
+  data: [
+    { type: "model", id: "claude-opus-5-5", display_name: "Claude Opus 5.5" },
+    { type: "model", id: "claude-sonnet-5-5", display_name: "Claude Sonnet 5.5" },
+    { type: "model", id: "claude-haiku-5-5", display_name: "Claude Haiku 5.5" },
+  ],
+  has_more: false,
+});
 
 /** What the sweep's grep keeps from `codex debug models`. */
 function codexTokens(models: Array<Record<string, string | number>>): string {
@@ -81,6 +95,76 @@ describe("agent model discovery", () => {
   it("adds Claude's configured model after its aliases", () => {
     const stdout = record("help", CLAUDE_HELP) + record("settings", JSON.stringify({ model: "claude-opus-5-5" }));
     assert.deepEqual(parseAgentModels("claude", stdout), ["fable", "opus", "sonnet", "claude-opus-5-5"]);
+  });
+
+  it("reads the model options Claude caches for the signed-in account", () => {
+    assert.deepEqual(claudeAccountModels(CLAUDE_ACCOUNT_CACHE), ["claude-fable-5-1[1m]", "claude-opus-5-5"]);
+    assert.deepEqual(claudeAccountModels('"additionalModelOptionsCache": []'), []);
+    assert.deepEqual(claudeAccountModels("not json"), []);
+  });
+
+  it("reads the provider's model list", () => {
+    assert.deepEqual(anthropicApiModels(ANTHROPIC_MODELS), ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
+    assert.deepEqual(anthropicApiModels('{"type":"error","error":{"type":"authentication_error"}}'), []);
+    assert.deepEqual(anthropicApiModels("<html>"), []);
+  });
+
+  it("offers Claude's versioned models from the provider instead of bare aliases", () => {
+    const stdout = record("help", CLAUDE_HELP)
+      + record("settings", JSON.stringify({ model: "opus" }))
+      + record("account", CLAUDE_ACCOUNT_CACHE)
+      + record("api", ANTHROPIC_MODELS);
+    assert.deepEqual(parseAgentModels("claude", stdout), [
+      "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+      "claude-fable-5-1[1m]",
+    ]);
+  });
+
+  it("falls back to Claude's aliases when the provider cannot be asked", () => {
+    const stdout = record("help", CLAUDE_HELP) + record("account", CLAUDE_ACCOUNT_CACHE);
+    assert.deepEqual(parseAgentModels("claude", stdout), ["fable", "opus", "sonnet", "claude-fable-5-1[1m]", "claude-opus-5-5"]);
+  });
+
+  it("keeps Claude's availableModels allowlist as the whole menu", () => {
+    const stdout = record("settings", JSON.stringify({ availableModels: ["sonnet"] }))
+      + record("account", CLAUDE_ACCOUNT_CACHE)
+      + record("api", ANTHROPIC_MODELS);
+    assert.deepEqual(parseAgentModels("claude", stdout), ["sonnet"]);
+  });
+
+  it("asks the provider for Claude's models without putting the credential in argv", () => {
+    const script = buildModelDiscoveryScript("claude");
+    assert.match(script, /\/v1\/models/);
+    assert.match(script, /-H @-/);
+    assert.doesNotMatch(script, /curl[^\n]*\$(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_AUTH_TOKEN)/);
+    assert.match(script, /additionalModelOptionsCache/);
+  });
+
+  it("falls back to Claude Code's own saved login without exposing the token", async () => {
+    const script = buildModelDiscoveryScript("claude");
+    assert.match(script, /\.credentials\.json/);
+    assert.match(script, /security find-generic-password -s "Claude Code-credentials" -w/);
+    assert.doesNotMatch(script, /curl[^\n]*\$token/);
+
+    // Run the real sweep against a fake saved login and a stub curl that
+    // echoes the headers it read from stdin: the token must arrive there.
+    const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { execFileSync } = await import("node:child_process");
+    const root = mkdtempSync(join(tmpdir(), "claude-login-"));
+    const home = join(root, "home");
+    const bin = join(root, "bin");
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    mkdirSync(bin);
+    writeFileSync(join(home, ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "saved-login-token" } }));
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\nheaders=$(cat)\ncase "$headers" in *"Bearer saved-login-token"*) printf '%s' '${ANTHROPIC_MODELS}';; esac\n`);
+    chmodSync(join(bin, "curl"), 0o755);
+    const stdout = execFileSync("bash", ["-c", script], {
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home },
+    }).toString();
+    assert.deepEqual(parseAgentModels("claude", stdout), ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
+    assert.doesNotMatch(stdout, /saved-login-token/);
   });
 
   it("offers Codex's listed models in catalog priority order and hides internal ones", () => {
@@ -142,6 +226,19 @@ describe("agent model discovery", () => {
     assert.deepEqual(models, { codex: ["gpt-6-luna", "gpt-5.6-terra", "gpt-5.6-luna"] });
     assert.equal(calls.length, 2);
     assert.ok(calls.every((call) => call.env !== undefined));
+  });
+
+  it("keeps Claude's last versioned list when its saved login has since expired", async () => {
+    const sweeps = [
+      record("help", CLAUDE_HELP) + record("api", ANTHROPIC_MODELS),
+      record("help", CLAUDE_HELP) + record("account", CLAUDE_ACCOUNT_CACHE),
+    ];
+    const exec = async (): Promise<ExecResult> => ({ exit_code: 0, stdout: sweeps.shift() ?? "", stderr: "" });
+    const memory = new Map();
+    const first = await discoverAgentModels(exec, ["claude"], undefined, undefined, memory);
+    const second = await discoverAgentModels(exec, ["claude"], undefined, undefined, memory);
+    assert.deepEqual(first.claude, ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
+    assert.deepEqual(second.claude, ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1[1m]"]);
   });
 
   it("never throws when a runtime cannot be asked", async () => {

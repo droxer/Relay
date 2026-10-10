@@ -31,7 +31,7 @@ import { consumeRoundResult } from "./round-result.js";
 import { validateHandoffWorkspace } from "./handoff-validation.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
-import { discoverAgentModels } from "./agent-models.js";
+import { discoverAgentModels, type ProviderListMemory } from "./agent-models.js";
 import { defaultExecutionManager, type ExecutionManager } from "./execution.js";
 import { ensureLocalDevboxOci, hasHostKimiCodeAuth, prepareHostAgentSkills, prepareHostKimiCodeHome } from "./box.js";
 
@@ -286,7 +286,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   }
   let agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, options.signal);
   let agentInventory = await discoverAgentInventory(environment.execStream, options.signal, inventoryDiscoveryTimeoutMs);
-  let agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), options.signal, inventoryDiscoveryTimeoutMs);
+  const providerModelLists: ProviderListMemory = new Map();
+  let agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), options.signal, inventoryDiscoveryTimeoutMs, providerModelLists);
   const runtimeRefreshCommands = new Map<string, string>();
   let refreshedCommands: Array<{ commandId: string; leaseId: string }> = [];
   const buildRegistration = (includeEmployeeId = Boolean(configuredEmployeeId), status?: DaemonNodeRegistration["status"]): DaemonNodeRegistration => ({
@@ -518,7 +519,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         if (activeRuns.size === 0 && (runtimeRefreshCommands.size > 0 || Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs)) {
           agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal);
           agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
-          agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs);
+          agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists);
           refreshedCommands = [...runtimeRefreshCommands].slice(0, 50).map(([commandId, leaseId]) => ({ commandId, leaseId }));
           updateHeartbeatSettings(await register());
           for (const { commandId } of refreshedCommands) runtimeRefreshCommands.delete(commandId);
