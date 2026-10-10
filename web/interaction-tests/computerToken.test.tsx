@@ -13,21 +13,23 @@ const credentials = {
 };
 beforeEach(() => { vi.mocked(revealComputerToken).mockReset(); vi.mocked(reissueComputerToken).mockReset(); });
 
-it("reveals the installer for an existing local computer instead of the old daemon command", async () => {
-  vi.mocked(revealComputerToken).mockResolvedValue(credentials);
+it("reissues a token without offering recovery of stored secrets", async () => {
+  vi.mocked(reissueComputerToken).mockResolvedValue(credentials);
   render(<ComputerTokenDrawer open node={node} onClose={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "computer.token_reveal_action" }));
+  expect(screen.queryByRole("button", { name: "computer.token_reveal_action" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "computer.token_reissue_action" }));
   expect(await screen.findByText(credentials.installCommand)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "computer.token_reveal_action" })).toBeNull();
+  expect(revealComputerToken).not.toHaveBeenCalled();
   expect(screen.queryByText(credentials.daemonCommand)).toBeNull();
   expect(screen.getByText("computer.connect_token_prompt")).toBeTruthy();
 });
 
 it("uses the installer returned after reissuing a token", async () => {
-  vi.mocked(revealComputerToken).mockResolvedValue(credentials);
+  vi.mocked(reissueComputerToken).mockResolvedValue(credentials);
   vi.mocked(reissueComputerToken).mockResolvedValue({ ...credentials, nodeToken: "replacement-token" });
   render(<ComputerTokenDrawer open node={node} onClose={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "computer.token_reveal_action" }));
-  await screen.findByText("fixture-token");
+  expect(screen.queryByRole("button", { name: "computer.token_reveal_action" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "computer.token_reissue_action" }));
   await screen.findByText("replacement-token");
   expect(screen.getByText(credentials.installCommand)).toBeTruthy();
@@ -35,9 +37,10 @@ it("uses the installer returned after reissuing a token", async () => {
 });
 
 it("keeps the daemon command for BoxLite computers without an installer", async () => {
-  vi.mocked(revealComputerToken).mockResolvedValue({ nodeToken: "fixture-token", daemonEnv: {}, daemonCommand: "boxlite-command" });
+  vi.mocked(reissueComputerToken).mockResolvedValue({ nodeToken: "fixture-token", daemonEnv: {}, daemonCommand: "boxlite-command" });
   render(<ComputerTokenDrawer open node={{ ...node, sandboxMode: "boxlite", nodeLocation: "cloud" }} onClose={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "computer.token_reveal_action" }));
+  expect(screen.queryByRole("button", { name: "computer.token_reveal_action" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "computer.token_reissue_action" }));
   expect(await screen.findByText("boxlite-command")).toBeTruthy();
   expect(screen.getByText("admin.daemon_command_hint")).toBeTruthy();
 });

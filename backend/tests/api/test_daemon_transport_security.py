@@ -83,3 +83,15 @@ def test_anonymous_registration_cannot_create_a_computer(monkeypatch):
         })
         assert response.status_code == 401
         assert app.state.registry.get('sbx_unprovisioned') is None
+
+
+def test_legacy_local_secrets_are_erased_on_open(tmp_path):
+    import json
+    from relay.persistence.daemon_store import LocalDaemonStore
+    nodes = tmp_path / 'daemon' / 'nodes'
+    nodes.mkdir(parents=True)
+    path = nodes / 'legacy.json'
+    path.write_text(json.dumps({'id': 'legacy', 'nodeTokenSecret': 'old-secret', 'nodeTokenHash': 'hash'}))
+    store = LocalDaemonStore(tmp_path)
+    assert 'old-secret' not in path.read_text()
+    assert store.get_node('legacy')['nodeTokenHash'] == 'hash'
