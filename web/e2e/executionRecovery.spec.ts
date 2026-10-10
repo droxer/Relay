@@ -4,9 +4,10 @@ const now = new Date().toISOString();
 const executionFor = (reason: string) => ({ phase: "recovery_required", blockingReason: reason, canDelete: false, executionConfirmed: false, deletionRequested: false, lastConfirmedAt: null, nextRecoveryAt: null });
 const sessionFor = (reason: string) => ({ id: "recovery-thread", title: "Recovery thread", taskGoal: "Recover execution", workspacePath: "/workspace", computerId: "computer-1", ownerEmployeeId: "review-user", participants: ["human"], status: "failed", phase: "created", createdAt: now, updatedAt: now, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0, execution: executionFor(reason) });
 
-async function serveRecoveryThread(page: Page, reason: string, phase = "recovery_required"): Promise<string[]> {
+async function serveRecoveryThread(page: Page, reason: string, phase = "recovery_required", detail: { computerOnline?: boolean; deletionRequested?: boolean } = {}): Promise<string[]> {
   const session = sessionFor(reason);
   session.execution.phase = phase;
+  Object.assign(session.execution, detail);
   const writes: string[] = [];
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
@@ -113,3 +114,19 @@ for (const phase of ["queued", "unresponsive", "stopping", "finalizing"]) {
     expect(writes).toEqual([]);
   });
 }
+
+
+test("online computer with pending deletion keeps exit recovery visible", async ({ page }) => {
+  const writes = await serveRecoveryThread(page, "execution_unconfirmed", "unresponsive", {
+    computerOnline: true, deletionRequested: true,
+  });
+  await page.goto("/threads/recovery-thread");
+  const panel = page.getByRole("region", { name: "Next steps" });
+  await expect(panel).toContainText("Computer online; agent exit unconfirmed");
+  await expect(panel).toContainText("Deletion is pending");
+  await expect(panel).not.toContainText("Computer is not responding");
+  await expect(panel.getByRole("button", { name: "Report the agent as gone" })).toHaveCount(0);
+  await panel.getByRole("link", { name: "Open Computers" }).click();
+  await expect(page).toHaveURL(/\/settings\/computers$/);
+  expect(writes).toEqual([]);
+});

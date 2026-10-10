@@ -1000,6 +1000,8 @@ describe("execution cancellation", () => {
   it("kills the active BoxLite execution when aborted", async () => {
     const controller = new AbortController();
     let killed = false;
+    let confirmExit!: (result: { exitCode: number }) => void;
+    const exit = new Promise<{ exitCode: number }>(resolve => { confirmExit = resolve; });
     const execution = {
       stdout: async () => ({
         next: async () => {
@@ -1013,9 +1015,10 @@ describe("execution cancellation", () => {
           return null;
         },
       }),
-      wait: async () => ({ exitCode: killed ? 143 : 0 }),
+      wait: async () => exit,
       kill: async () => {
         killed = true;
+        confirmExit({ exitCode: 143 });
       },
     };
 

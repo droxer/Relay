@@ -2089,6 +2089,10 @@
       "title": "Execution needs reconciliation",
       "body": "This thread still records a running agent without a matching execution record. Ask an administrator to reconcile the retained run and exit evidence. Retrying result saving cannot repair missing evidence; if the run is definitely over, report the agent as gone to release it."
     },
+    "online_exit_unconfirmed": {
+      "title": "Computer online; agent exit unconfirmed",
+      "body": "The computer is connected, but Relay has not confirmed that the agent stopped. Check the agent process and its child processes on the computer, then restore exit reporting. Relay will retain this execution and pending deletion until exit is confirmed and results are saved."
+    },
     "execution_unconfirmed": {
       "title": "Computer is not responding",
       "body": "Check the assigned computer and restore its daemon connection. The agent may still be running. Relay must receive exit evidence before releasing the execution or completing deletion — if the computer is never coming back, report the agent as gone."

@@ -592,6 +592,7 @@ transition, capacity, history compatibility, and migration policies.
 
 `GET /api/v1/threads/{id}/execution` returns the same `execution` object included
 in thread detail and list responses. It reports `phase`, `executionConfirmed`,
+`computerOnline` (daemon heartbeat liveness, or null when unknown),
 `canDelete`, `blockingReason`, `deletionRequested`, `lastConfirmedAt`, and
 `nextRecoveryAt`, plus `canRetrySave` and `canReportGone`. These capabilities
 reflect current execution state; operation routes still check actor authorization
@@ -601,6 +602,9 @@ recovered rather than discarded. Clients talking to an older backend must at
 least gate recovery actions on `recovery_required`. Phases are `queued`, `running`, `stopping`, `unresponsive`,
 `finalizing`, `terminal`, and `recovery_required`. A live command lease confirms
 execution ownership; task/session outcome alone never proves remote termination.
+A fresh computer heartbeat also does not prove execution exit. An online computer
+with unconfirmed execution receives process inspection guidance rather than a
+connection-loss message.
 
 `DELETE /api/v1/threads/{id}?stop=true` records an event-backed deletion request
 and stops outstanding work. It returns `204` when deleted or `202` with the

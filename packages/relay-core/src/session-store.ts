@@ -204,6 +204,8 @@ export interface CollaborationRoundManifest {
 export interface ExecutionStatus {
   phase: "queued" | "running" | "stopping" | "unresponsive" | "finalizing" | "terminal" | "recovery_required";
   executionConfirmed: boolean;
+  /** Daemon heartbeat liveness; independent of execution ownership or exit. */
+  computerOnline?: boolean | null;
   deletionRequested: boolean;
   canDelete: boolean;
   canRetrySave?: boolean;

@@ -260,3 +260,13 @@ it("uses explicit server capabilities for an unfamiliar finalization reason", ()
   expect(screen.getByRole("button", { name: "recovery.retry" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "recovery.report_gone" })).toBeNull();
 });
+
+it("shows online exit guidance while retaining pending deletion", () => {
+  const pending = session("execution_unconfirmed");
+  pending.execution = {...pending.execution!,phase: "unresponsive",computerOnline: true,deletionRequested: true};
+  render(<ExecutionRecoveryPanel session={pending} />);
+  expect(screen.getByText("recovery.online_exit_unconfirmed.title")).toBeTruthy();
+  expect(screen.getByText("recovery.online_exit_unconfirmed.body")).toBeTruthy();
+  expect(screen.getByText("recovery.deletion_pending")).toBeTruthy();
+  expect(screen.queryByText("recovery.execution_unconfirmed.title")).toBeNull();
+});

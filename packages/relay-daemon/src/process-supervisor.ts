@@ -67,6 +67,9 @@ export async function superviseLocalProcess(
       const rendered = options.stderrRenderer ? options.stderrRenderer(text) : text;
       if (rendered) options.sink?.(rendered);
     });
+    // Parent exit precedes pipe EOF when a descendant inherited stdout/stderr.
+    // Clean the process group immediately so those pipes cannot strand exit.
+    child.on("exit", () => { if (detached && child.pid) terminate("SIGKILL"); });
     child.on("close", async (code) => {
       if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener("abort", abort);
@@ -77,28 +80,27 @@ export async function superviseLocalProcess(
         terminate("SIGKILL");
         const groupId = child.pid;
         const cleanupDeadline = Date.now() + (options.cleanupTimeoutMs ?? 5_000);
-        const cleanupError = await new Promise<string | undefined>((finished) => {
+        await new Promise<void>((finished) => {
+          let warned = false;
           const check = (): void => {
             try { process.kill(-groupId, 0); } catch (error) {
               if ((error as NodeJS.ErrnoException).code === "ESRCH") {
-                finished(undefined);
+                finished();
               } else {
-                finished("Process cleanup could not verify termination.");
+                if (!warned) { process.stderr.write("[relay] Cannot verify process-group termination; retaining execution.\n"); warned = true; }
+                setTimeout(check, 100);
               }
               return;
             }
-            if (Date.now() >= cleanupDeadline) {
-              finished("Process cleanup timed out; descendants may still be running.");
-              return;
+            if (!warned && Date.now() >= cleanupDeadline) {
+              process.stderr.write("[relay] Process cleanup overdue; descendants may still be running. Retaining execution.\n");
+              warned = true;
             }
-            setTimeout(check, Math.min(100, Math.max(1, cleanupDeadline - Date.now())));
+            terminate("SIGKILL");
+            setTimeout(check, 100);
           };
           check();
         });
-        if (cleanupError) {
-          resolve({ exit_code: -1, stdout: stdoutCapture.toString(), stderr: stderrCapture.toString(), error_message: cleanupError });
-          return;
-        }
       }
       resolve({
         exit_code: code ?? -1,
