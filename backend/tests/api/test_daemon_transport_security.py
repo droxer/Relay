@@ -6,15 +6,22 @@ from relay.app import create_app
 from sqlalchemy import text
 
 
-def test_local_credentials_are_hash_only(monkeypatch):
+@pytest.mark.parametrize('database', [False, True])
+def test_local_credentials_are_hash_only(monkeypatch, database):
+    from relay.daemon_registry import DaemonNodeRegistry
+    from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
+    from relay.persistence.session_store import LocalSessionStore
     monkeypatch.setenv('RELAY_ADMIN_TOKEN', 'admin_token')
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        node, _, token = app.state.registry.provision_pending('alice', '/workspace', 'none')
-        with app.state.daemon_store.engine.connect() as conn:
-            secret = conn.execute(text('SELECT node_token_secret FROM daemon_nodes')).scalar()
-        assert secret is None
-        assert app.state.registry.reveal_node_token(node['id']) is None
+        store = DatabaseDaemonStore(f'sqlite:///{root}/daemon.db', create_schema=True) if database else LocalDaemonStore(root)
+        registry = DaemonNodeRegistry(LocalSessionStore(root), store)
+        node, _, token = registry.provision_pending('alice', '/workspace', 'none')
+        assert not store.get_node(node['id']).get('nodeTokenSecret')
+        if database:
+            with store.engine.connect() as conn:
+                secret = conn.execute(text('SELECT node_token_secret FROM daemon_nodes')).scalar()
+            assert secret is None
+        assert registry.reveal_node_token(node['id']) is None
         assert token
 
 

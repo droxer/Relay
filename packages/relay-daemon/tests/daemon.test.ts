@@ -1123,7 +1123,9 @@ test("daemon renews liveness while an idle command poll is in flight", async () 
       if (path.endsWith("/heartbeat")) {
         assert.equal(init?.method, "POST");
         assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer node_token");
-        const body = await jsonBody<{ activeCommandLeases: unknown[] }>(init);
+        const body = await jsonBody<{ activeCommandLeases: unknown[]; leaseSeconds: number }>(init);
+        stop.abort();
+        assert.equal(body.leaseSeconds, 90);
         assert.deepEqual(body.activeCommandLeases, []);
         heartbeats += 1;
         stop.abort();
@@ -3750,4 +3752,56 @@ test("inventory uses the same custom homes as local execution", async () => {
     assert.deepEqual(inventory.codex?.skills.map(skill => skill.name), ["custom"]);
     assert.deepEqual(inventory.codex?.mcpServers.map(server => server.name), ["custom"]);
   } finally { process.env = previous; rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const rejectedDuring of ["registration", "poll"]) {
+  test(`revoked token stops cleanly during ${rejectedDuring}`, async () => {
+    let registrations = 0;
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "sbx_revoked", token: "revoked", employeeId: "alice",
+      workspacePath: process.cwd(), signal: AbortSignal.timeout(2000), preflight: false,
+      pollIntervalMs: 1, shutdownGraceMs: 10, logger: testLogger(), environment: fakeEnvironment(),
+      fetchFn: async (url) => {
+        if (String(url).endsWith("/daemon-node-registrations")) {
+          registrations++;
+          return jsonResponse({}, rejectedDuring === "registration" ? 401 : 200);
+        }
+        return jsonResponse({}, 401);
+      },
+    });
+    assert.equal(registrations, 1);
+  });
+}
+
+test("managed daemon reuses durable enrollment after grant expiry", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-managed-restart-"));
+  let enrollments = 0;
+  try {
+    for (let restart = 0; restart < 2; restart++) {
+      const stop = new AbortController();
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", enrollmentToken: "restart-grant.secret", stateDir: root,
+        workspacePath: root, pollIntervalMs: 1, shutdownGraceMs: 10, logger: testLogger(),
+        signal: stop.signal, preflight: false, environment: fakeEnvironment(),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path.endsWith("/daemon-node-enrollments")) {
+            enrollments++;
+            if (restart) return jsonResponse({}, 401);
+            return jsonResponse({ sandboxId: "sbx_restart", token: "runtime-token", employeeId: "alice", sandboxMode: "boxlite" });
+          }
+          if (path.endsWith("/daemon-node-registrations")) {
+            const body = JSON.parse(String(init?.body));
+            assert.equal(body.sandboxId, "sbx_restart");
+            assert.equal(body.token, "runtime-token");
+            assert.equal(body.employeeId, "alice");
+            return jsonResponse({});
+          }
+          if (path.endsWith("/commands")) { stop.abort(); return jsonResponse({ commands: [] }); }
+          throw new Error(`unexpected URL ${url}`);
+        },
+      });
+    }
+    assert.equal(enrollments, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
