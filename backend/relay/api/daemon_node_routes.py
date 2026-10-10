@@ -65,9 +65,11 @@ def bounded_float(
 ) -> float:
     if value in (None, ""):
         return default
+    if isinstance(value, bool):
+        raise HTTPException(400, f"{field} must be a number.")
     try:
         parsed = float(value)
-    except ValueError:
+    except (TypeError, ValueError):
         raise HTTPException(400, f"{field} must be a number.")
     if not math.isfinite(parsed):
         raise HTTPException(400, f"{field} must be a finite number.")
@@ -552,7 +554,7 @@ def register_daemon_node(
             and registration.get("employeeId")
         )
         if not prior and not admin_authorized_ownership:
-            registration.pop("employeeId", None)
+            raise PermissionError("Computer enrollment is required before daemon registration.")
         sandbox = ctx.registry.register(
             registration,
             bearer_token(request),
@@ -623,6 +625,10 @@ async def daemon_heartbeat(
                 sandbox_id,
                 bearer_token(request),
                 heartbeat_command_leases(body),
+                lease_seconds=bounded_float(
+                    body.get("leaseSeconds"), default=60.0, minimum=1.0,
+                    maximum=MAX_COMMAND_LEASE_SECONDS, field="leaseSeconds",
+                ),
             )
         }
     except DeletedDaemonNodeError as error:
@@ -787,6 +793,9 @@ async def daemon_events(
 ) -> dict[str, bool]:
     try:
         event = daemon_node_event(await json_body(request))
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    try:
         if event.get("type") in WORKSPACE_EVENT_TYPES:
             ctx.registry.assert_node_event_authorized(sandbox_id, bearer_token(request))
             await run_in_threadpool(
@@ -811,10 +820,8 @@ async def daemon_events(
             "Daemon node event unauthorized", sandbox_id=sandbox_id, error=str(error)
         )
         raise HTTPException(401, str(error))
-    except KeyError as error:
-        raise HTTPException(404, str(error))
     except Exception as error:  # noqa: BLE001 - API boundary logs and normalizes event-store failures.
         logger.warning(
-            "Daemon node event rejected", sandbox_id=sandbox_id, error=str(error)
+            "Daemon node event failed", sandbox_id=sandbox_id, error=str(error)
         )
-        raise HTTPException(400, str(error))
+        raise HTTPException(503, "Event processing is temporarily unavailable.") from error

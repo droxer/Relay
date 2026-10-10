@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
 import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
 export { localProcessExecStream } from "./local-runtime.js";
 import { accessSync, chmodSync, constants, mkdirSync, statSync } from "node:fs";
@@ -194,12 +196,18 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let enrolledSandboxMode: string | undefined;
   let enrolledHeartbeatSettings: DaemonNodeHeartbeatSettings | undefined;
   if (!sandboxId && enrollmentToken) {
-    const enrollment = await withBackendReconnect(
+    // A grant identifies one provisioning attempt. Keying the private bootstrap
+    // state by backend + grant avoids reusing an identity for another attempt.
+    const enrollmentKey = createHash("sha256").update(JSON.stringify([backendUrl, enrollmentToken])).digest("hex");
+    const enrollmentDir = resolveDaemonStateDirectory(`enrollment-${enrollmentKey}`, options.stateDir);
+    const enrollmentPath = join(enrollmentDir, `enrollment-${enrollmentKey}.json`);
+    const enrollment = loadManagedEnrollment(enrollmentPath) ?? await withBackendReconnect(
       () => enrollManagedDaemon(fetchFn, backendUrl, enrollmentToken, workspacePath, options.signal),
       options.logger ?? { warn: () => undefined },
       { sandboxId: "pending-managed-enrollment", what: "managed enrollment" },
       { signal: options.signal },
     );
+    saveManagedEnrollment(enrollmentPath, enrollment);
     sandboxId = enrollment.sandboxId;
     enrolledToken = enrollment.token;
     configuredEmployeeId = configuredEmployeeId ?? enrollment.employeeId;
@@ -283,7 +291,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let shutdownPromise: Promise<void> | undefined;
   // Set when the backend answers 410: the node was deleted in the control
   // panel, so this daemon stops instead of re-registering itself back in.
-  let nodeDeleted = false;
+  let credentialsRejected = false;
   if (runtimeSignal.aborted) {
     setHealth("stopping", { signal: "external" });
     await environment.close();
@@ -340,24 +348,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   });
   const register = async (): Promise<DaemonNodeHeartbeatSettings | undefined> => {
     const url = relayApiUrl(backendUrl, "/daemon-node-registrations");
-    try {
-      const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
-        fetchFn, url, buildRegistration(), undefined, runtimeSignal,
-      );
-      return validHeartbeatSettings(response.heartbeat);
-    } catch (error) {
-      if (
-        error instanceof DaemonHttpError &&
-        error.status === 400 &&
-        error.message.includes("employeeId is required for unprovisioned daemon node registration")
-      ) {
-        const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
-          fetchFn, url, buildRegistration(true), undefined, runtimeSignal,
-        );
-        return validHeartbeatSettings(response.heartbeat);
-      }
-      throw error;
-    }
+    const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
+      fetchFn, url, buildRegistration(), undefined, runtimeSignal,
+    );
+    return validHeartbeatSettings(response.heartbeat);
   };
   if (options.preflight !== false) {
     await runStartupPreflight({ backendUrl, sandboxId, token, workspacePath, fetchFn, logger, signal: runtimeSignal });
@@ -375,7 +369,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ]);
       // A deleted node has no record to mark stopped, and the backend rejects
       // the registration anyway. Skip it rather than log a bogus failure.
-      if (!nodeDeleted) {
+      if (!credentialsRejected) {
         await postJson(
           fetchFn,
           relayApiUrl(backendUrl, "/daemon-node-registrations"),
@@ -460,6 +454,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           fetchFn,
           url,
           {
+            leaseSeconds: commandLeaseSeconds,
             activeCommandLeases: renewing.map(({ command }) => ({
               commandId: command.id,
               ...(command.leaseId ? { leaseId: command.leaseId } : {}),
@@ -508,6 +503,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       }
     })().catch((error: unknown) => {
       if (stopping || runtimeSignal.aborted || error instanceof DaemonStoppedError) return;
+      if (error instanceof DaemonHttpError && (error.status === 401 || error.status === 410)) {
+        credentialsRejected = true;
+        logger.info("daemon credentials rejected; run setup again", { sandboxId, status: error.status });
+        shutdown("external", false);
+        return;
+      }
       logger.error("liveness heartbeat stopped", {
         sandboxId,
         error: error instanceof Error ? error.message : String(error),
@@ -552,7 +553,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           const detail = `Command poll failed: ${response.status} ${await response.text()}`;
           // Gone is permanent: use the same clean shutdown as a deleted-node
           // registration instead of trying to bring the node back.
-          if (response.status === 410) throw new DaemonHttpError(detail, response.status);
+          if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status);
           // The backend may have restarted with fresh state or demoted this node;
           // re-register before treating the rejection as fatal.
           logger.warn("command poll rejected; re-registering", { sandboxId, error: detail });
@@ -776,10 +777,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     }
     await shutdownPromise;
   } catch (error) {
-    if (error instanceof DaemonHttpError && error.status === 410) {
-      nodeDeleted = true;
-      logger.info("daemon node deleted; stopping", { sandboxId, error: error.message });
-      console.log(`Relay daemon stopping: node ${sandboxId} was deleted in the control panel.`);
+    if (error instanceof DaemonHttpError && (error.status === 410 || error.status === 401)) {
+      credentialsRejected = true;
+      const reason = error.status === 410
+        ? `node ${sandboxId} was deleted in the control panel.`
+        : `the credential for node ${sandboxId} was rejected or reissued. Run setup again to reconnect this computer.`;
+      logger.info("daemon credentials rejected; stopping", { sandboxId, reason });
+      console.log(`Relay daemon stopping: ${reason}`);
       shutdown("external", false);
       await shutdownPromise;
       return;
@@ -1668,7 +1672,7 @@ async function withBackendReconnect<T>(
       return await action();
     } catch (error) {
       if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
-      if (error instanceof DaemonHttpError && error.status < 500) throw error;
+      if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;
       attempt += 1;
       const message = error instanceof Error ? error.message : String(error);
       const backoff = backendReconnectDelayMs(attempt);
@@ -1751,7 +1755,7 @@ async function postJsonWithRetry(
       await postJson(fetchFn, url, body, token, signal);
       return;
     } catch (error) {
-      if (error instanceof DaemonHttpError && error.status < 500) throw error;
+      if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;
       const backoff = Math.min(EVENT_POST_RETRY_INITIAL_DELAY_MS * 2 ** Math.min(attempt, 5), EVENT_POST_RETRY_MAX_DELAY_MS);
       attempt += 1;
       await delay(backoff, signal);

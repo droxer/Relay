@@ -127,6 +127,7 @@ def _assert_node_run_request_capacity(
 def _node_for_storage(node: dict[str, Any]) -> dict[str, Any]:
     stored = {**node, "token": None}
     stored.pop("nodeToken", None)
+    stored.pop("nodeTokenSecret", None)
     return stored
 
 
@@ -3539,7 +3540,7 @@ def node_to_row(
         # owner reveal the token again. Managed nodes persist neither.
         "ui_token_hash": node.get("uiTokenHash"),
         "node_token_hash": node.get("nodeTokenHash"),
-        "node_token_secret": node.get("nodeTokenSecret"),
+        "node_token_secret": None,
         "last_error": node.get("lastError"),
         "created_at": _parse_iso(node["createdAt"]),
         "updated_at": _parse_iso(node["updatedAt"]),
@@ -3670,11 +3671,6 @@ def row_to_node(row: Any) -> dict[str, Any]:
         **(
             {"nodeTokenHash": row["node_token_hash"]}
             if row.get("node_token_hash")
-            else {}
-        ),
-        **(
-            {"nodeTokenSecret": row["node_token_secret"]}
-            if row.get("node_token_secret")
             else {}
         ),
         **({"lastError": row["last_error"]} if row.get("last_error") else {}),

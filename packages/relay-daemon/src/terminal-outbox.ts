@@ -2,6 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+// Timeout and rate limiting are transient even though they are 4xx.
+const permanentlyRejected = (status: number) => status >= 400 && status < 500 && status !== 408 && status !== 429;
 const outboxes = new WeakMap<typeof fetch, TerminalOutbox>();
 const terminalTypes = new Set(["run.completed", "run.failed", "run.cancelled"]);
 const outputTypes = new Set(["run.output", "run.output.batch", "run.collaboration"]);
@@ -99,7 +101,7 @@ export class TerminalOutbox {
         }
       }
       const response = await send(input, init);
-      if (record && response.ok) this.acknowledge(record.key);
+      if (record && (response.ok || permanentlyRejected(response.status))) this.acknowledge(record.key);
       return response;
     };
     outboxes.set(wrapped, this);
@@ -131,7 +133,7 @@ export class TerminalOutbox {
             body: JSON.stringify(event), signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)]),
           });
           await response.body?.cancel();
-          if (!response.ok) { outputBlocked = true; continue; }
+          if (!response.ok && !permanentlyRejected(response.status)) { outputBlocked = true; continue; }
           this.acknowledge(record.key);
         } catch {
           // Output stays ordered; terminal evidence must still release the run.
