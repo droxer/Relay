@@ -95,3 +95,13 @@ def test_legacy_local_secrets_are_erased_on_open(tmp_path):
     store = LocalDaemonStore(tmp_path)
     assert 'old-secret' not in path.read_text()
     assert store.get_node('legacy')['nodeTokenHash'] == 'hash'
+
+
+def test_unknown_node_event_is_a_permanent_rejection(monkeypatch):
+    monkeypatch.setenv('RELAY_ADMIN_TOKEN', 'admin_token')
+    with TemporaryDirectory() as root:
+        response = TestClient(create_app(root)).post('/api/v1/daemon-nodes/missing/events', json={
+            'type': 'run.output', 'commandId': 'cmd', 'sessionId': 'ses',
+            'runId': 'run', 'agent': 'codex', 'stream': 'stdout', 'text': 'hello', 'sequence': 0,
+        })
+        assert response.status_code == 404
