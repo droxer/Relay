@@ -103,6 +103,7 @@ def test_team_agents_returns_the_lead_first() -> None:
         (None, [], "team_not_found"),
         (_team(deletedAt="2026-01-01T00:00:00Z"), [], "team_not_found"),
         (_team(enabled=False), [], "team_disabled"),
+        (_team(enabled=False, memberAgentIds=[], leadAgentId=None), [], "team_invalid"),
         (_team(ownerEmployeeId="bob"), [], "team_forbidden"),
         (_team(leadAgentId="stranger"), [], "team_invalid"),
     ],

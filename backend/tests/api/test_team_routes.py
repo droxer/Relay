@@ -910,6 +910,55 @@ def test_deleting_lead_agent_promotes_next_member(monkeypatch) -> None:
         assert updated["memberAgentIds"] == [support["id"]]
 
 
+def test_team_emptied_by_agent_deletion_is_disabled_and_restaffable(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        _employee(client, "alice")
+        only = _agent(client, "alice", "Only", "codex")
+        team = client.post(
+            "/api/v1/admin/teams",
+            json={
+                "ownerEmployeeId": "alice",
+                "name": "Delivery",
+                "leadAgentId": only["id"],
+                "memberAgentIds": [only["id"]],
+            },
+        ).json()["team"]
+
+        assert client.delete(f"/api/v1/admin/agents/{only['id']}").status_code == 200
+        emptied = app.state.team_store.get_team(team["id"])
+        assert emptied["memberAgentIds"] == []
+        assert emptied["enabled"] is False
+
+        renamed = client.patch(
+            f"/api/v1/admin/teams/{team['id']}", json={"name": "Delivery (paused)"}
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["team"]["name"] == "Delivery (paused)"
+
+        reenabled = client.patch(
+            f"/api/v1/admin/teams/{team['id']}", json={"enabled": True}
+        )
+        assert reenabled.status_code == 400
+        assert reenabled.json()["detail"] == "team_members_required"
+
+        fresh = _agent(client, "alice", "Fresh", "claude")
+        restaffed = client.patch(
+            f"/api/v1/admin/teams/{team['id']}",
+            json={
+                "leadAgentId": fresh["id"],
+                "memberAgentIds": [fresh["id"]],
+                "enabled": True,
+            },
+        )
+        assert restaffed.status_code == 200, restaffed.text
+        assert restaffed.json()["team"]["enabled"] is True
+        assert restaffed.json()["team"]["lead"]["id"] == fresh["id"]
+
+
 def test_startup_repairs_team_members_deleted_by_an_older_runtime(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -1723,6 +1772,8 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
         assert create_with_thread.status_code == 409
         assert create_with_thread.json()["detail"] == "team_invalid"
 
+        # Emptying the team disabled it, so even a thread-less assignment is
+        # refused up front instead of failing later when a thread is linked.
         task = client.post(
             "/api/v1/tasks",
             json={
@@ -1732,12 +1783,9 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
                 "assigneeEmployeeId": "alice",
                 "assignedTeamId": team["id"],
             },
-        ).json()
-        linked = client.post(
-            "/api/v1/threads", json={"taskGoal": "No lead thread", "taskId": task["id"]}
         )
-        assert linked.status_code == 409
-        assert linked.json()["detail"] == "team_invalid"
+        assert task.status_code == 409
+        assert task.json()["detail"] == "team_invalid"
 
 
 def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
