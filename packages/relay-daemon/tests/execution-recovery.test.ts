@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { collectExecution } from "../src/box.js";
+
+const tick = () => new Promise<void>(resolve => setTimeout(resolve, 10));
+const closed = async () => ({ next: async () => null });
+
+test("exit is observed while an inherited output stream remains open", async () => {
+  let waited = false;
+  let release!: (value: null) => void;
+  const stream = new Promise<null>(resolve => { release = resolve; });
+  const pending = collectExecution({
+    stdout: async () => ({ next: async () => stream }), stderr: closed,
+    wait: async () => { waited = true; return { exitCode: 0 }; },
+  });
+  await tick();
+  const observedBeforeEof = waited;
+  release(null);
+  await pending;
+  assert.equal(observedBeforeEof, true);
+});
+
+test("cancellation retries a rejected kill and retains execution until exit", async () => {
+  const controller = new AbortController();
+  let kills = 0;
+  let release!: (value: { exitCode: number }) => void;
+  const exit = new Promise<{ exitCode: number }>(resolve => { release = resolve; });
+  const warnings: string[] = [];
+  let settled = false;
+  const pending = collectExecution({stdout: closed, stderr: closed, wait: async () => exit,
+    kill: async () => { kills++; if (kills === 1) throw new Error("transport unavailable"); },
+  }, false, undefined, undefined, undefined, controller.signal,
+  { retryMs: 5, graceMs: 5, warn: message => warnings.push(message) }).finally(() => { settled = true; });
+  controller.abort();
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const retained = !settled;
+  release({exitCode: 137});
+  const result = await pending;
+  assert.equal(retained, true);
+  assert.ok(kills >= 2);
+  assert.ok(warnings.some(message => message.includes("transport unavailable")));
+  assert.equal(result.error_message, "Execution cancelled.");
+});
+
+test("cancellation escalates from TERM to KILL and stops retries after confirmed exit", async () => {
+  const controller = new AbortController();
+  const signals: number[] = [];
+  let release!: (value: {exitCode: number}) => void;
+  const exit = new Promise<{exitCode: number}>(resolve => { release = resolve; });
+  const pending = collectExecution({stdout: closed, stderr: closed, wait: async () => exit,
+    signal: async (signal: number) => { signals.push(signal); },
+    kill: async () => { signals.push(9); release({exitCode: 137}); },
+  }, false, undefined, undefined, undefined, controller.signal, { retryMs: 5, graceMs: 5 });
+  controller.abort();
+  await pending;
+  const count = signals.length;
+  await tick();
+  assert.equal(signals[0], 15);
+  assert.ok(signals.includes(9));
+  assert.equal(signals.length, count);
+});

@@ -68,3 +68,13 @@ def test_stopping_does_not_remain_silent_forever():
     assert status["phase"] == "recovery_required"
     assert status["blockingReason"] == "termination_unconfirmed"
     assert status["canDelete"] is False
+
+
+def test_online_computer_does_not_prove_execution_exit():
+    status = execution_status({}, {"status": "running"}, {
+        "status": "dispatched", "leaseExpiresAt": "2026-09-15T00:00:00Z",
+    }, now=NOW, computer_online=True)
+    assert status["computerOnline"] is True
+    assert status["phase"] == "unresponsive"
+    assert status["executionConfirmed"] is False
+    assert status["canDelete"] is False
