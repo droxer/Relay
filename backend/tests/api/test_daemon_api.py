@@ -2459,13 +2459,10 @@ def test_local_enrollment_adopts_the_workspace_of_a_pathless_computer(
         assert body["node"]["workspacePath"] == "/Users/alice/project"
 
 
-def test_local_enrollment_returns_the_persisted_token_on_adoption(
+def test_local_enrollment_adopts_without_recovering_a_token(
     monkeypatch,
 ) -> None:
-    # Launch tokens are persisted for control-panel computers, so re-enrolling
-    # an already-connected computer hands back the same token — identical to
-    # what the reveal endpoint answers. The command still prompts for the
-    # secret instead of embedding it.
+    # Adoption must not rotate a running computer or recover its secret.
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -2505,11 +2502,12 @@ def test_local_enrollment_returns_the_persisted_token_on_adoption(
         body = response.json()
         assert body["reused"] is True
         assert body["node"]["id"] == node_id
-        assert body["nodeToken"] == node_token
+        assert not body.get("nodeToken")
         assert body["daemonCommand"]
         assert node_id in body["daemonCommand"]
         # The command prompts for the token rather than carrying the secret.
-        assert "read -rsp" in body["daemonCommand"]
+        assert node_token not in body["daemonCommand"]
+        assert app.state.registry.get(node_id)["nodeTokenHash"]
 
 
 def test_employee_can_disconnect_own_computer(monkeypatch) -> None:
@@ -2577,7 +2575,7 @@ def test_employee_cannot_disconnect_an_admin_managed_computer(monkeypatch) -> No
         assert "managed by an admin" in response.json()["detail"]
 
 
-def test_employee_can_reveal_own_computer_token(monkeypatch) -> None:
+def test_employee_must_reissue_to_recover_a_computer_token(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -2593,19 +2591,12 @@ def test_employee_can_reveal_own_computer_token(monkeypatch) -> None:
 
         response = client.get(f"/api/v1/daemon-nodes/{node_id}/token")
 
-        assert response.status_code == 200
-        body = response.json()
-        assert body["nodeToken"] == node_token
-        assert body["daemonEnv"]["RELAY_DAEMON_NODE_TOKEN"] == node_token
-        assert body["daemonEnv"]["RELAY_SANDBOX_ID"] == node_id
-        # The start command prompts for the secret instead of embedding it.
-        assert "read -rsp" in body["daemonCommand"]
-        assert node_token not in body["daemonCommand"]
+        assert response.status_code == 409
+        assert node_token not in response.text
 
 
-def test_employee_can_reveal_token_after_a_backend_restart(monkeypatch) -> None:
-    # The whole point of persisting the secret: a new backend process over the
-    # same data root still answers the reveal.
+def test_employee_cannot_reveal_token_after_a_backend_restart(monkeypatch) -> None:
+    # A backend restart cannot recover a previously issued secret.
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         first_app = create_app(root)
@@ -2632,8 +2623,8 @@ def test_employee_can_reveal_token_after_a_backend_restart(monkeypatch) -> None:
 
         response = restarted.get(f"/api/v1/daemon-nodes/{node_id}/token")
 
-        assert response.status_code == 200
-        assert response.json()["nodeToken"] == node_token
+        assert response.status_code == 409
+        assert node_token not in response.text
 
 
 def test_employee_cannot_reveal_another_employees_token(monkeypatch) -> None:
@@ -2698,10 +2689,10 @@ def test_employee_can_reissue_own_computer_token(monkeypatch) -> None:
         new_token = body["nodeToken"]
         assert new_token != old_token
         assert body["daemonEnv"]["RELAY_DAEMON_NODE_TOKEN"] == new_token
-        # The reveal now answers the reissued token...
+        # Rotation displays the token once, never through the reveal route.
         revealed = client.get(f"/api/v1/daemon-nodes/{node_id}/token")
-        assert revealed.status_code == 200
-        assert revealed.json()["nodeToken"] == new_token
+        assert revealed.status_code == 409
+        assert new_token not in revealed.text
         # ...and the rotated-out token no longer authenticates the daemon.
         try:
             app.state.registry.register(
@@ -2747,10 +2738,7 @@ def test_reveal_without_a_recoverable_token_points_at_reissue(monkeypatch) -> No
         assert "Reissue" in response.json()["detail"]
         reissued = client.post(f"/api/v1/daemon-nodes/{node_id}/token/reissue")
         assert reissued.status_code == 200
-        assert (
-            client.get(f"/api/v1/daemon-nodes/{node_id}/token").json()["nodeToken"]
-            == reissued.json()["nodeToken"]
-        )
+        assert client.get(f"/api/v1/daemon-nodes/{node_id}/token").status_code == 409
 
 
 def test_employee_cannot_reveal_a_managed_computer_token(monkeypatch) -> None:
@@ -4362,7 +4350,6 @@ def test_local_enrollment_and_token_commands_use_public_domain(monkeypatch) -> N
         node_id = enrolled.json()["node"]["id"]
         responses = [
             enrolled,
-            client.get(f"/api/v1/daemon-nodes/{node_id}/token"),
             client.post(f"/api/v1/daemon-nodes/{node_id}/token/reissue"),
         ]
         for response in responses:

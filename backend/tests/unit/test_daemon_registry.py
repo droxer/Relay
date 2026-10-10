@@ -405,8 +405,8 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
         node_tokens = [enrollment[2] for enrollment in enrollments]
         assert len({node["id"] for node in nodes}) == 1
         assert sum(token is not None for token in ui_tokens) == 1
-        assert len(set(node_tokens)) == 1
-        assert node_tokens[0]
+        # Only the creator can return the secret; replicas cannot recover it.
+        assert sum(token is not None for token in node_tokens) == 1
 
         restarted = DaemonNodeRegistry(
             LocalSessionStore(root), daemon_store_factory(root)
@@ -476,11 +476,10 @@ def test_daemon_store_retains_managed_runtime_identity_after_delete(
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
-def test_pending_employee_device_enrollment_returns_persisted_token_after_restart(
+def test_pending_employee_device_enrollment_rotates_token_after_restart(
     daemon_store_factory,
 ) -> None:
-    # The launch token is persisted, so a restarted backend answers a retried
-    # enrollment with the same token instead of rotating it.
+    # Pending enrollments can be retried, but the old secret is unrecoverable.
     with TemporaryDirectory() as root:
         first = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
         node, _, first_token = first.provision_pending(
@@ -496,7 +495,7 @@ def test_pending_employee_device_enrollment_returns_persisted_token_after_restar
 
         assert retried["id"] == node["id"]
         assert replacement_token
-        assert replacement_token == first_token
+        assert replacement_token != first_token
         registration = {
             "sandboxId": node["id"],
             "employeeId": "alice",
@@ -513,7 +512,7 @@ def test_pending_employee_device_enrollment_returns_persisted_token_after_restar
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
-def test_reveal_and_reissue_node_token_survive_restart(daemon_store_factory) -> None:
+def test_reissue_authenticates_after_restart_without_recoverable_secrets(daemon_store_factory) -> None:
     with TemporaryDirectory() as root:
         registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
         node, _, token = registry.provision_pending(
@@ -523,13 +522,13 @@ def test_reveal_and_reissue_node_token_survive_restart(daemon_store_factory) -> 
         restarted = DaemonNodeRegistry(
             LocalSessionStore(root), daemon_store_factory(root)
         )
-        assert restarted.reveal_node_token(node["id"]) == token
+        assert restarted.reveal_node_token(node["id"]) is None
 
         updated, new_token = restarted.reissue_node_token(node["id"])
 
         assert new_token != token
         assert updated["credentialVersion"] == 2
-        assert restarted.reveal_node_token(node["id"]) == new_token
+        assert restarted.reveal_node_token(node["id"]) is None
         registration = {
             "sandboxId": node["id"],
             "employeeId": "alice",
@@ -540,9 +539,10 @@ def test_reveal_and_reissue_node_token_survive_restart(daemon_store_factory) -> 
         }
         with pytest.raises(PermissionError):
             restarted.register({**registration, "token": token})
-        # The reissued secret is persisted too: a third process still reveals it.
+        # Only the hash survives; a third process can authenticate but not reveal it.
         third = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
-        assert third.reveal_node_token(node["id"]) == new_token
+        assert third.reveal_node_token(node["id"]) is None
+        assert third.register({**registration, "token": new_token})["status"] == "ready"
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)

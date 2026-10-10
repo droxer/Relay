@@ -320,6 +320,11 @@ class LocalDaemonStore:
             self.events_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
+        # Upgrade legacy file-backed records without retaining launch secrets.
+        for path in self.nodes_dir.glob("*.json"):
+            node = _read_json(path)
+            if "nodeTokenSecret" in node:
+                self._write_node(node)
         self._rebuild_command_index()
 
     def set_command_listener(
@@ -1515,8 +1520,7 @@ class DatabaseDaemonStore:
         Column("max_concurrent_runs", Integer, nullable=False, default=1),
         Column("ui_token_hash", Text, nullable=True),
         Column("node_token_hash", Text, nullable=True),
-        # Plaintext launch token for control-panel computers, so the owner can
-        # reveal it again for a reconnect. Managed nodes leave this NULL.
+        # Legacy compatibility column, cleared by migration 0089. Always NULL.
         Column("node_token_secret", Text, nullable=True),
         Column("last_error", Text, nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),

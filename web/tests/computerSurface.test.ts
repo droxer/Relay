@@ -129,9 +129,9 @@ describe("My Computer record card", () => {
     }
   });
 
-  it("lets the owner see the token again for reconnecting", async () => {
+  it("lets the owner reissue a token for reconnecting", async () => {
     // Enrollment shows the token once; the card carries a labelled Token
-    // action that opens the reveal/reissue drawer against the owner-scoped
+    // action that opens the reissue drawer against the owner-scoped
     // token subresource.
     const [card, page, drawer] = await Promise.all([
       read("web/src/components/computer/ComputerCard.tsx"),
@@ -140,7 +140,7 @@ describe("My Computer record card", () => {
     ]);
     assert.match(card, /\{t\("computer\.token_button"\)\}/);
     assert.match(page, /<ComputerTokenDrawer/);
-    assert.match(drawer, /revealComputerToken\(node!\.id\)/);
+    assert.doesNotMatch(drawer, /revealComputerToken/);
     assert.match(drawer, /reissueComputerToken\(node!\.id\)/);
     // Reissue burns the current token, so it is confirmed destructively.
     assert.match(drawer, /tone: "danger"/);

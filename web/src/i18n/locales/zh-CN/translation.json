@@ -826,7 +826,7 @@
     "token_reissue_title": "重新签发令牌",
     "token_reissue_message": "当前令牌将立即失效。已在这台电脑上运行的守护进程必须使用新令牌重启。",
     "token_reissued_note": "已签发新令牌——旧令牌已失效。请使用此令牌重启守护进程。",
-    "token_unrecoverable": "这台电脑的令牌早于令牌存储功能，无法显示。请重新签发以获取新令牌。",
+    "token_unrecoverable": "电脑令牌仅在签发时显示。重新签发令牌以连接电脑，旧令牌将失效。",
     "token_error": "无法加载令牌：{{message}}"
   },
   "routine": {

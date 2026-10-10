@@ -261,7 +261,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
             },
         )
 
-        assert registered.status_code == 200
+        assert registered.status_code == 401
         assert "employeeId" not in registered.json()
         restarted_app = create_app(root)
         restarted_daemon = TestClient(restarted_app)
@@ -280,7 +280,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
                 "status": "ready",
             },
         )
-        assert heartbeat.status_code == 200
+        assert heartbeat.status_code == 401
         assert "employeeId" not in heartbeat.json()
         assert "nodeLocation" not in heartbeat.json()
         restarted_admin = TestClient(restarted_app)

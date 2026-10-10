@@ -842,7 +842,7 @@
     "token_reissue_title": "Reissue token",
     "token_reissue_message": "The current token stops working immediately. A daemon already running on this computer must be restarted with the new token.",
     "token_reissued_note": "New token issued — the previous one no longer works. Restart the daemon with this token.",
-    "token_unrecoverable": "This computer’s token predates token storage and cannot be shown. Reissue it to get a new one.",
+    "token_unrecoverable": "Computer tokens are shown only when issued. Reissue a token to reconnect; the previous token will stop working.",
     "token_error": "Could not load the token: {{message}}"
   },
   "routine": {

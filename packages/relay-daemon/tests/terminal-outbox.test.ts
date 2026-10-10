@@ -23,12 +23,12 @@ test("terminal result survives failed delivery and daemon restart", async () => 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("first terminal result wins and HTTP rejection retains evidence", async () => {
+test("first terminal result wins and transient HTTP rejection retains evidence", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-outbox-"));
   try {
     const outbox = new TerminalOutbox(root);
     const event = { type: "run.completed", commandId: "cmd", leaseId: "lease", exitCode: 0 };
-    const send = outbox.wrapFetch(async () => new Response("rejected", { status: 409 }));
+    const send = outbox.wrapFetch(async () => new Response("unavailable", { status: 503 }));
     await send("http://backend/events", { method: "POST", body: JSON.stringify(event) });
     await send("http://backend/events", { method: "POST", body: JSON.stringify({ ...event, type: "run.failed" }) });
     assert.deepEqual(outbox.pending()[0].event, event);
