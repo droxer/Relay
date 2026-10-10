@@ -95,6 +95,21 @@ WantedBy=default.target
 ` };
 }
 
+const LAUNCHER_MARKER = '# Managed by Relay computer installer';
+
+/** Writes `<binDir>/<name>` to run `script`, unless an unrelated executable already owns that name. */
+function installLauncher(binDir: string, name: string, script: string): string | undefined {
+  mkdirSync(binDir, { recursive: true });
+  const launcher = join(binDir, name);
+  if (existsSync(launcher) && !readFileSync(launcher, 'utf8').includes(LAUNCHER_MARKER)) {
+    console.log(`Preserving existing executable: ${launcher}`);
+    return undefined;
+  }
+  writeFileSync(launcher, `#!/bin/sh\n${LAUNCHER_MARKER}\nexec ${shell(process.execPath)} ${shell(script)} "$@"\n`, { mode: 0o755 });
+  chmodSync(launcher, 0o755);
+  return launcher;
+}
+
 async function install(): Promise<void> {
   const options = parseInstallArgs(process.argv.slice(2));
   if (!['darwin', 'linux'].includes(process.platform)) throw new Error('Only macOS and Linux are supported.');
@@ -164,15 +179,8 @@ async function install(): Promise<void> {
     '--employee-id', options.employeeId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
     '--local-permission-policy', options.localPermissionPolicy, ...(runtimeProfile ? ['--runtime-profile', runtimeProfile] : [])];
   const binDir = join(homedir(), '.local', 'bin');
-  mkdirSync(binDir, { recursive: true });
-  const wrapper = join(binDir, 'relay-daemon');
-  const marker = '# Managed by Relay computer installer';
-  if (!existsSync(wrapper) || readFileSync(wrapper, 'utf8').includes(marker)) {
-    writeFileSync(wrapper, `#!/bin/sh\n${marker}\nexec ${shell(process.execPath)} ${shell(cli)} "$@"\n`, { mode: 0o755 });
-    chmodSync(wrapper, 0o755);
-  } else {
-    console.log(`Preserving existing executable: ${wrapper}`);
-  }
+  const wrapper = installLauncher(binDir, 'relay-daemon', cli);
+  const control = installLauncher(binDir, 'relay', join(dirname(cli), 'control.js'));
   if (options.foreground) {
     console.log('Starting Relay in this terminal. Press Ctrl+C to stop.');
     const child = spawnSync(argv[0]!, argv.slice(1), { stdio: 'inherit' });
@@ -190,10 +198,11 @@ async function install(): Promise<void> {
     writeFileSync(file, service.content, { mode: 0o600 });
     const domain = `gui/${process.getuid!()}`;
     spawnSync('launchctl', ['bootout', `${domain}/${service.name}`], { stdio: 'ignore' });
+    // Reconnecting overrides an earlier `relay stop`, which disables the label.
+    spawnSync('launchctl', ['enable', `${domain}/${service.name}`], { stdio: 'ignore' });
     execFileSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' });
     if (options.verbose) {
       console.log(`Logs: ${join(logDir, 'service.log')}`);
-      console.log(`Stop: launchctl bootout ${domain}/${service.name}`);
     }
   } else {
     const directory = join(homedir(), '.config', 'systemd', 'user');
@@ -204,12 +213,18 @@ async function install(): Promise<void> {
     execFileSync('systemctl', ['--user', 'restart', `${service.name}.service`], { stdio: 'inherit' });
     if (options.verbose) {
       console.log(`Logs: journalctl --user -u ${service.name}`);
-      console.log(`Stop: systemctl --user disable --now ${service.name}`);
     }
   }
   console.log('Connected to Relay. You can close this terminal.');
   console.log('Relay runs in the background and starts automatically when you log in.');
-  if (options.verbose) console.log(`CLI installed at ${wrapper}.`);
+  if (control) {
+    const relay = shell(control);
+    console.log('Control Relay with:');
+    console.log(`  Stop: ${relay} stop`);
+    console.log(`  Start: ${relay} start`);
+    console.log('Other commands: status, restart, logs.');
+  }
+  if (options.verbose) console.log(`CLI installed at ${wrapper ?? join(binDir, 'relay-daemon')}.`);
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

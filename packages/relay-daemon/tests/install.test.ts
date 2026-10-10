@@ -42,14 +42,17 @@ import { promisify } from 'node:util';
 const exec = promisify(execFile);
 test('installer verifies authentication and writes a service using the real packaged client', async () => {
   const root = mkdtempSync(join(tmpdir(), 'relay-install-test-'));
-  const home = join(root, 'home with spaces');
+  const home = join(root, "home with ' spaces");
   const bin = join(root, 'bin');
+  const installPath = `${bin}:${join(home, '.local/bin')}:/usr/bin:/bin`;
   const workspace = join(root, 'workspace with spaces');
   for (const path of [home, bin, workspace]) mkdirSync(path, { recursive: true });
   const customHome = join(root, 'custom codex');
   mkdirSync(customHome);
   writeFileSync(join(bin, 'codex'), '#!/bin/sh\nprintf "%s" "$CODEX_HOME" > "$CODEX_HOME/observed"\n', { mode: 0o755 });
   const calls = join(root, 'service-calls');
+  // A different relay earlier on PATH must never receive the printed commands.
+  writeFileSync(join(bin, 'relay'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
   for (const name of ['launchctl', 'systemctl', 'open', 'xdg-open']) {
     const file = join(bin, name);
     writeFileSync(file, '#!/bin/sh\nprintf "%s\\n" "$@" >> "$SERVICE_CALLS"\n');
@@ -86,12 +89,30 @@ test('installer verifies authentication and writes a service using the real pack
       '--backend-url', `http://127.0.0.1:${address.port}`, '--sandbox-id', 'node-install-test',
       '--employee-id', 'alice', '--workspace', workspace];
     const { stdout, stderr } = await exec(process.execPath, command, {
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token', RELAY_DAEMON_STATE_DIR: join(root, 'unrelated-state') },
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token', RELAY_DAEMON_STATE_DIR: join(root, 'unrelated-state') },
       timeout: 30_000,
     });
     assert.equal(registrations.length, 0);
     assert.doesNotMatch(stdout + stderr, /fixture-token/);
     assert.match(stdout, /Connected to Relay\. You can close this terminal\./);
+    const verifyControlHints = async (output: string, path: string) => {
+      const hints = [...output.matchAll(/^  (Stop|Start): (.+)$/gm)];
+      assert.deepEqual(hints.map(hint => hint[1]), ['Stop', 'Start']);
+      const name = 'build.relay.computer.node-install-test';
+      for (const hint of hints) {
+        writeFileSync(calls, '');
+        await exec('/bin/sh', ['-c', hint[2]!], {
+          env: { HOME: home, PATH: path, SERVICE_CALLS: calls }, timeout: 30_000,
+        });
+        const expected = process.platform === 'darwin'
+          ? hint[1] === 'Stop'
+            ? ['disable', `gui/${process.getuid!()}/${name}`, 'bootout', `gui/${process.getuid!()}/${name}`, 'print', `gui/${process.getuid!()}/${name}`]
+            : ['enable', `gui/${process.getuid!()}/${name}`, 'bootstrap', `gui/${process.getuid!()}`, service, 'kickstart', `gui/${process.getuid!()}/${name}`]
+          : ['--user', ...(hint[1] === 'Stop' ? ['disable', '--now'] : ['enable']), `${name}.service`, ...(hint[1] === 'Start' ? ['--user', 'start', `${name}.service`] : [])];
+        assert.equal(readFileSync(calls, 'utf8'), expected.join('\n') + '\n');
+      }
+    };
+    assert.match(readFileSync(join(home, '.local/bin/relay'), 'utf8'), /control\.js/);
     assert.doesNotMatch(stdout, /launchctl|systemctl|journalctl|CLI installed at|Logs:/);
     const credential = join(home, '.relay/daemon-nodes/node-install-test/credentials/alice.token');
     assert.equal(readFileSync(credential, 'utf8').trim(), 'fixture-token');
@@ -105,6 +126,7 @@ test('installer verifies authentication and writes a service using the real pack
     assert.doesNotMatch(content, /unrelated-state/);
     assert.match(content, /RELAY_DAEMON_STATE_DIR/);
     assert.match(readFileSync(calls, 'utf8'), /bootstrap|restart/);
+    await verifyControlHints(stdout, `${bin}:/usr/bin:/bin`);
     const profile = join(home, '.relay/daemon-nodes/node-install-test/runtime-profile.json');
     assert.equal(JSON.parse(readFileSync(profile, 'utf8')).environment.CODEX_HOME, customHome);
     assert.equal(readFileSync(join(customHome, 'observed'), 'utf8'), customHome);
@@ -118,11 +140,11 @@ test('installer verifies authentication and writes a service using the real pack
     assert.doesNotMatch(diagnosed.stdout + diagnosed.stderr, /fixture-token/);
     // Reconnecting the same computer replaces its service instead of creating another.
     const verbose = await exec(process.execPath, [...command, '--verbose'], {
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token' },
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token' },
       timeout: 30_000,
     });
     assert.match(verbose.stdout, /Logs:/);
-    assert.match(verbose.stdout, /Stop:/);
+    await verifyControlHints(verbose.stdout, installPath);
     assert.match(verbose.stdout, /CLI installed at/);
     assert.doesNotMatch(verbose.stdout + verbose.stderr, /fixture-token/);
     assert.equal(readFileSync(service, 'utf8'), content);
@@ -131,7 +153,7 @@ test('installer verifies authentication and writes a service using the real pack
     // New-device setup obtains the credential through browser approval;
     // neither credential appears in console output or the service definition.
     const deviceSetup = await exec(process.execPath, [command[0]!, '--backend-url', `http://127.0.0.1:${address.port}`, '--workspace', workspace], {
-      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SERVICE_CALLS: calls }, timeout: 30_000,
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
     });
     assert.match(deviceSetup.stdout, /Confirm this computer in your browser/);
     assert.doesNotMatch(deviceSetup.stdout + deviceSetup.stderr, /device-fixture-secret|fixture-token/);
