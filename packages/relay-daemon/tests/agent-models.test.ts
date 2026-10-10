@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { AgentName } from "relay-core";
 import {
   MAX_MODELS_PER_AGENT,
-  anthropicApiModels,
+  providerListModels,
   buildModelDiscoveryScript,
   claudeAccountModels,
   claudeHelpAliases,
@@ -104,9 +104,9 @@ describe("agent model discovery", () => {
   });
 
   it("reads the provider's model list", () => {
-    assert.deepEqual(anthropicApiModels(ANTHROPIC_MODELS), ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
-    assert.deepEqual(anthropicApiModels('{"type":"error","error":{"type":"authentication_error"}}'), []);
-    assert.deepEqual(anthropicApiModels("<html>"), []);
+    assert.deepEqual(providerListModels(ANTHROPIC_MODELS), ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
+    assert.deepEqual(providerListModels('{"type":"error","error":{"type":"authentication_error"}}'), []);
+    assert.deepEqual(providerListModels("<html>"), []);
   });
 
   it("offers Claude's versioned models from the provider instead of bare aliases", () => {
@@ -239,6 +239,46 @@ describe("agent model discovery", () => {
     const second = await discoverAgentModels(exec, ["claude"], undefined, undefined, memory);
     assert.deepEqual(first.claude, ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
     assert.deepEqual(second.claude, ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1[1m]"]);
+  });
+
+  it("offers only the endpoint's own models behind a custom endpoint", () => {
+    const deepseek = JSON.stringify({ data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }] });
+    const claude = record("help", CLAUDE_HELP) + record("account", CLAUDE_ACCOUNT_CACHE) + record("api", deepseek);
+    assert.deepEqual(parseAgentModels("claude", claude, undefined, { customEndpoint: true }), ["deepseek-chat", "deepseek-reasoner"]);
+    const codex = record("catalog", CODEX_CATALOG) + record("api", deepseek);
+    assert.deepEqual(parseAgentModels("codex", codex, undefined, { customEndpoint: true }), ["deepseek-chat", "deepseek-reasoner"]);
+    // Nothing listed: no vendor ids leak through.
+    assert.deepEqual(parseAgentModels("claude", record("help", CLAUDE_HELP), undefined, { customEndpoint: true }), []);
+    // The vendor's own Codex catalog is unaffected by an api record it never asked for.
+    assert.deepEqual(parseAgentModels("codex", record("catalog", CODEX_CATALOG)), ["gpt-6-luna", "gpt-5.6-terra", "gpt-5.6-luna"]);
+  });
+
+  it("never sends Claude Code's saved login to a custom endpoint", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const { execFileSync } = await import("node:child_process");
+    const root = mkdtempSync(join(tmpdir(), "claude-proxy-"));
+    const home = join(root, "home");
+    const bin = join(root, "bin");
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    mkdirSync(bin);
+    writeFileSync(join(home, ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "saved-login-token" } }));
+    const seen = join(root, "seen");
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\ncat >> "${seen}"\n`);
+    chmodSync(join(bin, "curl"), 0o755);
+    writeFileSync(seen, "");
+    execFileSync("bash", ["-c", buildModelDiscoveryScript("claude")], {
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic" },
+    });
+    const { readFileSync } = await import("node:fs");
+    assert.doesNotMatch(readFileSync(seen, "utf8"), /saved-login-token/);
+  });
+
+  it("asks a custom OpenAI-compatible endpoint for Codex's models with the key on stdin", () => {
+    const script = buildModelDiscoveryScript("codex");
+    assert.match(script, /\$base\/models/);
+    assert.doesNotMatch(script, /curl[^\n]*\$key/);
   });
 
   it("never throws when a runtime cannot be asked", async () => {

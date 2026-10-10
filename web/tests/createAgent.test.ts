@@ -91,6 +91,9 @@ describe("model selection on a computer", () => {
     assert.equal(computerUsesCustomModelEndpoint([proxied], target, "codex"), false);
     assert.equal(computerUsesCustomModelEndpoint([{ ...proxied, status: "stopped" }], target, "claude"), false);
     assert.equal(computerUsesCustomModelEndpoint([{ ...live, id: "n1" }], target, "claude"), false);
+    // A daemon that reports only the endpoint's own models needs no suppression.
+    const endpointListed = { ...proxied, capabilities: ["agent-model", "endpoint-models"] };
+    assert.equal(computerUsesCustomModelEndpoint([endpointListed], target, "claude"), false);
   });
 
   it("offers the models a runtime reports on the computer's live nodes, merged in order", () => {

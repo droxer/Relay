@@ -1,4 +1,4 @@
-import { agentCredentialEnv, runAsAgent, type AgentName } from "relay-core";
+import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentName } from "relay-core";
 
 // ── Agent model discovery ───────────────────────────────────────────────────
 // Asks each runtime which models it offers, so the agent model picker lists
@@ -11,12 +11,17 @@ import { agentCredentialEnv, runAsAgent, type AgentName } from "relay-core";
 //           `.claude.json` adds the extra options the signed-in account
 //           offers, and settings.json `availableModels` is an allowlist that
 //           replaces all of it.
-//   codex   `codex debug models`, or the CLI's own models_cache.json.
+//   codex   `codex debug models`, or the CLI's own models_cache.json; behind
+//           a custom OPENAI_BASE_URL, that endpoint's `/models` instead.
 //           The catalog carries each model's full instructions (hundreds of
 //           KB), so the sweep keeps only the slug/visibility/priority keys —
 //           process output is tail-bounded and would lose the head.
 //   pi      `pi --list-models` — only providers it can authenticate.
 //   kimi    the `[models."<alias>"]` tables in its config.toml.
+//
+// A runtime behind a custom endpoint (a proxy or a compatible provider such
+// as DeepSeek) reports only the models that endpoint lists: its vendor's ids
+// would fail there. The daemon says so with the `endpoint-models` capability.
 //
 // Each sweep runs as the agent user with that agent's credentials, exactly
 // like preflight, so it works the same in `boxlite` and `none` mode. Discovery
@@ -63,9 +68,20 @@ const ANTHROPIC_MODELS_REQUEST = [
   "  if [ -n \"${ANTHROPIC_API_KEY:-}\" ]; then printf 'x-api-key: %s\\n' \"$ANTHROPIC_API_KEY\" | models",
   "  elif [ -n \"${CLAUDE_CODE_OAUTH_TOKEN:-}\" ]; then oauth \"$CLAUDE_CODE_OAUTH_TOKEN\"",
   "  elif [ -n \"${ANTHROPIC_AUTH_TOKEN:-}\" ]; then printf 'authorization: Bearer %s\\n' \"$ANTHROPIC_AUTH_TOKEN\" | models",
-  "  else token=$(claude_login_token); if [ -n \"$token\" ]; then oauth \"$token\"; fi",
+  // The saved login is Anthropic's; it is never sent to another endpoint.
+  '  else case "$base" in https://api.anthropic.com|https://api.anthropic.com/v1) token=$(claude_login_token); if [ -n "$token" ]; then oauth "$token"; fi;; esac',
   "  fi",
   "fi",
+].join("\n");
+
+// Only a custom endpoint is asked; the vendor's own catalog comes from the CLI.
+const OPENAI_ENDPOINT_MODELS_REQUEST = [
+  'base="${OPENAI_BASE_URL:-}"; base="${base%/}"; key="${OPENAI_API_KEY:-${CODEX_API_KEY:-}}"',
+  'case "$base" in ""|https://api.openai.com|https://api.openai.com/v1) ;; *)',
+  "  if [ -n \"$key\" ] && command -v curl >/dev/null 2>&1; then",
+  `    printf 'authorization: Bearer %s\\n' "$key" | curl -fsS --max-time ${PROVIDER_LIST_TIMEOUT_SECONDS} -H @- "$base/models" 2>/dev/null | emit api`,
+  "  fi;;",
+  "esac",
 ].join("\n");
 
 const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
@@ -80,6 +96,7 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
     'catalog=""; if command -v codex >/dev/null 2>&1; then catalog=$(codex debug models 2>/dev/null); fi',
     'f="${CODEX_HOME:-$HOME/.codex}/models_cache.json"; if [ -z "$catalog" ] && [ -f "$f" ]; then catalog=$(cat "$f"); fi',
     `printf '%s' "$catalog" | grep -oE '"(slug|visibility|priority)":[[:space:]]*("[^"]*"|-?[0-9]+)' | emit catalog`,
+    OPENAI_ENDPOINT_MODELS_REQUEST,
   ],
   // Pi prints its table on stderr.
   pi: ["if command -v pi >/dev/null 2>&1; then pi --list-models 2>&1 | emit list; fi"],
@@ -110,6 +127,7 @@ export async function discoverAgentModels(
   providerLists: ProviderListMemory = new Map(),
 ): Promise<Partial<Record<AgentName, string[]>>> {
   if (signal?.aborted) return {};
+  const customEndpoints = new Set(customModelEndpointAgents());
   const entries = await Promise.all(agents.map(async (agent) => {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const discoverySignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
@@ -121,7 +139,9 @@ export async function discoverAgentModels(
       if (result.exit_code !== 0) return [agent, []] as const;
       const fresh = providerListText(result.stdout);
       if (fresh) providerLists.set(agent, fresh);
-      return [agent, parseAgentModels(agent, result.stdout, providerLists.get(agent))] as const;
+      return [agent, parseAgentModels(agent, result.stdout, providerLists.get(agent), {
+        customEndpoint: customEndpoints.has(agent),
+      })] as const;
     } catch {
       return [agent, []] as const;
     }
@@ -132,7 +152,7 @@ export async function discoverAgentModels(
 /** The provider's model list in a sweep, when it returned one with any ids. */
 export function providerListText(stdout: string): string | undefined {
   return decodeRecords(stdout)
-    .filter((record) => record.source === "api" && anthropicApiModels(record.text).length > 0)
+    .filter((record) => record.source === "api" && providerListModels(record.text).length > 0)
     .map((record) => record.text)
     .at(-1);
 }
@@ -141,18 +161,26 @@ export function providerListText(stdout: string): string | undefined {
  * Turn one agent's sweep output into its model ids, in the runtime's order.
  * `rememberedProviderList` stands in when this sweep could not reach the provider.
  */
-export function parseAgentModels(agent: AgentName, stdout: string, rememberedProviderList?: string): string[] {
+export function parseAgentModels(
+  agent: AgentName,
+  stdout: string,
+  rememberedProviderList?: string,
+  { customEndpoint = false }: { customEndpoint?: boolean } = {},
+): string[] {
   const records = decodeRecords(stdout);
   const texts = (source: string) => records.filter((record) => record.source === source).map((record) => record.text);
+  const providerLists = providerListText(stdout)
+    ? texts("api")
+    : rememberedProviderList ? [rememberedProviderList] : [];
+  // Behind a custom endpoint only what that endpoint lists can run.
+  if (customEndpoint) return validModels(providerLists.flatMap(providerListModels));
   switch (agent) {
     case "claude":
       return validModels(claudeModels({
         helps: texts("help"),
         settingsFiles: texts("settings"),
         accounts: texts("account"),
-        providerLists: providerListText(stdout)
-          ? texts("api")
-          : rememberedProviderList ? [rememberedProviderList] : [],
+        providerLists,
       }));
     case "codex":
       return validModels(texts("catalog").flatMap(codexCatalogModels));
@@ -186,7 +214,7 @@ function claudeModels(sources: {
   const accountModels = sources.accounts.flatMap(claudeAccountModels);
   // The provider's list names each model with its version (claude-opus-5-5);
   // the bare aliases only say "latest", so they are the fallback.
-  const versioned = sources.providerLists.flatMap(anthropicApiModels);
+  const versioned = sources.providerLists.flatMap(providerListModels);
   if (versioned.length > 0) return [...versioned, ...accountModels];
   const configured = settings.map((entry) => entry?.model).filter((model): model is string => typeof model === "string");
   return [...sources.helps.flatMap(claudeHelpAliases), ...configured, ...accountModels];
@@ -202,8 +230,8 @@ export function claudeAccountModels(text: string): string[] {
   });
 }
 
-/** The ids in a `/v1/models` page. */
-export function anthropicApiModels(text: string): string[] {
+/** The ids in a models page — Anthropic's `/v1/models` and OpenAI-style `/models` share `data[].id`. */
+export function providerListModels(text: string): string[] {
   const data = parseJsonObject(text)?.data;
   if (!Array.isArray(data)) return [];
   return data.flatMap((model: unknown) => {

@@ -215,6 +215,22 @@ def test_agent_reports_whether_its_runtime_calls_a_custom_model_endpoint(
     assert record["customModelEndpoint"] is expected
 
 
+def test_endpoint_listed_models_are_not_suppressed_behind_a_custom_endpoint(env) -> None:
+    app, client = env
+    _register_node(
+        app,
+        ["agent-model", "endpoint-models"],
+        customModelEndpoints=["codex"],
+        agentModels={"codex": ["deepseek-chat"]},
+    )
+    agent = _create_agent(client)
+
+    record = client.get(f"/api/v1/admin/agents/{agent['id']}").json()["agent"]
+
+    assert record["customModelEndpoint"] is False
+    assert record["availableModels"] == ["deepseek-chat"]
+
+
 def test_registration_keeps_only_known_runtimes_as_custom_endpoints(env) -> None:
     app, _client = env
     _register_node(
