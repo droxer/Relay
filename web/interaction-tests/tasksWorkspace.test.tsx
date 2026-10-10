@@ -97,11 +97,42 @@ it("paginates the flat list and selects only the tasks visible on the current pa
   expect(within(board).getAllByRole("checkbox", { checked: true })).toHaveLength(6);
   expect(within(board).getByRole("table", { name: "issues.title" })).toBeTruthy();
 });
-it("always shows the issues table even with an old board preference", () => {
+/* The test Button drops tooltips, so the icon toggles are found by their group. */
+const boardToggle = () => within(screen.getByRole("group", { name: "backlog.view" })).getAllByRole("button")[0];
+it("opens as the table even when a project board is the remembered view", () => {
   window.localStorage.setItem("relay-web.backlogView", "board");
   show();
   expect(screen.getByRole("table", { name: "issues.title" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "backlog.view_board" })).toBeNull();
+  expect(boardToggle().getAttribute("aria-pressed")).toBe("false");
+});
+it("lays the queue out in the five workflow lanes and remembers the board", () => {
+  show(undefined, [...tasks, task("Running", "q", "running"), task("Finished", "p", "done")]);
+  fireEvent.click(boardToggle());
+  const page = screen.getByRole("region", { name: "issues.title" });
+  expect(within(page).queryByRole("table", { name: "issues.title" })).toBeNull();
+  const lane = (status: string) => within(page).getByRole("region", { name: `backlog.statuses.${status}` });
+  expect(titleLinks(within(lane("backlog")).getAllByRole("link")).map((link) => link.textContent).sort()).toEqual(["Answer", "Ship"]);
+  expect(within(lane("review")).getByRole("link", { name: "Review" })).toBeTruthy();
+  expect(within(lane("running")).getByRole("link", { name: "Running" })).toBeTruthy();
+  // The open queue holds no finished work, and an archived project stays out.
+  expect(within(lane("done")).queryAllByRole("link")).toHaveLength(0);
+  expect(within(page).queryByRole("link", { name: "Old" })).toBeNull();
+  // A card read across projects names its project.
+  expect(within(lane("backlog")).getByText("Support")).toBeTruthy();
+  // The lanes are the grouping, so the group-by control steps aside.
+  expect(within(page).queryByRole("combobox", { name: "issues.group_by" })).toBeNull();
+  expect(window.localStorage.getItem("relay-web.issuesView")).toBe("board");
+  expect(window.localStorage.getItem("relay-web.backlogView")).toBeNull();
+});
+it("selects only the cards on screen from the board", () => {
+  window.localStorage.setItem("relay-web.issuesView", "board");
+  show();
+  const page = screen.getByRole("region", { name: "issues.title" });
+  expect(within(page).getByRole("region", { name: "backlog.statuses.backlog" })).toBeTruthy();
+  const boxes = within(page).getAllByRole("checkbox", { name: "backlog.select_task" });
+  expect(boxes).toHaveLength(3);
+  fireEvent.click(boxes[0]);
+  expect(within(page).getAllByRole("checkbox", { checked: true })).toHaveLength(1);
 });
 
 it("keeps the project list quiet and puts execution actions in the drawer", () => {

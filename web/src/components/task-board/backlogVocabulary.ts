@@ -58,12 +58,15 @@ export const BACKLOG_FILTER_SPEC: FilterSpec<BacklogFilters> = {
 export type BacklogView = "board" | "list";
 
 export const VIEW_STORAGE_KEY = "relay-web.backlogView";
+/* The cross-project Tasks page remembers its own view: a reader who plans a
+   project on its board may still triage everything as a table. */
+export const ISSUES_VIEW_STORAGE_KEY = "relay-web.issuesView";
 const BACKLOG_VIEWS: readonly BacklogView[] = ["board", "list"];
 
-export function parseBacklogView(value: string | null): BacklogView {
+export function parseBacklogView(value: string | null, storageKey = VIEW_STORAGE_KEY): BacklogView {
   return BACKLOG_VIEWS.includes(value as BacklogView)
     ? value as BacklogView
-    : readViewPreference(VIEW_STORAGE_KEY, "list", BACKLOG_VIEWS);
+    : readViewPreference(storageKey, "list", BACKLOG_VIEWS);
 }
 
 export function activeFilterCount(filters: BacklogFilters): number {
