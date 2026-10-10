@@ -216,6 +216,8 @@ DAEMON_CAPABILITY_ROUND_RESULT = "round-result"
 DAEMON_CAPABILITY_PRODUCED_FILES = "produced-files"
 # The daemon passes an agent's pinned model to its runtime CLI.
 DAEMON_CAPABILITY_AGENT_MODEL = "agent-model"
+# A runtime behind a custom endpoint reports only the models that endpoint lists.
+DAEMON_CAPABILITY_ENDPOINT_MODELS = "endpoint-models"
 DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
@@ -233,6 +235,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_PRODUCED_FILES,
         DAEMON_CAPABILITY_HANDOFF_VALIDATION,
         DAEMON_CAPABILITY_AGENT_MODEL,
+        DAEMON_CAPABILITY_ENDPOINT_MODELS,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})

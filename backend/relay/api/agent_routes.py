@@ -9,7 +9,10 @@ from ..collaboration.models import RunIntent
 from ..collaboration.service import CollaborationConductor, CollaborationError
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.computer_identity import computer_id
-from ..daemon_registry.registry import DAEMON_CAPABILITY_AGENT_MODEL
+from ..daemon_registry.registry import (
+    DAEMON_CAPABILITY_AGENT_MODEL,
+    DAEMON_CAPABILITY_ENDPOINT_MODELS,
+)
 from ..persistence.agent_placement_store import create_node_placement, placement_status
 from ..security.auth import require_admin_session
 from ..services.agent_binding import binding_status
@@ -428,6 +431,8 @@ def _custom_model_endpoint(
 
     The vendor model ids the web suggests may not exist behind a proxy or a
     compatible provider, so the picker then asks for an id that endpoint serves.
+    A daemon with ``endpoint-models`` reports only the endpoint's own models, so
+    its options need no suppression.
     """
     executor_kind = agent.get("executorKind")
     node_ids = {
@@ -437,6 +442,7 @@ def _custom_model_endpoint(
     }
     return any(
         executor_kind in (node.get("customModelEndpoints") or [])
+        and DAEMON_CAPABILITY_ENDPOINT_MODELS not in (node.get("capabilities") or [])
         for node in ctx.registry.monitor_nodes()
         if node["id"] in node_ids
     )

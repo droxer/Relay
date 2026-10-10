@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -89,6 +89,11 @@ export const DAEMON_CAPABILITY_TASK_WORKSPACES: DaemonNodeCapability = "task-wor
 export const DAEMON_CAPABILITY_WORK_RESULTS: DaemonNodeCapability = "work-results";
 /** The daemon passes `AgentState.agent_model` to the runtime CLI's model flag. */
 export const DAEMON_CAPABILITY_AGENT_MODEL: DaemonNodeCapability = "agent-model";
+/**
+ * A runtime behind a custom model endpoint reports only the models that
+ * endpoint lists, never its vendor's ids, so its options can be offered as is.
+ */
+export const DAEMON_CAPABILITY_ENDPOINT_MODELS: DaemonNodeCapability = "endpoint-models";
 export const DAEMON_CAPABILITY_ROUND_RESULT: DaemonNodeCapability = "round-result";
 /**
  * "produced-files" means the daemon reports every file a run changed, not only

@@ -84,12 +84,15 @@ export function computerCanSelectModel(nodes: NodeLike[], target: string, kind: 
 
 /**
  * Whether `kind` on this computer calls a custom model endpoint (a proxy or a
- * compatible provider), where the vendor ids the picker suggests may not exist.
+ * compatible provider) whose reported models may be the vendor's ids, which
+ * may not exist there. A daemon with `endpoint-models` reports only what the
+ * endpoint itself lists, so its options are offered as is.
  */
 export function computerUsesCustomModelEndpoint(nodes: NodeLike[], target: string, kind: string): boolean {
   return nodes.some((node) => computerId(node) === target
     && LIVE_NODE_STATUSES.has(node.status ?? "")
-    && (node.customModelEndpoints ?? []).includes(kind));
+    && (node.customModelEndpoints ?? []).includes(kind)
+    && !node.capabilities?.includes("endpoint-models"));
 }
 
 /**
