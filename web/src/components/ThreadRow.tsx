@@ -94,15 +94,16 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   // them already says "idle", and restating it on every row is noise. A
   // cancel keeps its words but takes the settled grey pip, not the failure
   // ring: it was the user's own call, not a fault.
-  const runningAgent = item.runningAgent ?? (session.status === "running" ? session.currentAgent : undefined);
   const status: { text: string; tone: "attn" | "run" | "err" | "idle" } | null =
-    session.execution && session.execution.phase !== "terminal"
-      ? { tone: session.execution.phase === "running" ? "run" : "attn", text: t(`thread.execution_${session.execution.phase}`) }
-      : tone === "run"
+    session.execution && session.execution.phase !== "terminal" && session.execution.phase !== "running"
+      ? { tone: "attn", text: t(`thread.execution_${session.execution.phase}`) }
+      : session.execution?.phase === "running" || tone === "run"
       ? {
           tone: "run",
-          text: runningAgent
-            ? t("thread.agent_working", { agent: agentLabel(runningAgent) })
+          // Named by the logical agent, never the executor kind: several
+          // agents share one runtime, so "Claude is working" named nobody.
+          text: item.runningAgentName
+            ? t("thread.agent_working", { agent: item.runningAgentName })
             : t("thread.group_running"),
         }
       : tone === "attn"

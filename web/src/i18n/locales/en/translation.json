@@ -2354,6 +2354,16 @@
     "trigger_kind": "Started by",
     "filters_hint": "Leave a filter on Any to match every issue.",
     "webhook_copied": "Copied",
-    "webhook_secret": "Secret"
+    "webhook_secret": "Secret",
+    "opening": {
+      "kicker": "Automation run",
+      "label": "Automation run: {{title}}",
+      "triggered": "Triggered",
+      "events": "What triggered it",
+      "not_listed_one": "{{count}} more event not listed",
+      "not_listed_other": "{{count}} more events not listed",
+      "thread": "A thread",
+      "webhook_payload": "Webhook payload"
+    }
   }
 }

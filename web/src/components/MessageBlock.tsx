@@ -11,6 +11,8 @@ import { AgentMark } from "./AgentMark";
 import { AgentStream } from "./AgentStream";
 import { AttachmentMarker } from "./AttachmentMarker";
 import { MarkdownContent } from "./LazyMarkdown";
+import { AutomationOpening } from "./AutomationOpening";
+import type { AutomationOpening as AutomationOpeningParts } from "../lib/automationOpening";
 import { MessageTurnActions } from "./MessageTurnActions";
 import type { AgentName, TokenUsage } from "../types";
 import { AGENT_NAMES } from "../types";
@@ -169,6 +171,9 @@ type MessageBlockProps = {
   slotLabel?: string;
   styleFallback?: boolean;
   message: DerivedMessage;
+  /** Set on an automation run's opening turn: it draws as the automation's
+   * card instead of a message the user typed. */
+  automationOpening?: AutomationOpeningParts | null;
   sessionId: string;
   grouped?: boolean;
   agentDisplayNames?: Partial<Record<AgentName, string>>;
@@ -190,6 +195,7 @@ export const MessageBlock = memo(function MessageBlock({
   slotLabel,
   styleFallback,
   message,
+  automationOpening,
   sessionId,
   grouped = false,
   agentDisplayNames,
@@ -201,6 +207,10 @@ export const MessageBlock = memo(function MessageBlock({
   pickupFrom,
 }: MessageBlockProps) {
   const { t } = useTranslation();
+  if (message.kind === "user" && automationOpening) {
+    return <AutomationOpening opening={automationOpening} time={<MsgTime value={message.timestamp} />} />;
+  }
+
   if (message.kind === "user") {
     return (
       <article className="msg msg-user" aria-label={t("message.user_label")}>

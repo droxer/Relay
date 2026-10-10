@@ -2303,6 +2303,15 @@
     "trigger_kind": "触发来源",
     "filters_hint": "筛选保持“任意”即匹配所有议题。",
     "webhook_copied": "已复制",
-    "webhook_secret": "密钥"
+    "webhook_secret": "密钥",
+    "opening": {
+      "kicker": "自动化运行",
+      "label": "自动化运行：{{title}}",
+      "triggered": "已触发",
+      "events": "触发事件",
+      "not_listed": "另有 {{count}} 个事件未列出",
+      "thread": "某个对话",
+      "webhook_payload": "Webhook 负载"
+    }
   }
 }
