@@ -23,6 +23,7 @@ from ..services.team_dispatch import (
     task_thread_ownership,
 )
 from ..sessions import SessionArchivedError, SessionController, SessionRunInFlightError
+from ..sessions.task_scope import thread_task_scope
 from .deps import AppContext, AppContextDep
 from .helpers import (
     JsonBodyDep,
@@ -52,6 +53,20 @@ ACTIVE_TASK_STATUSES = frozenset(
     {"assigned", "running", "waiting_for_human", "review", "blocked"}
 )
 ACTIVE_SESSION_STATUSES = frozenset({"running", "waiting_for_human"})
+
+
+def session_awaits_human(session: dict[str, Any]) -> bool:
+    """Whether the thread is parked on its human.
+
+    A rejected turn says so in its status. A round that stopped to ask closes
+    its session `completed` with `workOutcome: "blocked"` instead (and parks
+    its task at `waiting_for_human`). A failed session also reads `blocked`,
+    so only a completed one counts. Mirrored by `isAwaitingHuman` in
+    web/src/lib/workflow.ts.
+    """
+    return session.get("status") == "waiting_for_human" or (
+        session.get("status") == "completed" and session.get("workOutcome") == "blocked"
+    )
 
 
 def session_artifact(
@@ -455,6 +470,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
                     session
                     for session in sessions
                     if session.get("status") in ACTIVE_SESSION_STATUSES
+                    or session_awaits_human(session)
                 ]
             ),
             "taskCount": len(tasks),
@@ -703,6 +719,11 @@ def cancel_session_run(
         session_id
     )
     node_id = node["id"] if node else run_request.get("nodeId") if run_request else None
+    # Resolved before cancelling: an undelivered request stops being active,
+    # and its task must still be released or the scheduler starts it again.
+    task_id, task_owner = thread_task_scope(
+        session, run_request, ctx.task_store, ctx.registry.daemon_store
+    )
     if node_id:
         cancelled = ctx.backend.cancel_run(
             node_id,
@@ -721,7 +742,8 @@ def cancel_session_run(
     return SessionController(
         ctx.session_store,
         task_store=ctx.task_store,
-        task_id=session.get("taskId"),
+        task_id=task_id,
+        task_execution_owner=task_owner,
         owner_employee_id=actor["employeeId"],
     ).cancel_session(session_id, reason)
 
@@ -787,22 +809,34 @@ def decision(
     session_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    get_session_for_actor(ctx.session_store, session_id, actor)
+    session = get_session_for_actor(ctx.session_store, session_id, actor)
     body = _request_body
     kind = body.get("kind")
-    if kind not in ("approve", "reject", "cancel", "rerun", "handoff", "mark_done"):
+    if kind in ("rerun", "handoff"):
+        # These name the next turn, and this route dispatches nothing; recording
+        # one here would mark the thread running with no run behind it.
         raise HTTPException(
-            400, "kind must be approve, reject, cancel, rerun, handoff, or mark_done."
+            400, f"{kind} dispatches an agent; send it through POST /agent-runs."
         )
-    controller = SessionController(
-        ctx.session_store,
-        task_store=ctx.task_store,
-        owner_employee_id=actor["employeeId"],
-    )
+    if kind not in ("approve", "reject", "cancel", "mark_done"):
+        raise HTTPException(400, "kind must be approve, reject, cancel, or mark_done.")
+    task_id = task_owner = None
     if kind in ("cancel", "mark_done"):
         run_request = ctx.registry.daemon_store.active_run_request_for_session_any_node(
             session_id
         )
+        # Resolved before cancelling, which ends the request's task authority.
+        task_id, task_owner = thread_task_scope(
+            session, run_request, ctx.task_store, ctx.registry.daemon_store
+        )
+    controller = SessionController(
+        ctx.session_store,
+        task_store=ctx.task_store,
+        task_id=task_id,
+        task_execution_owner=task_owner,
+        owner_employee_id=actor["employeeId"],
+    )
+    if kind in ("cancel", "mark_done"):
         if run_request:
             terminal_reason = string_field(body, "note") or (
                 "Session marked done by employee."

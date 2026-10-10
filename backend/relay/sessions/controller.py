@@ -194,6 +194,14 @@ class SessionController:
             for event in current.get("events", [])
         ):
             return current
+        scope = manifest.get("workScope") or {}
+        if (
+            self.task_execution_owner is not None
+            and scope.get("kind") == "task"
+            and scope.get("taskId") == self.task_id
+        ):
+            # Retain the claim with the round even after daemon request pruning.
+            manifest = {**manifest, "taskExecutionOwner": dict(self.task_execution_owner)}
         return self._append(
             session_id,
             relay_event(
@@ -216,6 +224,31 @@ class SessionController:
         self, session_id: str, outcome: str, task_status: str = "done",
         work_outcome: str = "unverified", input_options: list[str] | None = None,
     ) -> dict[str, Any]:
+        current = self.store.get_session(session_id)
+        if (
+            current.get("status") == "completed"
+            and current.get("finalOutcome") == outcome
+            and current.get("workOutcome") == work_outcome
+            and current.get("inputOptions", []) == list(input_options or [])
+        ):
+            # File-backed stores can persist the session before a task write
+            # fails. Repair that write, fenced by this execution's original
+            # owner, without duplicating the session event or task transition.
+            if self.task_store and self.task_id:
+                task = self.task_store.get_task(self.task_id)
+                expected = (
+                    "review" if task_status == "done"
+                    and task.get("acceptancePolicy", "automatic") == "human"
+                    else task_status
+                )
+                if task.get("status") != expected:
+                    self._update_task_status(
+                        task_status, outcome, {"sessionId": session_id},
+                        execution_owner=self.task_execution_owner or {
+                            "requestId": session_id, "revision": 0,
+                        },
+                    )
+            return current
         session = self._append(
             session_id,
             relay_event("session.completed", session_id, {
@@ -368,14 +401,29 @@ class SessionController:
             relay_event("human.decision", session_id, {"decision": decision}),
         )
         if kind == "approve":
-            return self._append(
-                session_id,
-                relay_event(
-                    "session.status",
+            current = self.store.get_session(session_id)
+            if current.get("status") == "running":
+                return self._append(
                     session_id,
-                    {"status": "running", "phase": "approved"},
-                ),
-            )
+                    relay_event(
+                        "session.status",
+                        session_id,
+                        {"status": "running", "phase": "approved"},
+                    ),
+                )
+            if current.get("status") == "waiting_for_human":
+                # Approving a rejected turn accepts it after all. Nothing is
+                # dispatched, so the thread settles instead of claiming a run.
+                return self._append(
+                    session_id,
+                    relay_event(
+                        "session.status",
+                        session_id,
+                        {"status": "completed", "phase": "approved"},
+                    ),
+                )
+            # A terminal thread keeps its status; the decision is the record.
+            return current
         if kind == "reject":
             return self._append(
                 session_id,
@@ -773,25 +821,16 @@ class SessionController:
                     "sessionId": session_id,
                 },
             )
-        elif step_result.get("pipelineHasNext"):
-            # Another assignment follows immediately; keep the task running
-            # instead of flapping through waiting_for_human/review between steps.
-            self._update_task_status(
-                "running",
+        elif self.task_store and self.task_id:
+            # A finished turn is not a task transition. The round's closeout
+            # (or the next assignment) picks the status; writing one here made
+            # every round pass through waiting_for_human, which automations
+            # matching on status changes then saw as a real stop.
+            self.task_store.record_activity(
+                self.task_id,
                 f"{step_result['agent']} completed.",
-                {
-                    "agent": step_result["agent"],
-                    "sessionId": session_id,
-                },
-            )
-        else:
-            self._update_task_status(
-                "waiting_for_human",
-                f"{step_result['agent']} completed.",
-                {
-                    "agent": step_result["agent"],
-                    "sessionId": session_id,
-                },
+                {"agent": step_result["agent"], "sessionId": session_id},
+                execution_owner=self.task_execution_owner,
             )
         return merge_agent_state(state, state_patch)
 
@@ -814,11 +853,13 @@ class SessionController:
         return nullcontext()
 
     def _update_task_status(
-        self, status: str, message: str, extras: dict[str, Any] | None = None
+        self, status: str, message: str, extras: dict[str, Any] | None = None,
+        *, execution_owner: dict[str, Any] | None = None,
     ) -> None:
         if not self.task_store:
             return
         extras = extras or {}
+        execution_owner = execution_owner or self.task_execution_owner
         if self.task_id:
             task_ids = [self.task_id]
         else:
@@ -834,14 +875,14 @@ class SessionController:
                     "code": extras.get("code", "unknown"),
                     "source": "execution",
                     **{key: extras[key] for key in ("sessionId", "runId") if extras.get(key)},
-                    **({"runRequestId": self.task_execution_owner["requestId"]}
-                       if self.task_execution_owner else {}),
+                    **({"runRequestId": execution_owner["requestId"]}
+                       if execution_owner else {}),
                 }
             self.task_store.append_event(
                 task_id,
                 relay_task_event("task.status", task_id, payload),
-                execution_owner=self.task_execution_owner,
+                execution_owner=execution_owner,
             )
             self.task_store.record_activity(
-                task_id, message, extras, execution_owner=self.task_execution_owner,
+                task_id, message, extras, execution_owner=execution_owner,
             )

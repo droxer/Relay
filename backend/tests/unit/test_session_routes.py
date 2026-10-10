@@ -3,7 +3,11 @@ from __future__ import annotations
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
-from relay.api.session_routes import is_workspace_artifact, workspace_artifacts
+from relay.api.session_routes import (
+    is_workspace_artifact,
+    session_awaits_human,
+    workspace_artifacts,
+)
 from relay.app import create_app
 from relay.persistence.store_common import store_transaction
 from sqlalchemy import update
@@ -279,3 +283,11 @@ def test_thread_read_does_not_500_when_registration_history_disagrees_with_the_s
             event["type"] != "session.runtime_affinity"
             for event in persisted["events"]
         )
+
+
+def test_a_round_that_stopped_to_ask_awaits_its_human() -> None:
+    assert session_awaits_human({"status": "waiting_for_human"}) is True
+    assert session_awaits_human({"status": "completed", "workOutcome": "blocked"}) is True
+    # A failed session also reads blocked; it is settled, not waiting.
+    assert session_awaits_human({"status": "failed", "workOutcome": "blocked"}) is False
+    assert session_awaits_human({"status": "completed", "workOutcome": "accepted"}) is False

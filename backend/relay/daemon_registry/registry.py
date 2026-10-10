@@ -3808,9 +3808,6 @@ class DaemonNodeRegistry:
             work_result = validate_work_result(envelope.get("work") if isinstance(envelope, dict) else None)
         agent_log = event.get("agentLog") or self.output_for_run(event["runId"])
         self.clear_run_output(event["runId"])
-        has_next = event["exitCode"] == 0 and run_request.get(
-            "currentIndex", 0
-        ) + 1 < len(assignments)
         state_patch = {
             "agent_logs": [agent_log],
             "last_exit_code": event["exitCode"],
@@ -3831,7 +3828,6 @@ class DaemonNodeRegistry:
                     **({"workResult": work_result} if work_result else {}),
                     "tokenUsage": event.get("tokenUsage"),
                     "assignmentId": assignment.get("assignmentId"),
-                    **({"pipelineHasNext": True} if has_next else {}),
                 },
             )
         )

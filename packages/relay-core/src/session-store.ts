@@ -138,6 +138,8 @@ export interface CollaborationRoundManifest {
   }>;
   sourceOwnership?: { revision: number; roundId: string | null };
   sourceTaskRevision?: number;
+  /** Durable task claim for actions after the round's request is pruned. */
+  taskExecutionOwner?: { requestId: string; revision: number };
   handoffContext?: {
     receipt?: {
       contract: { name: "relay.handoff.receipt"; version: 1 };
