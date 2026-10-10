@@ -18,7 +18,9 @@ STYLE_POLICIES: dict[str, str] = {
     "pipeline": "pipeline-v1",
 }
 BUILDER_ROLES = frozenset({"implementer", "fixer"})
-PIPELINE_STAGE: dict[str, int] = {
+# Writes come before verification, and verification before review. Lead
+# planning, the lead-led member order and Pipeline all sort by this.
+ROLE_STAGE: dict[str, int] = {
     "planner": 0,
     "implementer": 1,
     "fixer": 1,
@@ -92,4 +94,4 @@ def fill_build_review_slots(
 
 
 def pipeline_order(agents: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(agents, key=lambda agent: PIPELINE_STAGE.get(_role(agent), 1))
+    return sorted(agents, key=lambda agent: ROLE_STAGE.get(_role(agent), 1))

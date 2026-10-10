@@ -3029,7 +3029,7 @@ def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(
 ) -> None:
     """A computer can be made up of several node records (re-provisioning
     swaps in a new node id, and the stale record doesn't disappear on its
-    own). available_runtimes() unions ready runtimes across all of a
+    own). ready_runtimes() unions ready runtimes across all of a
     computer's nodes, so creation can succeed even though no single online
     node is ready for the requested runtime. Placement must not be forced
     onto some other online node just because it happens to be online — that

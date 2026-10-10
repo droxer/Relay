@@ -7,14 +7,18 @@ from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 from .contracts import text_list
+from .styles import ROLE_STAGE
 
 MAX_WORK_ITEMS = 16
+# One budget for every full-sequence rerun in a round: findings repairs here
+# and the coordinator's runtime-failure repairs in policy.py both draw on it.
 MAX_REPAIRS = 2
 MAX_CONSULTATIONS = 2
 
 WORK_PROTOCOL = "_relay_work_protocol"
 WORK_RESULTS = "_relay_work_results"
 WORK_REPAIRS = "_relay_work_repairs"
+RUNTIME_REPAIRS = "_relay_repair_count"
 WORK_REPAIR_NOTE = "_relay_work_repair_note"
 WORK_REPAIR_TARGET = "_relay_work_repair_target"
 WORK_PLAN_ERROR = "_relay_work_plan_error"
@@ -126,14 +130,37 @@ def validate_work_result(value: Any) -> dict[str, Any] | None:
         return None
 
 
+def repairs_used(state: dict[str, Any]) -> int:
+    return int(state.get(WORK_REPAIRS) or 0) + int(state.get(RUNTIME_REPAIRS) or 0)
+
+
+def is_answer_turn(state: dict[str, Any], index: int) -> bool:
+    """Whether this turn only answers a teammate's question."""
+    return isinstance(state.get(QUESTION_RESUME), int) and state.get(QUESTION_TARGET) == index
+
+
 def record_work_result(
-    state: dict[str, Any], assignment: dict[str, Any], result: dict[str, Any] | None
+    state: dict[str, Any],
+    assignment: dict[str, Any],
+    result: dict[str, Any] | None,
+    *,
+    answering: bool = False,
 ) -> dict[str, Any]:
+    """Record a turn's report. An answer turn keeps the contribution it answers
+    for: acceptance stays with the original evidence, and only the answer
+    messages are added."""
     results = dict(state.get(WORK_RESULTS) or {})
-    results[assignment["assignmentId"]] = result or {
-        "status": "missing",
-        "evidence": [],
-    }
+    key = assignment["assignmentId"]
+    original = results.get(key)
+    if answering and isinstance(original, dict) and original.get("status") != "missing":
+        answers = [
+            message
+            for message in (result or {}).get("messages", [])
+            if message.get("kind") == "answer"
+        ]
+        results[key] = {**original, "messages": [*original.get("messages", []), *answers]}
+    else:
+        results[key] = result or {"status": "missing", "evidence": []}
     return {**state, WORK_RESULTS: results}
 
 
@@ -206,7 +233,7 @@ def repair_transition(
     *,
     max_repairs: int,
 ) -> tuple[int, dict[str, Any]] | None:
-    if int(state.get(WORK_REPAIRS) or 0) >= max_repairs:
+    if repairs_used(state) >= max_repairs:
         return None
     current = assignments[index]
     result = (state.get(WORK_RESULTS) or {}).get(current["assignmentId"]) or {}
@@ -250,12 +277,19 @@ def repair_transition(
 
 
 def question_transition(
-    assignments: list[dict[str, Any]], index: int, state: dict[str, Any]
+    assignments: list[dict[str, Any]],
+    index: int,
+    state: dict[str, Any],
+    reported: dict[str, Any] | None = None,
 ) -> tuple[int, dict[str, Any]] | None:
-    """One bounded consultation at a time, with an explicit requester to resume."""
-    result = (state.get(WORK_RESULTS) or {}).get(
-        assignments[index]["assignmentId"]
-    ) or {}
+    """One bounded consultation at a time, with an explicit requester to resume.
+
+    ``reported`` is this turn's own report. Pass it for an answer turn: the
+    recorded result there is the earlier contribution, not the answer.
+    """
+    result = reported if reported is not None else (
+        (state.get(WORK_RESULTS) or {}).get(assignments[index]["assignmentId"]) or {}
+    )
     resume = state.get(QUESTION_RESUME)
     if isinstance(resume, int):
         requester = (
@@ -385,8 +419,7 @@ def compile_proposed_plan(
     if required - selected:
         raise ValueError("The plan omitted a required team contribution.")
     # Verification/review may not precede writes, even if proposed out of order.
-    stage = {"planner": 0, "implementer": 1, "fixer": 1, "tester": 2, "reviewer": 3}
-    compiled[1:] = sorted(compiled[1:], key=lambda item: stage.get(item.get("role"), 1))
+    compiled[1:] = sorted(compiled[1:], key=lambda item: ROLE_STAGE.get(item.get("role"), 1))
     final = next(
         (deepcopy(item) for item in reversed(assignments) if item.get("synthesizer")),
         None,

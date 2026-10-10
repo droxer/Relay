@@ -210,3 +210,31 @@ def test_a_message_cannot_address_a_team_and_agents_at_once(monkeypatch) -> None
         )
 
         assert response.status_code == 400
+
+
+def test_addressing_team_members_records_the_lead_led_style_it_runs(monkeypatch) -> None:
+    with _world(monkeypatch) as (app, client, here, there):
+        lead = _agent(app, here, "Lead", "claude")
+        helper = _agent(app, here, "Helper", "codex")
+        _sync(app, here, there)
+        team = app.state.team_store.create_team(
+            "admin",
+            {
+                "name": "Crew",
+                "leadAgentId": lead["id"],
+                "memberAgentIds": [lead["id"], helper["id"]],
+                "collaborationStyle": "build_review",
+            },
+        )
+        session = _thread(app, here, lead, teamId=team["id"])
+
+        response = client.post(
+            f"/api/v1/threads/{session['id']}/messages",
+            json={"text": "both of you", "addressAgentIds": [helper["id"], lead["id"]]},
+        )
+
+        assert response.status_code == 202, response.text
+        manifest = app.state.session_store.get_session(session["id"])["collaborationRounds"][-1]
+        assert manifest["style"] == "lead_led"
+        assert manifest["assignments"][0]["agentId"] == lead["id"]
+        assert manifest["assignments"][0]["coordinator"] is True

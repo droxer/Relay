@@ -5,6 +5,7 @@ from typing import Any, Protocol
 from loguru import logger
 
 from ..core.computer_identity import computer_id, is_provisional_computer_id
+from ..core.node_readiness import ready_runtimes
 from ..persistence.agent_placement_store import create_node_placement
 from ..persistence.protocols import (
     AgentPlacementStore,
@@ -94,20 +95,7 @@ def sync_node_agents(ctx: NodeAgentContext, node: dict[str, Any]) -> None:
         )
         return
     node_computer_id = computer_id(node)
-    # node["agents"] always carries every AGENT_NAMES key regardless of what's
-    # actually installed (see registry.py / node_backend.py), so folding its
-    # full key set into `available` would always add back the entire agent
-    # roster — that's the bug Task 4 retires. Only entries whose status is
-    # "ready" indicate a runtime this node can actually run; supportedAgents
-    # is a convenience field some callers (and older node records) supply
-    # directly instead. Mirrors available_runtimes() in agent_creation.py.
-    available = set(node.get("supportedAgents") or [])
-    available |= {
-        kind
-        for kind, status in (node.get("agents") or {}).items()
-        if status == "ready"
-    }
-    available -= set(node.get("disabledAgents") or [])
+    available = ready_runtimes([node])
     try:
         owned = ctx.agent_store.list_agents(supervisor_employee_id=employee_id)
     except Exception as error:
