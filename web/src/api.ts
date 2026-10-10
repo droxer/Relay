@@ -779,6 +779,26 @@ export async function readArtifactText(
   return text;
 }
 
+/** An artifact's bytes, for previews the raw URL cannot back directly. The
+ *  raw route answers `attachment` with `frame-ancestors 'none'` (it is a
+ *  download, and must never render on this origin), so a PDF preview frames
+ *  these bytes as a `data:` URL instead. */
+export async function readArtifactBlob(
+  sessionId: string,
+  artifactId: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(
+    relayApiEndpoint(`/threads/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`),
+    { credentials: "include", signal },
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new RelayApiError(text.trim() || response.statusText, response.status);
+  }
+  return response.blob();
+}
+
 export interface DashboardSessionsResponse {
   total: number;
   last24h: number;

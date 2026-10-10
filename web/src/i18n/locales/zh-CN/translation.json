@@ -628,6 +628,7 @@
     "open_thread": "打开对话",
     "loading_preview": "正在加载预览…",
     "close_preview": "关闭预览",
+    "refresh_files": "刷新文件",
     "binary_file": "二进制文件不支持预览。",
     "empty_file": "此文件为空。",
     "file_truncated": "预览已截断至 {{limit}}。被截断的文件无法下载。",

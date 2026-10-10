@@ -165,11 +165,26 @@ const highlightCache = new Map<string, string>();
  * Highlights `code` to HTML using a real grammar when the language is known,
  * falling back to auto-detection otherwise. Input is HTML-escaped by
  * highlight.js, so the result is safe to inject via dangerouslySetInnerHTML.
+ *
+ * `live` marks a fence that is still streaming. Its text grows every token, so
+ * each render is a new cache key: caching it would push every settled fence
+ * out of the LRU within one reply, and an unlabeled live fence would re-run
+ * `highlightAuto` across every grammar per token. A live fence skips the cache
+ * and auto-detection; it gets its full highlighting once the turn settles.
  */
-export function highlightToHtml(code: string, language?: string | null): string {
+export function highlightToHtml(
+  code: string,
+  language?: string | null,
+  { live = false }: { live?: boolean } = {},
+): string {
   ensureRegistered();
   const plain = isPlainLanguage(language);
   const resolved = plain ? null : resolveLanguage(language);
+  if (live) {
+    return resolved
+      ? hljs.highlight(code, { language: resolved, ignoreIllegals: true }).value
+      : escapeHtml(code);
+  }
   const key = `${resolved ?? (plain ? "plain" : "auto")}\u0000${code}`;
   const cached = highlightCache.get(key);
   if (cached !== undefined) {

@@ -230,6 +230,18 @@ html:lang(zh-CN) .md-body blockquote {
   text-underline-offset: 2px;
 }
 
+/* A workspace-relative link or image (components/Markdown.tsx renders it
+   inert — there is no URL for it here). Muted ink and a dotted rule say "this
+   names something" without the link colour promising a destination; the
+   target itself is in the title. */
+.md-body .md-link-inert,
+.md-body .md-image-inert {
+  color: var(--ink-2);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
 .md-body a:hover {
   color: var(--link-hover);
   text-decoration-thickness: 2px;
@@ -316,7 +328,7 @@ html:lang(zh-CN) .md-body blockquote {
 /* ---- table scroll region ----
    The one block that cannot be reflowed to fit a narrow column. It scrolls
    inside its own box so the transcript column never scrolls sideways.
-   `tabindex` is set by the browser's scrollable-region heuristics; the border
+   `tabindex` is set by MarkdownTable so keyboard users can scroll it; the border
    makes the clipped edge legible rather than looking like a truncated table.
    Deliberately 1px where every other line is the 0.5px hairline — a scrolling
    table's clipped edge needs the legible frame, not the soft hairline. */
@@ -437,7 +449,11 @@ html:lang(zh-CN) .md-body blockquote {
 
 .md-diagram-canvas svg {
   display: block;
-  max-width: 100%;
+  /* Natural size, not max-width: 100%. Shrinking a wide flowchart to the
+     column made its labels unreadable and the figure's overflow never engaged;
+     mermaidConfig() turns off Mermaid's own fit-to-width for the same reason.
+     Narrow diagrams still centre. */
+  max-width: none;
   height: auto;
   margin: 0 auto;
 }

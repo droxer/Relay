@@ -32,15 +32,16 @@ type WorkspaceFileResponseLike = Omit<ProjectWorkspaceFileResponse, "projectId">
  *  Lives here, next to the preview it drives, but is owned by the PARENT: the
  *  switch sits in the file's header beside its name on both surfaces, and a
  *  header cannot read state held by its sibling body. */
-export function useWorkspaceFileView(name: string): {
+export function useWorkspaceFileView(path: string): {
   view: ArtifactView;
   setView: (view: ArtifactView) => void;
 } {
-  const renderable = isRenderableFile(name);
+  const renderable = isRenderableFile(path.split("/").at(-1) ?? "");
   const [view, setView] = useState<ArtifactView>(renderable ? "preview" : "source");
   // Each file opens on its own default rather than carrying the last file's
-  // source view onto one the reader has not looked at yet.
-  useKeyChange(name, () => setView(renderable ? "preview" : "source"));
+  // source view onto one the reader has not looked at yet. Keyed on the path,
+  // not the name: `a/README.md` then `b/README.md` is a different file.
+  useKeyChange(path, () => setView(renderable ? "preview" : "source"));
   return { view, setView };
 }
 

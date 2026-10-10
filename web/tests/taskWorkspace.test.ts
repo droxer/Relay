@@ -48,3 +48,24 @@ it("distinguishes not-created, offline, unsupported and denied workspaces", () =
 it("does not call a missing workspace an empty directory", () => {
   assert.equal(taskWorkspaceState({ isLoading: false, error: null, data: { exists: false, entries: [] } }), "not-created");
 });
+
+describe("task workspace state inside a folder", () => {
+  it("keeps the browser (and its path bar) while a nested folder loads", () => {
+    assert.equal(taskWorkspaceState({ isLoading: true, error: null, data: undefined, path: "reports" }), "ready");
+  });
+
+  it("keeps the browser when a nested folder no longer exists", () => {
+    const data = { exists: false, entries: [] };
+    assert.equal(taskWorkspaceState({ isLoading: false, error: null, data, path: "reports/old" }), "ready");
+  });
+
+  it("keeps the browser when a nested folder fails to read", () => {
+    const error = { status: 500 };
+    assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined, path: "reports" }), "ready");
+  });
+
+  it("still names an offline computer at the root", () => {
+    const error = { status: 503, code: "computer-offline" };
+    assert.equal(taskWorkspaceState({ isLoading: false, error, data: undefined, path: "" }), "offline");
+  });
+});

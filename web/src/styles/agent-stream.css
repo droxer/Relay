@@ -382,9 +382,14 @@
 
 /* The caret rides whatever block the streamed text currently ends in — plain
    paragraph, heading, list item, blockquote, or code fence — so a turn that
-   is mid-list or mid-fence still shows liveness in the body. */
+   is mid-list or mid-fence still shows liveness in the body. A list follows
+   only the trailing item down its trailing sublist (three levels): a bare
+   `li:last-child` also matched the last item of every earlier nested list, so
+   one streaming list showed two or three carets. */
 .agent-stream.streaming .agent-text.is-live .agent-prose > :last-child:is(p, h1, h2, h3, h4, h5, h6, div, span):not(.md-fence, .md-table)::after,
-.agent-stream.streaming .agent-text.is-live .agent-prose > :last-child:is(ul, ol) li:last-child::after,
+.agent-stream.streaming .agent-text.is-live .agent-prose > :last-child:is(ul, ol) > li:last-child:not(:has(> :is(ul, ol):last-child))::after,
+.agent-stream.streaming .agent-text.is-live .agent-prose > :last-child:is(ul, ol) > li:last-child > :last-child:is(ul, ol) > li:last-child:not(:has(> :is(ul, ol):last-child))::after,
+.agent-stream.streaming .agent-text.is-live .agent-prose > :last-child:is(ul, ol) > li:last-child > :last-child:is(ul, ol) > li:last-child > :last-child:is(ul, ol) > li:last-child::after,
 .agent-stream.streaming .agent-text.is-live .agent-prose > blockquote:last-child p:last-child::after,
 .agent-stream.streaming .agent-text.is-live .agent-prose > .md-fence:last-child pre > code::after,
 .agent-stream.streaming .agent-text.is-live .agent-prose > .md-table:last-child tbody tr:last-child td:last-child::after,

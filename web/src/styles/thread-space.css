@@ -267,6 +267,8 @@
   align-items: center;
   gap: var(--sp-2);
   flex-shrink: 0;
+  /* Ends the row whether a filename or the path bar fills the space before. */
+  margin-left: auto;
 }
 
 /* Bounds its child; does NOT scroll. Both things that render here own a

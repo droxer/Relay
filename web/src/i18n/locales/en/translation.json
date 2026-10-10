@@ -640,6 +640,7 @@
     "open_thread": "Open thread",
     "loading_preview": "Loading preview…",
     "close_preview": "Close preview",
+    "refresh_files": "Refresh files",
     "binary_file": "Preview unavailable for binary files.",
     "empty_file": "This file is empty.",
     "file_truncated": "Preview truncated to {{limit}}. Download unavailable for a truncated file.",

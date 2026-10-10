@@ -18,6 +18,8 @@ import {
 } from "../workspace/WorkspaceFilePreview";
 import { WorkspaceFileActions } from "../workspace/WorkspaceFileActions";
 import { FilePaneBack } from "../workspace/FilePaneBack";
+import { ICON, NavRefresh } from "../icons";
+import { Button } from "@/components/ui/button";
 import { OverlayCloseButton } from "@/components/ui/OverlayCloseButton";
 
 /** The project workspace, browsed inside the thread output panel.
@@ -59,12 +61,33 @@ export function ThreadSpaceFiles({
     queryFn: ({ signal }): Promise<ProjectWorkspaceFileResponse> =>
       readProjectWorkspaceFile({ projectId, path: selectedPath }, signal),
   });
-  const { view, setView } = useWorkspaceFileView(selectedName);
+  const { view, setView } = useWorkspaceFileView(selectedPath);
 
   function openDirectory(next: string): void {
     setPath(next);
     setSelectedPath("");
   }
+
+  /* An agent writes into this workspace while the reader watches it, and
+     nothing here refetches on its own (window-focus refetch is off app-wide),
+     so the listing and the open file would otherwise stay as first loaded. */
+  function refresh(): void {
+    void fileQuery.refetch();
+    if (selectedPath) void contentQuery.refetch();
+  }
+
+  const refreshButton = (
+    <Button
+      variant="ghost"
+      size="icon-dense"
+      type="button"
+      tooltip={t("workspace.refresh_files")}
+      aria-label={t("workspace.refresh_files")}
+      onClick={refresh}
+    >
+      <NavRefresh size={ICON.sm} aria-hidden="true" />
+    </Button>
+  );
 
   if (selectedPath) {
     return (
@@ -83,6 +106,7 @@ export function ThreadSpaceFiles({
               view={view}
               onViewChange={setView}
             />
+            {refreshButton}
             <OverlayCloseButton label={t("sheet.close")} onClick={onClose} />
           </div>
         </div>
@@ -103,6 +127,7 @@ export function ThreadSpaceFiles({
     <div className="thread-space-files">
       <div className="thread-space-files-bar">
         <WorkspacePathBreadcrumb path={path} onNavigate={openDirectory} />
+        <div className="thread-space-files-actions">{refreshButton}</div>
       </div>
       <div className="thread-space-files-body" aria-label={t("workspace.tab_files")}>
         <WorkspaceFileList
