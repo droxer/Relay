@@ -327,6 +327,7 @@ export function AgentProfilePanel({
                 labelId={modelLabelId}
                 saving={saving}
                 canSelectModel={agent.canSelectModel !== false}
+                models={agent.availableModels}
                 customEndpoint={agent.customModelEndpoint === true}
                 onSave={handleModelSave}
               />

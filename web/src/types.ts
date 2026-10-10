@@ -647,6 +647,9 @@ export interface EmployeeAgent {
   /** True when the agent's runtime calls a custom model endpoint on its node,
       so vendor model ids may not exist there. */
   customModelEndpoint?: boolean;
+  /** Model ids this agent's runtime reports on the computers it runs on.
+      Node-reported and resolved on read, like skills. */
+  availableModels?: string[];
   /** Skills installed for this agent's runtime on the computers it runs on.
       Node-reported inventory resolved on read, never a stored agent field. */
   skills?: DaemonAgentSkill[];

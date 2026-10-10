@@ -116,8 +116,9 @@ function runCommand(id = "cmd_1"): DaemonNodeRunCommand {
   };
 }
 
+/** The startup skill/MCP inventory sweep or the per-runtime model sweep. */
 function isInventoryProbe(args: string[] | undefined): boolean {
-  return Boolean(args?.[1]?.includes("printf 'SKILL"));
+  return Boolean(args?.[1]?.includes("printf 'SKILL") || args?.[1]?.includes("emit()"));
 }
 
 test("relay daemon recognizes an npm-style symlink as its CLI entrypoint", () => {

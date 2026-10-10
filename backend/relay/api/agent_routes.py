@@ -395,6 +395,7 @@ def _agent_with_placements(ctx: AppContextDep, agent: dict[str, Any]) -> dict[st
         "skills": _agent_skills(ctx, agent, placements),
         "canSelectModel": _can_select_model(ctx, placements),
         "customModelEndpoint": _custom_model_endpoint(ctx, agent, placements),
+        "availableModels": _available_models(ctx, agent, placements),
     }
 
 
@@ -439,6 +440,30 @@ def _custom_model_endpoint(
         for node in ctx.registry.monitor_nodes()
         if node["id"] in node_ids
     )
+
+
+def _available_models(
+    ctx: AppContextDep, agent: dict[str, Any], placements: list[dict[str, Any]]
+) -> list[str]:
+    """The model ids this agent's runtime reports on the computers it runs on.
+
+    Like skills, the list is node-reported and resolved on read: the runtime is
+    the source of truth for its own catalog, so nothing is stored on the agent.
+    """
+    executor_kind = agent.get("executorKind")
+    if not executor_kind:
+        return []
+    node_ids = {
+        placement["runtimeNodeId"]
+        for placement in placements
+        if placement.get("runtimeNodeId")
+    }
+    models: dict[str, None] = {}
+    for node in ctx.registry.monitor_nodes():
+        if node["id"] in node_ids:
+            for model in (node.get("agentModels") or {}).get(executor_kind) or []:
+                models.setdefault(model, None)
+    return list(models)
 
 
 def _agent_skills(

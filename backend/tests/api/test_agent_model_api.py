@@ -224,3 +224,66 @@ def test_registration_keeps_only_known_runtimes_as_custom_endpoints(env) -> None
     node = app.state.registry.get("node_a")
 
     assert node["customModelEndpoints"] == ["claude", "codex"]
+
+
+def test_registration_keeps_only_well_formed_models_of_known_runtimes(env) -> None:
+    app, _client = env
+    _register_node(
+        app,
+        ["agent-model"],
+        agentModels={
+            "codex": ["gpt-6-luna", "bad id", 7, "gpt-6-luna", "gpt-5.6-terra"],
+            "gpt": ["gpt-6-luna"],
+            "pi": "openai/gpt-5",
+            "kimi": [],
+        },
+    )
+
+    node = app.state.registry.get("node_a")
+
+    assert node["agentModels"] == {"codex": ["gpt-6-luna", "gpt-5.6-terra"]}
+
+
+def test_registration_caps_each_runtimes_model_list(env) -> None:
+    app, _client = env
+    _register_node(
+        app, ["agent-model"], agentModels={"codex": [f"m-{i}" for i in range(500)]}
+    )
+
+    node = app.state.registry.get("node_a")
+
+    assert len(node["agentModels"]["codex"]) == 200
+
+
+def test_agent_offers_the_models_its_runtime_reports(env) -> None:
+    app, client = env
+    _register_node(
+        app,
+        ["agent-model"],
+        agentModels={"codex": ["gpt-6-luna", "gpt-5.6-terra"], "claude": ["opus"]},
+    )
+    agent = _create_agent(client)
+
+    record = client.get(f"/api/v1/admin/agents/{agent['id']}").json()["agent"]
+
+    assert record["availableModels"] == ["gpt-6-luna", "gpt-5.6-terra"]
+
+
+def test_agent_offers_no_models_when_its_runtime_reports_none(env) -> None:
+    app, client = env
+    _register_node(app, ["agent-model"])
+    agent = _create_agent(client)
+
+    record = client.get(f"/api/v1/admin/agents/{agent['id']}").json()["agent"]
+
+    assert record["availableModels"] == []
+
+
+def test_computer_list_carries_the_models_each_runtime_reports(env) -> None:
+    app, client = env
+    _register_node(app, ["agent-model"], agentModels={"codex": ["gpt-6-luna"]})
+
+    sandboxes = client.get("/api/v1/sandboxes").json()["sandboxes"]
+
+    node = next(item for item in sandboxes if item["id"] == "node_a")
+    assert node["agentModels"] == {"codex": ["gpt-6-luna"]}

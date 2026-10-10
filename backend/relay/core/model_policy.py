@@ -42,6 +42,15 @@ def normalize_model_policy(value: dict[str, Any]) -> dict[str, Any]:
     return {"model": model}
 
 
+def is_model_id(value: Any) -> bool:
+    """Whether ``value`` is a model id the policy would accept as given."""
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= MODEL_ID_MAX_LENGTH
+        and _MODEL_ID.match(value) is not None
+    )
+
+
 def policy_model(agent: dict[str, Any]) -> str | None:
     """The model an agent pins, or None to use the runtime's default."""
     policy = agent.get("modelPolicy")

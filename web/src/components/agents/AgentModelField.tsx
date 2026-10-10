@@ -11,14 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MODEL_ID_MAX_LENGTH, suggestedModels } from "../../lib/agentModels.ts";
-import type { AgentName } from "../../types";
 
 /** Select values that are not model ids; real ids cannot start with "_". */
 const DEFAULT_CHOICE = "__default__";
 const CUSTOM_CHOICE = "__custom__";
 
 interface AgentModelFieldProps {
-  executorKind: AgentName;
   /** The pinned model id, or "" for the runtime default. */
   value: string;
   onChange: (model: string) => void;
@@ -29,17 +27,18 @@ interface AgentModelFieldProps {
   triggerRef?: Ref<HTMLButtonElement>;
   /** Commits a typed custom id (Enter in the custom input). */
   onSubmitCustom?: () => void;
+  /** The models the runtime itself reports on the agent's computer. */
+  models?: readonly string[];
   /** The runtime calls a custom endpoint, so vendor ids are not suggested. */
   customEndpoint?: boolean;
 }
 
 /**
- * Model picker scoped to one runtime: its default, the runtime's suggested
- * models, or any other id the computer's provider serves. The choice is
+ * Model picker scoped to one runtime: its default, the models the runtime
+ * reports, or any other id the computer's provider serves. The choice is
  * derived from `value`, so only "Custom with nothing typed yet" needs state.
  */
 export function AgentModelField({
-  executorKind,
   value,
   onChange,
   labelId,
@@ -48,11 +47,12 @@ export function AgentModelField({
   error = false,
   triggerRef,
   onSubmitCustom,
+  models,
   customEndpoint = false,
 }: AgentModelFieldProps) {
   const { t } = useTranslation();
   const customInputId = useId();
-  const suggestions = suggestedModels(executorKind, { customEndpoint });
+  const suggestions = suggestedModels(models, { customEndpoint });
   const [customPicked, setCustomPicked] = useState(false);
   const isCustom = customPicked || (value !== "" && !suggestions.includes(value));
   const choice = isCustom ? CUSTOM_CHOICE : value || DEFAULT_CHOICE;

@@ -40,6 +40,7 @@ from ..collaboration.policy import (
     validate_round_result,
 )
 from ..core.computer_identity import computer_id, local_enrollment_key
+from ..core.model_policy import is_model_id
 from ..core.environment import load_backend_env
 from ..core.ids import new_database_id, new_relay_id, new_sandbox_id, now_iso
 from ..core.models import (
@@ -369,6 +370,30 @@ def agent_inventory_state(
     return inventory
 
 
+# Pi lists every model its configured providers serve; keep the record bounded.
+MAX_REPORTED_MODELS = 200
+
+
+def agent_models_state(payload: dict[str, Any]) -> dict[str, list[str]]:
+    """The model ids each runtime itself reports, known agents only.
+
+    Untrusted daemon payload: keep only ids the model policy would accept, in
+    the runtime's order, deduped and capped, and drop runtimes that report none.
+    """
+    raw = payload.get("agentModels")
+    if not isinstance(raw, dict):
+        return {}
+    models: dict[str, list[str]] = {}
+    for agent in AGENT_NAMES:
+        entries = raw.get(agent)
+        if not isinstance(entries, list):
+            continue
+        valid = list(dict.fromkeys(entry for entry in entries if is_model_id(entry)))
+        if valid:
+            models[agent] = valid[:MAX_REPORTED_MODELS]
+    return models
+
+
 def custom_model_endpoints_state(payload: dict[str, Any]) -> list[str]:
     """Runtimes the daemon says call a custom model endpoint, known agents only."""
     raw = payload.get("customModelEndpoints")
@@ -581,6 +606,7 @@ class DaemonNodeRegistry:
         ]
         agent_inventory = agent_inventory_state(payload)
         custom_model_endpoints = custom_model_endpoints_state(payload)
+        agent_models = agent_models_state(payload)
         prior_disabled = list((existing or {}).get("disabledAgents") or [])
         prior_role_defaults = dict((existing or {}).get("agentRoleDefaults") or {})
         prior_role_overrides = dict((existing or {}).get("agentRoleOverrides") or {})
@@ -674,6 +700,7 @@ class DaemonNodeRegistry:
                 if custom_model_endpoints
                 else {}
             ),
+            **({"agentModels": agent_models} if agent_models else {}),
             **({"displayName": prior_display_name} if prior_display_name else {}),
             **({"disabledAgents": prior_disabled} if prior_disabled else {}),
             **(
