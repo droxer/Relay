@@ -869,6 +869,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
                 else {}
             ),
             **({"roundResult": round_result} if isinstance(round_result, dict) else {}),
+            **({"outputTruncated": True} if value.get("outputTruncated") is True else {}),
         }
     if event_type == "run.failed":
         # An agent process may finish successfully and write deliverables even

@@ -8172,3 +8172,12 @@ def test_a_daemon_that_cannot_confirm_exit_makes_the_run_reportable(store_factor
             assert registry.heartbeat("sbx_alice", "node_token", leases)["settledCommandIds"] == [command["id"]]
 
     asyncio.run(run_flow())
+
+
+def test_run_completed_keeps_the_output_truncated_flag():
+    from relay.api.helpers import daemon_node_event
+
+    base = {"type": "run.completed", "commandId": "c", "sessionId": "s", "runId": "r",
+            "agent": "codex", "exitCode": 0, "agentLog": ""}
+    assert daemon_node_event({**base, "outputTruncated": True})["outputTruncated"] is True
+    assert "outputTruncated" not in daemon_node_event(base)

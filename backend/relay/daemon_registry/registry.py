@@ -784,10 +784,9 @@ class DaemonNodeRegistry:
                     continue
                 if record.get("status") == "dispatched":
                     request = self.daemon_store.run_request_for_command(command_id)
-                    if request and request.get("status") in ACTIVE_RUN_REQUEST_STATUSES:
-                        state = dict(request.get("state") or {})
-                        state.setdefault(EXECUTION_INTERRUPTED_STATE_KEY, now_iso())
-                        self.daemon_store.update_run_request(request["id"], {"state": state})
+                    if request and self.daemon_store.mark_run_request_state(
+                        request["id"], EXECUTION_INTERRUPTED_STATE_KEY
+                    ):
                         logger.warning(
                             "Daemon restarted with a run it will not resume",
                             node_id=sandbox_id, command_id=command_id,
@@ -1716,14 +1715,11 @@ class DaemonNodeRegistry:
     def _record_exit_unconfirmed(
         self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]
     ) -> None:
-        request = self.daemon_store.get_run_request(command.get("_runRequestId"))
-        if not request or request.get("status") not in ACTIVE_RUN_REQUEST_STATUSES:
+        request_id = command.get("_runRequestId")
+        if not request_id or not self.daemon_store.mark_run_request_state(
+            request_id, EXIT_UNCONFIRMED_STATE_KEY
+        ):
             return
-        state = dict(request.get("state") or {})
-        if state.get(EXIT_UNCONFIRMED_STATE_KEY):
-            return
-        state[EXIT_UNCONFIRMED_STATE_KEY] = now_iso()
-        self.daemon_store.update_run_request(request["id"], {"state": state})
         logger.warning(
             "Daemon cannot confirm a stopped run exited; it stays reserved",
             node_id=sandbox_id, command_id=event["commandId"], run_id=event["runId"],
@@ -2353,6 +2349,11 @@ class DaemonNodeRegistry:
             "run.failed": "failed",
             "run.cancelled": "cancelled",
         }.get(event["type"])
+        if event.get("outputTruncated"):
+            logger.warning(
+                "Run completed but the backend refused part of its streamed output",
+                sandbox_id=sandbox_id, command_id=event["commandId"], run_id=event["runId"],
+            )
         late_output = (
             event.get("replayed") is True
             and event["type"] in {"run.output", "run.output.batch", "run.collaboration"}
