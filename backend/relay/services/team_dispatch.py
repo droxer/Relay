@@ -123,7 +123,12 @@ def team_agents(
     if not team or team.get("deletedAt"):
         raise TeamDispatchError("team_not_found", permanent=True)
     if not team.get("enabled", True):
-        raise TeamDispatchError("team_disabled", permanent=True)
+        # An emptied team is disabled by the store, but "invalid" is what the
+        # owner can act on: re-enabling it is refused until it is restaffed.
+        raise TeamDispatchError(
+            "team_disabled" if team.get("memberAgentIds") else "team_invalid",
+            permanent=True,
+        )
     if team.get("ownerEmployeeId") != employee_id:
         raise TeamDispatchError("team_forbidden", permanent=True)
     members = list(team.get("memberAgentIds") or [])

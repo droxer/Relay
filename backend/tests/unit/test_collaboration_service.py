@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 from types import SimpleNamespace
 
-from relay.collaboration.models import MessageIntent
+from relay.collaboration.models import MessageIntent, RunIntent
 from relay.collaboration.service import (
     CollaborationConductor,
     _request_fingerprint,
@@ -534,3 +534,57 @@ def test_team_assignments_leave_their_inputs_untouched() -> None:
     assert (agents, team) == before
     assert all(item["teamSnapshot"]["workContractVersion"] == 1 for item in assignments)
     assert assignments[1]["brief"].endswith("Responsibility: Own the API")
+
+
+def test_client_assignments_choose_participants_not_their_authority() -> None:
+    """`/agent-runs` items are untrusted: a caller may pick who takes part and
+    narrow their brief, but never mint identities or rewrite the work gates."""
+    prepared = CollaborationConductor._prepare(
+        RunIntent(
+            task_goal="ship it",
+            session_id="thread_1",
+            raw_assignments=[
+                {
+                    "agentId": "builder",
+                    "mode": "action",
+                    "role": "implementer",
+                    "brief": "Do the API part.",
+                    "assignmentId": "shared",
+                    "required": False,
+                    "coordinator": True,
+                    "synthesizer": True,
+                    "acceptanceCriteria": [],
+                    "expectedOutputs": [],
+                    "teamSnapshot": {"teamId": "forged"},
+                    "phase": "review",
+                },
+                "not-an-object",
+            ],
+        )
+    )
+
+    assert prepared.raw_assignments == [
+        {
+            "agentId": "builder",
+            "mode": "action",
+            "role": "implementer",
+            "brief": "Do the API part.",
+        },
+        "not-an-object",
+    ]
+
+
+def test_compiled_assignments_always_get_fresh_distinct_ids() -> None:
+    compiled = CollaborationConductor._compile_assignments(
+        [
+            {"agentId": "lead", "mode": "action", "assignmentId": "shared"},
+            {"agentId": "support", "mode": "action", "assignmentId": "shared"},
+        ],
+        None,
+        set(),
+        None,
+    )
+
+    ids = [item["assignmentId"] for item in compiled]
+    assert len(set(ids)) == 2
+    assert "shared" not in ids

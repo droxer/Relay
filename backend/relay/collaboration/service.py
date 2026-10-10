@@ -210,7 +210,7 @@ class CollaborationConductor:
                     "agentIds": [intent.target_agent_id],
                 },
             )
-        raw_assignments = intent.raw_assignments
+        raw_assignments = _client_assignments(intent.raw_assignments)
         addressed = [
             item.get("agentId")
             for item in (raw_assignments or [])
@@ -838,7 +838,9 @@ class CollaborationConductor:
             phase = team_assignment_phase(role, mode, coordinator)
             assignments.append(
                 {
-                    "assignmentId": item.get("assignmentId") or new_database_id(),
+                    # Minted here, never carried in: work results are keyed by
+                    # it, so a shared id would let one report stand in for another.
+                    "assignmentId": new_database_id(),
                     "agentId": item["agentId"],
                     **(
                         {"executorKind": item["executorKind"]}
@@ -863,6 +865,26 @@ class CollaborationConductor:
                 }
             )
         return assignments
+
+
+# What a caller may say about a participant it names. Identity (`assignmentId`)
+# and authority (`coordinator`, `synthesizer`, `required`, acceptance
+# criteria, expected outputs, team snapshot) come from the conductor and the
+# team's own configuration, never from the request.
+CLIENT_ASSIGNMENT_FIELDS = ("agentId", "mode", "role", "brief")
+
+
+def _client_assignments(
+    raw_assignments: list[Any] | None,
+) -> list[Any] | None:
+    if raw_assignments is None:
+        return None
+    return [
+        {key: item[key] for key in CLIENT_ASSIGNMENT_FIELDS if key in item}
+        if isinstance(item, dict)
+        else item
+        for item in raw_assignments
+    ]
 
 
 def _scoped_idempotency_key(

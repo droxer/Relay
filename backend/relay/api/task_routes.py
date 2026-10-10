@@ -136,7 +136,10 @@ def team_for_assignment(
     if not team or team.get("deletedAt"):
         raise HTTPException(404, "Team not found.")
     if not team.get("enabled", True):
-        raise HTTPException(409, "team_disabled")
+        # Mirrors `team_agents`: an emptied team needs restaffing, not enabling.
+        raise HTTPException(
+            409, "team_disabled" if team.get("memberAgentIds") else "team_invalid"
+        )
     if team.get("ownerEmployeeId") != expected_employee_id:
         raise HTTPException(403, "Team is not available to the task assignee.")
     if (

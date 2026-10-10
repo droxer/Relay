@@ -172,26 +172,9 @@ class LocalTeamStore:
             ]
             if members == current.get("memberAgentIds", []):
                 return current
-            lead = current.get("leadAgentId")
-            if lead == agent_id:
-                lead = members[0] if members else None
-            updated = {
-                **current,
-                "memberAgentIds": members,
-                "memberConfigs": {key: value for key, value in current.get("memberConfigs", {}).items() if key in members},
-                "leadAgentId": lead,
-                "updatedAt": now_iso(),
-            }
+            updated, patch = _without_member(current, members, agent_id)
             self._append(
-                team_id,
-                "team.updated",
-                {
-                    "patch": {
-                        "memberAgentIds": members,
-                        "leadAgentId": lead,
-                    },
-                    "team": updated,
-                },
+                team_id, "team.updated", {"patch": patch, "team": updated}
             )
             return updated
 
@@ -403,20 +386,8 @@ class DatabaseTeamStore:
             ]
             if members == current.get("memberAgentIds", []):
                 return None
-            lead = current.get("leadAgentId")
-            if lead == agent_id:
-                lead = members[0] if members else None
-            updated = {
-                **current,
-                "memberAgentIds": members,
-                "memberConfigs": {key: value for key, value in current.get("memberConfigs", {}).items() if key in members},
-                "leadAgentId": lead,
-                "updatedAt": now_iso(),
-            }
-            return updated, {
-                "patch": {"memberAgentIds": members, "leadAgentId": lead},
-                "team": updated,
-            }
+            updated, patch = _without_member(current, members, agent_id)
+            return updated, {"patch": patch, "team": updated}
 
         return self._mutate(team_id, "team.updated", remove_from_snapshot)
 
@@ -541,6 +512,36 @@ class DatabaseTeamStore:
             raise TeamValidationError("team_name_taken")
 
 
+def _without_member(
+    current: dict[str, Any], members: list[str], agent_id: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The team after `agent_id` leaves, and the patch that records it.
+
+    A departing lead hands the lead to the first remaining member. A team left
+    with nobody on it cannot run, so it is disabled rather than left enabled
+    with no lead; it stays editable and can be restaffed.
+    """
+    lead = current.get("leadAgentId")
+    if lead == agent_id:
+        lead = members[0] if members else None
+    patch: dict[str, Any] = {
+        "memberAgentIds": members,
+        "leadAgentId": lead,
+        **({} if members else {"enabled": False}),
+    }
+    updated = {
+        **current,
+        **patch,
+        "memberConfigs": {
+            key: value
+            for key, value in current.get("memberConfigs", {}).items()
+            if key in members
+        },
+        "updatedAt": now_iso(),
+    }
+    return updated, patch
+
+
 def _new_team(
     owner_employee_id: str, payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -650,11 +651,15 @@ def _normalize_team_patch(
         normalized["collaborationStyle"] = (
             None if value is None else validate_collaboration_style(value)
         )
-    if lead not in members:
+    # An emptied team has no lead; edits that leave the roster alone (a rename,
+    # a style change) stay valid until it is restaffed.
+    if (members or "leadAgentId" in patch) and lead not in members:
         raise TeamValidationError("team_lead_not_member")
     if "enabled" in patch:
         if not isinstance(patch["enabled"], bool):
             raise ValueError("enabled must be a boolean.")
+        if patch["enabled"] and not members:
+            raise TeamValidationError("team_members_required")
         normalized["enabled"] = patch["enabled"]
     return normalized
 
