@@ -49,7 +49,11 @@ from ..core.models import (
     AGENT_NAMES,
     DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS,
 )
-from ..persistence.daemon_store import ACTIVE_RUN_REQUEST_STATUSES, EXECUTION_INTERRUPTED_STATE_KEY
+from ..persistence.daemon_store import (
+    ACTIVE_RUN_REQUEST_STATUSES,
+    EXECUTION_INTERRUPTED_STATE_KEY,
+    EXIT_UNCONFIRMED_STATE_KEY,
+)
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.task_execution import request_execution_owner
 from ..persistence.stores import (
@@ -1689,15 +1693,41 @@ class DaemonNodeRegistry:
     def command_lease_observations(
         self, sandbox_id: str, command_leases: list[tuple[str, str | None]]
     ) -> dict[str, Any]:
-        """Read matching ownership evidence after an authenticated renewal/poll."""
+        """Read matching ownership evidence after an authenticated renewal/poll.
+
+        `settledCommandIds` names submitted runs Relay already holds a terminal
+        outcome for. A daemon still holding one has not reported it, so that
+        outcome is a person's assertion; a daemon stuck verifying the exit may
+        then let the run go.
+        """
         accepted = []
+        settled = []
         for command_id, lease_id in command_leases:
             record = self.daemon_store.get_command(command_id)
-            if (record and record.get("nodeId") == sandbox_id
-                and record.get("status") == "dispatched"
-                and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
+            if not record or record.get("nodeId") != sandbox_id:
+                continue
+            if record.get("status") in ("completed", "failed", "cancelled"):
+                settled.append(command_id)
+            elif (record.get("status") == "dispatched"
+                  and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
                 accepted.append({"commandId": command_id, "leaseId": lease_id, "leaseExpiresAt": record["leaseExpiresAt"]})
-        return {"commandLeases": accepted, "observedAt": now_iso()}
+        return {"commandLeases": accepted, "settledCommandIds": settled, "observedAt": now_iso()}
+
+    def _record_exit_unconfirmed(
+        self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]
+    ) -> None:
+        request = self.daemon_store.get_run_request(command.get("_runRequestId"))
+        if not request or request.get("status") not in ACTIVE_RUN_REQUEST_STATUSES:
+            return
+        state = dict(request.get("state") or {})
+        if state.get(EXIT_UNCONFIRMED_STATE_KEY):
+            return
+        state[EXIT_UNCONFIRMED_STATE_KEY] = now_iso()
+        self.daemon_store.update_run_request(request["id"], {"state": state})
+        logger.warning(
+            "Daemon cannot confirm a stopped run exited; it stays reserved",
+            node_id=sandbox_id, command_id=event["commandId"], run_id=event["runId"],
+        )
 
     def _take_commands_unlocked(
         self,
@@ -2417,6 +2447,9 @@ class DaemonNodeRegistry:
             raise PermissionError(
                 "Unauthorized daemon node event: command metadata does not match the active command."
             )
+        if event["type"] == "run.exit_unconfirmed":
+            self._record_exit_unconfirmed(sandbox_id, command, event)
+            return
         if event["type"] == "run.workspace":
             from ..persistence.store_common import relay_task_event
 

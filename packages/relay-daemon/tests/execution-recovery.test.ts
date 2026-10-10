@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { collectExecution } from "../src/box.js";
+import { watchExecutionExit } from "../src/execution-capture.js";
 
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 10));
 const closed = async () => ({ next: async () => null });
@@ -102,4 +103,43 @@ test("cancellation watchdog warns without completing an unconfirmed execution", 
   assert.ok(warnings.some(message=>message.includes("Cancellation overdue")));
   finish({exitCode: 137});
   await pending;
+});
+
+test("an exit that cannot be verified is reported once and held until released", async () => {
+  const controller = new AbortController();
+  const release = new AbortController();
+  let reports = 0;
+  let settled = false;
+  const pending = collectExecution({stdout: closed, stderr: closed,
+    wait: () => new Promise(() => undefined),
+    kill: async () => { throw new Error("guest gone"); },
+  }, false, undefined, undefined, undefined, controller.signal, {
+    retryMs: 5, graceMs: 5, unconfirmedAfterMs: 20, warn: () => undefined,
+    onExitUnconfirmed: () => { reports++; }, release: release.signal,
+  }).finally(() => { settled = true; });
+  controller.abort();
+  await new Promise(resolve => setTimeout(resolve, 80));
+  // Still reserved: reporting the doubt never releases the run by itself.
+  assert.equal(settled, false);
+  assert.equal(reports, 1);
+  release.abort();
+  const result = await pending;
+  assert.equal(result.exit_code, -1);
+  assert.match(result.error_message ?? "", /reported gone/);
+});
+
+test("hooks registered for a run's signal reach the execution without extra plumbing", async () => {
+  const controller = new AbortController();
+  const release = new AbortController();
+  let reports = 0;
+  watchExecutionExit(controller.signal, { onExitUnconfirmed: () => { reports++; }, release: release.signal });
+  const pending = collectExecution({stdout: closed, stderr: closed,
+    wait: () => new Promise(() => undefined), kill: async () => undefined,
+  }, false, undefined, undefined, undefined, controller.signal,
+  { retryMs: 5, graceMs: 5, unconfirmedAfterMs: 10, warn: () => undefined });
+  controller.abort();
+  await new Promise(resolve => setTimeout(resolve, 50));
+  release.abort();
+  await pending;
+  assert.equal(reports, 1);
 });

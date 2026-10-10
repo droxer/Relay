@@ -97,6 +97,9 @@ TERMINAL_CLAIM_ID_STATE_KEY = "_relay_terminal_claim_id"
 # it. Kept apart from _relay_recovery_required, which marks a stuck save and
 # makes finalization stand down; a late exit report must still finalize.
 EXECUTION_INTERRUPTED_STATE_KEY = "_relay_execution_interrupted_at"
+# Set when the daemon reports it cannot verify the process exited after a stop.
+# The run stays reserved; a person may now report it gone.
+EXIT_UNCONFIRMED_STATE_KEY = "_relay_exit_unconfirmed_at"
 TERMINAL_CLAIM_EXPIRES_STATE_KEY = "_relay_terminal_claim_expires_at"
 
 

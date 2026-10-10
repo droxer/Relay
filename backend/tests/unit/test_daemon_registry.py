@@ -8140,3 +8140,35 @@ def test_lost_dispatch_says_never_received_only_when_the_daemon_could_have_said_
                 assert error == "The computer stopped responding before the run reported progress."
 
     asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_a_daemon_that_cannot_confirm_exit_makes_the_run_reportable(store_factory):
+    """A run whose process exit the daemon can no longer verify used to look
+    live for as long as the daemon kept renewing its lease. Saying so lets a
+    person see it and report it gone, and the heartbeat then tells the daemon
+    that run is settled so it can give the slot back."""
+    from relay.services.execution_lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Wedged"})["id"])
+            identity = {"commandId": command["id"], "leaseId": command["leaseId"],
+                        "sessionId": command["sessionId"], "runId": command["runId"], "agent": "codex"}
+
+            registry.handle_event("sbx_alice", {"type": "run.exit_unconfirmed", **identity}, "node_token")
+
+            lifecycle = ExecutionLifecycleService(registry, None)
+            status = lifecycle.status(sessions.get_session(command["sessionId"]))
+            assert status["phase"] == "recovery_required"
+            assert status["blockingReason"] == "termination_unconfirmed"
+            assert status["canReportGone"] is True
+            leases = [(command["id"], command["leaseId"])]
+            assert registry.heartbeat("sbx_alice", "node_token", leases)["settledCommandIds"] == []
+
+            lifecycle.reconcile(command["sessionId"], "alice")
+
+            assert registry.heartbeat("sbx_alice", "node_token", leases)["settledCommandIds"] == [command["id"]]
+
+    asyncio.run(run_flow())

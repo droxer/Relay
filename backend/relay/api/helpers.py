@@ -684,6 +684,15 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "agent": agent,
             **({"skillsSkipped": skills_skipped} if skills_skipped else {}),
         }
+    if event_type == "run.exit_unconfirmed":
+        return {
+            "type": event_type,
+            "commandId": command_id,
+            **lease_field,
+            "sessionId": session_id,
+            "runId": run_id,
+            "agent": agent,
+        }
     if event_type == "run.workspace":
         if not isinstance(value.get("waiting"), bool):
             raise ValueError("invalid daemon workspace wait state.")

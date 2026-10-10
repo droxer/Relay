@@ -641,7 +641,12 @@ restarts and reports a journaled command it will not resume surfaces
 `recovery_required` / `execution_interrupted`: a daemon advertising
 `execution-journal-report` sends `journaledCommandIds` on registration, and the
 response's `acknowledgedJournalIds` lists the ones the backend accounted for so
-the daemon can drop their journal records. None of these release anything on
+the daemon can drop their journal records. A daemon that cannot verify a stopped
+run's process exit for a minute sends `run.exit_unconfirmed`, which surfaces
+`recovery_required` / `termination_unconfirmed` at once. Heartbeat and poll lease
+observations list `settledCommandIds`: submitted runs that already have a terminal
+outcome, so a daemon holding a reported-gone run can give back its slot. None of
+these release anything on
 their own: silence is never treated as termination, so a person must still
 report the agent gone (reconcile or deletion) to release the reservation.
 

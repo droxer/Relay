@@ -15,6 +15,7 @@ from loguru import logger
 
 from ..persistence.daemon_store import (
     EXECUTION_INTERRUPTED_STATE_KEY,
+    EXIT_UNCONFIRMED_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
@@ -68,6 +69,10 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                 # the lease it was handed before the crash proves nothing.
                 confirmed = False
                 phase, reason = "recovery_required", "execution_interrupted"
+            elif state.get(EXIT_UNCONFIRMED_STATE_KEY):
+                # The daemon itself says it cannot verify the stopped process
+                # exited; waiting longer will not produce that evidence.
+                phase, reason = "recovery_required", "termination_unconfirmed"
             elif not live:
                 phase, reason = "unresponsive", "execution_unconfirmed"
             elif state.get("_relay_stop_command_id") or session.get("deletionRequestedAt"):
@@ -226,7 +231,7 @@ class ExecutionLifecycleService:
             # waking up for a run nobody is going to report on.
             for key in (TERMINAL_CLAIM_ID_STATE_KEY, TERMINAL_CLAIM_EXPIRES_STATE_KEY,
                         "_relay_recovery_required", "_relay_finalization_retry_at",
-                        EXECUTION_INTERRUPTED_STATE_KEY):
+                        EXECUTION_INTERRUPTED_STATE_KEY, EXIT_UNCONFIRMED_STATE_KEY):
                 state.pop(key, None)
             self.registry.daemon_store.update_run_request(request["id"], {
                 "status": "cancelled", "state": state,

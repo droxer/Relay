@@ -91,6 +91,7 @@ import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
+import { watchExecutionExit } from "./execution-capture.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeSkills } from "./agent-skills.js";
 
@@ -320,6 +321,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   }
   setHealth("starting", { employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
   const activeRuns = new Map<string, { command: DaemonNodeRunCommand; controller: AbortController; promise: Promise<void> }>();
+  // Runs whose stop could not be verified, each with the switch that lets it go.
+  const unconfirmedExits = new Map<string, AbortController>();
   const shutdownGraceMs = options.shutdownGraceMs ?? positiveIntEnv("RELAY_DAEMON_SHUTDOWN_GRACE_MS") ?? 10_000;
   const shutdownController = new AbortController();
   const runtimeSignal = options.signal
@@ -488,6 +491,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       }
     };
     const renewExecutionLeases = (settings: DaemonNodeHeartbeatSettings | undefined, sentAt: number): void => {
+      // A run the backend already settled while this daemon could not verify
+      // its exit was reported gone by a person; only that frees its slot.
+      for (const commandId of settings?.settledCommandIds ?? []) {
+        unconfirmedExits.get(commandId)?.abort("Reported gone by an operator.");
+      }
       if (!settings?.commandLeases) return;
       const observedAt = Date.parse(settings.observedAt ?? "");
       for (const lease of settings.commandLeases) {
@@ -695,6 +703,27 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           const controller = new AbortController();
           if (command.leaseId) executionWatchdog.track(command.id, commandLeaseSeconds * 1000,
             () => controller.abort("Execution lease expired; stopping until ownership can be confirmed."));
+          const release = new AbortController();
+          watchExecutionExit(controller.signal, {
+            release: release.signal,
+            onExitUnconfirmed: () => {
+              unconfirmedExits.set(command.id, release);
+              logger.warn("Stopped run's exit cannot be verified; reporting it and keeping the run reserved", commandLogFields(sandboxId, command));
+              void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+                type: "run.exit_unconfirmed",
+                commandId: command.id,
+                ...commandLeaseEventFields(command),
+                sessionId: command.sessionId,
+                runId: command.runId,
+                agent: command.agent,
+              } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+                logger.warn("exit-unconfirmed report failed", {
+                  ...commandLogFields(sandboxId, command),
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              });
+            },
+          });
           const promise = Promise.resolve().then(() =>
             workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => executeCommand(
               backendUrl,
@@ -765,6 +794,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               });
             });
           }).finally(() => {
+            unconfirmedExits.delete(command.id);
             activeRuns.delete(command.id);
             terminalCommands.delete(command.id);
             executionWatchdog.forget(command.id);

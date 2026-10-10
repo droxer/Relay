@@ -19,10 +19,23 @@ NOW = datetime(2026, 9, 16, tzinfo=timezone.utc)
     ({"status": "finalizing", "state": {"_relay_recovery_required": True}}, {"status": "failed"}, "recovery_required"),
 ])
 def test_execution_truth_does_not_trust_session_outcome(run_request, command, phase):
-    status = execution_status({"status": "completed", "agentRuns": []}, run_request, command, now=NOW)
+    status = execution_status({"status": "completed", "agentRuns": []}, run_request, command,
+                              now=NOW, computer_online=True)
     assert status["phase"] == phase
     assert status["canDelete"] == (phase == "terminal")
     assert status["executionConfirmed"] == (phase in {"running", "stopping"})
+
+
+@pytest.mark.parametrize("computer_online", [False, None])
+def test_a_long_dead_lease_on_a_computer_not_online_needs_recovery(computer_online):
+    status = execution_status(
+        {"status": "running", "agentRuns": []}, {"status": "running"},
+        {"status": "dispatched", "leaseExpiresAt": "2026-09-15T00:00:00Z"},
+        now=NOW, computer_online=computer_online,
+    )
+    assert status["phase"] == "recovery_required"
+    assert status["blockingReason"] == "execution_lost"
+    assert status["canReportGone"] is True
 
 
 def test_orphaned_agent_record_requires_recovery():

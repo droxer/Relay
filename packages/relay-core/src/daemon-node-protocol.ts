@@ -208,6 +208,8 @@ export interface DaemonNodeHeartbeatSettings {
   /** Backend timestamp for the accepted renewal. */
   observedAt?: string;
   commandLeases?: Array<{ commandId: string; leaseId?: string; leaseExpiresAt: string }>;
+  /** Submitted runs Relay already holds a terminal outcome for (reported gone). */
+  settledCommandIds?: string[];
 }
 
 export interface DaemonNodeHeartbeat {
@@ -402,6 +404,15 @@ export type DaemonNodeEvent =
       roundResult?: DaemonRoundResult;
       /** The backend rejected at least one output batch; the streamed log has gaps. */
       outputTruncated?: boolean;
+    }
+  | {
+      /** A stopped run's process exit cannot be verified; it stays reserved. */
+      type: "run.exit_unconfirmed";
+      commandId: string;
+      leaseId?: string;
+      sessionId: string;
+      runId: string;
+      agent: AgentName;
     }
   | {
       type: "run.failed";
