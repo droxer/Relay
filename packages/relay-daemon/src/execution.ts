@@ -120,7 +120,9 @@ export class BoxLiteExecutionManager implements ExecutionManager {
     }
     const env = options.env ? Object.entries(options.env) : null;
     const execution = await activeBox().exec(cmd, args, env, false, null, null, options.cwd ?? null);
-    return collectExecution(execution, true, options.stdoutRenderer, options.stderrRenderer, options.sink, options.signal);
+    // Daemon runs stream to the backend, not the daemon's terminal — the same
+    // as local execution, which never echoes.
+    return collectExecution(execution, false, options.stdoutRenderer, options.stderrRenderer, options.sink, options.signal);
   }
 
   async runShell(command: string, signal?: AbortSignal, env?: Record<string, string>): Promise<StreamExecResult> {

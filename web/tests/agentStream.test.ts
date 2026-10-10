@@ -1037,6 +1037,52 @@ describe("agent stream parsing", () => {
     assert.deepEqual(accumulator.update("plain replacement"), [{ kind: "text", text: "plain replacement" }]);
   });
 
+  it("parses only the unsettled Claude suffix once earlier turns are checkpointed", (t) => {
+    const accumulator = new AgentStreamAccumulator("claude");
+    const turns = Array.from({ length: 200 }, (_, index) => [
+      JSON.stringify({
+        type: "stream_event",
+        event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: `Turn ${index}.` } },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { id: `msg_${index}`, role: "assistant", content: [{ type: "text", text: `Turn ${index}.` }] },
+      }),
+    ].join("\n")).join("\n");
+    accumulator.update(turns);
+    const next = `${turns}\n${JSON.stringify({
+      type: "stream_event",
+      event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Live" } },
+    })}`;
+
+    const parse = t.mock.method(JSON, "parse");
+    const segments = accumulator.update(next);
+
+    assert.ok(parse.mock.callCount() < 10, `parsed ${parse.mock.callCount()} frames for one appended delta`);
+    assert.deepEqual(segments.at(-1), { kind: "text", text: "Live" });
+    assert.equal(segments.length, 201);
+  });
+
+  it("settles a Claude transcript canonically when the result frame arrives incrementally", () => {
+    const accumulator = new AgentStreamAccumulator("claude");
+    const turn = [
+      JSON.stringify({
+        type: "stream_event",
+        event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Answer." } },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { id: "msg_1", role: "assistant", content: [{ type: "text", text: "Answer." }] },
+      }),
+    ].join("\n");
+    const settled = `${turn}\n${JSON.stringify({ type: "result", subtype: "success", result: "Answer." })}`;
+
+    accumulator.update(turn);
+    assert.deepEqual(accumulator.update(settled), parseAgentStream("claude", settled));
+    const trailing = `${settled}\n`;
+    assert.deepEqual(accumulator.update(trailing), parseAgentStream("claude", trailing));
+  });
+
   it("does not re-append a replayed Claude checkpoint", () => {
     const turn = [
       JSON.stringify({

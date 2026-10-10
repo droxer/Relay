@@ -1051,6 +1051,8 @@ async function executeCommand(
       } finally {
         outputPostBacklogBytes = Math.max(0, outputPostBacklogBytes - item.bytes);
       }
+      // Output held back while this post was in flight goes out as one batch.
+      if (outputPostHead >= outputPostQueue.length && !outputPostFailure) outputBuffer.resume();
     }
     outputPostQueue.length = 0;
     outputPostHead = 0;
@@ -1114,8 +1116,12 @@ async function executeCommand(
       entries.reduce((total, entry) => total + Buffer.byteLength(entry.text), 0),
     );
   };
+  // Batches are posted one at a time. While one is in flight the buffer keeps
+  // collecting, so a slow backend gets fewer, larger posts instead of a queue
+  // that grows by one post (and one durable record) every latency window.
   const outputBuffer = new OutputEventBuffer(
     (entries) => emitOutputBatch(command.agent, entries),
+    { isBusy: () => outputPostDrain !== undefined },
   );
   const eventSink = {
     agentOutput: (_runId: string, _agent: AgentName, stream: "stdout" | "stderr", text: string): void => {

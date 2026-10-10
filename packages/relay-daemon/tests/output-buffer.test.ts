@@ -79,6 +79,43 @@ describe("OutputEventBuffer", () => {
     assert.equal(emitted.some((text) => /[\uD800-\uDBFF]$|^[\uDC00-\uDFFF]/u.test(text)), false);
   });
 
+  it("holds the timed flush while delivery is busy and releases one coalesced batch", async () => {
+    const emitted: string[] = [];
+    let busy = true;
+    const buffer = new OutputEventBuffer((entries) => emitted.push(entries.map((entry) => entry.text).join("")), {
+      delayMs: 5,
+      maxChars: 32_768,
+      isBusy: () => busy,
+    });
+
+    buffer.push("stdout", "one ");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    buffer.push("stdout", "two");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(emitted, []);
+
+    busy = false;
+    buffer.resume();
+    assert.deepEqual(emitted, ["one two"]);
+    buffer.resume();
+    assert.deepEqual(emitted, ["one two"]);
+    buffer.close();
+  });
+
+  it("still flushes at the size cap while delivery is busy", () => {
+    const emitted: string[] = [];
+    const buffer = new OutputEventBuffer((entries) => emitted.push(entries.map((entry) => entry.text).join("")), {
+      delayMs: 1_000,
+      maxChars: 4,
+      isBusy: () => true,
+    });
+
+    buffer.push("stdout", "abcdef");
+    assert.deepEqual(emitted, ["abcd"]);
+    buffer.close();
+    assert.deepEqual(emitted, ["abcd", "ef"]);
+  });
+
   it("flushes after the latency window", async () => {
     const emitted: string[] = [];
     const buffer = new OutputEventBuffer((entries) => emitted.push(entries.map((entry) => entry.text).join("")), {

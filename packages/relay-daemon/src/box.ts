@@ -438,17 +438,18 @@ export async function collectExecution(
   async function readStream(name: "stdout" | "stderr", capture: BoundedTextCapture): Promise<void> {
     const reader = await execution[name]();
     const decoder = new TextDecoder("utf-8");
+    const renderer = name === "stderr" ? stderrRenderer : stdoutRenderer;
     const pushText = (text: string): void => {
       if (!text) return;
       capture.append(text);
-      if (!echo) return;
-      const rendered = name === "stderr"
-        ? stderrRenderer ? stderrRenderer(text) : text
-        : stdoutRenderer ? stdoutRenderer(text) : text;
+      // Renderers carry the live event feed, so they see every chunk; `echo`
+      // only decides whether output without a sink reaches this terminal.
+      const rendered = renderer ? renderer(text) : text;
       if (sink) {
-        sink(rendered);
+        if (rendered) sink(rendered);
         return;
       }
+      if (!echo || !rendered) return;
       if (name === "stderr") {
         process.stderr.write(rendered);
       } else {

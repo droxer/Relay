@@ -157,6 +157,21 @@ describe("adaptive agent execution", () => {
     }
   });
 
+  it("asks every agent CLI for unbuffered output so it streams over a pipe", async () => {
+    for (const agent of AGENT_NAMES) {
+      let env: Record<string, string> | undefined;
+      await runAgentNode(agent, state({ task_goal: "Fix auth" }), {
+        sink: () => undefined,
+        execStream: async (_cmd, _args, options) => {
+          env = options?.env;
+          return { exit_code: 0, stdout: "", stderr: "" };
+        },
+      });
+
+      assert.equal(env?.PYTHONUNBUFFERED, "1", agent);
+    }
+  });
+
   it("marks a non-zero exit as a failure for every agent", async () => {
     for (const agent of AGENT_NAMES) {
       const patch = await runAgentNode(agent, state({ task_goal: "Fix auth" }), {
@@ -1592,7 +1607,7 @@ describe("credential scoping", () => {
           return { exit_code: 0, stdout: "", stderr: "" };
         },
       });
-      assert.deepEqual(executionEnv, { ANTHROPIC_API_KEY: "anthropic-secret" });
+      assert.deepEqual(executionEnv, { PYTHONUNBUFFERED: "1", ANTHROPIC_API_KEY: "anthropic-secret" });
     });
   });
 

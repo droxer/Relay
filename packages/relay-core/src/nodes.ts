@@ -66,7 +66,10 @@ export async function runAgentNode(
     },
     sink: options.sink,
     signal: options.signal,
-    env: Object.fromEntries(agentCredentialEnv(agent)),
+    // Output reaches the daemon through a pipe, where a Python CLI block-buffers
+    // stdout and the transcript arrives in bursts; `stdbuf` (BoxLite only) does
+    // not reach Python's own buffering, so ask for it on every computer.
+    env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)) },
   });
   const tokenUsage = extractTokenUsageFromJsonl(result.stdout, agent);
 

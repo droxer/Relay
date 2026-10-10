@@ -73,6 +73,9 @@ export class AgentStreamAccumulator {
   // must dedup against these — the slice-local check inside parseClaude cannot
   // see segments committed by an earlier slice.
   private turnTextSignatures = new Set<string>();
+  // Set once Claude's `result` frame is seen; from then on the log is parsed
+  // canonically as a whole (see update).
+  private settled = false;
 
   constructor(private readonly agent: AgentName) {}
 
@@ -83,8 +86,14 @@ export class AgentStreamAccumulator {
       this.stableSegments = [];
       this.seenCheckpointIds.clear();
       this.turnTextSignatures.clear();
+      this.settled = false;
     }
     this.raw = raw;
+
+    // Everything before stableOffset is already checkpointed, so only the
+    // suffix can hold a new frame — rescanning the whole log here made each
+    // streamed delta cost the length of the run.
+    const checkpoints = this.settled ? [] : agentCheckpoints(this.agent, raw, this.stableOffset);
 
     // A completed Claude transcript is small enough to parse canonically once.
     // More importantly, the full parse can reconcile replayed assistant frames
@@ -93,8 +102,9 @@ export class AgentStreamAccumulator {
     // though another frame in the same raw log contains the intact text.
     if (
       this.agent === "claude"
-      && agentCheckpoints(this.agent, raw, 0).some((checkpoint) => checkpoint.value.type === "result")
+      && (this.settled || checkpoints.some((checkpoint) => checkpoint.value.type === "result"))
     ) {
+      this.settled = true;
       this.stableOffset = 0;
       this.stableSegments = [];
       this.seenCheckpointIds.clear();
@@ -104,7 +114,7 @@ export class AgentStreamAccumulator {
     }
 
     let sliceStart = this.stableOffset;
-    for (const checkpoint of agentCheckpoints(this.agent, raw, this.stableOffset)) {
+    for (const checkpoint of checkpoints) {
       const checkpointId = agentCheckpointId(this.agent, checkpoint.value);
       if (!checkpointId || !this.seenCheckpointIds.has(checkpointId)) {
         let parsed = parseAgentStream(this.agent, raw.slice(sliceStart, checkpoint.end));

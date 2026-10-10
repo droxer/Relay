@@ -9,6 +9,12 @@ type OutputEventBufferOptions = {
   delayMs?: number;
   maxChars?: number;
   maxEntries?: number;
+  /**
+   * True while an earlier batch is still being delivered. The latency timer
+   * then holds its flush so output arriving behind a slow post joins one batch
+   * instead of queueing a post per window; `resume` releases it.
+   */
+  isBusy?: () => boolean;
 };
 
 const DEFAULT_DELAY_MS = 25;
@@ -43,9 +49,11 @@ export class OutputEventBuffer {
   private entries: BufferedOutput[] = [];
   private bufferedChars = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private held = false;
   private readonly delayMs: number;
   private readonly maxChars: number;
   private readonly maxEntries: number;
+  private readonly isBusy: () => boolean;
 
   constructor(
     private readonly emit: (entries: BufferedOutput[]) => void,
@@ -54,6 +62,7 @@ export class OutputEventBuffer {
     this.delayMs = Math.max(1, options.delayMs ?? DEFAULT_DELAY_MS);
     this.maxChars = Math.max(1, options.maxChars ?? DEFAULT_MAX_CHARS);
     this.maxEntries = Math.max(1, options.maxEntries ?? DEFAULT_MAX_ENTRIES);
+    this.isBusy = options.isBusy ?? (() => false);
   }
 
   push(stream: OutputStream, text: string): void {
@@ -77,19 +86,34 @@ export class OutputEventBuffer {
       }
     }
     if (this.entries.length === 0) return;
-    if (this.timer) return;
-    this.timer = setTimeout(() => this.flush(), this.delayMs);
+    if (this.timer || this.held) return;
+    this.timer = setTimeout(() => this.flushWhenIdle(), this.delayMs);
     this.timer.unref?.();
+  }
+
+  /** Release a flush the latency timer held while delivery was busy. */
+  resume(): void {
+    if (this.held) this.flush();
   }
 
   flush(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
+    this.held = false;
     if (this.entries.length === 0) return;
     const entries = this.entries;
     this.entries = [];
     this.bufferedChars = 0;
     this.emit(entries);
+  }
+
+  private flushWhenIdle(): void {
+    this.timer = undefined;
+    if (this.isBusy()) {
+      this.held = true;
+      return;
+    }
+    this.flush();
   }
 
   close(): void {
