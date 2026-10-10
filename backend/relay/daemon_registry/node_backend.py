@@ -37,21 +37,11 @@ class ServerDaemonNodeBackend:
         registry: DaemonNodeRegistry,
         *,
         agent_store: AgentStore | None = None,
-        employee_agent_store: AgentStore | None = None,
         agent_placement_store: AgentPlacementStore | None = None,
         skill_store: Any | None = None,
         team_store: Any | None = None,
         project_store: Any | None = None,
     ):
-        if (
-            agent_store is not None
-            and employee_agent_store is not None
-            and agent_store is not employee_agent_store
-        ):
-            raise ValueError(
-                "Pass either agent_store or employee_agent_store, not both."
-            )
-        agent_store = agent_store or employee_agent_store
         self.registry = registry
         self.agent_store = agent_store
         self.skill_store = skill_store

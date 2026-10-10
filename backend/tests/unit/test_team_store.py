@@ -170,6 +170,7 @@ def test_remove_member_promotes_the_first_remaining_member(team_store) -> None:
 
     assert promoted["leadAgentId"] == "agent_support"
     assert promoted["memberAgentIds"] == ["agent_support", "agent_review"]
+    assert promoted["enabled"] is True
     assert emptied["leadAgentId"] is None
     assert emptied["memberAgentIds"] == []
     # A team with nobody on it cannot run, so it stops being enabled.
