@@ -246,6 +246,10 @@ DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
 DAEMON_NODE_DELETED_STATUS = "deleted"
 
 
+class UnknownDaemonNodeError(KeyError):
+    """The requested node does not exist; the event cannot be accepted."""
+
+
 class DeletedDaemonNodeError(Exception):
     """Raised when a daemon tries to register a node that was deleted."""
 
@@ -4544,7 +4548,7 @@ class DaemonNodeRegistry:
             logger.warning(
                 "Daemon node request for unknown sandbox", sandbox_id=sandbox_id
             )
-            raise KeyError(f"Unknown sandbox {sandbox_id}.")
+            raise UnknownDaemonNodeError(f"Unknown sandbox {sandbox_id}.")
         if not daemon_node_token_matches(sandbox, token):
             logger.warning("Unauthorized daemon node request", sandbox_id=sandbox_id)
             raise PermissionError("Unauthorized daemon node request.")

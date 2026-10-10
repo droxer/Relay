@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from ..core.ids import new_database_id
 from ..core.models import DaemonNodeRegistration
 from ..daemon_registry import public_sandbox_record
-from ..daemon_registry.registry import DeletedDaemonNodeError
+from ..daemon_registry.registry import DeletedDaemonNodeError, UnknownDaemonNodeError
 from ..services.computer_limits import assert_local_computer_allowed
 from ..services.computer_names import (
     normalize_computer_display_name,
@@ -813,6 +813,8 @@ async def daemon_events(
             "Daemon node event unauthorized", sandbox_id=sandbox_id, error=str(error)
         )
         raise HTTPException(401, str(error))
+    except UnknownDaemonNodeError as error:
+        raise HTTPException(404, "Daemon node not found.") from error
     except Exception as error:  # noqa: BLE001 - API boundary logs and normalizes event-store failures.
         logger.warning(
             "Daemon node event failed", sandbox_id=sandbox_id, error=str(error)
