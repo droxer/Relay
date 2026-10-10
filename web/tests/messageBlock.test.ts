@@ -364,6 +364,34 @@ describe("projectMessages artifact projection", () => {
     assert.equal(userMessages[1].text, "Now add a dark mode toggle");
   });
 
+  it("marks every finished turn without counts as unreported and preserves reported usage", () => {
+    const run = (runId: string, status: "completed" | "failed" | "cancelled", tokenUsage?: { input: number; output: number; cache: number; total: number }) => [
+      { id: `ev_start_${runId}`, type: "agent.started", sessionId: "ses_1", timestamp, runId, agent: "kimi", role: "fixer" },
+      {
+        id: `ev_done_${runId}`, type: "agent.completed", sessionId: "ses_1", timestamp, runId, agent: "kimi",
+        status, exitCode: status === "completed" ? 0 : 1, agentLog: "",
+        ...(tokenUsage ? { tokenUsage } : {}),
+      },
+    ];
+    const messages = projectMessages(session([
+      ...(["completed", "failed", "cancelled"] as const).flatMap((status) => [
+        ...run(`run_${status}`, status),
+        ...run(`run_counted_${status}`, status, { input: 3, output: 2, cache: 0, total: 5 }),
+      ]),
+      { id: "ev_running", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_running", agent: "kimi", role: "fixer" },
+    ] as RelaySession["events"]), t);
+    const turns = new Map(messages.flatMap((message) => message.kind === "agent" ? [[message.runId, message] as const] : []));
+
+    for (const status of ["completed", "failed", "cancelled"]) {
+      assert.equal(turns.get(`run_${status}`)?.usageUnreported, true, status);
+      assert.equal(turns.get(`run_${status}`)?.streaming, false, status);
+      assert.equal(turns.get(`run_counted_${status}`)?.usageUnreported, undefined, status);
+      assert.equal(turns.get(`run_counted_${status}`)?.tokenUsage?.total, 5, status);
+    }
+    assert.equal(turns.get("run_running")?.usageUnreported, undefined);
+    assert.equal(turns.get("run_running")?.streaming, true);
+  });
+
   it("does not fabricate an agent message for an unknown artifact run", () => {
     const messages = projectMessages(session([
       {

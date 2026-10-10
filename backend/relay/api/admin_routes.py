@@ -3,13 +3,15 @@ from __future__ import annotations
 import asyncio
 import secrets
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 
 from ..daemon_registry import public_sandbox_record
+from ..persistence.store_common import split_cache_tokens
 from ..persistence.org_settings_store import (
     OrgSettingsValidationError,
     normalize_max_local_computers,
@@ -833,13 +835,12 @@ def list_chat_integration_audit(
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────
-# Aggregated, read-only stats for the admin Dashboard view. Built on the
-# existing session/task event stores — no schema changes. Token-usage stats
-# (TODO: GET /api/v1/admin/dashboard/tokens) will land once agent runs record token
-# counts on their session events.
+# Aggregated, read-only stats for the admin Dashboard view, built on the
+# session store and its per-run token-usage ledger.
 
 _DAY_WINDOW = 14
-_TOKEN_USAGE_UNSUPPORTED_AGENTS = ("kimi",)
+_SUMMARY_DAYS = 7
+_TOKEN_KEYS = ("input", "output", "cacheRead", "cacheWrite")
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
@@ -917,104 +918,101 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.get("/admin/dashboard/tokens")
-def dashboard_tokens(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def dashboard_tokens(
+    request: Request, ctx: AppContextDep, tz: str | None = None
+) -> dict[str, Any]:
+    """Token usage per calendar day in the viewer's time zone (``tz``).
+
+    The headline is fresh tokens — input, output, and cache writes. Cache reads
+    are reported beside it but kept out of the headline: they dominate a long
+    agent run's total while costing a tenth of input.
+    """
     require_admin_session(request, ctx.auth_store)
-    now = datetime.now(timezone.utc)
-    window_start = (now - timedelta(days=_DAY_WINDOW - 1)).date()
-    usage_since = datetime.combine(
-        window_start, datetime.min.time(), tzinfo=timezone.utc
+    zone = _dashboard_zone(tz)
+    today = datetime.now(zone).date()
+    window_start = today - timedelta(days=_DAY_WINDOW - 1)
+    summary_start = today - timedelta(days=_SUMMARY_DAYS - 1)
+    usage_since = datetime.combine(window_start, datetime.min.time(), tzinfo=zone)
+    usage_rows = (
+        ctx.session_store.list_dashboard_token_usage(since=usage_since)
+        if hasattr(ctx.session_store, "list_dashboard_token_usage")
+        else ctx.session_store.list_token_usage()
     )
-    usage_rows = ctx.session_store.list_dashboard_token_usage(
-        since=usage_since, recent_session_limit=10
-    ) if hasattr(ctx.session_store, "list_dashboard_token_usage") else ctx.session_store.list_token_usage() if hasattr(ctx.session_store, "list_token_usage") else [
-        {
-            "sessionId": session.get("id"),
-            "ownerEmployeeId": session.get("ownerEmployeeId"),
-            "taskGoal": session.get("taskGoal"),
-            "updatedAt": session.get("updatedAt"),
-            **usage,
-        }
-        for session in ctx.session_store.list_sessions()
-        for usage in [_token_usage(session.get("tokenUsage"))]
-        if usage
-    ]
-    summary_start = (now - timedelta(days=6)).date()
-    buckets: dict[str, dict[str, int]] = {
-        (window_start + timedelta(days=offset)).isoformat(): {"input": 0, "output": 0, "cache": 0, "total": 0}
+    buckets = {
+        (window_start + timedelta(days=offset)).isoformat(): _empty_token_counts()
         for offset in range(_DAY_WINDOW)
     }
-    totals = {"input": 0, "output": 0, "cache": 0, "total": 0}
-    by_employee: dict[str, dict[str, Any]] = {}
-    employee_sessions: dict[str, set[str]] = {}
-    recent_by_session: dict[str, dict[str, Any]] = {}
-
+    totals = _empty_token_counts()
+    unreported: Counter[str] = Counter()
     for row in usage_rows:
+        timestamp = _parse_timestamp(row.get("completedAt") or row.get("updatedAt"))
+        if timestamp is None:
+            continue
+        day = timestamp.astimezone(zone).date()
+        in_summary = day >= summary_start
+        if row.get("reported") is False:
+            if in_summary and row.get("agent"):
+                unreported[str(row["agent"])] += 1
+            continue
         usage = _token_usage(row)
         if not usage:
             continue
-        usage_timestamp = row.get("completedAt") or row.get("updatedAt")
-        timestamp = _parse_timestamp(usage_timestamp)
-        in_summary_window = False
-        if timestamp:
-            day_key = timestamp.date().isoformat()
-            if day_key in buckets:
-                for key in buckets[day_key]:
-                    buckets[day_key][key] += usage[key]
-            in_summary_window = timestamp.date() >= summary_start
-        if in_summary_window:
-            for key in totals:
-                totals[key] += usage[key]
-            employee_id = str(row.get("ownerEmployeeId") or "unassigned")
-            employee = by_employee.setdefault(
-                employee_id,
-                {"employeeId": employee_id, "input": 0, "output": 0, "cache": 0, "total": 0, "sessionCount": 0},
-            )
-            for key in ("input", "output", "cache", "total"):
-                employee[key] += usage[key]
-            session_id = str(row.get("sessionId") or "")
-            if session_id:
-                employee_sessions.setdefault(employee_id, set()).add(session_id)
-        session_id = str(row.get("sessionId") or row.get("runId") or "unknown")
-        recent = recent_by_session.setdefault(session_id, {
-            "sessionId": row.get("sessionId"),
-            "employeeId": row.get("ownerEmployeeId"),
-            "taskGoal": row.get("taskGoal"),
-            "updatedAt": usage_timestamp,
-            "input": 0,
-            "output": 0,
-            "cache": 0,
-            "total": 0,
-        })
-        for key in ("input", "output", "cache", "total"):
-            recent[key] += usage[key]
-        if str(usage_timestamp or "") > str(recent.get("updatedAt") or ""):
-            recent["updatedAt"] = usage_timestamp
-
-    for employee_id, employee in by_employee.items():
-        employee["sessionCount"] = len(employee_sessions.get(employee_id, set()))
-    recent_sessions = list(recent_by_session.values())
-    recent_sessions.sort(key=lambda item: item.get("updatedAt") or "", reverse=True)
-    ranked_employees = sorted(by_employee.values(), key=lambda item: item["total"], reverse=True)
+        bucket = buckets.get(day.isoformat())
+        if bucket is not None:
+            _add_token_counts(bucket, usage)
+        if in_summary:
+            _add_token_counts(totals, usage)
+    daily = [{"date": day, **_with_derived_counts(counts)} for day, counts in buckets.items()]
+    summary = _with_derived_counts(totals)
     return {
-        "available": totals["total"] > 0,
-        "totalInput": totals["input"],
-        "totalOutput": totals["output"],
-        "totalCache": totals["cache"],
-        "total": totals["total"],
-        "unsupportedAgents": list(_TOKEN_USAGE_UNSUPPORTED_AGENTS),
-        "daily": [{"date": day, **stats} for day, stats in buckets.items()],
-        "byEmployee": ranked_employees,
-        "recentSessions": recent_sessions[:10],
+        "available": any(point["total"] > 0 for point in daily),
+        "timeZone": str(zone),
+        "totalInput": summary["input"],
+        "totalOutput": summary["output"],
+        "totalCacheRead": summary["cacheRead"],
+        "totalCacheWrite": summary["cacheWrite"],
+        "totalCache": summary["cache"],
+        "total": summary["total"],
+        "fresh": summary["fresh"],
+        "daily": daily,
+        "unreportedRuns": [
+            {"agent": agent, "runs": runs} for agent, runs in unreported.most_common()
+        ],
     }
+
+
+def _dashboard_zone(name: str | None) -> tzinfo:
+    if not name or len(name) > 64:
+        return timezone.utc
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return timezone.utc
+
+
+def _empty_token_counts() -> dict[str, int]:
+    return dict.fromkeys(_TOKEN_KEYS, 0)
+
+
+def _add_token_counts(target: dict[str, int], usage: dict[str, int]) -> None:
+    for key in _TOKEN_KEYS:
+        target[key] += usage[key]
+
+
+def _with_derived_counts(counts: dict[str, int]) -> dict[str, int]:
+    cache = counts["cacheRead"] + counts["cacheWrite"]
+    fresh = counts["input"] + counts["output"] + counts["cacheWrite"]
+    return {**counts, "cache": cache, "total": fresh + counts["cacheRead"], "fresh": fresh}
 
 
 def _token_usage(value: Any) -> dict[str, int] | None:
     if not isinstance(value, dict):
         return None
+    cache_read, cache_write = split_cache_tokens(value)
     usage = {
         "input": int(value.get("input") or 0),
         "output": int(value.get("output") or 0),
-        "cache": int(value.get("cache") or 0),
+        "cacheRead": cache_read,
+        "cacheWrite": cache_write,
     }
-    usage["total"] = usage["input"] + usage["output"] + usage["cache"]
-    return usage if usage["total"] > 0 else None
+    return usage if any(usage.values()) else None

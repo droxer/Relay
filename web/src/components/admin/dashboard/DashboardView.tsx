@@ -81,7 +81,7 @@ export function DashboardView({
             <KpiTile
               slot="tokens"
               eyebrow={t("admin.v2.dash_kpi_tokens")}
-              value={tokens.isError ? dash : formatCompact(tokens.total, i18n.language)}
+              value={tokens.isError ? dash : formatCompact(tokens.fresh, i18n.language)}
               hint={tokens.isError ? t("workspace.load_failed") : t("admin.v2.dash_kpi_tokens_hint")}
             />
           ) : null}

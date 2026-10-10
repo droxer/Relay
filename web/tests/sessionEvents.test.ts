@@ -230,7 +230,7 @@ describe("applySessionEvent", () => {
       tokenUsage: { input: 10, output: 4, cache: 1, total: 15 },
       artifactIds: [],
     });
-    assert.deepEqual(updated.tokenUsage, { input: 10, output: 4, cache: 1, total: 15 });
+    assert.deepEqual(updated.tokenUsage, { input: 10, output: 4, cache: 1, cacheRead: 1, cacheWrite: 0, total: 15 });
   });
 
   it("clears stale feedback waits on terminal streamed events", () => {

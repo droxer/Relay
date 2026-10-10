@@ -1,18 +1,7 @@
-import type { RelaySession, TokenUsage } from "../types.js";
+import type { RelaySession } from "../types.js";
+import { mergeTokenUsage } from "./tokenUsage.ts";
 
 type RelayEvent = RelaySession["events"][number];
-
-function mergeRunTokenUsage(values: Array<TokenUsage | undefined>): TokenUsage | undefined {
-  const totals = { input: 0, output: 0, cache: 0 };
-  for (const value of values) {
-    if (!value) continue;
-    totals.input += value.input;
-    totals.output += value.output;
-    totals.cache += value.cache;
-  }
-  if (totals.input === 0 && totals.output === 0 && totals.cache === 0) return undefined;
-  return { ...totals, total: totals.input + totals.output + totals.cache };
-}
 
 export function applySessionEvent(session: RelaySession, event: RelayEvent): RelaySession {
   if (session.events.some((existing) => existing.id === event.id)) return session;
@@ -140,7 +129,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
             ? "agent_completed"
             : event.status === "cancelled" ? "cancelled" : "agent_failed",
         };
-        const tokenUsage = mergeRunTokenUsage(agentRuns.map((run) => run.tokenUsage));
+        const tokenUsage = mergeTokenUsage(agentRuns.map((run) => run.tokenUsage));
         if (tokenUsage) {
           updated.tokenUsage = tokenUsage;
         } else {

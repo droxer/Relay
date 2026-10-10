@@ -14,12 +14,12 @@ import { MarkdownContent } from "./LazyMarkdown";
 import { AutomationOpening } from "./AutomationOpening";
 import type { AutomationOpening as AutomationOpeningParts } from "../lib/automationOpening";
 import { MessageTurnActions } from "./MessageTurnActions";
-import type { AgentName } from "../types";
+import type { AgentName, TokenUsage } from "../types";
 import { AGENT_NAMES } from "../types";
 import { imageForAgentRun, labelForAgentRun, labelForExecutor } from "../lib/agentDisplayNames";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
-import { formatCompactTokens } from "../lib/tokenUsage";
+import { formatCompactTokens, freshTokens, splitCache } from "../lib/tokenUsage";
 import { parsePlanSteps, type PlanStep } from "../lib/plan";
 import type { RelayArtifact } from "relay-core";
 import { useArtifactBody } from "../lib/useArtifactBody";
@@ -206,8 +206,7 @@ export const MessageBlock = memo(function MessageBlock({
   retryDisabled = false,
   pickupFrom,
 }: MessageBlockProps) {
-  const { t, i18n } = useTranslation();
-  const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.language || undefined), [i18n.language]);
+  const { t } = useTranslation();
   if (message.kind === "user" && automationOpening) {
     return <AutomationOpening opening={automationOpening} time={<MsgTime value={message.timestamp} />} />;
   }
@@ -273,23 +272,12 @@ export const MessageBlock = memo(function MessageBlock({
           ) : null}
           <footer className="msg-turn-foot">
             {message.tokenUsage ? (
-              <span
-                className="msg-tokens"
-                title={t("thread.token_usage_title", {
-                  input: numberFormat.format(message.tokenUsage.input),
-                  output: numberFormat.format(message.tokenUsage.output),
-                  cache: numberFormat.format(message.tokenUsage.cache),
-                })}
-                aria-label={t("thread.token_usage_title", {
-                  input: numberFormat.format(message.tokenUsage.input),
-                  output: numberFormat.format(message.tokenUsage.output),
-                  cache: numberFormat.format(message.tokenUsage.cache),
-                })}
-              >
+              <TurnTokenUsage usage={message.tokenUsage} />
+            ) : message.usageUnreported && !message.streaming ? (
+              <span className="msg-tokens" title={t("thread.token_usage_unreported")}>
                 <MetricTokens size={ICON.sm} aria-hidden="true" />
-                <span className="msg-turn-action-label">
-                  {formatCompactTokens(message.tokenUsage.total, i18n.language)} {t("thread.tokens_short")}
-                </span>
+                <span className="msg-turn-action-label" aria-hidden="true">—</span>
+                <span className="sr-only">{t("thread.token_usage_unreported")}</span>
               </span>
             ) : null}
             <MessageTurnActions
@@ -338,3 +326,29 @@ export const MessageBlock = memo(function MessageBlock({
     </div>
   );
 });
+
+/**
+ * The turn's headline is fresh tokens (input, output, cache writes). Cache
+ * reads stay in the breakdown: they dominate a long run yet cost a tenth of
+ * input, so headlining them made every turn read as enormous.
+ */
+function TurnTokenUsage({ usage }: { usage: TokenUsage }) {
+  const { t, i18n } = useTranslation();
+  const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.language || undefined), [i18n.language]);
+  const { cacheRead, cacheWrite } = splitCache(usage);
+  const breakdown = t("thread.token_usage_title", {
+    input: numberFormat.format(usage.input),
+    output: numberFormat.format(usage.output),
+    cacheWrite: numberFormat.format(cacheWrite),
+    cacheRead: numberFormat.format(cacheRead),
+  });
+  return (
+    <span className="msg-tokens" title={breakdown}>
+      <MetricTokens size={ICON.sm} aria-hidden="true" />
+      <span className="msg-turn-action-label" aria-hidden="true">
+        {formatCompactTokens(freshTokens(usage), i18n.language)} {t("thread.tokens_short")}
+      </span>
+      <span className="sr-only">{breakdown}</span>
+    </span>
+  );
+}

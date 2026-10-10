@@ -173,13 +173,35 @@ def test_daemon_node_event_parser_keeps_error_messages_and_raw_logs() -> None:
             },
         }
     )
+    # A daemon from before the cache split reports one combined figure; it
+    # is read as cache reads.
     assert parsed_with_usage["tokenUsage"] == {
         "input": 10,
         "output": 5,
         "cache": 3,
+        "cacheRead": 3,
+        "cacheWrite": 0,
         "total": 18,
         "source": "codex",
     }
+
+    split_usage = {"input": 10, "output": 5, "cache": 30, "cacheRead": 25, "cacheWrite": 5, "total": 45}
+    for terminal in (
+        {"type": "run.failed", "error": "stream post failed"},
+        {"type": "run.cancelled", "reason": "Stopped.", "agentLog": raw_log},
+    ):
+        parsed_terminal = daemon_node_event(
+            {
+                **terminal,
+                "commandId": "cmd_1",
+                "sessionId": "ses_1",
+                "runId": "run_1",
+                "agent": "claude",
+                "tokenUsage": split_usage,
+            }
+        )
+        assert parsed_terminal["tokenUsage"] == split_usage
+    assert parsed_terminal["agentLog"] == raw_log
 
     parsed_with_round_result = daemon_node_event(
         {
@@ -220,4 +242,8 @@ def test_daemon_node_event_parser_keeps_error_messages_and_raw_logs() -> None:
     with pytest.raises(ValueError, match="tokenUsage total"):
         token_usage_field(
             {"tokenUsage": {"input": 1, "output": 1, "cache": 0, "total": 9}}
+        )
+    with pytest.raises(ValueError, match="cacheRead"):
+        token_usage_field(
+            {"tokenUsage": {"input": 1, "output": 1, "cache": 9, "cacheRead": 1, "cacheWrite": 1}}
         )

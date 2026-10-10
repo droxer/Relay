@@ -3784,6 +3784,7 @@ class DaemonNodeRegistry:
                         "status": "cancelled",
                         "exitCode": 130,
                         "agentLog": agent_log,
+                        "tokenUsage": event.get("tokenUsage"),
                         "assignmentId": assignment.get("assignmentId"),
                     },
                 )

@@ -6,6 +6,20 @@ export type { TokenUsageSnapshot };
 const KEY = ["admin", "dashboard", "tokens"] as const;
 const POLL_INTERVAL_MS = 10_000;
 
+const EMPTY_SNAPSHOT: TokenUsageSnapshot = {
+  available: false,
+  timeZone: "UTC",
+  totalInput: 0,
+  totalOutput: 0,
+  totalCacheRead: 0,
+  totalCacheWrite: 0,
+  totalCache: 0,
+  total: 0,
+  fresh: 0,
+  daily: [],
+  unreportedRuns: [],
+};
+
 export type TokenUsageState = TokenUsageSnapshot & { isError: boolean; error: string | null };
 
 export function useTokenUsage(): TokenUsageState {
@@ -15,17 +29,7 @@ export function useTokenUsage(): TokenUsageState {
     refetchInterval: POLL_INTERVAL_MS,
   });
   return {
-    ...(query.data ?? {
-    available: false,
-    totalInput: 0,
-    totalOutput: 0,
-    totalCache: 0,
-    total: 0,
-    unsupportedAgents: ["kimi"],
-    daily: [],
-    byEmployee: [],
-    recentSessions: [],
-    }),
+    ...(query.data ?? EMPTY_SNAPSHOT),
     isError: query.isError,
     error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
   };

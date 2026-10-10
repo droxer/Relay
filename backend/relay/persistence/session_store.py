@@ -16,6 +16,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -32,6 +33,7 @@ from sqlalchemy import (
     or_,
     select,
     text,
+    true,
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -58,6 +60,7 @@ from .store_common import (
     materialize_events,
     new_database_id,
     now_iso,
+    split_cache_tokens,
     publish_database_notification,
     relay_event,
     safe_name,
@@ -682,6 +685,15 @@ class DatabaseSessionStore:
         Column("output_tokens", BigInteger, nullable=False),
         Column("cache_tokens", BigInteger, nullable=False),
         Column("total_tokens", BigInteger, nullable=False),
+        # cache_tokens split; cache_tokens = cache_read + cache_write.
+        Column("cache_read_tokens", BigInteger, nullable=False, server_default="0"),
+        Column("cache_write_tokens", BigInteger, nullable=False, server_default="0"),
+        # The executor kind that ran, so the dashboard can name runtimes that
+        # completed without reporting usage.
+        Column("agent", Text, nullable=True),
+        # False for a completed run whose runtime reported no counts; its
+        # token columns are zero.
+        Column("reported", Boolean, nullable=False, server_default=true()),
         Column("completed_at", DateTime(timezone=True), nullable=False),
         UniqueConstraint(
             "session_id", "run_id", name="uq_session_run_token_usage_session_run"
@@ -1659,38 +1671,7 @@ class DatabaseSessionStore:
         return result
 
     def list_token_usage(self) -> list[dict[str, Any]]:
-        with store_transaction(self.engine) as conn:
-            rows = (
-                conn.execute(
-                    select(
-                        self.run_token_usage,
-                        self.sessions.c.task_goal.label("session_task_goal"),
-                    )
-                    .select_from(
-                        self.run_token_usage.outerjoin(
-                            self.sessions,
-                            self.run_token_usage.c.session_id == self.sessions.c.id,
-                        )
-                    )
-                    .order_by(self.run_token_usage.c.completed_at.desc())
-                )
-                .mappings()
-                .all()
-            )
-        return [
-            {
-                "sessionId": row["session_id"],
-                "runId": row["run_id"],
-                "ownerEmployeeId": row["owner_employee_id"],
-                "taskGoal": row["task_goal"] or row["session_task_goal"],
-                "input": int(row["input_tokens"] or 0),
-                "output": int(row["output_tokens"] or 0),
-                "cache": int(row["cache_tokens"] or 0),
-                "total": int(row["total_tokens"] or 0),
-                "completedAt": _format_iso(row["completed_at"]),
-            }
-            for row in rows
-        ]
+        return self._read_token_usage(None)
 
     def dashboard_session_metrics(
         self, *, day_window: int = 14, now: datetime | None = None
@@ -1771,55 +1752,41 @@ class DatabaseSessionStore:
             ],
         }
 
-    def list_dashboard_token_usage(
-        self, *, since: datetime, recent_session_limit: int = 10
-    ) -> list[dict[str, Any]]:
-        """Read the reporting window plus complete runs for the newest sessions."""
-        recent_sessions = (
+    def list_dashboard_token_usage(self, *, since: datetime) -> list[dict[str, Any]]:
+        """Read the ledger rows of runs that finished inside the reporting window."""
+        return self._read_token_usage(since)
+
+    def _read_token_usage(self, since: datetime | None) -> list[dict[str, Any]]:
+        query = (
             select(
-                self.run_token_usage.c.session_id,
-                func.max(self.run_token_usage.c.completed_at).label("latest"),
+                self.run_token_usage,
+                self.sessions.c.task_goal.label("session_task_goal"),
             )
-            .group_by(self.run_token_usage.c.session_id)
-            .order_by(text("latest DESC"))
-            .limit(max(1, recent_session_limit))
-            .subquery()
-        )
-        with store_transaction(self.engine) as conn:
-            rows = (
-                conn.execute(
-                    select(
-                        self.run_token_usage,
-                        self.sessions.c.task_goal.label("session_task_goal"),
-                    )
-                    .select_from(
-                        self.run_token_usage.outerjoin(
-                            self.sessions,
-                            self.run_token_usage.c.session_id == self.sessions.c.id,
-                        )
-                    )
-                    .where(
-                        or_(
-                            self.run_token_usage.c.completed_at >= since,
-                            self.run_token_usage.c.session_id.in_(
-                                select(recent_sessions.c.session_id)
-                            ),
-                        )
-                    )
-                    .order_by(self.run_token_usage.c.completed_at.desc())
+            .select_from(
+                self.run_token_usage.outerjoin(
+                    self.sessions,
+                    self.run_token_usage.c.session_id == self.sessions.c.id,
                 )
-                .mappings()
-                .all()
             )
+            .order_by(self.run_token_usage.c.completed_at.desc())
+        )
+        if since is not None:
+            query = query.where(self.run_token_usage.c.completed_at >= since)
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(query).mappings().all()
         return [
             {
                 "sessionId": row["session_id"],
                 "runId": row["run_id"],
                 "ownerEmployeeId": row["owner_employee_id"],
                 "taskGoal": row["task_goal"] or row["session_task_goal"],
+                "agent": row["agent"],
+                "reported": bool(row["reported"]),
                 "input": int(row["input_tokens"] or 0),
                 "output": int(row["output_tokens"] or 0),
                 "cache": int(row["cache_tokens"] or 0),
+                "cacheRead": int(row["cache_read_tokens"] or 0),
+                "cacheWrite": int(row["cache_write_tokens"] or 0),
                 "total": int(row["total_tokens"] or 0),
                 "completedAt": _format_iso(row["completed_at"]),
             }
@@ -2222,52 +2189,72 @@ def session_run_token_usage_to_row(
         (item for item in session.get("agentRuns", []) if item.get("id") == run_id),
         None,
     )
-    usage = run.get("tokenUsage") if isinstance(run, dict) else None
-    if (
-        not isinstance(usage, dict)
-        or not run.get("completedAt")
-        or not int(usage.get("total") or 0)
-    ):
+    record = run_token_usage_record(session, run) if isinstance(run, dict) else None
+    if record is None:
         return None
     return {
         "id": new_database_id(),
         "session_id": session_pk,
         "run_id": run_id,
-        "owner_employee_id": session.get("ownerEmployeeId"),
-        "task_goal": session.get("taskGoal"),
-        "input_tokens": int(usage.get("input") or 0),
-        "output_tokens": int(usage.get("output") or 0),
-        "cache_tokens": int(usage.get("cache") or 0),
-        "total_tokens": int(usage.get("total") or 0),
-        "completed_at": _parse_iso(run["completedAt"]),
+        "owner_employee_id": record["ownerEmployeeId"],
+        "task_goal": record["taskGoal"],
+        "input_tokens": record["input"],
+        "output_tokens": record["output"],
+        "cache_tokens": record["cache"],
+        "cache_read_tokens": record["cacheRead"],
+        "cache_write_tokens": record["cacheWrite"],
+        "total_tokens": record["total"],
+        "agent": record["agent"],
+        "reported": record["reported"],
+        "completed_at": _parse_iso(record["completedAt"]),
+    }
+
+
+def run_token_usage_record(
+    session: dict[str, Any], run: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The usage ledger entry for one finished run, or None if it has none.
+
+    A run with counts is recorded whatever its outcome — a stopped run still
+    spent what it spent. A run that completed successfully without counts is
+    recorded as unreported, so coverage gaps are measured rather than assumed.
+    """
+    completed_at = run.get("completedAt")
+    if not completed_at:
+        return None
+    usage = run.get("tokenUsage")
+    reported = isinstance(usage, dict) and int(usage.get("total") or 0) > 0
+    if not reported and run.get("status") != "completed":
+        return None
+    usage = usage if reported else {}
+    cache_read, cache_write = split_cache_tokens(usage)
+    input_tokens = int(usage.get("input") or 0)
+    output_tokens = int(usage.get("output") or 0)
+    return {
+        "sessionId": session["id"],
+        "runId": run["id"],
+        "ownerEmployeeId": session.get("ownerEmployeeId"),
+        "taskGoal": session.get("taskGoal"),
+        "agent": run.get("agent"),
+        "reported": reported,
+        "input": input_tokens,
+        "output": output_tokens,
+        "cache": cache_read + cache_write,
+        "cacheRead": cache_read,
+        "cacheWrite": cache_write,
+        "total": input_tokens + output_tokens + cache_read + cache_write,
+        "completedAt": completed_at,
     }
 
 
 def session_run_token_usage_rows(session: dict[str, Any]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for run in session.get("agentRuns", []):
-        usage = run.get("tokenUsage") if isinstance(run, dict) else None
-        completed_at = run.get("completedAt") if isinstance(run, dict) else None
-        if (
-            not isinstance(usage, dict)
-            or not completed_at
-            or not int(usage.get("total") or 0)
-        ):
-            continue
-        rows.append(
-            {
-                "sessionId": session["id"],
-                "runId": run["id"],
-                "ownerEmployeeId": session.get("ownerEmployeeId"),
-                "taskGoal": session.get("taskGoal"),
-                "input": int(usage.get("input") or 0),
-                "output": int(usage.get("output") or 0),
-                "cache": int(usage.get("cache") or 0),
-                "total": int(usage.get("total") or 0),
-                "completedAt": completed_at,
-            }
-        )
-    return rows
+    return [
+        record
+        for run in session.get("agentRuns", [])
+        if isinstance(run, dict)
+        for record in [run_token_usage_record(session, run)]
+        if record is not None
+    ]
 
 
 def compact_database_session_snapshot(session: dict[str, Any], *, event_count: int | None = None) -> dict[str, Any]:

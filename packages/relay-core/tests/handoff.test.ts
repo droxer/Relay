@@ -22,6 +22,8 @@ import {
   codexTaskPrompt,
   CodexStreamRenderer,
   extractTokenUsageFromJsonl,
+  freshTokens,
+  mergeTokenUsage,
   failureCount,
   formatClaudeJsonLine,
   formatCodexJsonLine,
@@ -1662,7 +1664,7 @@ describe("token usage accounting", () => {
       }),
     ].join("\n"), "claude");
 
-    assert.deepEqual(usage, { input: 10, output: 4, cache: 5, total: 19, source: "claude" });
+    assert.deepEqual(usage, { input: 10, output: 4, cache: 5, cacheRead: 2, cacheWrite: 3, total: 19, source: "claude" });
   });
 
   it("uses Claude's cumulative result usage instead of summing repeated stream snapshots", () => {
@@ -1692,7 +1694,37 @@ describe("token usage accounting", () => {
       }),
     ].join("\n"), "claude");
 
-    assert.deepEqual(usage, { input: 3, output: 3, cache: 100, total: 106, source: "claude" });
+    assert.deepEqual(usage, { input: 3, output: 3, cache: 100, cacheRead: 0, cacheWrite: 100, total: 106, source: "claude" });
+  });
+
+  it("counts each Claude message once when the run ends without a result event", () => {
+    const blockEvent = (id: string, output: number) => JSON.stringify({
+      type: "assistant",
+      message: {
+        id,
+        usage: { input_tokens: 5, output_tokens: output, cache_read_input_tokens: 50 },
+      },
+    });
+    // Two content blocks of msg_1 repeat its usage; msg_2 is a second call.
+    const usage = extractTokenUsageFromJsonl([
+      blockEvent("msg_1", 2),
+      blockEvent("msg_1", 2),
+      blockEvent("msg_2", 7),
+    ].join("\n"), "claude");
+
+    assert.deepEqual(usage, { input: 10, output: 9, cache: 100, cacheRead: 100, cacheWrite: 0, total: 119, source: "claude" });
+  });
+
+  it("headlines fresh tokens and reads legacy combined cache as cache reads", () => {
+    assert.equal(freshTokens({ input: 10, output: 5, cache: 120, cacheRead: 100, cacheWrite: 20, total: 135 }), 35);
+    assert.equal(freshTokens({ input: 10, output: 5, cache: 120, total: 135 }), 15);
+    assert.deepEqual(
+      mergeTokenUsage([
+        { input: 1, output: 2, cache: 3, total: 6 },
+        { input: 1, output: 1, cache: 5, cacheRead: 4, cacheWrite: 1, total: 7 },
+      ]),
+      { input: 2, output: 3, cache: 8, cacheRead: 7, cacheWrite: 1, total: 13 },
+    );
   });
 
   it("extracts Codex/OpenAI-style usage from the final JSON event", () => {
@@ -1708,7 +1740,7 @@ describe("token usage accounting", () => {
       }),
     ].join("\n"), "codex");
 
-    assert.deepEqual(usage, { input: 6, output: 8, cache: 6, total: 20, source: "codex" });
+    assert.deepEqual(usage, { input: 6, output: 8, cache: 6, cacheRead: 6, cacheWrite: 0, total: 20, source: "codex" });
   });
 
   it("separates Codex cached_input_tokens from uncached input", () => {
@@ -1721,7 +1753,7 @@ describe("token usage accounting", () => {
       },
     }), "codex");
 
-    assert.deepEqual(usage, { input: 20, output: 10, cache: 80, total: 110, source: "codex" });
+    assert.deepEqual(usage, { input: 20, output: 10, cache: 80, cacheRead: 80, cacheWrite: 0, total: 110, source: "codex" });
   });
 
   it("sums usage across multiple reported model calls", () => {
@@ -1730,7 +1762,7 @@ describe("token usage accounting", () => {
       JSON.stringify({ type: "turn.completed", usage: { prompt_tokens: 8, completion_tokens: 3 } }),
     ].join("\n"), "codex");
 
-    assert.deepEqual(usage, { input: 18, output: 7, cache: 0, total: 25, source: "codex" });
+    assert.deepEqual(usage, { input: 18, output: 7, cache: 0, cacheRead: 0, cacheWrite: 0, total: 25, source: "codex" });
   });
 
   it("counts each finalized Pi message once and includes cache reads and writes", () => {
@@ -1751,7 +1783,7 @@ describe("token usage accounting", () => {
       JSON.stringify({ type: "turn_end", message }),
     ].join("\n"), "pi");
 
-    assert.deepEqual(usage, { input: 10, output: 5, cache: 24, total: 39, source: "pi" });
+    assert.deepEqual(usage, { input: 10, output: 5, cache: 24, cacheRead: 20, cacheWrite: 4, total: 39, source: "pi" });
   });
 
   it("does not estimate usage when JSONL has no reported counts", () => {
@@ -1848,7 +1880,7 @@ describe("token usage accounting", () => {
     assert.equal(session.collaborationRevision, 1);
     assert.equal(session.collaborationRounds[0]?.strategy, "coordinate");
     assert.equal(session.collaborationRounds[0]?.workGraph?.items[0]?.ownerAgentId, "agent_builder");
-    assert.deepEqual(session.tokenUsage, { input: 5, output: 7, cache: 3, total: 15 });
+    assert.deepEqual(session.tokenUsage, { input: 5, output: 7, cache: 3, cacheRead: 3, cacheWrite: 0, total: 15 });
   });
 
   it("clears pending feedback when materializing terminal session events", () => {

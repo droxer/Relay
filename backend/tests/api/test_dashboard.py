@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryDirectory
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 from relay.app import create_app
@@ -102,25 +103,45 @@ def test_api_responses_expose_server_timing(monkeypatch) -> None:
         assert float(value) >= 0
 
 
-def test_dashboard_tokens_returns_reported_usage(monkeypatch) -> None:
+def _record_run(
+    app,
+    session_id: str,
+    run_id: str,
+    usage: dict | None,
+    *,
+    agent: str = "codex",
+    status: str = "completed",
+    timestamp: str | None = None,
+) -> None:
+    started = relay_event("agent.started", session_id, {"runId": run_id, "agent": agent, "role": "fixer"})
+    completed = relay_event("agent.completed", session_id, {
+        "runId": run_id,
+        "agent": agent,
+        "status": status,
+        "exitCode": 0 if status == "completed" else 1,
+        **({"tokenUsage": usage} if usage else {}),
+    })
+    if timestamp:
+        started["timestamp"] = timestamp
+        completed["timestamp"] = timestamp
+    app.state.session_store.append_event(session_id, started)
+    app.state.session_store.append_event(session_id, completed)
+
+
+def _dashboard_client(monkeypatch, root: str):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(root)
+    client = TestClient(app)
+    _bootstrap(client)
+    return app, client
+
+
+def test_dashboard_tokens_returns_reported_usage(monkeypatch) -> None:
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        client = TestClient(app)
-        _bootstrap(client)
+        app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
-        app.state.session_store.append_event(session_id, relay_event("agent.started", session_id, {
-            "runId": "run_1",
-            "agent": "codex",
-            "role": "fixer",
-            }))
-        app.state.session_store.append_event(session_id, relay_event("agent.completed", session_id, {
-            "runId": "run_1",
-            "agent": "codex",
-            "status": "completed",
-            "exitCode": 0,
-            "tokenUsage": {"input": 10, "output": 5, "cache": 2, "total": 17, "source": "codex"},
-        }))
+        # A record from before the cache split: its combined cache counts as reads.
+        _record_run(app, session_id, "run_1", {"input": 10, "output": 5, "cache": 2, "total": 17, "source": "codex"})
 
         response = client.get("/api/v1/admin/dashboard/tokens")
         assert response.status_code == 200
@@ -128,88 +149,120 @@ def test_dashboard_tokens_returns_reported_usage(monkeypatch) -> None:
         assert body["available"] is True
         assert body["totalInput"] == 10
         assert body["totalOutput"] == 5
+        assert body["totalCacheRead"] == 2
+        assert body["totalCacheWrite"] == 0
         assert body["totalCache"] == 2
         assert body["total"] == 17
-        assert body["unsupportedAgents"] == ["kimi"]
+        assert body["fresh"] == 15
+        assert body["unreportedRuns"] == []
         assert len(body["daily"]) == 14
-        assert body["recentSessions"][0]["sessionId"] == session_id
-        assert body["recentSessions"][0]["taskGoal"] == "demo"
+        assert "recentSessions" not in body
+        assert "byEmployee" not in body
+
+
+def test_dashboard_tokens_headline_excludes_cache_reads(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "run_1", {
+            "input": 10, "output": 5, "cache": 1020, "cacheRead": 1000, "cacheWrite": 20, "total": 1035,
+        }, agent="claude")
+
+        body = client.get("/api/v1/admin/dashboard/tokens").json()
+
+        assert body["totalCacheRead"] == 1000
+        assert body["totalCacheWrite"] == 20
+        assert body["total"] == 1035
+        assert body["fresh"] == 35
+        today = body["daily"][-1]
+        assert (today["fresh"], today["cacheRead"], today["cacheWrite"]) == (35, 1000, 20)
 
 
 def test_dashboard_tokens_totals_only_cover_last_seven_days(monkeypatch) -> None:
-    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        client = TestClient(app)
-        _bootstrap(client)
-        current_session_id = _create_session(client)
-        old_session_id = _create_session(client)
-
-        app.state.session_store.append_event(current_session_id, relay_event("agent.started", current_session_id, {
-            "runId": "run_current",
-            "agent": "codex",
-            "role": "fixer",
-            }))
-        app.state.session_store.append_event(current_session_id, relay_event("agent.completed", current_session_id, {
-            "runId": "run_current",
-            "agent": "codex",
-            "status": "completed",
-            "exitCode": 0,
-            "tokenUsage": {"input": 10, "output": 5, "cache": 2, "total": 17, "source": "codex"},
-        }))
-
-        old_started = relay_event("agent.started", old_session_id, {
-            "runId": "run_old",
-            "agent": "codex",
-            "role": "fixer",
-            })
-        old_completed = relay_event("agent.completed", old_session_id, {
-            "runId": "run_old",
-            "agent": "codex",
-            "status": "completed",
-            "exitCode": 0,
-            "tokenUsage": {"input": 100, "output": 50, "cache": 25, "total": 175, "source": "codex"},
-        })
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "run_current", {"input": 10, "output": 5, "cache": 2, "total": 17})
         old_timestamp = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
-        old_started["timestamp"] = old_timestamp
-        old_completed["timestamp"] = old_timestamp
-        app.state.session_store.append_event(old_session_id, old_started)
-        app.state.session_store.append_event(old_session_id, old_completed)
+        _record_run(app, session_id, "run_old", {"input": 100, "output": 50, "cache": 25, "total": 175}, timestamp=old_timestamp)
 
-        response = client.get("/api/v1/admin/dashboard/tokens")
-        assert response.status_code == 200
-        body = response.json()
+        body = client.get("/api/v1/admin/dashboard/tokens").json()
+
         assert body["totalInput"] == 10
         assert body["totalOutput"] == 5
         assert body["totalCache"] == 2
         assert body["total"] == 17
-        assert {item["sessionId"] for item in body["recentSessions"]} == {current_session_id, old_session_id}
+        assert sum(day["total"] for day in body["daily"]) == 17
+
+
+def test_dashboard_tokens_available_when_usage_is_older_than_the_summary_week(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        _record_run(app, session_id, "run_1", {"input": 10, "output": 5, "cache": 0, "total": 15}, timestamp=ten_days_ago)
+
+        body = client.get("/api/v1/admin/dashboard/tokens").json()
+
+        assert body["total"] == 0
+        assert body["available"] is True
+        assert sum(day["total"] for day in body["daily"]) == 15
+
+
+def test_dashboard_tokens_name_runtimes_that_completed_without_usage(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "run_kimi_1", None, agent="kimi")
+        _record_run(app, session_id, "run_kimi_2", None, agent="kimi")
+        _record_run(app, session_id, "run_pi", None, agent="pi")
+        # A failed run that reported nothing says nothing about the runtime.
+        _record_run(app, session_id, "run_failed", None, agent="claude", status="failed")
+        _record_run(app, session_id, "run_codex", {"input": 1, "output": 1, "cache": 0, "total": 2})
+
+        body = client.get("/api/v1/admin/dashboard/tokens").json()
+
+        assert body["unreportedRuns"] == [{"agent": "kimi", "runs": 2}, {"agent": "pi", "runs": 1}]
+        assert body["total"] == 2
+
+
+def test_dashboard_tokens_count_usage_of_stopped_runs(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "run_1", {"input": 40, "output": 2, "cache": 0, "total": 42}, status="cancelled")
+
+        body = client.get("/api/v1/admin/dashboard/tokens").json()
+
+        assert body["total"] == 42
+
+
+def test_dashboard_tokens_bucket_days_in_the_viewer_time_zone(monkeypatch) -> None:
+    zone = ZoneInfo("Pacific/Kiritimati")  # UTC+14: its day starts the previous UTC day
+    local_today = datetime.now(zone).date()
+    start_of_local_day = datetime.combine(local_today, datetime.min.time(), tzinfo=zone) + timedelta(seconds=1)
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "run_1", {"input": 7, "output": 0, "cache": 0, "total": 7},
+                    timestamp=start_of_local_day.astimezone(timezone.utc).isoformat())
+
+        local = client.get("/api/v1/admin/dashboard/tokens", params={"tz": "Pacific/Kiritimati"}).json()
+        utc = client.get("/api/v1/admin/dashboard/tokens", params={"tz": "Not/AZone"}).json()
+
+        assert local["timeZone"] == "Pacific/Kiritimati"
+        assert {day["date"]: day["total"] for day in local["daily"]}[local_today.isoformat()] == 7
+        assert utc["timeZone"] == "UTC"
+        utc_day = start_of_local_day.astimezone(timezone.utc).date().isoformat()
+        assert {day["date"]: day["total"] for day in utc["daily"]}[utc_day] == 7
 
 
 def test_dashboard_tokens_do_not_redate_old_usage_after_unrelated_session_activity(monkeypatch) -> None:
-    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        client = TestClient(app)
-        _bootstrap(client)
+        app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
         old_timestamp = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
-        started = relay_event("agent.started", session_id, {
-            "runId": "run_old",
-            "agent": "codex",
-            "role": "fixer",
-            })
-        completed = relay_event("agent.completed", session_id, {
-            "runId": "run_old",
-            "agent": "codex",
-            "status": "completed",
-            "exitCode": 0,
-            "tokenUsage": {"input": 100, "output": 50, "cache": 25, "total": 175, "source": "codex"},
-        })
-        started["timestamp"] = old_timestamp
-        completed["timestamp"] = old_timestamp
-        app.state.session_store.append_event(session_id, started)
-        app.state.session_store.append_event(session_id, completed)
+        _record_run(app, session_id, "run_old", {"input": 100, "output": 50, "cache": 25, "total": 175}, timestamp=old_timestamp)
         app.state.session_store.append_event(session_id, relay_event("human.decision", session_id, {
             "decision": {"id": "dec_recent", "kind": "approve", "createdAt": datetime.now(timezone.utc).isoformat()},
         }))
@@ -224,36 +277,12 @@ def test_dashboard_tokens_do_not_redate_old_usage_after_unrelated_session_activi
 
 
 def test_dashboard_tokens_aggregate_runs_without_double_counting_sessions(monkeypatch) -> None:
-    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        client = TestClient(app)
-        _bootstrap(client)
+        app, client = _dashboard_client(monkeypatch, root)
         session_id = _create_session(client)
-        for index, usage in enumerate((
-            {"input": 10, "output": 5, "cache": 2, "total": 17, "source": "codex"},
-            {"input": 20, "output": 7, "cache": 3, "total": 30, "source": "codex"},
-        ), start=1):
-            run_id = f"run_{index}"
-            app.state.session_store.append_event(session_id, relay_event("agent.started", session_id, {
-                "runId": run_id,
-                "agent": "codex",
-                "role": "fixer",
-                }))
-            app.state.session_store.append_event(session_id, relay_event("agent.completed", session_id, {
-                "runId": run_id,
-                "agent": "codex",
-                "status": "completed",
-                "exitCode": 0,
-                "tokenUsage": usage,
-            }))
+        _record_run(app, session_id, "run_1", {"input": 10, "output": 5, "cache": 2, "total": 17})
+        _record_run(app, session_id, "run_2", {"input": 20, "output": 7, "cache": 3, "total": 30})
 
-        response = client.get("/api/v1/admin/dashboard/tokens")
+        body = client.get("/api/v1/admin/dashboard/tokens").json()
 
-        assert response.status_code == 200
-        body = response.json()
         assert body["total"] == 47
-        assert body["byEmployee"][0]["sessionCount"] == 1
-        assert len(body["recentSessions"]) == 1
-        assert body["recentSessions"][0]["sessionId"] == session_id
-        assert body["recentSessions"][0]["total"] == 47

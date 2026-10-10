@@ -37,7 +37,7 @@ describe("reviewed design regressions", () => {
 
   it("does not display a failed token total as a measured value", () => {
     const dashboard = readWeb("src/components/admin/dashboard/DashboardView.tsx");
-    assert.match(dashboard, /value=\{tokens\.isError \? dash : formatCompact\(tokens\.total, i18n\.language\)\}/);
+    assert.match(dashboard, /value=\{tokens\.isError \? dash : formatCompact\(tokens\.fresh, i18n\.language\)\}/);
     assert.match(dashboard, /hint=\{tokens\.isError \? t\("workspace.load_failed"\)/);
   });
 
