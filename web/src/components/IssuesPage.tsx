@@ -11,7 +11,9 @@ import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
-import { usePagination } from "../hooks/usePagination";
+import { useLanePagination, usePagination } from "../hooks/usePagination";
+import { useClientMounted } from "../hooks/useClientMounted";
+import { useKeyChange } from "../hooks/useKeyChange";
 import { useListSort } from "../hooks/useListSort";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
@@ -19,9 +21,11 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Pagination } from "@/components/ui/Pagination";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { agentReadyForTask, filterTasks, isoToday } from "../lib/backlog";
+import { agentReadyForTask, filterTasks, isoToday, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
-import { paginate } from "../lib/pagination";
+import { LANE_PAGE_SIZE, paginate, type Page } from "../lib/pagination";
+import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
+import { writeViewPreference } from "../lib/viewPreference";
 import {
   DEFAULT_ISSUE_GROUPING,
   DEFAULT_ISSUE_QUEUE,
@@ -54,12 +58,22 @@ import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
-import { BacklogFiltersBar } from "./task-board/BacklogChrome";
+import { BacklogFiltersBar, BacklogViewToggle } from "./task-board/BacklogChrome";
+import { BacklogBoard } from "./task-board/BacklogBoard";
 import { TaskSelectAllCheckbox, TaskSelectionBar } from "./task-board/TaskSelection";
-import { activeFilterCount, BACKLOG_FILTER_SPEC, initialFilters } from "./task-board/backlogVocabulary";
+import {
+  activeFilterCount,
+  BACKLOG_FILTER_SPEC,
+  ISSUES_VIEW_STORAGE_KEY,
+  initialFilters,
+  parseBacklogView,
+  type BacklogView,
+} from "./task-board/backlogVocabulary";
 import { IssueQueueNav } from "./issues/IssueQueueNav";
 import { IssuesTable, type IssueRowContext } from "./issues/IssuesTable";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskListItem } from "../types";
+
+type Lanes = Record<TaskWorkflowStage, Page<RelayTaskListItem>>;
 
 /** A table read across projects wants more rows per page than a board lane. */
 const ISSUE_PAGE_SIZE = 50;
@@ -72,6 +86,11 @@ const ISSUE_PAGE_SIZE = 50;
  * "untriaged", "blocked"…) rather than a status board, the table groups by
  * project, status, or assignee, and the batch action that matters here —
  * moving intake into a project — sits beside delete.
+ *
+ * The board view lays the same queue out in the project board's five lanes,
+ * so a queue ("running", "untriaged"…) can be read as a pipeline too. A drop
+ * takes the same commit path as a project board's; a card from a closed
+ * project stays where it is.
  *
  * An issue can be filed with no project. It is intake: it takes no agent or
  * team and never runs (the server refuses both) until triage moves it into a
@@ -123,6 +142,14 @@ export function IssuesPage({
   const [projectFilter, setProjectFilter] = useUrlSearchState<string | null>("project", null,
     (value) => value || null, (value) => value);
   const { page, setPage } = usePagination();
+  const { lanePages, setLanePage } = useLanePagination(TASK_FLOW_STAGES);
+  const [view, setView] = useState<BacklogView>("list");
+  // Deterministic first render; the stored preference is browser-only.
+  const mounted = useClientMounted();
+  useKeyChange(mounted, (isMounted) => {
+    if (isMounted) setView(parseBacklogView(null, ISSUES_VIEW_STORAGE_KEY));
+  }, { from: false });
+  const board = view === "board";
 
   const {
     form, setForm, open: drawerOpen, assignmentFocus, saving, deleting, projectChoice,
@@ -168,7 +195,23 @@ export function IssuesPage({
     () => new Map(groupIssues(visible, groupBy, labels).map((group) => [group.key, group.tasks.length])),
     [visible, groupBy, labels],
   );
-  const visibleIds = useMemo(() => listPage.items.map((task) => task.id), [listPage.items]);
+  /* On the board the lanes are the grouping and each lane pages on its own;
+     the table's grouping and page cursor do not apply there. */
+  const laneTasks = useMemo(() => tasksByStatus(visible), [visible]);
+  const pagedLanes = useMemo(
+    () => Object.fromEntries(TASK_FLOW_STAGES.map((status) => [
+      status,
+      paginate(laneTasks[status], lanePages[status] ?? 1, LANE_PAGE_SIZE),
+    ])) as Lanes,
+    [laneTasks, lanePages],
+  );
+  /* Selection follows what is on screen in either view, so "select all" then
+     Delete cannot reach a card on a lane page the reader never saw. */
+  const onScreen = useMemo(
+    () => (board ? TASK_FLOW_STAGES.flatMap((status) => pagedLanes[status].items) : listPage.items),
+    [board, pagedLanes, listPage.items],
+  );
+  const visibleIds = useMemo(() => onScreen.map((task) => task.id), [onScreen]);
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
   const selected = useMemo(() => selectedTasks(visible, visibleSelection), [visible, visibleSelection]);
   const movable = selected.filter((task) => issueNeedsProject(task) && task.status !== "done");
@@ -200,6 +243,17 @@ export function IssuesPage({
         ? team.profileImageUrl
         : logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.profileImageUrl,
     };
+  }
+
+  function changeView(next: BacklogView): void {
+    setView(next);
+    writeViewPreference(ISSUES_VIEW_STORAGE_KEY, next);
+  }
+
+  // A closed project's work is shown, never moved.
+  function moveTaskToLane(task: RelayTaskListItem, status: TaskWorkflowStage): void {
+    if (rowContext(task).readOnly) return;
+    inlineEdits?.changeStatus(task, status);
   }
 
   function dropFromSelection(ids: readonly string[]): void {
@@ -262,7 +316,7 @@ export function IssuesPage({
   const creatable = queue === "open" || queue === "untriaged";
 
   return (
-    <section id="backlog-panel" className="backlog-page issues-page sec-shell" aria-label={t("issues.title")} tabIndex={-1}>
+    <section id="backlog-panel" className="backlog-page issues-page sec-shell" data-view={view} aria-label={t("issues.title")} tabIndex={-1}>
       <div className="sec-rail">
         <PageHeader title={t("issues.title")} titleAs="h2"
           count={t("issues.sub", { count: issues.length })} titleVariant="title" layout="stacked" />
@@ -276,6 +330,7 @@ export function IssuesPage({
           topbarActions
           actions={(
             <TaskBoardHeaderActions
+              leading={<BacklogViewToggle view={view} onChange={changeView} />}
               refreshLabel={t("nav.refresh")}
               createLabel={t("issues.new_issue")}
               isRefreshing={isRefreshing}
@@ -293,7 +348,7 @@ export function IssuesPage({
           onChange={(next) => { setFilters(next); setPage(1); }}
           sortMenu={(
             <>
-              <Select value={groupBy} onValueChange={(value) => { if (value) setGroupBy(parseIssueGroupBy(value)); }}>
+              {board ? null : <Select value={groupBy} onValueChange={(value) => { if (value) setGroupBy(parseIssueGroupBy(value)); }}>
                 <SelectTrigger className="issues-group-by" aria-label={t("issues.group_by")}>
                   <SelectValue>{(value: IssueGroupBy) => t("issues.group_by_value", { value: t(`issues.groupings.${value}`) })}</SelectValue>
                 </SelectTrigger>
@@ -302,11 +357,12 @@ export function IssuesPage({
                     <SelectItem key={value} value={value}>{t(`issues.groupings.${value}`)}</SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
+              </Select>}
               <SortMenu
                 options={[
                   { key: "title", label: t("issues.col_issue") },
-                  { key: "status", label: t("backlog.status") },
+                  /* On the board the lanes already are the status order. */
+                  ...(board ? [] : [{ key: "status" as const, label: t("backlog.status") }]),
                   { key: "project", label: t("issues.col_project") },
                   { key: "priority", label: t("backlog.priority") },
                   { key: "assignee", label: t("backlog.assignee") },
@@ -329,6 +385,29 @@ export function IssuesPage({
             onCreate={filtered || !creatable ? undefined : openCreate}
             clearLabel={filtered ? t("backlog.clear_filters") : undefined}
             onClear={filtered ? () => { setFilters(initialFilters); setProjectFilter(null); } : undefined}
+          />
+        ) : board ? (
+          <BacklogBoard
+            lanes={pagedLanes}
+            laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, laneTasks[status].length])) as Record<TaskWorkflowStage, number>}
+            cardProps={(task) => {
+              const context = rowContext(task);
+              return {
+                task,
+                projectName: context.projectName,
+                selected: visibleSelection.has(task.id),
+                onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
+                agentDisplayName: context.agentDisplayName,
+                agentImageUrl: context.agentImageUrl,
+                ready: context.ready,
+                onOpen: () => onOpenRecord(task.id),
+              };
+            }}
+            onMoveTask={moveTaskToLane}
+            onCreateInLane={creatable
+              ? (status) => openForm({ ...emptyBacklogForm(currentUser), projectId: projectFilter ?? undefined, status })
+              : undefined}
+            onLanePageChange={setLanePage}
           />
         ) : (
           <div className="backlog-rows issues-rows" data-density="compact">

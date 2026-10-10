@@ -72,6 +72,24 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   await expect(drawer.getByRole("button", { name: "Done", exact: true })).toHaveCount(0);
 });
 
+test("the global Tasks page lays its queue out as the same board, and a drop commits", async ({ page }) => {
+  const writes = await mockQueuedTask(page);
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "Board view", exact: true }).click();
+  await expect(page.locator(".backlog-lane")).toHaveCount(5);
+  const card = page.locator('.backlog-lane[data-status="assigned"] article');
+  // Read across projects, a card names its project.
+  await expect(card).toContainText("Launch");
+  await page.screenshot({ path: test.info().outputPath("tasks-board.png") });
+  await dragCard(page, card, page.locator('.backlog-lane[data-status="running"]'));
+  await expect.poll(() => writes).toEqual(["run"]);
+  // The choice is remembered for the Tasks page only.
+  await page.reload();
+  await expect(page.locator(".backlog-lane")).toHaveCount(5);
+  await page.goto("/projects/p?tab=tasks");
+  await expect(page.locator(".backlog-lane")).toHaveCount(0);
+});
+
 /** A project's Issues tab opens as a list; the lanes live behind the view toggle. */
 async function openBoard(page: Page) {
   await page.goto("/projects/p?tab=tasks");
