@@ -172,6 +172,29 @@ def test_remove_member_promotes_the_first_remaining_member(team_store) -> None:
     assert promoted["memberAgentIds"] == ["agent_support", "agent_review"]
     assert emptied["leadAgentId"] is None
     assert emptied["memberAgentIds"] == []
+    # A team with nobody on it cannot run, so it stops being enabled.
+    assert emptied["enabled"] is False
+
+
+def test_an_emptied_team_stays_editable_until_it_is_restaffed(team_store) -> None:
+    team = team_store.create_team(
+        "alice",
+        {"name": "Delivery", "leadAgentId": "solo", "memberAgentIds": ["solo"]},
+    )
+    team_store.remove_member(team["id"], "solo")
+
+    renamed = team_store.update_team(team["id"], {"name": "Delivery (paused)"})
+    assert renamed["name"] == "Delivery (paused)"
+    with pytest.raises(ValueError) as error:
+        team_store.update_team(team["id"], {"enabled": True})
+    assert getattr(error.value, "code", None) == "team_members_required"
+
+    restaffed = team_store.update_team(
+        team["id"],
+        {"memberAgentIds": ["fresh"], "leadAgentId": "fresh", "enabled": True},
+    )
+    assert restaffed["memberAgentIds"] == ["fresh"]
+    assert restaffed["enabled"] is True
 
 
 def test_database_team_updates_merge_from_the_locked_snapshot(

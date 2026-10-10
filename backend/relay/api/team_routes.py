@@ -17,6 +17,8 @@ from .helpers import (
 
 router = APIRouter()
 
+ROSTER_FIELDS = frozenset({"leadAgentId", "memberAgentIds", "computerId"})
+
 
 def _team_error(error: ValueError) -> HTTPException:
     code = error.code if isinstance(error, TeamValidationError) else str(error)
@@ -45,12 +47,17 @@ def _validated_roster(
     body: dict[str, Any],
     *,
     current: dict[str, Any] | None = None,
-) -> tuple[str, list[str], dict[str, Any]]:
+) -> tuple[str | None, list[str], dict[str, Any]]:
     """Validate a team write's roster and pin it to one computer.
 
     Returns the lead, the members, and the computer fields to persist — empty
     when the write touches neither roster nor computer.
     """
+    if current is not None and not ROSTER_FIELDS & body.keys():
+        # Nothing about who is on the team or where it runs changes, so the
+        # stored roster is not re-judged. That keeps a team emptied by agent
+        # deletion renamable; the store still refuses to enable it.
+        return current.get("leadAgentId"), list(current.get("memberAgentIds") or []), {}
     lead, members = validate_team_payload(
         owner_employee_id, body, ctx.agent_store, current=current
     )
@@ -67,7 +74,7 @@ def _validated_roster(
 
 
 def _team_patch(
-    body: dict[str, Any], lead: str, members: list[str], computer: dict[str, Any]
+    body: dict[str, Any], lead: str | None, members: list[str], computer: dict[str, Any]
 ) -> dict[str, Any]:
     patch = dict(body)
     if "leadAgentId" in body:
