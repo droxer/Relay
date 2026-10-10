@@ -95,9 +95,9 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   // cancel keeps its words but takes the settled grey pip, not the failure
   // ring: it was the user's own call, not a fault.
   const status: { text: string; tone: "attn" | "run" | "err" | "idle" } | null =
-    session.execution && session.execution.phase !== "terminal"
-      ? { tone: session.execution.phase === "running" ? "run" : "attn", text: t(`thread.execution_${session.execution.phase}`) }
-      : tone === "run"
+    session.execution && session.execution.phase !== "terminal" && session.execution.phase !== "running"
+      ? { tone: "attn", text: t(`thread.execution_${session.execution.phase}`) }
+      : session.execution?.phase === "running" || tone === "run"
       ? {
           tone: "run",
           // Named by the logical agent, never the executor kind: several

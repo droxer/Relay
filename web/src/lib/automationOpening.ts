@@ -107,12 +107,18 @@ function parseBlock(block: string): OpeningTrigger {
   };
 }
 
-/** One entry per `- ` line; a line without the prefix continues the one above
-    (a webhook payload, a multi-line run error). */
+/** Run errors can contain bullets themselves. Inside a run error, only a
+    recognised event header starts another entry; other lines stay verbatim. */
 function eventTexts(lines: readonly string[]): string[] {
   const texts: string[] = [];
   for (const line of lines) {
-    if (line.startsWith(EVENT_PREFIX)) texts.push(line.slice(EVENT_PREFIX.length));
+    const candidate = line.startsWith(EVENT_PREFIX) ? line.slice(EVENT_PREFIX.length) : null;
+    const previous = texts.length > 0 ? parseEvent(texts[texts.length - 1]) : null;
+    const inRunError = previous?.kind === "run" && Boolean(previous.error);
+    const knownHeader = candidate !== null && (
+      parseEvent(candidate).kind !== "other" || candidate === "Webhook payload (JSON):"
+    );
+    if (candidate !== null && (!inRunError || knownHeader)) texts.push(candidate);
     else if (texts.length > 0) texts[texts.length - 1] += `\n${line}`;
   }
   return texts;
