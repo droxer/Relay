@@ -1,6 +1,6 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, EmployeeAgent } from "../../types";
+import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, EmployeeAgent, ThreadMessageInput } from "../../types";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
 import { effectiveStyle } from "../../lib/collaborationStyle";
 import { sendShortcutLabel } from "../../lib/sendShortcut";
@@ -30,8 +30,15 @@ export type ComposerHandle = {
   /** Put text back in the box — used to return a message a failed send ate. */
   setText: (text: string) => void;
   /** Send this text as the message, as if typed and submitted — a picked
-   *  answer goes through exactly the path a typed one does. */
-  send: (text: string) => Promise<boolean>;
+   *  answer goes through exactly the path a typed one does. A draft already
+   *  in the box is put back afterwards rather than lost. */
+  send: (text: string, options?: ComposerSendOptions) => Promise<boolean>;
+};
+
+export type ComposerSendOptions = {
+  /** `discuss` asks without handing the agent work: nothing it reports can
+   *  move a task. Default is the composer's own `accomplish`. */
+  intent?: ThreadMessageInput["intent"];
 };
 
 // Message composer: textarea, agent control, and the send/cancel
@@ -69,7 +76,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   /** Agents `@` may name in this thread — the ones on its computer. Empty
    *  while staging a new thread, where the footer picker chooses the target. */
   mentionCandidates?: MentionCandidate[];
-  onSend: (style?: CollaborationStyle) => void | Promise<boolean | void>;
+  onSend: (style?: CollaborationStyle, intent?: ThreadMessageInput["intent"]) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
@@ -152,7 +159,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     || !composerText.trim()
     || parsed.blocked
     || (initializingThread && !projectName && !runtimeNodeId);
-  const triggerSend = async (): Promise<boolean> => {
+  const triggerSend = async (intent?: ThreadMessageInput["intent"]): Promise<boolean> => {
     if (running || sendPending) return false;
     // The send button is disabled on a mention that resolves to nobody, and on
     // a staged thread with no computer, but the keyboard shortcut bypasses the
@@ -161,7 +168,11 @@ const ComposerView = forwardRef<ComposerHandle, {
     if (cannotSend) return false;
     setSendPending(true);
     try {
-      const sent = await onSend(activeTeamId && !projectName && !addressedLogicalAgentId ? style ?? undefined : undefined);
+      // A style shapes team work; a question hands out none.
+      const teamStyle = activeTeamId && !projectName && !addressedLogicalAgentId && (intent ?? "accomplish") === "accomplish"
+        ? style ?? undefined
+        : undefined;
+      const sent = await (intent ? onSend(teamStyle, intent) : onSend(teamStyle));
       if (sent === false) return false;
       setStyle(null);
       return true;
@@ -187,7 +198,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   // A picked answer lands in the box first, then sends once the box (and the
   // handle dispatch reads it through) holds it.
-  const queuedSendRef = useRef<{ text: string; resolve: (sent: boolean) => void } | null>(null);
+  const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; resolve: (sent: boolean) => void } | null>(null);
   const triggerSendRef = useRef(triggerSend);
   // Declared first so the queued send below sees this render's closure.
   useEffect(() => { triggerSendRef.current = triggerSend; });
@@ -195,7 +206,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     const queued = queuedSendRef.current;
     if (!queued || queued.text !== composerText) return;
     queuedSendRef.current = null;
-    void triggerSendRef.current().then(queued.resolve);
+    void triggerSendRef.current(queued.intent).then(queued.resolve);
   }, [composerText]);
   useEffect(() => () => {
     queuedSendRef.current?.resolve(false);
@@ -206,15 +217,22 @@ const ComposerView = forwardRef<ComposerHandle, {
     focus: () => textareaRef.current?.focus(),
     getText: () => composerText,
     setText: (text: string) => setComposerText(text),
-    send: (text: string) => {
+    send: (text: string, options?: ComposerSendOptions) => {
       queuedSendRef.current?.resolve(false);
       queuedSendRef.current = null;
-      if (text === composerText) {
-        return triggerSendRef.current();
-      }
-      return new Promise<boolean>((resolve) => {
-        queuedSendRef.current = { text, resolve };
-        setComposerText(text);
+      const intent = options?.intent;
+      // Whatever the person had started typing is theirs: it goes back in the
+      // box once the picked answer has gone (or failed to).
+      const draft = composerText.trim() && composerText !== text ? composerText : null;
+      const sent = text === composerText
+        ? triggerSendRef.current(intent)
+        : new Promise<boolean>((resolve) => {
+          queuedSendRef.current = { text, intent, resolve };
+          setComposerText(text);
+        });
+      return draft === null ? sent : sent.then((ok) => {
+        setComposerText(draft);
+        return ok;
       });
     },
   }), [composerText, setComposerText, textareaRef]);

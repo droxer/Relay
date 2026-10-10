@@ -2996,6 +2996,15 @@ def test_a_blocked_round_offers_its_answers_as_choices(recovery_team_thread):
         "The round reported it is blocked. Rotate staging only, or prod too?"
     )
     assert asked["inputOptions"] == ["Staging only", "Staging and prod"]
+    assert asked["inputQuestion"] == "Rotate staging only, or prod too?"
+    # The step's own blocked report restates the question; it is not a note.
+    assert "inputNotes" not in asked
+    # The task keeps the question itself, and the thread it waits in.
+    assert waiting["waitingRequest"] == {
+        "inputQuestion": "Rotate staging only, or prod too?",
+        "inputOptions": ["Staging only", "Staging and prod"],
+    }
+    assert waiting["waitingSessionId"] == session["id"]
 
     # Picking one is a reply: it resumes the work and the choices go away.
     response = client.post(
@@ -3091,6 +3100,84 @@ def test_non_action_reply_preserves_a_waiting_task(recovery_team_thread, intent)
                 "node_token",
             )
     assert store.get_task(task["id"]) == waiting
+
+
+def _reply(client, session_id, text, key, **extra):
+    response = client.post(
+        f"/api/v1/threads/{session_id}/messages",
+        json={"text": text, "idempotencyKey": key, **extra},
+    )
+    assert response.status_code == 202, response.text
+    return response.json()
+
+
+def test_a_status_question_does_not_orphan_the_wait(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    registry = client.app.state.registry
+
+    asked = _reply(client, session["id"], "What is done so far?", "status-1", intent="discuss")
+    assert asked["collaborationRounds"][-1]["workScope"] == {"kind": "thread"}
+    _finish_turns(registry, session["id"], {"status": "continue", "note": "Half done"})
+    assert store.get_task(task["id"])["status"] == "waiting_for_human"
+
+    # The thread still answers for the task: the wait names it.
+    answered = _reply(client, session["id"], "Use the ops vault.", "answer-1")
+    assert answered["collaborationRounds"][-1]["workScope"] == {
+        "kind": "task", "taskId": task["id"],
+    }
+
+
+def test_an_older_thread_does_not_resume_a_task_waiting_elsewhere(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    store.update_task(task["id"], {
+        "status": "waiting_for_human",
+        "statusReason": "The round reported it is blocked. Which region?",
+        "statusSessionId": "ses_newer_round",
+    })
+    waiting = store.get_task(task["id"])
+
+    reply = _reply(client, session["id"], "Use the ops vault.", "answer-1")
+
+    assert reply["collaborationRounds"][-1]["workScope"] == {"kind": "thread"}
+    assert store.get_task(task["id"]) == waiting
+
+
+def test_a_finished_step_never_parks_the_task(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    registry = client.app.state.registry
+    before = len(store.get_task(task["id"])["events"])
+
+    _reply(client, session["id"], "Use the ops vault.", "answer-1")
+    _finish_turns(registry, session["id"], {
+        "status": "done",
+        "note": "Rotated keys",
+        "work": {"status": "done", "evidence": ["vault read ok"], "note": "Rotated keys"},
+    })
+
+    statuses = [
+        event["status"]
+        for event in store.get_task(task["id"])["events"][before:]
+        if event["type"] == "task.status"
+    ]
+    assert statuses[-1] == "review"
+    assert "waiting_for_human" not in statuses
+
+
+def test_a_human_answer_opens_a_fresh_round_budget(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    registry = client.app.state.registry
+    store.record_round(task["id"], round_count=5)
+
+    _reply(client, session["id"], "Keep going.", "answer-1")
+    _finish_turns(registry, session["id"], {
+        "status": "continue",
+        "note": "More to do",
+        "work": {"status": "continue", "evidence": [], "note": "More to do"},
+    })
+
+    resumed = store.get_task(task["id"])
+    assert resumed["status"] == "assigned"
+    assert resumed["roundCount"] == 1
 
 
 def test_replying_to_a_finished_task_thread_stays_a_conversation(

@@ -67,13 +67,13 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         if (event.status !== "completed" && event.status !== "failed") {
           delete updated.finalOutcome;
           delete updated.workOutcome;
-          delete updated.inputOptions;
+          clearInputRequest(updated);
         }
         return updated;
       }
     case "agent.started": {
       delete next.workOutcome;
-      delete next.inputOptions;
+      clearInputRequest(next);
       if (next.agentRuns.some((run) => run.id === event.runId)) {
         return { ...next, status: "running", phase: event.agent, currentAgent: event.agent };
       }
@@ -165,15 +165,17 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         if (event.decision.kind === "cancel") {
           delete updated.pendingDecision;
           delete updated.workOutcome;
-          delete updated.inputOptions;
+          clearInputRequest(updated);
         }
         return updated;
       }
     case "session.completed":
       {
         const updated: RelaySession = { ...next, status: "completed", phase: "completed", finalOutcome: event.outcome, workOutcome: event.workOutcome ?? "unverified" };
+        clearInputRequest(updated);
+        if (event.inputQuestion) updated.inputQuestion = event.inputQuestion;
         if (event.inputOptions?.length) updated.inputOptions = [...event.inputOptions];
-        else delete updated.inputOptions;
+        if (event.inputNotes?.length) updated.inputNotes = [...event.inputNotes];
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return updated;
@@ -181,7 +183,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
     case "session.failed":
       {
         const updated: RelaySession = { ...next, status: "failed", phase: "failed", finalOutcome: event.outcome, workOutcome: "blocked" };
-        delete updated.inputOptions;
+        clearInputRequest(updated);
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return updated;
@@ -195,4 +197,11 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
     default:
       return next;
   }
+}
+
+/** Drop a session's question for its human: only a completion carries one. */
+function clearInputRequest(session: RelaySession): void {
+  delete session.inputQuestion;
+  delete session.inputOptions;
+  delete session.inputNotes;
 }

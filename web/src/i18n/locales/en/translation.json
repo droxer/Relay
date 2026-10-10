@@ -2053,7 +2053,10 @@
     "choice_status_reply": "Before going further, tell me what is done, what is left, and anything you need from me.",
     "hint_choices_task": "Pick one to resume {{ref}}, or write your own answer.",
     "hint_choices_thread": "Pick one to continue, or write your own answer.",
-    "write_own": "Write my own"
+    "write_own": "Write my own",
+    "hint_check_task": "Keeping going resumes {{ref}}. Asking for status leaves it waiting for you.",
+    "hint_check_thread": "Pick one, or write your own answer. Asking for status changes nothing.",
+    "notes_title": "Also holding up the work:"
   },
   "recovery": {
     "title": "Next steps",

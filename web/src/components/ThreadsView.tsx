@@ -121,7 +121,7 @@ type ThreadsViewProps = {
   onRuntimeNodeChange: (nodeId: string) => void;
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
-  onSend: (style?: import("../types").CollaborationStyle) => void | Promise<boolean | void>;
+  onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"]) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
   onRetryExecutionRecovery?: () => Promise<void>;
@@ -512,7 +512,7 @@ export function ThreadsView({
               waiting={waiting}
               agentName={waitingAgentName}
               agentImage={waiting.run?.logicalAgentId ? logicalAgentImages[waiting.run.logicalAgentId] : undefined}
-              onChoose={(reply) => composerRef.current?.send(reply) ?? Promise.resolve(false)}
+              onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
             />
           ) : null}

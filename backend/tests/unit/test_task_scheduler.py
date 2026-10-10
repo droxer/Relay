@@ -1618,6 +1618,9 @@ def test_scheduler_stops_a_task_that_never_reports_itself_finished() -> None:
             assert stopped["status"] == "waiting_for_human"
             assert stopped["dispatchOutcome"]["code"] == "round_budget_exhausted"
             assert "2-round budget" in stopped["activity"][-1]["message"]
+            # The wait quotes why it stopped, and names the thread to answer in.
+            assert "2-round budget" in stopped["waitingReason"]
+            assert stopped["waitingSessionId"] == command["sessionId"]
 
     asyncio.run(run_flow())
 
