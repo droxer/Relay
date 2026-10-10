@@ -3402,3 +3402,70 @@ def test_admin_placement_on_another_computer_moves_the_agent(
         assert [event["type"] for event in app.state.agent_store.events(agent["id"])][
             -1
         ] == "agent.moved"
+
+
+def test_admin_placement_refuses_to_move_an_agent_off_its_team_computer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        assert (
+            client.post(
+                "/api/v1/admin/employees",
+                json={
+                    "employeeId": "alice",
+                    "username": "alice",
+                    "password": "userpass",
+                    "displayName": "Alice",
+                },
+            ).status_code
+            == 201
+        )
+        birth = _birth_computer_id(client, "alice", "codex")
+        agent = client.post(
+            "/api/v1/admin/agents",
+            json={
+                "supervisorEmployeeId": "alice",
+                "displayName": "Builder",
+                "executorKind": "codex",
+                "defaultRole": "implementer",
+                "computerId": birth,
+            },
+        ).json()["agent"]
+        team = client.post(
+            "/api/v1/admin/teams",
+            json={
+                "ownerEmployeeId": "alice",
+                "name": "Delivery",
+                "computerId": birth,
+                "leadAgentId": agent["id"],
+                "memberAgentIds": [agent["id"]],
+            },
+        )
+        assert team.status_code == 201
+        app.state.registry.register(
+            {
+                "sandboxId": "node_alice_laptop",
+                "employeeId": "alice",
+                "workspaceId": "machine-alice-laptop",
+                "token": "node_token",
+                "workspacePath": "/workspace/alice-laptop",
+                "protocolVersion": 1,
+                "supportedAgents": ["codex"],
+                "capabilities": ["thread-workspaces"],
+                "status": "ready",
+            }
+        )
+
+        placed = client.post(
+            f"/api/v1/admin/agents/{agent['id']}/placements",
+            json={"daemonNodeId": "node_alice_laptop"},
+        )
+
+        assert placed.status_code == 409
+        assert "Remove it from the team" in placed.json()["detail"]
+        assert app.state.agent_store.get_agent(agent["id"])["computerId"] == birth
+        assert app.state.agent_placement_store.list_placements(agent_id=agent["id"]) == []

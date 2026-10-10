@@ -24,6 +24,12 @@ from ..persistence.agent_placement_store import create_node_placement
 LIVE_PLACEMENT_STATES = frozenset({"active", "draining"})
 
 
+class AgentMoveError(ValueError):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
 def agent_computer_ids(
     agent: Mapping[str, Any],
     *,
@@ -75,12 +81,52 @@ def agent_placed_on_computer(
     )
 
 
+def assert_agent_can_move(
+    agent: Mapping[str, Any],
+    target_computer_id: str,
+    *,
+    team_store: Any,
+    project_store: Any,
+) -> None:
+    """Refuse a move that would strand the agent's team or project.
+
+    A team and a project each live on one computer with every member on it,
+    so an agent must leave them before it can leave their computer. A team
+    that never recorded a computer predates the rule and does not pin it.
+    """
+    if agent.get("computerId") == target_computer_id:
+        return
+    for team in team_store.list_teams(agent.get("supervisorEmployeeId")):
+        if (
+            agent["id"] in team.get("memberAgentIds", [])
+            and team.get("computerId")
+            and team["computerId"] != target_computer_id
+        ):
+            raise AgentMoveError(
+                "agent_team_computer_mismatch",
+                f"Agent belongs to team {team.get('name') or team['id']} on another "
+                "computer. Remove it from the team before moving it.",
+            )
+    for project in project_store.list_projects(include_archived=False):
+        if project.get("computerId") != target_computer_id and any(
+            member.get("agentId") == agent["id"] for member in project.get("members", [])
+        ):
+            raise AgentMoveError(
+                "agent_project_computer_mismatch",
+                "Agent belongs to a project on another computer. Remove it from "
+                "the project before moving it.",
+            )
+
+
 def place_agent_on_node(
     agent_store: Any,
     placement_store: Any,
     agent: dict[str, Any],
     node: Mapping[str, Any],
     payload: dict[str, Any] | None = None,
+    *,
+    team_store: Any,
+    project_store: Any,
 ) -> dict[str, Any]:
     """Place an agent on a node, moving it when the node is another computer.
 
@@ -88,6 +134,9 @@ def place_agent_on_node(
     move on the agent afterwards keeps its ``computerId`` truthful without
     moving an agent whose placement was rejected.
     """
+    assert_agent_can_move(
+        agent, computer_id(node), team_store=team_store, project_store=project_store
+    )
     placement = create_node_placement(placement_store, agent, dict(node), payload)
     if agent.get("computerId") != placement["computerId"]:
         agent_store.move_to_computer(agent["id"], placement["computerId"])

@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from relay.services.agent_location import (
+    AgentMoveError,
     agent_computer_ids,
     agent_placed_on_computer,
+    assert_agent_can_move,
 )
 
 
@@ -93,4 +97,62 @@ def test_placed_on_computer_matches_legacy_placements_by_node() -> None:
     )
     assert not agent_placed_on_computer(
         "a1", "device:alice:machine-a", node_ids={"node-1"}, placement_store=store
+    )
+
+
+class _Teams:
+    def __init__(self, teams: list[dict[str, Any]]):
+        self._teams = teams
+
+    def list_teams(self, owner_employee_id: str | None = None) -> list[dict[str, Any]]:
+        return self._teams
+
+
+class _Projects:
+    def __init__(self, projects: list[dict[str, Any]]):
+        self._projects = projects
+
+    def list_projects(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        return self._projects
+
+
+def test_an_agent_cannot_move_off_its_teams_computer() -> None:
+    agent = {"id": "a1", "supervisorEmployeeId": "alice", "computerId": "device:alice:m1"}
+    teams = _Teams(
+        [{"id": "t1", "name": "Delivery", "computerId": "device:alice:m1", "memberAgentIds": ["a1"]}]
+    )
+
+    with pytest.raises(AgentMoveError) as error:
+        assert_agent_can_move(
+            agent, "device:alice:m2", team_store=teams, project_store=_Projects([])
+        )
+
+    assert error.value.code == "agent_team_computer_mismatch"
+
+
+def test_an_agent_cannot_move_off_its_projects_computer() -> None:
+    agent = {"id": "a1", "supervisorEmployeeId": "alice", "computerId": "device:alice:m1"}
+    projects = _Projects(
+        [{"id": "p1", "computerId": "device:alice:m1", "members": [{"agentId": "a1"}]}]
+    )
+
+    with pytest.raises(AgentMoveError) as error:
+        assert_agent_can_move(
+            agent, "device:alice:m2", team_store=_Teams([]), project_store=projects
+        )
+
+    assert error.value.code == "agent_project_computer_mismatch"
+
+
+def test_staying_on_the_same_computer_or_a_free_agent_may_move() -> None:
+    agent = {"id": "a1", "supervisorEmployeeId": "alice", "computerId": "device:alice:m1"}
+    teams = _Teams(
+        [{"id": "t1", "name": "Delivery", "computerId": "device:alice:m1", "memberAgentIds": ["a1"]}]
+    )
+
+    assert_agent_can_move(
+        agent, "device:alice:m1", team_store=teams, project_store=_Projects([])
+    )
+    assert_agent_can_move(
+        {**agent, "id": "a2"}, "device:alice:m2", team_store=teams, project_store=_Projects([])
     )
