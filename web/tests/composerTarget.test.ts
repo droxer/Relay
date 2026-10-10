@@ -127,7 +127,7 @@ describe("composer agent selection", () => {
     // directly, and a blocked draft sent that way addresses the whole room
     // instead of the agent the author named.
     assert.match(composer, /const cannotSend =[\s\S]*?parsed\.blocked/);
-    assert.match(composer, /const triggerSend = async \(\): Promise<boolean> => \{[\s\S]*?if \(cannotSend\) return false;/);
+    assert.match(composer, /const triggerSend = async \([^)]*\): Promise<boolean> => \{[\s\S]*?if \(cannotSend\) return false;/);
   });
 
   it("shows the addressed agent in the footer while the draft names one", async () => {

@@ -82,8 +82,10 @@ export function threadMessageOperationKey({ sessionId, text, intent, addressAgen
  *
  * Addressing is resolved and validated before this serialization boundary.
  */
-export function threadMessageInput({ text, addressAgentIds, addressTeamId = null, userMessageId, style }: {
+export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style }: {
   text: string;
+  /** `discuss` asks without handing out work; styles apply only to work. */
+  intent?: ThreadMessageInput["intent"];
   /** Empty intentionally addresses the whole room. */
   addressAgentIds: readonly string[];
   /** Another team on the thread's computer; ignored when agents are named. */
@@ -93,10 +95,10 @@ export function threadMessageInput({ text, addressAgentIds, addressTeamId = null
 }): ThreadMessageInput {
   return {
     text,
-    intent: "accomplish",
+    intent,
     userMessageId,
     idempotencyKey: userMessageId,
-    ...(style && addressAgentIds.length === 0 ? { style } : {}),
+    ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? { style } : {}),
     ...(addressAgentIds.length
       ? { addressAgentIds: [...addressAgentIds] }
       : addressTeamId

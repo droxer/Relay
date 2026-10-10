@@ -259,6 +259,7 @@ export {
   type RelayTaskListItem,
   type RelayTaskSummary,
   type TaskExecutionAttention,
+  type TaskWaitingRequest,
   type TaskPriority,
   type TaskRoutineCadence,
   type TaskRoutineType,

@@ -466,6 +466,11 @@ def _complete_task_scoped_sessions(
         controller.complete_session(session_id, outcome)
 
 
+UNBLOCKED_WAIT_REASON = (
+    "The block was cleared, but the interrupted run does not restart on its own. "
+    "Tell the agent how to continue."
+)
+
 @router.get("/tasks")
 def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
@@ -682,6 +687,21 @@ def update_task(
         status = current.get("blockedFromStatus") or "backlog"
         if status == "running":
             status = "waiting_for_human"
+    # An unblocked run cannot resume on its own; say so where the wait is
+    # quoted, and point the answer at the thread the block came from.
+    unblocked_wait = (
+        {
+            "statusReason": UNBLOCKED_WAIT_REASON,
+            **(
+                {"statusSessionId": current["attention"]["sessionId"]}
+                if isinstance(current.get("attention"), dict)
+                and current["attention"].get("sessionId")
+                else {}
+            ),
+        }
+        if unblock and status == "waiting_for_human"
+        else {}
+    )
     blocker_reason = string_field(body, "blockerReason").strip()
     if status == "blocked" and (not blocker_reason or len(blocker_reason) > 2000):
         raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
@@ -866,6 +886,7 @@ def update_task(
         "acceptancePolicy": acceptance_policy,
         "collaborationStyle": collaboration_style,
         "blockerReason": blocker_reason,
+        **unblocked_wait,
         "actorEmployeeId": actor["employeeId"],
         "expectedStatus": current["status"],
         "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),

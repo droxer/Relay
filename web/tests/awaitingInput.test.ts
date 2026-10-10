@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { awaitingInput, readWaitingReason } from "../src/lib/awaitingInput.js";
+import { awaitingInput, readWaitingReason, taskWaitingPrompt } from "../src/lib/awaitingInput.js";
 import type { RelaySession, RelayTaskListItem } from "../src/types.js";
 
 function session(partial: Partial<RelaySession> = {}): RelaySession {
@@ -24,6 +24,11 @@ function session(partial: Partial<RelaySession> = {}): RelaySession {
   } as RelaySession;
 }
 
+/** A thread whose last round was a conversation, not a task's round. */
+function threadSession(partial: Partial<RelaySession> = {}): RelaySession {
+  return session({ collaborationRounds: [], ...partial });
+}
+
 function task(partial: Partial<RelayTaskListItem> = {}): RelayTaskListItem {
   return {
     id: "task_1",
@@ -39,7 +44,7 @@ function task(partial: Partial<RelayTaskListItem> = {}): RelayTaskListItem {
 describe("awaitingInput", () => {
   it("quotes the agent's question without the system preamble", () => {
     const waiting = awaitingInput(
-      session({ workOutcome: "blocked", finalOutcome: "The round reported it is blocked. Which vault holds the staging key?" }),
+      threadSession({ workOutcome: "blocked", finalOutcome: "The round reported it is blocked. Which vault holds the staging key?" }),
       [],
     );
     assert.deepEqual(waiting && { kind: waiting.kind, text: waiting.text }, {
@@ -57,21 +62,21 @@ describe("awaitingInput", () => {
   });
 
   it("says a blocked round gave no question rather than inventing one", () => {
-    const waiting = awaitingInput(session({ workOutcome: "blocked", finalOutcome: "The round reported it is blocked." }), []);
+    const waiting = awaitingInput(threadSession({ workOutcome: "blocked", finalOutcome: "The round reported it is blocked." }), []);
     assert.equal(waiting?.kind, "question");
     assert.equal(waiting?.text, null);
   });
 
   it("treats a gated round as a check and words it without internal ids", () => {
     const legacy = awaitingInput(
-      session({ workOutcome: "blocked", finalOutcome: "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing." }),
+      threadSession({ workOutcome: "blocked", finalOutcome: "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing." }),
       [],
     );
     assert.equal(legacy?.kind, "check");
     assert.equal(legacy?.text, "A required step ended without reporting what it did.");
     assert.deepEqual(legacy?.options, []);
     const current = awaitingInput(
-      session({ workOutcome: "blocked", finalOutcome: "The work can't be accepted yet. A required step failed to run." }),
+      threadSession({ workOutcome: "blocked", finalOutcome: "The work can't be accepted yet. A required step failed to run." }),
       [],
     );
     assert.equal(current?.text, "A required step failed to run.");
@@ -87,7 +92,7 @@ describe("awaitingInput", () => {
   });
 
   it("offers the answers the agent gave", () => {
-    const waiting = awaitingInput(session({
+    const waiting = awaitingInput(threadSession({
       workOutcome: "blocked",
       finalOutcome: "The round reported it is blocked. Rotate staging only, or prod too?",
       inputOptions: ["Staging only", "Staging and prod", "Staging only"],
@@ -102,7 +107,7 @@ describe("awaitingInput", () => {
     "Which environment?\n" + Array.from({ length: 7 }, (_, i) => `${i + 1}. env-${i + 1}`).join("\n"),
   ]) {
     it(`preserves an unstructured list: ${text.split("\n")[0]}`, () => {
-      const waiting = awaitingInput(session({
+      const waiting = awaitingInput(threadSession({
         workOutcome: "blocked",
         finalOutcome: `The round reported it is blocked. ${text}`,
       }), []);
@@ -162,5 +167,77 @@ describe("awaitingInput", () => {
   it("ignores deleted and routine tasks even when the round names them", () => {
     assert.equal(awaitingInput(session(), [task({ deletedAt: "2026-10-10T00:00:00.000Z" })]), null);
     assert.equal(awaitingInput(session(), [task({ isRoutine: true })]), null);
+  });
+
+  it("drops a task round's old question once the task is no longer waiting", () => {
+    const stale = session({ workOutcome: "blocked", finalOutcome: "The round reported it is blocked. Which vault?" });
+    for (const status of ["done", "review", "assigned", "running"] as const) {
+      assert.equal(awaitingInput(stale, [task({ status })]), null, status);
+    }
+    assert.equal(awaitingInput(stale, []), null);
+  });
+
+  it("leaves a task waiting in a newer thread to that thread", () => {
+    const elsewhere = task({ waitingSessionId: "ses_newer", waitingReason: "The round reported it is blocked. Which region?" });
+    assert.equal(awaitingInput(session({ workOutcome: "blocked" }), [elsewhere]), null);
+  });
+
+  it("keeps the wait after a status question took over the active round", () => {
+    const named = task({
+      waitingSessionId: "ses_1",
+      waitingRequest: { inputQuestion: "Which vault?", inputOptions: ["Ops", "Shared"] },
+    });
+    const afterStatus = session({
+      workOutcome: "unverified",
+      activeRoundId: "status-round",
+      collaborationRounds: [
+        { roundId: "asking-round", workScope: { kind: "task", taskId: "task_1" } },
+        { roundId: "status-round", workScope: { kind: "thread" } },
+      ] as RelaySession["collaborationRounds"],
+    });
+    const waiting = awaitingInput(afterStatus, [named]);
+    assert.equal(waiting?.task?.id, "task_1");
+    assert.equal(waiting?.text, "Which vault?");
+    assert.deepEqual(waiting?.options, ["Ops", "Shared"]);
+  });
+
+  it("quotes the structured question and carries the gates it stood in front of", () => {
+    const waiting = awaitingInput(threadSession({
+      workOutcome: "blocked",
+      finalOutcome: "The round reported it is blocked. Which vault? 1 participant assignment(s) failed; inspect the thread before closing the work.",
+      inputQuestion: "Which vault?",
+      inputNotes: ["A required step failed to run.", " "],
+    }), []);
+    assert.equal(waiting?.kind, "question");
+    assert.equal(waiting?.text, "Which vault?");
+    assert.deepEqual(waiting?.notes, ["A required step failed to run."]);
+  });
+
+  it("offers answers even when the agent gave no question text", () => {
+    const waiting = awaitingInput(threadSession({
+      workOutcome: "blocked",
+      finalOutcome: "The round reported it is blocked.",
+      inputOptions: ["Staging", "Prod"],
+    }), []);
+    assert.equal(waiting?.text, null);
+    assert.deepEqual(waiting?.options, ["Staging", "Prod"]);
+  });
+});
+
+describe("taskWaitingPrompt", () => {
+  it("prefers the structured question over the recorded reason", () => {
+    assert.deepEqual(
+      taskWaitingPrompt({
+        waitingReason: "The round reported it is blocked. Which vault? 1 participant assignment(s) failed.",
+        waitingRequest: { inputQuestion: "Which vault?", inputNotes: ["A required step failed to run."] },
+      }),
+      { kind: "question", text: "Which vault?", notes: ["A required step failed to run."] },
+    );
+  });
+
+  it("quotes a parked wait's reason", () => {
+    const parked = taskWaitingPrompt({ waitingReason: "The task used its 5-round budget without reporting it was finished." });
+    assert.equal(parked.kind, "check");
+    assert.match(parked.text ?? "", /5-round budget/);
   });
 });
