@@ -75,6 +75,39 @@ def _agent_turns(session: dict[str, Any], store: ArtifactReader) -> list[tuple[t
     return turns
 
 
+# The preamble `_round_outcome` (daemon_registry/registry.py) puts before a
+# blocked round's note; threads completed before `inputQuestion` existed only
+# carry the question inside their outcome.
+_BLOCKED_ROUND_PREAMBLE = "The round reported it is blocked."
+
+
+def _questions_asked(session: dict[str, Any]) -> list[tuple[tuple[str, int], str, str]]:
+    """What the agent asked its human when a round stopped on a question.
+
+    The question lives in the round verdict, not the agent's chat output, and
+    the daemon consumes the verdict file. Without this block the run that the
+    answer resumes would see "Staging" with no idea what it answers.
+    """
+    items: list[tuple[tuple[str, int], str, str]] = []
+    for index, event in enumerate(session.get("events", [])):
+        if event.get("type") != "session.completed" or event.get("workOutcome") != "blocked":
+            continue
+        question = event.get("inputQuestion")
+        outcome = event.get("outcome")
+        if not question and isinstance(outcome, str) and outcome.startswith(_BLOCKED_ROUND_PREAMBLE):
+            question = outcome[len(_BLOCKED_ROUND_PREAMBLE):].strip()
+        options = [item for item in event.get("inputOptions") or [] if isinstance(item, str)]
+        if not (isinstance(question, str) and question.strip()) and not options:
+            continue
+        lines = ["[You stopped and asked the human]"]
+        if isinstance(question, str) and question.strip():
+            lines.append(question.strip())
+        if options:
+            lines.append("Offered answers: " + " | ".join(options))
+        items.append(((event.get("timestamp") or "", index), "question", "\n".join(lines)))
+    return items
+
+
 def _history_len(blocks: list[str]) -> int:
     return len("\n\n".join(blocks))
 
@@ -170,6 +203,10 @@ def compute_conversation_history(
         if decision.get("targetAgentId"):
             target += f" ({decision['targetAgentId']})"
         items.append((marker, "handoff", f"[Historical handoff to @{target}]\n{note.strip()}"))
+
+    items.extend(
+        item for item in _questions_asked(session) if not latest_user or item[0] < latest_user
+    )
 
     items.sort(key=lambda item: item[0])
 

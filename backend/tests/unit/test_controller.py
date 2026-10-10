@@ -255,3 +255,55 @@ def test_completion_retry_does_not_overwrite_newer_execution(monkeypatch, claime
         before = tasks.get_task(task["id"])
         controller.complete_session(session["id"], "Done.")
         assert tasks.get_task(task["id"]) == before
+
+
+@pytest.mark.parametrize("field,new_value", [
+    ("inputQuestion", "Which environment?"),
+    ("inputOptions", ["development", "production"]),
+    ("inputNotes", ["Approval is required."]),
+])
+def test_completion_retry_compares_all_structured_input_fields(field, new_value) -> None:
+    with TemporaryDirectory() as root:
+        store = LocalSessionStore(root)
+        controller = SessionController(store)
+        session = controller.create_session("Question")
+        request = {"inputQuestion": "Which branch?", "inputOptions": ["main"], "inputNotes": ["Tests failed."]}
+        controller.complete_session(session["id"], "Question", work_outcome="blocked", input_request=request)
+        changed = {**request, field: new_value}
+        updated = controller.complete_session(session["id"], "Question", work_outcome="blocked", input_request=changed)
+        assert len([e for e in updated["events"] if e["type"] == "session.completed"]) == 2
+        assert controller.complete_session(
+            session["id"], "Question", work_outcome="blocked", input_request=changed,
+        ) == updated
+
+
+@pytest.mark.parametrize("initial_status", ["running", "waiting_for_human"])
+def test_completion_retry_repairs_structured_task_question(monkeypatch, initial_status) -> None:
+    from relay.persistence.task_store import LocalTaskStore
+    from relay.persistence.store_common import relay_task_event
+
+    with TemporaryDirectory() as root:
+        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
+        task = tasks.create_task({"title": "Question"})
+        controller = SessionController(sessions, task_store=tasks, task_id=task["id"])
+        session = controller.create_session("Question")
+        tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": initial_status}))
+        request = {"inputQuestion": "Which branch?", "inputOptions": ["main"], "inputNotes": ["Tests failed."]}
+        with monkeypatch.context() as patch:
+            def fail_task_write(*args, **kwargs):
+                raise OSError("task write failed")
+
+            patch.setattr(tasks, "append_event", fail_task_write)
+            with pytest.raises(OSError):
+                controller.complete_session(session["id"], "Question", task_status="waiting_for_human",
+                                            work_outcome="blocked", input_request=request)
+        controller.complete_session(session["id"], "Question", task_status="waiting_for_human",
+                                    work_outcome="blocked", input_request=request)
+        repaired = tasks.get_task(task["id"])
+        assert repaired["waitingRequest"] == request
+        assert repaired["waitingSessionId"] == session["id"]
+        assert all("request" not in activity for activity in repaired["activity"])
+        again = controller.complete_session(session["id"], "Question", task_status="waiting_for_human",
+                                            work_outcome="blocked", input_request=request)
+        assert tasks.get_task(task["id"]) == repaired
+        assert len([e for e in again["events"] if e["type"] == "session.completed"]) == 1

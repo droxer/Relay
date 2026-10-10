@@ -213,23 +213,33 @@ class SessionController:
 
     def complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
-        *, work_outcome: str = "unverified", input_options: list[str] | None = None,
+        *, work_outcome: str = "unverified",
+        input_request: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
             return self._complete_session(
-                session_id, outcome, task_status, work_outcome, input_options
+                session_id, outcome, task_status, work_outcome, input_request
             )
 
     def _complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
-        work_outcome: str = "unverified", input_options: list[str] | None = None,
+        work_outcome: str = "unverified",
+        input_request: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        # Keep structured human input fields in both completion
+        # events and task closeout, including a retry after a partial write.
+        request = {key: value for key, value in (input_request or {}).items() if value}
+        task_extras = {"sessionId": session_id, **({"request": request} if request else {})}
         current = self.store.get_session(session_id)
+        current_request = {
+            key: current[key] for key in ("inputQuestion", "inputOptions", "inputNotes")
+            if current.get(key)
+        }
         if (
             current.get("status") == "completed"
             and current.get("finalOutcome") == outcome
             and current.get("workOutcome") == work_outcome
-            and current.get("inputOptions", []) == list(input_options or [])
+            and current_request == request
         ):
             # File-backed stores can persist the session before a task write
             # fails. Repair that write, fenced by this execution's original
@@ -241,23 +251,28 @@ class SessionController:
                     and task.get("acceptancePolicy", "automatic") == "human"
                     else task_status
                 )
-                if task.get("status") != expected:
+                missing_request = expected == "waiting_for_human" and (
+                    task.get("waitingSessionId") != session_id
+                    or task.get("waitingRequest", {}) != request
+                )
+                if task.get("status") != expected or missing_request:
                     self._update_task_status(
-                        task_status, outcome, {"sessionId": session_id},
+                        task_status, outcome, task_extras,
                         execution_owner=self.task_execution_owner or {
                             "requestId": session_id, "revision": 0,
                         },
                     )
             return current
+
         session = self._append(
             session_id,
             relay_event("session.completed", session_id, {
-                "outcome": outcome, "workOutcome": work_outcome,
-                # The answers the agent offered for its question.
-                **({"inputOptions": list(input_options)} if input_options else {}),
+                "outcome": outcome, "workOutcome": work_outcome, **request,
             }),
         )
-        self._update_task_status(task_status, outcome, {"sessionId": session_id})
+        self._update_task_status(
+            task_status, outcome, task_extras,
+        )
         logger.info("Session completed", session_id=session_id, outcome=outcome)
         return session
 
@@ -870,6 +885,14 @@ class SessionController:
             if status == "done" and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human":
                 next_status = "review"
             payload: dict[str, Any] = {"status": next_status, "reason": message}
+            if next_status == "waiting_for_human" and extras.get("sessionId"):
+                # The thread the answer belongs in; any other thread that once
+                # ran this task must not offer to resume it.
+                payload["sessionId"] = extras["sessionId"]
+            if next_status == "waiting_for_human" and extras.get("request"):
+                # The question itself, kept with the task so it outlives any
+                # status question asked in the thread before answering.
+                payload["request"] = extras["request"]
             if next_status == "blocked":
                 payload["attention"] = {
                     "code": extras.get("code", "unknown"),
@@ -884,5 +907,7 @@ class SessionController:
                 execution_owner=execution_owner,
             )
             self.task_store.record_activity(
-                task_id, message, extras, execution_owner=execution_owner,
+                task_id, message,
+                {key: value for key, value in extras.items() if key != "request"},
+                execution_owner=execution_owner,
             )

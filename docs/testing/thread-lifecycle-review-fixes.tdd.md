@@ -68,3 +68,22 @@ Pre-commit dependency audit used `npm audit --registry=https://registry.npmjs.or
 because the configured mirror does not implement auditing. It reported 26
 findings: one critical, 15 high, four moderate, and six low. This change does
 not modify dependency manifests or lockfiles.
+
+## Merge with main
+
+Resolved the controller conflicts with `main` at `6bbdadf5`, preserving structured
+`inputQuestion`, `inputOptions`, and `inputNotes`, task wait provenance, original
+execution fences, and activity-only recording for successful turns. Retry
+comparisons include all structured input fields and repair a missing task
+question even when its status already reads `waiting_for_human`.
+
+- Controller, task scope, backend review regressions, and team route tests:
+  178 passed. Added five cases for structured input comparisons and retry repair.
+- Compiled awaiting-input, thread group, and core handoff tests: 138 passed.
+- Package and web TypeScript checks passed after rebuilding `relay-core`.
+- Input-prompt React tests: seven passed, one failed (`allows another choice
+  and a custom reply after dispatch rejects an answer`). The test, Composer,
+  and AwaitingInputPrompt are unchanged from `origin/main`; the failure is
+  unrelated to the controller conflict resolution.
+- Dependency audit remains at 26 findings; dependency files are unchanged.
+- `git diff --check` passed.

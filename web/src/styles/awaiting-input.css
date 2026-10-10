@@ -110,6 +110,25 @@
   color: var(--ink-3);
 }
 
+/* Gates the question stood in front of: context for the answer, so they
+   read as supporting text under the quote, never as a second question. */
+.awaiting-input-notes {
+  min-width: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+.awaiting-input-notes-title {
+  margin: 0;
+  color: var(--ink-3);
+}
+
+.awaiting-input-notes ul {
+  margin: var(--sp-1) 0 0;
+  padding-inline-start: var(--sp-4);
+  overflow-wrap: anywhere;
+}
+
 /* The answers: one click each sends the reply. Full-width rows rather than
    chips, because an offered answer is often a sentence and a chip would
    truncate the very words being chosen. The index is a quiet key, not a
@@ -142,6 +161,9 @@
 
 .awaiting-input-choice-key {
   min-width: 1.5ch;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-3);
   font: 500 var(--fs-code)/1 var(--font-mono);
   font-variant-numeric: tabular-nums;

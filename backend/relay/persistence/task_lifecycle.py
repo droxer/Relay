@@ -70,6 +70,18 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             # What the agent asked for, so a surface can quote the question
             # instead of only saying that input is needed.
             task["waitingReason"] = event.get("reason") or UNKNOWN_REASON
+            # The thread the answer belongs in. A wait without one (a parked
+            # continuation, an unblock) may be answered from the task's room.
+            if event.get("sessionId"):
+                task["waitingSessionId"] = event["sessionId"]
+            else:
+                task.pop("waitingSessionId", None)
+            # The agent's structured question: `inputQuestion`, the
+            # `inputOptions` it offered, and `inputNotes` it stood in front of.
+            if isinstance(event.get("request"), dict) and event["request"]:
+                task["waitingRequest"] = dict(event["request"])
+            else:
+                task.pop("waitingRequest", None)
         # A wait after execution is still in progress; an impediment in review stays there.
         if stage not in ("backlog", "assigned", "running", "review") or (
             status == "waiting_for_human" and stage == "backlog"
@@ -92,6 +104,9 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
     if status != "waiting_for_human":
         task.pop("waitingFromStatus", None)
         task.pop("waitingReason", None)
+        task.pop("waitingSessionId", None)
+        task.pop("waitingRequest", None)
+        task.pop("waitingRequest", None)
     if status in ("running", "review", "waiting_for_human") and not task.get(
         "isRoutine"
     ):

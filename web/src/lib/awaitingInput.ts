@@ -25,11 +25,16 @@ export type AwaitingInput = {
   /** Answers the agent offered, each sendable as is. Empty for an open
    *  question; a check's choices are the surface's own. */
   options: string[];
+  /** Acceptance-gate reasons the question stood in front of — not what to
+   *  answer, but what the person answering should know. */
+  notes: string[];
   /** The turn that stopped — who is waiting on the answer. */
   run?: RelaySession["agentRuns"][number];
   /** The task the reply resumes, when the thread is that task's room. */
   task?: RelayTaskListItem;
 };
+
+type InputRequest = { inputQuestion?: string; inputOptions?: string[]; inputNotes?: string[] };
 
 /**
  * Whether this thread is parked on its human, and on what.
@@ -47,21 +52,64 @@ export function awaitingInput(
   if (!session || session.status !== "completed") return null;
   // A rejected turn already has its own controls (the decision bar).
   if (isAwaitingFeedbackDecision(session)) return null;
-  // Historical links do not grant task ownership. Match the conductor's
-  // active-round scope before promising that a reply resumes a task.
   const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
-  const task = scope?.kind === "task" ? tasks.find((item) => (
-    item.id === scope.taskId && item.status === "waiting_for_human" && !item.isRoutine && !item.deletedAt
-  )) : undefined;
-  if (!task && session.workOutcome !== "blocked") return null;
+  const task = waitingTask(session, scope, tasks);
+  if (!task) {
+    // The round ran for a task that is not waiting here (anymore): answered
+    // in another thread, moved on the board, or done. Its old blocked outcome
+    // is history, not a question.
+    if (scope?.kind === "task") return null;
+    if (session.workOutcome !== "blocked") return null;
+  }
   const run = session.agentRuns.at(-1);
-  const reason = readWaitingReason(task?.waitingReason ?? session.finalOutcome);
-  if (reason.kind === "check") return { ...reason, options: [], run, task };
-  const offered = distinctOptions(session.inputOptions ?? []);
-  if (offered.length >= OPTIONS_MIN) return { ...reason, options: offered, run, task };
+  // The task keeps the question across turns in between; a wait recorded
+  // before tasks carried it still has it on this thread's last completion.
+  const request: InputRequest = task?.waitingRequest ?? session;
+  const question = request.inputQuestion?.trim() || null;
   // Lists in prose may be requested details or steps, rather than alternatives.
   // Only structured options are safe to send as complete answers.
-  return { ...reason, options: [], run, task };
+  const offered = distinctOptions(request.inputOptions ?? []);
+  const options = offered.length >= OPTIONS_MIN ? offered : [];
+  const notes = (request.inputNotes ?? []).map((note) => note.trim()).filter(Boolean);
+  // Records written before the structured question carry it in the outcome.
+  const reason = readWaitingReason(task?.waitingReason ?? session.finalOutcome);
+  if (!question && !options.length && reason.kind === "check") return { ...reason, options: [], notes: [], run, task };
+  return {
+    kind: "question",
+    text: question ?? (reason.kind === "question" ? reason.text : null),
+    options,
+    notes,
+    run,
+    task,
+  };
+}
+
+/**
+ * The task a reply in this thread resumes — the backend's rule
+ * (`CollaborationConductor._awaiting_task`). A wait that names its thread
+ * wins, so a status question asked in between does not orphan it; older waits
+ * fall back to the active round's task. Historical links never count.
+ */
+function waitingTask(
+  session: RelaySession,
+  scope: NonNullable<RelaySession["collaborationRounds"]>[number]["workScope"] | undefined,
+  tasks: readonly RelayTaskListItem[],
+): RelayTaskListItem | undefined {
+  const resumable = (item: RelayTaskListItem) => item.status === "waiting_for_human" && !item.isRoutine && !item.deletedAt;
+  const named = tasks.find((item) => item.waitingSessionId === session.id && resumable(item));
+  if (named) return named;
+  if (scope?.kind !== "task") return undefined;
+  return tasks.find((item) => (
+    item.id === scope.taskId && resumable(item) && (!item.waitingSessionId || item.waitingSessionId === session.id)
+  ));
+}
+
+/** What a waiting task asks, for surfaces that show the task, not its thread. */
+export function taskWaitingPrompt(task: Pick<RelayTaskListItem, "waitingReason" | "waitingRequest">): Pick<AwaitingInput, "kind" | "text" | "notes"> {
+  const question = task.waitingRequest?.inputQuestion?.trim();
+  const notes = (task.waitingRequest?.inputNotes ?? []).map((note) => note.trim()).filter(Boolean);
+  if (question) return { kind: "question", text: question, notes };
+  return { ...readWaitingReason(task.waitingReason), notes };
 }
 
 /** Split a recorded waiting reason into what kind of wait it is and the words

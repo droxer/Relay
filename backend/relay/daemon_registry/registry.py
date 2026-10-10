@@ -25,7 +25,7 @@ from ..collaboration.models import (
 )
 from ..collaboration.work import (
     WORK_PROTOCOL, WORK_RESULTS, WORK_STATE_KEYS, WORK_REPAIR_NOTE, WORK_REPAIR_TARGET, WORK_PLAN_ERROR,
-    WORK_NEEDS_ATTENTION,
+    WORK_NEEDS_ATTENTION, unaccepted_work_reason,
     completion_blockers, record_work_result, validate_work_result, compile_proposed_plan,
     is_answer_turn, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
 )
@@ -4231,7 +4231,7 @@ class DaemonNodeRegistry:
         asked = (
             isinstance(round_result, dict)
             and round_result.get("status") == "blocked"
-            and bool(round_result.get("note"))
+            and bool(round_result.get("note") or round_result.get("options"))
         )
         if blockers:
             task_status = "waiting_for_human"
@@ -4260,12 +4260,14 @@ class DaemonNodeRegistry:
                 f"{outcome} {len(participant_failures)} participant assignment(s) "
                 "failed; inspect the thread before closing the work."
             )
-        # The answers a blocked round offered ride on the completion, so the
-        # thread can offer them as choices.
-        input_options = (
-            round_result.get("options") or []
+        # The question rides on the completion as structured fields, so the
+        # thread quotes it exactly and offers its answers as choices. Gate
+        # reasons the question stood in front of travel as notes rather than
+        # disappearing: the person answering should know about them.
+        input_request = (
+            self._input_request(run_request, round_result, blockers, participant_failures)
             if asked and task_status == "waiting_for_human"
-            else []
+            else None
         )
         if (
             self.store.get_session(run_request["sessionId"]).get("status")
@@ -4273,7 +4275,7 @@ class DaemonNodeRegistry:
         ):
             controller.complete_session(
                 run_request["sessionId"], outcome, task_status=task_status,
-                work_outcome=work_outcome, input_options=input_options,
+                work_outcome=work_outcome, input_request=input_request,
             )
         self.daemon_store.update_run_request(
             run_request["id"], {"status": "completed", "error": None}
@@ -4281,6 +4283,33 @@ class DaemonNodeRegistry:
         self.update_status(
             run_request["nodeId"], {"status": "ready", "lastError": None}
         )
+
+    @staticmethod
+    def _input_request(
+        run_request: dict[str, Any],
+        round_result: dict[str, Any],
+        blockers: list[str],
+        participant_failures: Any,
+    ) -> dict[str, Any]:
+        """What a blocked round asked its human, ready for `session.completed`."""
+        # A step's own blocked report restates the question; every other gate
+        # reason is something the question would otherwise hide.
+        asking = {
+            unaccepted_work_reason(result)
+            for result in ((run_request.get("state") or {}).get(WORK_RESULTS) or {}).values()
+            if isinstance(result, dict) and result.get("status") == "blocked"
+        }
+        notes = [blocker for blocker in blockers if blocker not in asking]
+        if isinstance(participant_failures, list) and participant_failures:
+            notes.append(
+                f"{len(participant_failures)} participant assignment(s) failed; "
+                "inspect the thread before closing the work."
+            )
+        return {
+            "inputQuestion": round_result.get("note"),
+            "inputOptions": round_result.get("options") or [],
+            "inputNotes": notes,
+        }
 
     @staticmethod
     def _round_outcome(
@@ -4366,12 +4395,18 @@ class DaemonNodeRegistry:
             return
         task = self.task_store.get_task(task_id)
         rounds_used = task.get("roundCount")
+        # The budget bounds *unattended* continuation. A round a person started
+        # by answering is attended: it opens a fresh budget, so "keep going"
+        # after an exhausted budget buys more than the one round it ran.
+        manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        human_started = manifest.get("source") == "message"
         self.task_store.record_round(
             task_id,
             round_result=round_result,
             round_count=(
                 rounds_used + 1
-                if isinstance(rounds_used, int) and not isinstance(rounds_used, bool)
+                if not human_started
+                and isinstance(rounds_used, int) and not isinstance(rounds_used, bool)
                 else 1
             ),
             continuation_session_id=run_request["sessionId"],

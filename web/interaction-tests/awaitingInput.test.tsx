@@ -4,7 +4,13 @@ import { expect, it, vi } from "vitest";
 import { AwaitingInputPrompt } from "../src/components/AwaitingInputPrompt";
 import { Composer, type ComposerHandle } from "../src/components/composer/Composer";
 
-function setup(onSend: () => Promise<boolean>, options = ["Staging", "Production"]) {
+type Waiting = Parameters<typeof AwaitingInputPrompt>[0]["waiting"];
+
+function setup(
+  onSend: (...args: unknown[]) => Promise<boolean>,
+  options = ["Staging", "Production"],
+  waiting: Waiting = { kind: "question", text: "Which environment?", options, notes: [] },
+) {
   const ref = createRef<ComposerHandle>();
   const onReply = vi.fn();
   render(<Composer
@@ -23,9 +29,9 @@ function setup(onSend: () => Promise<boolean>, options = ["Staging", "Production
     onSend={onSend}
     onCancelRun={vi.fn()}
     prompt={<AwaitingInputPrompt
-      waiting={{ kind: "question", text: "Which environment?", options }}
+      waiting={waiting}
       agentName="Ada"
-      onChoose={(reply) => ref.current?.send(reply) ?? Promise.resolve(false)}
+      onChoose={(reply, sendOptions) => ref.current?.send(reply, sendOptions) ?? Promise.resolve(false)}
       onReply={onReply}
     />}
   />);
@@ -70,4 +76,47 @@ it("unlocks the prompt when dispatch throws", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Staging" }));
   await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
   await waitFor(() => expect((screen.getByRole("button", { name: "Production" }) as HTMLButtonElement).disabled).toBe(false));
+});
+
+it("puts a half-typed draft back after a picked answer is sent", async () => {
+  const onSend = vi.fn(async () => true);
+  const { ref } = setup(onSend);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Actually, wait" } });
+  fireEvent.click(screen.getByRole("button", { name: "Staging" }));
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  await waitFor(() => expect(ref.current?.getText()).toBe("Actually, wait"));
+});
+
+it("picks an answer by its number key, but never while someone is typing", async () => {
+  const onSend = vi.fn(async () => true);
+  const { ref } = setup(onSend);
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "1" });
+  expect(onSend).not.toHaveBeenCalled();
+  fireEvent.keyDown(document.body, { key: "2" });
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  expect(ref.current?.getText()).toBe("Production");
+});
+
+it("asks for status without handing the agent a task round", async () => {
+  const onSend = vi.fn(async () => true);
+  setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
+  fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_status" }));
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  expect(onSend).toHaveBeenLastCalledWith(undefined, "discuss");
+});
+
+it("sends keep-going as an ordinary reply that resumes the work", async () => {
+  const onSend = vi.fn(async () => true);
+  setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
+  fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_continue" }));
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  expect(onSend).toHaveBeenLastCalledWith(undefined);
+});
+
+it("shows what else held the work up under the question", () => {
+  setup(vi.fn(async () => true), ["Staging", "Production"], {
+    kind: "question", text: "Which environment?", options: ["Staging", "Production"],
+    notes: ["A required step failed to run."],
+  });
+  expect(screen.getByRole("group", { name: "awaiting.notes_title" }).textContent).toContain("A required step failed to run.");
 });

@@ -52,6 +52,15 @@ export interface TaskWorkspaceBinding {
   sessionId?: string;
 }
 
+/** A blocked round's structured question, as recorded on its task. */
+export interface TaskWaitingRequest {
+  inputQuestion?: string;
+  /** Answers the agent offered, each sendable as is. */
+  inputOptions?: string[];
+  /** Acceptance-gate reasons the question stood in front of. */
+  inputNotes?: string[];
+}
+
 export interface RelayTask {
   collaborationStyle?: CollaborationStyle;
   acceptancePolicy?: "human" | "automatic";
@@ -63,6 +72,10 @@ export interface RelayTask {
   waitingFromStatus?: TaskStatus;
   /** What the agent asked for while the task waits on a human. */
   waitingReason?: string;
+  /** The thread the answer belongs in, when the wait came from a round. */
+  waitingSessionId?: string;
+  /** What the agent asked, when it stopped on a question. */
+  waitingRequest?: TaskWaitingRequest;
   blockerReason?: string;
   attention?: TaskExecutionAttention;
   blockerOwnerEmployeeId?: string;
@@ -278,6 +291,10 @@ export type RelayTaskEvent =
       reason?: string;
       attention?: Partial<TaskExecutionAttention>;
       actorEmployeeId?: string;
+      /** For `waiting_for_human`: the thread the answer belongs in. */
+      sessionId?: string;
+      /** For `waiting_for_human`: the agent's structured question. */
+      request?: TaskWaitingRequest;
     }
   | {
       id: string;
@@ -510,6 +527,10 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
       task.blockerOwnerEmployeeId = event.actorEmployeeId || task.assigneeEmployeeId || task.ownerEmployeeId || "unowned";
     } else {
       task.waitingReason = event.reason || "Execution needs attention.";
+      if (event.sessionId) task.waitingSessionId = event.sessionId;
+      else delete task.waitingSessionId;
+      if (event.request && Object.keys(event.request).length) task.waitingRequest = { ...event.request };
+      else delete task.waitingRequest;
     }
     if (stage === "done" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
   } else {
@@ -527,6 +548,8 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
   if (status !== "waiting_for_human") {
     delete task.waitingFromStatus;
     delete task.waitingReason;
+    delete task.waitingSessionId;
+    delete task.waitingRequest;
   }
   if (["running", "review", "waiting_for_human"].includes(status) && !task.isRoutine) task.startedAt ??= event.timestamp;
   if (status === "done") task.finishedAt ??= event.timestamp;

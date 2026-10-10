@@ -102,7 +102,10 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     reportMutationError, t,
   } = deps;
 
-  async function sendMessage(requestedStyle?: import("../types").CollaborationStyle) {
+  async function sendMessage(
+    requestedStyle?: import("../types").CollaborationStyle,
+    intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
+  ) {
     const raw = composerRef.current?.getText().trim() ?? "";
     if (!raw || !selectedEmployee || threadRunning || projectDispatchDisabled) return false;
     if (requiresRuntimeSelection && !selectedThreadNodeId) {
@@ -178,7 +181,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       ? threadMessageOperationKey({
           sessionId,
           text: goal,
-          intent: "accomplish",
+          intent,
           addressAgentIds: messageAddress.addressAgentIds,
           addressTeamId: addressedTeamId,
           style: roundTeam.teamId ? requestedStyle : undefined,
@@ -214,6 +217,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
             sessionId,
             input: threadMessageInput({
               text: goal,
+              intent,
               addressAgentIds: messageAddress.addressAgentIds,
               addressTeamId: addressedTeamId,
               userMessageId,
