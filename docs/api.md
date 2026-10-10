@@ -438,6 +438,17 @@ POST /api/v1/daemon-nodes/{id}/heartbeat
 
 The request is authenticated with the daemon node token and may include
 `activeCommandLeases` so liveness and delivery ownership renew together.
+`leaseSeconds` requests the same command lease used by polling: 1–3600 seconds,
+with a 60-second default for older clients. Invalid, nonfinite, or out-of-range
+values return 400. Updated daemons send their configured lease on every heartbeat.
+
+New computers must enroll before registration. An authenticated admin may also
+register a new computer; anonymous registration cannot create an ownerless node.
+Event payload validation returns 400, authorization failures return 401, deleted
+nodes return 410, and unknown nodes return 404. Unexpected event-processing
+failures return 503 so daemons retry them. Durable output and terminal events
+are removed from the outbox after permanent 4xx rejection; 408, 429, network
+errors, and 5xx responses remain retryable.
 
 `GET /api/v1/daemon-nodes/{id}/auth-check` validates the daemon's runtime bearer
 token and returns `{ "sandboxId": "<id>", "authenticated": true }`. It does not
@@ -772,11 +783,22 @@ Public non-JSON download routes at the backend origin:
 These routes serve build artifacts only. All enrollment and execution still
 flow through authenticated registry routes and the user's daemon.
 
-For existing personal computers, `GET /api/v1/daemon-nodes/{id}/token` and
-`POST /api/v1/daemon-nodes/{id}/token/reissue` also return `installCommand`.
-The Token drawer prefers it for installation/reconnection. BoxLite computers
-and records lacking the owner/workspace needed by the installer retain
-`daemonCommand`; neither response embeds the token in a command.
+Computer credentials are stored as SHA-256 hashes. The compatibility route
+`GET /api/v1/daemon-nodes/{id}/token` returns 409 to an authorized owner and
+points to reissue. `POST /api/v1/daemon-nodes/{id}/token/reissue` rotates the
+credential and displays the new token once, with `installCommand` when supported.
+The Token drawer offers reissue for reconnection. BoxLite computers and records
+lacking the owner/workspace needed by the installer retain `daemonCommand`;
+neither response embeds the token in a command. Browser-approved device setup
+issues its credential at the single-use device-token exchange.
+
+A daemon whose registration, poll, or heartbeat receives 401 stops successfully
+and asks the owner to run setup again, avoiding service-manager restart loops.
+A 410 also stops successfully. Managed daemons save the enrolled sandbox id,
+credential, owner, and sandbox mode in a private host state file before starting.
+On process restart they reuse that identity instead of redeeming the expired
+grant. Bootstrap state is scoped to the backend URL and provisioning grant and
+must persist with the daemon host; deleting it requires a new provisioning grant.
 
 Existing `/issues/{taskId}/threads/{threadId}` deep links retain the Tasks
 destination. Legacy `/projects/{projectId}/threads/{threadId}` links

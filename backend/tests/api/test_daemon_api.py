@@ -7,6 +7,8 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import UUID
 
+import pytest
+
 from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
@@ -4394,8 +4396,11 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         assert client.get(endpoint + f"/{command_id}").status_code == 403
 
 
-def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch) -> None:
+@pytest.mark.parametrize("database", [False, True])
+def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch, database) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    if database:
+        monkeypatch.setenv("RELAY_DAEMON_STORE", "database")
     with TemporaryDirectory() as root:
         app = create_app(root)
         browser = TestClient(app)
@@ -4416,10 +4421,19 @@ def test_device_authorization_requires_browser_approval_and_single_use_redemptio
         assert browser.post(approval + "/approve").status_code == 200
         wrong = device.post(endpoint, headers={"Authorization": "Device wrong"})
         assert wrong.status_code == 401
+        # The approved grant survives a backend restart without any stored token.
+        device = TestClient(create_app(root))
         redeemed = device.post(endpoint, headers=headers)
         assert redeemed.status_code == 200
         assert redeemed.json()["employeeId"] == "alice"
-        assert redeemed.json()["token"]
+        token = redeemed.json()["token"]
+        assert token
+        registration = device.post("/api/v1/daemon-node-registrations", json={
+            "sandboxId": redeemed.json()["sandboxId"], "token": token,
+            "protocolVersion": 1, "supportedAgents": ["codex"], "status": "ready",
+        })
+        assert registration.status_code == 200
+        assert not device.app.state.daemon_store.get_node(redeemed.json()["sandboxId"]).get("nodeTokenSecret")
         assert device.post(endpoint, headers=headers).status_code == 410
         assert browser.post(approval + "/approve").status_code == 409
 

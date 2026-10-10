@@ -379,3 +379,21 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_BACKEND_URL` | `http://127.0.0.1:8790` | Proxy target for `RELAY_WEB_HOST=proxy` and for `next dev`. |
 | `NEXT_PUBLIC_RELAY_API_ORIGIN` | unset (same-origin) | Backend origin the browser calls directly. |
 | `NEXT_PUBLIC_RELAY_BACKEND_ORIGIN` | unset | Backend origin shown in copy-out values under proxied mode. |
+
+### Daemon credential and transport upgrade
+
+Stop old backend processes, apply Alembic revision `20261010_0089` to clear
+legacy `daemon_nodes.node_token_secret` values, and start the updated backend. The
+nullable column remains for schema compatibility, but updated code always writes
+NULL and never reads it. Existing daemon authentication hashes remain valid;
+reconnection through the Token drawer now requires explicit reissue. File-backed
+node records are scrubbed when the store starts. Downgrading does not restore
+erased secrets; older backend code can write new plaintext again.
+
+The daemon host state directory must survive process restarts. Managed bootstrap
+identity files are mode 0600 under a mode 0700 directory, scoped to the backend
+and grant. Keep this state outside guest workspaces. A new provisioning attempt
+uses a new grant and its own identity. Upgrade the backend before the daemon so
+heartbeats honor the configured command lease and transient event failures return
+retryable 503 responses. Updated daemons exit successfully on revoked credentials,
+so reconnect them through setup after token reissue.
