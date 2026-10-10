@@ -74,6 +74,11 @@ Optional:
 - `RELAY_DAEMON_COMMAND_LEASE_SECONDS`: command lease duration requested from
   the backend. Defaults to 90 seconds and is renewed by command polls while the
   daemon still owns the run; values are capped at one hour.
+- `RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS`: how long a run may continue after
+  its lease expires while every backend call is failing with a network error or
+  5xx (a deploy or outage). Defaults to 300 seconds; `0` disables it. Granted
+  once per lease; any backend answer that does not renew the lease, or a
+  401/410, still stops the run immediately.
 - `RELAY_DAEMON_MAX_CONCURRENT_RUNS`: maximum concurrent runs on this node.
   Defaults to 3. In BoxLite mode each concurrently running thread gets its own
   guest VM (mounting only that thread's workspace), so this also caps how many

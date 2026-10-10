@@ -3787,6 +3787,78 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
 }
 
 
+async function runThroughOutage(options: {
+  graceMs: number; runMs: number; outageMs: number; outageStatus: number;
+}): Promise<{ events: DaemonNodeEvent[]; aborted: boolean }> {
+  const root = mkdtempSync(join(tmpdir(), "relay-outage-grace-"));
+  const stop = new AbortController();
+  const command = { ...runCommand("outage_lease"), workspacePath: root, leaseId: "lease",
+    leaseExpiresAt: new Date(Date.now() + 1000).toISOString() };
+  const events: DaemonNodeEvent[] = [];
+  let served = false;
+  let outageEndsAt = Infinity;
+  let aborted = false;
+  const down = () => Date.now() < outageEndsAt;
+  const heartbeat = () => ({ intervalMs: 5000, timeoutMs: 15000, observedAt: new Date().toISOString(),
+    commandLeases: [{ commandId: command.id, leaseId: "lease", leaseExpiresAt: new Date(Date.now() + 1000).toISOString() }] });
+  const timeout = setTimeout(() => stop.abort(), options.outageMs + options.runMs + 4000);
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+      workspacePath: root, commandLeaseSeconds: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
+      unreachableGraceMs: options.graceMs, signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
+      environment: fakeEnvironment({ exec: async (_cmd, args, execOptions) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        const end = Date.now() + options.runMs;
+        while (Date.now() < end && !execOptions?.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
+        aborted = Boolean(execOptions?.signal?.aborted);
+        return { exit_code: 0, stdout: "done", stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (served && down()) return jsonResponse({ error: "deploying" }, options.outageStatus);
+        if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ ok: true, heartbeat: heartbeat() });
+        if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: heartbeat() });
+        if (path.endsWith("/commands")) {
+          const commands = served ? [] : [command];
+          if (!served) { served = true; outageEndsAt = Date.now() + options.outageMs; }
+          return jsonResponse({ commands, heartbeat: heartbeat() });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
+          if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) setTimeout(() => stop.abort(), 10);
+          return jsonResponse({ ok: true });
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    return { events, aborted };
+  } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+}
+
+test("a run outlives its lease through a backend outage shorter than the grace", async () => {
+  const { events, aborted } = await runThroughOutage({ graceMs: 5000, runMs: 2500, outageMs: 3000, outageStatus: 503 });
+  assert.equal(aborted, false);
+  assert.equal(events.some((event) => event.type === "run.cancelled"), false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+});
+
+test("a backend outage longer than the grace still stops the run", async () => {
+  const { events, aborted } = await runThroughOutage({ graceMs: 500, runMs: 3500, outageMs: 3500, outageStatus: 503 });
+  assert.equal(aborted, true);
+  const cancelled = events.find((event) => event.type === "run.cancelled");
+  assert.ok(cancelled?.type === "run.cancelled");
+  assert.match(cancelled.reason, /lease expired/);
+});
+
+test("a credential rejection during an outage stops the run without waiting out the grace", async () => {
+  const startedAt = Date.now();
+  const { aborted } = await runThroughOutage({ graceMs: 30_000, runMs: 6000, outageMs: 6000, outageStatus: 401 });
+  assert.equal(aborted, true);
+  assert.ok(Date.now() - startedAt < 5000);
+});
+
 test("explicit runtime refresh re-registers before the periodic refresh is due", async () => {
   const stop = new AbortController();
   const registrations: DaemonNodeRegistration[] = [];

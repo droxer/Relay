@@ -116,6 +116,11 @@ export interface DaemonRuntimeOptions {
   pollIntervalMs?: number;
   commandPollWaitMs?: number;
   commandLeaseSeconds?: number;
+  /**
+   * How long a run may outlive its expired lease while the backend cannot be
+   * reached at all (network errors or 5xx). 0 disables the grace.
+   */
+  unreachableGraceMs?: number;
   /** How often the daemon renews its liveness lease. The backend-advertised
    * cadence is used by default. */
   livenessHeartbeatIntervalMs?: number;
@@ -228,7 +233,19 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
-  const executionWatchdog = new ExecutionWatchdog();
+  // Set while every backend call is failing transiently; cleared by any answer.
+  // A refusal (4xx) is an answer: it never extends a lease.
+  let backendUnreachable = false;
+  const unreachableGraceMs = options.unreachableGraceMs
+    ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS")
+    ?? DEFAULT_UNREACHABLE_GRACE_MS;
+  const executionWatchdog = new ExecutionWatchdog(undefined, {
+    graceMs: unreachableGraceMs,
+    shouldGrace: () => backendUnreachable,
+    onGrace: (commandId) => logger.warn("Execution lease expired while the backend is unreachable; continuing for one grace period", {
+      sandboxId, commandId, graceMs: unreachableGraceMs,
+    }),
+  });
   const terminalCommands = new Set<string>();
   const executionJournal = new ExecutionJournal(join(stateDir, "executions"));
   const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => {
@@ -440,7 +457,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let heartbeatTask: Promise<void> | undefined;
   let outboxTask: Promise<void> | undefined;
   try {
-    const reconnectControl = { signal: runtimeSignal, shouldStop: () => stopping };
+    const reconnectControl = {
+      signal: runtimeSignal,
+      shouldStop: () => stopping,
+      onTransientFailure: () => { backendUnreachable = true; },
+      onSuccess: () => { backendUnreachable = false; },
+    };
     const initialHeartbeatSettings = await withBackendReconnect(
       register, logger, { sandboxId, what: "registration" }, reconnectControl,
     );
@@ -1534,6 +1556,14 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Seconds from the environment as milliseconds; 0 is a valid "off". */
+function nonNegativeSecondsEnv(name: string): number | undefined {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value * 1000) : undefined;
+}
+
 function positiveIntEnv(name: string): number | undefined {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
@@ -1686,6 +1716,8 @@ const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 5_000;
 const MAX_COMMAND_LEASE_SECONDS = 60 * 60;
 const DEFAULT_COMMAND_LEASE_SECONDS = 90;
+/** Longer than a typical backend deploy, and well inside the backend's 15-minute idle reaper. */
+const DEFAULT_UNREACHABLE_GRACE_MS = 300_000;
 /** Matches the backend's per-registration journal report bound. */
 const JOURNAL_REPORT_LIMIT = 200;
 
@@ -1760,16 +1792,27 @@ async function withBackendReconnect<T>(
   action: () => Promise<T>,
   logger: Pick<DaemonLogger, "warn">,
   context: { sandboxId: string; what: string },
-  control: { signal?: AbortSignal; shouldStop?: () => boolean } = {},
+  control: {
+    signal?: AbortSignal;
+    shouldStop?: () => boolean;
+    onTransientFailure?: () => void;
+    onSuccess?: () => void;
+  } = {},
 ): Promise<T> {
   let attempt = 0;
   while (true) {
     if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
     try {
-      return await action();
+      const result = await action();
+      control.onSuccess?.();
+      return result;
     } catch (error) {
       if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
-      if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;
+      if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) {
+        control.onSuccess?.();
+        throw error;
+      }
+      control.onTransientFailure?.();
       attempt += 1;
       const message = error instanceof Error ? error.message : String(error);
       const backoff = backendReconnectDelayMs(attempt);
