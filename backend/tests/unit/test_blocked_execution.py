@@ -60,7 +60,7 @@ def execution(tmp_path, request):
     )
     placements.create_placement(agent, "node")
     backend = ServerDaemonNodeBackend(
-        registry, employee_agent_store=agents, agent_placement_store=placements
+        registry, agent_store=agents, agent_placement_store=placements
     )
     projects = DatabaseProjectStore(f"sqlite:///{tmp_path}/projects.db", create_schema=True)
     project = project_for(projects, "alice", node, [agent["id"]])

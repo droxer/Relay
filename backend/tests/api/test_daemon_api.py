@@ -3859,7 +3859,7 @@ def test_admin_can_soft_delete_employee_and_unassign_nodes(monkeypatch) -> None:
         assert body["deletedAgents"] == [agent["id"]]
         assert body["removedPlacements"] == [placement["id"]]
         assert body["deletedManagedNodes"] == [managed_node["id"]]
-        assert app.state.employee_agent_store.get_agent(agent["id"])["enabled"] is False
+        assert app.state.agent_store.get_agent(agent["id"])["enabled"] is False
         cleaned_team = app.state.team_store.get_team(team["id"])
         assert cleaned_team["memberAgentIds"] == []
         assert cleaned_team["leadAgentId"] is None

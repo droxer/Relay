@@ -18,7 +18,6 @@ import {
   recordDecision,
   renameSession,
   requestThreadRecovery,
-  runSandbox,
   runLogicalAgents,
   startTask,
   submitThreadMessage,
@@ -26,7 +25,7 @@ import {
   updateProject,
   updateTeam,
 } from "../api";
-import type { AgentRunInput, CreateProjectInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, RunInput, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import type { AgentRunInput, CreateProjectInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, RELAY_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
@@ -123,14 +122,6 @@ export function useRelayMutations() {
       void invalidateTasks();
     },
     onError: onRelayError("Failed to record decision", "errors.record_decision"),
-  });
-
-  const runSandboxMutation = useMutation({
-    mutationFn: ({ input, token }: { input: RunInput; token?: string }) => runSandbox(input, token),
-    onSuccess: (session) => {
-      cacheSession(session);
-      void invalidateNodes();
-    },
   });
 
   const runLogicalAgentsMutation = useMutation({
@@ -395,7 +386,6 @@ export function useRelayMutations() {
     deleteSessionMutation,
     cancelRunMutation,
     recordDecisionMutation,
-    runSandboxMutation,
     runLogicalAgentsMutation,
     submitThreadMessageMutation,
     requestThreadRecoveryMutation,

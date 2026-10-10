@@ -535,7 +535,7 @@ def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
             "status": "ready",
         }, headers={"Authorization": "Bearer ui_token"})
         assert register.status_code == 200
-        agent = app.state.employee_agent_store.create_agent(
+        agent = app.state.agent_store.create_agent(
             "alice", {"displayName": "Auth Maintainer", "executorKind": "codex", "defaultRole": "implementer"}
         )
 

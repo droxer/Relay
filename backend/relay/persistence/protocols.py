@@ -215,6 +215,7 @@ class AgentStore(Protocol):
     def set_birth_certificate(
         self, agent_id: str, *, computer_id: str, default_role: str
     ) -> dict[str, Any]: ...
+    def move_to_computer(self, agent_id: str, computer_id: str) -> dict[str, Any]: ...
 
 
 class AgentPlacementStore(Protocol):

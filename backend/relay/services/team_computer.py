@@ -14,41 +14,7 @@ from typing import Any
 
 from ..core.computer_identity import computer_id
 from ..persistence.team_store import TeamValidationError
-
-
-def placement_on_computer(
-    placement: Mapping[str, Any],
-    target_computer_id: str,
-    target_node_id: str | None,
-) -> bool:
-    """Is this placement an active one on the target computer?
-
-    Legacy placements predate stable computer ids and only name the daemon
-    node, so they match on the node currently hosting the computer.
-    """
-    if placement.get("desiredState") != "active":
-        return False
-    if placement.get("computerId"):
-        return placement["computerId"] == target_computer_id
-    return target_node_id is not None and placement.get("daemonNodeId") == target_node_id
-
-
-def _agent_computer_ids(agent: Mapping[str, Any], registry: Any, placement_store: Any) -> set[str]:
-    """The computers an agent actually runs on: its active placements, or the
-    computer it was created on when nothing has been placed yet."""
-    found: set[str] = set()
-    for placement in placement_store.list_placements(agent_id=agent["id"]):
-        if placement.get("desiredState") != "active":
-            continue
-        if placement.get("computerId"):
-            found.add(placement["computerId"])
-            continue
-        node = registry.get(placement.get("daemonNodeId") or "")
-        if node:
-            found.add(computer_id(node))
-    if not found and agent.get("computerId"):
-        found.add(agent["computerId"])
-    return found
+from .agent_location import agent_computer_ids
 
 
 def _named_computer(owner_employee_id: str, value: Any, registry: Any) -> str:
@@ -104,8 +70,13 @@ def resolve_team_computer(
         if names_computer
         else (current or {}).get("computerId")
     )
+    nodes_by_id = {node["id"]: node for node in registry.monitor_nodes()}
     rosters = [
-        _agent_computer_ids(agent_store.get_agent(agent_id) or {"id": agent_id}, registry, placement_store)
+        agent_computer_ids(
+            {**(agent_store.get_agent(agent_id) or {}), "id": agent_id},
+            placement_store=placement_store,
+            nodes_by_id=nodes_by_id,
+        )
         for agent_id in member_ids
     ]
     if target:

@@ -8,6 +8,7 @@ from typing import Any
 
 from ..core.computer_identity import computer_id
 from ..core.ids import new_database_id, new_relay_id
+from ..services.agent_location import agent_computer_ids
 from ..services.agent_routing import (
     AgentRoutingError,
     persist_legacy_session_computer_id,
@@ -666,32 +667,18 @@ class CollaborationConductor:
         if not newcomers:
             return
         nodes_by_id = {node["id"]: node for node in daemon_nodes}
-        required_node = nodes_by_id.get(required_node_id) or {}
-        required_computer_id = computer_id(required_node) if required_node else None
-        managed_node_id = required_node.get("managedNodeId")
-        allowed_node_ids = {required_node_id} | {
-            node["id"]
-            for node in daemon_nodes
-            if managed_node_id and node.get("managedNodeId") == managed_node_id
-        }
+        required_computer_id = computer_id(
+            nodes_by_id.get(required_node_id) or {"id": required_node_id}
+        )
         for agent_id in newcomers:
-            placements = self.ctx.agent_placement_store.list_placements(
-                agent_id=agent_id
-            )
-            if any(
-                placement.get("desiredState") != "removed"
-                and (
-                    placement.get("computerId") == required_computer_id
-                    or (
-                        not placement.get("computerId")
-                        and placement.get("daemonNodeId") in allowed_node_ids
-                    )
-                )
-                for placement in placements
+            agent = {**(self.ctx.agent_store.get_agent(agent_id) or {}), "id": agent_id}
+            if required_computer_id in agent_computer_ids(
+                agent,
+                placement_store=self.ctx.agent_placement_store,
+                nodes_by_id=nodes_by_id,
             ):
                 continue
-            agent = self.ctx.agent_store.get_agent(agent_id)
-            name = (agent or {}).get("displayName") or agent_id
+            name = agent.get("displayName") or agent_id
             raise CollaborationError(
                 "agent_not_on_thread_node",
                 f"{name} does not run on this thread's computer.",

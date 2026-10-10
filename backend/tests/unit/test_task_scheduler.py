@@ -10,7 +10,7 @@ from relay.core.computer_identity import computer_id
 from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
 from relay.persistence.agent_placement_store import LocalAgentPlacementStore
 from relay.persistence.daemon_store import LocalDaemonStore
-from relay.persistence.employee_agent_store import LocalEmployeeAgentStore
+from relay.persistence.agent_store import LocalAgentStore
 from relay.persistence.project_store import DatabaseProjectStore
 from relay.persistence.session_store import LocalSessionStore
 from relay.persistence.task_store import LocalTaskStore
@@ -40,7 +40,7 @@ def _logical_backend(
     *node_ids: str,
     instructions: str | None = None,
 ):
-    agent_store = LocalEmployeeAgentStore(root)
+    agent_store = LocalAgentStore(root)
     placement_store = LocalAgentPlacementStore(root)
     payload = {
         "displayName": "Builder",
@@ -55,7 +55,7 @@ def _logical_backend(
     return (
         ServerDaemonNodeBackend(
             registry,
-            employee_agent_store=agent_store,
+            agent_store=agent_store,
             agent_placement_store=placement_store,
         ),
         agent,
@@ -451,14 +451,14 @@ def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
         with TemporaryDirectory() as root:
             session_store = LocalSessionStore(root)
             task_store = LocalTaskStore(root)
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placement_store = LocalAgentPlacementStore(root)
             registry = DaemonNodeRegistry(
                 session_store, LocalDaemonStore(root), task_store=task_store
             )
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placement_store,
             )
             registry.register(
@@ -873,7 +873,7 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placement_store = LocalAgentPlacementStore(root)
             declared = agent_store.create_agent(
                 "alice",
@@ -886,7 +886,7 @@ def test_scheduler_materializes_and_dispatches_legacy_assignment() -> None:
             )
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placement_store,
             )
             legacy = task_store.create_task(
@@ -918,7 +918,7 @@ def test_legacy_assignment_reuses_placement_after_runtime_replacement() -> None:
     id, so a declared agent's placement survives a runtime re-registration
     under a new node id for the same computer — no duplicate is created."""
     with TemporaryDirectory() as root:
-        agents = LocalEmployeeAgentStore(root)
+        agents = LocalAgentStore(root)
         placements = LocalAgentPlacementStore(root)
         current = [
             {
@@ -999,7 +999,7 @@ def test_scheduler_materializes_legacy_routine_before_promotion() -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placement_store = LocalAgentPlacementStore(root)
             agent_store.create_agent(
                 "alice",
@@ -1012,7 +1012,7 @@ def test_scheduler_materializes_legacy_routine_before_promotion() -> None:
             )
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placement_store,
             )
             routine = task_store.create_task(
@@ -1119,7 +1119,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placements = LocalAgentPlacementStore(root)
             lead = agent_store.create_agent(
                 "alice",
@@ -1141,7 +1141,7 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
             placements.create_placement(support, "sbx_alice")
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placements,
             )
             teams = LocalTeamStore(root)
@@ -1275,7 +1275,7 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
                 },
                 "ui_token",
             )
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placements = LocalAgentPlacementStore(root)
             lead = agent_store.create_agent(
                 "alice",
@@ -1297,7 +1297,7 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
             placements.create_placement(support, "sbx_alice")
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placements,
             )
             teams = LocalTeamStore(root)
@@ -1384,7 +1384,7 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
             registry = DaemonNodeRegistry(
                 LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
             )
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placements = LocalAgentPlacementStore(root)
             member = agent_store.create_agent(
                 "alice",
@@ -1397,7 +1397,7 @@ def test_scheduler_records_team_unavailable_without_claiming() -> None:
             )
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placements,
             )
             teams = LocalTeamStore(root)
@@ -1444,7 +1444,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
                 LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
             )
             managed_nodes = LocalManagedNodeStore(root)
-            agent_store = LocalEmployeeAgentStore(root)
+            agent_store = LocalAgentStore(root)
             placements = LocalAgentPlacementStore(root)
             lead = agent_store.create_agent(
                 "alice",
@@ -1456,7 +1456,7 @@ def test_scheduler_requests_managed_capacity_for_unroutable_team_lead() -> None:
             )
             backend = ServerDaemonNodeBackend(
                 registry,
-                employee_agent_store=agent_store,
+                agent_store=agent_store,
                 agent_placement_store=placements,
             )
             teams = LocalTeamStore(root)
@@ -1521,7 +1521,7 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
         },
         "ui_token",
     )
-    agent_store = LocalEmployeeAgentStore(root)
+    agent_store = LocalAgentStore(root)
     placements = LocalAgentPlacementStore(root)
     agent = agent_store.create_agent(
         "alice",
@@ -1529,7 +1529,7 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
     )
     placements.create_placement(agent, "sbx_alice")
     backend = ServerDaemonNodeBackend(
-        registry, employee_agent_store=agent_store, agent_placement_store=placements
+        registry, agent_store=agent_store, agent_placement_store=placements
     )
     # Rounds are backlog work, and backlog work runs inside a project.
     projects = DatabaseProjectStore(f"sqlite:///{root}/projects.db", create_schema=True)
@@ -1644,7 +1644,7 @@ def _legacy_fixture(root: str):
     )
     return (
         registry,
-        LocalEmployeeAgentStore(root),
+        LocalAgentStore(root),
         LocalAgentPlacementStore(root),
         {"id": "task-1", "ownerEmployeeId": "alice", "assignments": [{"agent": "claude"}]},
     )

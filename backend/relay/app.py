@@ -378,9 +378,6 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.state.team_store = team_store
     app.state.project_store = project_store
     app.state.skill_store = skill_store
-    app.state.employee_agent_store = (
-        agent_store  # compatibility for migrations still reading the old name
-    )
     app.state.agent_placement_store = agent_placement_store
     app.state.profile_image_store = profile_image_store
     app.state.org_settings_store = org_settings_store

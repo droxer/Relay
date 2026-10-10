@@ -256,6 +256,23 @@ class LocalAgentStore:
             self._append(agent_id, "agent.updated", {"agent": updated})
             return updated
 
+    def move_to_computer(self, agent_id: str, computer_id: str) -> dict[str, Any]:
+        """Record that the agent now lives on another computer.
+
+        An agent lives on exactly one computer, and placing it on a different
+        one moves it; this keeps the agent record the single answer to "where
+        does it live". The configuration is unchanged, so the version is too.
+        """
+        with self._lock:
+            current = self.get_agent(agent_id)
+            if not current or current.get("deletedAt"):
+                raise KeyError(agent_id)
+            if current.get("computerId") == computer_id:
+                return current
+            updated = {**current, "computerId": computer_id, "updatedAt": now_iso()}
+            self._append(agent_id, "agent.moved", {"agent": updated})
+            return updated
+
     def events(self, agent_id: str) -> list[dict[str, Any]]:
         return _read_jsonl(self._events_path(agent_id))
 
@@ -622,6 +639,21 @@ class DatabaseAgentStore:
             "updatedAt": now_iso(),
         }
         return self._append(agent_id, "agent.updated", updated, {"agent": updated})
+
+    def move_to_computer(self, agent_id: str, computer_id: str) -> dict[str, Any]:
+        """Record that the agent now lives on another computer.
+
+        An agent lives on exactly one computer, and placing it on a different
+        one moves it; this keeps the agent record the single answer to "where
+        does it live". The configuration is unchanged, so the version is too.
+        """
+        current = self.get_agent(agent_id)
+        if not current or current.get("deletedAt"):
+            raise KeyError(agent_id)
+        if current.get("computerId") == computer_id:
+            return current
+        updated = {**current, "computerId": computer_id, "updatedAt": now_iso()}
+        return self._append(agent_id, "agent.moved", updated, {"agent": updated})
 
     def events(self, agent_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
