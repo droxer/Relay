@@ -141,8 +141,8 @@ test("Space on a card's checkbox selects it instead of picking the card up", asy
 
 test("the due date is picked from a calendar and kept as a day key", async ({ page }) => {
   await mockQueuedTask(page);
-  await page.goto("/issues");
-  await page.getByRole("button", { name: "New issue" }).first().click();
+  await page.goto("/tasks");
+  await page.getByRole("button", { name: "New task" }).first().click();
   const due = page.getByRole("button", { name: /^Due Pick a date$/ });
   await due.click();
   await page.getByRole("grid").getByRole("button", { name: /14/ }).first().click();

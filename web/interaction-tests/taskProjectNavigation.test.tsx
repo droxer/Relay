@@ -25,6 +25,6 @@ it("redirects legacy project Activities tabs to tasks while preserving task deta
 });
 
 it("preserves project scope and filters through task record navigation", () => {
-  expect(canonicalBrowserUrl("/issues", "?project=p&q=ship")).toBe("/issues?project=p&q=ship");
-  expect(canonicalBrowserUrl("/issues/t", "?project=p&q=ship&tab=workspace")).toBe("/issues/t?tab=workspace&project=p&q=ship");
+  expect(canonicalBrowserUrl("/tasks", "?project=p&q=ship")).toBe("/tasks?project=p&q=ship");
+  expect(canonicalBrowserUrl("/tasks/t", "?project=p&q=ship&tab=workspace")).toBe("/tasks/t?tab=workspace&project=p&q=ship");
 });

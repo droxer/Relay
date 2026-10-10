@@ -19,12 +19,12 @@ for (const mobile of [false, true]) {
       if (path.endsWith("/runs")) body = { runs: [] };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
-    await page.goto("/issues");
+    await page.goto("/tasks");
     const panel = page.locator("#backlog-panel");
     await expect(panel.getByRole("group", { name: "Backlog metrics" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Ship the release", exact: true })).toHaveCount(1);
     await expect(panel.getByRole("columnheader", { name: "Actions", exact: true })).toHaveCount(0);
-    const rows = panel.getByRole("table", { name: "Issues", exact: true });
+    const rows = panel.getByRole("table", { name: "Tasks", exact: true });
     await expect(rows.getByRole("link", { name: "Ship the release" })).toBeVisible();
     await expect(rows.getByRole("link", { name: "Answer customers" })).toBeVisible();
     await expect(panel.locator(".issues-band")).toHaveCount(2);
@@ -43,7 +43,7 @@ for (const mobile of [false, true]) {
     await expect(rows.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     await expect(page).toHaveURL((url) => url.searchParams.get("team") === "team-a");
     await panel.getByRole("button", { name: "Clear", exact: true }).click();
-    const statusNav = panel.getByRole("navigation", { name: "Issue queues", exact: true });
+    const statusNav = panel.getByRole("navigation", { name: "Task queues", exact: true });
     await statusNav.getByRole("button", { name: "Needs me 1", exact: true }).click();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     await expect(statusNav.getByRole("button", { name: "Running 1", exact: true })).toBeVisible();
@@ -62,7 +62,7 @@ for (const mobile of [false, true]) {
       return hit === element || element.contains(hit);
     })).toBe(true);
     await page.screenshot({ path: `/tmp/relay-tasks-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
-    await panel.getByRole("searchbox", { name: "Search issues" }).fill("Ship");
+    await panel.getByRole("searchbox", { name: "Search tasks" }).fill("Ship");
     await panel.getByRole("link", { name: "Ship the release", exact: true }).click();
     const drawer = page.getByRole("dialog");
     await expect(drawer).toBeVisible();
@@ -73,16 +73,16 @@ for (const mobile of [false, true]) {
     await page.screenshot({ path: `/tmp/relay-task-drawer-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
     await expect(drawer).toHaveCount(0);
-    await expect(panel.getByRole("searchbox", { name: "Search issues" })).toHaveValue("Ship");
-    await expect(page).toHaveURL((url) => url.pathname === "/issues" && url.searchParams.get("q") === "Ship");
-    await panel.getByRole("searchbox", { name: "Search issues" }).fill("");
+    await expect(panel.getByRole("searchbox", { name: "Search tasks" })).toHaveValue("Ship");
+    await expect(page).toHaveURL((url) => url.pathname === "/tasks" && url.searchParams.get("q") === "Ship");
+    await panel.getByRole("searchbox", { name: "Search tasks" }).fill("");
     await expect(panel.getByRole("link", { name: "Answer customers" })).toBeVisible();
     // A pre-split ?tab=files link opens the live workspace.
-    await page.goto("/issues/ship?project=launch&tab=files");
+    await page.goto("/tasks/ship?project=launch&tab=files");
     await expect(drawer.getByRole("tab", { name: "Workspace", exact: true })).toHaveAttribute("aria-selected", "true");
     await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
     await expect(drawer).toHaveCount(0);
-    await expect(page).toHaveURL((url) => url.pathname === "/issues" && url.searchParams.get("project") === "launch");
+    await expect(page).toHaveURL((url) => url.pathname === "/tasks" && url.searchParams.get("project") === "launch");
     await expect(panel.getByRole("link", { name: "Ship the release" })).toBeVisible();
     await expect(panel.getByRole("link", { name: "Answer customers" })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);

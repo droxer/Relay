@@ -47,7 +47,7 @@ async function openBoard(page) {
  *  board get the collapsed navigation rail so every column fits the frame. */
 const SHOTS = [
   { name: "threads", path: `/threads/${HERO_ID}`, ready: ".transcript .msg" },
-  { name: "issues", path: "/issues", ready: ".backlog-filter-search-wrap", sidenav: false },
+  { name: "issues", path: "/tasks", ready: ".backlog-filter-search-wrap", sidenav: false },
   { name: "routines", path: "/automations", ready: ".backlog-filter-search-wrap", sidenav: false },
   { name: "projects", path: "/projects/project_infra?tab=tasks", ready: ".backlog-view-btn", prepare: openBoard, sidenav: false },
   { name: "agents", path: "/agents/agent_aria", ready: ".record-band, .agent-profile" },

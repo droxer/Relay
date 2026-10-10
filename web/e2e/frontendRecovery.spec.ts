@@ -38,7 +38,7 @@ test("dirty agent profile survives cancelled sidebar and Back navigation", async
   await page.getByRole("button", { name: /Edit profile/ }).click();
   const name = page.locator('input[name="agent-profile-name"]');
   await name.fill("Unsaved profile");
-  await page.getByRole("link", { name: "Issues", exact: true }).click();
+  await page.getByRole("link", { name: "Tasks", exact: true }).click();
   const confirmation = page.getByRole("alertdialog");
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: /Cancel/ }).click();
@@ -49,10 +49,10 @@ test("dirty agent profile survives cancelled sidebar and Back navigation", async
   await confirmation.getByRole("button", { name: /Cancel/ }).click();
   await expect(name).toHaveValue("Unsaved profile");
   await expect(page).toHaveURL(/\/agents\/review-agent$/);
-  await page.getByRole("link", { name: "Issues", exact: true }).click();
+  await page.getByRole("link", { name: "Tasks", exact: true }).click();
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: /Discard/ }).click();
-  await expect(page).toHaveURL(/\/issues$/);
+  await expect(page).toHaveURL(/\/tasks$/);
 });
 
 test("mobile Back asks once before discarding an agent draft", async ({ page }) => {

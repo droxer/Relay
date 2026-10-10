@@ -93,7 +93,7 @@ export function IssuesPage({
   projects: ProjectRecord[];
   projectNotice?: ReactNode;
   onCreateProject?: (onCreated: (id: string) => void) => void;
-  /** The issue whose record is open, from `/issues/<id>`. */
+  /** The issue whose record is open, from `/tasks/<id>`. */
   recordTaskId?: string | null;
   onOpenRecord: (taskId: string | null) => void;
   tasks: RelayTaskListItem[];
