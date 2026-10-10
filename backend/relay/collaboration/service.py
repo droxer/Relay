@@ -374,7 +374,14 @@ class CollaborationConductor:
             else:
                 team, members = self._team_for_round(round_team_id, session, actor)
                 team_member_ids = {agent["id"] for agent in members}
-            team_snapshot = team_runtime_snapshot(team, members)
+            # An addressed accomplish round runs lead-led whatever the team's
+            # own style: the lead coordinates and synthesizes below. Record
+            # that, so style-aware policy treats it like any lead-led round.
+            team_snapshot = team_runtime_snapshot(
+                team,
+                members,
+                style=LEAD_LED if intent.mode == "action" and not is_recovery else None,
+            )
             # Addressing chooses participants, not their specialization. Keep
             # explicit overrides, but fill in team briefs and roles. In an
             # accomplish group the addressed lead coordinates first regardless

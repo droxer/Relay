@@ -1,4 +1,5 @@
 import hashlib
+from copy import deepcopy
 import json
 from dataclasses import asdict
 from types import SimpleNamespace
@@ -468,3 +469,68 @@ def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
         json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()
     assert _request_fingerprint(plain) == legacy
+
+
+def _round_team_conductor(roster: list[str]) -> CollaborationConductor:
+    team_store = SimpleNamespace(get_team=lambda _team_id: {"memberAgentIds": roster})
+    return CollaborationConductor(SimpleNamespace(team_store=team_store))
+
+
+def test_round_team_is_the_addressed_team_when_one_is_named() -> None:
+    conductor = _round_team_conductor(["lead"])
+    assert conductor._round_team_id("team_a", "team_b", None, retargetable=True) == "team_b"
+
+
+def test_round_team_stays_the_thread_team_for_its_own_members() -> None:
+    conductor = _round_team_conductor(["lead", "helper"])
+    addressed = [{"agentId": "helper"}]
+    assert conductor._round_team_id("team_a", None, addressed, retargetable=True) == "team_a"
+
+
+def test_round_team_is_dropped_when_a_message_addresses_an_outsider() -> None:
+    conductor = _round_team_conductor(["lead"])
+    addressed = [{"agentId": "lead"}, {"agentId": "outsider"}]
+    assert conductor._round_team_id("team_a", None, addressed, retargetable=True) is None
+
+
+def test_recovery_keeps_the_strict_thread_team() -> None:
+    conductor = _round_team_conductor(["lead"])
+    addressed = [{"agentId": "outsider"}]
+    assert conductor._round_team_id("team_a", None, addressed, retargetable=False) == "team_a"
+
+
+def test_pipeline_honours_a_member_marked_optional() -> None:
+    agents = [
+        {"id": "lead", "executorKind": "codex", "defaultRole": "implementer"},
+        {"id": "tester", "executorKind": "claude", "defaultRole": "tester"},
+        {"id": "reviewer", "executorKind": "claude", "defaultRole": "reviewer"},
+    ]
+    team = {
+        "id": "team",
+        "leadAgentId": "lead",
+        "memberConfigs": {"tester": {"required": False}, "reviewer": {"required": False}},
+    }
+
+    assignments = team_member_assignments(agents, team=team, style="pipeline")
+
+    required = {item["agentId"]: item["required"] for item in assignments}
+    assert required == {"lead": True, "tester": False, "reviewer": True}
+
+
+def test_team_assignments_leave_their_inputs_untouched() -> None:
+    agents = [
+        {"id": "lead", "executorKind": "codex"},
+        {"id": "builder", "executorKind": "claude"},
+    ]
+    team = {
+        "id": "team",
+        "leadAgentId": "lead",
+        "memberConfigs": {"builder": {"responsibility": "Own the API"}},
+    }
+    before = deepcopy((agents, team))
+
+    assignments = team_member_assignments(agents, team=team)
+
+    assert (agents, team) == before
+    assert all(item["teamSnapshot"]["workContractVersion"] == 1 for item in assignments)
+    assert assignments[1]["brief"].endswith("Responsibility: Own the API")

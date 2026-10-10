@@ -5,6 +5,7 @@ from typing import Any
 
 from ..core.computer_identity import computer_id
 from ..core.model_policy import policy_model
+from ..core.node_readiness import is_live_node
 from ..daemon_registry.scheduling import node_accepts_run
 from ..persistence.agent_placement_store import placement_status
 from ..sessions.controller import SessionController
@@ -60,17 +61,7 @@ def placement_node(
     candidates = [node for node in nodes.values() if computer_id(node) == identity]
     if not candidates:
         return None
-    return min(
-        candidates,
-        key=lambda node: (
-            0
-            if node.get("online")
-            and not node.get("stale")
-            and node.get("status") in ("ready", "busy", "running")
-            else 1,
-            node["id"],
-        ),
-    )
+    return min(candidates, key=lambda node: (0 if is_live_node(node) else 1, node["id"]))
 
 
 def resolve_session_daemon_node_id(
@@ -113,9 +104,7 @@ def resolve_session_daemon_node_id(
         for node in daemon_nodes
         if computer_id(node) == identity
         and not node.get("retiredAt")
-        and node.get("online")
-        and not node.get("stale")
-        and node.get("status") in ("ready", "busy", "running")
+        and is_live_node(node)
     ]
     if not candidates:
         return None

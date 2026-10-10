@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock, RLock
@@ -25,8 +25,8 @@ from ..collaboration.models import (
 )
 from ..collaboration.work import (
     WORK_PROTOCOL, WORK_RESULTS, WORK_STATE_KEYS, WORK_REPAIR_NOTE, WORK_REPAIR_TARGET, WORK_PLAN_ERROR,
-    completion_blockers, record_work_result, repair_transition, validate_work_result, compile_proposed_plan,
-    question_transition, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
+    completion_blockers, record_work_result, validate_work_result, compile_proposed_plan,
+    is_answer_turn, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
 )
 from ..collaboration.policy import (
     PARTICIPANT_FAILURES_STATE_KEY,
@@ -37,6 +37,7 @@ from ..collaboration.policy import (
     advance_after_success,
     assignment_reports_round_result,
     decide_failure,
+    next_work_transition,
     validate_round_result,
 )
 from ..core.computer_identity import computer_id, local_enrollment_key
@@ -3850,7 +3851,14 @@ class DaemonNodeRegistry:
         if round_result:
             next_state[ROUND_RESULT_STATE_KEY] = round_result
         if (run_request.get("state") or {}).get(WORK_PROTOCOL):
-            next_state = record_work_result(next_state, assignment, work_result)
+            next_state = record_work_result(
+                next_state,
+                assignment,
+                work_result,
+                answering=is_answer_turn(
+                    run_request.get("state") or {}, run_request.get("currentIndex", 0)
+                ),
+            )
         if event["exitCode"] != 0:
             # Agent-first assignments carry agentId/executorKind and no "agent"
             # key, so indexing it here raised before the request could be marked
@@ -3892,55 +3900,22 @@ class DaemonNodeRegistry:
                 run_request["nodeId"], {"status": "ready", "lastError": outcome}
             )
             return
-        next_index, next_state = self._next_index_after_success(run_request, next_state)
         if (run_request.get("state") or {}).get(WORK_PROTOCOL):
-            question = question_transition(assignments, run_request.get("currentIndex", 0), next_state)
-            repair = repair_transition(assignments, run_request.get("currentIndex", 0), next_state, max_repairs=MAX_REPAIRS)
-            if question:
-                next_index, next_state = question
-            elif QUESTION_RESUME in next_state:
-                next_state[WORK_PLAN_ERROR] = "The requested teammate answer was not provided."
-                next_index = len(assignments)
-            elif repair:
-                next_index, next_state = repair
-            elif work_result and "plan" in work_result and run_request.get("currentIndex", 0) == 0 and assignment.get("coordinator") and not (run_request.get("state") or {}).get(REPAIR_NOTE_STATE_KEY):
-                from ..collaboration.service import create_round_manifest, compile_assignment_work_graph
-                parent = next_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
-                try:
-                    planned = compile_proposed_plan(assignments, work_result["plan"], parent.get("roundId") or run_request["id"])
-                    assignments = compile_assignment_work_graph(planned, purpose="accomplish", team_snapshot=parent.get("teamSnapshot"))
-                    manifest = create_round_manifest(
-                        source="lead_plan", purpose="accomplish", address=parent.get("address") or {"kind": "room"},
-                        assignments=assignments, team_snapshot=parent.get("teamSnapshot"),
-                        collaboration_id=parent.get("collaborationId"), round_id=f"{parent.get('roundId') or run_request['id']}_plan",
-                    )
-                    manifest["parentRoundId"] = parent.get("roundId")
-                    manifest["workScope"] = parent.get("workScope", {"kind": "thread"})
-                    controller.record_collaboration_round_started(run_request["sessionId"], manifest)
-                    next_state[COLLABORATION_MANIFEST_STATE_KEY] = manifest
-                except ValueError as error:
-                    next_state[WORK_PLAN_ERROR] = str(error)
-                    next_index = len(assignments)
-            if not question and not repair:
-                if work_result is None or work_result.get("status") != "done":
-                    # Continue after a missing member report so the next
-                    # specialist or reviewer can inspect the workspace. The
-                    # completion gate still rejects the missing evidence.
-                    style = (assignment.get("teamSnapshot") or {}).get("collaborationStyle")
-                    inspect_missing_member_report = (
-                        work_result is None
-                        and next_index < len(assignments)
-                        and style in ("build_review", "pipeline", "lead_led")
-                        and not assignment.get("coordinator")
-                    )
-                    if assignment.get("required", True) and not inspect_missing_member_report:
-                        next_index = len(assignments)
-                elif (run_request.get("currentIndex", 0) == 0 and assignment.get("coordinator")
-                      and len(assignments) > 1 and next_state.get(COLLABORATION_MANIFEST_STATE_KEY)
-                      and "plan" not in work_result and not (run_request.get("state") or {}).get(REPAIR_NOTE_STATE_KEY)
-                      and QUESTION_RESUME not in (run_request.get("state") or {})):
-                    next_state[WORK_PLAN_ERROR] = "The coordinator did not provide a bounded work plan."
-                    next_index = len(assignments)
+            transition = next_work_transition(
+                run_request, assignment, work_result, next_state, max_repairs=MAX_REPAIRS
+            )
+            next_state = transition.state
+            if transition.plan is not None:
+                assignments, next_state = self._adopt_lead_plan(
+                    run_request, controller, assignments, transition.plan, next_state
+                )
+                if WORK_PLAN_ERROR in next_state:
+                    transition = replace(transition, next_index=None)
+            next_index = (
+                len(assignments) if transition.next_index is None else transition.next_index
+            )
+        else:
+            next_index, next_state = self._next_index_after_success(run_request, next_state)
         updated = self.daemon_store.update_run_request_if_claimed(
             run_request["id"],
             TERMINAL_CLAIM_ID_STATE_KEY,
@@ -3963,6 +3938,43 @@ class DaemonNodeRegistry:
             self._complete_run_request(updated, "Assignments completed.")
         else:
             self._enqueue_current_assignment(updated)
+
+    @staticmethod
+    def _adopt_lead_plan(
+        run_request: dict[str, Any],
+        controller: Any,
+        assignments: list[dict[str, Any]],
+        plan: list[Any],
+        next_state: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Compile the coordinator's plan into the round, or record why it was refused."""
+        from ..collaboration.service import compile_assignment_work_graph, create_round_manifest
+
+        parent = next_state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        parent_round_id = parent.get("roundId") or run_request["id"]
+        try:
+            planned = compile_assignment_work_graph(
+                compile_proposed_plan(assignments, plan, parent_round_id),
+                purpose="accomplish",
+                team_snapshot=parent.get("teamSnapshot"),
+            )
+        except ValueError as error:
+            return assignments, {**next_state, WORK_PLAN_ERROR: str(error)}
+        manifest = {
+            **create_round_manifest(
+                source="lead_plan",
+                purpose="accomplish",
+                address=parent.get("address") or {"kind": "room"},
+                assignments=planned,
+                team_snapshot=parent.get("teamSnapshot"),
+                collaboration_id=parent.get("collaborationId"),
+                round_id=f"{parent_round_id}_plan",
+            ),
+            "parentRoundId": parent.get("roundId"),
+            "workScope": parent.get("workScope", {"kind": "thread"}),
+        }
+        controller.record_collaboration_round_started(run_request["sessionId"], manifest)
+        return planned, {**next_state, COLLABORATION_MANIFEST_STATE_KEY: manifest}
 
     @staticmethod
     def _round_result(event: dict[str, Any]) -> dict[str, Any] | None:

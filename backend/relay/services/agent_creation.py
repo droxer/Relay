@@ -6,6 +6,7 @@ from typing import Any
 
 from ..core.computer_identity import computer_id
 from ..core.models import AGENT_ROLES
+from ..core.node_readiness import is_live_node, ready_runtimes
 from ..persistence.agent_placement_store import create_node_placement
 
 
@@ -34,21 +35,6 @@ def computer_nodes(
     ]
 
 
-def available_runtimes(nodes: list[dict[str, Any]]) -> set[str]:
-    """The set of runtimes currently available on this computer."""
-    supported: set[str] = set()
-    disabled: set[str] = set()
-    for node in nodes:
-        supported |= set(node.get("supportedAgents") or [])
-        supported |= {
-            kind
-            for kind, status in (node.get("agents") or {}).items()
-            if status == "ready"
-        }
-        disabled |= set(node.get("disabledAgents") or [])
-    return supported - disabled
-
-
 def create_agent_for_employee(
     ctx: Any, supervisor_employee_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -67,7 +53,7 @@ def create_agent_for_employee(
             "computer_not_found", "Computer not found.", status=404
         )
     executor_kind = (body.get("executorKind") or "").strip()
-    if executor_kind not in available_runtimes(nodes):
+    if executor_kind not in ready_runtimes(nodes):
         raise AgentCreationError(
             "runtime_unavailable",
             f"This computer does not have the {executor_kind or '(missing)'} runtime.",
@@ -110,25 +96,20 @@ def _place_on_a_live_node(
     A computer can be made up of several node records (re-provisioning swaps
     in a new node id, and the old record doesn't automatically go away), and
     those node records don't have to agree on which runtimes are ready.
-    available_runtimes() unions ready runtimes across all of a computer's
-    nodes to decide whether creation is allowed, but placement has to land on
-    the *specific* node that is actually ready for this executorKind —
-    placing it on the wrong node would make the daemon's dispatch admission
-    check reject this agent forever.
+    ready_runtimes() unions ready runtimes across all of a computer's nodes to
+    decide whether creation is allowed, but placement has to land on the
+    *specific* node that is actually ready for this executorKind — placing it
+    on the wrong node would make the daemon's dispatch admission check reject
+    this agent forever.
 
-    Note: there is no "backfill placement once the computer comes online"
-    fallback here — sync_node_agents today only serves compatibility agents
-    and doesn't look at an explicitly-created agent's computerId. That
-    fallback won't exist until Task 4 rewrites sync_node_agents; until then,
-    an agent created for an offline computer stays unplaced.
+    An agent created while its computer is offline stays unplaced here;
+    sync_node_agents places it when the computer next registers.
     """
     live = next(
         (
             node
             for node in nodes
-            if node.get("online")
-            and not node.get("stale")
-            and node.get("status") in ("ready", "running")
+            if is_live_node(node)
             and (node.get("agents") or {}).get(agent["executorKind"]) == "ready"
         ),
         None,

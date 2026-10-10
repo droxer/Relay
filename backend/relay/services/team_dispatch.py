@@ -4,6 +4,7 @@ from typing import Any
 
 from ..collaboration.styles import (
     LEAD_LED,
+    ROLE_STAGE,
     fill_build_review_slots,
     pipeline_order,
     resolve_collaboration_style,
@@ -146,11 +147,6 @@ def team_member_assignments(
 ) -> list[dict[str, Any]]:
     roster = agents
     lead_agent_id = team.get("leadAgentId") if team else None
-    snapshot = (
-        team_runtime_snapshot(team, roster, style=LEAD_LED if mode == "action" else None)
-        if team
-        else None
-    )
     configs = (team or {}).get("memberConfigs", {})
     agents = [
         {**agent, "defaultRole": configs.get(agent["id"], {}).get("role", agent.get("defaultRole"))}
@@ -161,6 +157,17 @@ def team_member_assignments(
     if team and mode == "action" and style != LEAD_LED:
         return _styled_assignments(agents, roster=roster, team=team, style=style, configs=configs)
     synthesis_round = mode in ("ask", "review")
+    # A multi-member accomplish round always gets the lead's synthesis turn
+    # below, so it is evidence-gated from the start.
+    delegated = bool(team) and not synthesis_round and len(agents) > 1
+    snapshot = (
+        {
+            **team_runtime_snapshot(team, roster, style=LEAD_LED if mode == "action" else None),
+            **({"workContractVersion": 1} if delegated else {}),
+        }
+        if team
+        else None
+    )
     ordered_agents = (
         [
             *(agent for agent in agents if agent["id"] != lead_agent_id),
@@ -170,42 +177,62 @@ def team_member_assignments(
         else _ordered_accomplish_agents(agents, lead_agent_id)
     )
     assignments = [
-        _team_member_assignment(
-            agent,
-            mode=mode,
-            coordinator=(agent["id"] == lead_agent_id if lead_agent_id else index == 0),
-            synthesizer=bool(
-                synthesis_round and lead_agent_id and agent["id"] == lead_agent_id
+        _configured_member_assignment(
+            _team_member_assignment(
+                agent,
+                mode=mode,
+                coordinator=(agent["id"] == lead_agent_id if lead_agent_id else index == 0),
+                synthesizer=bool(
+                    synthesis_round and lead_agent_id and agent["id"] == lead_agent_id
+                ),
+                team_snapshot=snapshot,
             ),
-            team_snapshot=snapshot,
+            team,
+            configs.get(agent["id"], {}),
         )
         for index, agent in enumerate(ordered_agents)
     ]
-    if snapshot and mode == "action" and len(assignments) > 1:
-        snapshot["workContractVersion"] = 1
-    for assignment in assignments:
-        config = configs.get(assignment["agentId"], {})
-        if team:
-            assignment["required"] = (
-                True if assignment.get("coordinator") else config.get(
-                    "required", config.get("participation") != "on_request"
-                )
-            )
-            assignment["acceptanceCriteria"] = list(team.get("acceptanceCriteria", []))
-            assignment["expectedOutputs"] = list(config.get("expectedOutputs", []))
-        if config.get("responsibility"):
-            assignment["brief"] += " Responsibility: " + config["responsibility"]
-    if team and not synthesis_round and len(assignments) > 1:
-        lead = next((agent for agent in agents if agent["id"] == lead_agent_id), None)
-        if lead:
-            assignments.append({
+    lead = next((agent for agent in agents if agent["id"] == lead_agent_id), None)
+    if delegated and lead:
+        return [
+            *assignments,
+            {
                 **_team_member_assignment(lead, mode=mode, synthesizer=True, team_snapshot=snapshot),
                 "required": True,
                 "acceptanceCriteria": list(team.get("acceptanceCriteria", [])),
-            })
-    elif team and len(assignments) == 1:
-        assignments[0]["synthesizer"] = True
+            },
+        ]
+    if team and len(assignments) == 1:
+        return [{**assignments[0], "synthesizer": True}]
     return assignments
+
+
+def _configured_member_assignment(
+    assignment: dict[str, Any],
+    team: dict[str, Any] | None,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply a member's team configuration to its assignment."""
+    responsibility = config.get("responsibility")
+    return {
+        **assignment,
+        **(
+            {
+                "required": True if assignment.get("coordinator") else config.get(
+                    "required", config.get("participation") != "on_request"
+                ),
+                "acceptanceCriteria": list(team.get("acceptanceCriteria", [])),
+                "expectedOutputs": list(config.get("expectedOutputs", [])),
+            }
+            if team
+            else {}
+        ),
+        **(
+            {"brief": f"{assignment['brief']} Responsibility: {responsibility}"}
+            if responsibility
+            else {}
+        ),
+    }
 
 
 _STYLE_BRIEFS = {
@@ -273,7 +300,10 @@ def _styled_assignments(
         {**base_snapshot, "workContractVersion": 1} if len(turns) > 1 else base_snapshot
     )
     return [
-        _styled_assignment(agent, role, mode, synthesizer, brief, team, snapshot, configs)
+        _styled_assignment(
+            agent, role, mode, synthesizer, brief, team, snapshot, configs,
+            optional_allowed=style == "pipeline",
+        )
         for agent, role, mode, synthesizer, brief in turns
     ]
 
@@ -287,7 +317,12 @@ def _styled_assignment(
     team: dict[str, Any],
     snapshot: dict[str, Any],
     configs: dict[str, Any],
+    *,
+    optional_allowed: bool = False,
 ) -> dict[str, Any]:
+    """One styled turn. Solo and Build/review turns are each the whole round's
+    only builder or reviewer, so they are always required; a Pipeline stage
+    other than the last honours the member's ``required`` setting."""
     config = configs.get(agent["id"], {})
     base = _team_member_assignment(
         {**agent, "defaultRole": role},
@@ -299,7 +334,9 @@ def _styled_assignment(
     return {
         **base,
         "brief": f"{brief} Responsibility: {responsibility}" if responsibility else brief,
-        "required": True,
+        "required": (
+            config.get("required", True) if optional_allowed and not synthesizer else True
+        ),
         "acceptanceCriteria": list(team.get("acceptanceCriteria", [])),
         "expectedOutputs": list(config.get("expectedOutputs", [])),
     }
@@ -319,16 +356,9 @@ def _ordered_accomplish_agents(
         return agents
     lead = [agent for agent in agents if agent["id"] == lead_agent_id]
     members = [agent for agent in agents if agent["id"] != lead_agent_id]
-    stage = {
-        "planner": 0,
-        "implementer": 1,
-        "fixer": 1,
-        "tester": 2,
-        "reviewer": 3,
-    }
     return [
         *lead,
-        *sorted(members, key=lambda agent: stage.get(agent.get("defaultRole"), 1)),
+        *sorted(members, key=lambda agent: ROLE_STAGE.get(agent.get("defaultRole"), 1)),
     ]
 
 

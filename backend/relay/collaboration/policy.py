@@ -3,22 +3,49 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .models import COLLABORATION_MANIFEST_STATE_KEY
 from .work import (
+    MAX_REPAIRS,
     QUESTION_NOTE,
     QUESTION_RESUME,
     QUESTION_TARGET,
+    RUNTIME_REPAIRS,
+    WORK_PLAN_ERROR,
     WORK_REPAIR_NOTE,
     WORK_REPAIR_TARGET,
     WORK_RESULTS,
+    question_transition,
+    repair_transition,
+    repairs_used,
 )
 
-REPAIR_COUNT_STATE_KEY = "_relay_repair_count"
+REPAIR_COUNT_STATE_KEY = RUNTIME_REPAIRS
 REPAIR_RESUME_INDEX_STATE_KEY = "_relay_repair_resume_index"
 REPAIR_NOTE_STATE_KEY = "_relay_repair_note"
 ROUND_RESULT_STATE_KEY = "_relay_round_result"
 PARTICIPANT_FAILURES_STATE_KEY = "_relay_participant_failures"
 ROUND_RESULT_STATUSES = frozenset({"done", "continue", "blocked"})
 ROUND_RESULT_NOTE_MAX_CHARS = 2000
+
+
+# Styles whose next member can still inspect the workspace when a member
+# finished without a report; the completion gate still rejects the gap.
+INSPECTING_STYLES = frozenset({"build_review", "pipeline", "lead_led"})
+MISSING_ANSWER_ERROR = "The requested teammate answer was not provided."
+MISSING_PLAN_ERROR = "The coordinator did not provide a bounded work plan."
+
+
+@dataclass(frozen=True)
+class WorkTransition:
+    """Where an evidence-gated round goes after a successful turn.
+
+    ``next_index`` None ends the round. ``plan`` is a coordinator plan the
+    caller must compile into the round before dispatching ``next_index``.
+    """
+
+    next_index: int | None
+    state: dict[str, Any]
+    plan: list[Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +74,7 @@ def decide_failure(
         and index > 0
         and len(assignments) >= 2
         and repairs < max_repairs
+        and repairs_used(state) < MAX_REPAIRS
         and assignments[0].get("coordinator") is True
         and (assignments[0].get("mode") or "action") == "action"
     )
@@ -102,6 +130,65 @@ def advance_after_success(
     state.pop(REPAIR_RESUME_INDEX_STATE_KEY, None)
     state.pop(REPAIR_NOTE_STATE_KEY, None)
     return resume_index, state
+
+
+def next_work_transition(
+    run_request: dict[str, Any],
+    assignment: dict[str, Any],
+    work_result: dict[str, Any] | None,
+    next_state: dict[str, Any],
+    *,
+    max_repairs: int,
+) -> WorkTransition:
+    """Choose the next turn of an evidence-gated round after a successful run.
+
+    ``next_state`` already records this turn's report. Precedence: a pending
+    consultation, then a findings repair, then the coordinator's plan; a
+    required turn without accepted work then ends the round.
+    """
+    assignments = run_request["assignments"]
+    index = run_request.get("currentIndex", 0)
+    prior = run_request.get("state") or {}
+    next_index: int | None
+    next_index, state = advance_after_success(run_request, next_state)
+    reported = work_result or {"status": "missing", "evidence": []}
+    question = question_transition(assignments, index, state, reported)
+    if question:
+        return WorkTransition(*question)
+    if QUESTION_RESUME in state:
+        return WorkTransition(None, {**state, WORK_PLAN_ERROR: MISSING_ANSWER_ERROR})
+    repair = repair_transition(assignments, index, state, max_repairs=max_repairs)
+    if repair:
+        return WorkTransition(*repair)
+    is_planning_turn = (
+        index == 0
+        and assignment.get("coordinator") is True
+        and not prior.get(REPAIR_NOTE_STATE_KEY)
+    )
+    if work_result is None or work_result.get("status") != "done":
+        style = (assignment.get("teamSnapshot") or {}).get("collaborationStyle")
+        may_inspect = (
+            work_result is None
+            and next_index < len(assignments)
+            and style in INSPECTING_STYLES
+            and not assignment.get("coordinator")
+        )
+        if assignment.get("required", True) and not may_inspect:
+            next_index = None
+    elif (
+        is_planning_turn
+        and len(assignments) > 1
+        and state.get(COLLABORATION_MANIFEST_STATE_KEY)
+        and "plan" not in work_result
+        and QUESTION_RESUME not in prior
+    ):
+        return WorkTransition(None, {**state, WORK_PLAN_ERROR: MISSING_PLAN_ERROR})
+    plan = (
+        work_result["plan"]
+        if is_planning_turn and next_index is not None and work_result and "plan" in work_result
+        else None
+    )
+    return WorkTransition(next_index, state, plan)
 
 
 def assignment_reports_round_result(
