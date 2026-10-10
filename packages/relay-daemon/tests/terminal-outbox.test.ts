@@ -23,12 +23,12 @@ test("terminal result survives failed delivery and daemon restart", async () => 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("first terminal result wins and HTTP rejection retains evidence", async () => {
+test("first terminal result wins and transient HTTP rejection retains evidence", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-outbox-"));
   try {
     const outbox = new TerminalOutbox(root);
     const event = { type: "run.completed", commandId: "cmd", leaseId: "lease", exitCode: 0 };
-    const send = outbox.wrapFetch(async () => new Response("rejected", { status: 409 }));
+    const send = outbox.wrapFetch(async () => new Response("unavailable", { status: 503 }));
     await send("http://backend/events", { method: "POST", body: JSON.stringify(event) });
     await send("http://backend/events", { method: "POST", body: JSON.stringify({ ...event, type: "run.failed" }) });
     assert.deepEqual(outbox.pending()[0].event, event);
@@ -121,3 +121,24 @@ test("re-retaining live output does not read the record back from disk", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
+  for (const delivery of ["live", "replay"]) {
+    test(`${delivery} outbox handles HTTP ${status} without retaining permanent rejects`, async () => {
+      const root = mkdtempSync(join(tmpdir(), "relay-reject-"));
+      try {
+        const outbox = new TerminalOutbox(root, undefined, 200);
+        const event = { type: "run.output", commandId: "cmd", leaseId: "lease", sequence: 0, text: "chunk" };
+        const send: typeof fetch = async () => new Response("rejected", { status });
+        if (delivery === "live") await outbox.wrapFetch(send)("http://backend/events", { method: "POST", body: JSON.stringify(event) });
+        else { outbox.retain(event); await outbox.replay(send, "http://backend/events", "token"); }
+        const retryable = [408, 429, 503].includes(status);
+        assert.equal(outbox.pending().length, retryable ? 1 : 0);
+        if (!retryable) {
+          assert.equal(new TerminalOutbox(root).pending().length, 0);
+          assert.doesNotThrow(() => outbox.retain({ ...event, sequence: 1 }));
+        }
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    });
+  }
+}

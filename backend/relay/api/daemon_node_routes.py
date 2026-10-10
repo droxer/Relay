@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from ..core.ids import new_database_id
 from ..core.models import DaemonNodeRegistration
 from ..daemon_registry import public_sandbox_record
-from ..daemon_registry.registry import DeletedDaemonNodeError
+from ..daemon_registry.registry import DeletedDaemonNodeError, UnknownDaemonNodeError
 from ..services.computer_limits import assert_local_computer_allowed
 from ..services.computer_names import (
     normalize_computer_display_name,
@@ -65,9 +65,11 @@ def bounded_float(
 ) -> float:
     if value in (None, ""):
         return default
+    if isinstance(value, bool):
+        raise HTTPException(400, f"{field} must be a number.")
     try:
         parsed = float(value)
-    except ValueError:
+    except (TypeError, ValueError):
         raise HTTPException(400, f"{field} must be a number.")
     if not math.isfinite(parsed):
         raise HTTPException(400, f"{field} must be a finite number.")
@@ -355,10 +357,8 @@ def create_local_device_enrollment(
         # this process's initial probe. Only a newly created node receives the
         # one-time UI token, so derive the response from the atomic outcome.
         reused = not bool(node.get("sandboxToken"))
-    # The launch token is persisted for control-panel computers, so adopting
-    # an already-registered computer returns the same token again — matching
-    # what the reveal endpoint would answer. The start command still prompts
-    # for it rather than embedding the secret.
+    # Existing credentials cannot be recovered from storage. Callers without
+    # a launch token must use explicit reissue or the browser device exchange.
     node_token = node.get("nodeToken")
     response: dict[str, Any] = {
         "node": present_computer(
@@ -417,19 +417,14 @@ def _token_response(request: Request, node: dict[str, Any], token: str) -> dict[
 def reveal_daemon_node_token(
     sandbox_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    """Self-service reveal of a computer's launch token, for reconnecting.
-
-    Enrollment shows the token once; the owner of a personal computer can read
-    it again here whenever they need to restart or move the daemon.
-    """
+    """Compatibility route: authenticated owners are directed to reissue."""
     actor = request_actor(request, ctx.auth_store)
     if not actor.get("user"):
         raise HTTPException(401, "Authentication required.")
     node = _owned_live_node(actor, ctx, sandbox_id)
     token = ctx.registry.reveal_node_token(sandbox_id)
     if not token:
-        # Nodes provisioned before tokens were persisted have no recoverable
-        # plaintext; the only way forward is a fresh one.
+        # Only a hash is stored, so recovery always requires explicit rotation.
         raise HTTPException(
             409, "This computer's token is not recoverable. Reissue it instead."
         )
@@ -551,8 +546,8 @@ def register_daemon_node(
             and actor.get("isAdmin")
             and registration.get("employeeId")
         )
-        if not prior and not admin_authorized_ownership:
-            registration.pop("employeeId", None)
+        if not prior and not (actor and actor.get("isAdmin")):
+            raise PermissionError("Computer enrollment is required before daemon registration.")
         sandbox = ctx.registry.register(
             registration,
             bearer_token(request),
@@ -623,6 +618,10 @@ async def daemon_heartbeat(
                 sandbox_id,
                 bearer_token(request),
                 heartbeat_command_leases(body),
+                lease_seconds=bounded_float(
+                    body.get("leaseSeconds"), default=60.0, minimum=1.0,
+                    maximum=MAX_COMMAND_LEASE_SECONDS, field="leaseSeconds",
+                ),
             )
         }
     except DeletedDaemonNodeError as error:
@@ -787,6 +786,9 @@ async def daemon_events(
 ) -> dict[str, bool]:
     try:
         event = daemon_node_event(await json_body(request))
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    try:
         if event.get("type") in WORKSPACE_EVENT_TYPES:
             ctx.registry.assert_node_event_authorized(sandbox_id, bearer_token(request))
             await run_in_threadpool(
@@ -811,10 +813,10 @@ async def daemon_events(
             "Daemon node event unauthorized", sandbox_id=sandbox_id, error=str(error)
         )
         raise HTTPException(401, str(error))
-    except KeyError as error:
-        raise HTTPException(404, str(error))
+    except UnknownDaemonNodeError as error:
+        raise HTTPException(404, "Daemon node not found.") from error
     except Exception as error:  # noqa: BLE001 - API boundary logs and normalizes event-store failures.
         logger.warning(
-            "Daemon node event rejected", sandbox_id=sandbox_id, error=str(error)
+            "Daemon node event failed", sandbox_id=sandbox_id, error=str(error)
         )
-        raise HTTPException(400, str(error))
+        raise HTTPException(503, "Event processing is temporarily unavailable.") from error

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ComputerPlatformSupport } from "./ComputerPlatformSupport";
-import { RelayApiError, reissueComputerToken, revealComputerToken } from "../../api";
+import { reissueComputerToken } from "../../api";
 import type { ComputerTokenResponse, ControlPanelDaemonNodeRecord } from "../../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
@@ -19,60 +19,30 @@ interface ComputerTokenDrawerProps {
   node: ControlPanelDaemonNodeRecord | null;
 }
 
-/**
- * The launch token for one of the employee's own computers, on demand.
- *
- * Enrollment shows the token once; this drawer is the "sometimes I need it
- * again" surface — reveal reads the persisted secret, reissue rotates it when
- * the reader would rather burn the old one (lost, pasted somewhere public,
- * or the computer predates persistence and has nothing to reveal).
- */
+/** Reissue a computer credential and display it once. */
 export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawerProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const { copiedField, copy } = useCopyFeedback();
   const [credentials, setCredentials] = useState<ComputerTokenResponse | null>(null);
-  const [unrecoverable, setUnrecoverable] = useState(false);
   const [reissued, setReissued] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"reveal" | "reissue" | null>(null);
+  const [busy, setBusy] = useState<"reissue" | null>(null);
   const credentialsRef = useRef<HTMLDivElement>(null);
 
   useOnOpen(open, () => {
     setCredentials(null);
-    setUnrecoverable(false);
     setReissued(false);
     setError(null);
     setBusy(null);
   });
 
-  // The Reveal button unmounts once credentials arrive; move focus onto the
-  // revealed block instead of letting it drop to document.body.
+  // Move focus to the newly issued credentials.
   useEffect(() => {
     if (credentials) credentialsRef.current?.focus();
   }, [credentials]);
 
   if (!node) return null;
-
-  async function handleReveal() {
-    setBusy("reveal");
-    setError(null);
-    try {
-      const response = await revealComputerToken(node!.id);
-      setCredentials(response);
-      setUnrecoverable(false);
-      setReissued(false);
-    } catch (err) {
-      if (err instanceof RelayApiError && err.status === 409) {
-        setCredentials(null);
-        setUnrecoverable(true);
-      } else {
-        setError(t("computer.token_error", { message: err instanceof Error ? err.message : String(err) }));
-      }
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function handleReissue() {
     const confirmed = await confirm({
@@ -87,7 +57,6 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
     try {
       const response = await reissueComputerToken(node!.id);
       setCredentials(response);
-      setUnrecoverable(false);
       setReissued(true);
     } catch (err) {
       setError(t("computer.token_error", { message: err instanceof Error ? err.message : String(err) }));
@@ -138,7 +107,7 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
           </>
         ) : (
           <p className="adm-cred-note">
-            {unrecoverable ? t("computer.token_unrecoverable") : t("computer.token_hidden_note")}
+            {t("computer.token_unrecoverable")}
           </p>
         )}
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
@@ -161,17 +130,6 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
             </>
           ) : (
             <>
-              {!unrecoverable ? (
-                <Button
-                  size="cta"
-                  type="button"
-                  onClick={() => void handleReveal()}
-                  disabled={busy !== null}
-                  loading={busy === "reveal"}
-                >
-                  {busy === "reveal" ? t("computer.token_revealing") : t("computer.token_reveal_action")}
-                </Button>
-              ) : null}
               <Button
                 size="cta"
                 type="button"

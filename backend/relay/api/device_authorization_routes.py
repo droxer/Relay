@@ -84,13 +84,13 @@ def redeem_authorization(request: Request, ctx: AppContextDep, response: Respons
         node = ctx.registry.get(row["node_id"])
         if not node or node.get("status") == "deleted" or node.get("employeeId") != row["employee_id"]:
             raise HTTPException(410, "Computer authorization is no longer available.")
-        token = node.get("nodeTokenSecret")
-        if not token:
-            raise HTTPException(409, "Computer credential is unavailable. Run setup again.")
         consumed = conn.execute(update(grants).where(grants.c.device_hash == digest).where(
             grants.c.status == "approved").values(status="consumed"))
         if consumed.rowcount != 1:
             raise HTTPException(410, "This device credential has already been used.")
+        # Issue only at the one-time exchange; the database keeps its hash.
+        # Store transactions enlist in the surrounding grant-consumption transaction.
+        _, token = ctx.registry.reissue_node_token(node["id"])
         return {"sandboxId": node["id"], "employeeId": row["employee_id"], "token": token,
                 "workspacePath": row["workspace_path"]}
 

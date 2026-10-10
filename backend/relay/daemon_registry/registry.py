@@ -246,6 +246,10 @@ DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
 DAEMON_NODE_DELETED_STATUS = "deleted"
 
 
+class UnknownDaemonNodeError(KeyError):
+    """The requested node does not exist; the event cannot be accepted."""
+
+
 class DeletedDaemonNodeError(Exception):
     """Raised when a daemon tries to register a node that was deleted."""
 
@@ -723,13 +727,6 @@ class DaemonNodeRegistry:
             "uiTokenHash": next_ui_hash,
             "nodeTokenHash": hash_daemon_node_token(payload.get("token"))
             or (existing or {}).get("nodeTokenHash"),
-            # The reveal-anytime secret survives daemon re-registrations; the
-            # registration payload only ever proves knowledge of the token.
-            **(
-                {"nodeTokenSecret": existing["nodeTokenSecret"]}
-                if (existing or {}).get("nodeTokenSecret")
-                else {}
-            ),
             "createdAt": (existing or {}).get("createdAt", now),
             "updatedAt": now,
             "lastSeenAt": now,
@@ -942,16 +939,10 @@ class DaemonNodeRegistry:
         return nodes
 
     def reveal_node_token(self, sandbox_id: str) -> str | None:
-        """The persisted launch token for a live node, if it is recoverable.
-
-        Managed runtime credentials are never persisted, and nodes provisioned
-        before the secret column existed have none — both answer None, and the
-        caller offers a reissue instead.
-        """
-        sandbox = self._live_node(sandbox_id)
-        if not sandbox:
+        """Retained for older clients: launch credentials are now hash-only."""
+        if not self._live_node(sandbox_id):
             raise KeyError(sandbox_id)
-        return sandbox.get("nodeTokenSecret") or self.plain_node_tokens.get(sandbox_id)
+        return None
 
     def reissue_node_token(self, sandbox_id: str) -> tuple[dict[str, Any], str]:
         """Rotate a live node's launch token and return the new plaintext once.
@@ -971,7 +962,6 @@ class DaemonNodeRegistry:
             updated = {
                 **sandbox,
                 "nodeTokenHash": hash_daemon_node_token(node_token),
-                "nodeTokenSecret": node_token,
                 "credentialVersion": int(sandbox.get("credentialVersion") or 1) + 1,
                 "updatedAt": now_iso(),
             }
@@ -1245,9 +1235,7 @@ class DaemonNodeRegistry:
         if employee_id:
             existing = self.find_by_employee(employee_id, workspace_path)
             if existing:
-                node_token = existing.get(
-                    "nodeTokenSecret"
-                ) or self.plain_node_tokens.get(existing["id"])
+                node_token = self.plain_node_tokens.get(existing["id"])
                 updates: dict[str, Any] = {}
                 if not existing.get("sandboxMode"):
                     updates["sandboxMode"] = sandbox_mode
@@ -1281,7 +1269,6 @@ class DaemonNodeRegistry:
                     existing = {
                         **existing,
                         "nodeTokenHash": hash_daemon_node_token(node_token),
-                        "nodeTokenSecret": node_token,
                         "updatedAt": now_iso(),
                     }
                     self.sandboxes[existing["id"]] = existing
@@ -1309,7 +1296,6 @@ class DaemonNodeRegistry:
             "maxConcurrentRuns": 1,
             "uiTokenHash": hash_daemon_node_token(ui_token),
             "nodeTokenHash": hash_daemon_node_token(node_token),
-            "nodeTokenSecret": node_token,
             "createdAt": now,
             "updatedAt": now,
             "lastError": "Waiting for daemon node registration.",
@@ -1317,9 +1303,7 @@ class DaemonNodeRegistry:
         created = True
         if enrollment_key:
             sandbox, created = self.daemon_store.claim_pending_node(sandbox)
-            node_token = sandbox.get("nodeTokenSecret") or (
-                node_token if created else None
-            )
+            node_token = node_token if created else self.plain_node_tokens.get(sandbox["id"])
         else:
             self.daemon_store.register_node(sandbox)
         self.sandboxes[sandbox["id"]] = sandbox
@@ -4595,7 +4579,7 @@ class DaemonNodeRegistry:
             logger.warning(
                 "Daemon node request for unknown sandbox", sandbox_id=sandbox_id
             )
-            raise KeyError(f"Unknown sandbox {sandbox_id}.")
+            raise UnknownDaemonNodeError(f"Unknown sandbox {sandbox_id}.")
         if not daemon_node_token_matches(sandbox, token):
             logger.warning("Unauthorized daemon node request", sandbox_id=sandbox_id)
             raise PermissionError("Unauthorized daemon node request.")

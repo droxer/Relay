@@ -127,6 +127,7 @@ def _assert_node_run_request_capacity(
 def _node_for_storage(node: dict[str, Any]) -> dict[str, Any]:
     stored = {**node, "token": None}
     stored.pop("nodeToken", None)
+    stored.pop("nodeTokenSecret", None)
     return stored
 
 
@@ -319,6 +320,11 @@ class LocalDaemonStore:
             self.events_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
+        # Upgrade legacy file-backed records without retaining launch secrets.
+        for path in self.nodes_dir.glob("*.json"):
+            node = _read_json(path)
+            if "nodeTokenSecret" in node:
+                self._write_node(node)
         self._rebuild_command_index()
 
     def set_command_listener(
@@ -1514,8 +1520,7 @@ class DatabaseDaemonStore:
         Column("max_concurrent_runs", Integer, nullable=False, default=1),
         Column("ui_token_hash", Text, nullable=True),
         Column("node_token_hash", Text, nullable=True),
-        # Plaintext launch token for control-panel computers, so the owner can
-        # reveal it again for a reconnect. Managed nodes leave this NULL.
+        # Legacy compatibility column, cleared by migration 0089. Always NULL.
         Column("node_token_secret", Text, nullable=True),
         Column("last_error", Text, nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
@@ -3539,7 +3544,7 @@ def node_to_row(
         # owner reveal the token again. Managed nodes persist neither.
         "ui_token_hash": node.get("uiTokenHash"),
         "node_token_hash": node.get("nodeTokenHash"),
-        "node_token_secret": node.get("nodeTokenSecret"),
+        "node_token_secret": None,
         "last_error": node.get("lastError"),
         "created_at": _parse_iso(node["createdAt"]),
         "updated_at": _parse_iso(node["updatedAt"]),
@@ -3670,11 +3675,6 @@ def row_to_node(row: Any) -> dict[str, Any]:
         **(
             {"nodeTokenHash": row["node_token_hash"]}
             if row.get("node_token_hash")
-            else {}
-        ),
-        **(
-            {"nodeTokenSecret": row["node_token_secret"]}
-            if row.get("node_token_secret")
             else {}
         ),
         **({"lastError": row["last_error"]} if row.get("last_error") else {}),
