@@ -67,11 +67,13 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         if (event.status !== "completed" && event.status !== "failed") {
           delete updated.finalOutcome;
           delete updated.workOutcome;
+          delete updated.inputOptions;
         }
         return updated;
       }
     case "agent.started": {
       delete next.workOutcome;
+      delete next.inputOptions;
       if (next.agentRuns.some((run) => run.id === event.runId)) {
         return { ...next, status: "running", phase: event.agent, currentAgent: event.agent };
       }
@@ -163,12 +165,15 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         if (event.decision.kind === "cancel") {
           delete updated.pendingDecision;
           delete updated.workOutcome;
+          delete updated.inputOptions;
         }
         return updated;
       }
     case "session.completed":
       {
         const updated: RelaySession = { ...next, status: "completed", phase: "completed", finalOutcome: event.outcome, workOutcome: event.workOutcome ?? "unverified" };
+        if (event.inputOptions?.length) updated.inputOptions = [...event.inputOptions];
+        else delete updated.inputOptions;
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return updated;
@@ -176,6 +181,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
     case "session.failed":
       {
         const updated: RelaySession = { ...next, status: "failed", phase: "failed", finalOutcome: event.outcome, workOutcome: "blocked" };
+        delete updated.inputOptions;
         delete updated.currentAgent;
         delete updated.pendingDecision;
         return updated;

@@ -40,20 +40,21 @@ const task = {
   linkedSessionIds: [session.id], ownerEmployeeId: "u", assignedAgentId: reviewer.id, createdAt: stamp, updatedAt: stamp, events: [], activity: [],
 };
 
-async function serve(page: Page, theme: "light" | "dark", taskScoped = true): Promise<string[]> {
+async function serve(page: Page, theme: "light" | "dark", taskScoped = true, overrides: Partial<typeof session> & Record<string, unknown> = {}, taskOverrides: Record<string, unknown> = {}): Promise<string[]> {
   const sent: string[] = [];
-  const thread = taskScoped ? session : { ...session, activeRoundId: undefined, collaborationRounds: [] };
+  const thread = { ...(taskScoped ? session : { ...session, activeRoundId: undefined, collaborationRounds: [] }), ...overrides };
+  const waitingTask = { ...task, ...taskOverrides };
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    let body: unknown = { sessions: [thread], agents: [reviewer], teams: [], tasks: [task], nodes: [node], projects: [], sandboxes: [], skills: [], files: [], entries: [] };
+    let body: unknown = { sessions: [thread], agents: [reviewer], teams: [], tasks: [waitingTask], nodes: [node], projects: [], sandboxes: [], skills: [], files: [], entries: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme, language: "en" } };
     if (path.endsWith(`/threads/${session.id}`)) body = thread;
     if (path.endsWith(`/threads/${session.id}/events`)) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
       return;
     }
-    if (path.endsWith(`/tasks/${task.id}`)) body = task;
+    if (path.endsWith(`/tasks/${task.id}`)) body = waitingTask;
     if (path.endsWith("/runs")) body = { taskId: task.id, runs: [] };
     if (path.endsWith(`/tasks/${task.id}/events`)) body = { events: [] };
     if (request.method() === "POST" && path.endsWith(`/threads/${session.id}/messages`)) {
@@ -74,6 +75,60 @@ test("a legacy linked thread does not promise to resume a task", async ({ page }
   await expect(prompt).toContainText("Your reply continues the work.");
   await expect(prompt).not.toContainText("Your reply resumes");
   await expect(prompt.getByRole("link", { name: "Open task #12" })).toHaveCount(0);
+});
+
+test("an offered answer is one click, and sends as the reply", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sent = await serve(page, "light", true, { inputOptions: ["Ops vault", "Platform vault"] });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer needs your answer" });
+  const answers = prompt.getByRole("list", { name: "Answers" });
+  await expect(answers.getByRole("button")).toHaveText(["1Ops vault", "2Platform vault"]);
+  await expect(prompt).toContainText("Pick one to resume #12, or write your own answer.");
+  await prompt.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+  await answers.getByRole("button", { name: "Platform vault" }).hover();
+  await prompt.screenshot({ path: testInfo.outputPath("awaiting-choices.png") });
+  await answers.getByRole("button", { name: "Platform vault" }).click();
+  await expect.poll(() => sent).toEqual(["Platform vault"]);
+});
+
+test("a gate stop explains itself plainly and offers next steps", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const gate = "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing.";
+  const sent = await serve(page, "dark", true, { finalOutcome: gate }, { waitingReason: gate });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
+  await expect(prompt.locator("blockquote")).toHaveText("A required step ended without reporting what it did.");
+  await expect(prompt).not.toContainText("6fc1d579");
+  await prompt.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+  await prompt.screenshot({ path: testInfo.outputPath("awaiting-check.png") });
+  await prompt.getByRole("button", { name: "Keep going and report back" }).click();
+  await expect.poll(() => sent).toEqual([
+    "Please continue the work. When you stop, report what you did and how you checked it.",
+  ]);
+});
+
+test("a locally rejected choice leaves other answers available", async ({ page }) => {
+  const sent = await serve(page, "light", true, { inputOptions: ["@Unknown deploy", "Staging"] });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer needs your answer" });
+  await prompt.getByRole("button", { name: "@Unknown deploy" }).click();
+  await expect(prompt.getByRole("button", { name: "Staging" })).toBeEnabled();
+  await expect(prompt.getByRole("button", { name: "Write my own" })).toBeEnabled();
+  expect(sent).toEqual([]);
+  await prompt.getByRole("button", { name: "Staging" }).click();
+  await expect.poll(() => sent).toEqual(["Staging"]);
+});
+
+test("an unstructured list stays in the question with every item visible", async ({ page }) => {
+  const question = "Please provide these details:\n" + Array.from({ length: 7 }, (_, i) => `- Detail ${i + 1}`).join("\n");
+  const reason = `The round reported it is blocked. ${question}`;
+  await serve(page, "light", true, { finalOutcome: reason }, { waitingReason: reason });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer needs your answer" });
+  await expect(prompt.locator("blockquote")).toHaveText(question);
+  await expect(prompt.getByRole("list", { name: "Answers" })).toHaveCount(0);
+  await expect(prompt.getByRole("button", { name: "Reply", exact: true })).toBeEnabled();
 });
 
 for (const theme of ["light", "dark"] as const) {

@@ -113,6 +113,8 @@ export interface DaemonRoundResult {
   work?: Record<string, unknown>;
   status: "done" | "continue" | "blocked";
   note?: string;
+  /** Answers a blocked round offers its human to pick from. */
+  options?: string[];
 }
 
 /**

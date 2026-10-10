@@ -228,7 +228,7 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
         assert app.state.registry.take_commands(node_id, "node_token") == []
         completed = app.state.session_store.get_session(session_id)
         assert completed["status"] == "completed"
-        assert "Work needs attention" not in completed["finalOutcome"]
+        assert "can't be accepted yet" not in completed["finalOutcome"]
 
 
 def _agent(
@@ -2949,6 +2949,61 @@ def test_a_waiting_task_records_what_it_is_waiting_for(recovery_team_thread):
     assert waiting["waitingReason"] == (
         "The round reported it is blocked. Which vault holds the staging key?"
     )
+
+
+def _finish_turns(registry, session_id, round_result):
+    while commands := registry.take_commands("test_node_alice", "node_token"):
+        command = commands[0]
+        registry.handle_event(
+            "test_node_alice",
+            {
+                "type": "run.completed",
+                "commandId": command["id"],
+                "sessionId": session_id,
+                "runId": command["runId"],
+                "agent": command["agent"],
+                "exitCode": 0,
+                "agentLog": "Asked.",
+                "leaseId": command.get("leaseId"),
+                "roundResult": round_result,
+            },
+            "node_token",
+        )
+
+
+def test_a_blocked_round_offers_its_answers_as_choices(recovery_team_thread):
+    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    registry = client.app.state.registry
+    sessions = client.app.state.session_store
+
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Use the ops vault.", "idempotencyKey": "answer-1"},
+    )
+    assert response.status_code == 202, response.text
+    _finish_turns(registry, session["id"], {
+        "status": "blocked",
+        "note": "Rotate staging only, or prod too?",
+        "options": ["Staging only", " Staging only ", "Staging and prod", 7],
+        "work": {"status": "blocked", "evidence": [], "note": "Rotate staging only, or prod too?"},
+    })
+
+    asked = sessions.get_session(session["id"])
+    waiting = store.get_task(task["id"])
+    assert waiting["status"] == "waiting_for_human"
+    # The question is quoted, not the acceptance gate its blocked report tripped.
+    assert waiting["waitingReason"] == (
+        "The round reported it is blocked. Rotate staging only, or prod too?"
+    )
+    assert asked["inputOptions"] == ["Staging only", "Staging and prod"]
+
+    # Picking one is a reply: it resumes the work and the choices go away.
+    response = client.post(
+        f"/api/v1/threads/{session['id']}/messages",
+        json={"text": "Staging only", "idempotencyKey": "answer-2"},
+    )
+    assert response.status_code == 202, response.text
+    assert "inputOptions" not in sessions.get_session(session["id"])
 
 
 @pytest.mark.parametrize(

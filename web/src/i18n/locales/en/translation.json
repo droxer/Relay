@@ -2045,7 +2045,15 @@
     "hint_thread": "Your reply continues the work.",
     "reply": "Reply",
     "placeholder": "Answer {{agent}}…",
-    "open_task": "Open task {{ref}}"
+    "open_task": "Open task {{ref}}",
+    "choices": "Answers",
+    "choice_continue": "Keep going and report back",
+    "choice_continue_reply": "Please continue the work. When you stop, report what you did and how you checked it.",
+    "choice_status": "Tell me what's done and what's left",
+    "choice_status_reply": "Before going further, tell me what is done, what is left, and anything you need from me.",
+    "hint_choices_task": "Pick one to resume {{ref}}, or write your own answer.",
+    "hint_choices_thread": "Pick one to continue, or write your own answer.",
+    "write_own": "Write my own"
   },
   "recovery": {
     "title": "Next steps",

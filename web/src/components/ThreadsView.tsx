@@ -512,6 +512,7 @@ export function ThreadsView({
               waiting={waiting}
               agentName={waitingAgentName}
               agentImage={waiting.run?.logicalAgentId ? logicalAgentImages[waiting.run.logicalAgentId] : undefined}
+              onChoose={(reply) => composerRef.current?.send(reply) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
             />
           ) : null}

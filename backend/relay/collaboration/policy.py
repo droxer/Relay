@@ -26,6 +26,10 @@ ROUND_RESULT_STATE_KEY = "_relay_round_result"
 PARTICIPANT_FAILURES_STATE_KEY = "_relay_participant_failures"
 ROUND_RESULT_STATUSES = frozenset({"done", "continue", "blocked"})
 ROUND_RESULT_NOTE_MAX_CHARS = 2000
+# A blocked round may offer the answers it expects, so a person can pick one
+# instead of typing. Bounded: they render as buttons under the question.
+ROUND_RESULT_OPTIONS_MAX = 6
+ROUND_RESULT_OPTION_MAX_CHARS = 200
 
 
 # Styles whose next member can still inspect the workspace when a member
@@ -221,6 +225,7 @@ def validate_round_result(event: dict[str, Any]) -> dict[str, Any] | None:
     if status not in ROUND_RESULT_STATUSES:
         return None
     note = reported.get("note")
+    options = round_result_options(reported.get("options")) if status == "blocked" else []
     return {
         "status": status,
         **(
@@ -228,4 +233,23 @@ def validate_round_result(event: dict[str, Any]) -> dict[str, Any] | None:
             if isinstance(note, str) and note.strip()
             else {}
         ),
+        **({"options": options} if options else {}),
     }
+
+
+def round_result_options(raw: Any) -> list[str]:
+    """The answers a blocked round offers: trimmed, distinct, bounded.
+
+    One option is not a choice, so fewer than two offers nothing."""
+    if not isinstance(raw, list):
+        return []
+    options: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        text = " ".join(item.split())[:ROUND_RESULT_OPTION_MAX_CHARS]
+        if text and text not in options:
+            options.append(text)
+        if len(options) == ROUND_RESULT_OPTIONS_MAX:
+            break
+    return options if len(options) >= 2 else []

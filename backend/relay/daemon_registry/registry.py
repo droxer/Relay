@@ -25,6 +25,7 @@ from ..collaboration.models import (
 )
 from ..collaboration.work import (
     WORK_PROTOCOL, WORK_RESULTS, WORK_STATE_KEYS, WORK_REPAIR_NOTE, WORK_REPAIR_TARGET, WORK_PLAN_ERROR,
+    WORK_NEEDS_ATTENTION,
     completion_blockers, record_work_result, validate_work_result, compile_proposed_plan,
     is_answer_turn, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
 )
@@ -4227,11 +4228,21 @@ class DaemonNodeRegistry:
             require_evidence=bool((run_request.get("state") or {}).get(WORK_PROTOCOL)),
             allow_unfinished=isinstance(round_result, dict) and round_result.get("status") == "continue",
         )
+        # An agent that stopped to ask is the one thing its human must answer.
+        # Its own blocked report also trips the acceptance gate, but quoting
+        # the gate instead would replace the question with bookkeeping; the
+        # gate applies again to the round the answer resumes.
+        asked = (
+            isinstance(round_result, dict)
+            and round_result.get("status") == "blocked"
+            and bool(round_result.get("note"))
+        )
         if blockers:
             task_status = "waiting_for_human"
-            outcome = "Work needs attention. " + " ".join(blockers)
+            if not asked:
+                outcome = WORK_NEEDS_ATTENTION + " " + " ".join(blockers)
         if isinstance(round_result, dict):
-            self._record_round_result(run_request, {"status": "blocked", "note": outcome} if blockers else round_result, task_status)
+            self._record_round_result(run_request, {"status": "blocked", "note": outcome} if blockers and not asked else round_result, task_status)
         if task_status == "done" and self.task_store and run_request.get("taskId"):
             task = self.task_store.get_task(run_request["taskId"])
             if task.get("acceptancePolicy", "automatic") == "human":
@@ -4253,13 +4264,20 @@ class DaemonNodeRegistry:
                 f"{outcome} {len(participant_failures)} participant assignment(s) "
                 "failed; inspect the thread before closing the work."
             )
+        # The answers a blocked round offered ride on the completion, so the
+        # thread can offer them as choices.
+        input_options = (
+            round_result.get("options") or []
+            if asked and task_status == "waiting_for_human"
+            else []
+        )
         if (
             self.store.get_session(run_request["sessionId"]).get("status")
             != "completed"
         ):
             controller.complete_session(
                 run_request["sessionId"], outcome, task_status=task_status,
-                work_outcome=work_outcome,
+                work_outcome=work_outcome, input_options=input_options,
             )
         self.daemon_store.update_run_request(
             run_request["id"], {"status": "completed", "error": None}

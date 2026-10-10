@@ -155,6 +155,22 @@ def test_round_result_adapter_rejects_unknown_status_and_caps_notes() -> None:
     ) == {"status": "continue", "note": "x"}
 
 
+def test_round_result_keeps_a_blocked_rounds_choices_only() -> None:
+    offered = ["  Use   staging ", "Use prod", "Use prod", "", 3, *(f"o{n}" for n in range(9))]
+    blocked = validate_round_result({"roundResult": {"status": "blocked", "options": offered}})
+    assert blocked == {
+        "status": "blocked",
+        "options": ["Use staging", "Use prod", "o0", "o1", "o2", "o3"],
+    }
+    # Choices belong to a question; one option is no choice at all.
+    assert "options" not in validate_round_result(
+        {"roundResult": {"status": "done", "options": ["a", "b"]}}
+    )
+    assert "options" not in validate_round_result(
+        {"roundResult": {"status": "blocked", "options": ["only"]}}
+    )
+
+
 def assignments():
     return [
         {"assignmentId": "lead", "agentId": "lead", "coordinator": True, "mode": "action"},
