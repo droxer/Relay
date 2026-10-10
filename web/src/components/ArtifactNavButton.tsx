@@ -8,9 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 
 /** Opens the thread's files panel. A named control, not a bare glyph, and the
- *  name is the place it lands on: a thread inside a project opens on the
- *  project's shared workspace, so the pill reads "Workspace" there and "Files"
- *  on a thread that only has its own. The count chip rides along only on the
+ *  name is the place it lands on: the pill reads "Files" either way — a thread
+ *  inside a project opens on the project's shared workspace, one on its own
+ *  opens on the thread's files. The count chip rides along only on the
  *  second case — on a project thread it would promise a tally of something the
  *  panel does not open on, and that tally lives on the panel's own tab instead.
  *  Below the tablet breakpoint responsive.css drops the label back to the icon,
