@@ -79,6 +79,8 @@ def test_policy_locks_after_work_starts_and_rework_preserves_age(client):
     assert blocked["workflowStage"] == "running"
     restored = client.patch(url, json={"action": "unblock"}).json()
     assert restored["status"] == "waiting_for_human"
+    # The wait says what a person has to do, not a generic placeholder.
+    assert "does not restart on its own" in restored["waitingReason"]
     assert restored["workflowStage"] == "running"
     assert restored["startedAt"] == started["startedAt"]
     assert client.patch(url, json={"action": "unblock"}).status_code == 409

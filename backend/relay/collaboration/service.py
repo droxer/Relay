@@ -610,7 +610,17 @@ class CollaborationConductor:
         return self._admit_addressed_agents(dispatched, resolved, actor)
 
     def _awaiting_task(self, session: dict[str, Any]) -> dict[str, Any] | None:
-        """The task this thread's active round left waiting on a human, if any."""
+        """The task waiting on this thread's human, if a reply here resumes it.
+
+        A wait that records its thread (`waitingSessionId`) names the room
+        outright, so a status question asked in between does not orphan it.
+        Older waits fall back to the active round's task scope, and a task now
+        waiting in another thread never answers to this one.
+        """
+        session_id = session.get("id")
+        for task in self.ctx.task_store.list_tasks_for_session(session_id):
+            if task.get("waitingSessionId") == session_id and _resumable_wait(task):
+                return task
         source_round = next(
             (
                 item
@@ -631,11 +641,10 @@ class CollaborationConductor:
             task = self.ctx.task_store.get_task(scope["taskId"])
         except KeyError:
             return None
-        if (
-            task.get("deletedAt")
-            or task.get("isRoutine")
-            or task.get("status") != "waiting_for_human"
-        ):
+        if not _resumable_wait(task):
+            return None
+        waiting_session_id = task.get("waitingSessionId")
+        if waiting_session_id and waiting_session_id != session_id:
             return None
         return task
 
@@ -977,6 +986,14 @@ def _mode(value: Any) -> str:
 
 def _role(value: Any) -> str | None:
     return value if value in VALID_ROLES else None
+
+
+def _resumable_wait(task: dict[str, Any]) -> bool:
+    return (
+        not task.get("deletedAt")
+        and not task.get("isRoutine")
+        and task.get("status") == "waiting_for_human"
+    )
 
 
 def _purpose_for_mode(mode: Any) -> str:

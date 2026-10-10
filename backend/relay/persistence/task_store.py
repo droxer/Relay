@@ -352,8 +352,13 @@ def task_update_events(
         events.extend(task_assignment_events(task_id, resolved_assignment))
     if payload.get("status"):
         status_payload = {"status": payload["status"]}
-        if payload.get("blockerReason"):
-            status_payload["reason"] = payload["blockerReason"]
+        # `statusReason` says why for any status (a parked wait quotes it);
+        # `blockerReason` is the operator's own words for a block.
+        reason = payload.get("blockerReason") or payload.get("statusReason")
+        if reason:
+            status_payload["reason"] = reason
+        if payload["status"] == "waiting_for_human" and payload.get("statusSessionId"):
+            status_payload["sessionId"] = payload["statusSessionId"]
         if payload["status"] == "blocked":
             status_payload["attention"] = payload.get("attention") or {
                 "code": "manual_block" if payload.get("actorEmployeeId") else "unknown",

@@ -205,26 +205,33 @@ class SessionController:
 
     def complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
-        *, work_outcome: str = "unverified", input_options: list[str] | None = None,
+        *, work_outcome: str = "unverified",
+        input_request: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
             return self._complete_session(
-                session_id, outcome, task_status, work_outcome, input_options
+                session_id, outcome, task_status, work_outcome, input_request
             )
 
     def _complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
-        work_outcome: str = "unverified", input_options: list[str] | None = None,
+        work_outcome: str = "unverified",
+        input_request: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        # What the agent asked its human: `inputQuestion`, the `inputOptions`
+        # it offered, and `inputNotes` — gate reasons the question stood in
+        # front of. Empty values are dropped so the event stays minimal.
+        request = {key: value for key, value in (input_request or {}).items() if value}
         session = self._append(
             session_id,
             relay_event("session.completed", session_id, {
-                "outcome": outcome, "workOutcome": work_outcome,
-                # The answers the agent offered for its question.
-                **({"inputOptions": list(input_options)} if input_options else {}),
+                "outcome": outcome, "workOutcome": work_outcome, **request,
             }),
         )
-        self._update_task_status(task_status, outcome, {"sessionId": session_id})
+        self._update_task_status(
+            task_status, outcome,
+            {"sessionId": session_id, **({"request": request} if request else {})},
+        )
         logger.info("Session completed", session_id=session_id, outcome=outcome)
         return session
 
@@ -773,20 +780,13 @@ class SessionController:
                     "sessionId": session_id,
                 },
             )
-        elif step_result.get("pipelineHasNext"):
-            # Another assignment follows immediately; keep the task running
-            # instead of flapping through waiting_for_human/review between steps.
+        else:
+            # A finished step never decides the task: a later assignment, a
+            # repair, or the round's completion does. Parking it here would
+            # flap the task through waiting_for_human on every round and fire
+            # every "a task needs me" automation for work that needs no one.
             self._update_task_status(
                 "running",
-                f"{step_result['agent']} completed.",
-                {
-                    "agent": step_result["agent"],
-                    "sessionId": session_id,
-                },
-            )
-        else:
-            self._update_task_status(
-                "waiting_for_human",
                 f"{step_result['agent']} completed.",
                 {
                     "agent": step_result["agent"],
@@ -829,6 +829,14 @@ class SessionController:
             if status == "done" and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human":
                 next_status = "review"
             payload: dict[str, Any] = {"status": next_status, "reason": message}
+            if next_status == "waiting_for_human" and extras.get("sessionId"):
+                # The thread the answer belongs in; any other thread that once
+                # ran this task must not offer to resume it.
+                payload["sessionId"] = extras["sessionId"]
+            if next_status == "waiting_for_human" and extras.get("request"):
+                # The question itself, kept with the task so it outlives any
+                # status question asked in the thread before answering.
+                payload["request"] = extras["request"]
             if next_status == "blocked":
                 payload["attention"] = {
                     "code": extras.get("code", "unknown"),
@@ -843,5 +851,7 @@ class SessionController:
                 execution_owner=self.task_execution_owner,
             )
             self.task_store.record_activity(
-                task_id, message, extras, execution_owner=self.task_execution_owner,
+                task_id, message,
+                {key: value for key, value in extras.items() if key != "request"},
+                execution_owner=self.task_execution_owner,
             )

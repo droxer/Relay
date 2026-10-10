@@ -579,8 +579,15 @@ class TaskScheduler:
         return False
 
     def _park_for_human(self, task: dict[str, Any], code: str, message: str) -> None:
+        # Read before the round record clears it: the thread the work was in
+        # is where a person answers, and the message is what they answer.
+        session_id = continuation_session_id(task)
         self.task_store.record_round(task["id"], clear_continuation=True)
-        self.task_store.update_task(task["id"], {"status": "waiting_for_human"})
+        self.task_store.update_task(task["id"], {
+            "status": "waiting_for_human",
+            "statusReason": message,
+            **({"statusSessionId": session_id} if session_id else {}),
+        })
         self._record_dispatch_deferred(task, code, message, state="rejected")
         self.task_store.record_activity(task["id"], message)
         logger.info("Task continuation refused", task_id=task["id"], code=code)

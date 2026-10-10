@@ -2009,7 +2009,10 @@
     "choice_status_reply": "继续之前，请告诉我哪些已完成、还剩什么，以及需要我提供什么。",
     "hint_choices_task": "选择一项以继续 {{ref}}，或自己填写回答。",
     "hint_choices_thread": "选择一项以继续，或自己填写回答。",
-    "write_own": "自己填写"
+    "write_own": "自己填写",
+    "hint_check_task": "选择继续会恢复 {{ref}}；询问进展不会改变任务，它仍等待你的回复。",
+    "hint_check_thread": "选择一项，或自己填写回答。询问进展不会改变任何状态。",
+    "notes_title": "同时阻碍这项工作的问题："
   },
   "recovery": {
     "title": "后续操作",

@@ -219,3 +219,34 @@ def test_elided_history_names_the_progress_log_when_the_run_keeps_one() -> None:
         "if present for earlier decisions and state; verify it against the current workspace]\n\n"
         "[User]\nnear current follow up"
     )
+
+
+def test_the_question_a_round_stopped_on_reaches_the_run_that_answers_it() -> None:
+    session = _session(events=[
+        {"type": "session.completed", "timestamp": "2026-06-20T00:01:00.000Z",
+         "outcome": "The round reported it is blocked. Which environment?",
+         "workOutcome": "blocked", "inputQuestion": "Which environment?",
+         "inputOptions": ["Staging", "Prod"]},
+        {"type": "user.message", "timestamp": "2026-06-20T00:02:00.000Z", "text": "Staging"},
+    ])
+
+    history = compute_conversation_history(session, _FakeStore({}))
+
+    assert history.endswith(
+        "[You stopped and asked the human]\nWhich environment?\nOffered answers: Staging | Prod"
+    )
+
+
+def test_a_legacy_blocked_outcome_still_carries_its_question() -> None:
+    session = _session(events=[
+        {"type": "session.completed", "timestamp": "2026-06-20T00:01:00.000Z",
+         "outcome": "The round reported it is blocked. Which vault?", "workOutcome": "blocked"},
+        {"type": "session.completed", "timestamp": "2026-06-20T00:01:30.000Z",
+         "outcome": "Assignments completed.", "workOutcome": "unverified"},
+        {"type": "user.message", "timestamp": "2026-06-20T00:02:00.000Z", "text": "Ops vault"},
+    ])
+
+    history = compute_conversation_history(session, _FakeStore({}))
+
+    assert "[You stopped and asked the human]\nWhich vault?" in history
+    assert "Assignments completed." not in history

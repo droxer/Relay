@@ -108,6 +108,22 @@ test("a gate stop explains itself plainly and offers next steps", async ({ page 
   ]);
 });
 
+test("asking for status is a question, not a task round", async ({ page }) => {
+  const gate = "The work can't be accepted yet. A required step failed to run.";
+  await serve(page, "light", true, { finalOutcome: gate }, { waitingReason: gate });
+  const bodies: Array<{ text?: string; intent?: string }> = [];
+  // Registered after serve(), so it answers the message POST first.
+  await page.route(`**/threads/${session.id}/messages`, async (route) => {
+    bodies.push(JSON.parse(route.request().postData() ?? "{}"));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...session, status: "running" }) });
+  });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
+  await expect(prompt).toContainText("Asking for status leaves it waiting for you.");
+  await prompt.getByRole("button", { name: "Tell me what's done and what's left" }).click();
+  await expect.poll(() => bodies.map((body) => body.intent)).toEqual(["discuss"]);
+});
+
 test("a locally rejected choice leaves other answers available", async ({ page }) => {
   const sent = await serve(page, "light", true, { inputOptions: ["@Unknown deploy", "Staging"] });
   await page.goto(`/threads/${session.id}`);

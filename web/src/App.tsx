@@ -5,7 +5,7 @@ import { reconcileExecution, retryExecutionRecovery } from "./api";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logout } from "./api";
-import type { AgentName, AgentTeam, CollaborationStyle, EmployeeAgent, RelayArtifact, RelaySession } from "./types";
+import type { AgentName, AgentTeam, CollaborationStyle, EmployeeAgent, RelayArtifact, RelaySession, ThreadMessageInput } from "./types";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
@@ -627,7 +627,7 @@ export function App() {
     reportMutationError, t,
   });
 
-  const handleComposerSend = useStableEvent((style?: CollaborationStyle) => sendMessage(style));
+  const handleComposerSend = useStableEvent((style?: CollaborationStyle, intent?: ThreadMessageInput["intent"]) => sendMessage(style, intent));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));

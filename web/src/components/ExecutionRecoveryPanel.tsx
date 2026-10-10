@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import type { RelaySession, RelayTaskListItem } from "../types";
 import { hrefForRoute, hrefForSettingsSection, navigateToAppPath } from "../lib/appRoute";
 import { executionRecoveryGuide, taskRecoveryGuide, taskRecoveryReason, type RecoveryGuide } from "../lib/executionRecovery";
-import { readWaitingReason } from "../lib/awaitingInput";
+import { taskWaitingPrompt } from "../lib/awaitingInput";
+import { AwaitingInputNotes } from "./AwaitingInputPrompt";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 
@@ -114,11 +115,12 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
   const reason = taskRecoveryReason(task);
   // Waiting on a person: quote what the agent asked, and make answering it
   // the one primary action — the reply is what resumes the task.
-  const waiting = task.status === "waiting_for_human" ? readWaitingReason(task.waitingReason) : null;
+  const waiting = task.status === "waiting_for_human" ? taskWaitingPrompt(task) : null;
   return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} data-waiting={waiting ? waiting.kind : undefined} aria-label={t("recovery.title")}>
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     {reason ? <p className="recovery-context">{reason}</p> : null}
     {waiting?.text ? <blockquote className="awaiting-input-quote">{waiting.text}</blockquote> : null}
+    {waiting?.notes.length ? <AwaitingInputNotes notes={waiting.notes} /> : null}
     <p>{t(`recovery.${guide.key}.body`)}</p>
     {task.status === "blocked" ? <p>{t("recovery.unblock_help")}</p> : null}
     <div className="recovery-actions">
