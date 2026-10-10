@@ -267,18 +267,23 @@ calls the backend origin directly with `credentials: "include"`.
    starts at user login and restarts after failures. Linux requires an active
    systemd user session; append `--foreground` to the copied command to run in
    the terminal instead. It does not enable system-wide startup or Linux linger.
-   The installer prints the log location and stop command. Confirm that the
+   Control the service afterwards with `relay stop`, `relay start`,
+   `relay restart`, `relay status`, and `relay logs [--follow]`. `stop` keeps the
+   service off across logins until `relay start` (or re-running the installer);
+   with several connected computers, `--computer <node-id>` narrows any command.
+   Confirm that the
    computer becomes online in Relay; an accepted registration alone is not an
    online heartbeat.
 
    Client versions live in `~/.local/share/relay/releases/<sha256>/`, private
-   runtimes in `~/.local/share/relay/runtimes/`, and a convenience launcher in
-   `~/.local/bin/relay-daemon`. Services use absolute paths, so no PATH edit is
+   runtimes in `~/.local/share/relay/runtimes/`, and launchers in
+   `~/.local/bin/relay` (service control) and `~/.local/bin/relay-daemon`. Services use absolute paths, so no PATH edit is
    needed to connect. Node credentials remain in the existing private
    `~/.relay/daemon-nodes/<node-id>/credentials/` storage, not service definitions.
    Re-running the command installs the current release and restarts that node's
    service; stop active agent work before updating. Existing unrelated launchers
-   are preserved. For manual CLI use, add `~/.local/bin` to PATH.
+   are preserved. Add `~/.local/bin` to PATH to type `relay` without its full
+   path; the installer always prints commands using the quoted full path.
 
    `backend/Dockerfile` builds and ships the archive automatically. For source
    deployments run `npm run build:computer` before starting the backend (also
