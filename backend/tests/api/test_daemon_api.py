@@ -1555,11 +1555,17 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
                 "leaseId": start["leaseId"],
                 "sessionId": start["sessionId"],
                 "runId": start["runId"],
-                "agent": start["agent"],                "reason": "no longer needed",
+                "agent": start["agent"],
+                "reason": "no longer needed",
+                "tokenUsage": {"input": 30, "output": 4, "cache": 0, "total": 34},
             },
             headers={"Authorization": "Bearer node_token"},
         )
         assert terminal.status_code == 200
+        # A stopped run still spent tokens; they stay on the run and the thread.
+        stopped = app.state.session_store.get_session(session_id)
+        assert stopped["agentRuns"][-1]["tokenUsage"]["total"] == 34
+        assert stopped["tokenUsage"]["total"] == 34
 
         after_terminal = client.get(
             "/api/v1/daemon-nodes/sbx_alice/commands?leaseMode=explicit&leaseSeconds=1",

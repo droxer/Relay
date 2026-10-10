@@ -20,6 +20,7 @@ from ..daemon_registry import (
     DaemonNodeRegistry,
     sandbox_ui_token_matches,
 )
+from ..persistence.store_common import build_token_usage
 from ..persistence.stores import valid_agent
 from ..security.auth import require_user_session
 from .contract import WEB_UI_ROUTE_ROOTS
@@ -114,13 +115,22 @@ def token_usage_field(
         return None
     if not isinstance(raw, dict):
         raise ValueError("tokenUsage must be an object.")  # noqa: TRY004 - request validation uses ValueError.
-    usage = {
-        "input": token_count_field(raw, "input"),
-        "output": token_count_field(raw, "output"),
-        "cache": token_count_field(raw, "cache"),
-    }
-    usage["total"] = usage["input"] + usage["output"] + usage["cache"]
-    if usage["total"] == 0:
+    cache = token_count_field(raw, "cache")
+    if "cacheRead" in raw or "cacheWrite" in raw:
+        cache_read = token_count_field(raw, "cacheRead")
+        cache_write = token_count_field(raw, "cacheWrite")
+        if "cache" in raw and cache != cache_read + cache_write:
+            raise ValueError("tokenUsage cache must equal cacheRead + cacheWrite.")
+    else:
+        # A daemon from before the split reports one combined figure.
+        cache_read, cache_write = cache, 0
+    usage = build_token_usage(
+        token_count_field(raw, "input"),
+        token_count_field(raw, "output"),
+        cache_read,
+        cache_write,
+    )
+    if usage is None:
         raise ValueError("tokenUsage must include at least one reported count.")
     if "total" in raw and token_count_field(raw, "total") != usage["total"]:
         raise ValueError("tokenUsage total must equal input + output + cache.")
@@ -818,26 +828,16 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
                 "agentsStates": normalized_states,
             },
         }
+    if event_type in ("run.completed", "run.failed", "run.cancelled"):
+        # Every terminal event may carry the usage the process reported.
+        token_usage = _terminal_token_usage(value, session_id, run_id)
+    else:
+        token_usage = None
     if event_type == "run.completed":
         if not isinstance(value.get("exitCode"), (int, float)):
             raise ValueError(
                 "daemon node run.completed exitCode must be a finite number."
             )
-        # Usage counts are telemetry riding along on the one terminal event a
-        # daemon sends. Rejecting the event over them strands the run: the
-        # daemon drops the report, the session stays "running", and — runs
-        # being exclusive per node — the node refuses every later dispatch
-        # until the run timeout reaps it. Drop the counts, keep the run.
-        try:
-            token_usage = token_usage_field(value)
-        except ValueError as error:
-            logger.warning(
-                "Discarded unusable daemon token usage",
-                session_id=session_id,
-                run_id=run_id,
-                error=str(error),
-            )
-            token_usage = None
         # Passed through raw; the registry sanitizes each entry (path
         # confinement, extension allowlist, content caps) before indexing.
         generated_files = value.get("generatedFiles")
@@ -884,6 +884,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(value.get("exitCode"), (int, float))
                 else {}
             ),
+            **({"tokenUsage": token_usage} if token_usage else {}),
             **(
                 {"generatedFiles": generated_files}
                 if isinstance(generated_files, list)
@@ -899,8 +900,34 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "runId": run_id,
             "agent": agent,
             "reason": string_field(value, "reason") or "Cancelled by human.",
+            **(
+                {"agentLog": raw_string_field(value, "agentLog")}
+                if isinstance(value.get("agentLog"), str)
+                else {}
+            ),
+            **({"tokenUsage": token_usage} if token_usage else {}),
         }
     raise ValueError(f"unknown daemon node event type {event_type}.")
+
+
+def _terminal_token_usage(
+    value: dict[str, Any], session_id: str, run_id: str
+) -> dict[str, Any] | None:
+    # Usage counts are telemetry riding along on the one terminal event a
+    # daemon sends. Rejecting the event over them strands the run: the
+    # daemon drops the report, the session stays "running", and — runs
+    # being exclusive per node — the node refuses every later dispatch
+    # until the run timeout reaps it. Drop the counts, keep the run.
+    try:
+        return token_usage_field(value)
+    except ValueError as error:
+        logger.warning(
+            "Discarded unusable daemon token usage",
+            session_id=session_id,
+            run_id=run_id,
+            error=str(error),
+        )
+        return None
 
 
 def web_ui_asset_response(asset_path: str) -> Response:

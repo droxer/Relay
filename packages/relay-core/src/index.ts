@@ -68,8 +68,10 @@ export {
 
 export {
   extractTokenUsageFromJsonl,
+  freshTokens,
   mergeTokenUsage,
   normalizeTokenUsage,
+  splitCache,
   type TokenUsage,
 } from "./token-usage.js";
 

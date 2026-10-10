@@ -10,7 +10,6 @@ import {
 import type { TokenUsageState } from "../../../hooks/useTokenUsage";
 import { formatChartDate } from "../../../lib/chartDate";
 import { formatCompact } from "../../../lib/compactNumber";
-import { Badge } from "@/components/ui/badge";
 
 const WIDTH = 720;
 const HEIGHT = 200;
@@ -71,11 +70,16 @@ interface TokenUsageChartProps {
 export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChartProps) {
   const { t, i18n } = useTranslation();
   const numberFormat = new Intl.NumberFormat(i18n.language || undefined);
-  const unsupportedAgents = (snapshot.unsupportedAgents ?? [])
-    .map((agent) => agent.charAt(0).toUpperCase() + agent.slice(1))
+  // Measured, not assumed: runtimes whose runs completed this week without
+  // reporting counts (Kimi; Pi in its text fallback).
+  const unreported = (snapshot.unreportedRuns ?? [])
+    .map(({ agent, runs }) => t("admin.v2.dash_tokens_unreported_item", {
+      agent: agent.charAt(0).toUpperCase() + agent.slice(1),
+      count: runs,
+    }))
     .join(", ");
-  const coverageNote = unsupportedAgents
-    ? t("admin.v2.dash_tokens_unsupported", { agents: unsupportedAgents })
+  const coverageNote = unreported
+    ? t("admin.v2.dash_tokens_unreported", { runs: unreported })
     : null;
 
   if (snapshot.isError) {
@@ -96,7 +100,6 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
         <div className={`adm-dash-empty${compact ? " adm-dash-empty--compact" : ""}`}>
           <PlaceholderBars compact={compact} />
           <div className="adm-dash-empty-overlay">
-            <Badge className="adm-dash-empty-tag">{t("admin.v2.dash_coming_soon_tag")}</Badge>
             <p className="adm-dash-empty-copy">{t("admin.v2.dash_tokens_empty")}</p>
             {coverageNote ? <p className="adm-dash-empty-copy">{coverageNote}</p> : null}
           </div>
@@ -110,11 +113,15 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
     (totals, point) => ({
       input: totals.input + point.input,
       output: totals.output + point.output,
-      cache: totals.cache + point.cache,
+      cacheRead: totals.cacheRead + point.cacheRead,
+      cacheWrite: totals.cacheWrite + point.cacheWrite,
     }),
-    { input: 0, output: 0, cache: 0 },
+    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   );
-  const maxTotal = Math.max(1, ...points.map((point) => point.total));
+  // Bars plot fresh tokens only. Cache reads would dwarf the rest (they are
+  // most of a long run) and flatten output, the product of the work, to a
+  // sliver; the summary line above still reports them.
+  const maxFresh = Math.max(1, ...points.map((point) => point.fresh));
   const innerW = WIDTH - PADDING.left - PADDING.right;
   const innerH = HEIGHT - PADDING.top - PADDING.bottom;
   // Wider gutters than the placeholder: airy bars keep this card supporting
@@ -132,7 +139,8 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
           // Same voice as the KPI tile above it (36.9M), not 16,280,000.
           input: formatCompact(visibleTotals.input, i18n.language),
           output: formatCompact(visibleTotals.output, i18n.language),
-          cache: formatCompact(visibleTotals.cache, i18n.language),
+          cacheWrite: formatCompact(visibleTotals.cacheWrite, i18n.language),
+          cacheRead: formatCompact(visibleTotals.cacheRead, i18n.language),
         })}
       </CardDescription>
       <svg
@@ -152,18 +160,26 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
         />
         {points.map((point, i) => {
           const x = PADDING.left + i * (barW + gap);
-          let y = PADDING.top + innerH;
+          const base = PADDING.top + innerH;
           // Stacked dimmest-at-the-base so the bar reads as one brightness
-          // ramp: cache (bulk, least interesting) → input → output (the
-          // product of the work). See the fills in admin-v2-dashboard.css.
+          // ramp: cache writes → input → output (the product of the work).
+          // See the fills in admin-v2-dashboard.css. Edges are placed from the
+          // running sum, so the stack never outgrows the scale; a nonzero
+          // segment keeps a hairline minimum only where headroom allows.
           const segments = [
-            ["cache", point.cache] as const,
+            ["cache", point.cacheWrite] as const,
             ["input", point.input] as const,
             ["output", point.output] as const,
           ];
+          let sum = 0;
+          let top = base;
           return segments.map(([kind, value]) => {
-            const h = value <= 0 ? 0 : Math.max(2, (value / maxTotal) * innerH);
-            y -= h;
+            if (value <= 0) return null;
+            sum += value;
+            const bottom = top;
+            top = Math.max(PADDING.top, Math.min(base - (sum / maxFresh) * innerH, bottom - 1));
+            const y = top;
+            const h = bottom - top;
             return h > 0 ? (
               <rect
                 key={`${point.date}:${kind}`}
@@ -184,14 +200,14 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
       <ul className="sr-only">
         {points.map((point) => (
           <li key={point.date}>
-            {`${point.date}: ${t("admin.v2.dash_tokens_input")} ${numberFormat.format(point.input)}, ${t("admin.v2.dash_tokens_output")} ${numberFormat.format(point.output)}, ${t("admin.v2.dash_tokens_cache")} ${numberFormat.format(point.cache)}`}
+            {`${point.date}: ${t("admin.v2.dash_tokens_input")} ${numberFormat.format(point.input)}, ${t("admin.v2.dash_tokens_output")} ${numberFormat.format(point.output)}, ${t("admin.v2.dash_tokens_cache_write")} ${numberFormat.format(point.cacheWrite)}, ${t("admin.v2.dash_tokens_cache_read")} ${numberFormat.format(point.cacheRead)}`}
           </li>
         ))}
       </ul>
       <div className="adm-token-legend" role="group" aria-label={t("admin.v2.dash_tokens_legend")}>
         <span><i className="adm-token-dot adm-token-dot--output" aria-hidden="true" />{t("admin.v2.dash_tokens_output")}</span>
         <span><i className="adm-token-dot adm-token-dot--input" aria-hidden="true" />{t("admin.v2.dash_tokens_input")}</span>
-        <span><i className="adm-token-dot adm-token-dot--cache" aria-hidden="true" />{t("admin.v2.dash_tokens_cache")}</span>
+        <span><i className="adm-token-dot adm-token-dot--cache" aria-hidden="true" />{t("admin.v2.dash_tokens_cache_write")}</span>
       </div>
       {coverageNote ? <CardDescription>{coverageNote}</CardDescription> : null}
     </Card>

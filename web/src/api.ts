@@ -788,24 +788,52 @@ export interface DashboardSessionsResponse {
   topEmployees: Array<{ employeeId: string; sessionCount: number }>;
 }
 
+export interface TokenCounts {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** cacheRead + cacheWrite. */
+  cache: number;
+  /** Every token processed, cache reads included. */
+  total: number;
+  /** The headline: input + output + cacheWrite. */
+  fresh: number;
+}
+
 export interface TokenUsageSnapshot {
   available: boolean;
+  /** The IANA zone the server bucketed days in (falls back to UTC). */
+  timeZone: string;
   totalInput: number;
   totalOutput: number;
+  totalCacheRead: number;
+  totalCacheWrite: number;
   totalCache: number;
   total: number;
-  unsupportedAgents: string[];
-  daily: Array<{ date: string; input: number; output: number; cache: number; total: number }>;
-  byEmployee: Array<{ employeeId: string; input: number; output: number; cache: number; total: number; sessionCount: number }>;
-  recentSessions: Array<{ sessionId: string; employeeId?: string | null; taskGoal?: string; updatedAt?: string; input: number; output: number; cache: number; total: number }>;
+  fresh: number;
+  daily: Array<TokenCounts & { date: string }>;
+  /** Runs that completed in the summary window without reporting counts, per runtime. */
+  unreportedRuns: Array<{ agent: string; runs: number }>;
 }
 
 export function getDashboardSessions(signal?: AbortSignal): Promise<DashboardSessionsResponse> {
   return apiJson<DashboardSessionsResponse>("/admin/dashboard/sessions", { signal });
 }
 
-export function getDashboardTokens(signal?: AbortSignal): Promise<TokenUsageSnapshot> {
-  return apiJson<TokenUsageSnapshot>("/admin/dashboard/tokens", { signal });
+export function getDashboardTokens(signal?: AbortSignal, timeZone = viewerTimeZone()): Promise<TokenUsageSnapshot> {
+  // Days are bucketed in the viewer's zone so a late-evening run lands on the
+  // day the chart labels it with.
+  const query = timeZone ? `?tz=${encodeURIComponent(timeZone)}` : "";
+  return apiJson<TokenUsageSnapshot>(`/admin/dashboard/tokens${query}`, { signal });
+}
+
+function viewerTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function listChatIntegrations(signal?: AbortSignal): Promise<ChatIntegrationsResponse> {

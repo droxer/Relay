@@ -26,6 +26,9 @@ export type DerivedMessage =
       /** Token usage reported by the run on completion; shown at the foot of
        * the agent turn. */
       tokenUsage?: TokenUsage;
+      /** The run finished but its runtime reported no counts, so the foot
+       * says so rather than looking like a turn that cost nothing. */
+      usageUnreported?: boolean;
     }
   | {
       kind: "system";
@@ -459,6 +462,7 @@ export class ProjectMessagesAccumulator {
           stdout: state.stdout,
           stderr: state.stderr,
           ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
+          ...(!event.tokenUsage ? { usageUnreported: true } : {}),
         };
         return true;
       }

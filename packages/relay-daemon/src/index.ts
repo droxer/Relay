@@ -18,6 +18,7 @@ import type {
   AgentName,
   StreamExecResult,
   CodexCollaborationEvent,
+  TokenUsage,
 } from "relay-core";
 import {
   startOrchestratorSession,
@@ -1206,7 +1207,7 @@ async function executeCommand(
       ...commandLogFields(sandboxId, command),
       exitCode: next.last_exit_code,
     });
-    return runCancelledEvent(command, signal.reason, agentLog);
+    return runCancelledEvent(command, signal.reason, agentLog, next.token_usage);
   }
   // Output delivery can fail after the agent process has successfully written
   // its deliverables. Preserve those files on the terminal failure event so
@@ -1225,6 +1226,7 @@ async function executeCommand(
       error: `Daemon lost agent output: ${outputPostFailure.message}`,
       agentLog,
       exitCode: next.last_exit_code || 1,
+      ...(next.token_usage ? { tokenUsage: next.token_usage } : {}),
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
     } satisfies DaemonNodeEvent;
   }
@@ -1253,6 +1255,7 @@ function runCancelledEvent(
   command: DaemonNodeRunCommand,
   reason: unknown,
   agentLog?: string,
+  tokenUsage?: TokenUsage,
 ): DaemonNodeEvent {
   return {
     type: "run.cancelled",
@@ -1263,6 +1266,7 @@ function runCancelledEvent(
     agent: command.agent,
     reason: typeof reason === "string" && reason ? reason : "Cancelled by human.",
     ...(agentLog ? { agentLog } : {}),
+    ...(tokenUsage ? { tokenUsage } : {}),
   };
 }
 

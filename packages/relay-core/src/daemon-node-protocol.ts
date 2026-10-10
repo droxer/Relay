@@ -399,6 +399,8 @@ export type DaemonNodeEvent =
       error: string;
       agentLog?: string;
       exitCode?: number;
+      /** Usage the agent process reported before the run failed. */
+      tokenUsage?: TokenUsage;
       /** Files written by an otherwise successful agent process before output delivery failed. */
       generatedFiles?: DaemonGeneratedFile[];
     }
@@ -411,6 +413,8 @@ export type DaemonNodeEvent =
       agent: AgentName;
       reason: string;
       agentLog?: string;
+      /** Usage the agent process reported before it was stopped. */
+      tokenUsage?: TokenUsage;
     }
   | {
       type: "workspace.listing";
