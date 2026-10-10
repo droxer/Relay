@@ -1,7 +1,9 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { RelayArtifact } from "relay-core";
 
+import { readArtifactBlob } from "../../api";
 import {
   artifactFileName,
   artifactRawHref,
@@ -89,6 +91,45 @@ function SandboxedHtml({ html, title }: { html: string; title: string }) {
   return <iframe className="artifact-frame-preview" title={title} sandbox="" srcDoc={html} />;
 }
 
+/** Reads bytes as a `data:` URL of the given type. Not an object URL: those
+ *  must be revoked, and a revoke tied to an effect cleanup fires under Strict
+ *  Mode's double-invoke while the frame is still showing it. */
+function blobToDataUrl(blob: Blob, type: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the file."));
+    reader.readAsDataURL(new Blob([blob], { type }));
+  });
+}
+
+/** A PDF artifact, framed from its fetched bytes — the same `data:` framing the
+ *  workspace file preview uses.
+ *
+ *  Not `<iframe src={rawHref}>`: the raw route is a download — `attachment`,
+ *  CSP `sandbox` and `frame-ancestors 'none'` — so the browser refused to frame
+ *  it and the preview was blank (or became a download). */
+function PdfPreview({ sessionId, artifact }: { sessionId: string; artifact: RelayArtifact }) {
+  const { t } = useTranslation();
+  const query = useQuery({
+    queryKey: ["artifact-pdf", sessionId, artifact.id],
+    queryFn: async ({ signal }) =>
+      blobToDataUrl(await readArtifactBlob(sessionId, artifact.id, signal), "application/pdf"),
+    staleTime: Infinity,
+    gcTime: 60 * 1000,
+    retry: false,
+  });
+
+  if (query.isError) {
+    const message = query.error instanceof Error ? query.error.message : String(query.error);
+    return <p className="artifact-viewer-status artifact-viewer-error">{t("artifact.preview_error", { message })}</p>;
+  }
+  if (!query.data) {
+    return <p className="artifact-viewer-status" role="status">{t("artifact.loading_preview")}</p>;
+  }
+  return <iframe className="artifact-frame-preview" src={query.data} title={artifact.title} />;
+}
+
 /** Text body of a generated workspace file. Renderable types (Markdown, HTML)
  *  answer to the view switch; everything else has only its source reading. */
 function WorkspaceFileContent({
@@ -138,7 +179,7 @@ function WorkspaceFileBody({
   if (mode === "pdf") {
     return (
       <div className="artifact-viewer-body">
-        <iframe className="artifact-frame-preview" src={rawHref} title={artifact.title} />
+        <PdfPreview sessionId={sessionId} artifact={artifact} />
       </div>
     );
   }

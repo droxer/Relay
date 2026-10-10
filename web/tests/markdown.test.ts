@@ -14,6 +14,7 @@ import {
   fenceLanguage,
   isDiagramFence,
   shouldRenderDiagram,
+  markdownLinkKind,
   mermaidConfig,
   normalizeOverEscapedQuotes,
 } from "../src/lib/markdown.js";
@@ -254,5 +255,62 @@ describe("markdown stylesheet", () => {
   it("moves the document variant up the type ladder", () => {
     assert.match(markdownCss, /\.doc-prose \{[^}]*font-size: var\(--fs-4\)/s);
     assert.match(markdownCss, /max-width: var\(--measure-wide\)/);
+  });
+});
+
+describe("markdown link targets", () => {
+  it("opens absolute URLs as external links", () => {
+    assert.equal(markdownLinkKind("https://example.com/a"), "external");
+    assert.equal(markdownLinkKind("mailto:ops@example.com"), "external");
+    assert.equal(markdownLinkKind("//cdn.example.com/x.png"), "external");
+  });
+
+  it("keeps footnote and heading anchors in the same document", () => {
+    assert.equal(markdownLinkKind("#user-content-fn-1"), "fragment");
+    assert.equal(markdownLinkKind("#setup"), "fragment");
+  });
+
+  it("treats workspace-relative targets as inert", () => {
+    assert.equal(markdownLinkKind("out/report.md"), "relative");
+    assert.equal(markdownLinkKind("./chart.png"), "relative");
+    assert.equal(markdownLinkKind("../README.md"), "relative");
+    assert.equal(markdownLinkKind("/src/index.ts"), "relative");
+  });
+
+  it("has no target when react-markdown blanked an unsafe protocol", () => {
+    assert.equal(markdownLinkKind(""), "none");
+    assert.equal(markdownLinkKind(undefined), "none");
+  });
+
+  it("routes footnote refs through the fragment branch", () => {
+    const html = render("A claim.[^1]\n\n[^1]: The source.");
+    const href = /data-footnote-ref[^>]*href="([^"]+)"|href="([^"]+)"[^>]*data-footnote-ref/.exec(html);
+    assert.ok(href, html);
+    assert.equal(markdownLinkKind(href[1] ?? href[2]), "fragment");
+  });
+
+  it("wires the link and image overrides to the classification", () => {
+    const source = readWeb("src/components/Markdown.tsx");
+    assert.match(source, /markdownLinkKind\(href\)/);
+    assert.match(source, /target="_blank"/);
+    assert.match(source, /omit\(props, "node"\)/);
+  });
+});
+
+describe("mermaid sizing", () => {
+  it("draws diagrams at natural size so wide ones scroll", () => {
+    const config = mermaidConfig(true);
+    assert.equal(config.flowchart.useMaxWidth, false);
+    assert.equal(config.sequence.useMaxWidth, false);
+    const css = readWeb("src/styles/markdown.css");
+    assert.match(css, /\.md-diagram-canvas svg \{[^}]*max-width: none;/s);
+  });
+});
+
+describe("streaming caret on lists", () => {
+  const streamCss = readWeb("src/styles/agent-stream.css");
+  it("never matches the last item of every nested list", () => {
+    assert.doesNotMatch(streamCss, /:is\(ul, ol\) li:last-child::after/);
+    assert.match(streamCss, /:is\(ul, ol\) > li:last-child:not\(:has\(> :is\(ul, ol\):last-child\)\)::after/);
   });
 });

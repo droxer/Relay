@@ -44,13 +44,17 @@ export function WorkspacePathBreadcrumb({
             <li key={segment.path || "root"}>
               {index > 0 ? <span className="workspace-path-sep" aria-hidden="true">/</span> : null}
               {isCurrent ? (
-                <span className="workspace-path-segment is-current code" title={segment.path}>{segment.label}</span>
+                <span className="workspace-path-segment is-current code" title={segment.path} aria-current="location">
+                  {segment.label}
+                </span>
               ) : (
                 <Button
                   variant="ghost"
                   type="button"
                   className="workspace-path-segment code"
                   tooltip={segment.path}
+                  // The tooltip would otherwise become the spoken name (Button
+                  // derives aria-label from it); the segment is its own label.
                   aria-label={segment.label}
                   onClick={() => onNavigate(segment.path)}
                 >
@@ -150,7 +154,8 @@ function WorkspaceFileRow({
       variant="ghost"
       type="button"
       className={`workspace-pick workspace-file-pick${selected ? " is-active" : ""}`}
-      aria-pressed={selected}
+      // A folder row navigates; only a file row toggles the open preview.
+      aria-pressed={isDirectory ? undefined : selected}
       data-kind={entry.kind}
       onClick={() => (isDirectory ? onOpenDirectory(entry.path) : onSelectFile(entry))}
     >

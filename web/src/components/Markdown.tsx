@@ -6,7 +6,13 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
-import { fenceLanguage, normalizeOverEscapedQuotes, type MarkdownVariant } from "../lib/markdown";
+import {
+  fenceLanguage,
+  markdownLinkKind,
+  normalizeOverEscapedQuotes,
+  type MarkdownVariant,
+} from "../lib/markdown";
+import { omit } from "../lib/omit";
 import { MarkdownModeProvider } from "./markdown/context";
 import { MarkdownFence } from "./markdown/MarkdownFence";
 import { MarkdownTable } from "./markdown/MarkdownTable";
@@ -61,28 +67,51 @@ const MARKDOWN_COMPONENTS: Components = {
   // wrapping: past a few columns it either overflows the transcript or crushes
   // its cells. Give it its own scroll region so the page never scrolls sideways.
   table: MarkdownTable,
-  a: ({ href, children, ...rest }) => (
-    <a href={href} target="_blank" rel="noreferrer noopener" {...rest}>
-      {children}
-    </a>
-  ),
+  // react-markdown hands every override its AST `node`; spread onto the DOM it
+  // renders as `node="[object Object]"`, so it is dropped before the spread.
+  a: ({ href, children, ...props }) => {
+    const rest = omit(props, "node");
+    const kind = markdownLinkKind(href);
+    if (kind === "external") {
+      return (
+        <a href={href} target="_blank" rel="noreferrer noopener" {...rest}>
+          {children}
+        </a>
+      );
+    }
+    // Footnote refs/backrefs and heading anchors scroll within this document.
+    if (kind === "fragment") return <a href={href} {...rest}>{children}</a>;
+    // A workspace-relative target has no URL in this app; keep it readable,
+    // not clickable (see markdownLinkKind).
+    return <span className="md-link-inert" title={href || undefined}>{children}</span>;
+  },
   // Intrinsic dimensions of markdown images are unknown, so no width/height
   // hints — just lazy-load them instead of blocking on the transcript render.
-  img: ({ src, alt, ...rest }) => (
-    // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); markdown images have no known size
-    <img src={src} alt={alt ?? ""} loading="lazy" decoding="async" {...rest} />
-  ),
+  img: ({ src, alt, ...props }) => {
+    const rest = omit(props, "node");
+    const href = typeof src === "string" ? src : undefined;
+    if (markdownLinkKind(href) !== "external") {
+      // A relative image would resolve against the app origin and paint a
+      // broken-image box; say what it was instead.
+      return <span className="md-image-inert" title={href || undefined}>{alt || href}</span>;
+    }
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); markdown images have no known size
+      <img src={href} alt={alt ?? ""} loading="lazy" decoding="async" {...rest} />
+    );
+  },
 };
 
 /**
  * Renders agent-authored Markdown: GFM tables/strikethrough/task lists/
- * footnotes, highlighted code fences with a copy control, `$…$` math via
- * KaTeX, and ```mermaid fences as diagrams.
+ * footnotes, highlighted code fences with a copy control, `$$…$$` display math
+ * via KaTeX, and ```mermaid fences as diagrams.
  *
  * Output is HTML-escaped — raw HTML is not parsed, highlight.js escapes fence
- * bodies, and Mermaid renders under its strict security level. Links open in a
- * new tab with `noopener`. Note that remote images referenced by the text still
- * load from their origin.
+ * bodies, and Mermaid renders under its strict security level. Absolute links
+ * open in a new tab with `noopener`; `#` links stay in place; workspace-relative
+ * links and images render inert. Note that remote images referenced by the
+ * text still load from their origin.
  *
  * `variant` picks the reading: `chat` matches the transcript's body rhythm,
  * `document` gives the thread space preview document scale and a measure.

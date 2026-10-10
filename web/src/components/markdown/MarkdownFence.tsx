@@ -67,7 +67,7 @@ export function MarkdownFence({ code, language }: { code: string; language: stri
   const fence = (
     <pre className="agent-code code">
       {language ? <span className="agent-code-lang">{language}</span> : null}
-      <code className="hljs" dangerouslySetInnerHTML={{ __html: highlightToHtml(code, language) }} />
+      <code className="hljs" dangerouslySetInnerHTML={{ __html: highlightToHtml(code, language, { live }) }} />
     </pre>
   );
 

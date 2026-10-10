@@ -54,7 +54,7 @@ function WorkspaceFileBrowser({
       readProjectWorkspaceFile({ projectId, path: selectedPath }, signal),
   });
   const homeStatus = workspaceHomeStatus(fileQuery.data);
-  const { view, setView } = useWorkspaceFileView(selectedPath.split("/").at(-1) ?? "");
+  const { view, setView } = useWorkspaceFileView(selectedPath);
 
   function openDirectory(path: string): void {
     setFilePath(path);

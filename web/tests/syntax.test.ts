@@ -112,3 +112,20 @@ describe("fences that should not be painted as code", () => {
     assert.match(html, /class="hljs-deletion"/);
   });
 });
+
+describe("highlightToHtml on a live fence", () => {
+  it("does not auto-detect an unlabeled fence while it streams", () => {
+    const code = "function add(a, b) {\n  return a + b;\n}\nconst total = add(1, 2);";
+    const live = highlightToHtml(code, null, { live: true });
+    assert.doesNotMatch(live, /hljs-/);
+    assert.match(highlightToHtml(code, null), /hljs-/);
+  });
+
+  it("still highlights a labeled live fence", () => {
+    assert.match(highlightToHtml("const x = 1;", "ts", { live: true }), /hljs-keyword/);
+  });
+
+  it("escapes live fence text", () => {
+    assert.equal(highlightToHtml("<b>&</b>", null, { live: true }), "&lt;b&gt;&amp;&lt;/b&gt;");
+  });
+});

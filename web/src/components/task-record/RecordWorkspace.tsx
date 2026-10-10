@@ -31,7 +31,6 @@ export function RecordWorkspace({ taskId, rootLabel }: {
   const { t } = useTranslation();
   const [path, setPath] = useState("");
   const [selectedPath, setSelectedPath] = useState("");
-  const selectedName = selectedPath ? selectedPath.split("/").at(-1) || selectedPath : "";
 
   const fileQuery = useQuery({
     queryKey: ["workspace-files", `task:${taskId}`, path, 0],
@@ -46,7 +45,7 @@ export function RecordWorkspace({ taskId, rootLabel }: {
     queryFn: ({ signal }): Promise<TaskWorkspaceFileResponse> =>
       readTaskWorkspaceFile({ taskId, path: selectedPath }, signal),
   });
-  const { view, setView } = useWorkspaceFileView(selectedName);
+  const { view, setView } = useWorkspaceFileView(selectedPath);
 
   const statusQuery = useQuery({
     queryKey: ["task-workspace-status", taskId],

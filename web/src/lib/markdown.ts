@@ -9,7 +9,8 @@
  * `chat` is the transcript column: body copy sized to match the user bubble so
  * both voices share one rhythm. `document` is the thread space preview, where
  * the same Markdown is a standalone artifact and wants document scale, a
- * reading measure, and a heading ladder that can afford to start at 20px.
+ * reading measure, and prose leading (the heading ladder is shared — see
+ * styles/markdown.css).
  */
 export type MarkdownVariant = "chat" | "document";
 
@@ -43,6 +44,8 @@ export function shouldRenderDiagram(language: string | null, live: boolean): boo
   return !live && isDiagramFence(language);
 }
 
+const NATURAL_SIZE = { useMaxWidth: false } as const;
+
 /**
  * Mermaid runtime configuration.
  *
@@ -58,6 +61,21 @@ export function mermaidConfig(dark: boolean) {
     securityLevel: "strict",
     theme: dark ? "dark" : "default",
     fontFamily: "inherit",
+    // Draw at natural size. Mermaid's default (`width="100%"` plus an inline
+    // max-width) shrinks a wide diagram to the transcript column until its
+    // labels are unreadable; at natural size the figure scrolls instead.
+    flowchart: NATURAL_SIZE,
+    sequence: NATURAL_SIZE,
+    class: NATURAL_SIZE,
+    state: NATURAL_SIZE,
+    er: NATURAL_SIZE,
+    gantt: NATURAL_SIZE,
+    journey: NATURAL_SIZE,
+    pie: NATURAL_SIZE,
+    gitGraph: NATURAL_SIZE,
+    mindmap: NATURAL_SIZE,
+    timeline: NATURAL_SIZE,
+    requirement: NATURAL_SIZE,
   } as const;
 }
 
@@ -90,4 +108,27 @@ export function normalizeOverEscapedQuotes(code: string): string {
   const escapedQuoteCount = (code.match(/\\"/g) ?? []).length;
   if (escapedQuoteCount !== quoteCount) return code;
   return code.replace(/\\"/g, '"');
+}
+
+/** What a Markdown link or image target points at, which decides how it renders.
+ *
+ * - `external`: an absolute URL (`https:`, `mailto:`, `//host`) — a real
+ *   destination, opened in a new tab.
+ * - `fragment`: `#…` — a footnote or heading in the same document. It must stay
+ *   in this tab; opening a new tab to scroll to a footnote reloads the app.
+ * - `relative`: anything else. Agent prose says `[report](out/report.md)` or
+ *   `![](./chart.png)` meaning a file in its workspace, but the browser resolves
+ *   it against the app's own origin and lands on the web catch-all (or a broken
+ *   image). There is no URL that names "this file in that workspace", so these
+ *   render inert — the text and target stay visible, nothing navigates.
+ * - `none`: no target at all (react-markdown blanks unsafe protocols to "").
+ */
+export type MarkdownLinkKind = "external" | "fragment" | "relative" | "none";
+
+export function markdownLinkKind(href: string | null | undefined): MarkdownLinkKind {
+  const target = href?.trim() ?? "";
+  if (!target) return "none";
+  if (target.startsWith("#")) return "fragment";
+  if (target.startsWith("//") || /^[a-z][a-z\d+.-]*:/i.test(target)) return "external";
+  return "relative";
 }
