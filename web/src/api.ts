@@ -43,7 +43,6 @@ import type {
   AgentRunInput,
   RelaySession,
   RelayTask,
-  RunInput,
   SandboxesResponse,
   SandboxRecord,
 
@@ -935,20 +934,6 @@ export function provisionSandbox(employeeId: string, token?: string, nodeToken?:
     body: {
       employeeId,
       ...(nodeToken ? { nodeToken } : {}),
-    },
-  });
-}
-
-export function runSandbox(input: RunInput, token?: string): Promise<RelaySession> {
-  return apiJson<RelaySession>(`/sandboxes/${encodeURIComponent(input.sandboxId)}/runs`, {
-    method: "POST",
-    token,
-    body: {
-      taskGoal: input.taskGoal,
-      assignments: input.assignments,
-      sessionId: input.sessionId,
-      ...(input.userMessageId ? { userMessageId: input.userMessageId } : {}),
-      ...(input.decision ? { decision: input.decision } : {}),
     },
   });
 }

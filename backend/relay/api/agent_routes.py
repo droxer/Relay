@@ -13,9 +13,10 @@ from ..daemon_registry.registry import (
     DAEMON_CAPABILITY_AGENT_MODEL,
     DAEMON_CAPABILITY_ENDPOINT_MODELS,
 )
-from ..persistence.agent_placement_store import create_node_placement, placement_status
+from ..persistence.agent_placement_store import placement_status
 from ..security.auth import require_admin_session
 from ..services.agent_binding import binding_status
+from ..services.agent_location import place_agent_on_node
 from ..services.agent_creation import AgentCreationError, create_agent_for_employee
 from ..services.agent_routing import placement_node
 from ..services.computer_names import computer_display_name
@@ -231,7 +232,9 @@ def create_agent_placement(
     if not node:
         raise HTTPException(404, "Daemon node not found.")
     try:
-        placement = create_node_placement(ctx.agent_placement_store, agent, node, body)
+        placement = place_agent_on_node(
+            ctx.agent_store, ctx.agent_placement_store, agent, node, body
+        )
     except ValueError as error:
         raise HTTPException(
             409 if "already has" in str(error) else 400, str(error)

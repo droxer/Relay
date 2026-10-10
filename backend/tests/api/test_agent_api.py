@@ -3335,3 +3335,70 @@ def test_agent_without_placement_reports_no_skills(monkeypatch) -> None:
 
         assert response.status_code == 200, response.text
         assert response.json()["agents"][0]["skills"] == []
+
+
+def test_admin_placement_on_another_computer_moves_the_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # One agent lives on one computer. Placing it on a different computer moves
+    # it, so the agent record must follow — otherwise binding status and team
+    # rosters keep answering with the computer it left.
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        assert (
+            client.post(
+                "/api/v1/admin/employees",
+                json={
+                    "employeeId": "alice",
+                    "username": "alice",
+                    "password": "userpass",
+                    "displayName": "Alice",
+                },
+            ).status_code
+            == 201
+        )
+        birth = _birth_computer_id(client, "alice", "codex")
+        agent = client.post(
+            "/api/v1/admin/agents",
+            json={
+                "supervisorEmployeeId": "alice",
+                "displayName": "Mover",
+                "executorKind": "codex",
+                "defaultRole": "implementer",
+                "computerId": birth,
+            },
+        ).json()["agent"]
+        target = app.state.registry.register(
+            {
+                "sandboxId": "node_alice_laptop",
+                "employeeId": "alice",
+                "workspaceId": "machine-alice-laptop",
+                "token": "node_token",
+                "workspacePath": "/workspace/alice-laptop",
+                "protocolVersion": 1,
+                "supportedAgents": ["codex"],
+                "capabilities": ["thread-workspaces"],
+                "status": "ready",
+            }
+        )
+
+        placed = client.post(
+            f"/api/v1/admin/agents/{agent['id']}/placements",
+            json={"daemonNodeId": "node_alice_laptop"},
+        )
+
+        assert placed.status_code == 201
+        moved = app.state.agent_store.get_agent(agent["id"])
+        assert moved["computerId"] == computer_id(target) != birth
+        # A move changes where the agent runs, not its configuration, so the
+        # placement written for it is not left behind by a version bump.
+        assert moved["version"] == agent["version"]
+        assert app.state.agent_placement_store.get_placement(
+            placed.json()["placement"]["id"]
+        )["agentVersion"] == moved["version"]
+        assert [event["type"] for event in app.state.agent_store.events(agent["id"])][
+            -1
+        ] == "agent.moved"
