@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ProjectRecord } from "../types";
-import { matchesThreadQuery, reuseThreadItems, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
+import { matchesThreadQuery, reuseThreadItems, runningAgentName, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
 
 /**
@@ -16,7 +16,9 @@ import { threadNodeOffline } from "../lib/threadRuntime";
    the same way lib/threadRuntime.ts types its own helpers. Projects are not:
    threadsForDirectory groups on the full record, so a narrower shape here
    would only be a second, weaker spelling of the same model. */
-type DirectoryNode = { activeRuns: readonly { sessionId: string; agent: ThreadItem["runningAgent"] }[] };
+type DirectoryNode = {
+  activeRuns: readonly { sessionId: string; agent: ThreadItem["runningAgent"]; logicalAgentId?: string }[];
+};
 
 /** The rail draws each room's faces, so an agent entry carries a name and an
    image on top of what threadNodeOffline reads. */
@@ -64,23 +66,29 @@ export function useThreadDirectory({
   // object. Without this every row re-rendered on every poll.
   const candidates = useMemo<ThreadItem[]>(() => {
     const runningBy = new Map(
-      visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run.agent] as const)),
+      visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run] as const)),
     );
     const projectNames = new Map(projects.map(project => [project.id, project.name]));
     const agentsById = new Map(logicalAgents.map((agent) => [agent.id, agent]));
-    return myThreads.map((session) => ({
-      session,
-      runningAgent: runningBy.get(session.id),
-      nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
-      origin: origins.get(session.id),
-      projectName: session.projectId ? projectNames.get(session.projectId) ?? session.projectId : undefined,
-      // Resolved against the logical agent list, not stored on the session:
-      // a renamed or re-imaged agent must not need a session rewrite for the
-      // rail to draw its current face.
-      participants: (session.participantAgentIds ?? [])
-        .map((agentId) => agentsById.get(agentId))
-        .filter((agent): agent is DirectoryAgent => Boolean(agent)),
-    }));
+    const agentNames = new Map(logicalAgents.map((agent) => [agent.id, agent.displayName]));
+    return myThreads.map((session) => {
+      const activeRun = runningBy.get(session.id);
+      const running = Boolean(activeRun) || session.status === "running";
+      return {
+        session,
+        runningAgent: activeRun?.agent,
+        runningAgentName: running ? runningAgentName(session, activeRun, agentNames) : undefined,
+        nodeOffline: threadNodeOffline(session, logicalAgents, runtimeNodes),
+        origin: origins.get(session.id),
+        projectName: session.projectId ? projectNames.get(session.projectId) ?? session.projectId : undefined,
+        // Resolved against the logical agent list, not stored on the session:
+        // a renamed or re-imaged agent must not need a session rewrite for the
+        // rail to draw its current face.
+        participants: (session.participantAgentIds ?? [])
+          .map((agentId) => agentsById.get(agentId))
+          .filter((agent): agent is DirectoryAgent => Boolean(agent)),
+      };
+    });
   }, [myThreads, visibleNodes, logicalAgents, runtimeNodes, origins, projects]);
 
   const [held, setHeld] = useState(() => ({ candidates, items: candidates }));
