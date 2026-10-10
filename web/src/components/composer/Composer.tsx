@@ -1,4 +1,4 @@
-import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, EmployeeAgent } from "../../types";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
@@ -68,7 +68,11 @@ const ComposerView = forwardRef<ComposerHandle, {
   mentionCandidates?: MentionCandidate[];
   onSend: (style?: CollaborationStyle) => void | Promise<boolean | void>;
   onCancelRun: () => void;
-}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedEmployee, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun }, ref) {
+  /** Docked on the card's top edge — what the thread is waiting to hear. */
+  prompt?: ReactNode;
+  /** Replaces the default placeholder, e.g. to name who is being answered. */
+  placeholder?: string;
+}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedEmployee, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
   const { t } = useTranslation();
   const composer = useComposer();
   const [style, setStyle] = useState<CollaborationStyle | null>(null);
@@ -217,6 +221,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); triggerSend(); }}>
+      {prompt}
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>
@@ -252,9 +257,9 @@ const ComposerView = forwardRef<ComposerHandle, {
               autoComplete="off"
               disabled={readOnly}
               name="message"
-              placeholder={selectedEmployee
+              placeholder={placeholder ?? (selectedEmployee
                 ? t("composer.placeholder")
-                : t("composer.placeholder_no_employee")}
+                : t("composer.placeholder_no_employee"))}
               value={composerText}
               onChange={(e) => {
                 setComposerText(e.target.value);

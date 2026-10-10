@@ -1992,6 +1992,16 @@
     "save_member": "保存",
     "no_responsibility": "尚未设置职责范围。"
   },
+  "awaiting": {
+    "question_title": "{{agent}} 需要你的回答",
+    "check_title": "{{agent}} 在完成前停下了",
+    "no_question": "{{agent}} 请求帮助，但没有说明需要什么。请回复下一步该怎么做。",
+    "hint_task": "回复后将继续 {{ref}}。",
+    "hint_thread": "回复后将继续这项工作。",
+    "reply": "回复",
+    "placeholder": "回答 {{agent}}…",
+    "open_task": "打开任务 {{ref}}"
+  },
   "recovery": {
     "title": "后续操作",
     "retry": "重试保存结果",
@@ -2085,7 +2095,7 @@
     },
     "human": {
       "title": "需要你的输入",
-      "body": "请打开关联对话，查看所需输入或缺失证据，回复或使用可用的决策操作继续。"
+      "body": "请在关联对话中回复，你的回答会让任务继续进行。"
     },
     "review": {
       "title": "评审结果",
@@ -2095,7 +2105,8 @@
       "title": "任务被手动阻塞",
       "body": "请与负责人确认记录中的原因。解除阻塞只恢复之前的阶段，不会启动智能体。"
     },
-    "last_confirmed": "最后确认：{{time}}"
+    "last_confirmed": "最后确认：{{time}}",
+    "reply_in_thread": "在对话中回复"
   },
   "settings": {
     "eyebrow": "个人设置",

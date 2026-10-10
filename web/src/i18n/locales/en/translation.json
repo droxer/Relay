@@ -2036,6 +2036,16 @@
     "save_member": "Save",
     "no_responsibility": "No responsibility set yet."
   },
+  "awaiting": {
+    "question_title": "{{agent}} needs your answer",
+    "check_title": "{{agent}} stopped before finishing",
+    "no_question": "{{agent}} asked for help without saying what it needs. Reply with how to proceed.",
+    "hint_task": "Your reply resumes {{ref}}.",
+    "hint_thread": "Your reply continues the work.",
+    "reply": "Reply",
+    "placeholder": "Answer {{agent}}…",
+    "open_task": "Open task {{ref}}"
+  },
   "recovery": {
     "title": "Next steps",
     "retry": "Retry saving results",
@@ -2129,7 +2139,7 @@
     },
     "human": {
       "title": "Your input is needed",
-      "body": "Open the linked thread, read the requested input or missing evidence, and reply or use the available decision controls to continue."
+      "body": "Reply in the linked thread. Your answer resumes this task."
     },
     "review": {
       "title": "Review the result",
@@ -2139,7 +2149,8 @@
       "title": "Task blocked manually",
       "body": "Review the recorded reason with the person responsible. Unblocking restores the prior stage; it does not start an agent."
     },
-    "last_confirmed": "Last confirmed: {{time}}"
+    "last_confirmed": "Last confirmed: {{time}}",
+    "reply_in_thread": "Reply in thread"
   },
   "settings": {
     "eyebrow": "Personal settings",

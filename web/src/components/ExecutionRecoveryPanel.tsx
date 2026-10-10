@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { RelaySession, RelayTaskListItem } from "../types";
 import { hrefForRoute, hrefForSettingsSection, navigateToAppPath } from "../lib/appRoute";
 import { executionRecoveryGuide, taskRecoveryGuide, taskRecoveryReason, type RecoveryGuide } from "../lib/executionRecovery";
+import { readWaitingReason } from "../lib/awaitingInput";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 
@@ -10,11 +11,11 @@ import { useDialogs } from "@/components/ui/DialogProvider";
  *  grammar: `data-slot="link-button"` is what a11y.css grows to the touch
  *  target on coarse pointers, and the variant keeps it the same control as
  *  every other wayfinding anchor (see RoutineDrawerMeta). */
-function RecoveryLink({ href, onNavigate, children }: { href: string; onNavigate?: () => void; children: ReactNode }) {
+function RecoveryLink({ href, onNavigate, children, primary = false }: { href: string; onNavigate?: () => void; children: ReactNode; primary?: boolean }) {
   return (
     <a
       data-slot="link-button"
-      className={buttonVariants({ variant: "ghost", size: "dense" })}
+      className={buttonVariants({ variant: primary ? "default" : "ghost", size: "dense" })}
       href={href}
       onClick={event => {
         // No in-app handler means the href is the navigation: leave it alone,
@@ -111,9 +112,13 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
   const linked = task.workspaceWaiting?.blockingSessionId || (task.status === "blocked" && task.attention ? task.attention.sessionId : task.linkedSessionIds.at(-1));
   const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
   const reason = taskRecoveryReason(task);
-  return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} aria-label={t("recovery.title")}>
+  // Waiting on a person: quote what the agent asked, and make answering it
+  // the one primary action — the reply is what resumes the task.
+  const waiting = task.status === "waiting_for_human" ? readWaitingReason(task.waitingReason) : null;
+  return <section className="recovery-panel" data-tone={guide.tone ?? "attention"} data-waiting={waiting ? waiting.kind : undefined} aria-label={t("recovery.title")}>
     <strong>{t(`recovery.${guide.key}.title`)}</strong>
     {reason ? <p className="recovery-context">{reason}</p> : null}
+    {waiting?.text ? <blockquote className="awaiting-input-quote">{waiting.text}</blockquote> : null}
     <p>{t(`recovery.${guide.key}.body`)}</p>
     {task.status === "blocked" ? <p>{t("recovery.unblock_help")}</p> : null}
     <div className="recovery-actions">
@@ -122,7 +127,8 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
         <RecoveryLink
           href={hrefForRoute("main", sessionId)}
           onNavigate={onOpenThread ? () => onOpenThread(sessionId) : undefined}
-        >{t("recovery.thread")}</RecoveryLink>
+          primary={Boolean(waiting)}
+        >{t(waiting ? "recovery.reply_in_thread" : "recovery.thread")}</RecoveryLink>
       ) : null}
     </div>
   </section>;

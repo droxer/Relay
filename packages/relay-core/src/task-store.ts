@@ -61,6 +61,8 @@ export interface RelayTask {
   blockedAt?: string;
   blockedFromStatus?: TaskStatus;
   waitingFromStatus?: TaskStatus;
+  /** What the agent asked for while the task waits on a human. */
+  waitingReason?: string;
   blockerReason?: string;
   attention?: TaskExecutionAttention;
   blockerOwnerEmployeeId?: string;
@@ -506,6 +508,8 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
         if (typeof value === "string" && value && value.length <= 200) task.attention[key] = value;
       }
       task.blockerOwnerEmployeeId = event.actorEmployeeId || task.assigneeEmployeeId || task.ownerEmployeeId || "unowned";
+    } else {
+      task.waitingReason = event.reason || "Execution needs attention.";
     }
     if (stage === "done" || (status === "waiting_for_human" && stage === "backlog")) stage = "running";
   } else {
@@ -520,7 +524,10 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
     delete task.attention;
     delete task.blockerOwnerEmployeeId;
   }
-  if (status !== "waiting_for_human") delete task.waitingFromStatus;
+  if (status !== "waiting_for_human") {
+    delete task.waitingFromStatus;
+    delete task.waitingReason;
+  }
   if (["running", "review", "waiting_for_human"].includes(status) && !task.isRoutine) task.startedAt ??= event.timestamp;
   if (status === "done") task.finishedAt ??= event.timestamp;
   else delete task.finishedAt;
