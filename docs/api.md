@@ -613,7 +613,12 @@ create another deletion event. Pending deletion prevents new admission and
 remains visible in thread responses as `deletionRequestedAt`. The backend resumes
 cleanup after restart, without requiring browser polling. It clears conversation
 bindings and unlinks tasks before deleting thread history. Workspace files are
-not removed by this operation.
+not removed by this operation. When the execution already requires recovery
+(`canReportGone`), the deletion itself is the operator's assertion that the
+agent is gone: the backend applies the reconcile transitions and completes the
+deletion instead of pending forever. A `finalization_failed` blocker is the
+exception — the terminal result is retained and must be saved or explicitly
+discarded first.
 
 The existing unqualified DELETE remains synchronous and returns `409` while the
 shared lifecycle says deletion is unsafe. All deletion and explicit recovery

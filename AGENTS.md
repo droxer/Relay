@@ -210,6 +210,12 @@ Key modules:
   daemon commands (`ServerDaemonNodeBackend.run` → registry queue → daemon
   poll). The background `TaskScheduler` only promotes due routines and
   dispatches already-assigned tasks; it does not bypass the daemon path.
+- A delivered execution reservation releases only on daemon exit evidence or a
+  recorded human assertion. The assertion paths are the reconcile endpoint
+  (`POST /threads/{id}/execution/reconcile`) and thread deletion itself once
+  the execution requires recovery (`canReportGone`); both append
+  `session.execution_reconciled` with the actor, so the log never reads as
+  observed exit.
 - Event logs are authoritative. All session/task state changes go through the
   Python `SessionStore.append_event` or `TaskStore.append_event`; database
   snapshots and materialized fields are derived.

@@ -1,10 +1,11 @@
 """An unrecoverable execution must have a way out that a person can reach.
 
 Deletion waits for exit evidence, and evidence only ever arrived from the
-daemon. When the machine is gone, nothing produces it: the thread sits at
-"deletion pending" forever, and the Computers page refuses to delete the node
-because the stuck run request counts as active work. These tests pin the
-operator's assertion as the escape hatch, and pin its limits.
+daemon. When the machine is gone, nothing produces it. Two assertions release
+such an execution: deleting the thread asserts it for the thread (the delete
+completes once recovery is required), and the reconcile endpoint asserts it
+for the node, whose deletion the stuck request would otherwise block as
+active work. These tests pin both paths and their limits.
 """
 from __future__ import annotations
 
@@ -77,7 +78,12 @@ def _stop_requested_long_ago(app, request_id: str) -> None:
     store.update_run_request(request_id, {"state": state})
 
 
-def test_reconcile_releases_an_execution_whose_computer_never_reported_exit(monkeypatch) -> None:
+def test_delete_releases_an_execution_whose_computer_never_reported_exit(monkeypatch) -> None:
+    """Deleting a thread whose execution Relay gave up on completes by itself.
+
+    The delete is the operator's assertion that the agent is gone; asking them
+    to also find the reconcile button served no one.
+    """
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -91,20 +97,55 @@ def test_reconcile_releases_an_execution_whose_computer_never_reported_exit(monk
         assert stuck["phase"] == "recovery_required"
         assert stuck["blockingReason"] == "termination_unconfirmed"
         assert stuck["canDelete"] is False
-        # The dead end: deletion is accepted but can never complete.
-        assert client.delete(f"/api/v1/threads/{session_id}?stop=true").status_code == 202
-        app.state.execution_lifecycle.tick()
+        assert stuck["canReportGone"] is True
+
+        assert client.delete(f"/api/v1/threads/{session_id}?stop=true").status_code == 204
+
+        assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
+        store = app.state.registry.daemon_store
+        assert store.active_run_request_for_session_any_node(session_id) is None
+        assert store.get_run_request(run["request"]["id"])["status"] == "cancelled"
+        assert store.get_command(run["command"]["id"])["status"] == "cancelled"
+
+
+def test_delete_waits_out_the_stop_grace_before_asserting(monkeypatch) -> None:
+    """A fresh stop still gets its chance to confirm: the daemon may be slow,
+    not dead, so the assertion only stands in once recovery is required."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+
+        response = client.delete(f"/api/v1/threads/{session_id}?stop=true")
+        assert response.status_code == 202
+        assert response.json()["phase"] == "stopping"
         assert client.get(f"/api/v1/threads/{session_id}").status_code == 200
 
-        response = client.post(f"/api/v1/threads/{session_id}/execution/reconcile")
-
-        assert response.status_code == 200
-        assert response.json()["phase"] == "terminal"
-        assert response.json()["canDelete"] is True
-        # The pending deletion now drains on its own.
+        _stop_requested_long_ago(app, run["request"]["id"])
         app.state.execution_lifecycle.tick()
         assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
         assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+
+
+def test_delete_frees_an_orphaned_run_without_a_report(monkeypatch) -> None:
+    """A legacy running-agent record with no run behind it blocks deletion the
+    same way; the delete asserts it gone too."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        SessionController(app.state.session_store).record_agent_started(session_id, {
+            "runId": "run_orphaned", "agent": "claude",
+        })
+        assert client.get(f"/api/v1/threads/{session_id}/execution").json()["blockingReason"] == "orphaned_run"
+
+        assert client.delete(f"/api/v1/threads/{session_id}?stop=true").status_code == 204
+        assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
 
 
 def test_reconcile_frees_an_orphaned_run_with_no_retained_evidence(monkeypatch) -> None:
