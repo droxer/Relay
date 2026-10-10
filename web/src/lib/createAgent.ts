@@ -15,6 +15,8 @@ export interface NodeLike {
   capabilities?: readonly string[];
   /** Runtimes whose model calls go to a custom endpoint on this node. */
   customModelEndpoints?: readonly string[];
+  /** Model ids each runtime itself reports on this node. */
+  agentModels?: Readonly<Record<string, readonly string[] | undefined>>;
   status?: string;
 }
 
@@ -88,4 +90,17 @@ export function computerUsesCustomModelEndpoint(nodes: NodeLike[], target: strin
   return nodes.some((node) => computerId(node) === target
     && LIVE_NODE_STATUSES.has(node.status ?? "")
     && (node.customModelEndpoints ?? []).includes(kind));
+}
+
+/**
+ * The models `kind` itself reports on this computer, in the runtime's order,
+ * merged across the computer's live nodes.
+ */
+export function computerReportedModels(nodes: NodeLike[], target: string, kind: string): string[] {
+  const models = new Set<string>();
+  for (const node of nodes) {
+    if (computerId(node) !== target || !LIVE_NODE_STATUSES.has(node.status ?? "")) continue;
+    for (const model of node.agentModels?.[kind] ?? []) models.add(model);
+  }
+  return [...models];
 }

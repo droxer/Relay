@@ -4,7 +4,7 @@ import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { createAgent } from "../../api";
-import { computerCanSelectModel, computerUsesCustomModelEndpoint, runtimesForComputer } from "../../lib/createAgent";
+import { computerCanSelectModel, computerReportedModels, computerUsesCustomModelEndpoint, runtimesForComputer } from "../../lib/createAgent";
 import { modelHintKey, modelIdProblem, modelPolicyFor } from "../../lib/agentModels.ts";
 import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
@@ -133,6 +133,10 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
   // computer the agent is created on the runtime default.
   const canSelectModel = !executorKind || computerCanSelectModel(nodeLikes, computerId, executorKind);
   const customEndpoint = Boolean(executorKind) && computerUsesCustomModelEndpoint(nodeLikes, computerId, executorKind);
+  const reportedModels = useMemo(
+    () => (executorKind ? computerReportedModels(nodeLikes, computerId, executorKind) : []),
+    [nodeLikes, computerId, executorKind],
+  );
   const model = canSelectModel && executorKind && modelPick.kind === executorKind ? modelPick.model : "";
   const modelProblem = modelIdProblem(model);
 
@@ -293,7 +297,7 @@ export function CreateAgentDialog({ open, onClose, employeeId, onCreated }: Crea
             >
               <AgentModelField
                 key={executorKind}
-                executorKind={executorKind}
+                models={reportedModels}
                 customEndpoint={customEndpoint}
                 value={model}
                 onChange={(next) => {

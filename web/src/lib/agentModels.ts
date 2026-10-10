@@ -3,34 +3,27 @@
  * own default or `{ model }` to pin one; the daemon passes the id to the
  * runtime CLI's model flag.
  *
- * The suggestions are a shortcut, not an allowlist: catalogs move faster than
- * this file and Pi/Kimi models depend on the provider configured on the
- * computer, so any well-formed id can be entered as a custom model. The shape
- * rule mirrors backend/relay/core/model_policy.py.
+ * The options come from the runtime itself: each daemon asks its CLIs which
+ * models they offer and reports them per computer (`agentModels`). They are a
+ * shortcut, not an allowlist — any well-formed id can still be entered as a
+ * custom model. The shape rule mirrors backend/relay/core/model_policy.py.
  */
 import type { AgentName } from "../types.ts";
 
 export const MODEL_ID_MAX_LENGTH = 128;
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]+-]*$/;
 
-export const SUGGESTED_MODELS: Readonly<Record<AgentName, readonly string[]>> = {
-  claude: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-haiku-5-5"],
-  codex: ["gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1"],
-  pi: [],
-  kimi: [],
-};
-
 /**
- * Vendor ids to offer for `kind`. None behind a custom endpoint: a proxy or
- * compatible provider serves its own catalog, so a vendor id would only fail
- * when the run starts.
+ * The runtime-reported ids to offer. None behind a custom endpoint: a proxy or
+ * compatible provider serves its own catalog, so the runtime's vendor ids
+ * would only fail when the run starts.
  */
 export function suggestedModels(
-  kind: AgentName | "" | undefined,
+  reported: readonly string[] | undefined,
   { customEndpoint = false }: { customEndpoint?: boolean } = {},
 ): readonly string[] {
-  if (!kind || customEndpoint) return [];
-  return SUGGESTED_MODELS[kind] ?? [];
+  if (customEndpoint) return [];
+  return reported ?? [];
 }
 
 /**

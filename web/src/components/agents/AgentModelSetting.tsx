@@ -16,13 +16,15 @@ interface AgentModelSettingProps {
   saving: boolean;
   /** False when the agent's daemon cannot pass a model on; resetting stays allowed. */
   canSelectModel?: boolean;
+  /** The models the runtime itself reports on the agent's computer. */
+  models?: readonly string[];
   /** The runtime calls a custom model endpoint on its computer. */
   customEndpoint?: boolean;
   onSave: (model: string) => Promise<void>;
 }
 
 /**
- * The model row on an agent's profile. Picking the default or a suggested
+ * The model row on an agent's profile. Picking the default or a reported
  * model is a complete decision and saves at once; a custom id is typed, so it
  * waits for Enter or Save. Mount with `key={savedModel}` so a saved change
  * resets the draft.
@@ -33,6 +35,7 @@ export function AgentModelSetting({
   labelId,
   saving,
   canSelectModel = true,
+  models,
   customEndpoint = false,
   onSave,
 }: AgentModelSettingProps) {
@@ -45,7 +48,7 @@ export function AgentModelSetting({
   const locked = !canSelectModel && !savedModel;
   const problem = modelIdProblem(draft);
   const dirty = draft.trim() !== savedModel;
-  const suggestions = suggestedModels(executorKind, { customEndpoint });
+  const suggestions = suggestedModels(models, { customEndpoint });
   const hintKey = modelHintKey(executorKind, { customEndpoint });
 
   function commit(model: string) {
@@ -56,13 +59,13 @@ export function AgentModelSetting({
   return (
     <div className="agent-model-setting">
       <AgentModelField
-        executorKind={executorKind}
         value={draft}
         onChange={(next) => {
           setDraft(next);
           if (next === "" || suggestions.includes(next)) commit(next);
         }}
         onSubmitCustom={() => commit(draft)}
+        models={models}
         customEndpoint={customEndpoint}
         labelId={labelId}
         disabled={saving || locked}

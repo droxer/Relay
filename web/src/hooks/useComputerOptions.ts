@@ -40,6 +40,7 @@ function toNodeLike(sandbox: SandboxWithWorkspace): NodeLike {
     disabledAgents: sandbox.disabledAgents,
     capabilities: sandbox.capabilities,
     customModelEndpoints: sandbox.customModelEndpoints,
+    agentModels: sandbox.agentModels,
     status: sandbox.status,
   };
 }

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { computerCanSelectModel, computerName, computerUsesCustomModelEndpoint, runtimesForComputer, computersForEmployee } from "../src/lib/createAgent.js";
+import { computerCanSelectModel, computerName, computerReportedModels, computerUsesCustomModelEndpoint, runtimesForComputer, computersForEmployee } from "../src/lib/createAgent.js";
 
 describe("create agent options", () => {
   it("shows the computer name and never substitutes its workspace path", () => {
@@ -91,5 +91,17 @@ describe("model selection on a computer", () => {
     assert.equal(computerUsesCustomModelEndpoint([proxied], target, "codex"), false);
     assert.equal(computerUsesCustomModelEndpoint([{ ...proxied, status: "stopped" }], target, "claude"), false);
     assert.equal(computerUsesCustomModelEndpoint([{ ...live, id: "n1" }], target, "claude"), false);
+  });
+
+  it("offers the models a runtime reports on the computer's live nodes, merged in order", () => {
+    const target = "device:alice:mac";
+    const nodes = [
+      { ...live, id: "a", agentModels: { codex: ["gpt-6-luna", "gpt-5.6-terra"], claude: ["opus"] } },
+      { ...live, id: "b", agentModels: { codex: ["gpt-5.6-terra", "gpt-5.6-luna"] } },
+      { ...live, id: "old", status: "stopped", agentModels: { codex: ["gpt-retired"] } },
+    ];
+    assert.deepEqual(computerReportedModels(nodes, target, "codex"), ["gpt-6-luna", "gpt-5.6-terra", "gpt-5.6-luna"]);
+    assert.deepEqual(computerReportedModels(nodes, target, "pi"), []);
+    assert.deepEqual(computerReportedModels(nodes, "device:bob:pc", "codex"), []);
   });
 });
