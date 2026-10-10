@@ -4,6 +4,15 @@ import { ThreadRow } from "../src/components/ThreadRow";
 import type { RelaySession } from "../src/types";
 import type { ThreadItem } from "../src/lib/threads";
 
+// The shared setup's `t` drops interpolation; this file asserts the name that
+// fills `{{agent}}`, so its `t` keeps it.
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { agent?: string }) => (options?.agent ? `${key}:${options.agent}` : key),
+    i18n: { language: "en" },
+  }),
+}));
+
 function session(id: string, status: string, extra: Partial<RelaySession> = {}): RelaySession {
   return {
     id,
@@ -88,4 +97,17 @@ it("never draws the state twice on one row", () => {
   );
   expect(container.querySelectorAll(".state-mark").length).toBe(1);
   expect(container.querySelector(".conversation-subline")).toBeTruthy();
+});
+
+it("names the running agent, never its executor kind", () => {
+  // Several named agents share one runtime, so "Claude is working" named
+  // nobody — the row speaks the logical agent's name, or just "Running".
+  const named = renderRow(
+    { session: session("n", "running", { execution: { phase: "running" } as never }), runningAgent: "claude", runningAgentName: "Ada" },
+    "run",
+  );
+  expect(named.querySelector(".conversation-status")?.textContent).toBe("thread.agent_working:Ada");
+
+  const unnamed = renderRow({ session: session("u", "running", { execution: { phase: "running" } as never }), runningAgent: "claude" }, "run");
+  expect(unnamed.querySelector(".conversation-status")?.textContent).toBe("thread.group_running");
 });

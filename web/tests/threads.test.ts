@@ -7,6 +7,7 @@ import {
   matchesThreadQuery,
   myThreadSessions,
   pickActiveThreadSession,
+  runningAgentName,
   sessionAgents,
   threadLabel,
   threadOriginIndex,
@@ -63,6 +64,30 @@ describe("sessionAgents", () => {
 
   it("is empty for a fresh session with no runs", () => {
     assert.deepEqual(sessionAgents(session({ agentRuns: runs(), currentAgent: undefined })), []);
+  });
+});
+
+describe("runningAgentName", () => {
+  const names = new Map([["agt_ada", "Ada"], ["agt_bo", "Bo"]]);
+
+  it("names the logical agent behind the active run, not its executor kind", () => {
+    assert.equal(
+      runningAgentName(session({}), { logicalAgentId: "agt_ada" }, names),
+      "Ada",
+    );
+  });
+
+  it("falls back to the session's latest run when the active run carries no id", () => {
+    const agentRuns = [
+      { agent: "claude", logicalAgentId: "agt_ada" },
+      { agent: "claude", logicalAgentId: "agt_bo" },
+    ] as AgentRuns;
+    assert.equal(runningAgentName(session({ agentRuns }), {}, names), "Bo");
+  });
+
+  it("is undefined when no logical agent resolves", () => {
+    assert.equal(runningAgentName(session({}), { logicalAgentId: "agt_gone" }, names), undefined);
+    assert.equal(runningAgentName(session({ status: "completed" }), undefined, names), undefined);
   });
 });
 

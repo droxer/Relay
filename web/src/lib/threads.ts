@@ -8,6 +8,9 @@ export type ThreadItem = {
   session: RelaySession;
   /** Agent of an in-flight run for this thread, if any. */
   runningAgent?: AgentName;
+  /** Display name of the logical agent doing that run. Several named agents
+      share one executor kind, so the row names this, never the kind. */
+  runningAgentName?: string;
   /** The computer this thread is pinned to is unreachable. */
   nodeOffline?: boolean;
   /** The backlog task or routine that started this thread; absent for a chat. */
@@ -180,6 +183,19 @@ export function sessionAgents(
   return order;
 }
 
+/** Who is running a thread, by name: the active run's logical agent, else the
+ * session's latest run that recorded one. Undefined when neither resolves —
+ * the caller says "Running" rather than guess from the executor kind. */
+export function runningAgentName(
+  session: Pick<RelaySession, "agentRuns">,
+  activeRun: { logicalAgentId?: string } | undefined,
+  namesById: ReadonlyMap<string, string>,
+): string | undefined {
+  const recorded = (session.agentRuns ?? []).filter((run) => run.logicalAgentId);
+  const agentId = activeRun?.logicalAgentId ?? recorded.at(-1)?.logicalAgentId;
+  return agentId ? namesById.get(agentId) : undefined;
+}
+
 // Title/goal substring search used by the thread list filter.
 export function matchesThreadQuery(session: Labelled, query: string): boolean {
   const q = query.trim().toLowerCase();
@@ -246,6 +262,7 @@ export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadIt
     const keep = prior
       && prior.session === item.session
       && prior.runningAgent === item.runningAgent
+      && prior.runningAgentName === item.runningAgentName
       && prior.nodeOffline === item.nodeOffline
       && sameOrigin(prior.origin, item.origin)
       && prior.projectName === item.projectName

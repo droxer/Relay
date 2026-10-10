@@ -543,6 +543,143 @@
   word-break: break-word;
 }
 
+/* An automation run's opening turn (AutomationOpening). Nobody typed it, so
+   it trades the user's round avatar and hugging bubble for the automation's
+   square mark and a record card: a kicker naming what started it, the
+   automation's title, its brief, and — for an event-fired run — the events,
+   translated, that the agent was handed as an English trigger block. */
+.rail-node-automation {
+  background: var(--surface-3);
+  border-color: var(--line-1);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+}
+
+/* Hugs its content like the user bubble it replaces, but never narrower
+   than a readable record — a one-line brief should not shrink to a chip. */
+.msg-automation .turn-body {
+  justify-self: start;
+  width: fit-content;
+  min-width: min(100%, 22rem);
+  max-width: min(100%, 42rem);
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-1);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-3);
+}
+
+.automation-opening-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.automation-opening-kicker {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+/* What started the run, as a border-only chip (flat chrome: no fill). */
+.automation-opening-trigger {
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.automation-opening-title {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-name);
+  word-break: break-word;
+}
+
+.automation-opening-brief {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-transcript);
+  line-height: var(--leading-transcript);
+  word-break: break-word;
+}
+
+.automation-opening-events {
+  display: grid;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 0.5px solid var(--line-2);
+}
+
+.automation-opening-events-head {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.automation-opening-events ul {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.automation-opening-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  min-width: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.automation-opening-subject {
+  min-width: 0;
+  color: var(--ink-1);
+  word-break: break-word;
+}
+
+.automation-opening-detail,
+.automation-opening-more {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.automation-opening-detail[data-outcome="failed"],
+.automation-opening-error {
+  color: var(--err);
+}
+
+.automation-opening-error {
+  flex-basis: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.automation-opening-payload {
+  flex-basis: 100%;
+  max-height: 16rem;
+  margin: var(--sp-1) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  overflow: auto;
+  background: var(--surface-2);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-code);
+  letter-spacing: var(--type-code-track);
+  white-space: pre;
+}
+
 .msg-quiet {
   margin: 0;
   max-width: 100%;
