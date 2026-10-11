@@ -89,9 +89,12 @@ The database stores the digest and byte count, not new blob content. A nullable
 legacy content column remains temporarily so upgraded installations can read
 objects published by older builds.
 
-`SkillObjectStore` is the extension seam for a later S3-compatible or other
-object-storage implementation; catalog and dispatch code do not depend on the
-filesystem layout.
+`SkillObjectStore` is the extension seam for object storage; catalog and
+dispatch code do not depend on the filesystem layout. With
+`RELAY_BLOB_STORE=r2`, `BlobSkillObjectStore` keeps objects in R2 under
+`skills/objects/<sha256[0:2]>/<sha256[2:]>`, reading the data dir as a fallback
+for objects an earlier build wrote there and copying them up on read;
+`relay migrate-blobs-to-r2` moves the rest.
 
 Limits are enforced before publication: 300 files, 1 MiB per file, and 4 MiB
 per revision. Paths must be confined relative paths, `SKILL.md` is required,

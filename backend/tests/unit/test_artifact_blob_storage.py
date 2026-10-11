@@ -6,29 +6,12 @@ import json
 from pathlib import Path
 
 import pytest
+from blob_fakes import MemoryBlobStore
 from relay.persistence.session_store import DatabaseSessionStore
 from sqlalchemy import text
 
 ARTIFACT_ID = "22222222-2222-4222-8222-222222222222"
 CONTENT = b"pptx binary \x00 bytes"
-
-
-class MemoryBlobStore:
-    def __init__(self) -> None:
-        self.blobs: dict[str, bytes] = {}
-
-    def put(self, key: str, data: bytes, *, content_type: str | None) -> None:
-        self.blobs[key] = data
-
-    def get(self, key: str) -> bytes | None:
-        return self.blobs.get(key)
-
-    def delete(self, key: str) -> None:
-        self.blobs.pop(key, None)
-
-    def delete_prefix(self, prefix: str) -> None:
-        for key in [k for k in self.blobs if k.startswith(prefix)]:
-            del self.blobs[key]
 
 
 def _artifact(session_id: str, artifact_id: str = ARTIFACT_ID) -> dict:
