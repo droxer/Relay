@@ -24,6 +24,24 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# pg_dump/pg_restore for `relay backup-database` (a cron service on the same
+# image). pg_dump must be at least the server's major version, so the client
+# comes from the PostgreSQL apt repository; set PG_CLIENT_MAJOR to match the
+# database (Railway passes service variables through as build args).
+ARG PG_CLIENT_MAJOR=17
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends "postgresql-client-${PG_CLIENT_MAJOR}" \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
 # Resolve dependencies before copying sources so a code-only change reuses the
 # cached dependency layer. The migration extra carries Alembic without shipping
 # test and pre-commit tooling in the runtime image.

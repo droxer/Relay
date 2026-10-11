@@ -165,7 +165,66 @@ It uploads each item before clearing its row, so it is safe to interrupt and
 re-run; it never deletes files from the data dir. When a run reports `0` for
 everything, the volume can be detached.
 
-## 7. Verify
+## 7. Nightly database backups to R2
+
+Postgres is the source of truth for every thread, task, and event. A Railway
+cron service on the same image runs `relay backup-database` once a night: it
+`pg_dump`s the database into a temporary file, proves the archive is readable
+with `pg_restore --list`, and only then uploads it. A failed or truncated dump
+uploads nothing.
+
+| Object | Written | Kept (lifecycle rule) |
+| --- | --- | --- |
+| `daily/relay-<UTC timestamp>.dump` | every run | 30 days |
+| `monthly/relay-<UTC timestamp>.dump` | runs on the 1st of the month | 365 days |
+
+1. **Bucket.** Cloudflare → *R2* → create `relay-backups`, private. Under its
+   *Settings* → *Object lifecycle rules*, add: prefix `daily/` → delete after
+   30 days; prefix `monthly/` → delete after 365 days.
+2. **Token.** Create an R2 API token with **Object Read & Write** on
+   `relay-backups` only. Keep it separate from the artifact token so the
+   backend's everyday credentials cannot touch backups.
+3. **Service.** In the Railway project → *New* → *GitHub repo* → this repo
+   again. In the new service's *Settings*, set the *Config-as-code* path to
+   `railway.backup.json`; it builds the same image, runs `relay
+   backup-database` at 03:00 UTC (`cronSchedule`), and never restarts. Give it
+   no domain.
+4. **Variables** on the backup service:
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `RELAY_BACKUP_R2_BUCKET` | `relay-backups` |
+   | `RELAY_R2_ACCOUNT_ID` | your Cloudflare account ID |
+   | `RELAY_BACKUP_R2_ACCESS_KEY_ID` | the backup token's access key ID |
+   | `RELAY_BACKUP_R2_SECRET_ACCESS_KEY` | the backup token's secret |
+   | `PG_CLIENT_MAJOR` | your Postgres major version (default `17`) |
+
+   `pg_dump` must be at least the server's major version. Railway passes
+   `PG_CLIENT_MAJOR` to the image build, which installs that client from the
+   PostgreSQL apt repository; check the server with `select version();` and
+   rebuild after a Postgres major upgrade. Without the backup keys the
+   command falls back to `RELAY_R2_ACCESS_KEY_ID`/`RELAY_R2_SECRET_ACCESS_KEY`.
+5. **First run.** Deploy the service once by hand and check its log for
+   `Database backup uploaded` and the object in the bucket.
+
+**Restoring.** Restore into a fresh database first, check it, then repoint
+the backend:
+
+```bash
+# Download the archive from the R2 dashboard (or any S3 client), then:
+createdb relay_restore
+pg_restore --no-owner --no-privileges --dbname=relay_restore relay-<timestamp>.dump
+# Bring a restore up to the running code's schema before pointing the backend at it:
+DATABASE_URL=postgresql://.../relay_restore alembic -c backend/alembic.ini upgrade head
+```
+
+To restore over the live database instead, stop the backend first and add
+`--clean --if-exists`. Artifact snapshots and skill bundles live in the R2
+buckets from section 6, not in the dump; keys in a restored database still
+point at them.
+
+## 8. Verify
 
 ```bash
 # Through the edge: 200

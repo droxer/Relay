@@ -131,6 +131,15 @@ def _r2_endpoint(account_id: str) -> str:
     return override.rstrip("/")
 
 
+def r2_client(*, account_id: str, access_key_id: str, secret_access_key: str) -> Any:
+    """An S3 client for this account's R2 endpoint (honoring RELAY_R2_ENDPOINT)."""
+    return _s3_client(
+        endpoint_url=_r2_endpoint(account_id),
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+    )
+
+
 def blob_store_from_env() -> BlobStore | None:
     mode = os.environ.get("RELAY_BLOB_STORE", "").strip().lower()
     if mode in ("", "database"):
@@ -141,8 +150,8 @@ def blob_store_from_env() -> BlobStore | None:
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise RuntimeError(f"RELAY_BLOB_STORE=r2 requires {', '.join(missing)}.")
-    client = _s3_client(
-        endpoint_url=_r2_endpoint(values["RELAY_R2_ACCOUNT_ID"]),
+    client = r2_client(
+        account_id=values["RELAY_R2_ACCOUNT_ID"],
         access_key_id=values["RELAY_R2_ACCESS_KEY_ID"],
         secret_access_key=values["RELAY_R2_SECRET_ACCESS_KEY"],
     )
