@@ -824,6 +824,8 @@ class SessionController:
             completed_payload["tokenUsage"] = step_result["tokenUsage"]
         if step_result.get("outputTruncated"):
             completed_payload["outputTruncated"] = True
+        if step_result.get("runtimeSessionId"):
+            completed_payload["runtimeSessionId"] = step_result["runtimeSessionId"]
         self._append(
             session_id, relay_event("agent.completed", session_id, completed_payload)
         )

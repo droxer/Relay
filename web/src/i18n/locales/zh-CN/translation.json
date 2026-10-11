@@ -1578,6 +1578,8 @@
     "copy": "复制",
     "copied": "已复制",
     "retry": "重试",
+    "resume": "继续",
+    "resume_title": "继续：在智能体原有的会话中继续此运行，而不是从头开始",
     "copy_code": "复制代码",
     "copy_code_failed": "复制失败",
     "diagram": "图表",

@@ -9,16 +9,31 @@ import {
 import { kimiApiKey, kimiModel, localRuntimeEnvironment } from "./env.js";
 import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { AgentState } from "./state.js";
+import { isResumableSessionId } from "./runtime-session.js";
+
+/** Only a well-formed id is ever placed on a command line. */
+function resumeId(state: AgentState): string | undefined {
+  return isResumableSessionId(state.resume_session_id) ? state.resume_session_id : undefined;
+}
+
+const RESUME_NOTE = "[Resumed run] Your previous run of this task was interrupted before it finished. "
+  + "This conversation is that run. Check what you already completed and continue from there; do not start over.\n\n";
+
+function withResumeNote(prompt: string, state: AgentState): string {
+  return resumeId(state) ? RESUME_NOTE + prompt : prompt;
+}
 
 export function buildCodexCommand(state: AgentState, workspacePath?: string): string {
+  const resume = resumeId(state);
   const argv = [
-    ...codexBaseArgv({ workspacePath, model: state.agent_model }),
-    nativeSkillPrompt(codexTaskPrompt(state), state),
+    ...codexBaseArgv({ workspacePath, model: state.agent_model, resume }),
+    ...(resume ? [resume] : []),
+    withResumeNote(nativeSkillPrompt(codexTaskPrompt(state), state), state),
   ];
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CODEX_HOME"), workspacePath);
 }
 
-function codexBaseArgv({ workspacePath, model: pinned }: { workspacePath?: string; model?: string } = {}): string[] {
+function codexBaseArgv({ workspacePath, model: pinned, resume }: { workspacePath?: string; model?: string; resume?: string } = {}): string[] {
   const workspace = workspacePath ?? agentWorkspacePath();
   const argv = [
     ...agentArgv("codex"),
@@ -26,6 +41,8 @@ function codexBaseArgv({ workspacePath, model: pinned }: { workspacePath?: strin
     "-C",
     workspace,
     "exec",
+    // `codex exec resume <id> <prompt>` takes the same options as exec.
+    ...(resume ? ["resume"] : []),
     "--json",
     "--skip-git-repo-check",
     ...(trustedExecution() ? ["--dangerously-bypass-approvals-and-sandbox"] : []),
@@ -36,7 +53,7 @@ function codexBaseArgv({ workspacePath, model: pinned }: { workspacePath?: strin
 }
 
 export function buildClaudeCommand(state: AgentState, workspacePath?: string): string {
-  return buildClaudeInvocation(nativeSkillPrompt(claudeTaskPrompt(state), state), state, workspacePath);
+  return buildClaudeInvocation(withResumeNote(nativeSkillPrompt(claudeTaskPrompt(state), state), state), state, workspacePath);
 }
 function buildClaudeInvocation(
   prompt: string,
@@ -57,6 +74,8 @@ function buildClaudeInvocation(
   ];
   const model = runtimeModel(state.agent_model, anthropicModel);
   if (model) argv.push("--model", model);
+  const resume = resumeId(state);
+  if (resume) argv.push("--resume", resume);
   argv.push(prompt);
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
 }

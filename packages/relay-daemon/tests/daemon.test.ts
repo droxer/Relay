@@ -4144,6 +4144,45 @@ test("a restarted daemon settles a run it can prove ended instead of leaving it 
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
+test("a run reports the runtime conversation it ran in so it can be resumed", async () => {
+  const stop = new AbortController();
+  const session = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
+  const command = { ...runCommand("cmd_session"), agent: "claude" as const };
+  const events: DaemonNodeEvent[] = [];
+  let capabilities: unknown[] = [];
+  let served = false;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "sbx_session", employeeId: "alice", token: "node_token",
+    workspacePath: process.cwd(), pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+    environment: fakeEnvironment({ exec: async (_cmd, args) => isInventoryProbe(args)
+      ? { exit_code: 0, stdout: "", stderr: "" }
+      : { exit_code: 0, stdout: `{"type":"system","subtype":"init","session_id":"${session}"}\n`, stderr: "" } }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        const body = JSON.parse(String(init?.body));
+        if (body.status !== "stopped") capabilities = body.capabilities;
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) {
+        const commands = served ? [] : [command]; served = true;
+        return jsonResponse({ commands });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
+        if (event.type === "run.completed" || event.type === "run.failed") setTimeout(() => stop.abort(), 0);
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  const completed = events.find((event) => event.type === "run.completed");
+  if (!completed || completed.type !== "run.completed") throw new Error("missing run.completed");
+  assert.equal(completed.runtimeSessionId, session);
+  assert.ok(capabilities.includes("agent-resume"));
+});
+
 test("local execution cleans up descendants before waiting for inherited pipes", {skip: process.platform === "win32", timeout: 10000}, async () => {
   let childPid = 0;
   let ready!: () => void;

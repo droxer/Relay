@@ -8203,3 +8203,76 @@ def test_a_completed_run_remembers_its_output_was_truncated():
             assert run["status"] == "completed"
             assert run["outputTruncated"] is True
     asyncio.run(flow())
+
+
+SESSION_ID = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d"
+
+
+def _resume_registry(root: str, capabilities: list[str]) -> tuple[Any, Any]:
+    sessions = LocalSessionStore(root)
+    registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+    registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                       "workspacePath": "/workspace/alice", "protocolVersion": 2,
+                       "supportedAgents": ["claude"], "capabilities": ["thread-workspaces", *capabilities],
+                       "status": "ready"})
+    return sessions, registry
+
+
+def _finish(registry: Any, command: dict[str, Any], **fields: Any) -> None:
+    registry.handle_event("sbx_alice", {
+        "type": "run.cancelled", "commandId": command["id"], "runId": command["runId"],
+        "sessionId": command["sessionId"], "agent": "claude", "leaseId": command["leaseId"],
+        "reason": "lease expired", **fields,
+    }, "node_token")
+
+
+def test_a_run_remembers_the_runtime_conversation_it_ran_in():
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, registry = _resume_registry(root, ["agent-resume"])
+            await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "work", "assignments": [{"agent": "claude"}]})
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            _finish(registry, command, runtimeSessionId=SESSION_ID)
+            [run] = sessions.get_session(command["sessionId"])["agentRuns"]
+            assert run["runtimeSessionId"] == SESSION_ID
+    asyncio.run(flow())
+
+
+def test_a_malformed_runtime_session_id_is_dropped():
+    from relay.api.helpers import daemon_node_event
+
+    event = daemon_node_event({"type": "run.cancelled", "commandId": "c", "sessionId": "s", "runId": "r",
+                               "agent": "claude", "runtimeSessionId": "x; rm -rf /"})
+    assert "runtimeSessionId" not in event
+
+
+@pytest.mark.parametrize("capable", [True, False])
+def test_resuming_a_rerun_hands_the_agent_its_conversation_back(capable):
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, registry = _resume_registry(root, ["agent-resume"] if capable else [])
+            backend = ServerDaemonNodeBackend(registry)
+            await backend.run("sbx_alice", {"taskGoal": "work", "assignments": [{"agent": "claude"}]})
+            [first] = registry.take_commands("sbx_alice", "node_token")
+            _finish(registry, first, runtimeSessionId=SESSION_ID)
+
+            await backend.run("sbx_alice", {"sessionId": first["sessionId"], "taskGoal": "work",
+                                            "assignments": [{"agent": "claude", "resumeRun": True}]})
+            [second] = registry.take_commands("sbx_alice", "node_token")
+
+            state = second["state"]
+            if capable:
+                assert state["resume_session_id"] == SESSION_ID
+            else:
+                # An older daemon cannot resume; the rerun simply starts fresh.
+                assert "resume_session_id" not in state
+    asyncio.run(flow())
+
+
+def test_only_a_rerun_decision_can_ask_to_resume():
+    from relay.collaboration.service import _validated_decision
+
+    target = {"executorKind": "claude", "agentId": "agent_1"}
+    assert _validated_decision({"kind": "rerun", "resume": True}, target)["resume"] is True
+    assert "resume" not in _validated_decision({"kind": "rerun"}, target)
+    assert "resume" not in _validated_decision({"kind": "handoff", "resume": True}, target)

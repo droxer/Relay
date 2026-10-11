@@ -31,6 +31,8 @@ export type DerivedMessage =
       usageUnreported?: boolean;
       /** Part of the live output never reached Relay; the result is complete. */
       outputTruncated?: boolean;
+      /** The turn stopped before finishing and its runtime can pick it back up. */
+      resumable?: boolean;
     }
   | {
       kind: "system";
@@ -466,6 +468,7 @@ export class ProjectMessagesAccumulator {
           ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
           ...(!event.tokenUsage ? { usageUnreported: true } : {}),
           ...(event.outputTruncated ? { outputTruncated: true } : {}),
+          ...(event.status !== "completed" && event.runtimeSessionId ? { resumable: true } : {}),
         };
         return true;
       }

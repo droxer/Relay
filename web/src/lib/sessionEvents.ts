@@ -122,6 +122,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
             ...(event.agentLog !== undefined ? { agentLog: event.agentLog } : {}),
             ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
             ...(event.outputTruncated ? { outputTruncated: true } : {}),
+            ...(event.runtimeSessionId ? { runtimeSessionId: event.runtimeSessionId } : {}),
           }
         : run);
       {

@@ -600,6 +600,18 @@ def authorized_sandbox_for_token(
     )
 
 
+RUNTIME_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
+
+
+def _runtime_session_field(value: dict[str, Any]) -> dict[str, Any]:
+    """A runtime CLI's conversation id, kept only if it is a plain id: it is
+    later placed on a command line to resume that conversation."""
+    session_id = value.get("runtimeSessionId")
+    if isinstance(session_id, str) and RUNTIME_SESSION_ID.match(session_id):
+        return {"runtimeSessionId": session_id}
+    return {}
+
+
 def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
     event_type = string_field(value, "type")
     command_id = string_field(value, "commandId")
@@ -870,6 +882,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             ),
             **({"roundResult": round_result} if isinstance(round_result, dict) else {}),
             **({"outputTruncated": True} if value.get("outputTruncated") is True else {}),
+            **_runtime_session_field(value),
         }
     if event_type == "run.failed":
         # An agent process may finish successfully and write deliverables even
@@ -884,6 +897,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "runId": run_id,
             "agent": agent,
             "error": string_field(value, "error") or "Daemon node command failed.",
+            **_runtime_session_field(value),
             **(
                 {"agentLog": raw_string_field(value, "agentLog")}
                 if isinstance(value.get("agentLog"), str)
@@ -910,6 +924,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             "runId": run_id,
             "agent": agent,
             "reason": string_field(value, "reason") or "Cancelled by human.",
+            **_runtime_session_field(value),
             **(
                 {"agentLog": raw_string_field(value, "agentLog")}
                 if isinstance(value.get("agentLog"), str)

@@ -1614,6 +1614,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "retry": "Retry",
+    "resume": "Resume",
+    "resume_title": "Resume: continue in the agent's own conversation instead of starting over",
     "copy_code": "Copy code",
     "copy_code_failed": "Copy failed",
     "diagram": "Diagram",

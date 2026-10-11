@@ -131,6 +131,7 @@ LOST_DISPATCH_GRACE_SECONDS = DAEMON_COMMAND_LEASE_SECONDS
 # Bound one registration's journal report; the daemon sends the rest next time.
 JOURNAL_REPORT_LIMIT = 200
 DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT = "execution-journal-report"
+DAEMON_CAPABILITY_AGENT_RESUME = "agent-resume"
 DAEMON_COMMAND_RETENTION_SECONDS = float(
     os.environ.get("RELAY_DAEMON_COMMAND_RETENTION_SECONDS", str(6 * 60 * 60))
 )
@@ -250,6 +251,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_AGENT_MODEL,
         DAEMON_CAPABILITY_ENDPOINT_MODELS,
         DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
+        DAEMON_CAPABILITY_AGENT_RESUME,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -3409,6 +3411,10 @@ class DaemonNodeRegistry:
                 )
                 return run_request
             state["agent_model"] = assignment["agentModel"]
+        if assignment.get("resumeRun") and DAEMON_CAPABILITY_AGENT_RESUME in (sandbox.get("capabilities") or []):
+            resume = resumable_runtime_session(session_snapshot, assignment)
+            if resume:
+                state["resume_session_id"] = resume
         if assignment.get("brief"):
             state["assignment_brief"] = assignment["brief"]
         state["assignment_id"] = assignment["assignmentId"]
@@ -3776,6 +3782,8 @@ class DaemonNodeRegistry:
         }
         if event.get("tokenUsage"):
             payload["tokenUsage"] = event["tokenUsage"]
+        if event.get("runtimeSessionId"):
+            payload["runtimeSessionId"] = event["runtimeSessionId"]
         self.store.append_event(session["id"], relay_event("agent.completed", session["id"], payload))
 
     def _advance_run_request(
@@ -3885,6 +3893,7 @@ class DaemonNodeRegistry:
                         "exitCode": exit_code,
                         "agentLog": agent_log,
                         "tokenUsage": event.get("tokenUsage"),
+                        **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                         "assignmentId": assignment.get("assignmentId"),
                     },
                 )
@@ -3946,6 +3955,7 @@ class DaemonNodeRegistry:
                         "exitCode": 130,
                         "agentLog": agent_log,
                         "tokenUsage": event.get("tokenUsage"),
+                        **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                         "assignmentId": assignment.get("assignmentId"),
                     },
                 )
@@ -3987,6 +3997,7 @@ class DaemonNodeRegistry:
                     **({"workResult": work_result} if work_result else {}),
                     **({"outputTruncated": True} if event.get("outputTruncated") else {}),
                     "tokenUsage": event.get("tokenUsage"),
+                    **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                     "assignmentId": assignment.get("assignmentId"),
                 },
             )
@@ -4919,6 +4930,27 @@ class DaemonNodeRegistry:
                 "Daemon node stale", sandbox_id=sandbox["id"], last_seen_age_ms=age
             )
         return {"online": online, "stale": not online, "lastSeenAgeMs": age}
+
+
+def resumable_runtime_session(
+    session: dict[str, Any], assignment: dict[str, Any]
+) -> str | None:
+    """The runtime conversation this agent's latest run in the thread used.
+
+    Only the same logical agent (or, for legacy runs, the same executor) may
+    resume it; a different agent never inherits another's conversation.
+    """
+    agent_id = assignment.get("agentId")
+    for run in reversed(session.get("agentRuns") or []):
+        same_agent = (
+            run.get("logicalAgentId") == agent_id
+            if agent_id
+            else run.get("agent") == assignment.get("executorKind")
+        )
+        if not same_agent:
+            continue
+        return run.get("runtimeSessionId")
+    return None
 
 
 def daemon_active_run(run: dict[str, Any]) -> dict[str, Any]:

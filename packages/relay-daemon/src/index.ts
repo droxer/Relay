@@ -78,6 +78,7 @@ import {
   DAEMON_CAPABILITY_AGENT_MODEL,
   DAEMON_CAPABILITY_ENDPOINT_MODELS,
   DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
+  DAEMON_CAPABILITY_AGENT_RESUME,
   DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
   DAEMON_CAPABILITY_TASK_WORKSPACES,
   DAEMON_CAPABILITY_THREAD_WORKSPACES,
@@ -388,6 +389,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       DAEMON_CAPABILITY_AGENT_MODEL,
       DAEMON_CAPABILITY_ENDPOINT_MODELS,
       DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
+      DAEMON_CAPABILITY_AGENT_RESUME,
     ],
     agentHealth,
     ...(Object.keys(agentInventory).length > 0 ? { agentInventory } : {}),
@@ -1399,7 +1401,7 @@ async function executeCommand(
         ...commandLogFields(sandboxId, command),
         exitCode: next.last_exit_code,
       });
-      return runCancelledEvent(command, signal.reason, agentLog, next.token_usage);
+      return runCancelledEvent(command, signal.reason, agentLog, next.token_usage, next.runtime_session_id);
     }
     // Output delivery can fail after the agent process has successfully written
     // its deliverables. Preserve those files on the terminal failure event so
@@ -1420,6 +1422,7 @@ async function executeCommand(
         exitCode: next.last_exit_code || 1,
         ...(next.token_usage ? { tokenUsage: next.token_usage } : {}),
         ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+        ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
       } satisfies DaemonNodeEvent;
     }
     logger.info("run completed", {
@@ -1441,6 +1444,7 @@ async function executeCommand(
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
       ...(outputBatchesRejected > 0 ? { outputTruncated: true } : {}),
+      ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
     } satisfies DaemonNodeEvent;
   }
 }
@@ -1450,6 +1454,7 @@ function runCancelledEvent(
   reason: unknown,
   agentLog?: string,
   tokenUsage?: TokenUsage,
+  runtimeSessionId?: string,
 ): DaemonNodeEvent {
   return {
     type: "run.cancelled",
@@ -1461,6 +1466,7 @@ function runCancelledEvent(
     reason: typeof reason === "string" && reason ? reason : "Cancelled by human.",
     ...(agentLog ? { agentLog } : {}),
     ...(tokenUsage ? { tokenUsage } : {}),
+    ...(runtimeSessionId ? { runtimeSessionId } : {}),
   };
 }
 

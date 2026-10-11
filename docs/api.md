@@ -114,7 +114,7 @@ shows the reason and offers Re-enable to the owner or an admin.
 PATCH  /api/v1/threads/{id}                         { title } or { archived: true }
 POST   /api/v1/threads/{id}/cancellations
 POST   /api/v1/threads/{id}/messages               { text, intent, addressAgentIds?, addressTeamId?, style?, userMessageId?, idempotencyKey? }
-POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey? }
+POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey?, resume? }
 PUT    /api/v1/tasks/{id}/assignment
 POST   /api/v1/tasks/{id}/runs
 POST   /api/v1/tasks/{id}/pickups
@@ -141,6 +141,16 @@ or `review`; omitting `addressAgentId` addresses the current room. Recovery
 `kind` is `rerun` or `handoff`. The backend resolves membership, executor,
 placement, and immutable round assignments; clients do not send those transport
 details.
+
+A `kind: "rerun"` with `resume: true` continues the target agent's own runtime
+conversation instead of starting over: daemons advertising `agent-resume` report
+the CLI's conversation id as `runtimeSessionId` on `run.completed`/`run.failed`/
+`run.cancelled` (stored on the run record), and the rerun's command state carries
+it back as `resume_session_id`. Only Claude (`--resume`) and Codex
+(`exec resume`) resume today; on an older daemon, or with no recorded
+conversation, the rerun simply starts fresh, and a resume whose conversation is
+gone falls back to a fresh run on the daemon. Ids are accepted only as plain
+`[A-Za-z0-9_-]{8,128}` tokens because they return on a command line.
 
 Use `/threads/{id}/recoveries` with `kind: "handoff"` to dispatch a receiving
 logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under

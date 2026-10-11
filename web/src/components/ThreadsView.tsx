@@ -124,6 +124,7 @@ type ThreadsViewProps = {
   onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"]) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
+  onResumeAgent: (agent: AgentName, agentId?: string) => void;
   onRetryExecutionRecovery?: () => Promise<void>;
   onReportExecutionGone?: () => Promise<void>;
   running: boolean;
@@ -201,6 +202,7 @@ export function ThreadsView({
   onSend,
   onCancelRun,
   onRetryAgent,
+  onResumeAgent,
   onRetryExecutionRecovery,
   onReportExecutionGone,
   running,
@@ -446,6 +448,7 @@ export function ThreadsView({
                         logicalAgentImages={logicalAgentImages}
                         onOpenArtifact={onOpenArtifacts}
                         onRetryAgent={onRetryAgent}
+                        onResumeAgent={onResumeAgent}
                         retryDisabled={running}
                         pickupFrom={source ? labelForAgentRun(source, logicalAgentNames, agentDisplayNames) : undefined}
                       />

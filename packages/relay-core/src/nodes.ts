@@ -1,3 +1,4 @@
+import { extractRuntimeSessionId } from "./runtime-session.js";
 import { getAgent } from "./agents.js";
 import { StderrLineRenderer } from "./renderers.js";
 import {
@@ -45,11 +46,10 @@ export async function runAgentNode(
   const stderrRenderer = new StderrLineRenderer();
   const collaborationStream = agent === "codex" ? new CodexCollaborationStream() : undefined;
   const runId = options.runId;
-  const command = def.buildCommand(state, options.workspacePath);
   // Daemons pass a thread-specific directory. Direct callers retain the
   // environment-backed workspace for compatibility.
   const cwd = options.workspacePath ?? agentWorkspacePath();
-  const result = await execute("bash", ["-c", command], {
+  const run = (runState: AgentState) => execute("bash", ["-c", def.buildCommand(runState, options.workspacePath)], {
     cwd,
     stdoutRenderer: (chunk) => {
       if (runId) options.eventSink?.agentOutput(runId, agent, "stdout", chunk);
@@ -71,6 +71,15 @@ export async function runAgentNode(
     // not reach Python's own buffering, so ask for it on every computer.
     env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)) },
   });
+  let result = await run(state);
+  let runtimeSessionId = extractRuntimeSessionId(result.stdout, agent);
+  // A resume that never reached its conversation (pruned, or recorded on
+  // another computer) did no work, so the run starts fresh instead of failing.
+  if (state.resume_session_id && result.exit_code !== 0 && !runtimeSessionId && !options.signal?.aborted) {
+    const { resume_session_id: _dropped, ...fresh } = state;
+    result = await run(fresh);
+    runtimeSessionId = extractRuntimeSessionId(result.stdout, agent);
+  }
   const tokenUsage = extractTokenUsageFromJsonl(result.stdout, agent);
 
   return {
@@ -78,6 +87,7 @@ export async function runAgentNode(
     last_exit_code: result.exit_code,
     agent_failures: withFailure(state, agent, result.exit_code !== 0),
     token_usage: tokenUsage,
+    ...(runtimeSessionId ? { runtime_session_id: runtimeSessionId } : {}),
   };
 }
 

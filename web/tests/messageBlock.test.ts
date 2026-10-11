@@ -364,6 +364,25 @@ describe("projectMessages artifact projection", () => {
     assert.equal(userMessages[1].text, "Now add a dark mode toggle");
   });
 
+  it("offers resume only for an unfinished turn whose runtime reported its conversation", () => {
+    const turn = (runId: string, status: "completed" | "failed" | "cancelled", runtimeSessionId?: string) => [
+      { id: `ev_start_${runId}`, type: "agent.started", sessionId: "ses_1", timestamp, runId, agent: "claude", role: "fixer" },
+      { id: `ev_done_${runId}`, type: "agent.completed", sessionId: "ses_1", timestamp, runId, agent: "claude",
+        status, exitCode: status === "completed" ? 0 : 1, agentLog: "", ...(runtimeSessionId ? { runtimeSessionId } : {}) },
+    ];
+    const messages = projectMessages(session([
+      ...turn("run_cut", "cancelled", "sess-12345678"),
+      ...turn("run_failed", "failed", "sess-12345678"),
+      ...turn("run_done", "completed", "sess-12345678"),
+      ...turn("run_unknown", "failed"),
+    ] as RelaySession["events"]), t);
+    const turns = new Map(messages.flatMap((message) => message.kind === "agent" ? [[message.runId, message] as const] : []));
+    assert.equal(turns.get("run_cut")?.resumable, true);
+    assert.equal(turns.get("run_failed")?.resumable, true);
+    assert.equal(turns.get("run_done")?.resumable, undefined);
+    assert.equal(turns.get("run_unknown")?.resumable, undefined);
+  });
+
   it("carries a truncated-output flag from the completed run onto its turn", () => {
     const messages = projectMessages(session([
       { id: "ev_start_cut", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_cut", agent: "codex", role: "fixer" },

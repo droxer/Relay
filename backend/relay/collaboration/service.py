@@ -203,6 +203,7 @@ class CollaborationConductor:
                     "kind": intent.kind,
                     "targetAgentId": intent.target_agent_id,
                     **({"note": intent.note} if intent.note else {}),
+                    **({"resume": True} if intent.resume else {}),
                 },
                 source="recovery",
                 purpose=_purpose_for_mode(mode),
@@ -606,6 +607,12 @@ class CollaborationConductor:
             )
         if intent.decision:
             parsed["decision"] = _validated_decision(intent.decision, resolved[0])
+            if parsed["decision"].get("resume"):
+                # The rerun target picks its runtime conversation back up; the
+                # registry finds it and only resumes on a daemon that can.
+                parsed["assignments"] = [
+                    {**resolved[0], "resumeRun": True}, *resolved[1:],
+                ]
         dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
         return self._admit_addressed_agents(dispatched, resolved, actor)
 
@@ -1275,4 +1282,5 @@ def _validated_decision(
             if isinstance(decision.get("note"), str) and decision["note"].strip()
             else {}
         ),
+        **({"resume": True} if kind == "rerun" and decision.get("resume") is True else {}),
     }
