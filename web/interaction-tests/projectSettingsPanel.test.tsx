@@ -4,14 +4,15 @@ import { RelayApiError } from "../src/api";
 import { ProjectSettingsPanel } from "../src/components/ProjectSettingsPanel";
 import type { ProjectRecord } from "../src/types";
 
-const { update, archive, remove, getProject, confirm } = vi.hoisted(() => ({
-  update: vi.fn(), archive: vi.fn(), remove: vi.fn(), getProject: vi.fn(), confirm: vi.fn(),
+const { update, archive, remove, getProject, confirm, startSetup } = vi.hoisted(() => ({
+  update: vi.fn(), archive: vi.fn(), remove: vi.fn(), getProject: vi.fn(), confirm: vi.fn(), startSetup: vi.fn(),
 }));
 vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), getProject }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   updateProjectMutation: { isPending: false, mutateAsync: update },
   archiveProjectMutation: { isPending: false, mutateAsync: archive },
   deleteProjectMutation: { isPending: false, mutateAsync: remove },
+  startProjectSetupMutation: { isPending: false, mutateAsync: startSetup },
 }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm }) }));
@@ -163,4 +164,35 @@ it("stays on settings when deletion fails", async () => {
   fireEvent.click(screen.getByRole("button", { name: "project.delete" }));
   await waitFor(() => expect(remove).toHaveBeenCalledOnce());
   expect(onDeleted).not.toHaveBeenCalled();
+});
+
+it("adopts a run's context suggestion into the draft and resolves it on save", async () => {
+  update.mockResolvedValue({ project });
+  const suggestion = { id: "r:0", text: "Pricing lives in content/pricing.json.", evidence: "Created it", threadId: "t", runId: "r", createdAt: "now" };
+  renderPanel({ ...project, context: "Use Next.js.", contextSuggestions: [suggestion, { ...suggestion, id: "r:1", text: "Noise" }] });
+  fireEvent.click(screen.getAllByRole("button", { name: "project.context_suggestion_adopt" })[0]);
+  fireEvent.click(screen.getByRole("button", { name: "project.context_suggestion_dismiss" }));
+  expect(screen.queryByText("Noise")).toBeNull();
+  save();
+  await waitFor(() => expect(update).toHaveBeenCalled());
+  expect(update.mock.calls[0][0].input).toMatchObject({
+    context: "Use Next.js.\n- Pricing lives in content/pricing.json.",
+    resolveContextSuggestions: ["r:0", "r:1"],
+  });
+});
+
+it("asks the crew for a refine proposal and returns to the dashboard", async () => {
+  startSetup.mockResolvedValue({ project, threadId: "t" });
+  const onSetupStarted = vi.fn();
+  render(<ProjectSettingsPanel project={project} computer={computer} onDeleted={vi.fn()} onSetupStarted={onSetupStarted} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.refine_note" }), { target: { value: "Too many bugs slip through" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.refine_start" }));
+  await waitFor(() => expect(onSetupStarted).toHaveBeenCalled());
+  expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Too many bugs slip through" } });
+});
+
+it("holds off a refine while a setup draft is open", () => {
+  renderPanel({ ...project, setup: { state: "proposed", intent: "x", agentId: "a", threadId: "t", startedAt: "s" } });
+  expect(screen.getByText("project.refine_open")).toBeTruthy();
+  expect((screen.getByRole("button", { name: "project.refine_start" }) as HTMLButtonElement).disabled).toBe(true);
 });

@@ -6,12 +6,15 @@ from ..core.computer_identity import computer_id
 from ..core.models import AGENT_ROLES
 from ..persistence.project_store import ProjectValidationError
 from .agent_location import agent_placed_on_computer
+from .project_setup import ProjectSetupError, resolved_setup
 
 PROJECT_NAME_MAX_LENGTH = 120
 PROJECT_MEMBER_MAX_COUNT = 32
 PROJECT_RESPONSIBILITIES_MAX_LENGTH = 4_000
 PROJECT_INSTRUCTIONS_MAX_LENGTH = 8_000
 PROJECT_DESCRIPTION_MAX_LENGTH = 4_000
+PROJECT_GOAL_MAX_LENGTH = 280
+PROJECT_CONTEXT_MAX_LENGTH = 8_000
 
 
 def create_project_payload(
@@ -52,6 +55,8 @@ def create_project_payload(
             max_length=PROJECT_NAME_MAX_LENGTH,
         ),
         "description": project_description(payload.get("description")),
+        "goal": project_goal(payload.get("goal")),
+        "context": project_context(payload.get("context")),
         "computerId": target_computer_id,
         "leadAgentId": lead_agent_id,
         "members": members,
@@ -68,6 +73,38 @@ def project_description(value: Any) -> str:
     normalized = value.strip()
     if len(normalized) > PROJECT_DESCRIPTION_MAX_LENGTH:
         raise ProjectValidationError("project_description_too_long")
+    return normalized
+
+
+def project_goal(value: Any) -> str:
+    """The outcome a project commits to, in one line; absent is empty."""
+    return _optional_text(
+        value,
+        invalid="project_goal_invalid",
+        too_long="project_goal_too_long",
+        max_length=PROJECT_GOAL_MAX_LENGTH,
+    )
+
+
+def project_context(value: Any) -> str:
+    """The standing brief every project run reads: conventions, constraints,
+    definition of done. Markdown, optional; absent is empty."""
+    return _optional_text(
+        value,
+        invalid="project_context_invalid",
+        too_long="project_context_too_long",
+        max_length=PROJECT_CONTEXT_MAX_LENGTH,
+    )
+
+
+def _optional_text(value: Any, *, invalid: str, too_long: str, max_length: int) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ProjectValidationError(invalid)
+    normalized = value.strip()
+    if len(normalized) > max_length:
+        raise ProjectValidationError(too_long)
     return normalized
 
 
@@ -103,14 +140,42 @@ def update_project_payload(
     allowed = {
         "name",
         "description",
+        "goal",
+        "context",
         "leadAgentId",
         "members",
         "enabled",
+        "setupResolution",
+        "resolveContextSuggestions",
         "expectedVersion",
     }
     if set(payload) - allowed:
         raise ProjectValidationError("project_patch_unsupported")
-    patch = {key: value for key, value in payload.items() if key != "expectedVersion"}
+    patch = {
+        key: value
+        for key, value in payload.items()
+        if key not in ("expectedVersion", "setupResolution", "resolveContextSuggestions")
+    }
+    if "resolveContextSuggestions" in payload:
+        # Adopting a suggestion is this PATCH carrying the edited context;
+        # adopted and dismissed suggestions both leave the pending list.
+        resolved = payload["resolveContextSuggestions"]
+        if not isinstance(resolved, list) or not all(isinstance(item, str) for item in resolved):
+            raise ProjectValidationError("project_context_suggestions_invalid")
+        patch["contextSuggestions"] = [
+            item
+            for item in current.get("contextSuggestions") or []
+            if item.get("id") not in set(resolved)
+        ]
+    if "setupResolution" in payload:
+        # Applying a proposal is this same PATCH carrying the accepted roster
+        # and brief, so the setup closes in the same revision that applies it.
+        try:
+            patch["setup"] = resolved_setup(
+                current.get("setup"), payload["setupResolution"]
+            )
+        except ProjectSetupError as error:
+            raise ProjectValidationError(error.code) from error
     if "name" in patch:
         patch["name"] = _required_text(
             patch["name"],
@@ -119,6 +184,13 @@ def update_project_payload(
         )
     if "description" in patch:
         patch["description"] = project_description(patch["description"])
+    if "goal" in patch:
+        patch["goal"] = project_goal(patch["goal"])
+    if "context" in patch:
+        patch["context"] = project_context(patch["context"])
+        # Runs pin the revision they read, so a changed brief is a new one.
+        if patch["context"] != (current.get("context") or ""):
+            patch["contextRevision"] = int(current.get("contextRevision") or 0) + 1
     if "members" in patch or "leadAgentId" in patch:
         members, lead_agent_id = validate_project_roster(
             owner_employee_id,

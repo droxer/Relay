@@ -14,6 +14,8 @@ interface RoundResult {
   note?: string;
   /** Answers a blocked round offers its human; the backend validates them. */
   options?: string[];
+  /** Lines proposed for the project's context; the backend validates them. */
+  contextSuggestions?: Array<{ text: string; evidence?: string }>;
 }
 
 /** Workspace-relative path the agent writes. `.relay/` is excluded from the
@@ -25,6 +27,8 @@ const ROUND_RESULT_STATUSES = new Set(["done", "continue", "blocked"]);
 const NOTE_MAX_CHARS = 2000;
 const OPTIONS_MAX = 6;
 const OPTION_MAX_CHARS = 200;
+const CONTEXT_SUGGESTIONS_MAX = 3;
+const CONTEXT_SUGGESTION_MAX_CHARS = 500;
 
 /**
  * Read and consume the round result a run left behind, if any.
@@ -61,7 +65,7 @@ export function parseRoundResult(raw: string, expectedRunId?: string): RoundResu
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
-  const { status, note, runId, work, options } = parsed as { status?: unknown; note?: unknown; runId?: unknown; work?: unknown; options?: unknown };
+  const { status, note, runId, work, options, contextSuggestions } = parsed as { status?: unknown; note?: unknown; runId?: unknown; work?: unknown; options?: unknown; contextSuggestions?: unknown };
   if (expectedRunId !== undefined && runId !== expectedRunId) return undefined;
   if (typeof status !== "string" || !ROUND_RESULT_STATUSES.has(status)) {
     return undefined;
@@ -75,7 +79,25 @@ export function parseRoundResult(raw: string, expectedRunId?: string): RoundResu
     ...(status === "blocked" && Array.isArray(options)
       ? { options: options.filter((item): item is string => typeof item === "string").slice(0, OPTIONS_MAX).map((item) => item.slice(0, OPTION_MAX_CHARS)) }
       : {}),
+    ...contextSuggestionsField(contextSuggestions),
   };
+}
+
+function contextSuggestionsField(raw: unknown): Pick<RoundResult, "contextSuggestions"> {
+  if (!Array.isArray(raw)) return {};
+  const suggestions = raw
+    .filter((item): item is { text: string; evidence?: unknown } => (
+      Boolean(item) && typeof item === "object" && typeof (item as { text?: unknown }).text === "string"
+    ))
+    .map((item) => ({
+      text: item.text.trim().slice(0, CONTEXT_SUGGESTION_MAX_CHARS),
+      ...(typeof item.evidence === "string" && item.evidence.trim()
+        ? { evidence: item.evidence.trim().slice(0, CONTEXT_SUGGESTION_MAX_CHARS) }
+        : {}),
+    }))
+    .filter((item) => item.text)
+    .slice(0, CONTEXT_SUGGESTIONS_MAX);
+  return suggestions.length ? { contextSuggestions: suggestions } : {};
 }
 
 function removeQuietly(path: string): void {

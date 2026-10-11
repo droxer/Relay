@@ -21,6 +21,8 @@ import type {
   ManagedNodesResponse,
   ManagedNodeRecord,
   CreateProjectInput,
+  ProjectSetupResponse,
+  StartProjectSetupInput,
   CreateTaskInput,
   ControlPanelDaemonNodesResponse,
   ControlPanelEmployeesResponse,
@@ -646,6 +648,17 @@ export function createProject(input: CreateProjectInput): Promise<{ project: Pro
 export function updateProject(projectId: string, input: UpdateProjectInput): Promise<{ project: ProjectRecord }> {
   return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
+    body: input,
+  });
+}
+
+export function getProjectSetup(projectId: string, signal?: AbortSignal): Promise<ProjectSetupResponse> {
+  return apiJson<ProjectSetupResponse>(`/projects/${encodeURIComponent(projectId)}/setup`, { signal });
+}
+
+export function startProjectSetup(projectId: string, input: StartProjectSetupInput): Promise<{ project: ProjectRecord; threadId: string }> {
+  return apiJson<{ project: ProjectRecord; threadId: string }>(`/projects/${encodeURIComponent(projectId)}/setup`, {
+    method: "POST",
     body: input,
   });
 }

@@ -31,6 +31,8 @@ import {
 import { GuestPool, type GuestLease } from "./guest-pool.js";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
 import { consumeRoundResult } from "./round-result.js";
+import { syncProjectContext } from "./project-context.js";
+import { consumeProjectSetup } from "./project-setup.js";
 import { validateHandoffWorkspace } from "./handoff-validation.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
@@ -74,6 +76,7 @@ import {
   DAEMON_CAPABILITY_PRODUCED_FILES,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
   DAEMON_CAPABILITY_ROUND_RESULT,
+  DAEMON_CAPABILITY_PROJECT_SETUP,
   DAEMON_CAPABILITY_WORK_RESULTS,
   DAEMON_CAPABILITY_AGENT_MODEL,
   DAEMON_CAPABILITY_ENDPOINT_MODELS,
@@ -385,6 +388,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       "project-workspace-delete",
       DAEMON_CAPABILITY_TASK_WORKSPACES,
       DAEMON_CAPABILITY_ROUND_RESULT,
+      DAEMON_CAPABILITY_PROJECT_SETUP,
   DAEMON_CAPABILITY_WORK_RESULTS,
       DAEMON_CAPABILITY_AGENT_MODEL,
       DAEMON_CAPABILITY_ENDPOINT_MODELS,
@@ -1175,6 +1179,8 @@ async function executeCommand(
   if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
   // Discard control state from an interrupted previous run before execution.
   consumeRoundResult(threadWorkspace.hostPath);
+  syncProjectContext(threadWorkspace.hostPath, command.workspaceLayout, state.project_brief);
+  consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
   // The lease pins the guest that mounts this workspace for the whole run, so
   // a concurrent run on another thread cannot recycle it mid-execution.
   const execution = await environment.acquireWorkspace(threadWorkspace.hostPath, signal);
@@ -1399,6 +1405,7 @@ async function executeCommand(
       patch = await runAgentNode(command.agent, runState, options);
     } catch (error) {
       consumeRoundResult(threadWorkspace.hostPath);
+      consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
       throw error;
     } finally {
       outputBuffer.close();
@@ -1408,6 +1415,7 @@ async function executeCommand(
     const agentLog = next.agent_logs.slice(-1)[0] ?? "";
     // Consume on every terminal path, including cancellation and delivery failure.
     const roundResult = consumeRoundResult(threadWorkspace.hostPath, command.runId);
+    const projectSetup = consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
     if (signal?.aborted) {
       logger.info("run cancelled", {
         ...commandLogFields(sandboxId, command),
@@ -1457,6 +1465,7 @@ async function executeCommand(
       ...(roundResult ? { roundResult } : {}),
       ...(outputBatchesRejected > 0 ? { outputTruncated: true } : {}),
       ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
+      ...(projectSetup && state.project_setup ? { projectSetup } : {}),
     } satisfies DaemonNodeEvent;
   }
 }

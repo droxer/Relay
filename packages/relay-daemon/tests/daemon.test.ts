@@ -3698,6 +3698,75 @@ test("daemon cannot inherit a stale verdict from the shared workspace", async ()
   }
 });
 
+for (const kind of ["normal", "setup", "throws"] as const) {
+  test(`daemon scopes proposal cleanup to its setup attempt (${kind})`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "relay-setup-cleanup-"));
+    const workspace = join(root, "projects", "p");
+    const ownFile = ".relay/project-setup-run_1.json";
+    const otherFile = join(workspace, ".relay/project-setup-other.json");
+    const legacyFile = join(workspace, ".relay/project-setup.json");
+    mkdirSync(join(workspace, ".relay"), { recursive: true });
+    writeFileSync(join(workspace, ownFile), JSON.stringify({ goal: "Stale" }));
+    writeFileSync(otherFile, JSON.stringify({ goal: "Other attempt" }));
+    writeFileSync(legacyFile, JSON.stringify({ goal: "Legacy attempt" }));
+    const stop = new AbortController();
+    const events: DaemonNodeEvent[] = [];
+    let served = false;
+    const command = {
+      ...runCommand(), workspacePath: root, workspaceLayout: "project", workspaceSubpath: "projects/p",
+      state: {
+        task_goal: "Launch", agent_logs: [], last_exit_code: 0, agent_failures: {},
+        ...(kind === "normal" ? {} : {
+          project_setup: { file: ownFile, intent: "Launch", candidates: [], roles: [] },
+        }),
+      },
+    } satisfies DaemonNodeRunCommand;
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
+        workspacePath: root, token: "node_token", pollIntervalMs: 5,
+        signal: stop.signal, logger: testLogger(),
+        environment: fakeEnvironment({ exec: async () => {
+          assert.equal(existsSync(join(workspace, ownFile)), kind === "normal");
+          assert.equal(existsSync(otherFile), true);
+          writeFileSync(join(workspace, ownFile), JSON.stringify({ goal: "New proposal" }));
+          if (kind === "throws") throw new Error("Agent execution failed");
+          return { exit_code: 0, stdout: "done", stderr: "" };
+        } }),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api") return jsonResponse({ name: "Relay backend" });
+          if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+          if (path.endsWith("/commands")) {
+            if (served) return jsonResponse({ commands: [] });
+            served = true;
+            return jsonResponse({ commands: [command] });
+          }
+          if (path.endsWith("/events")) {
+            const event = await jsonBody<DaemonNodeEvent>(init);
+            events.push(event);
+            if (event.type === "run.completed" || event.type === "run.failed") stop.abort();
+            return jsonResponse({ ok: true }, 202);
+          }
+          throw new Error(`unexpected URL ${url}`);
+        },
+      });
+      const terminal = events.find((event) => event.type === "run.completed" || event.type === "run.failed");
+      assert.ok(terminal);
+      assert.equal(terminal.type, kind === "throws" ? "run.failed" : "run.completed");
+      if (terminal.type === "run.completed") {
+        assert.deepEqual(terminal.projectSetup, kind === "setup" ? { goal: "New proposal" } : undefined);
+      }
+      assert.equal(existsSync(join(workspace, ownFile)), kind === "normal");
+      assert.equal(existsSync(otherFile), true);
+      assert.equal(existsSync(legacyFile), true);
+    } finally {
+      stop.abort();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
 test("consumes the round result a run leaves behind and refuses malformed ones", () => {
   const workspace = mkdtempSync(join(tmpdir(), "relay-round-result-"));
   const controlPath = join(workspace, ROUND_RESULT_RELATIVE_PATH);

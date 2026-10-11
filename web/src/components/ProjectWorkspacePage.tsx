@@ -28,6 +28,8 @@ import { ProjectMark } from "./ProjectMark";
 import { ProjectMemberEditor } from "./ProjectMemberEditor";
 import { ProjectMembersPanel } from "./ProjectMembersPanel";
 import { ProjectSettingsPanel, type ProjectComputerSummary } from "./ProjectSettingsPanel";
+import { ProjectSetupPanel } from "./ProjectSetupPanel";
+import { setupNeedsAttention } from "../lib/projectSetup";
 import { ProjectWorkspaceFiles } from "./ProjectWorkspaceFiles";
 import { RecordBand, type RecordFact } from "./workspace/RecordBand";
 import { TonePill } from "./StatusPill";
@@ -195,6 +197,15 @@ export function ProjectWorkspacePage({
 
       <div className="workspace-body">
         <TabsContent value="dashboard">
+          {setupNeedsAttention(project.setup) && !membersReadOnly ? (
+            <ProjectSetupPanel
+              project={project}
+              setup={project.setup}
+              agents={agents}
+              onOpenThread={onOpenThread}
+              onManual={() => setPageTab("members")}
+            />
+          ) : null}
           <ProjectDashboard
             tasks={projectTasks}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
@@ -233,6 +244,7 @@ export function ProjectWorkspacePage({
             project={project}
             computer={computerSummary}
             onDeleted={onDeleted}
+            onSetupStarted={() => setPageTab("dashboard")}
           />
         </TabsContent>
       </div>

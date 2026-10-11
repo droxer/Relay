@@ -9,7 +9,7 @@ interface ProjectEditConflict {
 
 export class ProjectEditError extends Error {}
 
-const projectFields = ["name", "description", "leadAgentId", "enabled"] as const;
+const projectFields = ["name", "description", "goal", "context", "leadAgentId", "enabled"] as const;
 const memberFields = ["role", "responsibilities", "instructions", "enabled"] as const;
 const labels: Record<string, string> = {
   leadAgentId: "member_make_lead", enabled: "member_enabled",
@@ -47,14 +47,21 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
     }
     return merged;
   }
-  /* Projects created before descriptions existed carry none; read that as
-     empty so an untouched brief is never mistaken for an edit. */
-  const withDescription = (project: ProjectRecord): ProjectRecord => ({ ...project, description: project.description ?? "" });
+  /* Projects created before the brief fields existed carry none; read them
+     as empty so an untouched brief is never mistaken for an edit. */
+  const withDescription = (project: ProjectRecord): ProjectRecord => ({
+    ...project,
+    description: project.description ?? "",
+    goal: project.goal ?? "",
+    context: project.context ?? "",
+  });
   const desiredProject = withDescription({ ...base, ...input } as ProjectRecord);
   const mergedProject = mergeFields(withDescription(base), desiredProject, withDescription(latest), projectFields);
   for (const field of projectFields) {
     if (field in input) Object.assign(patch, { [field]: mergedProject[field] });
   }
+  // Resolving a suggestion is idempotent: one already gone is simply skipped.
+  if (input.resolveContextSuggestions) patch.resolveContextSuggestions = input.resolveContextSuggestions;
   if (input.members) {
     const before = new Map(base.members.map((member) => [member.agentId, normalizeMember(member)]));
     const desired = new Map(input.members.map((member) => [member.agentId, normalizeMember(member)]));

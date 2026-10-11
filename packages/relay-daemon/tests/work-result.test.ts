@@ -15,3 +15,23 @@ test("a blocked round passes its offered answers through", () => {
   const done = JSON.stringify({ status: "done", options: ["a", "b"], runId: "run-1" });
   assert.deepEqual(parseRoundResult(done, "run-1"), { status: "done" });
 });
+
+test("a project run's context suggestions pass through, bounded", () => {
+  const raw = JSON.stringify({
+    status: "done",
+    runId: "run-1",
+    contextSuggestions: [
+      { text: " Use pnpm, not npm. ", evidence: "package.json has a pnpm lock" },
+      { text: 42 },
+      { text: "Second" }, { text: "Third" }, { text: "Fourth" },
+    ],
+  });
+  assert.deepEqual(parseRoundResult(raw, "run-1"), {
+    status: "done",
+    contextSuggestions: [
+      { text: "Use pnpm, not npm.", evidence: "package.json has a pnpm lock" },
+      { text: "Second" },
+      { text: "Third" },
+    ],
+  });
+});

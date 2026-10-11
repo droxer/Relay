@@ -60,6 +60,11 @@ from ..persistence.stores import (
     infer_node_location,
     relay_event,
 )
+from ..services.project_context import (
+    context_suggestions_from_run,
+    merge_context_suggestions,
+    project_context_brief,
+)
 from ..services.task_workspace import DAEMON_CAPABILITY_TASK_WORKSPACES
 from ..sessions import (
     SessionController,
@@ -233,6 +238,8 @@ DAEMON_CAPABILITY_AGENT_MODEL = "agent-model"
 # A runtime behind a custom endpoint reports only the models that endpoint lists.
 DAEMON_CAPABILITY_ENDPOINT_MODELS = "endpoint-models"
 DAEMON_CAPABILITY_HANDOFF_VALIDATION = "handoff-validation"
+# The daemon reports a setup round's proposal file on run.completed.
+DAEMON_CAPABILITY_PROJECT_SETUP = "project-setup"
 DAEMON_NODE_CAPABILITIES = frozenset(
     {
         "work-results",
@@ -252,6 +259,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_ENDPOINT_MODELS,
         DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
         DAEMON_CAPABILITY_AGENT_RESUME,
+        DAEMON_CAPABILITY_PROJECT_SETUP,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -3417,6 +3425,37 @@ class DaemonNodeRegistry:
                 state["resume_session_id"] = resume
         if assignment.get("brief"):
             state["assignment_brief"] = assignment["brief"]
+        project_brief = project_context_brief(
+            manifest.get("projectSnapshot") or assignment.get("projectSnapshot"),
+            {
+                item["agentId"]: item["agentDisplayName"]
+                for item in assignments
+                if item.get("agentId") and item.get("agentDisplayName")
+            },
+        )
+        if project_brief:
+            state["project_brief"] = project_brief
+        setup_block = manifest.get("projectSetup")
+        if setup_block:
+            # Without the capability the proposal file would sit unread and
+            # the setup would wait forever; refuse instead.
+            if DAEMON_CAPABILITY_PROJECT_SETUP not in (sandbox.get("capabilities") or []):
+                self._fail_run_request(
+                    run_request,
+                    "Drafting a project setup needs a newer daemon on this computer. Update the daemon.",
+                )
+                return run_request
+            state["project_setup"] = {
+                "file": f".relay/project-setup-{run_id}.json",
+                "intent": setup_block.get("intent", ""),
+                "candidates": setup_block.get("candidates", []),
+                "roles": setup_block.get("roles", []),
+                **(
+                    {"previousProposal": setup_block["previousProposal"]}
+                    if setup_block.get("previousProposal")
+                    else {}
+                ),
+            }
         state["assignment_id"] = assignment["assignmentId"]
         state["work_item_id"] = (
             assignment.get("workItemId") or assignment["assignmentId"]
@@ -3837,7 +3876,9 @@ class DaemonNodeRegistry:
             # The human/session terminal decision wins over a late daemon
             # result. The command already retains the acknowledged result;
             # finish the agent projection and request bookkeeping, never reopen work or dispatch
-            # another assignment during crash recovery.
+            # another assignment during crash recovery. A stopped setup round
+            # still closes its draft so the project is not left waiting.
+            self._record_project_setup_result(run_request, event)
             if session_before.get("status") == "failed":
                 controller.fail_session(session_before["id"], session_before.get("finalOutcome") or "Execution failed.")
             self._close_terminal_session_agent(event)
@@ -3869,6 +3910,8 @@ class DaemonNodeRegistry:
             # Any terminal acknowledgement proves exit, but a late success
             # must not override the durable stop decision or start a successor.
             event = {**event, "type": "run.cancelled", "reason": run_request.get("error") or "Run stopped."}
+        if not existing_completion:
+            self._record_project_setup_result(run_request, event)
         if event["type"] == "run.failed":
             agent_log = event.get("agentLog") or event["error"]
             exit_code = event.get("exitCode", 1)
@@ -4018,6 +4061,8 @@ class DaemonNodeRegistry:
         )
         if round_result:
             next_state[ROUND_RESULT_STATE_KEY] = round_result
+        if event["exitCode"] == 0 and not existing_completion:
+            self._record_context_suggestions(run_request, event, assignment)
         if (run_request.get("state") or {}).get(WORK_PROTOCOL):
             next_state = record_work_result(
                 next_state,
@@ -4135,6 +4180,7 @@ class DaemonNodeRegistry:
                 address=parent.get("address") or {"kind": "room"},
                 assignments=planned,
                 team_snapshot=parent.get("teamSnapshot"),
+                project_snapshot=parent.get("projectSnapshot"),
                 collaboration_id=parent.get("collaborationId"),
                 round_id=f"{parent_round_id}_plan",
             ),
@@ -4143,6 +4189,89 @@ class DaemonNodeRegistry:
         }
         controller.record_collaboration_round_started(run_request["sessionId"], manifest)
         return planned, {**next_state, COLLABORATION_MANIFEST_STATE_KEY: manifest}
+
+    def _record_context_suggestions(
+        self,
+        run_request: dict[str, Any],
+        event: dict[str, Any],
+        assignment: dict[str, Any],
+    ) -> None:
+        """Keep the context lines a project run proposed for its owner to review."""
+        reported = (event.get("roundResult") or {}).get("contextSuggestions")
+        manifest = (run_request.get("state") or {}).get(
+            COLLABORATION_MANIFEST_STATE_KEY
+        ) or {}
+        project_id = (manifest.get("projectSnapshot") or {}).get("projectId")
+        if not reported or not project_id or manifest.get("projectSetup") or not self.project_store:
+            return
+        incoming = context_suggestions_from_run(
+            reported,
+            thread_id=run_request["sessionId"],
+            run_id=event["runId"],
+            agent_id=assignment.get("agentId"),
+            created_at=now_iso(),
+        )
+        if not incoming:
+            return
+        try:
+            self.project_store.add_context_suggestions(
+                project_id,
+                lambda latest: merge_context_suggestions(
+                    latest.get("contextSuggestions"), incoming, latest.get("context") or ""
+                ),
+            )
+        except Exception:
+            # Advice is optional; the run's completion must not depend on it.
+            logger.exception(
+                "Could not record project context suggestions",
+                project_id=project_id,
+                run_id=event.get("runId"),
+            )
+
+    def _record_project_setup_result(
+        self, run_request: dict[str, Any], event: dict[str, Any]
+    ) -> None:
+        """Fold a finished setup round's proposal into its project.
+
+        Recorded for every terminal outcome so a failed or stopped draft
+        never leaves the project waiting on a setup that will not come.
+        """
+        manifest = (run_request.get("state") or {}).get(
+            COLLABORATION_MANIFEST_STATE_KEY
+        ) or {}
+        project_id = (manifest.get("projectSnapshot") or {}).get("projectId")
+        if not manifest.get("projectSetup") or not project_id or not self.project_store:
+            return
+        from ..services.project_setup import completed_setup
+
+        exit_code = (
+            event.get("exitCode", 0)
+            if event["type"] == "run.completed"
+            else event.get("exitCode") or 1
+        )
+
+        def change(project: dict[str, Any]) -> dict[str, Any] | None:
+            current = project.get("setup") or {}
+            draft_id = manifest["projectSetup"].get("draftId")
+            if current.get("draftId") != draft_id:
+                return None
+            if current.get("threadId") not in (None, run_request["sessionId"]):
+                return None
+            updated = completed_setup(
+                current, event.get("projectSetup"), exit_code=exit_code
+            )
+            return {**updated, "threadId": run_request["sessionId"]} if updated else None
+
+        try:
+            self.project_store.mutate_setup(project_id, change)
+        except Exception:
+            # The run's own completion must not fail because its project
+            # moved on; the setup panel still reads the thread's status.
+            logger.exception(
+                "Could not record project setup result",
+                project_id=project_id,
+                run_id=event.get("runId"),
+            )
 
     @staticmethod
     def _round_result(event: dict[str, Any]) -> dict[str, Any] | None:
@@ -4647,6 +4776,9 @@ class DaemonNodeRegistry:
         self.daemon_store.update_run_request(
             run_request["id"], {"status": "failed", "error": outcome}
         )
+        # No terminal daemon event follows an undelivered request. Close its
+        # setup here, after the request and session are definitively failed.
+        self._record_project_setup_result(run_request, {"type": "run.failed", "exitCode": 1})
         self.update_status(
             run_request["nodeId"], {"status": "failed", "lastError": outcome}
         )

@@ -284,6 +284,57 @@ describe("prompts", () => {
       "the assignment boundary should precede the shared team goal",
     );
   });
+  it("tells a project run what the project is for, ahead of its role", () => {
+    const prompt = claudeTaskPrompt(state({
+      task_goal: "Add the pricing page",
+      project_brief: "Project: Website launch\nGoal: Ship the marketing site by Friday",
+      agent_role: "implementer",
+    }));
+
+    assert.match(prompt, /\[Project\]\nProject: Website launch\nGoal: Ship the marketing site by Friday/);
+    assert.match(prompt, /follow its standing context unless the user overrides it/);
+    assert.ok(
+      prompt.indexOf("[Project]") < prompt.indexOf("[Role]"),
+      "the project frames the role",
+    );
+  });
+  it("asks a setup round to draft a proposal rather than start the work", () => {
+    const prompt = claudeTaskPrompt(state({
+      task_goal: "Set up this project: launch the site",
+      project_setup: {
+        file: ".relay/project-setup-run-1.json",
+        intent: "Launch the marketing site",
+        candidates: [{ agentId: "agent-1", name: "Ada", executorKind: "claude", defaultRole: "planner" }],
+        roles: ["implementer", "planner"],
+        previousProposal: { name: "Old plan" },
+      },
+    }));
+
+    assert.match(prompt, /\[Project setup\]/);
+    assert.match(prompt, /Do not start the project's work/);
+    assert.match(prompt, /The owner's intent: Launch the marketing site/);
+    assert.match(prompt, /"agentId":"agent-1"/);
+    assert.match(prompt, /Allowed roles: implementer, planner/);
+    assert.match(prompt, /Your previous proposal, to revise per the owner's note: \{"name":"Old plan"\}/);
+    assert.match(prompt, /write `\.relay\/project-setup-run-1\.json` as JSON/);
+  });
+  it("invites project runs to suggest context lines in their round result", () => {
+    const inProject = claudeTaskPrompt(state({
+      task_goal: "Ship it",
+      project_brief: "Project: Launch",
+      round_result_file: ".relay/round-result.json",
+    }));
+    const outside = claudeTaskPrompt(state({ task_goal: "Ship it", round_result_file: ".relay/round-result.json" }));
+
+    assert.match(inProject, /"contextSuggestions": \[\{"text"/);
+    assert.match(inProject, /The owner decides whether to adopt them/);
+    assert.doesNotMatch(outside, /contextSuggestions/);
+  });
+  it("omits the project section outside a project", () => {
+    const prompt = codexTaskPrompt(state({ task_goal: "Fix the build" }));
+
+    assert.doesNotMatch(prompt, /\[Project\]/);
+  });
   it("carries a durable delegated work item and its dependencies into prompts", () => {
     const prompt = codexTaskPrompt(state({
       task_goal: "Ship the feature",

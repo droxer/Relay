@@ -1,4 +1,4 @@
-import type { AgentState } from "./state.js";
+import type { AgentState, ProjectSetupBrief } from "./state.js";
 
 export function prependPriorAgentBridge(prompt: string, state: AgentState): string {
   return state.prior_agent_bridge ? `${state.prior_agent_bridge}\n\n[User]\n${prompt}` : prompt;
@@ -32,6 +32,15 @@ function promptPreludes(state: AgentState): string[] {
   if (state.agent_display_name) {
     preludes.push(
       ["[Agent identity]", `Your name is ${state.agent_display_name}.`].join("\n"),
+    );
+  }
+  if (state.project_brief) {
+    preludes.push(
+      [
+        "[Project]",
+        state.project_brief,
+        "Work toward the project's goal and follow its standing context unless the user overrides it.",
+      ].join("\n"),
     );
   }
   if (state.agent_role) {
@@ -111,6 +120,9 @@ function promptPreludes(state: AgentState): string[] {
       ].join("\n"));
     }
   }
+  if (state.project_setup) {
+    preludes.push(projectSetupPrelude(state.project_setup));
+  }
   if (state.round_result_file) {
     preludes.push(
       [
@@ -121,6 +133,9 @@ function promptPreludes(state: AgentState): string[] {
           ? [`Include "runId": ${JSON.stringify(state.round_result_run_id)} in that JSON; verdicts for other runs are rejected.`]
           : []),
         '"done" means the requested work is complete, "continue" means real work remains, "blocked" means you cannot proceed without a human.',
+        ...(state.project_brief
+          ? ['If this run settled a durable project convention, constraint, or decision that future runs should follow and the project context does not already say, add "contextSuggestions": [{"text": "<one line for the project context>", "evidence": "<what established it>"}] (at most 3). The owner decides whether to adopt them; omit the field otherwise.']
+          : []),
         "This file records the work outcome independently of process exit. Missing required reports need attention. Tasks may continue within their round budget; a thread-only run records unfinished work for the next turn.",
         "It is a private control record for Relay, not part of your answer. Do not mention this file, its path, or that you wrote it in your reply; end with the answer itself.",
       ].join("\n"),
@@ -172,4 +187,28 @@ export function codexTaskPrompt(state: AgentState): string {
 
 export function kimiTaskPrompt(state: AgentState): string {
   return agentTaskPrompt(state);
+}
+
+/**
+ * A setup round drafts the project instead of doing its work: the owner
+ * reviews the proposal and applies it, so the agent must not start the work
+ * or claim the crew exists. Mirrors normalize_setup_proposal in
+ * backend/relay/services/project_setup.py — change both together.
+ */
+function projectSetupPrelude(setup: ProjectSetupBrief): string {
+  return [
+    "[Project setup]",
+    "You are drafting this project's setup for its owner to review. Do not start the project's work and do not create project files; the owner applies your proposal.",
+    `The owner's intent: ${setup.intent}`,
+    `Agents you may staff (only these, by agentId): ${JSON.stringify(setup.candidates)}`,
+    `Allowed roles: ${setup.roles.join(", ")}. Choose a lead among the members; prefer a planner.`,
+    ...(setup.previousProposal
+      ? [`Your previous proposal, to revise per the owner's note: ${JSON.stringify(setup.previousProposal)}`]
+      : []),
+    "Staff only the agents the work needs; one is fine for small work. Give each member responsibilities as a concrete outcome contract, not a job title.",
+    "The context is the standing brief every future run will read: conventions, constraints, what done means. Keep it specific to this project; do not restate generic advice.",
+    "Propose up to 8 first tasks that are bounded, verifiable, and in a sensible order.",
+    `When you stop, write \`${setup.file}\` as JSON: {"name": "<short project name>", "goal": "<one-line outcome>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "role": "<role>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [{"title": "<task>", "description": "<what and why>", "acceptanceCriteria": ["<observable criterion>"], "assignedAgentId": "<optional agentId>"}], "rationale": "<why this crew and plan>"}.`,
+    "Use valid JSON with double quotes. If the intent is too vague to staff, still write your best proposal and say what you assumed in the rationale; end your reply by asking the owner what to change.",
+  ].join("\n");
 }

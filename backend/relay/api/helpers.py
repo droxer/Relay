@@ -865,6 +865,9 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
         # Passed through raw; collaboration policy validates the aggregate
         # verdict before it can affect task state.
         round_result = value.get("roundResult")
+        # Passed through raw; project_setup.normalize_setup_proposal holds it
+        # to the shape the project PATCH accepts before it is recorded.
+        project_setup = value.get("projectSetup")
         return {
             "type": event_type,
             "commandId": command_id,
@@ -883,6 +886,7 @@ def daemon_node_event(value: dict[str, Any]) -> dict[str, Any]:
             **({"roundResult": round_result} if isinstance(round_result, dict) else {}),
             **({"outputTruncated": True} if value.get("outputTruncated") is True else {}),
             **_runtime_session_field(value),
+            **({"projectSetup": project_setup} if isinstance(project_setup, dict) else {}),
         }
     if event_type == "run.failed":
         # An agent process may finish successfully and write deliverables even

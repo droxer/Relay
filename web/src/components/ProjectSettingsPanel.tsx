@@ -18,9 +18,11 @@ import {
   WorkspaceFolder,
   type NodeOwnership,
 } from "./icons";
-import { ProjectDescriptionField, ProjectNameField } from "./ProjectFormFields";
+import { ProjectContextField, ProjectDescriptionField, ProjectGoalField, ProjectNameField } from "./ProjectFormFields";
+import { contextWithSuggestion, ProjectContextSuggestions, ProjectRefineSection } from "./ProjectContextUpkeep";
 
-type Draft = { name: string; description: string };
+type Draft = { name: string; description: string; goal: string; context: string };
+const briefFields = ["description", "goal", "context"] as const;
 
 /** The computer a project lives on, as the page resolved it. */
 export type ProjectComputerSummary = { label: string; ownership: NodeOwnership };
@@ -28,6 +30,8 @@ export type ProjectComputerSummary = { label: string; ownership: NodeOwnership }
 const draftOf = (project: ProjectRecord): Draft => ({
   name: project.name,
   description: project.description ?? "",
+  goal: project.goal ?? "",
+  context: project.context ?? "",
 });
 
 /** The Settings tab: the project's identity (name, description; its computer
@@ -43,10 +47,13 @@ export function ProjectSettingsPanel({
   project,
   computer,
   onDeleted,
+  onSetupStarted,
 }: {
   project: ProjectRecord;
   computer: ProjectComputerSummary;
   onDeleted: () => void;
+  /** A refine proposal was requested; its review lives on the Dashboard. */
+  onSetupStarted?: () => void;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
@@ -55,14 +62,21 @@ export function ProjectSettingsPanel({
   const [base, setBase] = useState(project);
   const [draft, setDraft] = useState<Draft>(() => draftOf(project));
   const [nameError, setNameError] = useState<string | null>(null);
+  /* Suggestions adopted or dismissed on this draft; Save resolves them with
+     the context they changed, Discard brings them back. */
+  const [resolvedSuggestions, setResolvedSuggestions] = useState<string[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const savedDraft = draftOf(base);
-  const dirty = draft.name !== savedDraft.name || draft.description !== savedDraft.description;
+  const dirty = draft.name !== savedDraft.name
+    || briefFields.some((field) => draft[field] !== savedDraft[field])
+    || resolvedSuggestions.length > 0;
   if (!dirty && project.version !== base.version) {
     setBase(project);
     setDraft(draftOf(project));
   }
+  const pendingSuggestions = (project.contextSuggestions ?? [])
+    .filter((suggestion) => !resolvedSuggestions.includes(suggestion.id));
 
   const busy = projectSave.pending || archiveProjectMutation.isPending || deleteProjectMutation.isPending;
   const archived = Boolean(project.archivedAt);
@@ -72,6 +86,7 @@ export function ProjectSettingsPanel({
     setBase(record);
     setDraft(draftOf(record));
     setNameError(null);
+    setResolvedSuggestions([]);
   };
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -83,14 +98,19 @@ export function ProjectSettingsPanel({
       nameRef.current?.focus();
       return;
     }
-    /* The brief rides the request only when it says something new, so a
-       rename never rewrites a description it did not touch. */
-    const description = draft.description.trim();
-    const descriptionChanged = description !== savedDraft.description.trim();
+    /* Each brief field rides the request only when it says something new,
+       so a rename never rewrites a brief it did not touch — and an untouched
+       context never bumps the revision runs pin. */
+    const changedBrief = Object.fromEntries(
+      briefFields
+        .map((field) => [field, draft[field].trim()] as const)
+        .filter(([field, value]) => value !== savedDraft[field].trim()),
+    );
     const result = await projectSave.save(base, {
       expectedVersion: base.version,
       name,
-      ...(descriptionChanged ? { description } : {}),
+      ...changedBrief,
+      ...(resolvedSuggestions.length ? { resolveContextSuggestions: resolvedSuggestions } : {}),
     });
     if (result) adopt(result.project);
   }
@@ -177,9 +197,27 @@ export function ProjectSettingsPanel({
               </div>
             ) : null}
           </dl>
+          <ProjectGoalField
+            value={draft.goal}
+            onChange={(goal) => setDraft((current) => ({ ...current, goal }))}
+          />
           <ProjectDescriptionField
             value={draft.description}
             onChange={(description) => setDraft((current) => ({ ...current, description }))}
+          />
+          <ProjectContextField
+            value={draft.context}
+            revision={project.contextRevision}
+            onChange={(context) => setDraft((current) => ({ ...current, context }))}
+          />
+          <ProjectContextSuggestions
+            suggestions={pendingSuggestions}
+            disabled={archived || busy}
+            onAdopt={(suggestion) => {
+              setDraft((current) => ({ ...current, context: contextWithSuggestion(current.context, suggestion.text) }));
+              setResolvedSuggestions((current) => [...current, suggestion.id]);
+            }}
+            onDismiss={(suggestion) => setResolvedSuggestions((current) => [...current, suggestion.id])}
           />
         </fieldset>
         {projectSave.error ? <p role="alert" className="project-settings-error text-destructive">{projectSave.error}</p> : null}
@@ -206,6 +244,8 @@ export function ProjectSettingsPanel({
           </div>
         </footer>
       </form>
+
+      <ProjectRefineSection project={project} onStarted={() => onSetupStarted?.()} />
 
       <section className="project-settings-section project-settings-section--danger" aria-labelledby="project-settings-danger">
         <header className="project-settings-head">

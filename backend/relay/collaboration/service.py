@@ -19,6 +19,7 @@ from ..services.project_runtime import (
     ProjectDispatchError,
     project_member_assignments,
     project_runtime_node,
+    project_task_assignment_error,
     project_runtime_snapshot,
 )
 from ..services.team_dispatch import (
@@ -84,6 +85,7 @@ class _PreparedRound:
     purpose: str
     address: dict[str, Any]
     style: str | None = None
+    project_setup: dict[str, Any] | None = None
 
 
 class CollaborationConductor:
@@ -232,6 +234,7 @@ class CollaborationConductor:
             decision=intent.decision,
             source=intent.source,
             style=intent.style,
+            project_setup=intent.project_setup,
             purpose=_purpose_for_mode(intent.mode),
             address=(
                 {"kind": "members", "agentIds": addressed}
@@ -333,15 +336,20 @@ class CollaborationConductor:
                 if raw_assignments is not None
                 else None
             )
-            try:
-                raw_assignments = project_member_assignments(
-                    project,
-                    mode=intent.mode,
-                    selected_agent_ids=selected_ids,
-                    snapshot=project_snapshot,
+            if intent.project_setup is not None:
+                raw_assignments = self._project_setup_assignments(
+                    project, selected_ids, project_snapshot
                 )
-            except ProjectDispatchError as error:
-                raise CollaborationError(error.code, status=400) from error
+            else:
+                try:
+                    raw_assignments = project_member_assignments(
+                        project,
+                        mode=intent.mode,
+                        selected_agent_ids=selected_ids,
+                        snapshot=project_snapshot,
+                    )
+                except ProjectDispatchError as error:
+                    raise CollaborationError(error.code, status=400) from error
         elif round_team_id and not raw_assignments:
             team, members = self._team_for_round(round_team_id, session, actor)
             team_member_ids = {agent["id"] for agent in members}
@@ -524,6 +532,8 @@ class CollaborationConductor:
             collaboration_id=collaboration_id,
             round_id=round_id,
         )
+        if intent.project_setup is not None:
+            manifest["projectSetup"] = intent.project_setup
         parsed: dict[str, Any] = {
             "taskGoal": task_goal,
             "assignments": resolved,
@@ -615,6 +625,41 @@ class CollaborationConductor:
                 ]
         dispatched = await self.ctx.backend.run(resolved[0]["daemonNodeId"], parsed)
         return self._admit_addressed_agents(dispatched, resolved, actor)
+
+    def _project_setup_assignments(
+        self,
+        project: dict[str, Any],
+        selected_ids: list[str] | None,
+        snapshot: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """The one agent drafting a project's setup.
+
+        Setup happens before there is a crew, so the drafter is admitted by
+        the rule project tasks use — any agent on the project's computer —
+        rather than by roster membership.
+        """
+        if not selected_ids or len(selected_ids) != 1:
+            raise CollaborationError("project_setup_agent_required", status=400)
+        agent_id = selected_ids[0]
+        error = project_task_assignment_error(
+            project,
+            agent_id=agent_id,
+            team=None,
+            placement_store=self.ctx.agent_placement_store,
+        )
+        if error:
+            raise CollaborationError(error, status=400)
+        return [
+            {
+                "agentId": agent_id,
+                "role": "planner",
+                "mode": "action",
+                "phase": "execution",
+                "coordinator": True,
+                "brief": "Draft this project's setup for the owner to review. Do not start the project's work.",
+                "projectSnapshot": snapshot,
+            }
+        ]
 
     def _awaiting_task(self, session: dict[str, Any]) -> dict[str, Any] | None:
         """The task waiting on this thread's human, if a reply here resumes it.
@@ -947,6 +992,12 @@ def _request_fingerprint(intent: _PreparedRound) -> str:
     # still match a retry of the same request.
     if payload.get("style") is None:
         payload.pop("style", None)
+    if payload.get("project_setup") is None:
+        payload.pop("project_setup", None)
+    else:
+        # Draft identity fences result writes; it is not part of the owner's
+        # request and must not make an otherwise identical retry conflict.
+        payload["project_setup"].pop("draftId", None)
     # Addressing the same text to a different set of agents is a different
     # request; addressing the same set in a different order is not.
     address = payload.get("address")

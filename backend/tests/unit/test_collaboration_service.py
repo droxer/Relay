@@ -464,11 +464,25 @@ def test_fingerprint_without_style_matches_the_pre_style_shape() -> None:
     styled = CollaborationConductor._prepare(MessageIntent(thread_id="t", text="hi", style="solo"))
     assert plain.style is None
     assert _request_fingerprint(plain) != _request_fingerprint(styled)
-    legacy_payload = {k: v for k, v in asdict(plain).items() if k not in ("idempotency_key", "style")}
+    legacy_payload = {k: v for k, v in asdict(plain).items() if k not in ("idempotency_key", "style", "project_setup")}
     legacy = hashlib.sha256(
         json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()
     assert _request_fingerprint(plain) == legacy
+
+
+def test_setup_draft_identity_does_not_change_the_request_fingerprint() -> None:
+    def prepare(draft_id: str | None, intent: str = "Launch"):
+        return CollaborationConductor._prepare(RunIntent(
+            task_goal="Set up the project", session_id=None, requested_project_id="p",
+            raw_assignments=[{"agentId": "lead"}], source="project_setup",
+            project_setup={"intent": intent, **({"draftId": draft_id} if draft_id else {})},
+        ))
+
+    first = prepare("first")
+    assert _request_fingerprint(first) == _request_fingerprint(prepare("retry"))
+    assert _request_fingerprint(first) == _request_fingerprint(prepare(None))
+    assert _request_fingerprint(first) != _request_fingerprint(prepare("first", "Revise"))
 
 
 def _round_team_conductor(roster: list[str]) -> CollaborationConductor:

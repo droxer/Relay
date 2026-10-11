@@ -8,6 +8,14 @@ export type { AgentOutputSink };
 export const AGENT_USER = "agent";
 export const GUEST_WORKSPACE = "/workspace";
 
+export interface ProjectSetupBrief {
+  file: string;
+  intent: string;
+  candidates: Array<{ agentId: string; name: string; executorKind?: string; defaultRole?: string; personality?: string }>;
+  roles: string[];
+  previousProposal?: Record<string, unknown>;
+}
+
 export interface AgentState {
   task_goal: string;
   agent_logs: string[];
@@ -35,6 +43,9 @@ export interface AgentState {
   agent_role?: string;
   /** Concrete scope owned by this member within the shared team goal. */
   assignment_brief?: string;
+  /** The project this run works in: name, goal, crew, and standing context,
+   *  rendered by the backend from the round's pinned project snapshot. */
+  project_brief?: string;
   /** Stable identity for this assignment across at-least-once delivery. */
   assignment_id?: string;
   /** Stable conductor-owned delegated-subtask identity. */
@@ -60,6 +71,9 @@ export interface AgentState {
   work_expected_outputs?: string[];
   work_predecessor_results?: Record<string, unknown>;
   team_plan_candidates?: Array<{ agentId: string; role?: string; responsibility?: string; required: boolean }>;
+  /** Present on a project setup round: what the owner asked for, the agents
+   *  the proposal may staff, and where to write the proposal. */
+  project_setup?: ProjectSetupBrief;
   round_result_file?: string;
   /** Set by the daemon to reject a verdict belonging to another run. */
   round_result_run_id?: string;
