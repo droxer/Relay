@@ -92,6 +92,8 @@ import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
 import { watchExecutionExit } from "./execution-capture.js";
+import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.js";
+import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeSkills } from "./agent-skills.js";
 
@@ -313,7 +315,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     logger.info("daemon health", { sandboxId, health: next, ...fields });
   };
   logger.info("daemon starting", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
+  // Runs the machine proves ended are settled with that evidence instead of
+  // waiting for a person. They stay fenced: none of them is ever run again.
+  const provenExits = await proveJournaledExits(environment, executionJournal.pending(), logger, sandboxId);
+  for (const record of provenExits) unreportedExecutions.delete(record.id);
   for (const execution of executionJournal.pending()) {
+    if (provenExits.some((record) => record.id === execution.id)) continue;
     logger.warn("Execution exit unconfirmed after daemon restart; retained identity requires reconciliation", {
       sandboxId, commandId: execution.id, runId: execution.runId,
       sessionId: execution.sessionId, leaseId: execution.leaseId,
@@ -474,6 +481,23 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ?? enrolledHeartbeatSettings?.intervalMs
       ?? DEFAULT_LIVENESS_HEARTBEAT_MS;
     let lastRegisteredAt = Date.now();
+    for (const record of provenExits) {
+      // Persisted to the outbox before sending, so delivery survives another
+      // restart; the outbox clears the journal record once it holds the event.
+      void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+        type: "run.cancelled",
+        commandId: record.id,
+        ...(record.leaseId ? { leaseId: record.leaseId } : {}),
+        sessionId: record.sessionId,
+        runId: record.runId,
+        agent: record.agent as AgentName,
+        reason: "The computer restarted, and this run's process had already stopped.",
+      } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+        logger.warn("proven-exit report failed; the outbox will retry", {
+          sandboxId, commandId: record.id, error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
     logger.info("daemon registered", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, logPath: logger.logPath });
     setHealth("registered");
     console.log(`Relay daemon registered sandbox ${sandboxId} with backend at ${backendUrl} (sandbox: ${sandboxMode})`);
@@ -706,6 +730,16 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           const release = new AbortController();
           watchExecutionExit(controller.signal, {
             release: release.signal,
+            onSpawn: (processGroup) => {
+              try {
+                executionJournal.attach(command.id, { processGroup, bootAt: hostBootAt() });
+              } catch (error) {
+                logger.warn("could not record the run's process group", {
+                  ...commandLogFields(sandboxId, command),
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              }
+            },
             onExitUnconfirmed: () => {
               unconfirmedExits.set(command.id, release);
               logger.warn("Stopped run's exit cannot be verified; reporting it and keeping the run reserved", commandLogFields(sandboxId, command));
@@ -1449,6 +1483,12 @@ export interface DaemonExecutionEnvironment {
   execStream: typeof localProcessExecStream;
   /** Hold the execution context for one run's workspace until release(). */
   acquireWorkspace(hostWorkspace: string, signal?: AbortSignal): Promise<WorkspaceExecution>;
+  /**
+   * After a restart, the ids of journaled runs this machine can prove are no
+   * longer executing. Optional: without it every journaled run waits for a
+   * person to report it gone.
+   */
+  proveExited?(records: ExecutionRecord[]): Promise<string[]>;
   close(): Promise<void>;
 }
 
@@ -1550,6 +1590,15 @@ export function createBoxliteEnvironment(
     execStream: (cmd, args = [], execOptions = {}) =>
       withAnyGuest(execOptions.signal, (execution) => execution.execStream(cmd, args, execOptions)),
     acquireWorkspace: async (hostWorkspace, signal) => workspaceExecution(await pool.acquire(hostWorkspace, signal)),
+    // Agents only ever run inside this computer's guests, so once every guest
+    // a previous daemon left behind is confirmed gone, so are its runs.
+    async proveExited(records) {
+      if (records.length === 0) return [];
+      const runtime = await runtimeOwner.get() as Partial<GuestRuntime>;
+      if (!runtime.listInfo || !runtime.remove) return [];
+      const retired = await retireStaleGuests(runtime as GuestRuntime, boxNameForSandbox(sandboxId));
+      return retired ? records.map((record) => record.id) : [];
+    },
     async close() {
       try {
         await pool.close();
@@ -1558,6 +1607,31 @@ export function createBoxliteEnvironment(
       }
     },
   };
+}
+
+async function proveJournaledExits(
+  environment: DaemonExecutionEnvironment,
+  records: ExecutionRecord[],
+  logger: DaemonLogger,
+  sandboxId: string,
+): Promise<ExecutionRecord[]> {
+  if (records.length === 0 || !environment.proveExited) return [];
+  try {
+    const proven = new Set(await environment.proveExited(records));
+    const exited = records.filter((record) => proven.has(record.id));
+    for (const record of exited) {
+      logger.info("Run admitted before the restart has provably stopped; reporting it cancelled", {
+        sandboxId, commandId: record.id, runId: record.runId, sessionId: record.sessionId,
+      });
+    }
+    return exited;
+  } catch (error) {
+    // No proof is the safe answer: those runs wait for a person instead.
+    logger.warn("could not check runs admitted before the restart", {
+      sandboxId, error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 function boxNameForSandbox(sandboxId: string, slot = 0): string {

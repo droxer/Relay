@@ -3,6 +3,8 @@ import { BoundedTextCapture } from "./bounded-text.js";
 type StreamRenderer = (chunk: string) => string;
 
 export interface ExecutionExitHooks {
+  /** A host-mode run started as this process group. */
+  onSpawn?: (processGroup: number) => void;
   /** Called once when a stop has gone unconfirmed for `unconfirmedAfterMs`. */
   onExitUnconfirmed?: () => void;
   /**

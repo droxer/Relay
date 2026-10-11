@@ -28,6 +28,7 @@ export async function superviseLocalProcess(
       error_message: "Execution cancelled before start.",
     };
   }
+  const hooks = exitHooksFor(options.signal);
   return new Promise((resolve) => {
     const detached = process.platform !== "win32";
     const child = spawn(cmd, args, {
@@ -36,6 +37,7 @@ export async function superviseLocalProcess(
       stdio: ["ignore", "pipe", "pipe"],
       detached,
     });
+    if (detached && child.pid) hooks?.onSpawn?.(child.pid);
     const stdoutCapture = new BoundedTextCapture();
     const stderrCapture = new BoundedTextCapture();
     let released = false;
@@ -85,7 +87,6 @@ export async function superviseLocalProcess(
         const groupId = child.pid;
         const cleanupStartedAt = Date.now();
         const cleanupDeadline = cleanupStartedAt + (options.cleanupTimeoutMs ?? 5_000);
-        const hooks = exitHooksFor(options.signal);
         const unconfirmedAfterMs = options.exitUnconfirmedAfterMs ?? 60_000;
         let reported = false;
         await new Promise<void>((finished) => {

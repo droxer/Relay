@@ -42,3 +42,11 @@ test("a local run whose group cannot be verified is reported and held until rele
   const result = await running;
   assert.match(result.error_message ?? "", /reported gone/);
 });
+
+test("a local run tells its watcher which process group it spawned", skipOnWindows, async () => {
+  const controller = new AbortController();
+  let spawned = 0;
+  watchExecutionExit(controller.signal, { onSpawn: (pid) => { spawned = pid; } });
+  await superviseLocalProcess("sh", ["-c", "exit 0"], { signal: controller.signal });
+  assert.ok(spawned > 0);
+});

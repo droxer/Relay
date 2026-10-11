@@ -4101,6 +4101,49 @@ test("daemon reports retained executions at registration and forgets them once a
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
+test("a restarted daemon settles a run it can prove ended instead of leaving it for a person", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-proven-exit-"));
+  const stop = new AbortController();
+  const proven = runCommand("cmd_proven");
+  const unproven = runCommand("cmd_unproven");
+  const journal = new ExecutionJournal(join(root, "executions"));
+  journal.record(proven);
+  journal.record(unproven);
+  const events: DaemonNodeEvent[] = [];
+  let reported: unknown;
+  let polls = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "proven-exit", employeeId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      signal: stop.signal, logger: testLogger(),
+      environment: { ...fakeEnvironment(), proveExited: async (records) =>
+        records.filter((record) => record.id === proven.id).map((record) => record.id) },
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/v1/daemon-node-registrations") {
+          const body = JSON.parse(String(init?.body));
+          if (body.status !== "stopped") reported ??= body.journaledCommandIds;
+          return jsonResponse({});
+        }
+        if (path.endsWith("/events")) { events.push(await jsonBody<DaemonNodeEvent>(init)); return jsonResponse({ ok: true }); }
+        if (path.endsWith("/commands")) {
+          if (polls++ > 2) stop.abort();
+          return jsonResponse({ commands: [] });
+        }
+        return jsonResponse({ ok: true });
+      },
+    });
+    // Proven ends are real exit evidence, so they settle the normal way.
+    const cancelled = events.find((event) => event.type === "run.cancelled" && event.commandId === proven.id);
+    assert.ok(cancelled?.type === "run.cancelled");
+    assert.match(cancelled.reason, /restarted/);
+    assert.deepEqual(reported, [unproven.id]);
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(proven.id), false);
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(unproven.id), true);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
 test("local execution cleans up descendants before waiting for inherited pipes", {skip: process.platform === "win32", timeout: 10000}, async () => {
   let childPid = 0;
   let ready!: () => void;
