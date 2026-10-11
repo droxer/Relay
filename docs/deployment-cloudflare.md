@@ -1,0 +1,129 @@
+# Deploying Relay on Railway behind Cloudflare
+
+This guide puts Cloudflare (DNS, TLS, CDN, WAF) in front of the Railway
+backend. It replaces the Vercel half of [deployment.md](deployment.md): the
+backend keeps serving the exported web UI, so the browser, the API, SSE, and
+every daemon share one origin and the session cookie needs no cross-site
+handling. Follow [deployment.md § 1](deployment.md#1-railway-postgres--backend)
+for the Railway service and Postgres, then come back here.
+
+```
+browser ─┐                ┌──────── Cloudflare (proxied DNS) ────────┐
+daemons ─┴─ https ──────▶ │ relay.example.com                        │
+                          │  adds  X-Relay-Edge: <secret>            │
+                          │  caches /_next/static/*, daemon bundles  │
+                          └──────────────────┬───────────────────────┘
+                                             ▼
+                          Railway: relay backend (1 replica) ─▶ Postgres
+```
+
+## 1. Domain and TLS
+
+1. Railway → backend service → *Settings* → *Networking* → *Custom Domain*:
+   add `relay.example.com`. Railway shows the CNAME target.
+2. Cloudflare → *DNS*: add that CNAME, **proxied** (orange cloud).
+3. Cloudflare → *SSL/TLS*: mode **Full (strict)**. Railway issues the origin
+   certificate for the custom domain; if issuance stalls, switch the record to
+   DNS-only until Railway reports the certificate, then proxy it again.
+4. Turn on *Always Use HTTPS*.
+
+## 2. Lock the origin to Cloudflare
+
+Railway offers no inbound IP allowlist, so the origin lock is a shared secret.
+Cloudflare adds it to every request; the backend refuses requests without it.
+
+1. Generate a secret: `openssl rand -hex 32`.
+2. Cloudflare → *Rules* → *Transform Rules* → *Modify Request Header* → new
+   rule matching all incoming requests: **Set static** `X-Relay-Edge` to the
+   secret. *Set* overwrites any value a client sends, so the header cannot be
+   forged through the edge.
+3. Railway backend variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `RELAY_EDGE_SECRET` | the secret |
+   | `RELAY_CLIENT_IP_HEADER` | `CF-Connecting-IP` |
+   | `RELAY_PUBLIC_BACKEND_URL` | `https://relay.example.com` |
+   | `RELAY_FORCE_SECURE_COOKIES` | `1` |
+
+   Leave `RELAY_TRUST_PROXY_HEADERS` unset: Railway's edge has no stable
+   address range to trust, and `RELAY_FORCE_SECURE_COOKIES` already gives the
+   cookie `Secure`. Leave the cookie host-only and `SameSite=Lax`, and leave
+   CORS unset — everything is same-origin.
+
+With `RELAY_EDGE_SECRET` set, any request that reaches the Railway domain
+directly (`*.up.railway.app`) gets `403`. `/healthz` stays open because
+Railway's health check calls the container directly.
+
+`RELAY_CLIENT_IP_HEADER` matters for rate limits: behind Cloudflare every
+request's socket peer is an edge address, so login and webhook limits would
+otherwise lump all callers at one Cloudflare location into one bucket. Relay
+reads the header only on a request that carried the edge secret, and refuses to
+start if the header is set without the secret.
+
+**Rotating the secret.** `RELAY_EDGE_SECRET` takes a comma-separated list.
+Add the new secret to the list and redeploy, switch the Transform Rule to the
+new value, then remove the old one from the list.
+
+**Anything that calls the backend must go through the edge.** Daemons,
+supervisors, and the chat gateway use `RELAY_PUBLIC_BACKEND_URL`, which is the
+Cloudflare hostname, so they pick up the header there. A service calling the
+backend over Railway's private network would be refused — point it at the
+public hostname.
+
+## 3. Caching
+
+The backend already sends the right `Cache-Control` headers; the cache rules
+make Cloudflare honor them and keep dynamic traffic out of the cache.
+
+Cloudflare → *Caching* → *Cache Rules*, in this order:
+
+| Match | Action | Why |
+| --- | --- | --- |
+| URI path starts with `/api/` | **Bypass cache** | JSON API and SSE streams. |
+| URI path starts with `/profile-images/` | **Bypass cache** | Served `private`; access is per user. |
+| URI path is `/install.sh` or `/computer/install.sh` | **Bypass cache** | Served `no-store`; it embeds the current bundle digest. |
+| URI path starts with `/_next/static/` | Eligible for cache, edge TTL 1 year | Content-hashed filenames. |
+| URI path starts with `/computer/daemon-` | Eligible for cache, respect origin TTL | Digest-named, served `immutable`. |
+
+HTML pages fall through to Cloudflare's default (not cached), so a deploy is
+visible immediately.
+
+## 4. SSE
+
+Thread streams are Server-Sent Events under `/api/`. Cloudflare closes a
+proxied connection that sends nothing for 100 seconds; Relay sends a heartbeat
+every 15 seconds, and the client reconnects with `Last-Event-ID` when a
+connection ends, so the default `RELAY_STREAM_MAX_SECONDS` works. Keep the
+`/api/` bypass rule above, and do not enable features that rewrite or buffer
+responses on that path (Rocket Loader, Email Obfuscation, Zaraz).
+
+## 5. Security rules
+
+- **Rate limiting** (*Security* → *WAF* → *Rate limiting rules*): add an edge
+  limit on `/api/v1/auth/` and `/api/v1/automations/*/webhook` as a first
+  line; the backend's own limits stay in force behind it.
+- **Bot protection:** daemons and supervisors are not browsers. If you enable
+  Bot Fight Mode or a managed challenge, add a WAF *Skip* rule for
+  `/api/v1/daemon-node`, `/api/v1/computer-authorizations`, `/install.sh`, and
+  `/computer/` so they are never challenged.
+- **Request body size:** Cloudflare's plan limit (100 MB on Free/Pro) sits
+  above `RELAY_MAX_JSON_BODY_BYTES`, so the backend's limit is the one users hit.
+
+## 6. Verify
+
+```bash
+# Through the edge: 200
+curl -sS -o /dev/null -w '%{http_code}\n' https://relay.example.com/api/v1/auth/status
+# Directly at Railway: 403
+curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/api/v1/auth/status
+# Health check is open on the origin: 200
+curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/healthz
+# Static assets come from the edge cache after the first hit: HIT
+curl -sSI https://relay.example.com/_next/static/<any-asset> | grep -i cf-cache-status
+# The API is never cached: BYPASS or DYNAMIC
+curl -sSI https://relay.example.com/api/v1/auth/status | grep -i cf-cache-status
+```
+
+Then open a thread with a running agent and confirm the stream stays live for
+several minutes, and connect a daemon to `https://relay.example.com`.

@@ -218,3 +218,44 @@ def forwarded_allow_ips() -> str:
                 f"got {proxy!r}."
             ) from error
     return ",".join(proxies)
+
+
+_MIN_EDGE_SECRET_LENGTH = 32
+_HEADER_NAME = re.compile(r"^[A-Za-z0-9-]+$")
+
+
+def edge_secrets() -> tuple[str, ...]:
+    """Shared secrets a CDN edge (Cloudflare) attaches to every proxied request.
+
+    Comma-separated so a new secret can be added at the edge before the old one
+    is removed. Set, the backend refuses requests that do not carry one of them,
+    which is the only origin lock a platform without IP allowlists (Railway)
+    offers. Unset, the backend accepts traffic from anywhere, as before.
+    """
+    secrets = tuple(value.strip() for value in _env("RELAY_EDGE_SECRET").split(",") if value.strip())
+    if any(len(secret) < _MIN_EDGE_SECRET_LENGTH for secret in secrets):
+        raise RuntimeError(
+            f"RELAY_EDGE_SECRET values must be at least {_MIN_EDGE_SECRET_LENGTH} characters."
+        )
+    return secrets
+
+
+def client_ip_header() -> str | None:
+    """Header the edge uses to name the real client, e.g. ``CF-Connecting-IP``.
+
+    Behind a CDN every request arrives from an edge address, so per-client rate
+    limits would collapse into a handful of shared buckets. The header is only
+    believable on a request that proved it came through the edge, so it requires
+    ``RELAY_EDGE_SECRET``.
+    """
+    name = _env("RELAY_CLIENT_IP_HEADER")
+    if not name:
+        return None
+    if not _HEADER_NAME.fullmatch(name):
+        raise RuntimeError("RELAY_CLIENT_IP_HEADER must be an HTTP header name.")
+    if not edge_secrets():
+        raise RuntimeError(
+            "RELAY_CLIENT_IP_HEADER requires RELAY_EDGE_SECRET: a client-IP header "
+            "is forgeable unless the request proves it came through the edge."
+        )
+    return name.lower()

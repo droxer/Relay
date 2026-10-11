@@ -81,6 +81,7 @@ from .persistence.stores import (
 )
 from .persistence.team_store import DatabaseTeamStore, LocalTeamStore
 from .security.auth import USER_COOKIE_NAME, auth_store_from_env, configure_admin_token
+from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
 from .services.event_notifier import (
     CONTROL_PLANE_NOTIFICATION_CHANNEL,
@@ -224,6 +225,8 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     wip_limit()  # Validate the shared admission policy before starting services.
     deploy_config.public_backend_url()  # Fail before enrollment can emit a bad URL.
+    deploy_config.edge_secrets()  # Fail before a weak origin lock goes live.
+    deploy_config.client_ip_header()
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
     configure_admin_token(root_dir)
@@ -354,6 +357,9 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.add_middleware(CookieRequestGuardMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     _configure_cors(app)
+    if deploy_config.edge_secrets():
+        # Added last so it runs first: nothing behind it sees an unproven request.
+        app.add_middleware(EdgeOriginGuardMiddleware)
     app.state.session_store = session_store
     app.state.automation_webhook_limiter = AuthRateLimiter(
         attempts=int(os.environ.get("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", "60")), window_seconds=60,

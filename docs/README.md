@@ -15,6 +15,8 @@ document.
 - [`deployment.md`](deployment.md) — canonical hosted deployment procedure
   (web UI on Vercel, backend and Postgres on Railway) and the origin, cookie,
   and proxy settings it requires.
+- [`deployment-cloudflare.md`](deployment-cloudflare.md) — Railway backend
+  behind Cloudflare (single origin, edge secret, cache rules, SSE).
 - [`../backend/migrations/README.md`](../backend/migrations/README.md) —
   canonical database migration and legacy-session import procedure.
 - [`api.md`](api.md) — current browser-route and HTTP API contract.
