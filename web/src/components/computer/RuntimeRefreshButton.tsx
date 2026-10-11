@@ -51,7 +51,7 @@ export function RuntimeRefreshButton({ nodeId, online, supported, busy }: {
     }
   }
   return <>
-    <Button type="button" variant="outline" size="dense" onClick={() => { void refresh(); }}
+    <Button type="button" variant="ghost" size="dense" onClick={() => { void refresh(); }}
       disabled={!online || !supported || status === "pending"}
       title={!supported ? t("computer.refresh_upgrade") : undefined}>
       {t("computer.refresh_runtimes")}

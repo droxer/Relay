@@ -11,6 +11,13 @@ import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ActionApprove,
   ActionCopy,
   ActionEdit,
@@ -18,6 +25,7 @@ import {
   ActionRemove,
   AdminManageExecutors,
   ICON,
+  NavMore,
   NodeOwnershipIcon,
 } from "../icons";
 import { abbreviateNodeId, formatRunElapsed } from "../../lib/computerNodes";
@@ -94,7 +102,7 @@ export function ComputerCard({
     <article className="computer-card" data-online={isNodeOnline(node) ? "true" : "false"}>
       <header className="computer-card-hero">
         <span className="computer-card-avatar" data-ownership={ownership} translate="no">
-          <NodeOwnershipIcon ownership={ownership} size={ICON.lg} aria-hidden="true" />
+          <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
         </span>
         <div className="computer-card-identity">
           <div className="computer-card-nameline">
@@ -119,150 +127,128 @@ export function ComputerCard({
             <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span>
           </p>
         </div>
-        {/* Labelled, not three bare icons: on the machine you own, "which one
-            of these renames it" should not need a hover. */}
+        {/* One overflow menu instead of a row of five outlined buttons: rename,
+            token, and disconnect are occasional, so they stay labelled but out
+            of sight until asked for. The runtime controls live with the
+            runtimes they act on. */}
         <div className="computer-card-actions">
-          <Button type="button" variant="outline" size="dense" onClick={() => onRename(node)}>
-            <ActionEdit size={ICON.sm} aria-hidden="true" />
-            {t("thread.rename")}
-          </Button>
-          <Button type="button" variant="outline" size="dense" onClick={() => onManageExecutors(node)}>
-            <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
-            {t("admin.v2.manage_executors")}
-          </Button>
-          <RuntimeRefreshButton nodeId={node.id} online={isNodeOnline(node)}
-            supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
-          <Button type="button" variant="outline" size="dense" onClick={() => onShowToken(node)}>
-            <ActionKey size={ICON.sm} aria-hidden="true" />
-            {t("computer.token_button")}
-          </Button>
-          {/* Removal is the counterpart to self-service enrollment, but
-              managed-computer lifecycle belongs to the admin control plane. */}
-          {node.managedNodeId ? null : (
-            // The destructive tier, like every other irreversible action in
-            // the app: a hairline ring and --err ink that invert on hover. As
-            // a ghost it was the fourth identical-looking button in a row of
-            // four, with nothing to say it was the one that unenrolls the
-            // machine.
-            <Button type="button" variant="destructive" size="dense" onClick={() => onDisconnect(node)}>
-              <ActionRemove size={ICON.sm} aria-hidden="true" />
-              {t("computer.disconnect")}
-            </Button>
-          )}
-        </div>
-      </header>
-
-      {/* Unnamed sections on purpose: each opens with an <h3> under the card's
-          <h2>, which already places it. Naming them made every card on the
-          page add the same three "Now running" / "Runtimes" / "Details"
-          landmarks, none of them tellable apart. */}
-      <section className="computer-card-activity">
-        <h3 className="computer-card-section-title">
-          {t("computer.now_running")}
-          {activeRuns.length > 0 ? (
-            <span className="computer-card-count tnum">{activeRuns.length}</span>
-          ) : null}
-        </h3>
-        {activeRuns.length === 0 ? (
-          // No --live ink when nothing is working: the live yellow means "an
-          // agent is running right now" and must be absent at rest.
-          <p className="computer-card-idle">{t("computer.idle")}</p>
-        ) : (
-          <ul className="computer-run-list">
-            {activeRuns.map((run) => {
-              const label = labelForExecutor(run.agent);
-              const row = (
-                <>
-                  <StateMark shape="live" className="computer-run-mark" />
-                  <AgentMark agent={run.agent} size={ICON.sm} className="computer-run-agent-mark" />
-                  <span className="computer-run-agent">{label}</span>
-                  <span className="computer-run-goal">{run.taskGoal || t("computer.untitled_run")}</span>
-                  <span className="computer-run-elapsed tnum">{formatRunElapsed(run.startedAt)}</span>
-                </>
-              );
-              return (
-                <li key={run.runId} className="computer-run-row">
-                  {onOpenThread ? (
-                    <Button
-                      variant="ghost"
-                      type="button"
-                      className="computer-run-open"
-                      onClick={() => onOpenThread(run.sessionId)}
-                      title={t("computer.open_run_thread")}
-                    >
-                      {row}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      type="button"
-                      className="computer-run-open"
-                      disabled
-                      title={t("computer.open_run_thread")}
-                    >
-                      {row}
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <div className="computer-card-body">
-        <section className="computer-card-panel">
-          <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
-          {runtimes.length === 0 ? (
-            <p className="computer-card-idle">{t("admin.v2.node_hosted_agents_empty")}</p>
-          ) : (
-            <ul className="computer-runtime-list">
-              {runtimes.map((name) => (
-                <RuntimeRow key={name} node={node} agent={name} t={t} />
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="computer-card-panel">
-          <h3 className="computer-card-section-title">{t("computer.details")}</h3>
-          <dl className="computer-fact-list">
-            <Fact label={t("computer.fact_workspace")}>
-              <span className="code computer-fact-path" title={node.workspacePath}>
-                {node.workspacePath || t("computer.fact_unset")}
-              </span>
-            </Fact>
-            <Fact label={t("admin.queued")}>
-              <span className="tnum">{node.queuedCommandCount}</span>
-            </Fact>
-            <Fact label={t("computer.fact_id")}>
-              <span className="computer-fact-id">
-                <span className="code" title={node.id} translate="no">{abbreviateNodeId(node.id)}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
                 <Button
                   type="button"
                   variant="icon"
                   size="icon-dense"
-                  tinted
-                  onClick={() => void handleCopyId()}
-                  aria-label={copied ? t("admin.copied") : t("admin.copy_node_id")}
+                  aria-label={t("computer.more_actions", { name: title })}
+                  title={t("computer.more_actions", { name: title })}
                 >
-                  {copied ? <ActionApprove size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
+                  <NavMore size={ICON.md} aria-hidden="true" />
                 </Button>
-              </span>
-            </Fact>
-          </dl>
-        </section>
-      </div>
-    </article>
-  );
-}
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onRename(node)}>
+                <ActionEdit size={ICON.sm} aria-hidden="true" />
+                {t("thread.rename")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onShowToken(node)}>
+                <ActionKey size={ICON.sm} aria-hidden="true" />
+                {t("computer.token_button")}
+              </DropdownMenuItem>
+              {/* Removal is the counterpart to self-service enrollment, but
+                  managed-computer lifecycle belongs to the admin control plane. */}
+              {node.managedNodeId ? null : (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem danger onClick={() => onDisconnect(node)}>
+                    <ActionRemove size={ICON.sm} aria-hidden="true" />
+                    {t("computer.disconnect")}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="computer-fact">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
+      {/* Active work only appears while there is some: an idle machine says so
+          through its presence pill, not through an empty section. */}
+      {activeRuns.length === 0 ? null : (
+        <section className="computer-card-section">
+          <h3 className="computer-card-section-title">
+            {t("computer.now_running")}
+            <span className="computer-card-count tnum">{activeRuns.length}</span>
+          </h3>
+          <ul className="computer-run-list">
+            {activeRuns.map((run) => (
+              <li key={run.runId} className="computer-run-row">
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className="computer-run-open"
+                  onClick={onOpenThread ? () => onOpenThread(run.sessionId) : undefined}
+                  disabled={!onOpenThread}
+                  title={t("computer.open_run_thread")}
+                >
+                  <StateMark shape="live" className="computer-run-mark" />
+                  <AgentMark agent={run.agent} size={ICON.sm} className="computer-run-agent-mark" />
+                  <span className="computer-run-agent">{labelForExecutor(run.agent)}</span>
+                  <span className="computer-run-goal">{run.taskGoal || t("computer.untitled_run")}</span>
+                  <span className="computer-run-elapsed tnum">{formatRunElapsed(run.startedAt)}</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="computer-card-section">
+        <div className="computer-card-section-head">
+          <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
+          <div className="computer-card-section-actions">
+            <RuntimeRefreshButton nodeId={node.id} online={isNodeOnline(node)}
+              supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
+            <Button type="button" variant="ghost" size="dense" onClick={() => onManageExecutors(node)}>
+              <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
+              {t("admin.v2.manage_executors")}
+            </Button>
+          </div>
+        </div>
+        {runtimes.length === 0 ? (
+          <p className="computer-card-idle">{t("admin.v2.node_hosted_agents_empty")}</p>
+        ) : (
+          <ul className="computer-runtime-list">
+            {runtimes.map((name) => (
+              <RuntimeRow key={name} node={node} agent={name} t={t} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Facts as one quiet footer line rather than a labelled panel: the
+          workspace path and id are looked up, not read. */}
+      <footer className="computer-card-meta">
+        <span className="code computer-fact-path" title={node.workspacePath}>
+          {node.workspacePath || t("computer.fact_unset")}
+        </span>
+        {node.queuedCommandCount > 0 ? (
+          <span className="tnum">{t("admin.queued")} {node.queuedCommandCount}</span>
+        ) : null}
+        <span className="computer-fact-id">
+          <span className="code" title={node.id} translate="no">{abbreviateNodeId(node.id)}</span>
+          <Button
+            type="button"
+            variant="icon"
+            size="icon-dense"
+            tinted
+            onClick={() => void handleCopyId()}
+            aria-label={copied ? t("admin.copied") : t("admin.copy_node_id")}
+          >
+            {copied ? <ActionApprove size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
+          </Button>
+        </span>
+      </footer>
+    </article>
   );
 }
 
