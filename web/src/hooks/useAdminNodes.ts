@@ -14,6 +14,12 @@ interface AdminNodes {
   employees: EmployeeRecord[];
 }
 
+// Fallbacks must keep a stable identity: AdminPage keys useKeyChange on
+// `nodes`, and a fresh `[]` per render never converges — an infinite
+// render loop on every first visit, before the poll resolves.
+const NO_NODES: ControlPanelDaemonNodeRecord[] = [];
+const NO_EMPLOYEES: EmployeeRecord[] = [];
+
 // Admin page node snapshot (daemon nodes + employees). Node polling shares
 // CONTROL_PANEL_NODES_KEY with useLocalDaemonNodes so localhost chat + admin
 // reuse one /api/v1/admin/daemon-nodes poll instead of two timers. When `live` is false the
@@ -46,8 +52,8 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
     ],
   });
 
-  const nodes = nodesQuery.data ?? [];
-  const employees = employeesQuery.data ?? [];
+  const nodes = nodesQuery.data ?? NO_NODES;
+  const employees = employeesQuery.data ?? NO_EMPLOYEES;
   const pollError = nodesQuery.error ?? employeesQuery.error;
   const dataUpdatedAt = Math.max(nodesQuery.dataUpdatedAt, employeesQuery.dataUpdatedAt);
 
