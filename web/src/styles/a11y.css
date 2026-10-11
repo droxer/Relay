@@ -222,12 +222,6 @@
   .md-fence-copy-label {
     display: none;
   }
-
-  /* The card action grid pins its slots on fine pointers; the boosted 44px
-     buttons would overflow their columns and overlap without matching tracks. */
-  .adm-node-card-actions {
-    grid-template-columns: repeat(5, var(--touch-target));
-  }
 }
 
 /* OS “increase contrast” — boost hairlines and body copy. */

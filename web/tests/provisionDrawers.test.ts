@@ -71,13 +71,14 @@ describe("provision drawers", () => {
     );
   });
 
-  it("keeps the employee preview out of the live region", () => {
+  it("says what handle will be stored when it differs from what was typed", () => {
+    // The preview card is gone; the id field's hint carries the same promise
+    // — `@Alice` is not what gets stored — without announcing per keystroke.
     const source = readWeb("src/components/admin/AddEmployeeDrawer.tsx");
-    const preview = source.slice(source.indexOf("adm-provision-preview "));
-    assert.ok(
-      !preview.slice(0, 400).includes("aria-live"),
-      "a keystroke-driven preview must not announce on every character",
-    );
+    assert.match(source, /normalizedHandle !== employeeId\.trim\(\)/);
+    assert.match(source, /admin\.v2\.employee_id_normalized/);
+    assert.ok(!source.includes("adm-provision-preview"), "the preview card must not come back");
+    assert.ok(!source.includes("aria-live"), "the hint must not announce on every character");
   });
 
   it("never offers the admin's own autofill for an account they are creating", () => {

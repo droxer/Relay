@@ -17,7 +17,6 @@ import {
   ICON_STROKE_LARGE,
 } from "../icons";
 import { SearchInput } from "@/components/ui/search-input";
-import { canUseLocalControlPanel } from "../../lib/controlPanel";
 import {
   matchesNodeQuickFilter,
   nodesByStatus,
@@ -36,7 +35,7 @@ import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { isNodeOnline, type StoredNodeTokenMap } from "./helpers";
+import { isNodeOnline } from "./helpers";
 import { NodeCard } from "./NodeCard";
 import { NodeActionsCell, NodeEmployeeCell, NodeIdentityCell, NodeRuntimesCell } from "./NodeRow";
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
@@ -48,7 +47,6 @@ import { createCellState } from "../../lib/cellState";
 interface NodesViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
   employees: EmployeeRecord[];
-  storedTokens: StoredNodeTokenMap;
   layout: AdminLayout;
   onLayoutChange: (next: AdminLayout) => void;
   onRevealCredentials: (node: ControlPanelDaemonNodeRecord) => void;
@@ -94,8 +92,6 @@ type ColumnChrome = { headClass?: string; cellClass?: string };
    its `useNodeDelete` state. */
 interface NodeCellState {
   t: TFunction;
-  storedTokens: StoredNodeTokenMap;
-  colocated: boolean;
   employeeById: Map<string, EmployeeRecord>;
   onRevealCredentials: NodesViewProps["onRevealCredentials"];
   onRenameNode: NodesViewProps["onRenameNode"];
@@ -140,8 +136,8 @@ function NodeColumnLabel({ labelKey }: { labelKey: string }) {
 }
 
 function NodeIdentityColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
-  const { storedTokens, colocated, t } = useNodeCellState();
-  return <NodeIdentityCell node={node} storedTokens={storedTokens} colocated={colocated} t={t} />;
+  const { t } = useNodeCellState();
+  return <NodeIdentityCell node={node} t={t} />;
 }
 
 function NodeEmployeeColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
@@ -236,11 +232,10 @@ function NodeBandTable({
   );
 }
 
-export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChange, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, onAddNode, highlightedNodeId }: NodesViewProps) {
+export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, onAddNode, highlightedNodeId }: NodesViewProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<NodeQuickFilter>("all");
   const [query, setQuery] = useState("");
-  const colocated = canUseLocalControlPanel();
 
   const employeeById = useMemo(() => {
     const map = new Map<string, EmployeeRecord>();
@@ -276,8 +271,8 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
   const { page, setPage } = usePagination("nodePage");
   // What the stable column defs read at render time (see NodeCells).
   const cellState = useMemo<NodeCellState>(
-    () => ({ t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode }),
-    [t, storedTokens, colocated, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode],
+    () => ({ t, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode }),
+    [t, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode],
   );
   /* `useListSort` owns the sort (it persists in the URL); TanStack's
      SortingState is a read-only projection of it. Header clicks go back
@@ -377,7 +372,7 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
             const active = filter === id;
             return (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="dense"
                 key={id}
                 type="button"
@@ -439,8 +434,6 @@ export function NodesView({ nodes, employees, storedTokens, layout, onLayoutChan
                 key={node.id}
                 node={node}
                 employeeName={employeeName}
-                storedTokens={storedTokens}
-                colocated={colocated}
                 onReveal={onRevealCredentials}
                 onRename={onRenameNode}
                 onManageExecutors={onManageExecutors}

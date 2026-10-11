@@ -221,36 +221,34 @@ tr.is-pulse > td:first-child::after {
 .adm-fleet-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   margin-bottom: var(--sp-4);
 }
 
-/* Geometry and the resting hairline come from `variant="outline"` at
-   `size="dense"`; this rule used to restate both, on a Button that declared
-   `variant="ghost"` — so the prop and the class described two different
-   buttons and the class won. The only local declaration left is the label
-   tier: these filters carry the strong label, not the button's own 700. */
+/* Quiet filters: `variant="ghost"` at `size="dense"`, so a resting chip is
+   just its label and count — seven outlined, bold pills in a row read as
+   seven buttons competing for the first glance. The active chip takes the
+   control fill, the same "this one is on" wash the view toggle uses. */
 .adm-fleet-chip {
-  gap: var(--sp-2);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
+  gap: var(--sp-1-5);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-3);
 }
 
+.adm-fleet-chip:hover {
+  color: var(--ink-1);
+}
 
 .adm-fleet-chip.active,
 .adm-fleet-chip[data-active="true"] {
-  /* Segmented-control recipe: recessed surface-0 fill + inset hairline, the
-     same idiom as the shell view-toggle. Not a selectable list row, so no
-     action-soft wash. */
   color: var(--ink-1);
-  border-color: var(--line-1);
-  background: var(--surface-0);
-  box-shadow: inset 0 0 0 0.5px var(--line-1);
+  background: var(--control-fill);
 }
 
 .adm-fleet-chip.active .adm-fleet-chip-count,
 .adm-fleet-chip[data-active="true"] .adm-fleet-chip-count {
-  color: var(--ink-1);
+  color: var(--ink-2);
 }
 
 .adm-fleet-chip-count {
@@ -485,14 +483,6 @@ tr.is-pulse > td:first-child::after {
 .adm-emp-card-metric .tnum {
   font: var(--type-label-strong);
   font-variant-numeric: tabular-nums;
-}
-
-/* Employee cards carry only edit + delete — collapse the fixed 5-slot node
-   grid (an unslotted button would auto-place into column 1 and leave empty
-   28px tracks) and pin the buttons to the footer edge. */
-.adm-emp-card .adm-node-card-actions {
-  display: flex;
-  margin-left: auto;
 }
 
 .adm-node-card.is-pulse::after {

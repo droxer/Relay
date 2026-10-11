@@ -1,37 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { useNodeDelete } from "../../hooks/useNodeDelete";
-import {
-  COPY_FEEDBACK_MS,
-  copyText,
-  statusTone,
-  visualStatus,
-  type StoredNodeTokenMap,
-} from "./helpers";
+import { statusTone, visualStatus } from "./helpers";
 import { NodeActions } from "./NodeActions";
-import { NodeProfileBadges } from "./NodeProfileBadges";
+import { NodeMeta } from "./NodeMeta";
 import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { TonePill } from "../StatusPill";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  ActionApprove,
-  ActionCopy,
-  AdminEmployees,
-  ICON,
-  NodeOwnershipIcon,
-} from "../icons";
-import { isNodeOnline, nodeOwnershipProfile } from "../../lib/adminHelpers";
+import { isNodeOnline } from "../../lib/adminHelpers";
 
 interface NodeCardProps {
   node: ControlPanelDaemonNodeRecord;
   employeeName?: string;
-  storedTokens?: StoredNodeTokenMap;
-  colocated?: boolean;
   onReveal?: (node: ControlPanelDaemonNodeRecord) => void;
   onRename: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
@@ -44,8 +26,6 @@ interface NodeCardProps {
 export function NodeCard({
   node,
   employeeName,
-  storedTokens = {},
-  colocated = false,
   onReveal,
   onRename,
   onManageExecutors,
@@ -53,14 +33,7 @@ export function NodeCard({
   highlight = false,
   t,
 }: NodeCardProps) {
-  const [copied, setCopied] = useState(false);
   const { deletePending, deleteError, handleDelete } = useNodeDelete(node, onDelete, t);
-
-  async function handleCopyId() {
-    await copyText(node.id);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-  }
 
   const hasName = Boolean(node.displayName);
   const nodeName = hasName ? node.displayName! : node.id;
@@ -68,14 +41,12 @@ export function NodeCard({
   // name is (or equals) its id would otherwise print the same string twice.
   const showHandle = hasName && node.id !== nodeName;
   const status = visualStatus(node);
-  const tone = statusTone(status);
-  const statusLabel = t(`status.${status}`, { defaultValue: status });
   const online = isNodeOnline(node);
-  // The presence pill already says Online/Offline, so the status pill only
-  // renders when it adds state presence can't: running, provisioning,
-  // failed, stopped.
+  // ONE status readout per card. Presence (Online/Offline) is the ordinary
+  // case; the lifecycle pill replaces it only when it says something presence
+  // cannot — running, provisioning, failed, stopped. Showing both printed
+  // "Running · Online" on every busy machine.
   const showStatusPill = status !== "ready" && status !== "stale";
-  const ownership = nodeOwnershipProfile(node);
 
   return (
     <article
@@ -83,83 +54,28 @@ export function NodeCard({
       data-online={online ? "true" : "false"}
     >
       <header className="adm-node-card-head">
-        <span
-          className="adm-node-avatar adm-node-avatar--machine"
-          data-ownership={ownership}
-          translate="no"
-        >
-          <NodeOwnershipIcon ownership={ownership} size={ICON.lg} aria-hidden="true" />
-        </span>
         <div className="adm-node-card-identity">
-          <span className="adm-node-card-nameline">
-            <span
-              className={`adm-node-card-name${hasName ? "" : " code"}`}
-              translate="no"
-              title={nodeName}
-            >
-              {nodeName}
-            </span>
-            <NodePresence node={node} t={t} withLabel />
-          </span>
           <span
-            className={`adm-node-card-handle code${showHandle ? "" : " is-placeholder"}`}
-            aria-hidden={showHandle ? undefined : true}
+            className={`adm-node-card-name${hasName ? "" : " code"}`}
             translate="no"
+            title={nodeName}
           >
-            {showHandle ? node.id : "\u00a0"}
+            {nodeName}
           </span>
-        </div>
-        {showStatusPill ? (
-          <TonePill tone={tone} label={statusLabel} live={status === "running" || status === "busy"} />
-        ) : null}
-      </header>
-
-      {/* Chips live inside the body, not as siblings of it. The card is a
-          fixed frame (identity at the top, actions at the bottom), so
-          everything between them has to share ONE region that clips — as
-          separate rows in the card's own column they each pushed the footer
-          down, and a computer with an owner and four runtimes lost its action
-          row off the bottom edge. Ownership and owner are also one tier of
-          chip, so they belong on one wrapping line rather than two. */}
-      <div className="adm-node-card-body">
-        <div className="adm-node-card-chips">
-          <NodeProfileBadges
-            node={node}
-            storedTokens={storedTokens}
-            colocated={colocated}
-            t={t}
-            card
-            hideThisHost
-            hideSavedHere
-          />
-          {employeeName ? (
-            <Badge className="adm-node-card-employee-badge" title={employeeName} translate="no">
-              <AdminEmployees size={ICON.xs} className="adm-node-card-employee-icon" aria-hidden="true" />
-              <span className="adm-node-card-employee-badge-text">{employeeName}</span>
-            </Badge>
+          {showHandle ? (
+            <span className="adm-node-card-handle code" translate="no">{node.id}</span>
           ) : null}
         </div>
-        <div className="adm-node-runtimes" title={t("admin.v2.node_runtimes")}>
-          <NodeRuntimeMarks node={node} t={t} />
-        </div>
-      </div>
-
-      <footer className="adm-node-card-foot">
-        {node.queuedCommandCount > 0 ? (
-          <span className="adm-node-card-queued tnum">{node.queuedCommandCount} {t("admin.queued")}</span>
-        ) : null}
-        <div className="adm-node-card-actions">
-          <Button variant="icon"
-            size="icon-dense"
-            tinted
-            type="button"
-            className="adm-node-card-icon-btn adm-node-action--copy"
-            onClick={() => void handleCopyId()}
-            aria-label={copied ? t("admin.copied") : t("admin.copy_node_id")}
-            tooltip={node.id}
-          >
-            {copied ? <ActionApprove size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
-          </Button>
+        <div className="adm-node-card-status">
+          {showStatusPill ? (
+            <TonePill
+              tone={statusTone(status)}
+              label={t(`status.${status}`, { defaultValue: status })}
+              live={status === "running" || status === "busy"}
+            />
+          ) : (
+            <NodePresence node={node} t={t} withLabel />
+          )}
           <NodeActions
             node={node}
             onReveal={onReveal}
@@ -171,6 +87,17 @@ export function NodeCard({
             t={t}
           />
         </div>
+      </header>
+
+      <NodeMeta node={node} employeeName={employeeName} t={t} />
+
+      <footer className="adm-node-card-runtimes">
+        <span className="adm-node-runtimes" title={t("admin.v2.node_runtimes")}>
+          <NodeRuntimeMarks node={node} t={t} />
+        </span>
+        {node.queuedCommandCount > 0 ? (
+          <span className="adm-node-card-queued tnum">{node.queuedCommandCount} {t("admin.queued")}</span>
+        ) : null}
       </footer>
       {deleteError ? (
         <p className="adm-node-card-error" role="alert">{t("admin.v2.action_failed", { message: deleteError })}</p>
