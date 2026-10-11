@@ -483,11 +483,12 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
       : null;
   const headerError = authError ?? pollError ?? managedNodesError;
   const viewTitle = t(`admin.v2.title_${view}`);
-  /* Organization has no header action, and an EMPTY actions container is not
-     the same as none: the narrow layout hides a header that holds nothing but
-     a title (section-rail.css), and an empty container kept it on screen as a
-     1px rule. */
-  const hasHeaderActions = Boolean(headerError) || view !== "organization";
+  /* Only the two roster sections own a create action. The dashboard reads;
+     its Add computer / Add employee pair repeated the sections one click away.
+     An EMPTY actions container is not the same as none: the narrow layout
+     hides a header that holds nothing but a title (section-rail.css), and an
+     empty container kept it on screen as a 1px rule. */
+  const hasHeaderActions = Boolean(headerError) || view === "employees" || view === "computers";
   const headerCount = view === "employees"
     ? t("admin.employee_count", { count: employees.length })
     : view === "computers"
@@ -544,29 +545,6 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   the cobalt fill and anything beside it steps down to an
                   outline. Two ghost buttons side by side named no primary at
                   all, which is how a page ends up with no focal point. */}
-              {view === "dashboard" ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="adm-create-action"
-                    onClick={() => setAddNodeOpen(true)}
-                    tooltip={t("admin.v2.add_node_cta")}
-                  >
-                    <ActionAdd size={ICON.md} aria-hidden="true" />
-                    {t("admin.v2.add_node_cta")}
-                  </Button>
-                  <Button
-                    type="button"
-                    className="adm-create-action"
-                    onClick={() => setAddEmployeeOpen(true)}
-                    tooltip={t("admin.v2.add_employee_cta")}
-                  >
-                    <ActionAdd size={ICON.md} aria-hidden="true" />
-                    {t("admin.v2.add_employee_cta")}
-                  </Button>
-                </>
-              ) : null}
               {view === "employees" ? (
                 <Button
                   type="button"

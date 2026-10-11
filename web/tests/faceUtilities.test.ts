@@ -109,7 +109,6 @@ describe("type-face utilities", () => {
       "adm-cred-value",
       "adm-assign-node-path",
       "workspace-path-segment",
-      "adm-emp-card-email",
     ]) {
       pairedWith("code", cls);
     }

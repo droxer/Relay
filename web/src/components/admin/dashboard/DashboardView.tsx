@@ -46,7 +46,6 @@ export function DashboardView({
         >
           <KpiTile
             slot="sessions"
-            hero
             eyebrow={t("admin.v2.dash_kpi_sessions")}
             value={sessionsReady ? formatCompact(sessions.total, i18n.language) : dash}
             delta={
@@ -115,7 +114,6 @@ export function DashboardView({
           <TopEmployees
             className="adm-dash-panel"
             employees={employees}
-            nodes={nodes}
             ranked={sessions.topEmployees}
             error={sessionsQuery.error}
           />

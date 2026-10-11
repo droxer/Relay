@@ -193,7 +193,9 @@ export function EmployeesView({
     <div className="adm-view">
       <div className="adm-view-controls">
         <div className="adm-fleet-filters" role="group" aria-label={t("admin.v2.filter_label")}>
-          {FILTERS.map((id) => {
+          {/* A slice nobody is in is not a choice; All and the open one
+              always stay so the row never loses its anchor. */}
+          {FILTERS.filter((id) => id === "all" || id === filter || counts[id] > 0).map((id) => {
             const active = filter === id;
             return (
               <Button
@@ -212,6 +214,15 @@ export function EmployeesView({
             );
           })}
         </div>
+        <SearchInput
+          className="relay-search adm-search"
+          inputClassName="adm-search-input"
+          label={t("admin.v2.search_employees_placeholder")}
+          name="admin-employees-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("admin.v2.search_employees_placeholder")}
+        />
         {/* Sits with the layout toggle, not inside the filter chips: at the
             widths it appears, it is the only way to sort at all. */}
         <SortMenu
@@ -228,16 +239,6 @@ export function EmployeesView({
         />
         <AdminLayoutToggle layout={layout} onChange={onLayoutChange} />
       </div>
-
-      <SearchInput
-        className="relay-search adm-search"
-        inputClassName="adm-search-input"
-        label={t("admin.v2.search_employees_placeholder")}
-        name="admin-employees-search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={t("admin.v2.search_employees_placeholder")}
-      />
 
       {deleteError ? (
         <Alert className="mb-4">{t("admin.v2.action_failed", { message: deleteError })}</Alert>

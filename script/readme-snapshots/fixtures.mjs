@@ -485,7 +485,11 @@ export const dashboardSessions = {
   ],
 };
 
-const usage = (input, output, cache) => ({ input, output, cache, total: input + output + cache });
+/* Cache splits roughly 9:1 reads to writes, the shape a long agent run has. */
+const usage = (input, output, cache) => {
+  const cacheWrite = Math.round(cache / 10);
+  return { input, output, cacheRead: cache - cacheWrite, cacheWrite, cache, total: input + output + cache, fresh: input + output + cacheWrite };
+};
 const dailyTokens = DAILY_SESSIONS.map((count, index) => ({ date: dateOnly(index - DAILY_SESSIONS.length + 1), ...usage(count * 21_400, count * 5_100, count * 88_000) }));
 const tokenTotals = dailyTokens.reduce((sum, day) => usage(sum.input + day.input, sum.output + day.output, sum.cache + day.cache), usage(0, 0, 0));
 
@@ -493,9 +497,13 @@ export const dashboardTokens = {
   available: true,
   totalInput: tokenTotals.input,
   totalOutput: tokenTotals.output,
+  totalCacheRead: tokenTotals.cacheRead,
+  totalCacheWrite: tokenTotals.cacheWrite,
   totalCache: tokenTotals.cache,
   total: tokenTotals.total,
-  unsupportedAgents: [],
+  fresh: tokenTotals.fresh,
+  timeZone: "UTC",
+  unreportedRuns: [],
   daily: dailyTokens,
   byEmployee: [
     { employeeId: EMPLOYEE, ...usage(2_410_000, 596_000, 9_820_000), sessionCount: 112 },

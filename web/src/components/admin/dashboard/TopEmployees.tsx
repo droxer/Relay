@@ -9,30 +9,23 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { EmployeeAvatar } from "../../EmployeeAvatar";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../../../types";
+import type { EmployeeRecord } from "../../../types";
 import { AVATAR } from "../../icons";
 import { employeeHandleOf } from "../../../lib/employeeHandle";
 
 interface TopEmployeesProps {
   employees: EmployeeRecord[];
-  nodes: ControlPanelDaemonNodeRecord[];
   ranked: Array<{ employeeId: string; sessionCount: number }>;
   error?: string | null;
   className?: string;
 }
 
-export function TopEmployees({ employees, nodes, ranked, error, className }: TopEmployeesProps) {
+export function TopEmployees({ employees, ranked, error, className }: TopEmployeesProps) {
   const { t } = useTranslation();
   const titleId = useId();
 
   const rows = useMemo(() => {
-    const nodeCountByEmployee = new Map<string, number>();
-    for (const node of nodes) {
-      if (!node.employeeId) continue;
-      nodeCountByEmployee.set(node.employeeId, (nodeCountByEmployee.get(node.employeeId) ?? 0) + 1);
-    }
     const employeeMap = new Map(employees.map((e) => [e.id, e] as const));
-    const maxCount = ranked[0]?.sessionCount ?? 0;
     return ranked.map((row) => {
       const employee = employeeMap.get(row.employeeId);
       return {
@@ -41,11 +34,9 @@ export function TopEmployees({ employees, nodes, ranked, error, className }: Top
         // their UUID off the screen either way.
         displayName: employee?.displayName || employeeHandleOf(employee ?? { id: row.employeeId }),
         sessionCount: row.sessionCount,
-        nodeCount: nodeCountByEmployee.get(row.employeeId) ?? 0,
-        share: maxCount > 0 ? row.sessionCount / maxCount : 0,
       };
     });
-  }, [ranked, employees, nodes]);
+  }, [ranked, employees]);
 
   return (
     <Card render={<section />} className={className}>
@@ -64,18 +55,10 @@ export function TopEmployees({ employees, nodes, ranked, error, className }: Top
             <li key={row.id} className="adm-dash-top-row">
               <span className="adm-dash-top-rank tnum">{index + 1}</span>
               <EmployeeAvatar displayName={row.displayName} running={false} size={AVATAR.md} />
-              <div className="adm-dash-top-meta">
-                <span className="adm-dash-top-name">{row.displayName}</span>
-                <span className="adm-dash-top-sub tnum">
-                  {t("admin.v2.dash_top_nodes", { count: row.nodeCount })}
-                </span>
-              </div>
+              {/* One line per person: name and count. The computer count and
+                  the share meter under each row restated the rank. */}
+              <span className="adm-dash-top-name">{row.displayName}</span>
               <span className="adm-dash-top-count tnum">{row.sessionCount}</span>
-              {/* Own grid line spanning name → count, so it reads as a row
-                  meter rather than an underline of the employee name. */}
-              <div className="adm-dash-top-bar" aria-hidden="true">
-                <span style={{ width: `${Math.max(row.share * 100, 4)}%` }} />
-              </div>
             </li>
           ))}
         </ol>
