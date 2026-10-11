@@ -15,6 +15,7 @@ import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectDescriptionField, ProjectNameField } from "./ProjectFormFields";
+import { RosterAgentItem, RosterEmptyOption, RosterTriggerValue } from "./roster/RosterOption";
 
 /** Setup intents share the backend cap (SETUP_INTENT_MAX_LENGTH). */
 const SETUP_INTENT_MAX_LENGTH = 4000;
@@ -309,17 +310,18 @@ function SetupAgentField({ agents, value, disabled, hint, onChange }: {
 }) {
   const { t } = useTranslation();
   const labelId = useId();
+  const selectedAgent = agents.find((agent) => agent.id === value);
   return (
     <Field label={t("project.setup_agent")} labelId={labelId} wrapper="div" hint={hint}>
       <Select value={value} onValueChange={(next) => onChange(next ?? AUTO_SETUP_AGENT)}>
         <SelectTrigger className="w-full" disabled={disabled} aria-labelledby={labelId}>
-          <SelectValue>
-            {(selected: string | null) => agents.find((agent) => agent.id === selected)?.displayName ?? t("project.setup_agent_auto")}
-          </SelectValue>
+          {selectedAgent ? <RosterTriggerValue agent={selectedAgent} /> : (
+            <SelectValue>{() => t("project.setup_agent_auto")}</SelectValue>
+          )}
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={AUTO_SETUP_AGENT}>{t("project.setup_agent_auto")}</SelectItem>
-          {agents.map((agent) => <SelectItem key={agent.id} value={agent.id}>{agent.displayName}</SelectItem>)}
+          <RosterEmptyOption value={AUTO_SETUP_AGENT} label={t("project.setup_agent_auto")} />
+          {agents.map((agent) => <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />)}
         </SelectContent>
       </Select>
     </Field>

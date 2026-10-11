@@ -17,8 +17,8 @@ vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   createTaskMutation: { isPending: false, mutateAsync: createTask },
 }) }));
 const agents = [
-  { id: "ada", displayName: "Ada", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
-  { id: "bo", displayName: "Bo", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
+  { id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
+  { id: "bo", displayName: "Bo", executorKind: "codex", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
 ];
 vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
@@ -62,7 +62,7 @@ it("creates the project from the intent and asks the chosen agent to draft its s
   render(<ProjectDrawer open computers={computers} employeeId="alice" onClose={vi.fn()} onSaved={onSaved} />);
   fireEvent.change(screen.getByRole("textbox", { name: /^project\.setup_intent/ }), { target: { value: "Launch the site.\nWith pricing." } });
   fireEvent.click(screen.getByRole("button", { name: "node" }));
-  fireEvent.click(screen.getByRole("button", { name: "Bo" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Bo · / }));
   fireEvent.click(screen.getByRole("button", { name: "project.setup_draft" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(create).toHaveBeenCalledWith({

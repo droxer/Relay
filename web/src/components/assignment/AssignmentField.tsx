@@ -15,7 +15,6 @@ import { teamAvailability } from "../../lib/taskAssignment";
 import { agentLabel } from "../../lib/plan";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
 import { navigateToAppPath } from "../../lib/appRoute";
-import { AgentMark } from "../AgentMark";
 import { AvatarStack } from "../AvatarStack";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
@@ -117,7 +116,7 @@ function AssignmentSummary({
             items={team.members.map((member) => ({
               id: member.id,
               name: member.displayName,
-              mark: <AgentMark agent={member.executorKind} size={ICON.xs} />,
+              mark: <ProfileImage src={member.profileImageUrl} alt="" fallback={<IdentityMark kind="agent" />} />,
             }))}
           />
         ) : null}

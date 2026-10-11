@@ -134,3 +134,10 @@
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
 }
+
+/* A filter chip is a compact control, so the badge it carries steps down to
+   the inline size; the filter menu rows keep the roster's full chip. */
+[data-slot="filter-chip"] .agent-state {
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+}

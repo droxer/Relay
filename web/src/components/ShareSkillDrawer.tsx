@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { assignSkill, revokeSkillAssignment } from "../api";
 import type { AgentTeam, EmployeeAgent, SkillDetail } from "../types";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
+import { RosterAgentMark, RosterTeamMark } from "./roster/RosterOption";
 
 function TargetRow({
   checked,
@@ -17,16 +18,20 @@ function TargetRow({
   onToggle,
   label,
   meta,
+  mark,
 }: {
   checked: boolean;
   disabled: boolean;
   onToggle: () => void;
   label: string;
   meta?: string;
+  /** The target's visual badge — an agent's or team's face. */
+  mark?: ReactNode;
 }) {
   return (
     <label className="skill-target" data-selected={checked ? "true" : undefined}>
       <Checkbox checked={checked} disabled={disabled} onCheckedChange={onToggle} />
+      {mark}
       <span className="skill-target-name">{label}</span>
       {meta ? <span className="skill-target-meta">{meta}</span> : null}
     </label>
@@ -156,6 +161,7 @@ export function ShareSkillDrawer({
                   disabled={busy}
                   onToggle={() => toggle(`team:${team.id}`)}
                   label={team.name}
+                  mark={<RosterTeamMark team={team} />}
                   meta={t("skills.member_count", { count: team.memberAgentIds.length })}
                 />
               ))}
@@ -173,6 +179,7 @@ export function ShareSkillDrawer({
                   disabled={busy}
                   onToggle={() => toggle(`agent:${agent.id}`)}
                   label={agent.displayName}
+                  mark={<RosterAgentMark agent={agent} />}
                   meta={labelForExecutor(agent.executorKind)}
                 />
               ))}
@@ -195,7 +202,10 @@ export function ShareSkillDrawer({
                   : agent?.displayName ?? team?.name ?? assignment.targetId;
                 return (
                   <div key={assignment.id}>
-                    <span>{label}</span>
+                    <span className="skill-grant-target">
+                      {agent ? <RosterAgentMark agent={agent} /> : team ? <RosterTeamMark team={team} /> : null}
+                      <span translate={agent || team ? "no" : undefined}>{label}</span>
+                    </span>
                     <Button
                       variant="ghost"
                       size="sm"

@@ -22,7 +22,7 @@ const agents = [
   { id: "agent-1", displayName: "Claude editor", executorKind: "claude", enabled: true },
   { id: "agent-2", displayName: "Codex reviewer", executorKind: "codex", enabled: true },
 ] as any;
-const teams = [{ id: "team-1", name: "Launch team", memberAgentIds: ["agent-1", "agent-2"] }] as any;
+const teams = [{ id: "team-1", name: "Launch team", enabled: true, memberAgentIds: ["agent-1", "agent-2"], members: [] }] as any;
 function wrapper({ children }: { children: ReactNode }) { return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>; }
 
 it("assigns a team scope without expanding it into agent grants", async () => {
