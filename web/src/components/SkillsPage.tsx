@@ -352,10 +352,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                 >
                   <span className="skills-roster-row-name">{item.displayName}</span>
                   <span className="skills-roster-row-meta">
-                    <span className="skills-roster-row-slug">{item.slug}</span>
-                    <span className="skills-roster-row-facts">
-                      {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
-                    </span>
+                    {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
                   </span>
                 </Button>
               </li>
@@ -384,27 +381,20 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
               titleAs="h2"
               layout="stacked"
               actions={
-                <Button type="button" onClick={() => setSharing(true)}>
+                <Button type="button" variant="outline" onClick={() => setSharing(true)}>
                   {t("skills.share")}
                 </Button>
               }
             />
             <div className="skill-detail-body">
             <p className="skill-description">{skill.description}</p>
-            <dl className="skill-stats">
-              <div>
-                <dt>{t("skills.current_revision")}</dt>
-                <dd>v{skill.revisions[0]?.revision ?? 1}</dd>
-              </div>
-              <div>
-                <dt>{t("skills.files")}</dt>
-                <dd>{skill.files.length}</dd>
-              </div>
-              <div>
-                <dt>{t("skills.granted")}</dt>
-                <dd>{skill.grantedAgentIds.length}</dd>
-              </div>
-            </dl>
+            {/* One quiet meta line, not a stat band: three small counts do not
+                earn display-size numerals between two hairlines. */}
+            <p className="skill-meta tnum">
+              <span title={t("skills.current_revision")}>v{skill.revisions[0]?.revision ?? 1}</span>
+              <span>{t("skills.file_count", { count: skill.files.length })}</span>
+              <span>{t("skills.granted_count", { count: skill.grantedAgentIds.length })}</span>
+            </p>
             <section>
               <h3>{t("skills.bundle")}</h3>
               <ul className="skill-file-list">
@@ -436,14 +426,14 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
             {owned ? (
               <section className="skill-owner-tools">
                 <h3>{t("skills.manage")}</h3>
-                <Field label={t("skills.display_name")} required hint={t("skills.display_name_hint")}>
+                <Field label={t("skills.display_name")} required>
                   <Input
                     required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                   />
                 </Field>
-                <Field label={t("skills.description")} required hint={t("skills.description_hint")}>
+                <Field label={t("skills.description")} required>
                   <Textarea
                     required
                     rows={2}
@@ -501,11 +491,7 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                         }
                       />
                     </Field>
-                    <Field
-                      label={t("skills.revision_note")}
-                      optional={t("skills.optional")}
-                      hint={t("skills.revision_note_hint")}
-                    >
+                    <Field label={t("skills.revision_note")} optional={t("skills.optional")}>
                       <Input
                         value={revisionNote}
                         onChange={(e) => setRevisionNote(e.target.value)}
@@ -519,7 +505,8 @@ export function SkillsPage({ currentUser }: { currentUser: CurrentUser }) {
                     920px-wide primary bar sat between two inputs. */}
                 <footer className="skill-owner-actions">
                   <Button
-                    variant="destructive"
+                    variant="ghost"
+                    danger
                     className="skill-owner-actions-leading"
                     disabled={busy}
                     onClick={() => void remove()}

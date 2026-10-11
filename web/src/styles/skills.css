@@ -97,29 +97,16 @@
   white-space: nowrap;
 }
 
-/* One meta line, like every other rail: the identifier, then the facts that
-   tell two skills apart. Neither line wraps — the slug ellipsizes first. */
+/* One meta line, like every other rail: the facts that tell two skills
+   apart. The slug lives in the detail header, not on every row. */
 .skills-roster-row-meta {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
+  overflow: hidden;
   min-width: 0;
   font: var(--type-label);
   font-size: var(--fs-1);
   letter-spacing: var(--type-label-track);
   color: var(--ink-4);
-}
-
-.skills-roster-row-slug {
-  overflow: hidden;
-  font-family: var(--font-mono);
-  letter-spacing: var(--type-code-track);
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.skills-roster-row-facts {
-  flex: none;
   white-space: nowrap;
 }
 
@@ -164,28 +151,15 @@
   color: var(--ink-2);
 }
 
-.skill-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin: var(--sp-6) 0;
-  border-block: 0.5px solid var(--line-1);
-}
-
-.skill-stats div {
-  padding: var(--sp-5) 0;
-}
-
-.skill-stats dt {
+/* The record's counts, as one muted line under the description. */
+.skill-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  margin: var(--sp-2) 0 0;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
-}
-
-.skill-stats dd {
-  margin: var(--sp-1) 0 0;
-  font: var(--type-number);
-  letter-spacing: var(--type-number-track);
-  color: var(--ink-1);
 }
 
 .skill-detail-body section {
@@ -195,20 +169,19 @@
 /* Section titles, on the drawer's own section-title role. */
 .skill-detail-body h3,
 .skill-drawer h3 {
-  margin: 0;
+  margin: 0 0 var(--sp-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-3);
 }
 
+/* Plain lists, not framed cards: short rows split by hairlines read as a
+   listing without boxing every section of the pane. */
 .skill-file-list,
 .skill-revisions {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  overflow: hidden;
 }
 
 .skill-file-list li,
@@ -218,13 +191,20 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) 0;
   border-bottom: 0.5px solid var(--line-2);
 }
 
 .skill-file-list li:last-child,
 .skill-revisions li:last-child {
   border-bottom: 0;
+}
+
+.skill-file-list code {
+  font: var(--type-body-sm);
+  font-family: var(--font-mono);
+  letter-spacing: var(--type-code-track);
+  color: var(--ink-2);
 }
 
 .skill-file-list span,
@@ -234,16 +214,27 @@
   color: var(--ink-3);
 }
 
-.skill-revisions span {
-  flex: 1;
+.skill-revisions strong {
+  min-width: 2.5ch;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
 }
 
+.skill-revisions span {
+  flex: 1;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-2);
+}
+
+/* The owner's form is a section like the two above it, divided by a hairline
+   rather than drawn as a bordered panel. */
 .skill-owner-tools {
   display: grid;
   gap: var(--sp-4);
-  padding: var(--sp-6);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
+  padding-top: var(--sp-6);
+  border-top: 0.5px solid var(--line-1);
 }
 
 /* Actions in one row, destructive pushed to the leading edge — the
@@ -478,9 +469,6 @@
     padding: var(--sp-6);
   }
 
-  .skill-stats {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* The share drawer's one requirement, stated where the fields would be. It
