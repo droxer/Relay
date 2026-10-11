@@ -366,8 +366,7 @@
   .sidenav-brand-row,
   .sidenav-bottom,
   .sidenav-group-label,
-  .sidenav-tooltip,
-  .sidenav-settings-menu {
+  .sidenav-tooltip {
     display: none;
   }
 
@@ -500,8 +499,6 @@
   .routine-page,
   .agents-page,
   .teams-page,
-  .computer-page,
-  .skills-page,
   .settings-page,
   .admin-console {
     grid-row: 2;

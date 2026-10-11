@@ -31,8 +31,6 @@ describe("app pathname routes", () => {
       "/automations": "routine",
       "/agents": "agents",
       "/teams": "teams",
-      "/computers": "computers",
-      "/skills": "skills",
       "/admin": "admin",
       "/settings": "settings",
     } as const;
@@ -45,23 +43,23 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/channels"), { route: "main", mobileView: "chat", sessionId: null, notFound: true });
   });
 
-  it("parses a settings section, and keeps the paths Computers and Skills came from", () => {
+  it("parses a settings section, and keeps the paths its sections came from", () => {
     assert.deepEqual(parseAppPath("/settings"), {
-      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "appearance",
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers",
+    });
+    assert.deepEqual(parseAppPath("/settings/skills"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
     });
     assert.deepEqual(parseAppPath("/settings/appearance"), {
       route: "settings", mobileView: "chat", sessionId: null, settingsSection: "appearance",
     });
-    // Computers and Skills were settings sections before they became
-    // Workforce routes of their own again; their links still resolve.
-    assert.deepEqual(parseAppPath("/settings/computers"), {
-      route: "computers", mobileView: "chat", sessionId: null,
-    });
-    assert.deepEqual(parseAppPath("/settings/skills"), {
-      route: "skills", mobileView: "chat", sessionId: null,
-    });
+    // Computers and Skills were routes of their own before they became
+    // settings sections; their links still resolve.
     assert.deepEqual(parseAppPath("/computer"), {
-      route: "computers", mobileView: "chat", sessionId: null,
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "computers",
+    });
+    assert.deepEqual(parseAppPath("/skills"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "skills",
     });
     // An unknown section is a bad link, not the default section.
     assert.equal(parseAppPath("/settings/nope").notFound, true);
@@ -112,8 +110,8 @@ describe("app pathname routes", () => {
   });
 
   it("writes only the canonical settings path", () => {
-    assert.equal(hrefForRoute("settings"), "/settings/appearance");
-    assert.equal(hrefForSettingsSection("language"), "/settings/language");
+    assert.equal(hrefForRoute("settings"), "/settings/computers");
+    assert.equal(hrefForSettingsSection("skills"), "/settings/skills");
     assert.equal(
       pathForAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: "language" }),
       "/settings/language",
@@ -132,9 +130,7 @@ describe("app pathname routes", () => {
     assert.equal(hrefForRoute("projects"), "/projects");
     assert.equal(hrefForRoute("backlog"), "/tasks");
     assert.equal(hrefForRoute("routine"), "/automations");
-    assert.equal(hrefForRoute("computers"), "/computers");
-    assert.equal(hrefForRoute("skills"), "/skills");
-    assert.equal(hrefForRoute("settings"), "/settings/appearance");
+    assert.equal(hrefForRoute("settings"), "/settings/computers");
   });
 
   it("marks unknown paths as not found instead of opening chat", () => {
@@ -269,9 +265,6 @@ describe("app pathname routes", () => {
     // back out, so the pager would advance its own highlight and show page 1.
     assert.equal(canonicalBrowserUrl("/backlog", "?page=3"), "/backlog?page=3");
     assert.equal(canonicalBrowserUrl("/routines", "?page=2"), "/automations?page=2");
-    assert.equal(canonicalBrowserUrl("/computers", "?page=2"), "/computers?page=2");
-    // The retired settings-section address keeps it too: the redirect lands
-    // on the same roster page.
     assert.equal(canonicalBrowserUrl("/settings/computers", "?page=2"), "/settings/computers?page=2");
     assert.equal(
       canonicalBrowserUrl("/admin", "?employeePage=2&nodePage=4"),
@@ -424,9 +417,8 @@ it("preserves computer device approval through login redirects", () => {
   assert.equal(canonicalBrowserUrl("/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), url);
 });
 
-it("preserves approval when the legacy computer path redirects to the computers route", () => {
-  assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
-  assert.equal(browserUrlForAppState(parseAppPath("/settings/computers"), "/settings/computers", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
+it("preserves approval when the legacy computer path redirects to settings", () => {
+  assert.equal(browserUrlForAppState(parseAppPath("/computer"), "/computer", "?connect=abcdefghijklmnopqrstuvwxyz123456"), "/settings/computers?connect=abcdefghijklmnopqrstuvwxyz123456");
 });
 
 it("keeps the project tasks tab explicit and canonicalizes Dashboard as the default", () => {

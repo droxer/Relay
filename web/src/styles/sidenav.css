@@ -207,41 +207,20 @@
   margin-inline-start: auto;
 }
 
-/* The cobalt tick marks the CURRENT ROUTE. An open preferences menu is not a
-   route, and on a dense square the bar reads as a nav selection that is not
-   there — the open state keeps the wash alone. */
+/* The cobalt tick marks a current ROUTE in the destination list. The footer's
+   square chrome buttons sit mid-row (expanded) or stacked with the other
+   squares (collapsed), where the left-edge bar reads as a stray mark — the
+   active wash alone carries the settings route state here. */
 .sidenav-bottom .sidenav-btn.active::after {
   content: none;
-}
-
-/* Menu SHELL (surface, border, radius, shadow, float layer, entry animation)
-   now comes from DropdownMenuContent — it was declared identically here and
-   again for `.sidenav-more-menu`, which is two drawings of one object. What is
-   left is the rail's own sizing and the menu label's type tier.
-
-   The item's paint is the DropdownMenuItem variant's: the neutral row washes
-   with `--accent` on highlight, and Sign out takes the `danger` modifier, so
-   the local `.danger { color: --err }` that restated the destructive grammar
-   hue-only — and therefore vanished under forced-colors — is gone. `font`
-   stays: the menu label is deliberately the 500 tier, not the 700 button
-   label. */
-.sidenav-settings-menu {
-  min-width: 188px;
-}
-
-.sidenav-settings-menu [data-slot="dropdown-menu-item"] {
-  min-height: var(--control-h-sm);
-  gap: var(--sp-3);
-  padding: 0 var(--sp-3);
-  font: var(--type-label);
 }
 
 /* Mobile-only More overflow (Channels / Admin): hidden on desktop where
    those destinations stay as primary rail items. The hide rule lives at the
    end of this file so it outranks every `.sidenav-btn` display rule above.
 
-   Rows are `--touch-target` tall rather than the settings menu's
-   `--control-h-sm`: this menu only ever opens from the mobile tab bar. */
+   Rows are `--touch-target` tall: this menu only ever opens from the mobile
+   tab bar. */
 
 .sidenav-more-menu {
   min-width: 188px;

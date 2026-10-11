@@ -34,7 +34,7 @@ describe("Admin page refresh stability", () => {
     );
   });
 
-  it("evicts a deleted computer from the My Computers cache immediately", async () => {
+  it("evicts a deleted computer from the Computers cache immediately", async () => {
     const adminPageSource = await readFile(resolve("web/src/components/AdminPage.tsx"), "utf8");
     const deleteHandler = adminPageSource.match(
       /async function handleDeleteNode[\s\S]*?\n  }/,

@@ -1,6 +1,5 @@
 import {
   ICON,
-  IdentityUser,
   MetricTokens,
   StreamAttachment,
 } from "./icons";
@@ -215,10 +214,10 @@ export const MessageBlock = memo(function MessageBlock({
 
   if (message.kind === "user") {
     return (
+      // The user's turn sits on the right as a bubble with no avatar — the
+      // side, not a face, says who is speaking (the shape every current chat
+      // surface converged on). The timestamp resolves under it on hover.
       <article className="msg msg-user" aria-label={t("message.user_label")}>
-        <span className="rail-node rail-node-user" aria-hidden="true">
-          <IdentityUser size={ICON.sm} />
-        </span>
         <div className="turn-body">
           {/* The user's own Markdown renders like the agent's: a pasted fence
               is a highlighted block, not a paragraph with backticks in it.
@@ -239,6 +238,10 @@ export const MessageBlock = memo(function MessageBlock({
         className={`msg msg-agent ${message.streaming ? "streaming" : ""} ${grouped ? "grouped" : ""}`}
         aria-label={t("message.agent_header", { employee: agentName })}
       >
+        {/* Who is speaking: mark, name, and time on one header row, with the
+            answer flush beneath it at the full column width. A continuation
+            from the same agent hides the row (see .msg-agent.grouped in
+            chat.css), so a run of turns reads as one speaker. */}
         <span className="rail-node rail-node-agent" aria-hidden="true">
           <ProfileImage
             src={imageForAgentRun(message, logicalAgentImages)}
@@ -246,11 +249,9 @@ export const MessageBlock = memo(function MessageBlock({
             fallback={<IdentityMark kind="agent" />}
           />
         </span>
+        <header className="msg-speaker" translate="no">{agentName}{slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}</header>
+        <MsgTime value={message.timestamp} />
         <div className="turn-body">
-          {/* Who is speaking, beside its mark. A continuation from the same
-              agent hides this (see .msg-agent.grouped in chat.css), so a run
-              of turns reads as one speaker rather than a repeated name. */}
-          <header className="msg-speaker" translate="no">{agentName}{slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}</header>
           {styleFallback ? <p className="collab-status">{t("collab_style.ran_solo")}</p> : null}
           <AgentStream
             agent={message.agent}
@@ -275,16 +276,9 @@ export const MessageBlock = memo(function MessageBlock({
           {message.outputTruncated && !message.streaming ? (
             <p className="msg-turn-note" role="note">{t("thread.output_truncated")}</p>
           ) : null}
+          {/* Actions lead under the answer, where the eye ends; usage trails
+              at the far edge as a quiet figure. */}
           <footer className="msg-turn-foot">
-            {message.tokenUsage ? (
-              <TurnTokenUsage usage={message.tokenUsage} />
-            ) : message.usageUnreported && !message.streaming ? (
-              <span className="msg-tokens" title={t("thread.token_usage_unreported")}>
-                <MetricTokens size={ICON.sm} aria-hidden="true" />
-                <span className="msg-turn-action-label" aria-hidden="true">—</span>
-                <span className="sr-only">{t("thread.token_usage_unreported")}</span>
-              </span>
-            ) : null}
             <MessageTurnActions
               agent={message.agent}
               agentId={message.agentId}
@@ -296,9 +290,17 @@ export const MessageBlock = memo(function MessageBlock({
               resumable={message.resumable}
               onResume={onResumeAgent}
             />
+            {message.tokenUsage ? (
+              <TurnTokenUsage usage={message.tokenUsage} />
+            ) : message.usageUnreported && !message.streaming ? (
+              <span className="msg-tokens" title={t("thread.token_usage_unreported")}>
+                <MetricTokens size={ICON.sm} aria-hidden="true" />
+                <span className="msg-turn-action-label" aria-hidden="true">—</span>
+                <span className="sr-only">{t("thread.token_usage_unreported")}</span>
+              </span>
+            ) : null}
           </footer>
         </div>
-        <MsgTime value={message.timestamp} />
       </article>
     );
   }

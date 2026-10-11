@@ -310,17 +310,10 @@ html:lang(zh-CN) .md-body blockquote {
 /* Syntax-highlight token colors live in styles/syntax.css (highlight.js
    `hljs-*` classes), shared with the workspace file preview. */
 
-/* The language label is plain muted micro text on the code's own left edge —
-   no chip, no border — so it reads as a caption of the block, not chrome
-   competing with the snippet. `sticky left:0` keeps it anchored when a wide
-   snippet scrolls sideways. */
+/* The language label is plain muted micro text at the start of the fence's
+   header bar — no chip, no border — a caption of the block, not chrome. */
 .agent-code-lang {
-  position: sticky;
-  left: 0;
-  display: block;
-  width: max-content;
-  margin-bottom: var(--sp-1);
-  color: var(--ink-4);
+  color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -391,49 +384,52 @@ html:lang(zh-CN) .md-body blockquote {
 .md-fence {
   position: relative;
   margin: 0 0 var(--sp-4);
+  overflow: hidden;
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-3);
+  background: var(--surface-2);
+}
+
+/* Header bar: language on the left, copy on the right, a hairline between it
+   and the code — the copy control never sits over the first line. */
+.md-fence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: var(--sp-7);
+  padding: 0 var(--sp-1) 0 var(--sp-4);
+  border-bottom: 0.5px solid var(--line-1);
 }
 
 .md-fence .agent-code {
   margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .md-fence-copy {
-  position: absolute;
-  top: var(--sp-2);
-  right: var(--sp-2);
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-2);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-1);
-  background: var(--surface-1);
+  height: var(--control-h-2xs);
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   cursor: pointer;
-  /* Chrome for a block the reader may only be skimming: it resolves on hover
-     or keyboard focus, and never sits over the first line of code uninvited. */
-  opacity: 0;
-  transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-}
-
-.md-fence:hover .md-fence-copy,
-.md-fence-copy:focus-visible {
-  opacity: 1;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
 
 .md-fence-copy:hover {
   color: var(--ink-1);
+  background: var(--control-fill-hover);
 }
 
 
-/* Touch has no hover to resolve the control, so it stays visible there. */
-@media (hover: none) {
-  .md-fence-copy {
-    opacity: 1;
-  }
-}
 
 /* ---- diagrams ----
    Mermaid output. The SVG carries its own intrinsic size, which can exceed a

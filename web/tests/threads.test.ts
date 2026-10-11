@@ -21,6 +21,7 @@ import {
   resolveNewThreadComputer,
   selectableThreadComputers,
   threadComputerSignature,
+  threadNodeOffline,
   threadRuntimeNodeId,
 } from "../src/lib/threadRuntime.js";
 import { isAwaitingFeedbackDecision, rerunAssignmentForSession } from "../src/lib/workflow.js";
@@ -188,6 +189,25 @@ describe("web thread helpers", () => {
       })),
       "node_b",
     );
+  });
+
+  it("follows a local computer that reconnected under a new node id", () => {
+    const nodes = [
+      {
+        id: "node_old", employeeId: "alice", workspaceId: "mch_laptop",
+        retiredAt: "2026-10-01T00:00:00.000Z", online: false, stale: true, status: "stopped",
+      },
+      { id: "node_new", employeeId: "alice", workspaceId: "mch_laptop", online: true, stale: false, status: "ready" },
+      { id: "node_other", employeeId: "alice", workspaceId: "mch_desktop", online: true, stale: false, status: "ready" },
+    ];
+    const reconnected = session({ daemonNodeId: "node_old", computerId: "device:alice:mch_laptop" });
+
+    assert.equal(threadRuntimeNodeId(reconnected, [], nodes), "node_new");
+    assert.equal(threadNodeOffline(reconnected, [], nodes), false);
+    // While the computer is away the thread still names it, and reads offline.
+    const away = nodes.filter((node) => node.id !== "node_new");
+    assert.equal(threadRuntimeNodeId(reconnected, [], away), "node_old");
+    assert.equal(threadNodeOffline(reconnected, [], away), true);
   });
 
   it("infers the pinned computer from the running agent's placement on legacy threads", () => {

@@ -113,7 +113,6 @@
     "coming_soon_short": "即将",
     "refresh": "刷新",
     "settings": "设置",
-    "account": "账户",
     "logout": "退出登录",
     "collapse": "收起",
     "expand": "展开",
@@ -763,7 +762,7 @@
     "refresh_completed": "运行时已更新",
     "refresh_failed": "检测失败，请重试。",
     "refresh_upgrade": "升级 Relay Computer 后可重新检测。",
-    "title": "我的电脑",
+    "title": "电脑",
     "count_other": "{{count}} 台电脑",
     "empty_title": "尚未连接电脑",
     "empty_body": "连接电脑以运行智能体，或请管理员分配电脑。",
@@ -818,6 +817,7 @@
     "connect_token_once": "请立即复制该令牌——之后也可以随时在电脑的“令牌”面板中再次查看。",
     "connect_token_on_device": "它的令牌早于令牌存储功能，无法显示——请在电脑上打开“令牌”并重新签发以获取新令牌。",
     "token_button": "令牌",
+    "more_actions": "{{name}} 的更多操作",
     "token_title": "电脑令牌",
     "token_hidden_note": "电脑令牌默认隐藏。持有此令牌的人可启动该电脑的守护进程。",
     "token_reveal_action": "显示令牌",
@@ -1561,7 +1561,11 @@
     "reasoning_steps_other": "{{count}} 步",
     "command_expand_other": "显示其余 {{count}} 行",
     "command_collapse": "收起",
-    "picking_up": "正在接续 {{agent}} 的工作…"
+    "picking_up": "正在接续 {{agent}} 的工作…",
+    "activity_tools_other": "使用了 {{count}} 个工具",
+    "activity_commands_other": "运行了 {{count}} 条命令",
+    "activity_separator": "，",
+    "activity_commands_only_other": "运行了 {{count}} 条命令"
   },
   "message": {
     "user_label": "你",

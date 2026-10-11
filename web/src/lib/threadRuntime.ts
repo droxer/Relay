@@ -1,8 +1,11 @@
+import { computerId } from "./createAgent.ts";
+
 type ThreadComputer = {
   id: string;
   managedNodeId?: string;
   retiredAt?: string;
   employeeId?: string;
+  workspaceId?: string;
   online: boolean;
   stale: boolean;
   status: string;
@@ -10,6 +13,7 @@ type ThreadComputer = {
 
 type ThreadRuntimeSession = {
   daemonNodeId?: string;
+  computerId?: string;
   managedNodeId?: string;
   agentRuns: ReadonlyArray<{ agent: string; daemonNodeId?: string; logicalAgentId?: string }>;
 };
@@ -194,6 +198,8 @@ export function threadRuntimeNodeId(
   agents: readonly ThreadAgent[] = [],
   nodes: readonly ThreadComputer[] = [],
 ): string | undefined {
+  const sameComputer = computerNodeId(session?.computerId, nodes);
+  if (sameComputer) return sameComputer;
   const originalNode = nodes.find((node) => node.id === session?.daemonNodeId);
   const managedNodeId = session?.managedNodeId ?? originalNode?.managedNodeId;
   if (managedNodeId) {
@@ -236,6 +242,24 @@ export function threadRuntimeNodeId(
     if (placement) return placement.runtimeNodeId || placement.daemonNodeId;
   }
   return undefined;
+}
+
+/**
+ * The node currently serving a thread's stable Computer identity. A computer
+ * that disconnects and comes back under a new node id is still the same
+ * computer, so its thread follows it instead of staying on the retired row.
+ */
+function computerNodeId(
+  identity: string | undefined,
+  nodes: readonly ThreadComputer[],
+): string | undefined {
+  if (!identity || identity.startsWith("node:")) return undefined;
+  const candidates = nodes.filter((node) => !node.retiredAt && computerId(node) === identity);
+  return (candidates.find(isLiveComputer) ?? candidates[0])?.id;
+}
+
+function isLiveComputer(node: ThreadComputer): boolean {
+  return node.online && !node.stale && ["ready", "running", "busy"].includes(node.status);
 }
 
 /**

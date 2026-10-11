@@ -1,13 +1,21 @@
 /* =====================================================================
    Personal settings  (settings-page)
 
-   The shell is the shared rail-and-content grammar (section-rail.css).
-   Appearance and language are plain option lists, so the content column
-   gives them its own header and a scrolling body.
+   The shell is the shared rail-and-content grammar (section-rail.css); this
+   file only says how each section fills the content column. Computers and
+   Skills bring their own page frame — a roster with its own header, a library
+   with its own rail — so they take the column whole rather than sitting
+   inside the column's own header + body.
    ===================================================================== */
 
 .settings-page {
   color: var(--ink-2);
+}
+
+.settings-page .sec-main > .computer-page,
+.settings-page .sec-main > .skills-page {
+  flex: 1;
+  min-height: 0;
 }
 
 /* An option list is a form, not a table: it keeps a readable measure instead

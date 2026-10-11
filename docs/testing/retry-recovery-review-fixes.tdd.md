@@ -87,3 +87,17 @@ run used stale packaged installer output and failed its new upgrade assertion;
 rebuilt daemon/supervisor packages and the computer bundle before rerunning.
 The final post-merge compiled suite passed all **2,062 tests**, with no failures
 or skips. `git diff --check` passed.
+
+## Subsequent PR conflict resolution
+
+Merged main at `8b363dcc`, retaining its new agent response layout together
+with the truncated-output note and native Resume action. Updated recovery
+browser route assertions to `/settings/computers` after main restored the
+Settings destination. The first browser attempt ran against the previous
+export; the completed merged export passed all 16 recovery/resume checks.
+
+Verification: production webpack build and TypeScript checks passed; all
+2,078 compiled package/web tests and all 431 React tests passed. No backend
+code changed in this merge. Dependency audit still reports the same 26
+existing advisories (6 low, 4 moderate, 15 high, 1 critical); dependencies
+were unchanged. `git diff --check` passed.

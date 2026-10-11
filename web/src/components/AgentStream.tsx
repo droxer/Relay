@@ -28,22 +28,17 @@ import { buildCollaborationTree } from "../lib/collaborationTree";
 import { SubagentTree } from "./SubagentTree";
 import { useDebouncedStreamingAnnouncement, useSmoothStreamingText } from "../hooks/useSmoothStreamingText";
 import { useKeyChange } from "../hooks/useKeyChange";
+import { activityCounts, groupActivity, type ActivityEntry } from "../lib/activityGroups";
 
+// "Working…" as a shimmer across the words themselves — the live tell Claude
+// and Codex both use — rather than a pulsing dot beside them. The text stays
+// plain and legible; the sweep is decoration and stops under reduced motion.
 function StreamActivity({ label }: { label: string }) {
   return (
     <div className="agent-stream-activity" role="status">
-      <span className="agent-stream-pulse" aria-hidden="true" />
-      <span>{label}</span>
+      <span className="agent-stream-shimmer">{label}</span>
     </div>
   );
-}
-
-// Keys come from lib/agentStream so the identity rule — the CLI's own id where
-// there is one, the per-kind ordinal otherwise — is testable and lives next to
-// the segments it keys.
-function keyedSegments(segments: AgentSegment[]): Array<{ key: string; segment: AgentSegment }> {
-  const keys = segmentKeys(segments);
-  return segments.map((segment, index) => ({ key: keys[index]!, segment }));
 }
 
 type AgentStreamProps = {
@@ -104,13 +99,22 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
   return (
     <div className={`agent-stream ${streaming ? "streaming" : ""}`}>
       <SubagentTree nodes={collaborationNodes} />
-      {keyedSegments(segments).map(({ key, segment }, index) => (
+      {/* Keys come from lib/agentStream so the identity rule — the CLI's own
+          id where there is one, the per-kind ordinal otherwise — is testable
+          and lives next to the segments it keys. */}
+      {groupActivity(segments, segmentKeys(segments)).map((item) => item.type === "activity" ? (
+        <ActivityGroup
+          key={item.key}
+          entries={item.entries}
+          live={streaming && item.entries.at(-1)!.index === segments.length - 1}
+        />
+      ) : (
         <SegmentView
-          key={key}
-          segment={segment}
-          live={index === liveTextIndex}
+          key={item.key}
+          segment={item.segment}
+          live={item.index === liveTextIndex}
           streaming={streaming}
-          last={index === segments.length - 1}
+          last={item.index === segments.length - 1}
         />
       ))}
       {showActivity ? <StreamActivity label={workingLabel} /> : null}
@@ -134,12 +138,14 @@ function SegmentView({
     return <ThinkingSegment text={segment.text} live={streaming && last} />;
   }
   if (segment.kind === "tool") {
-    // A tool call is a single inline `⏺` mono line — the tool name plus the
-    // file/command it acted on (design-system.md agent-turn: "⏺ for tool
-    // lines"). No bordered chip; consecutive calls read as a compact log.
+    // A tool call is a single inline line — the tool name plus the file or
+    // command it acted on. No bordered chip; consecutive calls fold into an
+    // ActivityGroup. The marker is a CSS dot: the `⏺` glyph the terminal
+    // renderer prints falls back to the colour-emoji font in a browser and
+    // drew a blue tile on every line.
     return (
       <div className="agent-tool">
-        <span className="agent-tool-marker" aria-hidden="true">⏺</span>
+        <span className="agent-tool-marker" aria-hidden="true" />
         <span className="agent-tool-name">{segment.name}</span>
         {segment.target ? <span className="agent-tool-target">{segment.target}</span> : null}
       </div>
@@ -165,6 +171,45 @@ function SegmentView({
     );
   }
   return <RawSegment text={segment.text} />;
+}
+
+// A run of tool calls and commands, folded behind a one-line summary ("Used 2
+// tools, ran 3 commands") so the log stops burying the answer it was working
+// towards. Same null-until-touched override as ThinkingSegment: a live group
+// is open — it is where the turn's visible progress is — and closes itself
+// when the next text arrives, unless the reader already chose.
+function ActivityGroup({ entries, live }: { entries: ActivityEntry[]; live: boolean }) {
+  const { t } = useTranslation();
+  const [override, setOverride] = useState<boolean | null>(null);
+  const open = override ?? live;
+  const { tools, commands } = activityCounts(entries.map((entry) => entry.segment));
+  const summary = tools === 0
+    ? t("agent_stream.activity_commands_only", { count: commands })
+    : [
+        t("agent_stream.activity_tools", { count: tools }),
+        commands > 0 ? t("agent_stream.activity_commands", { count: commands }) : null,
+      ].filter(Boolean).join(t("agent_stream.activity_separator"));
+
+  return (
+    <div className={`agent-activity ${open ? "is-open" : ""} ${live ? "is-live" : ""}`}>
+      <button
+        type="button"
+        className="agent-activity-header"
+        aria-expanded={open}
+        onClick={() => setOverride(!open)}
+      >
+        <DisclosureChevron size={ICON.xs} className="agent-activity-chevron" aria-hidden="true" />
+        <span className="agent-activity-summary">{summary}</span>
+      </button>
+      {open ? (
+        <div className="agent-activity-body">
+          {entries.map(({ key, segment }) => (
+            <SegmentView key={key} segment={segment} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 // Reasoning renders as one disclosure per block: a header row naming the step,
@@ -258,7 +303,7 @@ function CommandSegment({ command }: { command: string }) {
 
   return (
     <div className="agent-command code">
-      <span className="agent-tool-marker" aria-hidden="true">⏺</span>
+      <span className="agent-tool-marker" aria-hidden="true" />
       <div className="agent-command-body">
         <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
         {toggle ? (
