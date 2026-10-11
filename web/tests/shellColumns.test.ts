@@ -278,20 +278,15 @@ describe("adaptive preferred widths", () => {
 });
 
 describe("transcript measure", () => {
-  const fourColumnTier = Number(SHELL_FOUR_COLUMN_QUERY.match(/(\d+)px/)![1]);
-
-  it("grows with a wide chat column instead of leaving dead margins", () => {
-    // A hard 1200px cap spent ~290px per side as margin on a 2560px monitor.
-    // The floor of the clamp keeps every narrower screen exactly as it was.
+  it("caps the transcript at a reading measure, like Claude and Codex", () => {
+    // It used to be a 1200–1520px layout cap that grew with the window, which
+    // ran agent prose past 150 characters a line on a wide monitor. The
+    // transcript and composer now share one fixed reading measure: wide
+    // enough for a table or code fence, narrow enough that prose scans.
     const value = token("--thread-measure");
-    const shape = value.match(/^clamp\(\s*(\d+)px\s*,\s*(\d+(?:\.\d+)?)vw\s*,\s*(\d+)px\s*\)$/);
-    assert.ok(shape, `--thread-measure must be clamp(px, vw, px), got "${value}"`);
-    const [floor, share, ceiling] = [Number(shape[1]), Number(shape[2]) / 100, Number(shape[3])];
-    assert.equal(floor, 1200, "the clamp's floor is the width the cap used to be — nothing narrower may change");
-    assert.ok(ceiling > floor, "a ceiling at or below the floor is the old fixed cap with extra syntax");
-    assert.ok(
-      floor / share > fourColumnTier,
-      "the measure must not start growing until the shell has all four columns",
-    );
+    const shape = value.match(/^(\d+)px$/);
+    assert.ok(shape, `--thread-measure must be a fixed px measure, got "${value}"`);
+    const measure = Number(shape[1]);
+    assert.ok(measure >= 720 && measure <= 960, `a reading measure sits between 720px and 960px, got ${measure}px`);
   });
 });

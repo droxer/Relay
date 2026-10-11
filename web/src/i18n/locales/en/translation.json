@@ -1596,7 +1596,14 @@
     "command_expand_one": "Show {{count}} more line",
     "command_expand_other": "Show {{count}} more lines",
     "command_collapse": "Show less",
-    "picking_up": "Continuing from {{agent}}…"
+    "picking_up": "Continuing from {{agent}}…",
+    "activity_tools_one": "Used {{count}} tool",
+    "activity_tools_other": "Used {{count}} tools",
+    "activity_commands_one": "ran {{count}} command",
+    "activity_commands_other": "ran {{count}} commands",
+    "activity_commands_only_one": "Ran {{count}} command",
+    "activity_separator": ", ",
+    "activity_commands_only_other": "Ran {{count}} commands"
   },
   "message": {
     "user_label": "You",
