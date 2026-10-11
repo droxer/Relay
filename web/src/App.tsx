@@ -522,14 +522,17 @@ export function App() {
   }
 
   // Old project thread links resolve to their task; standalone project rooms
-  // no longer have a conversation surface.
+  // no longer have a conversation surface. The redirect only fires while the
+  // URL addresses the thread — a bare /threads is the list, and the sidenav's
+  // Threads destination must stay there even when the active thread is a
+  // project room.
   useEffect(() => {
     const projectId = routedProjectId ?? activeSession?.projectId;
     if ((route !== "projects" && route !== "main") || !projectId) return;
     if (route === "projects" && composingNew) {
       void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`, { replace: true });
     } else if (tasksStatus === "ready" && !composingNew && activeSession
-      && (routedSessionId === activeSession.id || (route === "main" && !routedSessionId))) {
+      && routedSessionId === activeSession.id) {
       const sessionId = activeSession.id;
       const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
       if (route === "main" && taskId) return;

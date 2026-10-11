@@ -207,6 +207,29 @@ for (const mobile of [false, true]) {
   });
 }
 
+/* A standalone project room (no task links it) is only reachable through its
+   project, but it still counts as the most recent thread: with it active, the
+   sidenav's Threads destination must still open the thread list rather than
+   bounce the reader back to the project. */
+test("sidenav Threads opens the thread list while a project room is active", async ({ page }) => {
+  const stamp = "2026-09-01T00:00:00Z";
+  const project = { id: "p", name: "Launch", ownerEmployeeId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
+  const room = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerEmployeeId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [room], tasks: [], projects: [project], agents: [], teams: [], nodes: [], sandboxes: [], skills: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/threads/s")) body = room;
+    if (path.endsWith("/events")) body = { events: [] };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/tasks");
+  await expect(page.locator("#backlog-panel")).toBeVisible();
+  await page.locator('[data-nav="threads"]').click();
+  await expect(page).toHaveURL(/\/threads$/);
+  await expect(page.locator('[data-nav="threads"]')).toHaveAttribute("aria-current", "page");
+});
+
 test("renaming without a runtime node recovers from a concurrent project edit", async ({ page }) => {
   const stamp = "2026-09-01T00:00:00Z";
   let project = { id: "edit-project", name: "Original project", ownerEmployeeId: "u", computerId: "node:gone",
