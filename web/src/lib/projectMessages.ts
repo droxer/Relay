@@ -29,6 +29,10 @@ export type DerivedMessage =
       /** The run finished but its runtime reported no counts, so the foot
        * says so rather than looking like a turn that cost nothing. */
       usageUnreported?: boolean;
+      /** Part of the live output never reached Relay; the result is complete. */
+      outputTruncated?: boolean;
+      /** The turn stopped before finishing and its runtime can pick it back up. */
+      resumable?: boolean;
     }
   | {
       kind: "system";
@@ -463,6 +467,8 @@ export class ProjectMessagesAccumulator {
           stderr: state.stderr,
           ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
           ...(!event.tokenUsage ? { usageUnreported: true } : {}),
+          ...(event.outputTruncated ? { outputTruncated: true } : {}),
+          ...(event.status !== "completed" && event.runtimeSessionId ? { resumable: true } : {}),
         };
         return true;
       }

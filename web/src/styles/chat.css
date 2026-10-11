@@ -752,6 +752,15 @@
   margin-top: var(--sp-2);
 }
 
+/* A finished turn whose live output was partly refused: supporting text, so
+   it reads as a footnote to the turn rather than a failure. */
+.msg-turn-note {
+  margin: var(--sp-2) 0 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
 /* Streaming turns render an empty footer until actions or usage appear. */
 .msg-turn-foot:empty {
   display: none;

@@ -304,6 +304,7 @@
     "tokens_short": "tokens",
     "token_usage_title": "Input {{input}} · Output {{output}} · Cache write {{cacheWrite}} · Cache read {{cacheRead}}",
     "token_usage_unreported": "Token usage not reported by this runtime",
+    "output_truncated": "Part of this run's live output was not saved. The final result is complete.",
     "no_sessions": "—",
     "rename": "Rename",
     "rename_prompt": "Rename thread",
@@ -1613,6 +1614,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "retry": "Retry",
+    "resume": "Resume",
+    "resume_title": "Resume: continue in the agent's own conversation instead of starting over",
     "copy_code": "Copy code",
     "copy_code_failed": "Copy failed",
     "diagram": "Diagram",
@@ -2100,6 +2103,14 @@
     "execution_unconfirmed": {
       "title": "Computer is not responding",
       "body": "Check the assigned computer and restore its daemon connection. The agent may still be running. Relay must receive exit evidence before releasing the execution or completing deletion — if the computer is never coming back, report the agent as gone."
+    },
+    "execution_lost": {
+      "title": "Computer has been offline too long",
+      "body": "The assigned computer stopped responding and has not come back. Relay never received exit evidence for this run. If you know the computer is gone or the agent is no longer running, report the agent as gone to release this execution; otherwise restore the computer’s daemon connection."
+    },
+    "execution_interrupted": {
+      "title": "Computer restarted during this run",
+      "body": "The computer’s daemon restarted while this run was in progress and will not resume it. Check the workspace for partial work, then report the agent as gone to release this execution before starting a new run."
     },
     "awaiting_dispatch": {
       "title": "Waiting to start",

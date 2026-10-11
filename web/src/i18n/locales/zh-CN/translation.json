@@ -302,6 +302,7 @@
     "tokens_short": "Token",
     "token_usage_title": "输入 {{input}} · 输出 {{output}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}}",
     "token_usage_unreported": "该运行时未上报 Token 用量",
+    "output_truncated": "此运行的部分实时输出未能保存，最终结果是完整的。",
     "no_sessions": "—",
     "rename": "重命名",
     "rename_prompt": "重命名对话",
@@ -1577,6 +1578,8 @@
     "copy": "复制",
     "copied": "已复制",
     "retry": "重试",
+    "resume": "继续",
+    "resume_title": "继续：在智能体原有的会话中继续此运行，而不是从头开始",
     "copy_code": "复制代码",
     "copy_code_failed": "复制失败",
     "diagram": "图表",
@@ -2056,6 +2059,14 @@
     "execution_unconfirmed": {
       "title": "电脑未响应",
       "body": "请检查所分配的电脑并恢复其守护进程连接。智能体可能仍在运行。Relay 必须收到退出证据，才能释放执行或完成删除——如果该电脑不会再恢复，请报告智能体已终止。"
+    },
+    "execution_lost": {
+      "title": "电脑离线时间过长",
+      "body": "所分配的电脑已停止响应且一直未恢复。Relay 从未收到此运行的退出证据。如果确认该电脑已无法恢复或智能体已不再运行，请报告智能体已终止以释放此执行；否则请恢复该电脑的守护进程连接。"
+    },
+    "execution_interrupted": {
+      "title": "运行期间电脑已重启",
+      "body": "此运行进行期间，电脑的守护进程已重启，且不会继续该运行。请检查工作区中的部分成果，然后报告智能体已终止以释放此执行，再开始新的运行。"
     },
     "awaiting_dispatch": {
       "title": "等待启动",

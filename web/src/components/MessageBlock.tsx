@@ -185,6 +185,7 @@ type MessageBlockProps = {
   logicalAgentImages?: Record<string, string>;
   onOpenArtifact?: (artifact: RelayArtifact) => void;
   onRetryAgent?: (agent: AgentName, agentId?: string) => void;
+  onResumeAgent?: (agent: AgentName, agentId?: string) => void;
   retryDisabled?: boolean;
   /** Name of the teammate this turn takes over from, when it is a handoff.
    * Until the first output lands the turn says so instead of "Working…". */
@@ -203,6 +204,7 @@ export const MessageBlock = memo(function MessageBlock({
   logicalAgentImages,
   onOpenArtifact,
   onRetryAgent,
+  onResumeAgent,
   retryDisabled = false,
   pickupFrom,
 }: MessageBlockProps) {
@@ -270,6 +272,9 @@ export const MessageBlock = memo(function MessageBlock({
               />
             </div>
           ) : null}
+          {message.outputTruncated && !message.streaming ? (
+            <p className="msg-turn-note" role="note">{t("thread.output_truncated")}</p>
+          ) : null}
           <footer className="msg-turn-foot">
             {message.tokenUsage ? (
               <TurnTokenUsage usage={message.tokenUsage} />
@@ -288,6 +293,8 @@ export const MessageBlock = memo(function MessageBlock({
               streaming={message.streaming}
               retryDisabled={retryDisabled}
               onRetry={onRetryAgent}
+              resumable={message.resumable}
+              onResume={onResumeAgent}
             />
           </footer>
         </div>

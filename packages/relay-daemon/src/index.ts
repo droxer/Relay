@@ -77,6 +77,8 @@ import {
   DAEMON_CAPABILITY_WORK_RESULTS,
   DAEMON_CAPABILITY_AGENT_MODEL,
   DAEMON_CAPABILITY_ENDPOINT_MODELS,
+  DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
+  DAEMON_CAPABILITY_AGENT_RESUME,
   DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS,
   DAEMON_CAPABILITY_TASK_WORKSPACES,
   DAEMON_CAPABILITY_THREAD_WORKSPACES,
@@ -90,6 +92,9 @@ import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
 import { TerminalOutbox, persistTerminalEvent } from "./terminal-outbox.js";
+import { watchExecutionExit } from "./execution-capture.js";
+import { hostBootAt, retireStaleGuests, type GuestRuntime } from "./exit-proof.js";
+import type { ExecutionRecord } from "./execution-journal.js";
 import { WorkspaceRunGate } from "./workspace-run-gate.js";
 import { materializeSkills } from "./agent-skills.js";
 
@@ -115,6 +120,11 @@ export interface DaemonRuntimeOptions {
   pollIntervalMs?: number;
   commandPollWaitMs?: number;
   commandLeaseSeconds?: number;
+  /**
+   * How long a run may outlive its expired lease while the backend cannot be
+   * reached at all (network errors or 5xx). 0 disables the grace.
+   */
+  unreachableGraceMs?: number;
   /** How often the daemon renews its liveness lease. The backend-advertised
    * cadence is used by default. */
   livenessHeartbeatIntervalMs?: number;
@@ -227,7 +237,19 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
-  const executionWatchdog = new ExecutionWatchdog();
+  // Set while execution endpoints fail transiently; cleared by an ownership
+  // response or a 401/410 rejection. Registration alone cannot renew a run.
+  let backendUnreachable = false;
+  const unreachableGraceMs = options.unreachableGraceMs
+    ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS")
+    ?? DEFAULT_UNREACHABLE_GRACE_MS;
+  const executionWatchdog = new ExecutionWatchdog(undefined, {
+    graceMs: unreachableGraceMs,
+    shouldGrace: () => backendUnreachable,
+    onGrace: (commandId) => logger.warn("Execution lease expired while the backend is unreachable; continuing for one grace period", {
+      sandboxId, commandId, graceMs: unreachableGraceMs,
+    }),
+  });
   const terminalCommands = new Set<string>();
   const executionJournal = new ExecutionJournal(join(stateDir, "executions"));
   const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => {
@@ -240,6 +262,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     if (["run.completed", "run.failed", "run.cancelled"].includes(String(record.event.type))) executionJournal.confirmExit(String(record.event.commandId));
   }
   const unconfirmedExecutions = new Set(executionJournal.pending().map(record => record.id));
+  // Retained executions the backend has not yet accounted for. Reported at
+  // registration until acknowledged; unconfirmedExecutions keeps fencing them.
+  const unreportedExecutions = new Set(unconfirmedExecutions);
   fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
@@ -291,7 +316,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     logger.info("daemon health", { sandboxId, health: next, ...fields });
   };
   logger.info("daemon starting", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
+  // Runs the machine proves ended are settled with that evidence instead of
+  // waiting for a person. They stay fenced: none of them is ever run again.
+  const provenExits = await proveJournaledExits(environment, executionJournal.pending(), logger, sandboxId);
+  for (const record of provenExits) unreportedExecutions.delete(record.id);
   for (const execution of executionJournal.pending()) {
+    if (provenExits.some((record) => record.id === execution.id)) continue;
     logger.warn("Execution exit unconfirmed after daemon restart; retained identity requires reconciliation", {
       sandboxId, commandId: execution.id, runId: execution.runId,
       sessionId: execution.sessionId, leaseId: execution.leaseId,
@@ -299,6 +329,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   }
   setHealth("starting", { employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
   const activeRuns = new Map<string, { command: DaemonNodeRunCommand; controller: AbortController; promise: Promise<void> }>();
+  // Runs whose stop could not be verified, each with the switch that lets it go.
+  const unconfirmedExits = new Map<string, AbortController>();
   const shutdownGraceMs = options.shutdownGraceMs ?? positiveIntEnv("RELAY_DAEMON_SHUTDOWN_GRACE_MS") ?? 10_000;
   const shutdownController = new AbortController();
   const runtimeSignal = options.signal
@@ -339,6 +371,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ...(agentInventory[executorKind as AgentName] ? { inventory: agentInventory[executorKind as AgentName] } : {}),
     })),
     runtimeRefreshCommands: refreshedCommands,
+    ...(unreportedExecutions.size > 0 ? { journaledCommandIds: [...unreportedExecutions].slice(0, JOURNAL_REPORT_LIMIT) } : {}),
     capabilities: [
       "runtime-refresh",
       DAEMON_CAPABILITY_AGENT_SKILLS,
@@ -355,6 +388,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   DAEMON_CAPABILITY_WORK_RESULTS,
       DAEMON_CAPABILITY_AGENT_MODEL,
       DAEMON_CAPABILITY_ENDPOINT_MODELS,
+      DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
+      DAEMON_CAPABILITY_AGENT_RESUME,
     ],
     agentHealth,
     ...(Object.keys(agentInventory).length > 0 ? { agentInventory } : {}),
@@ -368,6 +403,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
       fetchFn, url, buildRegistration(), undefined, runtimeSignal,
     );
+    for (const id of response.acknowledgedJournalIds ?? []) {
+      if (!unreportedExecutions.delete(id)) continue;
+      // The backend now holds the run as interrupted (or already settled), so
+      // the record has served its purpose. The fence stays for this process.
+      executionJournal.confirmExit(id);
+    }
     return validHeartbeatSettings(response.heartbeat);
   };
   if (options.preflight !== false) {
@@ -428,7 +469,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let heartbeatTask: Promise<void> | undefined;
   let outboxTask: Promise<void> | undefined;
   try {
-    const reconnectControl = { signal: runtimeSignal, shouldStop: () => stopping };
+    const reconnectControl = {
+      signal: runtimeSignal,
+      shouldStop: () => stopping,
+      onTransientFailure: () => { backendUnreachable = true; },
+      onCredentialRejected: () => { backendUnreachable = false; },
+    };
     const initialHeartbeatSettings = await withBackendReconnect(
       register, logger, { sandboxId, what: "registration" }, reconnectControl,
     );
@@ -437,6 +483,23 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       ?? enrolledHeartbeatSettings?.intervalMs
       ?? DEFAULT_LIVENESS_HEARTBEAT_MS;
     let lastRegisteredAt = Date.now();
+    for (const record of provenExits) {
+      // Persisted to the outbox before sending, so delivery survives another
+      // restart; the outbox clears the journal record once it holds the event.
+      void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+        type: "run.cancelled",
+        commandId: record.id,
+        ...(record.leaseId ? { leaseId: record.leaseId } : {}),
+        sessionId: record.sessionId,
+        runId: record.runId,
+        agent: record.agent as AgentName,
+        reason: "The computer restarted, and this run's process had already stopped.",
+      } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+        logger.warn("proven-exit report failed; the outbox will retry", {
+          sandboxId, commandId: record.id, error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
     logger.info("daemon registered", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, logPath: logger.logPath });
     setHealth("registered");
     console.log(`Relay daemon registered sandbox ${sandboxId} with backend at ${backendUrl} (sandbox: ${sandboxMode})`);
@@ -454,6 +517,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       }
     };
     const renewExecutionLeases = (settings: DaemonNodeHeartbeatSettings | undefined, sentAt: number): void => {
+      // A run the backend already settled while this daemon could not verify
+      // its exit was reported gone by a person; only that frees its slot.
+      for (const commandId of settings?.settledCommandIds ?? []) {
+        unconfirmedExits.get(commandId)?.abort("Reported gone by an operator.");
+      }
       if (!settings?.commandLeases) return;
       const observedAt = Date.parse(settings.observedAt ?? "");
       for (const lease of settings.commandLeases) {
@@ -488,6 +556,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           for (const { command } of renewing) executionWatchdog.renew(command.id,
             commandLeaseSeconds * 1000 - (performance.now() - sentAt));
         }
+        backendUnreachable = false;
       } catch (error) {
         // Rolling upgrades may briefly put a new daemon behind an older
         // backend. Registration remains the compatibility heartbeat.
@@ -568,6 +637,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         );
         if (!response.ok) {
           const detail = `Command poll failed: ${response.status} ${await response.text()}`;
+          // A healthy registration route cannot renew execution ownership.
+          // Retry transient poll failures directly so they retain outage grace.
+          if (response.status >= 500 || response.status === 408 || response.status === 429) {
+            throw new DaemonHttpError(detail, response.status);
+          }
           // Gone is permanent: use the same clean shutdown as a deleted-node
           // registration instead of trying to bring the node back.
           if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status);
@@ -588,6 +662,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         leaseObservationStartedAt = commandPollStartedAt + processingMs;
         pollHeartbeat = parsed.heartbeat;
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
+        backendUnreachable = false;
         completedEmptyLongPoll = commandPollWaitMs > 0
           && (parsed.commands?.length ?? 0) === 0
           && performance.now() - commandPollStartedAt >= commandPollWaitMs;
@@ -661,6 +736,37 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           const controller = new AbortController();
           if (command.leaseId) executionWatchdog.track(command.id, commandLeaseSeconds * 1000,
             () => controller.abort("Execution lease expired; stopping until ownership can be confirmed."));
+          const release = new AbortController();
+          watchExecutionExit(controller.signal, {
+            release: release.signal,
+            onSpawn: (processGroup) => {
+              try {
+                executionJournal.attach(command.id, { processGroup, bootAt: hostBootAt() });
+              } catch (error) {
+                logger.warn("could not record the run's process group", {
+                  ...commandLogFields(sandboxId, command),
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              }
+            },
+            onExitUnconfirmed: () => {
+              unconfirmedExits.set(command.id, release);
+              logger.warn("Stopped run's exit cannot be verified; reporting it and keeping the run reserved", commandLogFields(sandboxId, command));
+              void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+                type: "run.exit_unconfirmed",
+                commandId: command.id,
+                ...commandLeaseEventFields(command),
+                sessionId: command.sessionId,
+                runId: command.runId,
+                agent: command.agent,
+              } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+                logger.warn("exit-unconfirmed report failed", {
+                  ...commandLogFields(sandboxId, command),
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              });
+            },
+          });
           const promise = Promise.resolve().then(() =>
             workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => executeCommand(
               backendUrl,
@@ -731,6 +837,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               });
             });
           }).finally(() => {
+            unconfirmedExits.delete(command.id);
             activeRuns.delete(command.id);
             terminalCommands.delete(command.id);
             executionWatchdog.forget(command.id);
@@ -1102,6 +1209,9 @@ async function executeCommand(
     });
     let outputSequence = 0;
     let outputPostFailure: Error | undefined;
+    // Batches the backend refused outright. A refusal is about the batch, not
+    // the run, so the run keeps its exit status and is only flagged as gappy.
+    let outputBatchesRejected = 0;
     const maxOutputBacklogBytes = positiveIntEnv("RELAY_DAEMON_OUTPUT_BACKLOG_BYTES") ?? 16_777_216;
     const outputPostQueue: Array<{ post: () => Promise<void>; fields: DaemonLogFields; bytes: number }> = [];
     let outputPostHead = 0;
@@ -1113,12 +1223,22 @@ async function executeCommand(
         try {
           await item.post();
         } catch (error) {
-          outputPostFailure = error instanceof Error ? error : new Error(String(error));
-          logger.error("event post exhausted retries", {
-            ...commandLogFields(sandboxId, command),
-            ...item.fields,
-            error: outputPostFailure.message,
-          });
+          if (isRejectedOutputBatch(error)) {
+            outputBatchesRejected += 1;
+            logger.warn("output batch rejected; continuing without it", {
+              ...commandLogFields(sandboxId, command),
+              ...item.fields,
+              status: error.status,
+              error: error.message,
+            });
+          } else {
+            outputPostFailure = error instanceof Error ? error : new Error(String(error));
+            logger.error("event post exhausted retries", {
+              ...commandLogFields(sandboxId, command),
+              ...item.fields,
+              error: outputPostFailure.message,
+            });
+          }
         } finally {
           outputPostBacklogBytes = Math.max(0, outputPostBacklogBytes - item.bytes);
         }
@@ -1288,7 +1408,7 @@ async function executeCommand(
         ...commandLogFields(sandboxId, command),
         exitCode: next.last_exit_code,
       });
-      return runCancelledEvent(command, signal.reason, agentLog, next.token_usage);
+      return runCancelledEvent(command, signal.reason, agentLog, next.token_usage, next.runtime_session_id);
     }
     // Output delivery can fail after the agent process has successfully written
     // its deliverables. Preserve those files on the terminal failure event so
@@ -1309,6 +1429,7 @@ async function executeCommand(
         exitCode: next.last_exit_code || 1,
         ...(next.token_usage ? { tokenUsage: next.token_usage } : {}),
         ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+        ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
       } satisfies DaemonNodeEvent;
     }
     logger.info("run completed", {
@@ -1329,6 +1450,8 @@ async function executeCommand(
       tokenUsage: next.token_usage,
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
+      ...(outputBatchesRejected > 0 ? { outputTruncated: true } : {}),
+      ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
     } satisfies DaemonNodeEvent;
   }
 }
@@ -1338,6 +1461,7 @@ function runCancelledEvent(
   reason: unknown,
   agentLog?: string,
   tokenUsage?: TokenUsage,
+  runtimeSessionId?: string,
 ): DaemonNodeEvent {
   return {
     type: "run.cancelled",
@@ -1349,6 +1473,7 @@ function runCancelledEvent(
     reason: typeof reason === "string" && reason ? reason : "Cancelled by human.",
     ...(agentLog ? { agentLog } : {}),
     ...(tokenUsage ? { tokenUsage } : {}),
+    ...(runtimeSessionId ? { runtimeSessionId } : {}),
   };
 }
 
@@ -1371,6 +1496,12 @@ export interface DaemonExecutionEnvironment {
   execStream: typeof localProcessExecStream;
   /** Hold the execution context for one run's workspace until release(). */
   acquireWorkspace(hostWorkspace: string, signal?: AbortSignal): Promise<WorkspaceExecution>;
+  /**
+   * After a restart, the ids of journaled runs this machine can prove are no
+   * longer executing. Optional: without it every journaled run waits for a
+   * person to report it gone.
+   */
+  proveExited?(records: ExecutionRecord[]): Promise<string[]>;
   close(): Promise<void>;
 }
 
@@ -1472,6 +1603,15 @@ export function createBoxliteEnvironment(
     execStream: (cmd, args = [], execOptions = {}) =>
       withAnyGuest(execOptions.signal, (execution) => execution.execStream(cmd, args, execOptions)),
     acquireWorkspace: async (hostWorkspace, signal) => workspaceExecution(await pool.acquire(hostWorkspace, signal)),
+    // Agents only ever run inside this computer's guests, so once every guest
+    // a previous daemon left behind is confirmed gone, so are its runs.
+    async proveExited(records) {
+      if (records.length === 0) return [];
+      const runtime = await runtimeOwner.get() as Partial<GuestRuntime>;
+      if (!runtime.listInfo || !runtime.remove) return [];
+      const retired = await retireStaleGuests(runtime as GuestRuntime, boxNameForSandbox(sandboxId));
+      return retired ? records.map((record) => record.id) : [];
+    },
     async close() {
       try {
         await pool.close();
@@ -1480,6 +1620,31 @@ export function createBoxliteEnvironment(
       }
     },
   };
+}
+
+async function proveJournaledExits(
+  environment: DaemonExecutionEnvironment,
+  records: ExecutionRecord[],
+  logger: DaemonLogger,
+  sandboxId: string,
+): Promise<ExecutionRecord[]> {
+  if (records.length === 0 || !environment.proveExited) return [];
+  try {
+    const proven = new Set(await environment.proveExited(records));
+    const exited = records.filter((record) => proven.has(record.id));
+    for (const record of exited) {
+      logger.info("Run admitted before the restart has provably stopped; reporting it cancelled", {
+        sandboxId, commandId: record.id, runId: record.runId, sessionId: record.sessionId,
+      });
+    }
+    return exited;
+  } catch (error) {
+    // No proof is the safe answer: those runs wait for a person instead.
+    logger.warn("could not check runs admitted before the restart", {
+      sandboxId, error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 }
 
 function boxNameForSandbox(sandboxId: string, slot = 0): string {
@@ -1506,6 +1671,14 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
     }, ms);
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+/** Seconds from the environment as milliseconds; 0 is a valid "off". */
+function nonNegativeSecondsEnv(name: string): number | undefined {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value * 1000) : undefined;
 }
 
 function positiveIntEnv(name: string): number | undefined {
@@ -1660,6 +1833,10 @@ const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 5_000;
 const MAX_COMMAND_LEASE_SECONDS = 60 * 60;
 const DEFAULT_COMMAND_LEASE_SECONDS = 90;
+/** Longer than a typical backend deploy, and well inside the backend's 15-minute idle reaper. */
+const DEFAULT_UNREACHABLE_GRACE_MS = 300_000;
+/** Matches the backend's per-registration journal report bound. */
+const JOURNAL_REPORT_LIMIT = 200;
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
@@ -1732,7 +1909,12 @@ async function withBackendReconnect<T>(
   action: () => Promise<T>,
   logger: Pick<DaemonLogger, "warn">,
   context: { sandboxId: string; what: string },
-  control: { signal?: AbortSignal; shouldStop?: () => boolean } = {},
+  control: {
+    signal?: AbortSignal;
+    shouldStop?: () => boolean;
+    onTransientFailure?: () => void;
+    onCredentialRejected?: () => void;
+  } = {},
 ): Promise<T> {
   let attempt = 0;
   while (true) {
@@ -1741,7 +1923,14 @@ async function withBackendReconnect<T>(
       return await action();
     } catch (error) {
       if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
-      if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;
+      if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) {
+        // Only the backend itself revoking credentials speaks for ownership. A
+        // proxy's 403/404 mid-deploy says nothing about it, so it neither ends
+        // nor starts an outage grace.
+        if (error.status === 401 || error.status === 410) control.onCredentialRejected?.();
+        throw error;
+      }
+      control.onTransientFailure?.();
       attempt += 1;
       const message = error instanceof Error ? error.message : String(error);
       const backoff = backendReconnectDelayMs(attempt);
@@ -1804,6 +1993,16 @@ function validHeartbeatSettings(
   if (!value || !Number.isFinite(value.intervalMs) || value.intervalMs <= 0) return undefined;
   if (!Number.isFinite(value.timeoutMs) || value.timeoutMs <= value.intervalMs) return undefined;
   return value;
+}
+
+/**
+ * A definite refusal of one output batch (a 4xx other than the transient or
+ * credential ones). postJsonWithRetry already retried everything else.
+ */
+function isRejectedOutputBatch(error: unknown): error is DaemonHttpError {
+  return error instanceof DaemonHttpError
+    && error.status >= 400 && error.status < 500
+    && ![401, 408, 410, 429].includes(error.status);
 }
 
 const EVENT_POST_RETRY_INITIAL_DELAY_MS = 200;

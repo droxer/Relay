@@ -1230,7 +1230,7 @@ test("relay daemon retries terminal event posts across backend failures", async 
   assert.equal(terminalAttempts, 2);
 });
 
-test("relay daemon preserves final agent log and generated files when output event post fails", async (t) => {
+test("relay daemon completes a successful run whose output batch the backend rejected", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "relay-output-post-failed-"));
   const stop = new AbortController();
   const command = {
@@ -1291,12 +1291,15 @@ test("relay daemon preserves final agent log and generated files when output eve
     new Promise((_, reject) => setTimeout(() => reject(new Error("daemon did not post terminal event")), 1000)),
   ]);
 
-  const failed = events.find((event) => event.type === "run.failed");
-  assert.equal(failed?.type, "run.failed");
-  if (!failed || failed.type !== "run.failed") throw new Error("missing run.failed event");
-  assert.equal(failed.agentLog, "[Codex Exit 0]\nstdout:\n  done\n\n");
-  assert.match(failed.error, /Daemon lost agent output/);
-  assert.deepEqual(failed.generatedFiles?.map((file) => file.relativePath), ["agent-loop-guide.md"]);
+  // A 4xx on one output batch is a bad batch, not a failed agent: the run's
+  // exit status and deliverables stand, and the gap is flagged instead.
+  assert.equal(events.some((event) => event.type === "run.failed"), false);
+  const completed = events.find((event) => event.type === "run.completed");
+  if (!completed || completed.type !== "run.completed") throw new Error("missing run.completed event");
+  assert.equal(completed.exitCode, 0);
+  assert.equal(completed.outputTruncated, true);
+  assert.equal(completed.agentLog, "[Codex Exit 0]\nstdout:\n  done\n\n");
+  assert.deepEqual(completed.generatedFiles?.map((file) => file.relativePath), ["agent-loop-guide.md"]);
   assert.equal(existsSync(controlPath), false);
 });
 
@@ -3784,6 +3787,127 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
 }
 
 
+async function runThroughOutage(options: {
+  graceMs: number; runMs: number; outageMs: number; outageStatus: number;
+  /** Heartbeat answers during the outage, in order; the last one repeats. */
+  heartbeatStatuses?: number[];
+  /** Polls hang until the outage ends instead of answering. */
+  pollHangs?: boolean;
+  /** Registration is healthy even while the execution endpoints return 5xx. */
+  registrationDuringOutage?: boolean;
+}): Promise<{ events: DaemonNodeEvent[]; aborted: boolean }> {
+  let heartbeats = 0;
+  const root = mkdtempSync(join(tmpdir(), "relay-outage-grace-"));
+  const stop = new AbortController();
+  const command = { ...runCommand("outage_lease"), workspacePath: root, leaseId: "lease",
+    leaseExpiresAt: new Date(Date.now() + 1000).toISOString() };
+  const events: DaemonNodeEvent[] = [];
+  let served = false;
+  let outageEndsAt = Infinity;
+  let aborted = false;
+  const down = () => Date.now() < outageEndsAt;
+  const heartbeat = () => ({ intervalMs: 5000, timeoutMs: 15000, observedAt: new Date().toISOString(),
+    commandLeases: [{ commandId: command.id, leaseId: "lease", leaseExpiresAt: new Date(Date.now() + 1000).toISOString() }] });
+  const timeout = setTimeout(() => stop.abort(), options.outageMs + options.runMs + 4000);
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+      workspacePath: root, commandLeaseSeconds: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
+      unreachableGraceMs: options.graceMs, signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
+      environment: fakeEnvironment({ exec: async (_cmd, args, execOptions) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        const end = Date.now() + options.runMs;
+        while (Date.now() < end && !execOptions?.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
+        aborted = Boolean(execOptions?.signal?.aborted);
+        return { exit_code: 0, stdout: "done", stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path.endsWith("/daemon-node-registrations") && options.registrationDuringOutage) {
+          return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });
+        }
+        if (served && down()) {
+          if (path.endsWith("/heartbeat") && options.heartbeatStatuses) {
+            const statuses = options.heartbeatStatuses;
+            return jsonResponse({ error: "deploying" }, statuses[Math.min(heartbeats++, statuses.length - 1)]);
+          }
+          if (path.endsWith("/commands") && options.pollHangs) {
+            await new Promise((resolve) => setTimeout(resolve, Math.max(0, outageEndsAt - Date.now())));
+          } else {
+            return jsonResponse({ error: "deploying" }, options.outageStatus);
+          }
+        }
+        if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ ok: true, heartbeat: heartbeat() });
+        if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: heartbeat() });
+        if (path.endsWith("/commands")) {
+          const commands = served ? [] : [command];
+          if (!served) { served = true; outageEndsAt = Date.now() + options.outageMs; }
+          return jsonResponse({ commands, heartbeat: heartbeat() });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
+          if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) setTimeout(() => stop.abort(), 10);
+          return jsonResponse({ ok: true });
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    return { events, aborted };
+  } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+}
+
+test("a run outlives its lease through a backend outage shorter than the grace", async () => {
+  const { events, aborted } = await runThroughOutage({ graceMs: 5000, runMs: 2500, outageMs: 3000, outageStatus: 503 });
+  assert.equal(aborted, false);
+  assert.equal(events.some((event) => event.type === "run.cancelled"), false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+});
+
+test("a backend outage longer than the grace still stops the run", async () => {
+  const { events, aborted } = await runThroughOutage({ graceMs: 500, runMs: 3500, outageMs: 3500, outageStatus: 503 });
+  assert.equal(aborted, true);
+  const cancelled = events.find((event) => event.type === "run.cancelled");
+  assert.ok(cancelled?.type === "run.cancelled");
+  assert.match(cancelled.reason, /lease expired/);
+});
+
+test("healthy registration does not end grace while execution endpoints are unavailable", async () => {
+  const { events, aborted } = await runThroughOutage({
+    graceMs: 5000, runMs: 3000, outageMs: 3500, outageStatus: 503,
+    registrationDuringOutage: true,
+  });
+  assert.equal(aborted, false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+});
+
+test("a registration fallback heartbeat does not clear an execution outage", async () => {
+  const { events, aborted } = await runThroughOutage({
+    graceMs: 5000, runMs: 3000, outageMs: 3500, outageStatus: 503,
+    heartbeatStatuses: [503, 404], pollHangs: true, registrationDuringOutage: true,
+  });
+  assert.equal(aborted, false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+});
+
+test("a proxy refusal during an outage is not a lease revocation", async () => {
+  // A deploy's proxy may answer 403/404 on some routes while the rest time out.
+  // That says nothing about who owns the run, so the grace carries on.
+  const { events, aborted } = await runThroughOutage({
+    graceMs: 5000, runMs: 3000, outageMs: 3500, outageStatus: 503,
+    heartbeatStatuses: [503, 403], pollHangs: true,
+  });
+  assert.equal(aborted, false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+});
+
+test("a credential rejection during an outage stops the run without waiting out the grace", async () => {
+  const startedAt = Date.now();
+  const { aborted } = await runThroughOutage({ graceMs: 30_000, runMs: 6000, outageMs: 6000, outageStatus: 401 });
+  assert.equal(aborted, true);
+  assert.ok(Date.now() - startedAt < 5000);
+});
+
 test("explicit runtime refresh re-registers before the periodic refresh is due", async () => {
   const stop = new AbortController();
   const registrations: DaemonNodeRegistration[] = [];
@@ -3955,6 +4079,131 @@ test("daemon restart fences a retained execution instead of running it again", a
     assert.equal(executions, 0);
     assert.equal(new ExecutionJournal(join(root, "executions")).has(command.id), true);
   } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("daemon reports retained executions at registration and forgets them once acknowledged", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-journal-report-"));
+  const stop = new AbortController();
+  const command = runCommand();
+  new ExecutionJournal(join(root, "executions")).record(command);
+  const reported: unknown[] = [];
+  let capabilities: unknown[] = [];
+  let executions = 0;
+  let polls = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "journal-report", employeeId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      signal: stop.signal, logger: testLogger(),
+      environment: fakeEnvironment({ exec: async (_cmd, args) => {
+        if (!isInventoryProbe(args)) executions++;
+        return { exit_code: 0, stdout: "", stderr: "" };
+      }}),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/v1/daemon-node-registrations") {
+          const body = JSON.parse(String(init?.body));
+          if (body.status !== "stopped") {
+            reported.push(body.journaledCommandIds);
+            capabilities = body.capabilities;
+          }
+          return jsonResponse({ acknowledgedJournalIds: body.journaledCommandIds ?? [] });
+        }
+        if (path.endsWith("/commands")) {
+          if (polls++) { stop.abort(); return jsonResponse({commands: []}); }
+          return jsonResponse({commands: [command]});
+        }
+        return jsonResponse({ok: true});
+      },
+    });
+    assert.deepEqual(reported[0], [command.id]);
+    assert.ok(capabilities.includes("execution-journal-report"));
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(command.id), false);
+    // Forgetting the record never makes the run eligible to start again.
+    assert.equal(executions, 0);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("a restarted daemon settles a run it can prove ended instead of leaving it for a person", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-proven-exit-"));
+  const stop = new AbortController();
+  const proven = runCommand("cmd_proven");
+  const unproven = runCommand("cmd_unproven");
+  const journal = new ExecutionJournal(join(root, "executions"));
+  journal.record(proven);
+  journal.record(unproven);
+  const events: DaemonNodeEvent[] = [];
+  let reported: unknown;
+  let polls = 0;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "proven-exit", employeeId: "alice", token: "node_token",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      signal: stop.signal, logger: testLogger(),
+      environment: { ...fakeEnvironment(), proveExited: async (records) =>
+        records.filter((record) => record.id === proven.id).map((record) => record.id) },
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/v1/daemon-node-registrations") {
+          const body = JSON.parse(String(init?.body));
+          if (body.status !== "stopped") reported ??= body.journaledCommandIds;
+          return jsonResponse({});
+        }
+        if (path.endsWith("/events")) { events.push(await jsonBody<DaemonNodeEvent>(init)); return jsonResponse({ ok: true }); }
+        if (path.endsWith("/commands")) {
+          if (polls++ > 2) stop.abort();
+          return jsonResponse({ commands: [] });
+        }
+        return jsonResponse({ ok: true });
+      },
+    });
+    // Proven ends are real exit evidence, so they settle the normal way.
+    const cancelled = events.find((event) => event.type === "run.cancelled" && event.commandId === proven.id);
+    assert.ok(cancelled?.type === "run.cancelled");
+    assert.match(cancelled.reason, /restarted/);
+    assert.deepEqual(reported, [unproven.id]);
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(proven.id), false);
+    assert.equal(new ExecutionJournal(join(root, "executions")).has(unproven.id), true);
+  } finally { rmSync(root, {recursive: true, force: true}); }
+});
+
+test("a run reports the runtime conversation it ran in so it can be resumed", async () => {
+  const stop = new AbortController();
+  const session = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
+  const command = { ...runCommand("cmd_session"), agent: "claude" as const };
+  const events: DaemonNodeEvent[] = [];
+  let capabilities: unknown[] = [];
+  let served = false;
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "sbx_session", employeeId: "alice", token: "node_token",
+    workspacePath: process.cwd(), pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+    environment: fakeEnvironment({ exec: async (_cmd, args) => isInventoryProbe(args)
+      ? { exit_code: 0, stdout: "", stderr: "" }
+      : { exit_code: 0, stdout: `{"type":"system","subtype":"init","session_id":"${session}"}\n`, stderr: "" } }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        const body = JSON.parse(String(init?.body));
+        if (body.status !== "stopped") capabilities = body.capabilities;
+        return jsonResponse({ ok: true });
+      }
+      if (path.endsWith("/commands")) {
+        const commands = served ? [] : [command]; served = true;
+        return jsonResponse({ commands });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
+        if (event.type === "run.completed" || event.type === "run.failed") setTimeout(() => stop.abort(), 0);
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  const completed = events.find((event) => event.type === "run.completed");
+  if (!completed || completed.type !== "run.completed") throw new Error("missing run.completed");
+  assert.equal(completed.runtimeSessionId, session);
+  assert.ok(capabilities.includes("agent-resume"));
 });
 
 test("local execution cleans up descendants before waiting for inherited pipes", {skip: process.platform === "win32", timeout: 10000}, async () => {

@@ -3,6 +3,7 @@ import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent
 import type { DaemonExecutionEnvironment } from "./index.js";
 import { assertKimiConfigured } from "./agent-auth.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
+import { localExitProven } from "./exit-proof.js";
 
 /** Local CLI adapter. No registration, scheduling, or backend state lives here. */
 export function createLocalRuntime(): DaemonExecutionEnvironment {
@@ -16,6 +17,7 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
       execStream: localProcessExecStream,
       release: () => undefined,
     }),
+    proveExited: async (records) => records.filter((record) => localExitProven(record)).map((record) => record.id),
     close: async () => undefined,
   };
 }

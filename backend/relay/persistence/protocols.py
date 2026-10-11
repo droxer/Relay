@@ -315,6 +315,9 @@ class DaemonStore(Protocol):
     def request_run_stop(
         self, request_id: str, command_id: str, reason: str
     ) -> dict[str, Any] | None: ...
+    def mark_run_request_state(
+        self, request_id: str, key: str
+    ) -> dict[str, Any] | None: ...
     def claim_pending_node(
         self, node: dict[str, Any]
     ) -> tuple[dict[str, Any], bool]: ...

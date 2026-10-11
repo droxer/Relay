@@ -14,7 +14,9 @@ from itertools import product
 
 import pytest
 
-from relay.persistence.daemon_store import TERMINAL_CLAIM_ID_STATE_KEY
+from relay.persistence.daemon_store import (
+    EXECUTION_INTERRUPTED_STATE_KEY, EXIT_UNCONFIRMED_STATE_KEY, TERMINAL_CLAIM_ID_STATE_KEY,
+)
 from relay.services.execution_lifecycle import STOP_GRACE_SECONDS, execution_status
 
 NOW = datetime(2026, 10, 11, tzinfo=timezone.utc)
@@ -25,7 +27,8 @@ EXPIRED = (NOW - timedelta(seconds=30)).isoformat()
 
 REQUEST_STATUSES = (None, "prepared", "dispatching", "running", "finalizing")
 COMMAND_STATUSES = (None, "pending", "queued", "dispatched", "completed", "failed", "cancelled")
-LEASES = (None, LIVE, EXPIRED)
+LEASES = (None, LIVE, EXPIRED, (NOW - timedelta(seconds=601)).isoformat())
+EXECUTION_STATES = (None, EXECUTION_INTERRUPTED_STATE_KEY, EXIT_UNCONFIRMED_STATE_KEY)
 STOPS = (None, JUST_NOW, LONG_AGO)
 RECOVERY = (None, "finalization_failed", "missing_terminal_evidence", "unset_reason")
 CLAIMS = (False, True)
@@ -35,11 +38,11 @@ SESSION_STATUSES = ("running", "cancelled", "completed")
 
 def _inputs():
     for (request_status, command_status, lease, stop, recovery, claim,
-         running_agent, session_status) in product(
+         running_agent, session_status, execution_state) in product(
         REQUEST_STATUSES, COMMAND_STATUSES, LEASES, STOPS, RECOVERY, CLAIMS,
-        RUNNING_AGENT, SESSION_STATUSES,
+        RUNNING_AGENT, SESSION_STATUSES, EXECUTION_STATES,
     ):
-        if request_status is None and (stop or recovery or claim):
+        if request_status is None and (stop or recovery or claim or execution_state):
             continue  # Flags live on the request; there is nowhere to put them.
         if command_status is None and lease:
             continue
@@ -48,6 +51,8 @@ def _inputs():
         if recovery and not claim:
             continue  # A request reaches finalizing recovery only through a claim.
         state: dict = {}
+        if execution_state:
+            state[execution_state] = LONG_AGO
         if stop:
             state.update({"_relay_stop_command_id": "cmd_stop", "_relay_stop_requested_at": stop})
         if recovery:

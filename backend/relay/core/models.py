@@ -49,6 +49,8 @@ class RuntimeRefreshAcknowledgement(RelayModel):
 
 class DaemonNodeRegistration(RelayModel):
     runtime_refresh_commands: list[RuntimeRefreshAcknowledgement] = Field(default_factory=list, max_length=50)
+    # Runs a restarted daemon admitted before it crashed and will not resume.
+    journaled_command_ids: list[str] = Field(default_factory=list, max_length=1000)
     sandbox_id: str
     employee_id: str | None = None
     token: str

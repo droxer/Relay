@@ -614,6 +614,7 @@ export function App() {
     cancelActiveRun,
     sendDecision,
     retryAgentMessage,
+    resumeAgentMessage,
     sendHandoff,
   } = useThreadDispatch({
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
@@ -633,6 +634,7 @@ export function App() {
   const handleComposerSend = useStableEvent((style?: CollaborationStyle, intent?: ThreadMessageInput["intent"]) => sendMessage(style, intent));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
+  const handleResumeAgent = useStableEvent((agent: AgentName, agentId?: string) => { void resumeAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
   const handleProjectRoomPicked = useStableEvent(() => pickRoom());
   // Picking one member narrows a project round to them and drops a staged team.
@@ -877,6 +879,7 @@ export function App() {
             onSend={handleComposerSend}
             onCancelRun={handleCancelRun}
             onRetryAgent={handleRetryAgent}
+            onResumeAgent={handleResumeAgent}
             onRetryExecutionRecovery={async () => {
               if (!activeSession) return;
               await retryExecutionRecovery(activeSession.id, selectedToken);

@@ -76,7 +76,7 @@ for (const reason of ["finalization_failed", "termination_unconfirmed"]) {
     } else {
       await expect(panel.getByRole("button", { name: "Retry saving results" })).toHaveCount(0);
       await panel.getByRole("link", { name: "Open Computers" }).click();
-      await expect(page).toHaveURL(/\/settings\/computers$/);
+      await expect(page).toHaveURL(/\/computers$/);
       expect(writes).toEqual([]);
     }
   });
@@ -127,6 +127,58 @@ test("online computer with pending deletion keeps exit recovery visible", async 
   await expect(panel).not.toContainText("Computer is not responding");
   await expect(panel.getByRole("button", { name: "Report the agent as gone" })).toHaveCount(0);
   await panel.getByRole("link", { name: "Open Computers" }).click();
-  await expect(page).toHaveURL(/\/settings\/computers$/);
+  await expect(page).toHaveURL(/\/computers$/);
   expect(writes).toEqual([]);
+});
+
+
+/* A run Relay gave up on after its computer died or restarted: the copy names
+   what happened and the way out is the report-gone action, in both languages
+   and both themes. */
+for (const reason of ["execution_lost", "execution_interrupted"]) {
+  for (const [language, theme, title, action] of [
+    ["en", "light", reason === "execution_lost" ? "Computer has been offline too long" : "Computer restarted during this run", "Report the agent as gone"],
+    ["zh-CN", "dark", reason === "execution_lost" ? "电脑离线时间过长" : "运行期间电脑已重启", null],
+  ] as const) {
+    test(`${reason} explains itself and offers report gone (${language}, ${theme})`, async ({ page }, testInfo) => {
+      const session = sessionFor(reason);
+      Object.assign(session.execution, { computerOnline: false, canReportGone: true });
+      await page.route("**/api/**", async route => {
+        const path = new URL(route.request().url()).pathname;
+        let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+        if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme, language } };
+        if (path.endsWith("/threads/recovery-thread")) body = session;
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      });
+      await page.goto("/threads/recovery-thread");
+      const panel = page.locator("section[aria-label]:has(> strong)").filter({ hasText: title });
+      await expect(panel).toBeVisible();
+      // Two buttons at most: report gone is the only action this state allows.
+      await expect(panel.getByRole("button")).toHaveCount(1);
+      if (action) await expect(panel.getByRole("button", { name: action })).toBeVisible();
+      const text = await panel.innerText();
+      expect(text).not.toMatch(/\b[a-z]+(_[a-z]+)+\b/);
+      await page.screenshot({ path: testInfo.outputPath(`${reason}-${language}-${theme}.png`), fullPage: true });
+    });
+  }
+}
+
+test("a completed turn whose live output had gaps says so", async ({ page }) => {
+  const session = {
+    ...sessionFor("finalization_failed"), status: "completed", execution: { ...executionFor("finalization_failed"), phase: "terminal", blockingReason: null, canDelete: true },
+    events: [
+      { id: "ev_start", type: "agent.started", sessionId: "recovery-thread", timestamp: now, runId: "run_cut", agent: "codex", role: "implementer" },
+      { id: "ev_done", type: "agent.completed", sessionId: "recovery-thread", timestamp: now, runId: "run_cut", agent: "codex",
+        status: "completed", exitCode: 0, agentLog: "", outputTruncated: true },
+    ],
+  };
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/threads/recovery-thread")) body = session;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/threads/recovery-thread");
+  await expect(page.getByRole("note")).toContainText("Part of this run's live output was not saved");
 });

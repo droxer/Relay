@@ -1007,6 +1007,7 @@ export function requestThreadRecovery(
       targetAgentId: input.targetAgentId,
       ...(input.note ? { note: input.note } : {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      ...(input.resume ? { resume: true } : {}),
     },
   });
 }

@@ -58,6 +58,10 @@ export interface AgentRun {
   exitCode?: number;
   agentLog?: string;
   tokenUsage?: TokenUsage;
+  /** The backend refused part of the live output; the result itself is whole. */
+  outputTruncated?: boolean;
+  /** The runtime CLI's own conversation id, so the run can be resumed. */
+  runtimeSessionId?: string;
   artifactIds: string[];
 }
 
@@ -436,6 +440,8 @@ export type RelayEvent =
       exitCode: number;
       agentLog?: string;
       tokenUsage?: TokenUsage;
+      outputTruncated?: boolean;
+      runtimeSessionId?: string;
     }
   | {
       id: string;

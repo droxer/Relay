@@ -508,6 +508,10 @@ def _apply_agent_completed(session: dict[str, Any], event: dict[str, Any]) -> No
             run["workResult"] = event["workResult"]
         if event.get("tokenUsage"):
             run["tokenUsage"] = event["tokenUsage"]
+        if event.get("outputTruncated"):
+            run["outputTruncated"] = True
+        if event.get("runtimeSessionId"):
+            run["runtimeSessionId"] = event["runtimeSessionId"]
     token_usage = merge_token_usage(
         [run.get("tokenUsage") for run in session["agentRuns"]]
     )
