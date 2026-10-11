@@ -51,7 +51,7 @@ node --test --test-name-pattern='scopes proposal cleanup' dist/packages/relay-da
 git diff --check
 ```
 
-## Broader verification
+## Broader verification before rebasing
 
 - `npm test`: blocked during the default Turbopack build by local port binding
   (`Operation not permitted`), including the permitted retry.
@@ -72,6 +72,21 @@ git diff --check
   reported 26 existing dependency vulnerabilities (one critical, 15 high,
   four moderate, six low). Dependency manifests and lockfiles are outside
   this change.
+
+## Verification after rebasing onto current main
+
+The branch was rebased onto `48a8645e` before opening PR #398. The latest main
+fixes both Node assertions noted above.
+
+- `npm run test:py`: all 2,404 tests passed.
+- Compiled Node suites: all 2,106 tests passed.
+- `npm run test:react -w web`: all 443 tests passed on rerun after the heavier
+  build and Node jobs finished. The initial concurrent run timed out in the
+  unchanged roster interaction test.
+- `npx tsc -p packages/tsconfig.json`: passed.
+- `npm run build -w web -- --webpack`: production build and web typecheck passed.
+- The 67 focused Python tests passed again, and the daemon proposal/context
+  helpers retained 100% line, branch, and function coverage.
 
 Coverage measurement is limited to the daemon proposal/context helpers; Python
 coverage tooling is not installed. The backend concurrency tests inject a
