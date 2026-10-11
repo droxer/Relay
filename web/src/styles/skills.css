@@ -185,8 +185,7 @@
 }
 
 .skill-file-list li,
-.skill-revisions li,
-.skill-grant-list > div {
+.skill-revisions li {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -258,16 +257,6 @@
   min-width: 260px;
 }
 
-/* Only the share drawer's target rows hand-roll a label now — every editable
-   field in this surface renders through the <Field> primitive, which owns its
-   own label / required / optional / hint stack. A descendant `label` rule here
-   would outrank the primitive's utilities and silently restyle it. */
-.skill-picker-list label {
-  display: grid;
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-}
-
 /* Segmented control and drawer tabs, on the .adm-profile-segment recipe: a
    recessed track, and an active chip drawn by a hairline inset rather than a
    drop shadow — this system's elevation is --shadow-2, a 0.5px ring. */
@@ -337,38 +326,73 @@
   padding: var(--sp-4) var(--sp-7);
   border-top: 0.5px solid var(--line-1);
   background: var(--surface-3);
+  align-items: center;
 }
 
-.skill-team-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-}
-
-.skill-picker-list {
+/* Share targets: one compact checklist row for scope, teams, and agents —
+   checkbox, name, and a muted fact on the trailing edge. No frame per row;
+   the hover wash and the checkbox carry the state. The row is the only
+   hand-rolled label here — every editable field renders through <Field>. */
+.skill-target-list {
   display: grid;
-  gap: var(--sp-2);
+  margin-inline: calc(-1 * var(--sp-2));
 }
 
-.skill-picker-list label {
-  grid-template-columns: auto 1fr;
+.skill-target {
+  display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-2);
   border-radius: var(--r-2);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
 }
 
-.skill-picker-list span {
-  display: grid;
-  gap: var(--sp-0-5);
+.skill-target:hover {
+  background: var(--row-hover);
 }
 
-.skill-picker-list small {
+.skill-target-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-target-meta {
+  flex: none;
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
-  text-transform: capitalize;
+}
+
+/* Granted targets wear the checklist's row: same height, same name role,
+   with Revoke where the picker rows carry their fact. */
+.skill-grant-list {
+  display: grid;
+  margin-inline: calc(-1 * var(--sp-2));
+}
+
+.skill-grant-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: var(--control-h);
+  padding-left: var(--sp-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ink-1);
+}
+
+/* The footer's leading edge carries the drawer's one requirement. */
+.skill-share-hint {
+  margin: 0 auto 0 0;
 }
 
 .skill-error {
@@ -429,16 +453,6 @@
   gap: var(--sp-4);
 }
 
-/* A share target is selected, not merely hoverable: the chip and the agent row
-   both take the action's tint so the footer count always has a visible
-   antecedent. Before this, clicking "All current and future agents" changed
-   nothing on screen. */
-.skill-target-chip[data-selected="true"],
-.skill-picker-list label[data-selected="true"] {
-  border-color: var(--action);
-  background: var(--action-soft);
-  color: var(--ink-1);
-}
 
 @media (max-width: 480px) {
   /* Below the drawer's own width the paired GitHub fields stack rather than
@@ -471,11 +485,6 @@
 
 }
 
-/* The share drawer's one requirement, stated where the fields would be. It
-   reads as guidance, not as an error, until the user tries to act. */
-.skill-requirement {
-  color: var(--ink-2);
-}
 
 /* ---- skill preview ---------------------------------------------------
    Reading view for a granted bundle: one framed viewer whose title bar is the

@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { createInstance } from "i18next";
@@ -42,8 +43,9 @@ it("interpolates the Simplified Chinese team and selected-agent counts", async (
   const agents = [{ id: "agent-1", displayName: "Codex reviewer", executorKind: "codex", enabled: true }] as any;
   const teams = [{ id: "team-1", name: "Launch team", memberAgentIds: ["agent-1"] }] as any;
   render(providers(instance, <ShareSkillDrawer skill={skill} agents={agents} teams={teams} onClose={vi.fn()} />));
-  expect(screen.getByRole("button", { name: "Launch team · 1 名成员" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "共享给 0 个智能体" })).toBeTruthy();
+  expect(screen.getByText("1 名成员")).toBeTruthy();
+  await userEvent.setup().click(screen.getByRole("checkbox", { name: /Launch team/ }));
+  expect(screen.getByRole("button", { name: "共享给 1 个对象" })).toBeTruthy();
 });
 
 it.each([
