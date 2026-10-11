@@ -78,7 +78,8 @@ Optional:
   its lease expires while every backend call is failing with a network error or
   5xx (a deploy or outage). Defaults to 300 seconds; `0` disables it. Granted
   once per lease; any backend answer that does not renew the lease, or a
-  401/410, still stops the run immediately.
+  401/410, still stops the run immediately. Other 4xx (a proxy's 403/404 during
+  a deploy) neither start nor end the grace.
 - `RELAY_DAEMON_MAX_CONCURRENT_RUNS`: maximum concurrent runs on this node.
   Defaults to 3. In BoxLite mode each concurrently running thread gets its own
   guest VM (mounting only that thread's workspace), so this also caps how many

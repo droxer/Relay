@@ -234,8 +234,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
-  // Set while every backend call is failing transiently; cleared by any answer.
-  // A refusal (4xx) is an answer: it never extends a lease.
+  // Set while backend calls fail transiently; cleared by a real answer (a
+  // response, or a 401/410 credential rejection). Other 4xx leave it alone.
   let backendUnreachable = false;
   const unreachableGraceMs = options.unreachableGraceMs
     ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS")
@@ -1839,7 +1839,10 @@ async function withBackendReconnect<T>(
     } catch (error) {
       if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
       if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) {
-        control.onSuccess?.();
+        // Only the backend itself revoking credentials speaks for ownership. A
+        // proxy's 403/404 mid-deploy says nothing about it, so it neither ends
+        // nor starts an outage grace.
+        if (error.status === 401 || error.status === 410) control.onSuccess?.();
         throw error;
       }
       control.onTransientFailure?.();

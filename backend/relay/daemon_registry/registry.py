@@ -770,8 +770,8 @@ class DaemonNodeRegistry:
         run a journaled command again after a crash. Its report is not exit
         evidence -- a host-mode agent may outlive its daemon -- so a still
         delivered run is only marked interrupted, which a person can then
-        report gone. Returns the ids this node may forget: ones marked here,
-        already settled, or unknown. Another node's commands are ignored.
+        report gone. Returns the ids this node may forget: all of them. Only
+        this node's still-delivered runs are marked; the rest change nothing.
         """
         acknowledged: list[str] = []
         with self.dispatch_scope([sandbox_id]):
@@ -781,6 +781,11 @@ class DaemonNodeRegistry:
                     acknowledged.append(command_id)
                     continue
                 if record.get("nodeId") != sandbox_id:
+                    logger.warning(
+                        "Ignored a journaled run that belongs to another node",
+                        node_id=sandbox_id, command_id=command_id,
+                    )
+                    acknowledged.append(command_id)
                     continue
                 if record.get("status") == "dispatched":
                     request = self.daemon_store.run_request_for_command(command_id)

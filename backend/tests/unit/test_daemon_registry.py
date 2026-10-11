@@ -8107,8 +8107,9 @@ def test_journal_report_acknowledges_settled_or_unknown_runs_and_ignores_other_n
             other = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Live"})["id"])
 
             assert registry.account_journaled_commands("sbx_alice", [command["id"], "cmd_unknown"]) == [command["id"], "cmd_unknown"]
-            # Another node cannot mark this node's run interrupted.
-            assert registry.account_journaled_commands("sbx_bob", [other["id"]]) == []
+            # Another node cannot mark this node's run interrupted, but it may
+            # forget the record: nothing it reports about that run is acted on.
+            assert registry.account_journaled_commands("sbx_bob", [other["id"]]) == [other["id"]]
             request = registry.daemon_store.run_request_for_command(other["id"])
             assert not request["state"].get("_relay_execution_interrupted_at")
 

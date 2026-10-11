@@ -3789,7 +3789,12 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
 
 async function runThroughOutage(options: {
   graceMs: number; runMs: number; outageMs: number; outageStatus: number;
+  /** Heartbeat answers during the outage, in order; the last one repeats. */
+  heartbeatStatuses?: number[];
+  /** Polls hang until the outage ends instead of answering. */
+  pollHangs?: boolean;
 }): Promise<{ events: DaemonNodeEvent[]; aborted: boolean }> {
+  let heartbeats = 0;
   const root = mkdtempSync(join(tmpdir(), "relay-outage-grace-"));
   const stop = new AbortController();
   const command = { ...runCommand("outage_lease"), workspacePath: root, leaseId: "lease",
@@ -3817,7 +3822,17 @@ async function runThroughOutage(options: {
       fetchFn: async (url, init) => {
         const path = new URL(String(url)).pathname;
         if (path === "/api") return jsonResponse({ name: "Relay backend" });
-        if (served && down()) return jsonResponse({ error: "deploying" }, options.outageStatus);
+        if (served && down()) {
+          if (path.endsWith("/heartbeat") && options.heartbeatStatuses) {
+            const statuses = options.heartbeatStatuses;
+            return jsonResponse({ error: "deploying" }, statuses[Math.min(heartbeats++, statuses.length - 1)]);
+          }
+          if (path.endsWith("/commands") && options.pollHangs) {
+            await new Promise((resolve) => setTimeout(resolve, Math.max(0, outageEndsAt - Date.now())));
+          } else {
+            return jsonResponse({ error: "deploying" }, options.outageStatus);
+          }
+        }
         if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ ok: true, heartbeat: heartbeat() });
         if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: heartbeat() });
         if (path.endsWith("/commands")) {
@@ -3850,6 +3865,17 @@ test("a backend outage longer than the grace still stops the run", async () => {
   const cancelled = events.find((event) => event.type === "run.cancelled");
   assert.ok(cancelled?.type === "run.cancelled");
   assert.match(cancelled.reason, /lease expired/);
+});
+
+test("a proxy refusal during an outage is not a lease revocation", async () => {
+  // A deploy's proxy may answer 403/404 on some routes while the rest time out.
+  // That says nothing about who owns the run, so the grace carries on.
+  const { events, aborted } = await runThroughOutage({
+    graceMs: 5000, runMs: 3000, outageMs: 3500, outageStatus: 503,
+    heartbeatStatuses: [503, 403], pollHangs: true,
+  });
+  assert.equal(aborted, false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
 });
 
 test("a credential rejection during an outage stops the run without waiting out the grace", async () => {
