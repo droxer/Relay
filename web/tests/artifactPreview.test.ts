@@ -6,6 +6,7 @@ import type { RelayArtifact } from "relay-core";
 import {
   artifactDownloadName,
   artifactFileName,
+  artifactPreviewMode,
   artifactRawHref,
   artifactRenderMode,
   artifactShowsKind,
@@ -49,6 +50,33 @@ describe("workspaceFilePreviewMode", () => {
     assert.equal(workspaceFilePreviewMode("application/zip"), "none");
     assert.equal(workspaceFilePreviewMode(undefined), "none");
     assert.equal(workspaceFilePreviewMode(""), "none");
+  });
+});
+
+describe("artifactPreviewMode", () => {
+  it("reads source files the daemon reports as octet-stream as text", () => {
+    const script = artifact({
+      title: "fetch-ai-news.mjs",
+      path: "/workspace/tools/fetch-ai-news.mjs",
+      workspaceRelativePath: "tools/fetch-ai-news.mjs",
+      contentType: "application/octet-stream",
+    });
+    assert.equal(artifactPreviewMode(script), "text");
+  });
+
+  it("keeps the content type's answer when it has one", () => {
+    assert.equal(artifactPreviewMode(artifact({ contentType: "image/png", title: "chart.png" })), "image");
+    assert.equal(artifactPreviewMode(artifact({ contentType: "text/markdown" })), "text");
+  });
+
+  it("leaves unknown binaries without a preview", () => {
+    const archive = artifact({
+      title: "bundle.zip",
+      path: "/workspace/bundle.zip",
+      workspaceRelativePath: "bundle.zip",
+      contentType: "application/octet-stream",
+    });
+    assert.equal(artifactPreviewMode(archive), "none");
   });
 });
 

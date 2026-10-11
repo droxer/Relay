@@ -901,15 +901,20 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             });
           }
         } else if (command.type === "workspace.list" || command.type === "workspace.read") {
-          // A durable workspaceSubpath is validated before the workspace-read helpers
-          // run, so an escaping subpath throws here rather than inside workspaceCommandEvent —
+          // Thread ids and durable workspaceSubpaths are validated before the workspace-read helpers
+          // run, so an escaping path throws here rather than inside workspaceCommandEvent —
           // catch it the same way, as a workspace.error event, instead of letting it
           // fall out of the poll loop and take the whole daemon down.
           let event: DaemonNodeEvent;
           try {
-            const commandWorkspacePath = durableWorkspaceLayout(command.workspaceLayout) && command.sessionId
-              ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
-              : workspacePath;
+            if (command.workspaceLayout === "thread" && !command.sessionId) {
+              throw new Error("Thread workspace command is missing sessionId.");
+            }
+            const commandWorkspacePath = command.workspaceLayout === "thread"
+              ? threadWorkspaces.resolve(command.sessionId!).hostPath
+              : durableWorkspaceLayout(command.workspaceLayout) && command.sessionId
+                ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
+                : workspacePath;
             event = workspaceCommandEvent(commandWorkspacePath, command);
           } catch (error) {
             event = {

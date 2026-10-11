@@ -500,3 +500,153 @@ def test_task_workspace_status_denies_other_employee(client, task_with_run, othe
     task, _ = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
     response = client.get(f"/api/v1/tasks/{task['id']}/workspace/status", headers=other_employee.headers)
     assert response.status_code == 403
+
+
+def _thread_with_unsnapshotted_artifact(app, backlog_task, node) -> tuple[dict, dict]:
+    from relay.core.ids import new_database_id, now_iso
+
+    session = SessionController(
+        app.state.session_store,
+        task_store=app.state.task_store,
+        task_id=backlog_task["id"],
+        workspace_path=node["workspacePath"],
+        owner_employee_id="alice",
+        workspace_layout="task",
+        workspace_subpath=f"tasks/{backlog_task['id']}",
+        daemon_node_id=node["id"],
+        computer_id=computer_id(node),
+    ).create_session(backlog_task["title"], ["human", "codex"])
+    artifact = {
+        "id": new_database_id(),
+        "kind": "workspace_file",
+        "title": "fetch.mjs",
+        "path": f"/workspace/relay/tasks/{backlog_task['id']}/tools/fetch.mjs",
+        "workspaceRelativePath": "tools/fetch.mjs",
+        "createdAt": now_iso(),
+        "contentType": "application/octet-stream",
+        "bytes": 5,
+        "snapshotSkipped": "not-snapshotable-type",
+    }
+    app.state.session_store.index_workspace_artifact(session["id"], artifact, None)
+    return session, artifact
+
+
+def test_unsnapshotted_artifact_reads_live_from_its_thread_workspace(
+    client, backlog_task, monkeypatch
+):
+    app = client.app
+    node = _register_node(
+        app, "node_alice_live", "machine-alice-live",
+        ["task-workspaces", "workspace-read-shared"],
+    )
+    session, artifact = _thread_with_unsnapshotted_artifact(app, backlog_task, node)
+    captured: dict[str, Any] = {}
+
+    async def capture_dispatch(ctx: Any, target: dict, command: dict) -> dict:
+        captured.update(command, nodeId=target["id"])
+        return await _stub_dispatch(ctx, target, command)
+
+    monkeypatch.setattr(
+        "relay.api.session_routes.dispatch_workspace_command", capture_dispatch
+    )
+
+    response = client.get(
+        f"/api/v1/threads/{session['id']}/artifacts/{artifact['id']}"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.content == b"hello"
+    assert response.headers["content-disposition"].startswith("attachment;")
+    assert "sandbox" in response.headers["content-security-policy"]
+    assert captured["type"] == "workspace.read"
+    assert captured["path"] == "tools/fetch.mjs"
+    assert captured["workspaceLayout"] == "task"
+    assert captured["workspaceSubpath"] == f"tasks/{backlog_task['id']}"
+    assert captured["nodeId"] == node["id"]
+
+
+def test_unsnapshotted_artifact_past_the_live_limit_is_refused(
+    client, backlog_task, monkeypatch
+):
+    app = client.app
+    node = _register_node(
+        app, "node_alice_big", "machine-alice-big",
+        ["task-workspaces", "workspace-read-shared"],
+    )
+    session, artifact = _thread_with_unsnapshotted_artifact(app, backlog_task, node)
+
+    async def truncated_dispatch(_ctx: Any, _node: dict, command: dict) -> dict:
+        return {**await _stub_dispatch(_ctx, _node, command), "truncated": True}
+
+    monkeypatch.setattr(
+        "relay.api.session_routes.dispatch_workspace_command", truncated_dispatch
+    )
+
+    response = client.get(
+        f"/api/v1/threads/{session['id']}/artifacts/{artifact['id']}"
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["reason"] == "artifact-too-large"
+
+
+@pytest.mark.parametrize("original_root_available", [True, False])
+def test_unsnapshotted_artifact_preserves_its_recorded_workspace_root(
+    client, backlog_task, monkeypatch, original_root_available
+):
+    app = client.app
+    capabilities = ["task-workspaces", "workspace-read-shared"]
+    original = _register_node(app, "original-root", "same-machine", capabilities)
+    session, artifact = _thread_with_unsnapshotted_artifact(app, backlog_task, original)
+    original = {**original, "online": True, "stale": False, "retiredAt": None}
+    other = _register_node(app, "other-root", "same-machine", capabilities)
+    other = {
+        **other, "workspacePath": "/other/workspace",
+        "online": True, "stale": False, "retiredAt": None,
+    }
+    # A computer identity identifies the machine, not its workspace directory.
+    monkeypatch.setattr(
+        app.state.registry,
+        "monitor_nodes",
+        lambda: [other, original] if original_root_available else [other],
+    )
+    targets = []
+
+    async def capture_dispatch(ctx: Any, target: dict, command: dict) -> dict:
+        targets.append(target)
+        return await _stub_dispatch(ctx, target, command)
+
+    monkeypatch.setattr(
+        "relay.api.session_routes.dispatch_workspace_command", capture_dispatch
+    )
+    response = client.get(
+        f"/api/v1/threads/{session['id']}/artifacts/{artifact['id']}"
+    )
+
+    if original_root_available:
+        assert response.status_code == 200, response.text
+        assert response.content == b"hello"
+        assert [node["workspacePath"] for node in targets] == [session["workspacePath"]]
+    else:
+        assert response.status_code == 503
+        assert response.json()["detail"]["reason"] == "placement-unavailable"
+        assert targets == []
+
+
+def test_unsnapshotted_artifact_on_an_offline_computer_reports_it(
+    client, backlog_task
+):
+    app = client.app
+    node = _register_node(
+        app, "node_alice_gone", "machine-alice-gone",
+        ["task-workspaces", "workspace-read-shared"],
+    )
+    session, artifact = _thread_with_unsnapshotted_artifact(app, backlog_task, node)
+    app.state.registry.delete(node["id"])
+
+    response = client.get(
+        f"/api/v1/threads/{session['id']}/artifacts/{artifact['id']}"
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["reason"] == "computer-offline"

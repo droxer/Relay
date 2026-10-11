@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 
+from ..core.computer_identity import computer_id
 from ..services.event_notifier import workspace_response_key
 from ..services.workspace_query import WORKSPACE_COMMAND_TIMEOUT_SECONDS
 from .deps import AppContext
@@ -31,6 +32,86 @@ def workspace_path(raw: str | None, *, required: bool = False) -> str:
     if required and not value:
         raise HTTPException(400, "Workspace file path is required.")
     return value
+
+
+def workspace_binding_target(
+    nodes: list[dict[str, Any]], binding: dict[str, Any]
+) -> tuple[dict[str, Any], str, str]:
+    """The live node that can read a recorded workspace binding, with the
+    layout and subpath its `workspace.*` command carries."""
+    candidates = [
+        node
+        for node in nodes
+        if computer_id(node) == binding["computerId"]
+        and node.get("online")
+        and not node.get("stale")
+        and not node.get("retiredAt")
+    ]
+    if not candidates:
+        raise HTTPException(
+            503, {"reason": "computer-offline", "code": "computer-offline"}
+        )
+    if binding.get("workspaceRoot"):
+        candidates = [
+            node
+            for node in candidates
+            if node.get("workspacePath") == binding["workspaceRoot"]
+        ]
+        if not candidates:
+            raise HTTPException(
+                503,
+                {"reason": "placement-unavailable", "code": "placement-unavailable"},
+            )
+    layout = binding["layout"]
+    required = {
+        "task": "task-workspaces",
+        "project": "project-workspaces",
+        "thread": "thread-workspaces",
+    }.get(layout)
+    node = next(
+        (
+            node
+            for node in candidates
+            if "workspace-read-shared" in (node.get("capabilities") or [])
+            and (not required or required in (node.get("capabilities") or []))
+        ),
+        None,
+    )
+    if not node:
+        raise HTTPException(
+            503, {"reason": "workspace-unsupported", "code": "workspace-unsupported"}
+        )
+    subpath = (
+        binding.get("subpath")
+        if layout in ("task", "project")
+        else binding.get("sessionId")
+    )
+    if not isinstance(subpath, str) or not subpath:
+        raise HTTPException(
+            503, {"reason": "placement-unavailable", "code": "placement-unavailable"}
+        )
+    return node, layout, subpath
+
+
+def workspace_binding_command(
+    *,
+    routing_id: str,
+    command_id: str,
+    command_type: str,
+    path: str,
+    workspace_layout: str,
+    workspace_subpath: str,
+) -> dict[str, Any]:
+    return {
+        "id": command_id,
+        "type": command_type,
+        "sessionId": routing_id
+        if workspace_layout in ("task", "project")
+        else workspace_subpath,
+        "workspaceLayout": workspace_layout,
+        "workspaceSubpath": workspace_subpath,
+        "path": path,
+    }
 
 
 async def dispatch_workspace_command(

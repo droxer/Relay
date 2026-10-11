@@ -43,12 +43,8 @@ def recorded_task_workspace(
         if not session:
             continue
         layout = session.get("workspaceLayout") or "node-root"
-        identity = session.get("computerId")
+        identity = _session_computer_identity(session, by_id)
         node_id = session.get("daemonNodeId")
-        if not identity and session.get("managedNodeId"):
-            identity = f"managed:{session['managedNodeId']}"
-        if not identity and node_id in by_id:
-            identity = computer_id(by_id[node_id])
         # A thread created with the task has not necessarily been admitted yet.
         # It has no files on a Computer to recover until its first execution.
         unbound = not (
@@ -67,6 +63,43 @@ def recorded_task_workspace(
             **({"unbound": True} if unbound else {}),
         }
     return None
+
+
+def _session_computer_identity(
+    session: dict[str, Any], nodes_by_id: dict[str, dict[str, Any]]
+) -> str | None:
+    identity = session.get("computerId")
+    if not identity and session.get("managedNodeId"):
+        identity = f"managed:{session['managedNodeId']}"
+    node_id = session.get("daemonNodeId")
+    if not identity and node_id in nodes_by_id:
+        identity = computer_id(nodes_by_id[node_id])
+    return identity
+
+
+def recorded_session_workspace(
+    session: dict[str, Any], nodes: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The workspace a thread's runs wrote into, in the task binding's shape.
+
+    Generated-file paths are relative to this root, so a live read of one
+    resolves here. None until the thread has run somewhere."""
+    by_id = {node["id"]: node for node in nodes}
+    identity = _session_computer_identity(session, by_id)
+    node_id = session.get("daemonNodeId")
+    if not identity and not node_id:
+        return None
+    return {
+        "computerId": identity or f"node:{node_id}",
+        "layout": session.get("workspaceLayout") or "node-root",
+        "subpath": session.get("workspaceSubpath"),
+        "sessionId": session["id"],
+        **(
+            {"workspaceRoot": session["workspacePath"]}
+            if session.get("workspacePath")
+            else {}
+        ),
+    }
 
 
 def task_workspace_nodes(

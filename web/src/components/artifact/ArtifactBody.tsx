@@ -6,9 +6,9 @@ import type { RelayArtifact } from "relay-core";
 import { readArtifactBlob } from "../../api";
 import {
   artifactFileName,
+  artifactPreviewMode,
   artifactRawHref,
   artifactRenderMode,
-  workspaceFilePreviewMode,
 } from "../../lib/artifactPreview";
 import { useArtifactBody } from "../../lib/useArtifactBody";
 import { CodeView, languageForFile } from "../CodeView";
@@ -162,7 +162,7 @@ function WorkspaceFileBody({
   view: ArtifactView;
 }) {
   const { t } = useTranslation();
-  const mode = workspaceFilePreviewMode(artifact.contentType);
+  const mode = artifactPreviewMode(artifact);
   const rawHref = artifactRawHref(sessionId, artifact.id);
   const wantsText = mode === "html" || mode === "text";
   const query = useArtifactBody(sessionId, artifact.id, { enabled: wantsText });
