@@ -110,7 +110,40 @@ responses on that path (Rocket Loader, Email Obfuscation, Zaraz).
 - **Request body size:** Cloudflare's plan limit (100 MB on Free/Pro) sits
   above `RELAY_MAX_JSON_BODY_BYTES`, so the backend's limit is the one users hit.
 
-## 6. Verify
+## 6. R2 for artifact snapshots (optional)
+
+Generated workspace files (PDFs, decks, spreadsheets up to
+`RELAY_WORKSPACE_ARTIFACT_SNAPSHOT_MAX_BYTES`, 2 MB by default) are snapshotted
+so they stay downloadable after the computer that wrote them goes offline. By
+default the bytes live in Postgres; with R2 they live in a bucket and Postgres
+keeps only each file's key and SHA-256.
+
+1. Cloudflare → *R2* → create a bucket, e.g. `relay-artifacts`. Keep it
+   private — no public access, no custom domain. The backend reads it and
+   serves downloads itself, with the same authorization and headers as before.
+2. *R2* → *Manage API tokens* → create a token with **Object Read & Write**
+   scoped to that bucket only.
+3. Railway backend variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `RELAY_BLOB_STORE` | `r2` |
+   | `RELAY_R2_ACCOUNT_ID` | your Cloudflare account ID |
+   | `RELAY_R2_ACCESS_KEY_ID` | the token's access key ID |
+   | `RELAY_R2_SECRET_ACCESS_KEY` | the token's secret |
+   | `RELAY_R2_BUCKET` | `relay-artifacts` |
+
+   For a bucket in a jurisdiction (EU, FedRAMP), also set `RELAY_R2_ENDPOINT`
+   to that jurisdiction's endpoint.
+
+The backend refuses to start if `RELAY_BLOB_STORE=r2` is missing any of these.
+New snapshots go to R2 from then on; snapshots already in Postgres keep being
+served from there. Deleting a thread deletes its objects
+(`session-artifacts/<thread>/`). Do not switch back to `database` while R2
+holds snapshots: those files would fall back to a live read from their
+computer.
+
+## 7. Verify
 
 ```bash
 # Through the edge: 200

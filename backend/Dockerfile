@@ -29,12 +29,12 @@ WORKDIR /app
 # test and pre-commit tooling in the runtime image.
 COPY backend/pyproject.toml backend/uv.lock ./backend/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --extra migration --frozen --no-install-project
+    uv sync --project backend --extra migration --extra r2 --frozen --no-install-project
 
 COPY backend/ ./backend/
 COPY --from=computer-client /build/backend/relay/computer/daemon.tar.gz ./backend/relay/computer/daemon.tar.gz
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --extra migration --frozen
+    uv sync --project backend --extra migration --extra r2 --frozen
 
 # Bind every interface: the platform routes to the container's published port,
 # which arrives as $PORT and is read by relay.core.deploy_config.

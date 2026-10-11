@@ -66,6 +66,7 @@ from .persistence.agent_placement_store import (
     reconcile_single_active_placement,
 )
 from .persistence.agent_store import DatabaseAgentStore, LocalAgentStore
+from .persistence.blob_store import blob_store_from_env
 from .persistence.admin_token_store import DatabaseAdminTokenStore
 from .persistence.org_settings_store import DatabaseOrgSettingsStore
 from .persistence.profile_image_store import DatabaseProfileImageStore
@@ -559,6 +560,7 @@ def session_store_from_env(root_dir: Path) -> Any:
     store = DatabaseSessionStore(
         database_url,
         create_schema=database_url.startswith("sqlite"),
+        blob_store=blob_store_from_env(),
     )
     store.verify_schema()
     return store
