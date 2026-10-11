@@ -1,7 +1,7 @@
 import type { RelayArtifact } from "relay-core";
 import { relayApiPath } from "relay-core/api-url";
 
-import { isHtmlFile, isMarkdownFile } from "./fileKinds.ts";
+import { isHtmlFile, isMarkdownFile, languageForFile } from "./fileKinds.ts";
 
 /** Raw download/streaming URL for an artifact body. */
 export function artifactRawHref(sessionId: string, artifactId: string): string {
@@ -18,6 +18,15 @@ export function workspaceFilePreviewMode(contentType: string | undefined): Works
   if (type === "text/html") return "html";
   if (type.startsWith("text/") || type === "application/json") return "text";
   return "none";
+}
+
+/** How a generated workspace file can be previewed. The content type leads;
+ *  a file the daemon could only call `application/octet-stream` (a script, a
+ *  config) still reads as text when its name says it is source. */
+export function artifactPreviewMode(artifact: RelayArtifact): WorkspaceFilePreviewMode {
+  const mode = workspaceFilePreviewMode(artifact.contentType);
+  if (mode !== "none") return mode;
+  return languageForFile(artifactFileName(artifact)) ? "text" : "none";
 }
 
 /** Which rendered presentation an artifact has *in addition to* its source
@@ -44,7 +53,7 @@ export function artifactRenderMode(artifact: RelayArtifact): ArtifactRenderMode 
   if (artifact.kind !== "workspace_file") {
     return MARKDOWN_KINDS.has(artifact.kind) ? "markdown" : "none";
   }
-  const mode = workspaceFilePreviewMode(artifact.contentType);
+  const mode = artifactPreviewMode(artifact);
   if (mode === "html") return "html";
   // Images and PDFs have no source reading, and binaries have no preview at
   // all — neither earns a switch.

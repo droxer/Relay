@@ -3336,6 +3336,58 @@ test("relay daemon serves project workspace commands", async () => {
   assert.equal(error.code, "invalid-path");
 });
 
+test("relay daemon confines thread workspace reads to the thread directory", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-thread-read-"));
+  const sessionId = "ses_workspace_read";
+  mkdirSync(join(root, sessionId));
+  writeFileSync(join(root, sessionId, "report.mjs"), "thread content");
+  writeFileSync(join(root, "report.mjs"), "wrong root content");
+  writeFileSync(join(root, "root-only.txt"), "outside thread");
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  let served = false;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+      pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+      environment: fakeEnvironment(),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (served) return jsonResponse({ commands: [] });
+          served = true;
+          return jsonResponse({ commands: [
+            { id: "cmd_thread_ls", type: "workspace.list", sessionId, workspaceLayout: "thread", path: "" },
+            { id: "cmd_thread_read", type: "workspace.read", sessionId, workspaceLayout: "thread", path: "report.mjs" },
+            { id: "cmd_thread_missing", type: "workspace.read", sessionId, workspaceLayout: "thread", path: "root-only.txt" },
+            { id: "cmd_thread_escape", type: "workspace.read", sessionId, workspaceLayout: "thread", path: "../report.mjs" },
+            { id: "cmd_thread_bad_id", type: "workspace.read", sessionId: "../escape", workspaceLayout: "thread", path: "report.mjs" },
+            { id: "cmd_thread_no_id", type: "workspace.read", workspaceLayout: "thread", path: "report.mjs" },
+          ] });
+        }
+        if (path.endsWith("/events")) {
+          events.push(await jsonBody<DaemonNodeEvent>(init));
+          if (events.length === 6) stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+    const listing = events.find((event) => event.type === "workspace.listing");
+    assert.ok(listing && listing.type === "workspace.listing");
+    assert.deepEqual(listing.entries.map((entry) => entry.name), ["report.mjs"]);
+    const file = events.find((event) => event.type === "workspace.file");
+    assert.ok(file && file.type === "workspace.file");
+    assert.equal(Buffer.from(file.contentBase64 ?? "", "base64").toString(), "thread content");
+    const errors = events.filter((event) => event.type === "workspace.error");
+    assert.deepEqual(errors.map((event) => event.code), ["not-found", "invalid-path", "invalid-path", "invalid-path"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("relay daemon deletes a project workspace and acknowledges repeated delivery", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-ws-"));
   const projectId = "prj_workspace_delete";

@@ -82,6 +82,8 @@ from .workspace_transport import (
     live_workspace_file,
     live_workspace_listing,
     raise_workspace_error,
+    workspace_binding_command,
+    workspace_binding_target,
     workspace_path,
 )
 
@@ -1593,8 +1595,6 @@ def _task_workspace_target(
     ctx: Any, task: dict[str, Any], actor: dict[str, Any]
 ) -> tuple[dict[str, Any], str, str]:
     """Resolve live reads from the same recorded identity used for execution."""
-    from ..core.computer_identity import computer_id
-
     nodes = ctx.registry.monitor_nodes()
     binding = recorded_task_workspace(task, ctx.session_store, nodes)
     if task.get("isRoutine"):
@@ -1615,58 +1615,7 @@ def _task_workspace_target(
             409 if reason == "workspace-not-created" else 503,
             {"reason": reason, "code": reason},
         )
-    candidates = [
-        node
-        for node in nodes
-        if computer_id(node) == binding["computerId"]
-        and node.get("online")
-        and not node.get("stale")
-        and not node.get("retiredAt")
-    ]
-    if not candidates:
-        raise HTTPException(
-            503, {"reason": "computer-offline", "code": "computer-offline"}
-        )
-    if binding.get("workspaceRoot"):
-        candidates = [
-            node
-            for node in candidates
-            if node.get("workspacePath") == binding["workspaceRoot"]
-        ]
-        if not candidates:
-            raise HTTPException(
-                503,
-                {"reason": "placement-unavailable", "code": "placement-unavailable"},
-            )
-    layout = binding["layout"]
-    required = {
-        "task": "task-workspaces",
-        "project": "project-workspaces",
-        "thread": "thread-workspaces",
-    }.get(layout)
-    node = next(
-        (
-            node
-            for node in candidates
-            if "workspace-read-shared" in (node.get("capabilities") or [])
-            and (not required or required in (node.get("capabilities") or []))
-        ),
-        None,
-    )
-    if not node:
-        raise HTTPException(
-            503, {"reason": "workspace-unsupported", "code": "workspace-unsupported"}
-        )
-    subpath = (
-        binding.get("subpath")
-        if layout in ("task", "project")
-        else binding.get("sessionId")
-    )
-    if not isinstance(subpath, str) or not subpath:
-        raise HTTPException(
-            503, {"reason": "placement-unavailable", "code": "placement-unavailable"}
-        )
-    return node, layout, subpath
+    return workspace_binding_target(nodes, binding)
 
 
 def _task_workspace_command(
@@ -1678,19 +1627,17 @@ def _task_workspace_command(
     workspace_layout: str,
     workspace_subpath: str,
 ) -> dict[str, Any]:
-    return {
-        "id": command_id,
-        "type": command_type,
-        # Task ids use the same validated database-id alphabet as sessions. The
-        # daemon treats this only as a routing identifier; workspaceSubpath is
-        # what selects the durable task root.
-        "sessionId": task["id"]
-        if workspace_layout in ("task", "project")
-        else workspace_subpath,
-        "workspaceLayout": workspace_layout,
-        "workspaceSubpath": workspace_subpath,
-        "path": path,
-    }
+    # Task ids use the same validated database-id alphabet as sessions. The
+    # daemon treats this only as a routing identifier; workspaceSubpath is
+    # what selects the durable task root.
+    return workspace_binding_command(
+        routing_id=task["id"],
+        command_id=command_id,
+        command_type=command_type,
+        path=path,
+        workspace_layout=workspace_layout,
+        workspace_subpath=workspace_subpath,
+    )
 
 
 @router.get("/tasks/{task_id}/workspace/status")
