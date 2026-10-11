@@ -66,14 +66,14 @@ from .persistence.agent_placement_store import (
     reconcile_single_active_placement,
 )
 from .persistence.agent_store import DatabaseAgentStore, LocalAgentStore
-from .persistence.blob_store import blob_store_from_env
+from .persistence.blob_store import BlobStore, blob_store_from_env
 from .persistence.admin_token_store import DatabaseAdminTokenStore
 from .persistence.org_settings_store import DatabaseOrgSettingsStore
 from .persistence.profile_image_store import DatabaseProfileImageStore
 from .persistence.managed_node_store import DatabaseManagedNodeStore
 from .persistence.project_store import DatabaseProjectStore
 from .persistence.skill_store import DatabaseSkillStore
-from .persistence.skill_object_store import LocalSkillObjectStore
+from .persistence.skill_object_store import BlobSkillObjectStore, LocalSkillObjectStore
 from .persistence.stores import (
     DEFAULT_RELAY_DATA_DIR,
     DatabaseDaemonStore,
@@ -232,7 +232,9 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
 
-    session_store = session_store_from_env(root_dir)
+    # One client for every store that keeps bytes outside Postgres.
+    blob_store = blob_store_from_env()
+    session_store = session_store_from_env(root_dir, blob_store)
     # After the session store, so a missing database is reported as missing
     # thread storage — the dependency an operator recognizes.
     configure_admin_token(root_dir, admin_token_store_from_env())
@@ -248,7 +250,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     agent_store = agent_store_from_env(root_dir)
     team_store = team_store_from_env(root_dir)
     project_store = project_store_from_env(root_dir)
-    skill_store = skill_store_from_env(root_dir)
+    skill_store = skill_store_from_env(root_dir, blob_store)
     agent_placement_store = agent_placement_store_from_env(root_dir)
     profile_image_store = DatabaseProfileImageStore(
         session_store.engine.url.render_as_string(hide_password=False),
@@ -538,12 +540,19 @@ def project_store_from_env(root_dir: Path) -> Any:
     )
 
 
-def skill_store_from_env(root_dir: Path) -> DatabaseSkillStore:
+def skill_store_from_env(root_dir: Path, blob_store: BlobStore | None = None) -> DatabaseSkillStore:
     database_url = database_url_from_env(setting="database-only skill storage")
+    local_objects = LocalSkillObjectStore(root_dir / "skills" / "objects")
     return DatabaseSkillStore(
         database_url,
         create_schema=database_url.startswith("sqlite"),
-        object_store=LocalSkillObjectStore(root_dir / "skills" / "objects"),
+        # With a blob store the data dir is only a read fallback for objects
+        # an earlier version wrote there, so the backend needs no volume.
+        object_store=(
+            BlobSkillObjectStore(blob_store, fallback=local_objects)
+            if blob_store is not None
+            else local_objects
+        ),
     )
 
 
@@ -555,12 +564,12 @@ def agent_placement_store_from_env(root_dir: Path) -> Any:
     )
 
 
-def session_store_from_env(root_dir: Path) -> Any:
+def session_store_from_env(root_dir: Path, blob_store: BlobStore | None = None) -> Any:
     database_url = database_url_from_env(setting="database-only thread storage")
     store = DatabaseSessionStore(
         database_url,
         create_schema=database_url.startswith("sqlite"),
-        blob_store=blob_store_from_env(),
+        blob_store=blob_store,
     )
     store.verify_schema()
     return store

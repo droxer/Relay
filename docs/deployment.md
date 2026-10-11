@@ -165,13 +165,23 @@ This is the better steady state once you have a domain. Requires DNS.
    a stable trusted-proxy range, leave proxy headers disabled and set
    `RELAY_FORCE_SECURE_COOKIES=1` instead.
 
-5. **No volume is needed.** With the image's database stores, every piece of
-   state — including profile images, managed-node records, and the admin
-   token's hash — lives in Postgres, so the container filesystem can be wiped
-   on every deploy. **Upgrading** a deployment that already has a volume at
-   `/data`: keep it attached for one boot on this version. The backend imports
-   the legacy `auth/admin-token` file into Postgres as a hash and deletes it;
-   after that the volume can be detached.
+5. **Decide on a volume.** Everything but skill bundles lives in Postgres —
+   profile images, managed-node records, and the admin token's hash. Skill
+   bundle bytes are written to `/data/skills/objects` unless a blob store is
+   configured:
+
+   - **With R2** (`RELAY_BLOB_STORE=r2`, see
+     [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional)),
+     no volume is needed.
+   - **Without R2**, attach a volume at `/data` (Railway → service →
+     *Volumes*); without one, published skills lose their bundles on every
+     deploy.
+
+   **Upgrading** a deployment that already has a volume: keep it attached
+   for the first boot on this version, which imports the legacy
+   `auth/admin-token` file into Postgres as a hash. To retire the volume,
+   enable R2 and run `relay migrate-blobs-to-r2 --data-dir /data` until it
+   reports nothing left to move.
 
 6. **Generate a domain.** Service → *Settings* → *Networking* → *Generate
    Domain*, or attach `api.example.com` for Option B. This URL is what both the
@@ -378,7 +388,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_FORWARDED_ALLOW_IPS` | unset | Required comma-separated IP/CIDR allowlist when proxy headers are enabled; `*` is rejected. |
 | `RELAY_EDGE_SECRET` | unset | Comma-separated secrets (32+ chars) a CDN edge sends as `X-Relay-Edge`. Set, requests without one get `403` (except `/healthz`). See [deployment-cloudflare.md](deployment-cloudflare.md). |
 | `RELAY_CLIENT_IP_HEADER` | unset | Header naming the real client on edge-verified requests (e.g. `CF-Connecting-IP`), used by rate limits. Requires `RELAY_EDGE_SECRET`. |
-| `RELAY_BLOB_STORE` | `database` | `r2` keeps workspace-artifact snapshot bytes in Cloudflare R2 instead of Postgres; needs `RELAY_R2_ACCOUNT_ID`, `RELAY_R2_ACCESS_KEY_ID`, `RELAY_R2_SECRET_ACCESS_KEY`, `RELAY_R2_BUCKET` (optional `RELAY_R2_ENDPOINT`). See [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-optional). |
+| `RELAY_BLOB_STORE` | `database` | `r2` keeps workspace-artifact snapshots and skill bundle bytes in Cloudflare R2 instead of Postgres and the data dir; needs `RELAY_R2_ACCOUNT_ID`, `RELAY_R2_ACCESS_KEY_ID`, `RELAY_R2_SECRET_ACCESS_KEY`, `RELAY_R2_BUCKET` (optional `RELAY_R2_ENDPOINT`). See [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional). |
 | `RELAY_MAX_JSON_BODY_BYTES` | `4194304` | Maximum JSON request body size before a `413` response. |
 | `RELAY_STREAM_MAX_SECONDS` | `1800` | Cap on one SSE connection. |
 | `RELAY_ADMIN_TOKEN` | unset | One-time admin bootstrap token. |

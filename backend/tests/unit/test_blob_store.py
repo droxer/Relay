@@ -38,6 +38,11 @@ class FakeS3:
             raise _NotFound()
         return {"Body": io.BytesIO(self.objects[(Bucket, Key)]["body"])}
 
+    def head_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
+        if (Bucket, Key) not in self.objects:
+            raise _NotFound()
+        return {}
+
     def delete_object(self, *, Bucket: str, Key: str) -> None:
         self.objects.pop((Bucket, Key), None)
 
@@ -82,6 +87,12 @@ class TestR2BlobStore:
 
         with pytest.raises(RuntimeError, match="network down"):
             R2BlobStore(Broken(), "bucket").get("a")
+
+    def test_exists(self) -> None:
+        store = R2BlobStore(FakeS3(), "bucket")
+        assert store.exists("a") is False
+        store.put("a", b"1", content_type=None)
+        assert store.exists("a") is True
 
     def test_delete(self) -> None:
         store = R2BlobStore(FakeS3(), "bucket")

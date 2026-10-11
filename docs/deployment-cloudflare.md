@@ -110,13 +110,21 @@ responses on that path (Rocket Loader, Email Obfuscation, Zaraz).
 - **Request body size:** Cloudflare's plan limit (100 MB on Free/Pro) sits
   above `RELAY_MAX_JSON_BODY_BYTES`, so the backend's limit is the one users hit.
 
-## 6. R2 for artifact snapshots (optional)
+## 6. R2 for artifact snapshots and skill bundles (optional)
 
-Generated workspace files (PDFs, decks, spreadsheets up to
-`RELAY_WORKSPACE_ARTIFACT_SNAPSHOT_MAX_BYTES`, 2 MB by default) are snapshotted
-so they stay downloadable after the computer that wrote them goes offline. By
-default the bytes live in Postgres; with R2 they live in a bucket and Postgres
-keeps only each file's key and SHA-256.
+Two kinds of bytes can live in R2:
+
+- **Artifact snapshots** — generated workspace files (PDFs, decks, spreadsheets
+  up to `RELAY_WORKSPACE_ARTIFACT_SNAPSHOT_MAX_BYTES`, 2 MB by default), kept so
+  they stay downloadable after the computer that wrote them goes offline. By
+  default they live in Postgres.
+- **Skill bundles** — the files of every published skill revision. By default
+  they live on disk under `<data dir>/skills/objects`, which is the one reason
+  the backend would need a volume.
+
+With R2 both go to the bucket (`session-artifacts/…`, `skills/objects/…`) and
+Postgres keeps only keys and SHA-256 digests, so the backend needs no volume.
+Profile images stay in Postgres: they are small and bounded.
 
 1. Cloudflare → *R2* → create a bucket, e.g. `relay-artifacts`. Keep it
    private — no public access, no custom domain. The backend reads it and
@@ -137,11 +145,25 @@ keeps only each file's key and SHA-256.
    to that jurisdiction's endpoint.
 
 The backend refuses to start if `RELAY_BLOB_STORE=r2` is missing any of these.
-New snapshots go to R2 from then on; snapshots already in Postgres keep being
-served from there. Deleting a thread deletes its objects
-(`session-artifacts/<thread>/`). Do not switch back to `database` while R2
-holds snapshots: those files would fall back to a live read from their
-computer.
+New snapshots and skill bundles go to R2 from then on. Deleting a thread
+deletes its objects (`session-artifacts/<thread>/`). Do not switch back to
+`database` while R2 holds data: snapshots would fall back to a live read from
+their computer, and skill bundles would be missing.
+
+**Moving existing bytes.** Snapshots already in Postgres keep being served
+from there, and skill bundles in the data dir are copied to R2 the first time
+they are read. To move everything at once — and be able to detach the volume —
+run the backfill in the backend service (Railway → service → *Shell*, or a
+one-off deploy command):
+
+```bash
+relay migrate-blobs-to-r2 --data-dir /data --dry-run   # counts only
+relay migrate-blobs-to-r2 --data-dir /data
+```
+
+It uploads each item before clearing its row, so it is safe to interrupt and
+re-run; it never deletes files from the data dir. When a run reports `0` for
+everything, the volume can be detached.
 
 ## 7. Verify
 

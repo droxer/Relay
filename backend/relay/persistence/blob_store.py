@@ -31,6 +31,8 @@ class BlobStore(Protocol):
 
     def get(self, key: str) -> bytes | None: ...
 
+    def exists(self, key: str) -> bool: ...
+
     def delete(self, key: str) -> None: ...
 
     def delete_prefix(self, prefix: str) -> None: ...
@@ -55,6 +57,15 @@ class R2BlobStore:
                 return None
             raise
         return response["Body"].read()
+
+    def exists(self, key: str) -> bool:
+        try:
+            self.client.head_object(Bucket=self.bucket, Key=key)
+        except Exception as error:
+            if _error_code(error) in _NOT_FOUND_CODES:
+                return False
+            raise
+        return True
 
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)

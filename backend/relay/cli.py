@@ -12,6 +12,7 @@ from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
 from .core.storage_config import database_url_from_env
+from .persistence.blob_migration import migrate_blobs
 from .persistence.blob_store import blob_store_from_env
 from .persistence.employee_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
@@ -61,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
             "serve",
             "migrate-local-sessions",
             "migrate-local-operational-state",
+            "migrate-blobs-to-r2",
             "rehearse-employee-handles",
             "storage-report",
         ],
@@ -77,6 +79,20 @@ def main(argv: list[str] | None = None) -> None:
             parser.error("migrate-local-operational-state requires --data-dir")
         report = migrate_local_operational_state(args.data_dir,
             database_url_from_env(setting="migrate-local-operational-state"), dry_run=args.dry_run)
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "migrate-blobs-to-r2":
+        blob_store = blob_store_from_env()
+        if blob_store is None:
+            parser.error("migrate-blobs-to-r2 requires RELAY_BLOB_STORE=r2 and its R2 settings")
+        # Without --data-dir only database bytes move; the data dir's skill
+        # objects keep being copied up lazily as they are read.
+        report = migrate_blobs(
+            database_url_from_env(setting="migrate-blobs-to-r2"),
+            blob_store,
+            data_dir=args.data_dir,
+            dry_run=args.dry_run,
+        )
         print(json.dumps(report, indent=2))
         return
     if args.command == "migrate-local-sessions":

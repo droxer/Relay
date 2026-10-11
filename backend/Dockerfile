@@ -45,8 +45,9 @@ ENV HOST=0.0.0.0 \
     RELAY_CHAT_STORE=database \
     RELAY_DATA_DIR=/data
 
-# With the database stores above, all state lives in Postgres and no volume
-# is needed. A legacy admin-token file under /data is imported on first boot.
+# With the database stores above, everything but skill bundles lives in
+# Postgres. Skill bundles are written under /data/skills/objects unless
+# RELAY_BLOB_STORE=r2, so mount a volume at /data when R2 is not configured.
 RUN useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin relay \
     && mkdir -p /data \
     && chown -R relay:relay /data
