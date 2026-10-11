@@ -30,6 +30,7 @@ import {
 } from "../icons";
 import { abbreviateNodeId, formatRunElapsed } from "../../lib/computerNodes";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
+import { runtimeStateLabel } from "./runtimeStateLabel";
 import {
   COPY_FEEDBACK_MS,
   agentStatusTone,
@@ -261,27 +262,12 @@ function RuntimeRow({
   agent: AgentName;
   t: TFunction;
 }) {
-  const nodeOnline = isNodeOnline(node);
   const disabled = Boolean(node.disabledAgents?.includes(agent));
   const agentStatus = node.agents[agent] ?? "unknown";
   const version = node.agentDetails?.[agent]?.version;
   const tone = agentStatusTone(agentStatus, { disabled });
   const presence = nodeAgentPresence(node, agent);
-  // "Unknown" is accurate and unhelpful on a runtime the reader is trying to
-  // use; say what it means instead. And on a computer that has gone dark, the
-  // daemon's last "ready" is a memory, not an offer — the row says Offline
-  // rather than repeating a readiness the machine can no longer honour.
-  const stateLabel = disabled
-    ? t("admin.v2.agent_disabled")
-    : agentStatus === "failed"
-      // A broken runtime outlives the machine being off — it is still what
-      // the reader has to fix when they power it back on.
-      ? t("status.failed", { defaultValue: "failed" })
-      : !nodeOnline
-        ? t("nodes.presence_offline")
-        : agentStatus === "unknown"
-          ? t("computer.runtime_no_signal")
-          : t(`status.${agentStatus}`, { defaultValue: agentStatus });
+  const stateLabel = runtimeStateLabel(node, agent, disabled, t);
 
   return (
     <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`}>

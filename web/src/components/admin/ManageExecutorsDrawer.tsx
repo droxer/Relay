@@ -12,16 +12,13 @@ import { AGENT_NAMES } from "../../types";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { StateMark } from "../StateMark";
-import { AgentMark } from "../AgentMark";
 import { Drawer } from "@/components/ui/Drawer";
-import { agentStatusTone, nodeAgentPresence } from "./helpers";
-import { NodeProfileBadges } from "./NodeProfileBadges";
-import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
-import { ICON } from "../icons";
 import { Alert } from "@/components/ui/alert";
+import { visibleNodeAgentNames } from "./helpers";
+import { abbreviateNodeId } from "../../lib/computerNodes";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { ManageAgentRow } from "./ManageAgentRow";
+import { labelForExecutor } from "../../lib/agentDisplayNames";
 
 interface ManageExecutorsDrawerProps {
   open: boolean;
@@ -87,7 +84,7 @@ export function ManageExecutorsDrawer({ open, onClose, node, employeeHandle, onU
     if (newlyDisabledReady.length > 0) {
       const ok = await confirm({
         title: t("admin.v2.manage_executors_disable_confirm", {
-          agents: newlyDisabledReady.join(", "),
+          agents: newlyDisabledReady.map((agent) => labelForExecutor(agent)).join(", "),
         }),
         message: t("admin.v2.manage_executors_disable_message"),
         confirmLabel: t("admin.v2.save_agent_settings"),
@@ -129,121 +126,41 @@ export function ManageExecutorsDrawer({ open, onClose, node, employeeHandle, onU
     );
   }
 
+  // The card's Runtimes list, in its order — plus anything switched off here,
+  // so a hidden runtime the reader disabled can still be switched back on.
+  const visible = visibleNodeAgentNames(node);
+  const agents = [...visible, ...AGENT_NAMES.filter((agent) => !visible.includes(agent) && initialDisabled.has(agent))];
+  // Name the computer, not its id. An owner handle is only shown when the
+  // caller resolved one (the admin console); never render a raw employee id.
+  const computerName = node.displayName?.trim() || abbreviateNodeId(node.id);
+  const subtitle = employeeHandle ? `${computerName} · @${employeeHandle}` : computerName;
+
   return (
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
       title={t("admin.v2.manage_executors_title")}
-      subtitle={`${node.employeeId ? `@${employeeHandle || node.employeeId}` : t("admin.unassigned")} · ${node.id}`}
-      subtitleMono
+      subtitle={subtitle}
       closeLabel={t("drawer.close")}
       layer={1}
       width="detail"
       bodyClassName="adm-drawer-body--column"
     >
       <div className="adm-form">
-        <NodeProfileBadges
-          node={node}
-          storedTokens={{}}
-          colocated={false}
-          t={t}
-          compact
-        />
         <p className="adm-cred-note adm-agent-drawer-note">{t("admin.v2.manage_executors_help")}</p>
         <ul className="adm-agent-toggle-list">
-        {AGENT_NAMES.map((agent) => {
-          const agentStatus = node.agents[agent] ?? "unknown";
-          const tone = agentStatusTone(agentStatus);
-          const isEnabled = !disabled.has(agent);
-          // Same rule as the node surfaces: a dark computer hosts no online
-          // agents, so the chip must not keep advertising the last "ready".
-          const presence = nodeAgentPresence(node, agent);
-          const inventory = node.agentInventory?.[agent];
-          const skills = inventory?.skills ?? [];
-          const mcpServers = inventory?.mcpServers ?? [];
-          return (
-            <li
+          {agents.map((agent) => (
+            <ManageAgentRow
               key={agent}
-              className={`adm-agent-toggle-item${isEnabled ? "" : " is-disabled"}`}
-            >
-              <div className="adm-agent-toggle-row">
-                <div className="adm-agent-toggle-meta">
-                  <span className="adm-agent-toggle-name" translate="no">
-                    <AgentMark agent={agent} size={ICON.sm} className="adm-agent-toggle-mark" />
-                    {agent}
-                  </span>
-                  {/* Shared Badge chrome + the shared status mark. The dot was
-                      an `<i class="adm-agent-dot">` with its own ring rules —
-                      the last surface still drawing its own 8px status circle
-                      instead of going through StateMark, which is where the
-                      tone → shape grammar (ring for bad, hollow for a dark
-                      computer) is written down. */}
-                  <Badge
-                    variant="state"
-                    className={`adm-agent-chip tone-${tone}`}
-                    data-presence={presence}
-                  >
-                    <StateMark
-                      tone={tone}
-                      shape={presence === "offline" ? "ring" : undefined}
-                    />
-                    {presence === "offline" && agentStatus === "ready"
-                      ? t("nodes.presence_offline")
-                      : t(`status.${agentStatus}`, { defaultValue: agentStatus })}
-                  </Badge>
-                </div>
-                <label className="adm-agent-toggle-switch">
-                  <Switch
-                    name={`node-${node.id}-${agent}-enabled`}
-                    checked={isEnabled}
-                    onCheckedChange={() => toggle(agent)}
-                    disabled={saving}
-                    aria-label={
-                      isEnabled
-                        ? t("admin.v2.disable_agent", { agent })
-                        : t("admin.v2.enable_agent", { agent })
-                    }
-                  />
-                  <span className="adm-agent-toggle-label">
-                    {isEnabled ? t("admin.v2.agent_enabled") : t("admin.v2.agent_disabled")}
-                  </span>
-                </label>
-              </div>
-              <div className="adm-agent-inventory">
-                {skills.length === 0 && mcpServers.length === 0 ? (
-                  <span className="adm-agent-inventory-empty">{t("admin.v2.agent_no_inventory")}</span>
-                ) : (
-                  <>
-                    {skills.length > 0 && (
-                      <div className="adm-agent-inventory-group">
-                        <span className="adm-agent-inventory-label">{t("admin.v2.agent_skills", { count: skills.length })}</span>
-                        <span className="adm-agent-inventory-pills">
-                          {skills.map((skill) => (
-                            <Badge key={`${skill.namespace ?? ""}/${skill.name}`} className="adm-agent-inventory-pill code" title={skill.description ?? skill.name}>
-                              {skill.name}
-                            </Badge>
-                          ))}
-                        </span>
-                      </div>
-                    )}
-                    {mcpServers.length > 0 && (
-                      <div className="adm-agent-inventory-group">
-                        <span className="adm-agent-inventory-label">{t("admin.v2.agent_mcp", { count: mcpServers.length })}</span>
-                        <span className="adm-agent-inventory-pills">
-                          {mcpServers.map((server) => (
-                            <Badge key={server.name} className="adm-agent-inventory-pill code" title={server.command ?? server.name}>
-                              {server.name}
-                            </Badge>
-                          ))}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </li>
-          );
-        })}
+              node={node}
+              agent={agent}
+              savedEnabled={!initialDisabled.has(agent)}
+              enabled={!disabled.has(agent)}
+              saving={saving}
+              onToggle={toggle}
+              t={t}
+            />
+          ))}
         </ul>
         {error ? (
           <Alert variant="boxed">{t("admin.v2.action_failed", { message: error })}</Alert>
