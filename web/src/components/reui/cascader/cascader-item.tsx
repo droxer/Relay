@@ -514,7 +514,7 @@ const CascaderItem = React.memo(function CascaderItem({
   const checkbox = (
     <span
       data-slot="cascader-item-checkbox"
-      className="border-input in-data-[selected]:bg-primary in-data-[selected]:border-primary in-data-[selected]:text-primary-foreground in-data-[indeterminate]:bg-primary in-data-[indeterminate]:border-primary in-data-[indeterminate]:text-primary-foreground flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
+      className="border-(--control-track) in-data-[selected]:bg-primary in-data-[selected]:border-primary in-data-[selected]:text-primary-foreground in-data-[indeterminate]:bg-primary in-data-[indeterminate]:border-primary in-data-[indeterminate]:text-primary-foreground flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
     >
       {/* Colour declared ON THE ICON with `!`; see `CHECKBOX_MARK_CLASS`. */}
       {indeterminate ? (

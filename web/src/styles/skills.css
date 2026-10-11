@@ -432,6 +432,9 @@
 
 .skill-file-input[data-filled="true"] {
   border-style: solid;
+  /* Firms on solidify: the dashed empty state stays quiet, the ready well
+     takes the hover-strength edge so the state change reads at a glance. */
+  border-color: var(--control-border-hover);
   color: var(--ink-1);
 }
 
@@ -439,18 +442,21 @@
   height: var(--control-h-sm);
   margin-right: var(--sp-3);
   padding: 0 var(--sp-3);
-  border: 0.5px solid var(--control-border);
+  /* 1px, not 0.5px: --control-border is translucent ink now, and a sub-pixel
+     translucent edge renders as nothing. Matches the outline-button recipe. */
+  border: 1px solid var(--control-border);
   border-radius: var(--r-2);
   background: var(--control-fill);
   color: var(--ink-1);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease);
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
 .skill-file-input:hover::file-selector-button {
   background: var(--control-fill-hover);
+  border-color: var(--control-border-hover);
 }
 
 /* Keep the two short GitHub fields together when there is room. */

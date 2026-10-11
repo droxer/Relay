@@ -71,7 +71,9 @@ function ButtonGroupSeparator({
       data-slot="button-group-separator"
       orientation={orientation}
       className={cn(
-        "relative self-stretch bg-input data-horizontal:mx-px data-horizontal:w-auto data-vertical:my-px data-vertical:h-auto",
+        /* --control-track, not bg-input: --control-border went translucent,
+           and a separator needs the opaque edge it had before. */
+        "relative self-stretch bg-(--control-track) data-horizontal:mx-px data-horizontal:w-auto data-vertical:my-px data-vertical:h-auto",
         className
       )}
       {...props}

@@ -219,7 +219,7 @@ export function DesignSystemSpecimen() {
     </Section>
 
     <Section title="Search input">
-      <SearchInput className="flex items-center gap-2 rounded-md border border-input px-3" inputClassName="h-(--control-h-sm) bg-transparent text-sm outline-none" label="Example search" placeholder="Example search" />
+      <SearchInput className="flex items-center gap-2 rounded-md border border-input px-3 hover:border-(--control-border-hover)" inputClassName="h-(--control-h-sm) bg-transparent text-sm outline-none" label="Example search" placeholder="Example search" />
     </Section>
 
     {/* ---- Disclosure and navigation ---- */}

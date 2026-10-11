@@ -61,10 +61,19 @@
      the row rather than a border on it. */
   --accent-bar-inset: 10px;
 
-  /* Interactive control boundary / unchecked track. Unlike structural
-     hairlines, this role must remain at least 3:1 against every surface so an
-     unfocused field or switch state is still perceivable (WCAG 1.4.11). */
-  --control-border: var(--ink-4);
+  /* Text-field and outline-button boundary. Translucent ink, one step above
+     the structural hairline, so a field reads as a quiet well on any plane
+     (card, drawer, dialog) instead of a drawn box. At --ink-4 every input,
+     select and Cancel button carried a near-text-weight frame and the forms
+     read heavy. Fields stay identifiable by their label, fill and placeholder;
+     hover firms the edge and focus draws the 2px ring. */
+  --control-border: color-mix(in srgb, var(--ink-1) 16%, transparent);
+  --control-border-hover: color-mix(in srgb, var(--ink-1) 30%, transparent);
+
+  /* Unchecked checkbox / radio / switch track. These have no label-sized
+     body to identify them, so the boundary IS the control: it keeps the
+     3:1 floor against every surface (WCAG 1.4.11). */
+  --control-track: var(--ink-4);
 
   /* Neutral control fill — the rest/hover wash for the secondary, ghost,
      outline, and icon button tiers.
