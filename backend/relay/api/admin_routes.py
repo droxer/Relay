@@ -19,7 +19,7 @@ from ..persistence.org_settings_store import (
     normalize_skill_import_hosts,
 )
 from ..security.auth import (
-    get_admin_token,
+    admin_token_configured,
     reissue_admin_token,
     require_admin_session,
     validate_password,
@@ -92,11 +92,9 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         "capabilities": {
             "employeeEdits": hasattr(ctx.auth_store, "update_employee"),
         },
-        # The bootstrap/supervisor bearer token, surfaced so an admin can copy
-        # it from the console instead of digging through backend env files.
-        # Seeded from RELAY_ADMIN_TOKEN on first boot, generated otherwise,
-        # and reissuable via the route below.
-        "adminToken": get_admin_token(),
+        # Whether the bootstrap/supervisor bearer token exists. Only its hash
+        # is stored, so the value itself is shown once, by the reissue route.
+        "adminTokenConfigured": admin_token_configured(),
     }
 
 

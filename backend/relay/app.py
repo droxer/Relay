@@ -66,6 +66,7 @@ from .persistence.agent_placement_store import (
     reconcile_single_active_placement,
 )
 from .persistence.agent_store import DatabaseAgentStore, LocalAgentStore
+from .persistence.admin_token_store import DatabaseAdminTokenStore
 from .persistence.org_settings_store import DatabaseOrgSettingsStore
 from .persistence.profile_image_store import DatabaseProfileImageStore
 from .persistence.managed_node_store import DatabaseManagedNodeStore
@@ -229,9 +230,11 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     deploy_config.client_ip_header()
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir))
-    configure_admin_token(root_dir)
 
     session_store = session_store_from_env(root_dir)
+    # After the session store, so a missing database is reported as missing
+    # thread storage — the dependency an operator recognizes.
+    configure_admin_token(root_dir, admin_token_store_from_env())
     task_store = task_store_from_env(root_dir)
     automation_store = automation_store_from_env()
     daemon_store = daemon_store_from_env(root_dir)
@@ -501,6 +504,15 @@ def agent_store_from_env(root_dir: Path) -> Any:
     if not use_postgres_storage():
         return LocalAgentStore(root_dir)
     return DatabaseAgentStore(database_url_from_env(setting="RELAY_STORAGE=postgres"))
+
+
+def admin_token_store_from_env() -> DatabaseAdminTokenStore:
+    # Database-only for the same reason as org settings, and so the token
+    # survives a container that has no data volume.
+    database_url = database_url_from_env(setting="database-only admin token storage")
+    return DatabaseAdminTokenStore(
+        database_url, create_schema=database_url.startswith("sqlite")
+    )
 
 
 def org_settings_store_from_env(root_dir: Path) -> Any:

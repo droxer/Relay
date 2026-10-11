@@ -148,7 +148,7 @@ This is the better steady state once you have a domain. Requires DNS.
 
    | Variable | Value | Notes |
    | --- | --- | --- |
-   | `RELAY_ADMIN_TOKEN` | a long random string | Seeds the admin bearer token on first boot. The value is then persisted to the data volume (`auth/admin-token`) and the env var no longer changes it; rotate from the admin console (`POST /api/v1/admin/admin-token/reissue`). |
+   | `RELAY_ADMIN_TOKEN` | a long random string | Seeds the admin bearer token on first boot. Its SHA-256 is then stored in Postgres and the env var no longer changes it; rotate from the admin console (`POST /api/v1/admin/admin-token/reissue`), which shows the new token once. |
    | `RELAY_CORS_ALLOW_ORIGINS` | `https://app.example.com` | **Option B only.** Exact origins, comma-separated. `*` is rejected. |
    | `RELAY_CORS_ALLOW_ORIGIN_REGEX` | `https://relay-web-[a-z0-9-]+\.vercel\.app` | **Option B only**, if you want Vercel preview deployments to reach the API. |
    | `RELAY_SESSION_COOKIE_DOMAIN` | `.example.com` | **Option B only.** Shares the cookie across `app.` and `api.`. |
@@ -165,10 +165,13 @@ This is the better steady state once you have a domain. Requires DNS.
    a stable trusted-proxy range, leave proxy headers disabled and set
    `RELAY_FORCE_SECURE_COOKIES=1` instead.
 
-5. **Attach a volume at `/data`.** Profile images and managed-node records are
-   the operational state that does not live in Postgres, and a container
-   filesystem is wiped on every deploy. Railway → service → *Volumes* → mount
-   path `/data` (the image already points `RELAY_DATA_DIR` there).
+5. **No volume is needed.** With the image's database stores, every piece of
+   state — including profile images, managed-node records, and the admin
+   token's hash — lives in Postgres, so the container filesystem can be wiped
+   on every deploy. **Upgrading** a deployment that already has a volume at
+   `/data`: keep it attached for one boot on this version. The backend imports
+   the legacy `auth/admin-token` file into Postgres as a hash and deletes it;
+   after that the volume can be detached.
 
 6. **Generate a domain.** Service → *Settings* → *Networking* → *Generate
    Domain*, or attach `api.example.com` for Option B. This URL is what both the
@@ -224,9 +227,10 @@ calls the backend origin directly with `credentials: "include"`.
    ```
 
    Then keep `RELAY_ADMIN_TOKEN` in the service variables only as the
-   first-boot seed. Once the backend has booted, the token is persisted to
-   the data volume (`auth/admin-token`) and that persisted value is
-   authoritative — deleting or changing the env var afterwards has no effect.
+   first-boot seed. Once the backend has booted, the token's SHA-256 is stored
+   in Postgres and that stored value is authoritative — deleting or changing
+   the env var afterwards has no effect. Without `RELAY_ADMIN_TOKEN` no token
+   is generated and bootstrap answers `503`; set it before the first boot.
    A supervisor authenticates with the persisted value (see
    [The supervisor](#the-supervisor)).
 
@@ -340,11 +344,13 @@ issued per computer by the backend and are never set as service variables.
 
 `RELAY_ADMIN_TOKEN` deserves separate care: `require_admin_session` accepts it
 as a bearer token on every admin route, ahead of any session check. The env
-var only seeds the token on first boot; the value persisted to the data volume
-is authoritative afterwards and grants full admin access unaffected by user
-accounts, password changes, or session revocation. Rotate it from the admin
-console (`POST /api/v1/admin/admin-token/reissue`) if it is ever exposed —
-removing the env var does not revoke the persisted token.
+var only seeds the token on first boot; the hash stored in Postgres is
+authoritative afterwards, and the token grants full admin access unaffected by
+user accounts, password changes, or session revocation. Only the hash is
+stored, so a database dump does not reveal it — and the console cannot show it
+again either: rotate it from the admin console (`POST
+/api/v1/admin/admin-token/reissue`), which returns the new value once, if it
+is ever exposed or lost. Removing the env var does not revoke the stored token.
 
 ### Local development is unchanged
 
@@ -375,7 +381,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_MAX_JSON_BODY_BYTES` | `4194304` | Maximum JSON request body size before a `413` response. |
 | `RELAY_STREAM_MAX_SECONDS` | `1800` | Cap on one SSE connection. |
 | `RELAY_ADMIN_TOKEN` | unset | One-time admin bootstrap token. |
-| `RELAY_DATA_DIR` | `.relay` | Non-Postgres operational state; `/data` in the image. |
+| `RELAY_DATA_DIR` | `.relay` | File-store state for local installs, and where a legacy `auth/admin-token` is imported from; `/data` in the image. |
 
 **Web (Vercel)**
 

@@ -6,6 +6,7 @@ can bring a personal computer into existence.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -117,12 +118,14 @@ def test_settings_report_whether_employee_edits_are_storable(
         )
 
 
-def test_settings_expose_admin_token_to_admins_only(
+def test_settings_report_the_admin_token_without_revealing_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         body = client.get("/api/v1/admin/settings").json()
-        assert body["adminToken"] == "admin_token"
+        assert body["adminTokenConfigured"] is True
+        assert "adminToken" not in body
+        assert "admin_token" not in json.dumps(body)
 
         _create_employee(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
@@ -130,74 +133,37 @@ def test_settings_expose_admin_token_to_admins_only(
 
         _login(client, "alice")
         assert client.get("/api/v1/admin/settings").status_code == 403
+        assert client.post("/api/v1/admin/admin-token/reissue").status_code == 403
 
 
-def test_admin_token_is_generated_on_first_boot_and_persisted(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("RELAY_ADMIN_TOKEN", raising=False)
-    with TemporaryDirectory() as root:
-        client = TestClient(create_app(root))
-        token_path = Path(root) / "auth" / "admin-token"
-        token = token_path.read_text(encoding="utf-8").strip()
-        assert token
-
-        response = client.post(
-            "/api/v1/auth/bootstrap",
-            json={"token": token, "username": "admin", "password": "kestrel-vault-7719"},
-        )
-        assert response.status_code == 200
-        assert client.get("/api/v1/admin/settings").json()["adminToken"] == token
-
-        restarted = TestClient(create_app(root))
-        _login(restarted, "admin", "kestrel-vault-7719")
-        body = restarted.get("/api/v1/admin/settings").json()
-        assert body["adminToken"] == token
-        assert token_path.read_text(encoding="utf-8").strip() == token
-
-
-def test_admin_token_reissue_rotates_and_invalidates_the_old_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("RELAY_ADMIN_TOKEN", raising=False)
-    with TemporaryDirectory() as root:
-        client = TestClient(create_app(root))
-        old_token = (Path(root) / "auth" / "admin-token").read_text(
-            encoding="utf-8"
-        ).strip()
-        client.post(
-            "/api/v1/auth/bootstrap",
-            json={"token": old_token, "username": "admin", "password": "kestrel-vault-7719"},
-        )
-
-        assert client.post("/api/v1/admin/admin-token/reissue").status_code == 200
-        new_token = client.get("/api/v1/admin/settings").json()["adminToken"]
-        assert new_token and new_token != old_token
-
-        anonymous = TestClient(client.app)
-        assert (
-            anonymous.get(
-                "/api/v1/admin/settings",
-                headers={"authorization": f"Bearer {old_token}"},
-            ).status_code
-            == 401
-        )
-        assert (
-            anonymous.get(
-                "/api/v1/admin/settings",
-                headers={"authorization": f"Bearer {new_token}"},
-            ).status_code
-            == 200
-        )
-
-
-def test_admin_token_reissue_rotates_an_env_seeded_token(
+def test_admin_token_survives_a_restart_without_a_data_volume(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
-        assert client.post("/api/v1/admin/admin-token/reissue").status_code == 200
-        new_token = client.get("/api/v1/admin/settings").json()["adminToken"]
+        token = client.post("/api/v1/admin/admin-token/reissue").json()["adminToken"]
+
+    # A fresh data dir is a redeployed container with no volume; the database
+    # is the same one, so the token issued before still authenticates.
+    monkeypatch.delenv("RELAY_ADMIN_TOKEN")
+    with TemporaryDirectory() as fresh_root:
+        restarted = TestClient(create_app(fresh_root))
+        response = restarted.get(
+            "/api/v1/admin/settings", headers={"authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        assert response.json()["adminTokenConfigured"] is True
+        assert not (Path(fresh_root) / "auth" / "admin-token").exists()
+
+
+def test_admin_token_reissue_returns_it_once_and_invalidates_the_old_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _client(monkeypatch, database_auth=False) as client:
+        response = client.post("/api/v1/admin/admin-token/reissue")
+        assert response.status_code == 200
+        new_token = response.json()["adminToken"]
         assert new_token and new_token != "admin_token"
+        assert "adminToken" not in client.get("/api/v1/admin/settings").json()
 
         anonymous = TestClient(client.app)
         assert (
