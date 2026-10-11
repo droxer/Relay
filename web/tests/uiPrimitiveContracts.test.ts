@@ -29,15 +29,24 @@ function stripComments(source: string): string {
 }
 
 describe("UI primitive contracts", () => {
-  it("keeps control boundaries at 3:1 against every theme surface", async () => {
+  it("keeps selection-control tracks at 3:1 against every theme surface", async () => {
     const palette = await readFile(resolve("web/src/styles/tokens/palette.css"), "utf8");
     const roles = await readFile(resolve("web/src/styles/tokens/roles.css"), "utf8");
     const bridge = await readFile(resolve("web/src/styles/tokens/shadcn-bridge.css"), "utf8");
     const dark = palette.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
     const light = palette.match(/html\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
 
-    assert.match(roles, /--control-border:\s*var\(--ink-4\)/);
+    assert.match(roles, /--control-track:\s*var\(--ink-4\)/);
     assert.match(bridge, /--input:\s*var\(--control-border\)/);
+    for (const [file, pattern] of [
+      ["ui/checkbox.tsx", /border-\(--control-track\)/],
+      ["ui/radio-group.tsx", /border-\(--control-track\)/],
+      ["ui/switch.tsx", /bg-\(--control-track\)/],
+      ["reui/cascader/cascader-item.tsx", /border-\(--control-track\)/],
+    ] as const) {
+      const source = await readFile(resolve(`web/src/components/${file}`), "utf8");
+      assert.match(source, pattern, `${file} must draw its unchecked state with --control-track`);
+    }
 
     for (const [name, block, surfaces] of [
       ["dark", dark, ["surface-0", "surface-1", "surface-2", "surface-3"]],
@@ -46,7 +55,7 @@ describe("UI primitive contracts", () => {
       const boundary = cssHex(block, "ink-4");
       for (const surface of surfaces) {
         const ratio = contrast(boundary, cssHex(block, surface));
-        assert.ok(ratio >= 3, `${name} --control-border against --${surface} is ${ratio.toFixed(2)}:1`);
+        assert.ok(ratio >= 3, `${name} --control-track against --${surface} is ${ratio.toFixed(2)}:1`);
       }
     }
   });

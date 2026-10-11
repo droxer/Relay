@@ -24,17 +24,14 @@ const buttonVariants = cva(
            the one plane it was sized against, and inverted on the --surface-3
            planes (dialog, drawer, popover) these buttons most often sit on. */
         /* `border-input` (--control-border) in BOTH registers, matching Input,
-           Textarea, SelectTrigger, and Checkbox. This variant used to take
-           --line-1 in light and --control-border in dark, which made it a
-           visibly different control per register — and --line-1 is the
-           STRUCTURAL hairline, too faint to carry a control boundary under
-           WCAG 1.4.11. The border is an outline button's whole affordance. */
+           Textarea, and SelectTrigger, so an outline button and a field beside
+           it share one quiet edge. Hover firms it to --control-border-hover. */
         /* Border only at rest — the boundary is the affordance, so a grey
            wash under it was a second layer saying the same thing, and every
            filter, toolbar and card action read as a filled grey slab. The
            wash is now the hover/open state, which is what it signals. */
         outline:
-          "border-input bg-transparent hover:bg-(--control-fill) hover:text-foreground aria-expanded:bg-(--control-fill) aria-expanded:text-foreground",
+          "border-input bg-transparent hover:border-(--control-border-hover) hover:bg-(--control-fill) hover:text-foreground aria-expanded:bg-(--control-fill) aria-expanded:text-foreground",
         secondary:
           "bg-(--control-fill) text-secondary-foreground hover:bg-(--control-fill-hover) aria-expanded:bg-(--control-fill-hover) aria-expanded:text-secondary-foreground",
         ghost:

@@ -92,13 +92,20 @@
 .handoff-panel > input {
   min-width: 0;
   height: var(--control-h);
-  border: 0.5px solid var(--control-border);
+  /* 1px, not 0.5px: --control-border is translucent ink now, and a sub-pixel
+     translucent edge renders as nothing. Matches the Input primitive. */
+  border: 1px solid var(--control-border);
   border-radius: var(--r-2);
   outline: 0;
   background: var(--surface-0);
   padding: 0 var(--sp-4);
   color: var(--ink-1);
   font-size: var(--fs-transcript);
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.handoff-panel > input:hover {
+  border-color: var(--control-border-hover);
 }
 
 .handoff-row--note [data-slot="input"] {
