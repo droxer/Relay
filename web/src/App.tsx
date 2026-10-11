@@ -73,12 +73,16 @@ const RoutinesPage = lazy(() => import("./components/RoutinesPage").then((m) => 
 const AgentsPage = lazy(() => import("./components/AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const TeamsPage = lazy(() => import("./components/TeamsPage").then((m) => ({ default: m.TeamsPage })));
 const SettingsPage = lazy(() => import("./components/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const ComputerPage = lazy(() => import("./components/ComputerPage").then((m) => ({ default: m.ComputerPage })));
+const SkillsPage = lazy(() => import("./components/SkillsPage").then((m) => ({ default: m.SkillsPage })));
 
 const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "backlog-panel",
   routine: "routine-panel",
   agents: "agents-panel",
   teams: "teams-panel",
+  computers: "computer-panel",
+  skills: "skills-panel",
   settings: "settings-panel",
   channels: "channels-panel",
   admin: "admin-panel",
@@ -674,7 +678,7 @@ export function App() {
   }
 
   const deviceCode = new URL(window.location.href).searchParams.get("connect");
-  if (["/computer", "/settings/computers"].includes(window.location.pathname) && deviceCode && /^[A-Za-z0-9_-]{32}$/.test(deviceCode)) {
+  if (["/computer", "/computers", "/settings/computers"].includes(window.location.pathname) && deviceCode && /^[A-Za-z0-9_-]{32}$/.test(deviceCode)) {
     return <DeviceApproval code={deviceCode} />;
   }
 
@@ -792,13 +796,14 @@ export function App() {
             onBackToAgents={() => navigateToAgent(null)}
             onOpenThread={openThread}
           />
+        ) : route === "computers" ? (
+          <ComputerPage nodes={runtimeNodes} currentUser={user} onOpenThread={openThread} />
+        ) : route === "skills" ? (
+          <SkillsPage currentUser={user} />
         ) : route === "settings" ? (
           <SettingsPage
             section={settingsSection}
             onSelectSection={navigateToSettings}
-            currentUser={user}
-            nodes={runtimeNodes}
-            onOpenThread={openThread}
             theme={preferences.theme}
             onThemeChange={preferences.setTheme}
             language={preferences.language}
