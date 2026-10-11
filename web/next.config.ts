@@ -27,6 +27,8 @@ const CLIENT_ROUTES = [
   "/agents/:path*",
   "/teams",
   "/teams/:path*",
+  "/computers",
+  "/skills",
   "/settings",
   "/settings/:path*",
   "/projects",
@@ -34,9 +36,9 @@ const CLIENT_ROUTES = [
   "/channels",
   "/admin",
   "/admin/:path*",
-  // Pre-settings-section addresses; the app canonicalizes them to /settings/*.
+  // Pre-Workforce-route addresses; the app canonicalizes them to /computers
+  // and /skills.
   "/computer",
-  "/skills",
 ] as const;
 const spaFallbackRewrites = () => CLIENT_ROUTES.map((source) => ({ source, destination: "/" }));
 
