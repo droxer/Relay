@@ -2081,6 +2081,10 @@
       "title": "Results could not be saved",
       "body": "Relay retained the result, but saving it failed repeatedly. Retry saving results. If this fails again, ask an administrator to check backend storage. This does not rerun the agent."
     },
+    "missing_terminal_evidence": {
+      "title": "The run's result was lost",
+      "body": "The computer's exit report for this run never reached Relay, so there is nothing to save. If the agent is no longer running, report it gone to release the thread."
+    },
     "termination_unconfirmed": {
       "title": "Stopping needs attention",
       "body": "The stop request has not been confirmed. Open Computers and ask the computer operator to check the process and restore its exit report. If the computer is gone for good, report the agent as gone to release this execution — otherwise the thread cannot be deleted. Do not start replacement work until execution is settled."
