@@ -366,8 +366,7 @@
   .sidenav-brand-row,
   .sidenav-bottom,
   .sidenav-group-label,
-  .sidenav-tooltip,
-  .sidenav-settings-menu {
+  .sidenav-tooltip {
     display: none;
   }
 

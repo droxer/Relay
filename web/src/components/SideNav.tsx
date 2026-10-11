@@ -25,7 +25,6 @@ import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLinkItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -71,13 +70,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   const { t } = useTranslation();
   const [navTooltip, setNavTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const tooltipSuppressRef = useRef<HTMLElement | null>(null);
-  /* Open/closed only. The menus used to carry viewport coordinates because
-     they were positioned by hand; the Menu positioner anchors to the trigger
-     and handles flipping, so there is nothing left to store. */
-  const [accountOpen, setAccountOpen] = useState(false);
-  /* The expanded rail anchors the account menu to the FOOTER rather than to
-     its trigger — see the menu's own note below. */
-  const footerRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
@@ -104,25 +96,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
     tooltipSuppressRef.current = null;
     setNavTooltip(null);
   }
-  /* Only one rail menu at a time. Two Menu roots do not know about each other,
-     so the mutual close stays here — it is the one piece of this behaviour
-     that was ever app-specific. */
-  function onAccountOpenChange(open: boolean) {
-    if (open) {
-      hideNavTooltip();
-      setMoreOpen(false);
-    }
-    setAccountOpen(open);
-  }
   function onMoreOpenChange(open: boolean) {
-    if (open) {
-      hideNavTooltip();
-      setAccountOpen(false);
-    }
+    if (open) hideNavTooltip();
     setMoreOpen(open);
-  }
-  function handleLogout() {
-    onLogout();
   }
   function handleRouteClick(event: MouseEvent<HTMLAnchorElement>, nextRoute: AppRoute) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -318,7 +294,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           </DropdownMenu>
         </div>
       </nav>
-      <div className="sidenav-bottom" ref={footerRef}>
+      <div className="sidenav-bottom">
         {/* The palette's visible trigger lives with the other rail-level
             controls, not the destination list: it opens a command surface,
             it does not navigate anywhere. */}
@@ -336,57 +312,35 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           <ActionSearch size={ICON.md} />
           <span className="sr-only">{t("command.title")}</span>
         </Button>
-        <DropdownMenu open={accountOpen} onOpenChange={onAccountOpenChange}>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                className={`sidenav-btn ${route === "settings" || accountOpen ? "active" : ""}`}
-                data-nav="settings"
-                type="button"
-                aria-label={t("nav.account")}
-                onMouseEnter={(e) => showNavTooltip(t("nav.account"), e.currentTarget, true)}
-                onMouseLeave={hideNavTooltip}
-                onFocus={(e) => showNavTooltip(t("nav.account"), e.currentTarget, true)}
-                onBlur={hideNavTooltip}
-              >
-                <NavPreferences size={ICON.md} />
-                <span className="sr-only">{t("nav.account")}</span>
-              </Button>
-            }
-          />
-          {/* Collapsed: fly out to the right of the icon, like the nav
-              tooltips. Expanded: rise above the FOOTER — anchoring to the
-              32px trigger instead opens the menu straddling the rail|content
-              seam (the trigger sits mid-row, and the menu is wider than it),
-              so the anchor is the row the trigger sits in. */}
-          <DropdownMenuContent
-            side={sidenavExpanded ? "top" : "right"}
-            align={sidenavExpanded ? "start" : "end"}
-            anchor={sidenavExpanded ? footerRef : undefined}
-            className="sidenav-settings-menu"
-          >
-            <DropdownMenuLinkItem
-              render={
-                <a
-                  href={hrefForRoute("settings")}
-                  aria-current={route === "settings" ? "page" : undefined}
-                  onClick={(event: MouseEvent<HTMLAnchorElement>) => {
-                    setAccountOpen(false);
-                    handleRouteClick(event, "settings");
-                  }}
-                />
-              }
-            >
-              <NavPreferences size={ICON.md} />
-              <span>{t("nav.settings")}</span>
-            </DropdownMenuLinkItem>
-            <DropdownMenuItem danger onClick={handleLogout}>
-              <NavLogout size={ICON.md} />
-              <span>{t("nav.logout")}</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Settings is a direct footer link; sign-out used to hide inside its
+            menu, which made the gear an account surface instead of a
+            destination. Two controls, one job each. */}
+        <a
+          className={`sidenav-btn ${route === "settings" ? "active" : ""}`}
+          data-nav="settings"
+          href={hrefForRoute("settings")}
+          aria-label={t("nav.settings")}
+          aria-current={route === "settings" ? "page" : undefined}
+          onClick={(event) => handleRouteClick(event, "settings")}
+          onMouseEnter={(e) => showNavTooltip(t("nav.settings"), e.currentTarget, true)}
+          onMouseLeave={hideNavTooltip}
+          onFocus={(e) => showNavTooltip(t("nav.settings"), e.currentTarget, true)}
+          onBlur={hideNavTooltip}
+        >
+          <NavPreferences size={ICON.md} />
+          <span className="sr-only">{t("nav.settings")}</span>
+        </a>
+        <Button
+          type="button"
+          variant="ghost"
+          className="sidenav-btn"
+          data-nav="logout"
+          tooltip={t("nav.logout")}
+          onClick={onLogout}
+        >
+          <NavLogout size={ICON.md} />
+          <span className="sr-only">{t("nav.logout")}</span>
+        </Button>
         <Button
           type="button"
           variant="ghost"
