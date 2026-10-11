@@ -41,7 +41,7 @@ def _create_session(client: TestClient) -> str:
     return response.json()["id"]
 
 
-def _dispatched_run(app, session_id: str) -> dict:
+def _dispatched_run(app, session_id: str, *, lease_seconds: float = 60) -> dict:
     """A run the daemon took and never reported back on."""
     registry = app.state.registry
     registry.register({
@@ -61,7 +61,7 @@ def _dispatched_run(app, session_id: str) -> dict:
         "currentCommandId": command["id"], "currentRunId": command["runId"],
     })
     registry.daemon_store.enqueue_command("sbx_alice", command)
-    registry.daemon_store.take_queued_commands("sbx_alice", lease_seconds=60)
+    registry.daemon_store.take_queued_commands("sbx_alice", lease_seconds=lease_seconds)
     SessionController(app.state.session_store).record_agent_started(session_id, {
         "runId": command["runId"], "agent": "claude",
     })
@@ -106,6 +106,142 @@ def test_delete_releases_an_execution_whose_computer_never_reported_exit(monkeyp
         assert store.active_run_request_for_session_any_node(session_id) is None
         assert store.get_run_request(run["request"]["id"])["status"] == "cancelled"
         assert store.get_command(run["command"]["id"])["status"] == "cancelled"
+
+
+def test_delete_releases_an_execution_whose_lease_lapsed_after_the_stop(monkeypatch) -> None:
+    """A daemon that died mid-run also stops renewing its lease, so the run reads
+    unresponsive rather than stopping. Once the stop grace has passed, that is
+    the same dead end and the delete must still release it."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id, lease_seconds=-1)
+
+        unconfirmed = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert unconfirmed["phase"] == "unresponsive"
+        assert unconfirmed["canReportGone"] is False
+
+        _stop_requested_long_ago(app, run["request"]["id"])
+        stuck = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert stuck["phase"] == "recovery_required"
+        assert stuck["blockingReason"] == "termination_unconfirmed"
+        assert stuck["canReportGone"] is True
+
+        assert client.delete(f"/api/v1/threads/{session_id}?stop=true").status_code == 204
+        assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+
+
+def test_delete_starts_the_grace_when_no_stop_marker_could_be_recorded(monkeypatch) -> None:
+    """The stop marker is only written for a running request. A delete that hits
+    a delivered run in any other status must still start the clock itself."""
+    from relay.services import execution_lifecycle
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id, lease_seconds=-1)
+        app.state.registry.daemon_store.update_run_request(run["request"]["id"], {"status": "dispatching"})
+
+        assert client.delete(f"/api/v1/threads/{session_id}?stop=true").status_code == 202
+        assert "_relay_stop_requested_at" not in (
+            app.state.registry.daemon_store.get_run_request(run["request"]["id"]).get("state") or {}
+        )
+
+        monkeypatch.setattr(execution_lifecycle, "STOP_GRACE_SECONDS", 0)
+        app.state.execution_lifecycle.tick()
+        assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+
+
+def test_delete_releases_a_finalization_whose_evidence_was_lost(monkeypatch) -> None:
+    """Retrying a save with no exit evidence only re-marks it lost, so the
+    retry must not be the only way out; the delete asserts the run gone."""
+    from relay.persistence.daemon_store import TERMINAL_CLAIM_ID_STATE_KEY
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+        app.state.registry.daemon_store.update_run_request(run["request"]["id"], {
+            "status": "finalizing",
+            "state": {
+                TERMINAL_CLAIM_ID_STATE_KEY: "claim_lost",
+                "_relay_recovery_required": True,
+                "_relay_recovery_reason": "missing_terminal_evidence",
+            },
+        })
+
+        stuck = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert stuck["blockingReason"] == "missing_terminal_evidence"
+        assert stuck["canRetrySave"] is False
+        assert stuck["canReportGone"] is True
+
+        assert client.delete(f"/api/v1/threads/{session_id}?stop=true").status_code == 204
+        assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+
+
+@pytest.mark.parametrize("request_deletion", [False, True])
+def test_late_terminal_evidence_is_protected_and_can_be_saved(monkeypatch, request_deletion) -> None:
+    from relay.persistence.daemon_store import TERMINAL_CLAIM_ID_STATE_KEY
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+        registry = app.state.registry
+        store = registry.daemon_store
+        store.update_run_request(run["request"]["id"], {
+            "assignments": [{"assignmentId": "step_1", "executorKind": "claude"}],
+            "status": "finalizing", "state": {
+                TERMINAL_CLAIM_ID_STATE_KEY: "claim_lost",
+                "_relay_recovery_required": True,
+                "_relay_recovery_reason": "missing_terminal_evidence",
+            },
+        })
+        event = {
+            "type": "run.completed", "commandId": run["command"]["id"],
+            "runId": run["command"]["runId"], "sessionId": session_id,
+            "agent": "claude", "exitCode": 0, "agentLog": "late successful result",
+        }
+        assert store.mark_command_completed("sbx_alice", event)
+        assert registry._claim_and_advance_run_request(event) is False
+
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["canReportGone"] is False
+        assert status["canRetrySave"] is True
+        assert status["blockingReason"] == "finalization_failed"
+        assert client.post(f"/api/v1/threads/{session_id}/execution/reconcile").status_code == 409
+        if request_deletion:
+            response = client.delete(f"/api/v1/threads/{session_id}?stop=true")
+            assert response.status_code == 202
+            assert response.json()["canReportGone"] is False
+            assert store.get_run_request(run["request"]["id"])["status"] == "finalizing"
+
+        assert client.post(f"/api/v1/threads/{session_id}/execution/recovery").status_code == 200
+        registry.reap_stale_runs()
+        session = app.state.session_store.get_session(session_id)
+        agent_run = next(r for r in session["agentRuns"] if r["id"] == event["runId"])
+        assert agent_run["status"] == "completed"
+        assert agent_run["agentLog"] == "late successful result"
+        assert not [e for e in session["events"] if e["type"] == "session.execution_reconciled"]
+        assert store.active_run_request_for_session_any_node(session_id) is None
+        if request_deletion:
+            app.state.execution_lifecycle.tick()
+            assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
 
 
 def test_delete_waits_out_the_stop_grace_before_asserting(monkeypatch) -> None:
