@@ -776,7 +776,7 @@
     "refresh_completed": "Runtimes refreshed",
     "refresh_failed": "Could not refresh runtimes. Try again.",
     "refresh_upgrade": "Update Relay Computer to refresh runtimes.",
-    "title": "My computers",
+    "title": "Computers",
     "count_one": "{{count}} computer",
     "count_other": "{{count}} computers",
     "empty_title": "No computer connected yet",

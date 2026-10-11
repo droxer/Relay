@@ -761,7 +761,7 @@
     "refresh_completed": "运行时已更新",
     "refresh_failed": "检测失败，请重试。",
     "refresh_upgrade": "升级 Relay Computer 后可重新检测。",
-    "title": "我的电脑",
+    "title": "电脑",
     "count_other": "{{count}} 台电脑",
     "empty_title": "尚未连接电脑",
     "empty_body": "连接电脑以运行智能体，或请管理员分配电脑。",
