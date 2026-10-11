@@ -3,36 +3,71 @@
 
 /* ── Settings view ───────────────────────────────────────────────────── */
 
-/* Independent org-wide defaults, one card each, in the same intrinsically
-   responsive grid the Employees and Computers views use. It was a 560px
-   single column pinned to the left edge, which on a 1440px console left ~800px
-   of dead canvas beside three short forms — the settings view was the only
-   admin surface that did not use its width. `auto-fill` + `minmax` reflows
-   without a media query, so no breakpoint joins the registry for this. */
+/* One settings list, not a grid of cards: each org-wide default is a row,
+   its name and explanation on the left and its control on the right, rows
+   divided by hairlines. Three cards of uneven height, each with its own
+   title, sub, label, and hint, read as three forms; a list reads as one
+   page of settings. */
 .adm-settings {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  align-items: start;
-  gap: var(--sp-4);
-}
-
-/* The settings grid spans its own error across all columns. Selected by the
-   alert ROLE rather than a marker class — the message is an `Alert` now, and
-   `role="alert"` is the one thing every alert on this grid is guaranteed to
-   have. */
-.adm-settings > [role="alert"] {
-  grid-column: 1 / -1;
-  margin: 0 0 var(--sp-4);
-}
-
-.adm-settings-item {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-4);
-  padding: var(--sp-6);
+  /* The element is also .adm-view, whose section gap would open a band of
+     empty panel between rows; the hairline is the only separator. */
+  gap: 0;
+  max-width: 960px;
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
+}
+
+/* The view's own load error sits inside the panel, above the rows. */
+.adm-settings > [role="alert"] {
+  margin: var(--sp-4) var(--sp-6) 0;
+}
+
+.adm-settings-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  align-items: start;
+  gap: var(--sp-3) var(--sp-8);
+  padding: var(--sp-6);
+}
+
+.adm-settings-item + .adm-settings-item {
+  border-top: 0.5px solid var(--line-1);
+}
+
+/* Everything after the description is the control column; the description
+   spans however many rows the control stacks. */
+.adm-settings-item > :not(.adm-settings-head) {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* The description sits in row 1 beside the control; anything more the
+   control column holds (the token's reissue button) stacks beneath it. */
+.adm-settings-item > .adm-settings-head {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+/* The field hint speaks at the description's size: at body size it was the
+   loudest text in the row, louder than the setting's own explanation. */
+.adm-settings-item > :not(.adm-settings-head) p {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+@media (max-width: 820px) {
+  .adm-settings-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-settings-item > :not(.adm-settings-head),
+  .adm-settings-item > .adm-settings-head {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 .adm-settings-head {

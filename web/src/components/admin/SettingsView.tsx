@@ -254,8 +254,10 @@ function NumberSettingCard({
         <p className="adm-settings-sub">{subtitle}</p>
       </div>
 
+      {/* The row's title already names the setting, so the field label is
+          for assistive tech only — shown, it said the title twice. */}
       <Field
-        label={label}
+        label={<span className="sr-only">{label}</span>}
         hint={hint}
         error={error ?? undefined}
         errorId={errorId}

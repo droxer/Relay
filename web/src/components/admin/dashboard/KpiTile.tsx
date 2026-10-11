@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 interface KpiTileProps {
   eyebrow: string;
   value: ReactNode;
-  hero?: boolean;
   slot?: "sessions" | "nodes" | "employees" | "tokens";
   delta?: {
     label: string;
@@ -17,13 +16,13 @@ interface KpiTileProps {
   tone?: "bad" | "warn";
 }
 
-export function KpiTile({ eyebrow, value, hero, slot, delta, hint, tone }: KpiTileProps) {
+export function KpiTile({ eyebrow, value, slot, delta, hint, tone }: KpiTileProps) {
   const hasFoot = Boolean(delta || hint);
   const slotClass = slot ? ` adm-dash-tile--${slot}` : "";
   const toneClass = tone ? ` adm-dash-tile--toned tone-${tone}` : "";
   return (
     <div
-      className={`adm-dash-tile${hero ? " adm-dash-tile--hero" : ""}${slotClass}${toneClass}`}
+      className={`adm-dash-tile${slotClass}${toneClass}`}
     >
       <div className="adm-dash-tile-eyebrow">{eyebrow}</div>
       <div className="adm-dash-tile-value tnum">{value}</div>

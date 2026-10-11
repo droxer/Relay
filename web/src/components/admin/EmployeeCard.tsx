@@ -50,14 +50,14 @@ export function EmployeeCard({
         </span>
         <div className="adm-node-card-identity">
           <span className="adm-node-card-name" translate="no" title={member.displayName}>{member.displayName}</span>
-          <span className="adm-node-card-handle code" translate="no">@{employeeHandleOf(member)}</span>
-          {/* Department belongs to identity, not to status. Sharing the status
-              column meant it rendered on line 1 when the pill was absent and
-              line 2 when it was present, so the same card component produced
-              three different header layouts across one roster. */}
-          {member.departmentName ? (
-            <span className="adm-emp-card-dept">{member.departmentName}</span>
-          ) : null}
+          {/* Handle and department share one line: two short facts stacked
+              as two lines made the header the tallest part of the card. */}
+          <span className="adm-emp-card-sub">
+            <span className="adm-node-card-handle code" translate="no">@{employeeHandleOf(member)}</span>
+            {member.departmentName ? (
+              <span className="adm-emp-card-dept">{member.departmentName}</span>
+            ) : null}
+          </span>
         </div>
         <div className="adm-node-card-meta-col">
           {/* "Ready" is the default healthy state — the good tone on the card
@@ -73,9 +73,6 @@ export function EmployeeCard({
       </header>
 
       <div className="adm-node-card-body">
-        {member.email ? (
-          <p className="adm-emp-card-email code ink-dim" translate="no">{member.email}</p>
-        ) : null}
         <div className="adm-agents adm-emp-nodes">
           {/* Every computer the employee has, cloud and local alike — the same
               set the list row shows and the READY x/y footer below counts.
@@ -86,24 +83,10 @@ export function EmployeeCard({
       </div>
 
       <footer className="adm-node-card-foot">
-        <div
-          className="adm-emp-card-metrics"
-          aria-label={t("admin.v2.emp_metrics_aria", {
-            running: member.runningCount,
-            ready: member.readyCount,
-            total: member.nodeCount,
-          })}
-        >
-          <span className="adm-emp-card-metric">
-            <span className="adm-emp-metric-label">{t("admin.v2.col_running")}</span>
-            <span className={`tnum ${member.runningCount > 0 ? "ink-strong" : "ink-dim"}`}>
-              {member.runningCount}
-            </span>
-          </span>
-          <span className="adm-emp-card-metric">
-            <span className="adm-emp-metric-label">{t("admin.v2.col_ready")}</span>
-            <span className="tnum ink-dim">{member.readyCount}/{member.nodeCount}</span>
-          </span>
+        {/* Only the limit is said here. Running is the state pill above and
+            readiness is each computer's dot, so counting them again in the
+            footer said the card three times. */}
+        <div className="adm-emp-card-metrics">
           <span className="adm-emp-card-metric">
             <span className="adm-emp-metric-label">{t("admin.v2.col_local_limit")}</span>
             <span className={`tnum ${isOverLocalComputerLimit(member) ? "" : "ink-dim"}`}>

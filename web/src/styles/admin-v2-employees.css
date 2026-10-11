@@ -30,7 +30,7 @@
 .adm-view {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-7);
+  gap: var(--sp-6);
 }
 
 .adm-employees-empty.relay-empty--fill {
@@ -178,9 +178,11 @@ tr.is-pulse > td:first-child::after {
   color: var(--ink-3);
 }
 
+/* Same rung as the ratios beside it: a display numeral in one column made
+   the running count the loudest thing in every row, zeros included. */
 .adm-emp-running {
-  font: var(--type-number);
-  letter-spacing: var(--type-number-track);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .adm-emp-ratio {
@@ -410,8 +412,10 @@ tr.is-pulse > td:first-child::after {
 }
 
 .adm-view-controls > .adm-search {
-  flex: 1 1 240px;
-  min-width: 0;
+  /* The search shares the filter row instead of taking a row of its own:
+     one band of controls above the roster, not two. */
+  flex: 0 1 320px;
+  min-width: 200px;
 }
 
 .adm-layout-toggle {
@@ -421,14 +425,13 @@ tr.is-pulse > td:first-child::after {
 /* ── Employee card (card view) — inherits the node-card frame so the two
    views read as one system; only the interior slots differ. ───────────── */
 /* The fleet card's fixed height is sized for a computer's header. An
-   employee's header stacks name, handle, department and a state pill, which
-   left the body ~40px — every card faded its computer chips out entirely, so
-   the card never showed the one thing it lists. Employee cards grow from that
-   floor instead; the grid stretches each row to its tallest card, so a row
-   still reads as one even band. */
+   employee card sizes to its content instead — name, one handle line, its
+   computers, the limit — and the grid stretches each row to its tallest
+   card, so a row still reads as one even band. A fleet-height floor here
+   only left an empty well above the footer. */
 .adm-emp-card.adm-node-card {
   height: auto;
-  min-height: var(--card-h-fleet);
+  min-height: 0;
 }
 
 .adm-emp-card .adm-node-card-body {
@@ -437,25 +440,32 @@ tr.is-pulse > td:first-child::after {
   mask-image: none;
 }
 
-.adm-emp-card-dept {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
+.adm-emp-card-sub {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1-5);
+  min-width: 0;
   color: var(--ink-3);
-  /* Reads down the identity column now, not in from the status column. */
-  text-align: left;
 }
 
-.adm-emp-card-email {
-  margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+.adm-emp-card-sub > * {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.adm-emp-card-dept {
+  flex: 1 1 auto;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+.adm-emp-card-dept::before {
+  content: "·";
+  margin-inline-end: var(--sp-1-5);
+  color: var(--ink-4);
 }
 
 .adm-emp-card-metrics {

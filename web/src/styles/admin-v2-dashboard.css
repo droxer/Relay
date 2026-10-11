@@ -63,7 +63,7 @@
    the whole rail taller than it was a second ago, while the numbers beneath
    it are still loading.
 
-   A MINIMUM, not a fixed height. As a fixed one it clipped: the hero tile ran
+   A MINIMUM, not a fixed height. As a fixed one it clipped: the threads tile ran
    139px against the 132px box at every width, and under ~1200px of canvas —
    the control panel's normal width now that it has a section rail beside it —
    its foot wrapped to 159px and the delta line was sliced through the middle.
@@ -80,12 +80,6 @@
 }
 
 .adm-dash-tile:last-child { border-right: none; }
-
-.adm-dash-tile--hero {
-  padding: var(--sp-5) var(--sp-6);
-  gap: var(--sp-3);
-  background: var(--surface-0);
-}
 
 .adm-dash-tile-eyebrow {
   font: var(--type-micro);
@@ -106,14 +100,6 @@
    only passes a tone then, so a zero stays ink. */
 .adm-dash-tile--toned .adm-dash-tile-value {
   color: var(--tone);
-}
-
-.adm-dash-tile--hero .adm-dash-tile-value {
-  font-family: var(--font-display);
-  font-size: var(--fs-hero);
-  font-weight: 500;
-  line-height: var(--leading-none);
-  letter-spacing: var(--track-display);
 }
 
 .adm-dash-tile-foot {
@@ -502,20 +488,13 @@
   display: grid;
   grid-template-columns: 1.25rem 28px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-1) var(--sp-3);
+  gap: var(--sp-3);
 }
 
 .adm-dash-top-rank {
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-4);
-}
-
-.adm-dash-top-meta {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-0-5);
-  min-width: 0;
 }
 
 .adm-dash-top-name {
@@ -525,31 +504,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.adm-dash-top-sub {
-  font-size: var(--fs-1);
-  color: var(--ink-4);
-  letter-spacing: var(--track-caps);
-}
-
-/* The share bar spans the whole row on its own grid line rather than sitting
-   in a column of its own: at rail width a five-column row crushed the name to
-   an ellipsis after ~9 characters, and tucking the bar under just the name
-   made it read as a text underline. A full-row rule reads as a meter. */
-.adm-dash-top-bar {
-  position: relative;
-  grid-column: 3 / -1;
-  height: 2px;
-  overflow: hidden;
-}
-
-.adm-dash-top-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--ink-3);
-  min-width: 3px;
-  border-radius: var(--r-full);
 }
 
 .adm-dash-top-count {
@@ -577,10 +531,10 @@
 
   .adm-dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-dash-tile { grid-column: span 1; }
-  .adm-dash-tile--hero { grid-column: 1 / -1; border-right: none; border-bottom: 0.5px solid var(--line-1); }
-  .adm-dash-tile--nodes { border-right: 0.5px solid var(--line-1); border-bottom: 0.5px solid var(--line-1); }
-  .adm-dash-tile--employees { border-right: none; border-bottom: 0.5px solid var(--line-1); }
-  .adm-dash-tile--tokens { grid-column: 1 / -1; border-right: none; }
+  /* Two by two: the right column drops its rule, the top row gains one. */
+  .adm-dash-tile:nth-child(2n) { border-right: none; }
+  .adm-dash-tile:nth-child(-n + 2) { border-bottom: 0.5px solid var(--line-1); }
+  .adm-dash-kpis--lean .adm-dash-tile:last-child { grid-column: 1 / -1; }
   /* The floor exists so a desktop row holds one height while readings load.
      Stacked, each row is its own height, and the floor only padded the
      foot-less Computers / Employees pair into two tall empty boxes. */
@@ -603,11 +557,7 @@
     padding: var(--sp-4);
   }
 
-  .adm-dash-tile--hero {
-    padding: var(--sp-4);
-  }
-
-  .adm-dash-tile:not(.adm-dash-tile--hero) .adm-dash-tile-value {
+  .adm-dash-tile-value {
     /* Dropped onto the 24px rung the numeral joins the number tier
        (--type-number), whose tracking is the tightened --track-display. */
     font-size: var(--fs-5);
