@@ -305,7 +305,10 @@ export function RoutineTable({
       {
         id: "actions",
         meta: { headClass: "task-col-actions", cellClass: "task-col-actions" } satisfies ColumnChrome,
-        header: () => <RoutineCells.Read>{(s) => s.t("backlog.actions")}</RoutineCells.Read>,
+        /* Named for a screen reader only: the row's buttons are icons that
+           surface on hover, so a visible "Actions" caption labelled a column
+           that reads as empty. */
+        header: () => <RoutineCells.Read>{(s) => <span className="sr-only">{s.t("backlog.actions")}</span>}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
           const { onAssign, onStart, starting } = s.handlersFor(task);
@@ -326,7 +329,7 @@ export function RoutineTable({
 
   return (
     <RoutineCells.Provider value={cellState}>
-      <Table aria-label={ariaLabel} className="task-table">
+      <Table aria-label={ariaLabel} className="task-table routine-table">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent">
