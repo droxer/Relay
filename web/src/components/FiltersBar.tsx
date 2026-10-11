@@ -25,12 +25,14 @@ import {
 } from "@/lib/filterSelections";
 import { ICON } from "./icons";
 
-/** One filter a page offers. `select` filters by one of `options`; `text` by a substring. */
+/** One filter a page offers. `select` filters by one of `options`; `text` by a substring.
+ *  An option's `icon` is drawn beside its label in the menu and on the chip —
+ *  an agent or team option carries its visual badge there. */
 export interface FilterBarField {
   id: string;
   label: string;
   kind: SelectionKind;
-  options?: readonly { value: string; label: string }[];
+  options?: readonly { value: string; label: string; icon?: ReactNode }[];
 }
 
 interface FiltersBarProps {
@@ -144,7 +146,7 @@ export function FiltersBar({
       id: field.id,
       label: field.label,
       type: field.kind,
-      options: field.options?.map((option) => ({ value: option.value, label: option.label })),
+      options: field.options?.map((option) => ({ value: option.value, label: option.label, icon: option.icon })),
       operators: [{ value: operator, label: t(`filters.operator_${operator}`) }],
       defaultOperator: operator,
     };

@@ -390,6 +390,13 @@
   color: var(--ink-1);
 }
 
+.skill-grant-target {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
 /* The footer's leading edge carries the drawer's one requirement. */
 .skill-share-hint {
   margin: 0 auto 0 0;

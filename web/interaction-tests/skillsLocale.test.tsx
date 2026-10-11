@@ -41,7 +41,7 @@ it("interpolates the Simplified Chinese team and selected-agent counts", async (
   const instance = await locale("zh-CN");
   const skill = { id: "skill-1", displayName: "Release notes", grantedAgentIds: [], assignments: [], files: [], revisions: [] } as any;
   const agents = [{ id: "agent-1", displayName: "Codex reviewer", executorKind: "codex", enabled: true }] as any;
-  const teams = [{ id: "team-1", name: "Launch team", memberAgentIds: ["agent-1"] }] as any;
+  const teams = [{ id: "team-1", name: "Launch team", enabled: true, memberAgentIds: ["agent-1"], members: [] }] as any;
   render(providers(instance, <ShareSkillDrawer skill={skill} agents={agents} teams={teams} onClose={vi.fn()} />));
   expect(screen.getByText("1 名成员")).toBeTruthy();
   await userEvent.setup().click(screen.getByRole("checkbox", { name: /Launch team/ }));

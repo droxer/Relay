@@ -38,10 +38,26 @@ export function effectiveAgentAvailability(agent: Pick<EmployeeAgent, "enabled" 
   return agent.enabled ? agent.availability : "offline";
 }
 
+/** An agent's visual badge — profile image (or monogram) with the readiness
+ *  pip. Every surface that offers an agent to pick draws this, so a checklist,
+ *  a filter menu, and a select all show the same face. */
+export function RosterAgentMark({ agent }: { agent: AgentView }) {
+  const availability = effectiveAgentAvailability(agent);
+  return (
+    <AgentStateBadge
+      agent={agent.executorKind}
+      ready={availability === "ready"}
+      availability={availability}
+      imageUrl={agent.profileImageUrl}
+      name={agent.displayName}
+    />
+  );
+}
+
 // Team identity chip — the same `.agent-state` box the boards draw, so the
 // menu, the closed trigger, and the task cards all show one mark. The tone
 // pip carries readiness; the glyph stays neutral.
-function TeamMark({ team }: { team: TeamView }) {
+export function RosterTeamMark({ team }: { team: TeamView }) {
   const { t } = useTranslation();
   const availability = teamAvailability(team);
   const stateLabel = `${team.name} · ${t(`status.${availability}`, { defaultValue: availability })}`;
@@ -64,16 +80,9 @@ const executorLabel = (kind: string): string => kind.charAt(0).toUpperCase() + k
 export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamView }) {
   const { t } = useTranslation();
   if (agent) {
-    const availability = effectiveAgentAvailability(agent);
     return (
       <span className="roster-option">
-        <AgentStateBadge
-          agent={agent.executorKind}
-          ready={availability === "ready"}
-          availability={availability}
-          imageUrl={agent.profileImageUrl}
-          name={agent.displayName}
-        />
+        <RosterAgentMark agent={agent} />
         <span className="roster-option-copy">
           <span translate="no">{agent.displayName}</span>
           <span translate="no">{executorLabel(agent.executorKind)}</span>
@@ -85,7 +94,7 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
   if (!team) return null;
   return (
     <span className="roster-option">
-      <TeamMark team={team} />
+      <RosterTeamMark team={team} />
       <span className="roster-option-copy">
         <span translate="no">{team.name}</span>
         <span>{t("backlog.team_member_count", { count: team.members.length })}</span>
@@ -129,22 +138,15 @@ export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { age
   if (team) {
     return (
       <span className="roster-trigger">
-        <TeamMark team={team} />
+        <RosterTeamMark team={team} />
         <span className="roster-trigger-name" translate="no" title={team.name}>{team.name}</span>
       </span>
     );
   }
   if (agent) {
-    const availability = effectiveAgentAvailability(agent);
     return (
       <span className={cn("roster-trigger", hideBusyPulse && "roster-trigger--no-busy-pulse")}>
-        <AgentStateBadge
-          agent={agent.executorKind}
-          ready={availability === "ready"}
-          availability={availability}
-          imageUrl={agent.profileImageUrl}
-          name={agent.displayName}
-        />
+        <RosterAgentMark agent={agent} />
         <span className="roster-trigger-name" translate="no" title={agent.displayName}>{agent.displayName}</span>
       </span>
     );

@@ -20,6 +20,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RosterAgentMark } from "./roster/RosterOption";
 import { ProjectContextField, ProjectDescriptionField, ProjectGoalField } from "./ProjectFormFields";
 
 export const PROJECT_SETUP_QUERY_KEY = "project-setup";
@@ -278,6 +279,7 @@ function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
                   key={member.agentId}
                   member={member}
                   name={agentName(member.agentId)}
+                  agent={agents.find((agent) => agent.id === member.agentId)}
                   lead={draft.leadAgentId === member.agentId}
                   onChange={(patch) => patchMember(member.agentId, patch)}
                   onMakeLead={() => setDraft((current) => ({ ...current, leadAgentId: effectiveLead(current.members, member.agentId) }))}
@@ -334,9 +336,11 @@ function SetupReview({ project, setup, agents, onOpenThread }: PanelProps) {
   );
 }
 
-function SetupMemberRow({ member, name, lead, onChange, onMakeLead }: {
+function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
   member: SetupMemberDraft;
   name: string;
+  /** Absent when the proposed agent is no longer on the roster. */
+  agent?: EmployeeAgent;
   lead: boolean;
   onChange: (patch: Partial<SetupMemberDraft>) => void;
   onMakeLead: () => void;
@@ -355,7 +359,8 @@ function SetupMemberRow({ member, name, lead, onChange, onMakeLead }: {
             aria-describedby={blocked ? issueId : undefined}
             onCheckedChange={(value) => onChange({ include: value === true })}
           />
-          <strong>{name}</strong>
+          {agent ? <RosterAgentMark agent={agent} /> : null}
+          <strong translate="no">{name}</strong>
         </label>
         <Select value={member.role} disabled={inactive} onValueChange={(value) => onChange({ role: value as AgentRole })}>
           <SelectTrigger className="project-setup-role" aria-label={`${t("project.role")} · ${name}`}>

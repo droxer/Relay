@@ -1,12 +1,13 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, isEventKind, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
+import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
 import type { AgentTeam, EmployeeAgent, ProjectRecord, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
 
 const ANY = "__any__";
@@ -48,7 +49,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   const filters = trigger.filters ?? {};
   const setFilter = (key: keyof RoutineTriggerFilters, value: string) =>
     onChange({ ...trigger, filters: { ...filters, [key]: value === ANY ? undefined : value } });
-  const choice = (key: keyof RoutineTriggerFilters, label: string, options: Array<{ value: string; label: string }>) => (
+  const choice = (key: keyof RoutineTriggerFilters, label: string, options: FilterChoice[]) => (
     <FilterSelect key={key} label={label} value={(filters[key] as string | undefined) ?? ANY}
       options={[{ value: ANY, label: t("automation.filter_any") }, ...options]} onChange={(value) => setFilter(key, value)} />
   );
@@ -83,8 +84,8 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
             </>
           ) : null}
           {choice("projectId", t("automation.filter_project"), projects.map((p) => ({ value: p.id, label: p.name })))}
-          {choice("assignedAgentId", t("automation.filter_agent"), agents.map((a) => ({ value: a.id, label: a.displayName })))}
-          {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name })))}
+          {choice("assignedAgentId", t("automation.filter_agent"), agents.map((a) => ({ value: a.id, label: a.displayName, mark: <RosterAgentMark agent={a} /> })))}
+          {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name, mark: <RosterTeamMark team={team} /> })))}
           {choice("priority", t("automation.filter_priority"), TASK_PRIORITIES.map((p) => ({ value: p, label: t(`backlog.priorities.${p}`) })))}
           <Field label={t("automation.filter_title")} labelId={titleLabelId} error={error ? t(error) : undefined} errorId={errorId}
             className="trigger-filters-wide">
@@ -98,20 +99,39 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   );
 }
 
+/** An agent or team choice carries its visual badge, in the menu and the trigger. */
+type FilterChoice = { value: string; label: string; mark?: ReactNode };
+
+/* In a list of badged choices, "Any" holds the empty slot so names align —
+   the same placeholder the roster pickers draw for "Unassigned". */
+function ChoiceLabel({ option, slotted }: { option: FilterChoice; slotted: boolean }) {
+  if (!slotted) return <>{option.label}</>;
+  return (
+    <span className="roster-trigger">
+      {option.mark ?? <span className="agent-state agent-state--empty" aria-hidden="true" />}
+      <span className="roster-trigger-name" translate="no">{option.label}</span>
+    </span>
+  );
+}
+
 function FilterSelect({ label, value, options, onChange }: {
-  label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void;
+  label: string; value: string; options: FilterChoice[]; onChange: (value: string) => void;
 }) {
   const labelId = useId();
-  const labels = new Map(options.map((option) => [option.value, option.label]));
+  const byValue = new Map(options.map((option) => [option.value, option]));
+  const slotted = options.some((option) => option.mark);
   return (
     <Field label={label} labelId={labelId} wrapper="div">
       <Select value={value} onValueChange={(next) => next && onChange(next)}>
         <SelectTrigger className="w-full" aria-labelledby={labelId}>
-          <SelectValue>{(current: string) => labels.get(current) ?? current}</SelectValue>
+          <SelectValue>{(current: string) => {
+            const option = byValue.get(current);
+            return option ? <ChoiceLabel option={option} slotted={slotted} /> : current;
+          }}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value} label={option.label}>{option.label}</SelectItem>
+            <SelectItem key={option.value} value={option.value} label={option.label}><ChoiceLabel option={option} slotted={slotted} /></SelectItem>
           ))}
         </SelectContent>
       </Select>

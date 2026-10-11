@@ -6,6 +6,7 @@ import { StateMark, shapeForCount } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
+import { RosterAgentMark } from "../roster/RosterOption";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import {
   ROUTINE_STATE_ORDER,
@@ -88,7 +89,7 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
     { id: "cadence", label: t("routine.cadence"), kind: "select",
       options: TASK_ROUTINE_CADENCES.map((cadence) => ({ value: cadence, label: t(`routine.cadences.${cadence}`) })) },
     { id: "agent", label: t("backlog.agent"), kind: "select",
-      options: agents.map((agent) => ({ value: agent.id, label: agent.displayName })) },
+      options: agents.map((agent) => ({ value: agent.id, label: agent.displayName, icon: <RosterAgentMark agent={agent} /> })) },
     { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
   ], [agents, t]);
 

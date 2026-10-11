@@ -11,6 +11,7 @@ import {
 import { TASK_PRIORITIES, TASK_STATUSES, type BacklogFilters } from "../../lib/backlog";
 import { Button } from "@/components/ui/button";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
+import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { TaskStatusIcon } from "../TaskStatusIcon";
@@ -77,9 +78,9 @@ export function BacklogFiltersBar({
       { value: "unscheduled", label: t("backlog.unscheduled") },
     ] },
     { id: "agent", label: t("backlog.agent"), kind: "select",
-      options: agents.map((agent) => ({ value: agent.id, label: agent.displayName })) },
+      options: agents.map((agent) => ({ value: agent.id, label: agent.displayName, icon: <RosterAgentMark agent={agent} /> })) },
     { id: "team", label: t("backlog.team_filter"), kind: "select",
-      options: teams.map((team) => ({ value: team.id, label: team.name })) },
+      options: teams.map((team) => ({ value: team.id, label: team.name, icon: <RosterTeamMark team={team} /> })) },
     { id: "assignment", label: t("backlog.assignment_filter"), kind: "select", options: [
       { value: "assigned", label: t("backlog.with_assignment") },
       { value: "unassigned", label: t("backlog.without_assignment") },
