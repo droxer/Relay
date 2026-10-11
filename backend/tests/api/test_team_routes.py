@@ -268,7 +268,7 @@ def _agent(
             "workspacePath": f"/workspace/{employee_id}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation"],
+            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "agent-resume"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -2752,6 +2752,33 @@ def recovery_team_thread(monkeypatch, tmp_path):
     )
     session = controller.create_session("Build a login page")
     return client, controller, session, team, reviewer
+
+
+@pytest.mark.parametrize("resume", [True, False])
+def test_resuming_a_rerun_reopens_the_agents_runtime_conversation(recovery_team_thread, resume) -> None:
+    """Retry starts over; Resume hands the agent's own CLI conversation back."""
+    from relay.sessions.controller import initial_agent_state
+
+    client, controller, session, _team, reviewer = recovery_team_thread
+    controller.record_agent_started(session["id"], {
+        "runId": "run_before", "agent": "codex", "logicalAgentId": reviewer["id"],
+    })
+    controller.record_agent_completed(session["id"], initial_agent_state(session["taskGoal"]), {
+        "runId": "run_before", "agent": "codex", "status": "cancelled", "exitCode": 130,
+        "agentLog": "", "runtimeSessionId": "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+    })
+    controller.fail_session(session["id"], "Backend outage stopped the run")
+
+    response = client.post(f"/api/v1/threads/{session['id']}/recoveries", json={
+        "kind": "rerun", "targetAgentId": reviewer["id"], "resume": resume, "idempotencyKey": f"resume-{resume}",
+    })
+
+    assert response.status_code == 202, response.text
+    command = client.app.state.registry.take_commands("test_node_alice", "node_token")[0]
+    if resume:
+        assert command["state"]["resume_session_id"] == "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d"
+    else:
+        assert "resume_session_id" not in command["state"]
 
 
 @pytest.mark.parametrize("legacy", [False, True])

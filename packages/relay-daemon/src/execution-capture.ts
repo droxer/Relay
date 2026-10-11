@@ -2,14 +2,46 @@ import type { AgentOutputSink, StreamExecResult } from "relay-core";
 import { BoundedTextCapture } from "./bounded-text.js";
 type StreamRenderer = (chunk: string) => string;
 
-export interface ExecutionRecoveryOptions {
+export interface ExecutionExitHooks {
+  /** A host-mode run started as this process group. */
+  onSpawn?: (processGroup: number) => void;
+  /** Called once when a stop has gone unconfirmed for `unconfirmedAfterMs`. */
+  onExitUnconfirmed?: () => void;
+  /**
+   * Aborted when a person has reported the run gone. Only then may a run whose
+   * exit was never verified give up its reservation.
+   */
+  release?: AbortSignal;
+}
+
+export interface ExecutionRecoveryOptions extends ExecutionExitHooks {
   retryMs?: number;
   graceMs?: number;
+  /** How long a stop may go unverified before the daemon says so. */
+  unconfirmedAfterMs?: number;
   /** Bound draining only when the adapter also verifies descendant cleanup. */
   streamDrainMs?: number;
   terminate?: (force: boolean) => Promise<void>;
   warn?: (message: string) => void;
 }
+
+// The daemon owns a run's AbortSignal end to end, but the execution adapters
+// sit behind relay-core's runtime-neutral exec interface. Keying the hooks by
+// that signal reaches the adapter without widening every exec signature.
+const exitHooks = new WeakMap<AbortSignal, ExecutionExitHooks>();
+
+export function watchExecutionExit(signal: AbortSignal, hooks: ExecutionExitHooks): void {
+  exitHooks.set(signal, hooks);
+}
+
+export function exitHooksFor(signal: AbortSignal | undefined): ExecutionExitHooks | undefined {
+  return signal ? exitHooks.get(signal) : undefined;
+}
+
+/** The result a run gets when a person released it without verified exit. */
+export const RELEASED_EXIT_MESSAGE = "Released after the agent was reported gone; exit never verified.";
+
+const RELEASED = Symbol("released");
 
 export async function collectExecution(
   execution: any,
@@ -22,8 +54,11 @@ export async function collectExecution(
 ): Promise<StreamExecResult> {
   const stdoutCapture = new BoundedTextCapture();
   const stderrCapture = new BoundedTextCapture();
+  const hooks: ExecutionExitHooks = { ...(signal ? exitHooks.get(signal) : undefined), ...recovery };
   const retryMs = recovery.retryMs ?? 1000;
   const graceMs = recovery.graceMs ?? 5000;
+  const unconfirmedAfterMs = recovery.unconfirmedAfterMs ?? 60_000;
+  let reportedUnconfirmed = false;
   const warn = recovery.warn ?? ((message: string) => { process.stderr.write(`[relay] ${message}\n`); });
   let cancelled = false;
   let finished = false;
@@ -53,6 +88,10 @@ export async function collectExecution(
       overdue = true;
       warn("Cancellation overdue: waiting for verified process exit; the execution remains reserved.");
     }
+    if (!exited && !reportedUnconfirmed && Date.now() - stoppingAt! >= unconfirmedAfterMs) {
+      reportedUnconfirmed = true;
+      hooks.onExitUnconfirmed?.();
+    }
   };
   const requestStop = (): void => {
     if (stoppingAt !== undefined || exited) return;
@@ -64,16 +103,28 @@ export async function collectExecution(
   if (signal?.aborted) abortExecution();
   signal?.addEventListener("abort", abortExecution, { once: true });
 
+  const released = new Promise<typeof RELEASED>(resolve => {
+    if (hooks.release?.aborted) resolve(RELEASED);
+    hooks.release?.addEventListener("abort", () => resolve(RELEASED), { once: true });
+  });
   async function waitForConfirmedExit(): Promise<any> {
     let warned = false;
     for (;;) {
-      try { return await execution.wait(); } catch {
+      try {
+        const outcome = await Promise.race([execution.wait(), released]);
+        if (outcome !== RELEASED) return outcome;
+        warn("Execution released after it was reported gone; its exit was never verified.");
+        return { exitCode: -1, errorMessage: RELEASED_EXIT_MESSAGE, released: true };
+      } catch {
         if (!warned) {
           warn("Cannot confirm sandbox execution exit; retaining the run.");
           warned = true;
         }
         requestStop();
-        await new Promise(resolve => setTimeout(resolve, retryMs));
+        if (await Promise.race([released, new Promise(resolve => setTimeout(resolve, retryMs))]) === RELEASED) {
+          warn("Execution released after it was reported gone; its exit was never verified.");
+          return { exitCode: -1, errorMessage: RELEASED_EXIT_MESSAGE, released: true };
+        }
       }
     }
   }
@@ -121,7 +172,9 @@ export async function collectExecution(
   let drainTimer: NodeJS.Timeout | undefined;
   try {
     const result = await exit;
-    if (recovery.streamDrainMs === undefined) await streams;
+    // A released execution may hold its pipes open forever; keep what arrived.
+    if (result.released) { /* skip draining */ }
+    else if (recovery.streamDrainMs === undefined) await streams;
     else await Promise.race([streams, new Promise<void>(resolve => {
       drainTimer = setTimeout(() => {
         warn("Process exit confirmed; output drain timed out. Saving the captured transcript.");
@@ -132,7 +185,8 @@ export async function collectExecution(
     return {
       exit_code: result.exitCode ?? -1,
       stdout: stdoutCapture.toString(), stderr: stderrCapture.toString(),
-      error_message: cancelled ? "Execution cancelled." : result.errorMessage,
+      error_message: result.released ? result.errorMessage
+        : cancelled ? "Execution cancelled." : result.errorMessage,
     };
   } finally {
     finished = true;

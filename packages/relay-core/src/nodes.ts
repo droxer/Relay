@@ -1,3 +1,4 @@
+import { extractRuntimeSessionId, RuntimeSessionStream } from "./runtime-session.js";
 import { getAgent } from "./agents.js";
 import { StderrLineRenderer } from "./renderers.js";
 import {
@@ -45,32 +46,43 @@ export async function runAgentNode(
   const stderrRenderer = new StderrLineRenderer();
   const collaborationStream = agent === "codex" ? new CodexCollaborationStream() : undefined;
   const runId = options.runId;
-  const command = def.buildCommand(state, options.workspacePath);
   // Daemons pass a thread-specific directory. Direct callers retain the
   // environment-backed workspace for compatibility.
   const cwd = options.workspacePath ?? agentWorkspacePath();
-  const result = await execute("bash", ["-c", command], {
-    cwd,
-    stdoutRenderer: (chunk) => {
-      if (runId) options.eventSink?.agentOutput(runId, agent, "stdout", chunk);
-      if (runId && collaborationStream && options.eventSink?.agentCollaboration) {
-        for (const event of collaborationStream.feed(chunk)) {
-          options.eventSink.agentCollaboration(runId, agent, event);
+  const run = async (runState: AgentState) => {
+    const sessionStream = new RuntimeSessionStream(agent);
+    const result = await execute("bash", ["-c", def.buildCommand(runState, options.workspacePath)], {
+      cwd,
+      stdoutRenderer: (chunk) => {
+        sessionStream.feed(chunk);
+        if (runId) options.eventSink?.agentOutput(runId, agent, "stdout", chunk);
+        if (runId && collaborationStream && options.eventSink?.agentCollaboration) {
+          for (const event of collaborationStream.feed(chunk)) {
+            options.eventSink.agentCollaboration(runId, agent, event);
+          }
         }
-      }
-      return renderer.feed(chunk);
-    },
-    stderrRenderer: (chunk) => {
-      if (runId) options.eventSink?.agentOutput(runId, agent, "stderr", chunk);
-      return stderrRenderer.feed(chunk);
-    },
-    sink: options.sink,
-    signal: options.signal,
-    // Output reaches the daemon through a pipe, where a Python CLI block-buffers
-    // stdout and the transcript arrives in bursts; `stdbuf` (BoxLite only) does
-    // not reach Python's own buffering, so ask for it on every computer.
-    env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)) },
-  });
+        return renderer.feed(chunk);
+      },
+      stderrRenderer: (chunk) => {
+        if (runId) options.eventSink?.agentOutput(runId, agent, "stderr", chunk);
+        return stderrRenderer.feed(chunk);
+      },
+      sink: options.sink,
+      signal: options.signal,
+      // Output reaches the daemon through a pipe, where a Python CLI block-buffers
+      // stdout and the transcript arrives in bursts; `stdbuf` (BoxLite only) does
+      // not reach Python's own buffering, so ask for it on every computer.
+      env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)) },
+    });
+    return { result, runtimeSessionId: sessionStream.finish() ?? extractRuntimeSessionId(result.stdout, agent) };
+  };
+  let { result, runtimeSessionId } = await run(state);
+  // A resume that never reached its conversation (pruned, or recorded on
+  // another computer) did no work, so the run starts fresh instead of failing.
+  if (state.resume_session_id && result.exit_code !== 0 && !runtimeSessionId && !options.signal?.aborted) {
+    const { resume_session_id: _dropped, ...fresh } = state;
+    ({ result, runtimeSessionId } = await run(fresh));
+  }
   const tokenUsage = extractTokenUsageFromJsonl(result.stdout, agent);
 
   return {
@@ -78,6 +90,7 @@ export async function runAgentNode(
     last_exit_code: result.exit_code,
     agent_failures: withFailure(state, agent, result.exit_code !== 0),
     token_usage: tokenUsage,
+    ...(runtimeSessionId ? { runtime_session_id: runtimeSessionId } : {}),
   };
 }
 

@@ -25,3 +25,15 @@ test("restart retains unresolved execution identity; only durable exit evidence 
   assert.deepEqual(replayed,["run.output","run.cancelled"]);
  } finally {rmSync(root,{recursive:true,force:true});}
 });
+
+test("journal keeps spawn evidence across a restart", () => {
+  const dir = mkdtempSync(join(tmpdir(), "relay-journal-evidence-"));
+  try {
+    const journal = new ExecutionJournal(dir);
+    journal.record({ id: "cmd", runId: "run", sessionId: "ses", agent: "codex" });
+    journal.attach("cmd", { processGroup: 4242, bootAt: 1234 });
+    const [record] = new ExecutionJournal(dir).pending();
+    assert.equal(record?.processGroup, 4242);
+    assert.equal(record?.bootAt, 1234);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

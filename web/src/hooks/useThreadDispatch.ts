@@ -330,6 +330,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     fallback,
     kind,
     note,
+    resume = false,
     failureLabel,
     failureMessageKey,
   }: {
@@ -337,6 +338,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     fallback?: AgentName;
     kind: "rerun" | "handoff";
     note?: string;
+    /** Rerun inside the agent's own runtime conversation instead of afresh. */
+    resume?: boolean;
     failureLabel: string;
     failureMessageKey: string;
   }) {
@@ -371,9 +374,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         navigateToRoute("main");
         transcript.pinToBottom();
       }
-      const recoveryKey = note
-        ? `${activeSession.id}:${kind}:${logicalAgent.id}:${note}`
-        : `${activeSession.id}:${kind}:${logicalAgent.id}`;
+      const recoveryKey = [activeSession.id, resume ? "resume" : kind, logicalAgent.id, ...(note ? [note] : [])].join(":");
       const done = await requestThreadRecoveryMutation.mutateAsync({
         sessionId: activeSession.id,
         input: {
@@ -381,6 +382,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
           idempotencyKey: recoveryOperationId(recoveryKey),
           targetAgentId: logicalAgent.id,
           ...(note ? { note } : {}),
+          ...(resume ? { resume: true } : {}),
         },
       });
       recoveryOperationIdsRef.current.delete(recoveryKey);
@@ -436,6 +438,17 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     });
   }
 
+  async function resumeAgentMessage(agent: AgentName, agentId?: string) {
+    await dispatchRecovery({
+      prefer: agentId,
+      fallback: agent,
+      kind: "rerun",
+      resume: true,
+      failureLabel: "Failed to resume agent run",
+      failureMessageKey: "errors.rerun_assignment",
+    });
+  }
+
   async function sendHandoff() {
     // Read at send time: the draft lives in the handoff store, not in props.
     const { agentId, note } = useHandoffStore.getState();
@@ -449,5 +462,5 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   }
 
 
-  return { sendMessage, cancelActiveRun, sendDecision, retryAgentMessage, sendHandoff };
+  return { sendMessage, cancelActiveRun, sendDecision, retryAgentMessage, resumeAgentMessage, sendHandoff };
 }

@@ -45,6 +45,8 @@ class RecoveryIntent:
     mode: str = "action"
     note: str | None = None
     idempotency_key: str | None = None
+    # A rerun may pick its agent's runtime conversation back up.
+    resume: bool = False
 
 
 @dataclass(frozen=True)

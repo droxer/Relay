@@ -49,7 +49,11 @@ from ..core.models import (
     AGENT_NAMES,
     DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS,
 )
-from ..persistence.daemon_store import ACTIVE_RUN_REQUEST_STATUSES
+from ..persistence.daemon_store import (
+    ACTIVE_RUN_REQUEST_STATUSES,
+    EXECUTION_INTERRUPTED_STATE_KEY,
+    EXIT_UNCONFIRMED_STATE_KEY,
+)
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.task_execution import request_execution_owner
 from ..persistence.stores import (
@@ -124,6 +128,10 @@ DAEMON_COMMAND_LEASE_SECONDS = float(
 # live node before the reaper treats the start as lost. One full lease period
 # leaves room for heartbeats delayed by a slow poll or a backend restart.
 LOST_DISPATCH_GRACE_SECONDS = DAEMON_COMMAND_LEASE_SECONDS
+# Bound one registration's journal report; the daemon sends the rest next time.
+JOURNAL_REPORT_LIMIT = 200
+DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT = "execution-journal-report"
+DAEMON_CAPABILITY_AGENT_RESUME = "agent-resume"
 DAEMON_COMMAND_RETENTION_SECONDS = float(
     os.environ.get("RELAY_DAEMON_COMMAND_RETENTION_SECONDS", str(6 * 60 * 60))
 )
@@ -242,6 +250,8 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_HANDOFF_VALIDATION,
         DAEMON_CAPABILITY_AGENT_MODEL,
         DAEMON_CAPABILITY_ENDPOINT_MODELS,
+        DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
+        DAEMON_CAPABILITY_AGENT_RESUME,
     }
 )
 DAEMON_SANDBOX_MODES = frozenset({"none", "boxlite"})
@@ -752,6 +762,45 @@ class DaemonNodeRegistry:
             agents={agent: status for agent, status in sandbox["agents"].items()},
         )
         return sandbox
+
+    def account_journaled_commands(
+        self, sandbox_id: str, command_ids: list[str]
+    ) -> list[str]:
+        """Record runs a restarted daemon admitted but will not resume.
+
+        The daemon journals each run.start before executing it and refuses to
+        run a journaled command again after a crash. Its report is not exit
+        evidence -- a host-mode agent may outlive its daemon -- so a still
+        delivered run is only marked interrupted, which a person can then
+        report gone. Returns the ids this node may forget: all of them. Only
+        this node's still-delivered runs are marked; the rest change nothing.
+        """
+        acknowledged: list[str] = []
+        with self.dispatch_scope([sandbox_id]):
+            for command_id in command_ids[:JOURNAL_REPORT_LIMIT]:
+                record = self.daemon_store.get_command(command_id)
+                if not record:
+                    acknowledged.append(command_id)
+                    continue
+                if record.get("nodeId") != sandbox_id:
+                    logger.warning(
+                        "Ignored a journaled run that belongs to another node",
+                        node_id=sandbox_id, command_id=command_id,
+                    )
+                    acknowledged.append(command_id)
+                    continue
+                if record.get("status") == "dispatched":
+                    request = self.daemon_store.run_request_for_command(command_id)
+                    if request and self.daemon_store.mark_run_request_state(
+                        request["id"], EXECUTION_INTERRUPTED_STATE_KEY
+                    ):
+                        logger.warning(
+                            "Daemon restarted with a run it will not resume",
+                            node_id=sandbox_id, command_id=command_id,
+                            run_id=(record.get("command") or {}).get("runId"),
+                        )
+                acknowledged.append(command_id)
+        return acknowledged
 
     def _live_node(self, sandbox_id: str) -> dict[str, Any] | None:
         """The node row for `sandbox_id`, unless it is a deletion tombstone."""
@@ -1650,15 +1699,38 @@ class DaemonNodeRegistry:
     def command_lease_observations(
         self, sandbox_id: str, command_leases: list[tuple[str, str | None]]
     ) -> dict[str, Any]:
-        """Read matching ownership evidence after an authenticated renewal/poll."""
+        """Read matching ownership evidence after an authenticated renewal/poll.
+
+        `settledCommandIds` names submitted runs Relay already holds a terminal
+        outcome for. A daemon still holding one has not reported it, so that
+        outcome is a person's assertion; a daemon stuck verifying the exit may
+        then let the run go.
+        """
         accepted = []
+        settled = []
         for command_id, lease_id in command_leases:
             record = self.daemon_store.get_command(command_id)
-            if (record and record.get("nodeId") == sandbox_id
-                and record.get("status") == "dispatched"
-                and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
+            if not record or record.get("nodeId") != sandbox_id:
+                continue
+            if record.get("status") in ("completed", "failed", "cancelled"):
+                settled.append(command_id)
+            elif (record.get("status") == "dispatched"
+                  and record.get("leaseId") == lease_id and record.get("leaseExpiresAt")):
                 accepted.append({"commandId": command_id, "leaseId": lease_id, "leaseExpiresAt": record["leaseExpiresAt"]})
-        return {"commandLeases": accepted, "observedAt": now_iso()}
+        return {"commandLeases": accepted, "settledCommandIds": settled, "observedAt": now_iso()}
+
+    def _record_exit_unconfirmed(
+        self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]
+    ) -> None:
+        request_id = command.get("_runRequestId")
+        if not request_id or not self.daemon_store.mark_run_request_state(
+            request_id, EXIT_UNCONFIRMED_STATE_KEY
+        ):
+            return
+        logger.warning(
+            "Daemon cannot confirm a stopped run exited; it stays reserved",
+            node_id=sandbox_id, command_id=event["commandId"], run_id=event["runId"],
+        )
 
     def _take_commands_unlocked(
         self,
@@ -2284,6 +2356,11 @@ class DaemonNodeRegistry:
             "run.failed": "failed",
             "run.cancelled": "cancelled",
         }.get(event["type"])
+        if event.get("outputTruncated"):
+            logger.warning(
+                "Run completed but the backend refused part of its streamed output",
+                sandbox_id=sandbox_id, command_id=event["commandId"], run_id=event["runId"],
+            )
         late_output = (
             event.get("replayed") is True
             and event["type"] in {"run.output", "run.output.batch", "run.collaboration"}
@@ -2378,6 +2455,9 @@ class DaemonNodeRegistry:
             raise PermissionError(
                 "Unauthorized daemon node event: command metadata does not match the active command."
             )
+        if event["type"] == "run.exit_unconfirmed":
+            self._record_exit_unconfirmed(sandbox_id, command, event)
+            return
         if event["type"] == "run.workspace":
             from ..persistence.store_common import relay_task_event
 
@@ -2953,7 +3033,14 @@ class DaemonNodeRegistry:
         ):
             return False
         command = fresh_command.get("command") or {}
-        reason = "The run never started: its computer did not receive it."
+        # A daemon that reports its journal at registration would have named
+        # this run if it had admitted it, so its silence means never received.
+        # Older daemons cannot say, so claim only what Relay observed.
+        reason = (
+            "The run never started: its computer did not receive it."
+            if DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT in (sandbox.get("capabilities") or [])
+            else "The computer stopped responding before the run reported progress."
+        )
         event = {
             "type": "run.cancelled" if stopping else "run.failed",
             "commandId": command["id"],
@@ -2988,6 +3075,8 @@ class DaemonNodeRegistry:
             command_record.get("status") == "dispatched"
             and (command_record.get("command") or {}).get("type") == "run.start"
             and not request.get("currentProgressAt")
+            # The daemon said it received this run; it was not lost in transit.
+            and not (request.get("state") or {}).get(EXECUTION_INTERRUPTED_STATE_KEY)
             and lease_expires_at
             and self._age_ms(lease_expires_at) > LOST_DISPATCH_GRACE_SECONDS * 1000
         )
@@ -3322,6 +3411,10 @@ class DaemonNodeRegistry:
                 )
                 return run_request
             state["agent_model"] = assignment["agentModel"]
+        if assignment.get("resumeRun") and DAEMON_CAPABILITY_AGENT_RESUME in (sandbox.get("capabilities") or []):
+            resume = resumable_runtime_session(session_snapshot, assignment)
+            if resume:
+                state["resume_session_id"] = resume
         if assignment.get("brief"):
             state["assignment_brief"] = assignment["brief"]
         state["assignment_id"] = assignment["assignmentId"]
@@ -3689,6 +3782,8 @@ class DaemonNodeRegistry:
         }
         if event.get("tokenUsage"):
             payload["tokenUsage"] = event["tokenUsage"]
+        if event.get("runtimeSessionId"):
+            payload["runtimeSessionId"] = event["runtimeSessionId"]
         self.store.append_event(session["id"], relay_event("agent.completed", session["id"], payload))
 
     def _advance_run_request(
@@ -3798,6 +3893,7 @@ class DaemonNodeRegistry:
                         "exitCode": exit_code,
                         "agentLog": agent_log,
                         "tokenUsage": event.get("tokenUsage"),
+                        **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                         "assignmentId": assignment.get("assignmentId"),
                     },
                 )
@@ -3859,6 +3955,7 @@ class DaemonNodeRegistry:
                         "exitCode": 130,
                         "agentLog": agent_log,
                         "tokenUsage": event.get("tokenUsage"),
+                        **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                         "assignmentId": assignment.get("assignmentId"),
                     },
                 )
@@ -3898,7 +3995,9 @@ class DaemonNodeRegistry:
                     "exitCode": event["exitCode"],
                     "agentLog": agent_log,
                     **({"workResult": work_result} if work_result else {}),
+                    **({"outputTruncated": True} if event.get("outputTruncated") else {}),
                     "tokenUsage": event.get("tokenUsage"),
+                    **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                     "assignmentId": assignment.get("assignmentId"),
                 },
             )
@@ -4831,6 +4930,27 @@ class DaemonNodeRegistry:
                 "Daemon node stale", sandbox_id=sandbox["id"], last_seen_age_ms=age
             )
         return {"online": online, "stale": not online, "lastSeenAgeMs": age}
+
+
+def resumable_runtime_session(
+    session: dict[str, Any], assignment: dict[str, Any]
+) -> str | None:
+    """The runtime conversation this agent's latest run in the thread used.
+
+    Only the same logical agent (or, for legacy runs, the same executor) may
+    resume it; a different agent never inherits another's conversation.
+    """
+    agent_id = assignment.get("agentId")
+    for run in reversed(session.get("agentRuns") or []):
+        same_agent = (
+            run.get("logicalAgentId") == agent_id
+            if agent_id
+            else run.get("agent") == assignment.get("executorKind")
+        )
+        if not same_agent:
+            continue
+        return run.get("runtimeSessionId")
+    return None
 
 
 def daemon_active_run(run: dict[str, Any]) -> dict[str, Any]:

@@ -205,6 +205,7 @@ async def request_thread_recovery(
                 mode=mode,
                 note=string_field(body, "note") or None,
                 idempotency_key=string_field(body, "idempotencyKey") or None,
+                resume=kind == "rerun" and body.get("resume") is True,
             ),
             actor,
         )

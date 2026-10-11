@@ -457,3 +457,138 @@ def test_online_heartbeat_is_separate_from_unconfirmed_exit_in_detail_and_list(m
         listed = next(session for session in response["sessions"] if session["id"] == session_id)
         assert listed["execution"]["computerOnline"] is True
         assert listed["execution"]["canDelete"] is False
+
+
+def _clock_after(app, seconds: float) -> None:
+    """Advance the lifecycle's view of time past the command's lease."""
+    from datetime import datetime, timedelta, timezone
+
+    later = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    app.state.execution_lifecycle.clock = lambda: later
+
+
+def _computer_gone(app) -> None:
+    app.state.registry.liveness_timeout_ms = -1
+
+
+def test_a_dead_computer_run_becomes_reportable_after_the_unresponsive_window(monkeypatch) -> None:
+    """A computer that died mid-run never sends exit evidence and never renews
+    its lease. Once the lease has been dead long enough, the execution is one
+    Relay has given up on, so a person may report it gone; before this, the
+    run sat in `unresponsive` forever and reconcile refused it."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+        _computer_gone(app)
+        _clock_after(app, 60 + 11 * 60)
+
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["phase"] == "recovery_required"
+        assert status["blockingReason"] == "execution_lost"
+        assert status["canReportGone"] is True
+
+        assert client.post(f"/api/v1/threads/{session_id}/execution/reconcile").status_code == 200
+        store = app.state.registry.daemon_store
+        assert store.active_run_request_for_session_any_node(session_id) is None
+        assert store.get_run_request(run["request"]["id"])["status"] == "cancelled"
+
+
+def test_a_dead_lease_waits_out_the_unresponsive_window(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        _dispatched_run(app, session_id)
+        _computer_gone(app)
+        _clock_after(app, 60 + 5 * 60)
+
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["phase"] == "unresponsive"
+        assert status["canReportGone"] is False
+
+
+def test_an_online_computer_with_a_dead_lease_stays_unresponsive(monkeypatch) -> None:
+    """Liveness alone is not exit evidence: a computer that is still talking
+    to Relay may yet report on the run, so it is never offered as gone."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        _dispatched_run(app, session_id)
+        _clock_after(app, 60 + 11 * 60)
+
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["phase"] == "unresponsive"
+        assert status["canReportGone"] is False
+        assert client.post(f"/api/v1/threads/{session_id}/execution/reconcile").status_code == 409
+
+
+def test_an_unconfirmed_stop_on_a_dead_lease_escalates_after_the_grace(monkeypatch) -> None:
+    """The stop grace used to need a live lease, so a stop sent to a computer
+    that had already died never escalated."""
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+        _stop_requested_long_ago(app, run["request"]["id"])
+        _clock_after(app, 120)
+
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["phase"] == "recovery_required"
+        assert status["blockingReason"] == "termination_unconfirmed"
+        assert status["canReportGone"] is True
+
+
+def test_delete_releases_a_run_whose_computer_died(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        _dispatched_run(app, session_id)
+
+        response = client.delete(f"/api/v1/threads/{session_id}?stop=true")
+        assert response.status_code == 202
+        # The computer dies with the stop unacknowledged: the lease lapses
+        # and the stop grace runs out with no live lease behind it.
+        _computer_gone(app)
+        _clock_after(app, 60 + 61)
+        app.state.execution_lifecycle.tick()
+
+        assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+
+
+def test_a_restarted_daemon_names_the_run_it_will_not_resume(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        run = _dispatched_run(app, session_id)
+
+        response = TestClient(app).post("/api/v1/daemon-node-registrations", json={
+            "sandboxId": "sbx_alice", "token": "node_token", "protocolVersion": 1,
+            "supportedAgents": ["claude"], "status": "ready",
+            "capabilities": ["execution-journal-report"],
+            "journaledCommandIds": [run["command"]["id"]],
+        })
+
+        assert response.status_code == 200
+        assert response.json()["acknowledgedJournalIds"] == [run["command"]["id"]]
+        status = client.get(f"/api/v1/threads/{session_id}/execution").json()
+        assert status["blockingReason"] == "execution_interrupted"
+        assert status["canReportGone"] is True

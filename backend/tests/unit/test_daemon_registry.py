@@ -8056,3 +8056,223 @@ def test_reaper_never_relabels_a_run_that_executed_as_lost(store_factory, monkey
             assert len(registry.daemon_store.list_active_runs("sbx_alice")) == 1
 
     asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_a_restarted_daemon_reporting_a_journaled_run_marks_it_interrupted(store_factory, monkeypatch):
+    """A daemon that crashed mid-run comes back knowing it will not resume the
+    run. Saying so turns a silent, indefinite reservation into one a person
+    can see and release, and keeps the reaper from calling it never-received."""
+    from relay.services.execution_lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Interrupted"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+
+            acknowledged = registry.account_journaled_commands("sbx_alice", [command["id"]])
+
+            assert acknowledged == [command["id"]]
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            assert request["state"].get("_relay_execution_interrupted_at")
+            status = ExecutionLifecycleService(registry, None).status(sessions.get_session(command["sessionId"]))
+            assert status["phase"] == "recovery_required"
+            assert status["blockingReason"] == "execution_interrupted"
+            assert status["canReportGone"] is True
+
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+            registry.reap_stale_runs()
+            assert registry.daemon_store.get_command(command["id"])["status"] == "dispatched"
+
+    asyncio.run(run_flow())
+
+
+def test_journal_report_acknowledges_settled_or_unknown_runs_and_ignores_other_nodes():
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            registry.register({
+                "sandboxId": "sbx_bob", "employeeId": "bob", "token": "bob_token",
+                "workspacePath": "/workspace/bob", "protocolVersion": 1,
+                "supportedAgents": ["codex"], "status": "ready",
+            })
+            task = tasks.create_task({"title": "Settled"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            registry.handle_event("sbx_alice", {
+                "type": "run.failed", "commandId": command["id"], "leaseId": command["leaseId"],
+                "sessionId": command["sessionId"], "runId": command["runId"], "agent": "codex",
+                "error": "boom", "exitCode": 1,
+            }, "node_token")
+            other = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Live"})["id"])
+
+            assert registry.account_journaled_commands("sbx_alice", [command["id"], "cmd_unknown"]) == [command["id"], "cmd_unknown"]
+            # Another node cannot mark this node's run interrupted, but it may
+            # forget the record: nothing it reports about that run is acted on.
+            assert registry.account_journaled_commands("sbx_bob", [other["id"]]) == [other["id"]]
+            request = registry.daemon_store.run_request_for_command(other["id"])
+            assert not request["state"].get("_relay_execution_interrupted_at")
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("reports_journal", [True, False])
+def test_lost_dispatch_says_never_received_only_when_the_daemon_could_have_said_otherwise(reports_journal, monkeypatch):
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            _sessions, tasks, registry = _round_result_registry(root)
+            if reports_journal:
+                registry.register({
+                    "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                    "workspacePath": "/workspace/alice", "protocolVersion": 1,
+                    "supportedAgents": ["codex"], "status": "ready",
+                    "capabilities": ["task-workspaces", "thread-workspaces", "round-result",
+                                     "execution-journal-report"],
+                })
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Lost"})["id"])
+            _lapse_dispatch(registry, command, monkeypatch, long_ago=True)
+
+            registry.reap_stale_runs()
+
+            error = registry.daemon_store.get_command(command["id"])["error"]
+            if reports_journal:
+                assert error == "The run never started: its computer did not receive it."
+            else:
+                assert error == "The computer stopped responding before the run reported progress."
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+def test_a_daemon_that_cannot_confirm_exit_makes_the_run_reportable(store_factory):
+    """A run whose process exit the daemon can no longer verify used to look
+    live for as long as the daemon kept renewing its lease. Saying so lets a
+    person see it and report it gone, and the heartbeat then tells the daemon
+    that run is settled so it can give the slot back."""
+    from relay.services.execution_lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), tasks.create_task({"title": "Wedged"})["id"])
+            identity = {"commandId": command["id"], "leaseId": command["leaseId"],
+                        "sessionId": command["sessionId"], "runId": command["runId"], "agent": "codex"}
+
+            registry.handle_event("sbx_alice", {"type": "run.exit_unconfirmed", **identity}, "node_token")
+
+            lifecycle = ExecutionLifecycleService(registry, None)
+            status = lifecycle.status(sessions.get_session(command["sessionId"]))
+            assert status["phase"] == "recovery_required"
+            assert status["blockingReason"] == "termination_unconfirmed"
+            assert status["canReportGone"] is True
+            leases = [(command["id"], command["leaseId"])]
+            assert registry.heartbeat("sbx_alice", "node_token", leases)["settledCommandIds"] == []
+
+            lifecycle.reconcile(command["sessionId"], "alice")
+
+            assert registry.heartbeat("sbx_alice", "node_token", leases)["settledCommandIds"] == [command["id"]]
+
+    asyncio.run(run_flow())
+
+
+def test_run_completed_keeps_the_output_truncated_flag():
+    from relay.api.helpers import daemon_node_event
+
+    base = {"type": "run.completed", "commandId": "c", "sessionId": "s", "runId": "r",
+            "agent": "codex", "exitCode": 0, "agentLog": ""}
+    assert daemon_node_event({**base, "outputTruncated": True})["outputTruncated"] is True
+    assert "outputTruncated" not in daemon_node_event(base)
+
+
+def test_a_completed_run_remembers_its_output_was_truncated():
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions = LocalSessionStore(root)
+            registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+            registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                               "workspacePath": "/workspace/alice", "protocolVersion": 2,
+                               "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"], "status": "ready"})
+            await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "verbose", "assignments": [{"agent": "codex"}]})
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
+                "sessionId": command["sessionId"], "agent": "codex", "exitCode": 0,
+                "agentLog": "done", "leaseId": command["leaseId"], "outputTruncated": True,
+            }, "node_token")
+            [run] = sessions.get_session(command["sessionId"])["agentRuns"]
+            assert run["status"] == "completed"
+            assert run["outputTruncated"] is True
+    asyncio.run(flow())
+
+
+SESSION_ID = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d"
+
+
+def _resume_registry(root: str, capabilities: list[str]) -> tuple[Any, Any]:
+    sessions = LocalSessionStore(root)
+    registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+    registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                       "workspacePath": "/workspace/alice", "protocolVersion": 2,
+                       "supportedAgents": ["claude"], "capabilities": ["thread-workspaces", *capabilities],
+                       "status": "ready"})
+    return sessions, registry
+
+
+def _finish(registry: Any, command: dict[str, Any], **fields: Any) -> None:
+    registry.handle_event("sbx_alice", {
+        "type": "run.cancelled", "commandId": command["id"], "runId": command["runId"],
+        "sessionId": command["sessionId"], "agent": "claude", "leaseId": command["leaseId"],
+        "reason": "lease expired", **fields,
+    }, "node_token")
+
+
+def test_a_run_remembers_the_runtime_conversation_it_ran_in():
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, registry = _resume_registry(root, ["agent-resume"])
+            await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "work", "assignments": [{"agent": "claude"}]})
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            _finish(registry, command, runtimeSessionId=SESSION_ID)
+            [run] = sessions.get_session(command["sessionId"])["agentRuns"]
+            assert run["runtimeSessionId"] == SESSION_ID
+    asyncio.run(flow())
+
+
+def test_a_malformed_runtime_session_id_is_dropped():
+    from relay.api.helpers import daemon_node_event
+
+    event = daemon_node_event({"type": "run.cancelled", "commandId": "c", "sessionId": "s", "runId": "r",
+                               "agent": "claude", "runtimeSessionId": "x; rm -rf /"})
+    assert "runtimeSessionId" not in event
+
+
+@pytest.mark.parametrize("capable", [True, False])
+def test_resuming_a_rerun_hands_the_agent_its_conversation_back(capable):
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, registry = _resume_registry(root, ["agent-resume"] if capable else [])
+            backend = ServerDaemonNodeBackend(registry)
+            await backend.run("sbx_alice", {"taskGoal": "work", "assignments": [{"agent": "claude"}]})
+            [first] = registry.take_commands("sbx_alice", "node_token")
+            _finish(registry, first, runtimeSessionId=SESSION_ID)
+
+            await backend.run("sbx_alice", {"sessionId": first["sessionId"], "taskGoal": "work",
+                                            "assignments": [{"agent": "claude", "resumeRun": True}]})
+            [second] = registry.take_commands("sbx_alice", "node_token")
+
+            state = second["state"]
+            if capable:
+                assert state["resume_session_id"] == SESSION_ID
+            else:
+                # An older daemon cannot resume; the rerun simply starts fresh.
+                assert "resume_session_id" not in state
+    asyncio.run(flow())
+
+
+def test_only_a_rerun_decision_can_ask_to_resume():
+    from relay.collaboration.service import _validated_decision
+
+    target = {"executorKind": "claude", "agentId": "agent_1"}
+    assert _validated_decision({"kind": "rerun", "resume": True}, target)["resume"] is True
+    assert "resume" not in _validated_decision({"kind": "rerun"}, target)
+    assert "resume" not in _validated_decision({"kind": "handoff", "resume": True}, target)

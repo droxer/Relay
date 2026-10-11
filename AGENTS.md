@@ -215,7 +215,9 @@ Key modules:
   (`POST /threads/{id}/execution/reconcile`) and thread deletion itself once
   the execution requires recovery (`canReportGone`); both append
   `session.execution_reconciled` with the actor, so the log never reads as
-  observed exit. Every overdue deletion must have a way out — a person's action
+  observed exit. A dead computer's run becomes reportable (`execution_lost`,
+  `execution_interrupted`, or a stop past its grace) but never self-releases.
+  Every overdue deletion must have a way out — a person's action
   or automatic progress; `backend/tests/unit/test_execution_escape.py` sweeps
   the execution-status inputs to enforce it, so extend its axes with any new
   phase, status, or recovery reason.

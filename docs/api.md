@@ -114,7 +114,7 @@ shows the reason and offers Re-enable to the owner or an admin.
 PATCH  /api/v1/threads/{id}                         { title } or { archived: true }
 POST   /api/v1/threads/{id}/cancellations
 POST   /api/v1/threads/{id}/messages               { text, intent, addressAgentIds?, addressTeamId?, style?, userMessageId?, idempotencyKey? }
-POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey? }
+POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey?, resume? }
 PUT    /api/v1/tasks/{id}/assignment
 POST   /api/v1/tasks/{id}/runs
 POST   /api/v1/tasks/{id}/pickups
@@ -141,6 +141,16 @@ or `review`; omitting `addressAgentId` addresses the current room. Recovery
 `kind` is `rerun` or `handoff`. The backend resolves membership, executor,
 placement, and immutable round assignments; clients do not send those transport
 details.
+
+A `kind: "rerun"` with `resume: true` continues the target agent's own runtime
+conversation instead of starting over: daemons advertising `agent-resume` report
+the CLI's conversation id as `runtimeSessionId` on `run.completed`/`run.failed`/
+`run.cancelled` (stored on the run record), and the rerun's command state carries
+it back as `resume_session_id`. Only Claude (`--resume`) and Codex
+(`exec resume`) resume today; on an older daemon, or with no recorded
+conversation, the rerun simply starts fresh, and a resume whose conversation is
+gone falls back to a fresh run on the daemon. Ids are accepted only as plain
+`[A-Za-z0-9_-]{8,128}` tokens because they return on a command line.
 
 Use `/threads/{id}/recoveries` with `kind: "handoff"` to dispatch a receiving
 logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under
@@ -640,12 +650,23 @@ the retained result.
 A stop intent — an explicit stop or the thread deletion itself, whichever came
 first — that stays unconfirmed for 60 seconds surfaces `recovery_required` /
 `termination_unconfirmed`, whether the daemon still holds its lease (`stopping`)
-or stopped renewing it (`unresponsive`). Silence alone never releases anything:
-an `unresponsive` run nobody asked to stop stays `unresponsive`, and the
-release still needs a person's recorded assertion (the deletion or the
-reconcile endpoint). A legacy `orphaned_run` with no run request may be
-reported gone even when its last command is terminal, because there is no
-request left to finalize that result into.
+or stopped renewing it (`unresponsive`). Silence alone never releases anything.
+A disconnected daemon surfaces `unresponsive`; once the delivered command's
+lease has been expired for `RELAY_EXECUTION_UNRESPONSIVE_RECOVERY_SECONDS`
+(default 600) and the computer is not online, it surfaces `recovery_required` /
+`execution_lost`. A daemon that restarts and reports a journaled command it will
+not resume surfaces `recovery_required` / `execution_interrupted`: a daemon
+advertising `execution-journal-report` sends `journaledCommandIds` on
+registration, and the response's `acknowledgedJournalIds` lists those the backend
+accounted for so the daemon can drop their journal records. A daemon that cannot
+verify a stopped run's process exit for a minute sends `run.exit_unconfirmed`,
+which surfaces `recovery_required` / `termination_unconfirmed` at once. Heartbeat
+and poll lease observations list `settledCommandIds`: submitted runs that already
+have a terminal outcome, so a daemon holding a reported-gone run can give back
+its slot. None of these release anything automatically; release still needs a
+person's recorded assertion (deletion or reconciliation). A legacy
+`orphaned_run` with no run request may be reported gone even when its last command
+is terminal, because there is no request left to finalize that result into.
 
 `backend/tests/unit/test_execution_escape.py` walks the whole input space of
 the execution status and fails if any overdue deletion has neither a person's

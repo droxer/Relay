@@ -20,6 +20,8 @@ const executionGuides: Record<string, RecoveryGuide> = {
   termination_unconfirmed: { key: "termination_unconfirmed", destination: "computer", reportGone: true },
   orphaned_run: { key: "orphaned_run", destination: "computer", reportGone: true },
   execution_unconfirmed: { key: "execution_unconfirmed", destination: "computer", reportGone: true },
+  execution_lost: { key: "execution_lost", destination: "computer", reportGone: true },
+  execution_interrupted: { key: "execution_interrupted", destination: "computer", reportGone: true },
   awaiting_dispatch: { key: "awaiting_dispatch", destination: "computer" },
   awaiting_termination: { key: "awaiting_termination", destination: "computer" },
   saving_results: { key: "saving_results" },

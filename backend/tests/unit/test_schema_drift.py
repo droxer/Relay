@@ -477,6 +477,8 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
         links = conn.execute(text("SELECT count(*) FROM task_sessions")).scalar_one()
         valid = conn.execute(text(
             "SELECT convalidated FROM pg_constraint WHERE conname = 'task_sessions_session_id_fkey'"
+            # Every test schema has this constraint; pin it to this schema's table.
+            " AND conrelid = 'task_sessions'::regclass"
         )).scalar_one()
     assert links == 1 and valid is True
     sessions.delete_session(sid)

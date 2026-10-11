@@ -127,12 +127,13 @@ describe("design grid", () => {
     assert.deepEqual(offenders, [], "consolidation roles exist — consume them rather than re-mixing");
   });
 
-  it("never writes max-width: 720px, which overlaps the wide transcript rule", () => {
+  it("never queries max-width: 720px, which overlaps the wide transcript rule", () => {
     // chat.css splits its grid at the complementary pair min-width:720 /
-    // max-width:719. A max-width:720 rule matches at exactly 720px too, so both
-    // sides of the split applied at that one width.
+    // max-width:719. A max-width:720 query matches at exactly 720px too, so both
+    // sides of the split applied at that one width. A box capped at 720px wide
+    // is not a breakpoint, so only media queries are checked.
     const offenders = surfaceSheets()
-      .filter(({ source }) => /max-width:\s*720px/.test(source))
+      .filter(({ source }) => /@media[^{]*max-width:\s*720px/.test(source))
       .map(({ name }) => name);
     assert.deepEqual(offenders, [], "the narrow side of the 720 split is max-width: 719px");
   });

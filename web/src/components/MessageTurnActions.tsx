@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActionCopy,
   ActionRetry,
+  ActionStart,
   CheckIcon,
   ICON,
 } from "./icons";
@@ -20,6 +21,9 @@ type MessageTurnActionsProps = {
   streaming: boolean;
   retryDisabled?: boolean;
   onRetry?: (agent: AgentName, agentId?: string) => void;
+  /** Set when the turn stopped early and its runtime conversation survives. */
+  resumable?: boolean;
+  onResume?: (agent: AgentName, agentId?: string) => void;
 };
 
 export function MessageTurnActions({
@@ -30,6 +34,8 @@ export function MessageTurnActions({
   streaming,
   retryDisabled = false,
   onRetry,
+  resumable = false,
+  onResume,
 }: MessageTurnActionsProps) {
   const { t } = useTranslation();
   const { announce } = useDialogs();
@@ -67,10 +73,16 @@ export function MessageTurnActions({
     onRetry(agent, agentId);
   }, [agent, agentId, onRetry, retryDisabled, streaming]);
 
+  const handleResume = useCallback(() => {
+    if (retryDisabled || streaming || !onResume) return;
+    onResume(agent, agentId);
+  }, [agent, agentId, onResume, retryDisabled, streaming]);
+
   const canCopy = Boolean(plainText);
   const showRetry = Boolean(onRetry) && !streaming;
+  const showResume = resumable && Boolean(onResume) && !streaming;
 
-  if (!canCopy && !showRetry) return null;
+  if (!canCopy && !showRetry && !showResume) return null;
 
   return (
     <div className="msg-turn-actions" role="group" aria-label={t("message.actions_label")}>
@@ -97,6 +109,18 @@ export function MessageTurnActions({
         >
           <ActionRetry size={ICON.sm} />
           <span className="msg-turn-action-label">{t("message.retry")}</span>
+        </Button>
+      ) : null}
+      {showResume ? (
+        <Button variant="ghost"
+          type="button"
+          className="msg-turn-action"
+          onClick={handleResume}
+          disabled={retryDisabled}
+          tooltip={t("message.resume_title")}
+        >
+          <ActionStart size={ICON.sm} />
+          <span className="msg-turn-action-label">{t("message.resume")}</span>
         </Button>
       ) : null}
     </div>

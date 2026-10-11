@@ -787,6 +787,8 @@ export interface ThreadRecoveryInput {
   targetAgentId: string;
   note?: string;
   idempotencyKey?: string;
+  /** A rerun that continues the agent's own runtime conversation. */
+  resume?: boolean;
 }
 
 export interface RunInput {

@@ -581,7 +581,16 @@ def register_daemon_node(
             employee_id=sandbox.get("employeeId"),
             status=sandbox.get("status"),
         )
-        return {**sandbox, "heartbeat": ctx.registry.heartbeat_settings()}
+        journaled = registration.get("journaledCommandIds") or []
+        acknowledged = (
+            ctx.registry.account_journaled_commands(sandbox["id"], journaled)
+            if journaled else []
+        )
+        return {
+            **sandbox,
+            "heartbeat": ctx.registry.heartbeat_settings(),
+            **({"acknowledgedJournalIds": acknowledged} if journaled else {}),
+        }
     except DeletedDaemonNodeError as error:
         logger.info(
             "Daemon node registration rejected: node was deleted",

@@ -27,6 +27,10 @@ export interface AgentState {
   agent_instructions?: string;
   /** Model the selected logical agent pins; absent means the runtime default. */
   agent_model?: string;
+  /** Resume this runtime conversation instead of starting a new one. */
+  resume_session_id?: string;
+  /** The runtime conversation this run used, as reported by its CLI. */
+  runtime_session_id?: string;
   /** The job this run is doing within its team, e.g. "reviewer". */
   agent_role?: string;
   /** Concrete scope owned by this member within the shared team goal. */
