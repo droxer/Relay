@@ -32,6 +32,13 @@ export function watchExecutionExit(signal: AbortSignal, hooks: ExecutionExitHook
   exitHooks.set(signal, hooks);
 }
 
+export function exitHooksFor(signal: AbortSignal | undefined): ExecutionExitHooks | undefined {
+  return signal ? exitHooks.get(signal) : undefined;
+}
+
+/** The result a run gets when a person released it without verified exit. */
+export const RELEASED_EXIT_MESSAGE = "Released after the agent was reported gone; exit never verified.";
+
 const RELEASED = Symbol("released");
 
 export async function collectExecution(
@@ -105,7 +112,7 @@ export async function collectExecution(
         const outcome = await Promise.race([execution.wait(), released]);
         if (outcome !== RELEASED) return outcome;
         warn("Execution released after it was reported gone; its exit was never verified.");
-        return { exitCode: -1, errorMessage: "Released after the agent was reported gone; exit never verified.", released: true };
+        return { exitCode: -1, errorMessage: RELEASED_EXIT_MESSAGE, released: true };
       } catch {
         if (!warned) {
           warn("Cannot confirm sandbox execution exit; retaining the run.");
@@ -114,7 +121,7 @@ export async function collectExecution(
         requestStop();
         if (await Promise.race([released, new Promise(resolve => setTimeout(resolve, retryMs))]) === RELEASED) {
           warn("Execution released after it was reported gone; its exit was never verified.");
-          return { exitCode: -1, errorMessage: "Released after the agent was reported gone; exit never verified.", released: true };
+          return { exitCode: -1, errorMessage: RELEASED_EXIT_MESSAGE, released: true };
         }
       }
     }

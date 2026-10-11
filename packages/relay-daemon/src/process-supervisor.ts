@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import type { StreamExecResult } from "relay-core";
 import { BoundedTextCapture } from "./bounded-text.js";
+import { RELEASED_EXIT_MESSAGE, exitHooksFor } from "./execution-capture.js";
 
 const SIGKILL_DELAY_MS = 5_000;
 
@@ -15,6 +16,8 @@ export async function superviseLocalProcess(
     signal?: AbortSignal;
     env?: Record<string, string>;
     cleanupTimeoutMs?: number;
+    /** How long group cleanup may stay unverified before the daemon says so. */
+    exitUnconfirmedAfterMs?: number;
   } = {},
 ): Promise<StreamExecResult> {
   if (options.signal?.aborted) {
@@ -35,6 +38,7 @@ export async function superviseLocalProcess(
     });
     const stdoutCapture = new BoundedTextCapture();
     const stderrCapture = new BoundedTextCapture();
+    let released = false;
     let killTimer: NodeJS.Timeout | undefined;
     const terminate = (signal: NodeJS.Signals): void => {
       if (detached && child.pid) {
@@ -79,10 +83,24 @@ export async function superviseLocalProcess(
         // not cancel escalation just because the parent emitted close.
         terminate("SIGKILL");
         const groupId = child.pid;
-        const cleanupDeadline = Date.now() + (options.cleanupTimeoutMs ?? 5_000);
+        const cleanupStartedAt = Date.now();
+        const cleanupDeadline = cleanupStartedAt + (options.cleanupTimeoutMs ?? 5_000);
+        const hooks = exitHooksFor(options.signal);
+        const unconfirmedAfterMs = options.exitUnconfirmedAfterMs ?? 60_000;
+        let reported = false;
         await new Promise<void>((finished) => {
           let warned = false;
           const check = (): void => {
+            // Only a person reporting the run gone may end an unverified wait.
+            if (hooks?.release?.aborted) {
+              released = true;
+              finished();
+              return;
+            }
+            if (!reported && Date.now() - cleanupStartedAt >= unconfirmedAfterMs) {
+              reported = true;
+              hooks?.onExitUnconfirmed?.();
+            }
             try { process.kill(-groupId, 0); } catch (error) {
               if ((error as NodeJS.ErrnoException).code === "ESRCH") {
                 finished();
@@ -103,9 +121,10 @@ export async function superviseLocalProcess(
         });
       }
       resolve({
-        exit_code: code ?? -1,
+        exit_code: released ? -1 : code ?? -1,
         stdout: stdoutCapture.toString(),
         stderr: stderrCapture.toString(),
+        ...(released ? { error_message: RELEASED_EXIT_MESSAGE } : {}),
       });
     });
     child.on("error", (error) => {
