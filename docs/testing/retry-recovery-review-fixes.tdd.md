@@ -78,3 +78,12 @@ guide. Kept main's earliest stop/deletion intent and late-result preservation
 alongside the offline/restarted/unconfirmed-exit recovery markers. Extended the
 execution escape sweep with both new durable execution markers and a long-expired
 lease, preserving the invariant that overdue deletion always has a way out.
+
+Post-merge verification: the affected backend suite passed 348 tests; React
+passed all 431 tests; the production webpack build and TypeScript checks passed;
+all 16 recovery/resume browser tests passed. Updated the two browser route
+assertions for main's new `/computers` destination. The first compiled-suite
+run used stale packaged installer output and failed its new upgrade assertion;
+rebuilt daemon/supervisor packages and the computer bundle before rerunning.
+The final post-merge compiled suite passed all **2,062 tests**, with no failures
+or skips. `git diff --check` passed.

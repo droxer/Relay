@@ -76,7 +76,7 @@ for (const reason of ["finalization_failed", "termination_unconfirmed"]) {
     } else {
       await expect(panel.getByRole("button", { name: "Retry saving results" })).toHaveCount(0);
       await panel.getByRole("link", { name: "Open Computers" }).click();
-      await expect(page).toHaveURL(/\/settings\/computers$/);
+      await expect(page).toHaveURL(/\/computers$/);
       expect(writes).toEqual([]);
     }
   });
@@ -127,7 +127,7 @@ test("online computer with pending deletion keeps exit recovery visible", async 
   await expect(panel).not.toContainText("Computer is not responding");
   await expect(panel.getByRole("button", { name: "Report the agent as gone" })).toHaveCount(0);
   await panel.getByRole("link", { name: "Open Computers" }).click();
-  await expect(page).toHaveURL(/\/settings\/computers$/);
+  await expect(page).toHaveURL(/\/computers$/);
   expect(writes).toEqual([]);
 });
 
