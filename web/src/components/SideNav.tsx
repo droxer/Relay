@@ -7,7 +7,6 @@ import {
   NavAdmin,
   NavAgents,
   NavBacklog,
-  NavComputer,
   NavLogout,
   NavMore,
   NavPreferences,
@@ -15,7 +14,6 @@ import {
   NavRoutine,
   NavSidebarCollapse,
   NavSidebarExpand,
-  NavSkills,
   NavTeams,
   NavThreads,
   type GlyphProps,
@@ -51,8 +49,6 @@ const MORE_ROUTES: readonly {
 }[] = [
   { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
   { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
-  { route: "computers", Icon: NavComputer, labelKey: "computer.title" },
-  { route: "skills", Icon: NavSkills, labelKey: "skills.title" },
   { route: "settings", Icon: NavPreferences, labelKey: "nav.settings" },
   { route: "admin", Icon: NavAdmin, labelKey: "nav.admin", adminOnly: true },
 ];
@@ -138,7 +134,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
      once per key press, never per pointer move. */
   const sidenavCeiling = useCallback(() => maxSidenavWidth(width, chatColumnWidth(), viewportWidth()), [width]);
 
-  const moreActive = ["routine", "teams", "computers", "skills", "settings", "admin"].includes(route);
+  const moreActive = ["routine", "teams", "settings", "admin"].includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
 
   return (
@@ -254,36 +250,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           >
             <NavTeams size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.teams")}</span>
-          </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item ${route === "computers" ? "active" : ""}`}
-            data-nav="computers"
-            href={hrefForRoute("computers")}
-            aria-label={t("computer.title")}
-            aria-current={route === "computers" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "computers")}
-            onMouseEnter={(event) => showNavTooltip(t("computer.title"), event.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(event) => showNavTooltip(t("computer.title"), event.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavComputer size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("computer.title")}</span>
-          </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item ${route === "skills" ? "active" : ""}`}
-            data-nav="skills"
-            href={hrefForRoute("skills")}
-            aria-label={t("skills.title")}
-            aria-current={route === "skills" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "skills")}
-            onMouseEnter={(event) => showNavTooltip(t("skills.title"), event.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(event) => showNavTooltip(t("skills.title"), event.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavSkills size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("skills.title")}</span>
           </a>
         </div>
         {isAdmin ? (

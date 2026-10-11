@@ -17,22 +17,18 @@ const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   routine: "/automations",
   agents: "/agents",
   teams: "/teams",
-  computers: "/computers",
-  skills: "/skills",
   settings: "/settings",
   channels: "/channels",
   admin: "/admin",
 };
 
-/* Where Computers and Skills lived while they were settings sections (and
-   the singular /computer before that). Old links, bookmarks, and anything
-   that shipped with those hrefs still resolve; `pathForAppState` only ever
-   writes the /computers and /skills forms, so the address bar canonicalizes
-   itself on arrival. */
-const LEGACY_SECTION_PATHS: Record<string, AppRoute> = {
+/* Where Computers and Skills lived before they became settings sections. Old
+   links, bookmarks, and anything that shipped with those hrefs still resolve;
+   `pathForAppState` only ever writes the /settings form, so the address bar
+   canonicalizes itself on arrival. */
+const LEGACY_SECTION_PATHS: Record<string, SettingsSection> = {
   "/computer": "computers",
-  "/settings/computers": "computers",
-  "/settings/skills": "skills",
+  "/skills": "skills",
 };
 
 /* A disabled feature has no address: /channels reads as not found rather than
@@ -132,8 +128,6 @@ export function parseAppPath(pathname: string): AppLocationState {
   if (head === "teams" && second && rest.length === 0) {
     return { route: "teams", ...base, teamWorkspaceId: decodeSegment(second) };
   }
-  const legacyRoute = LEGACY_SECTION_PATHS[normalized];
-  if (legacyRoute) return { route: legacyRoute, ...base };
   if (head === "settings" && rest.length === 0) {
     if (!second) return { route: "settings", ...base, settingsSection: DEFAULT_SETTINGS_SECTION };
     if (isSettingsSection(second)) return { route: "settings", ...base, settingsSection: second };
@@ -144,6 +138,8 @@ export function parseAppPath(pathname: string): AppLocationState {
     if (isAdminSection(second)) return { route: "admin", ...base, adminSection: second };
     return { route: "main", ...base, notFound: true };
   }
+  const legacySection = LEGACY_SECTION_PATHS[normalized];
+  if (legacySection) return { route: "settings", ...base, settingsSection: legacySection };
   const workRoute = WORK_ROUTES.get(normalized);
   if (workRoute) return { route: workRoute, ...base };
   return { route: "main", ...base, notFound: true };
@@ -196,7 +192,9 @@ export function pathForAppState({
   return sessionId ? `/threads/${encodeURIComponent(sessionId)}` : "/threads";
 }
 
-/** The href of one settings section — the section rail's rows are links. */
+/** The href of one settings section — for links that point at a section
+ *  rather than at the settings route as a whole (the recovery panel sends a
+ *  reader to their computers). */
 export function hrefForSettingsSection(section: SettingsSection): string {
   return pathForAppState({ route: "settings", mobileView: "chat", sessionId: null, settingsSection: section });
 }
@@ -268,7 +266,7 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
   // writes it now that the list groups.
   backlog: ["page"],
   routines: ["page"],
-  computers: ["page"],
+  settings: ["page"],
   // Two paged collections on one path, so each owns its own key.
   admin: ["employeePage", "nodePage"],
 };
@@ -389,10 +387,10 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
   if (head === "login" && !entityId) {
     const rawReturnTo = source.get("returnTo");
     if (rawReturnTo) target.set("returnTo", validatedReturnTo(rawReturnTo));
-  } else if ((head === "computer" && !entityId) || (head === "computers" && !entityId) || (head === "settings" && entityId === "computers" && rest.length === 0)) {
+  } else if ((head === "computer" && !entityId) || (head === "settings" && entityId === "computers" && rest.length === 0)) {
     const code = source.get("connect");
     if (code && /^[A-Za-z0-9_-]{32}$/.test(code)) target.set("connect", code);
-    copyPageParams("computers", source, target);
+    if (head === "settings") copyPageParams(head, source, target);
   } else if (
     (head === "backlog" && Boolean(entityId) && rest[0] === "threads" && Boolean(rest[1]) && rest.length === 2)
     || (head === "threads" && entityId !== "new" && rest.length === 0)
@@ -498,8 +496,12 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     // The add-team drawer can open over a selected team's profile. Retain its
     // URL-backed state instead of immediately canonicalizing the click away.
     if (source.get("dialog") === "create") target.set("dialog", "create");
+  } else if (head === "settings") {
+    // The section is a path segment, so this branch runs with one — the
+    // computers roster still pages.
+    copyPageParams(head, source, target);
   } else if (head === "admin") {
-    // The section is a path segment, so the sort,
+    // Same shape as settings: the section is a path segment, so the sort,
     // page, and filter params of the employee and computer tables have to be
     // copied HERE rather than falling through to the no-entity branch below —
     // otherwise every admin table control would write a param that
@@ -573,7 +575,7 @@ export function browserUrlForAppState(
   currentSearch = "",
 ): string {
   const nextPath = pathForAppState(state);
-  const computerRedirect = ["/computer", "/settings/computers"].includes(currentPathname) && nextPath === "/computers";
+  const computerRedirect = currentPathname === "/computer" && nextPath === "/settings/computers";
   if (nextPath === currentPathname || computerRedirect) return canonicalBrowserUrl(nextPath, currentSearch);
   const [nextHead] = pathSegments(nextPath);
   const [currentHead] = pathSegments(currentPathname);

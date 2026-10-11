@@ -37,9 +37,7 @@ function appRoutePaths(): string[] {
 describe("SPA fallback routes", () => {
   it("covers every canonical and legacy path the app router owns", () => {
     const heads = clientRouteHeads();
-    // A nested legacy path (/settings/computers) is covered by its head's
-    // `:path*` fallback; a bare one needs its own entry.
-    const missing = appRoutePaths().filter((p) => !heads.has(p) && !heads.has(p.split("/").slice(0, 2).join("/")));
+    const missing = appRoutePaths().filter((p) => !heads.has(p));
     assert.deepEqual(missing, []);
   });
 });
