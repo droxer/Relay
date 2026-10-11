@@ -33,10 +33,10 @@ Implementation:
   ownership responses or credential rejection clear the execution outage state;
   successful registration, including heartbeat fallback, does not.
 
-Initial focused coverage ran all core tests and the process-supervisor tests
+Final focused coverage ran all core tests and the process-supervisor tests
 with Node's `--experimental-test-coverage` and included `nodes.js`,
-`runtime-session.js`, and `process-supervisor.js`: 181 tests passed, 88.60% line,
-88.14% branch, and 80.65% function coverage. Daemon HTTP behavior is covered by
+`runtime-session.js`, and `process-supervisor.js`: 183 tests passed, 89.74% line,
+89.60% branch, and 80.65% function coverage. Daemon HTTP behavior is covered by
 integration tests with controlled backend responses. This does not verify real
 Codex/Claude CLIs, uninterruptible kernel processes, or BoxLite guest retirement.
 
@@ -44,3 +44,26 @@ The dependency audit used `npm audit --registry=https://registry.npmjs.org
 --audit-level=high` because the configured mirror does not support auditing.
 It reported 26 existing advisories (6 low, 4 moderate, 15 high, 1 critical).
 Dependencies and lockfiles are unchanged by these fixes.
+
+## Repository verification
+
+- GREEN implementation checkpoint: `a0683be8`.
+- `npx tsc -p packages/tsconfig.json`: passed.
+- Compiled repository suites (`node --test` over core, chat, daemon, supervisor,
+  and web tests): **2,048 passed**, no failures or skips.
+- `PATH=/Users/feihe/.nvm/versions/node/v22.20.0/bin:$PATH npm run test:react
+  -w web -- --maxWorkers=2`: **431 passed** across 67 files. Default worker
+  startup under Node 26 was slow; interrupted runs are not counted as passes.
+- From `web/`, `npx playwright test -c playwright.recovery.config.ts
+  executionRecovery.spec.ts agentResume.spec.ts --workers=2`: **16 passed**.
+- `npm run build -w web -- --webpack`: passed, including TypeScript and static
+  page generation. The normal `npm test` chain stopped in Turbopack because its
+  CSS worker could not bind a port (`EPERM`), even on a retried build; the
+  individual suites above were run separately. The restricted TypeScript run
+  had three process/port fixture failures and one skip; the unrestricted run
+  passed all 2,048 tests. Restricted backend installer fixtures likewise could
+  not access `/dev/tty`; the unrestricted rerun passed those fixtures.
+- `git diff --check`: passed.
+- The full unrestricted `npm run test:py` rerun is still in progress when opening
+  the PR. Its completed API tests, including recovery and installer fixtures,
+  have no failures; the complete backend result is not yet claimed.
