@@ -244,6 +244,73 @@
 /* Tool / command lines — inline `⏺` mono lines, not bordered chips. A run of
    tool calls reads as a compact, scannable log; the marker is quiet, the tool
    name carries weight, the target is muted (design-system.md agent-turn). */
+/* A folded run of tool calls: one disclosure row ("Used 2 tools, ran 3
+   commands") in the reasoning header's voice, and — open — the calls as the
+   compact log under the same hairline rule the reasoning body hangs from. */
+.agent-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.agent-activity-header {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: var(--sp-2);
+  align-items: center;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  background: none;
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-size: var(--fs-2);
+  line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-activity-header:hover {
+  color: var(--ink-2);
+}
+
+.agent-activity-chevron {
+  flex: none;
+  color: var(--ink-4);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.agent-activity.is-open .agent-activity-chevron {
+  transform: rotate(90deg);
+}
+
+.agent-activity-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Same geometry as .agent-thinking-body: the rule hangs under the chevron. */
+.agent-activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  margin-left: 6px;
+  padding-left: 13.5px;
+  border-left: 0.5px solid var(--line-2);
+}
+
+.agent-activity-body > .agent-tool + .agent-tool,
+.agent-activity-body > .agent-tool + .agent-command,
+.agent-activity-body > .agent-command + .agent-tool,
+.agent-activity-body > .agent-command + .agent-command {
+  margin-top: 0;
+}
+
 .agent-tool,
 .agent-command {
   display: flex;
@@ -271,8 +338,14 @@
 }
 
 .agent-tool-marker {
+  /* A small dot centred on the line. The `⏺` glyph the terminal renderer
+     prints fell back to the colour-emoji font here. */
   flex: none;
-  color: var(--ink-4);
+  align-self: center;
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+  background: var(--ink-4);
 }
 
 .agent-tool-name {
@@ -298,6 +371,12 @@
   /* A command can be several lines long, so its marker anchors to the first
      line. A tool line is always one line and keeps the shared baseline. */
   align-items: flex-start;
+}
+
+.agent-command > .agent-tool-marker {
+  align-self: flex-start;
+  /* (line box − dot) / 2 lands the dot on the first line's centre. */
+  margin-top: calc((1lh - var(--dot-sm)) / 2);
 }
 
 .agent-command-body {
@@ -419,15 +498,37 @@
   font: var(--type-label);
 }
 
-.agent-stream-pulse {
-  flex-shrink: 0;
-  width: var(--dot-sm);
-  height: var(--dot-sm);
-  border-radius: var(--r-full);
-  background: var(--live);
-  /* Re-tint the shared pulse-ring so the halo matches the dot. */
-  --pulse-color: var(--live);
-  animation: pulse-ring var(--t-pulse) var(--ease) infinite;
+/* The live label shimmers: a lighter band sweeps across the words while the
+   text itself stays at --ink-3, so it is legible at every frame. Under
+   reduced motion or forced colours it is plain text. */
+.agent-stream-shimmer,
+.agent-thinking.is-live .agent-thinking-headline {
+  background: linear-gradient(
+    90deg,
+    var(--ink-3) 0%,
+    var(--ink-3) 35%,
+    var(--ink-1) 50%,
+    var(--ink-3) 65%,
+    var(--ink-3) 100%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: agent-shimmer 2.2s linear infinite;
+}
+
+@keyframes agent-shimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: -150% 0; }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .agent-stream-shimmer,
+  .agent-thinking.is-live .agent-thinking-headline {
+    background: none;
+    color: var(--ink-3);
+    animation: none;
+  }
 }
 
 .attachment-list {
@@ -504,9 +605,8 @@
    stay neutral. No horizontal rule — the calm transcript flow is the point. */
 .msg-system {
   display: grid;
-  /* Third track is the timestamp gutter; narrowed to `auto` on phones below. */
-  grid-template-columns: 20px minmax(0, 1fr) 5.5rem;
-  column-gap: var(--sp-3);
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  column-gap: var(--sp-2);
   align-items: baseline;
   padding: var(--sp-0-5) 0;
   color: var(--ink-3);
@@ -544,10 +644,6 @@
 }
 
 @media (max-width: 820px) {
-  .msg-system {
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-  }
-
   /* At phone width a command overran the ~240px column and was cut
      mid-string (`rg "status = 'exporting'" bi`) — a horizontal scroller whose
      overlay scrollbar never shows on touch, so nothing said there was more.

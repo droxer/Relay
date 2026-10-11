@@ -1559,7 +1559,11 @@
     "reasoning_steps_other": "{{count}} 步",
     "command_expand_other": "显示其余 {{count}} 行",
     "command_collapse": "收起",
-    "picking_up": "正在接续 {{agent}} 的工作…"
+    "picking_up": "正在接续 {{agent}} 的工作…",
+    "activity_tools_other": "使用了 {{count}} 个工具",
+    "activity_commands_other": "运行了 {{count}} 条命令",
+    "activity_separator": "，",
+    "activity_commands_only_other": "运行了 {{count}} 条命令"
   },
   "message": {
     "user_label": "你",

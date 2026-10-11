@@ -66,7 +66,6 @@ export function MarkdownFence({ code, language }: { code: string; language: stri
 
   const fence = (
     <pre className="agent-code code">
-      {language ? <span className="agent-code-lang">{language}</span> : null}
       <code className="hljs" dangerouslySetInnerHTML={{ __html: highlightToHtml(code, language, { live }) }} />
     </pre>
   );
@@ -79,11 +78,19 @@ export function MarkdownFence({ code, language }: { code: string; language: stri
     );
   }
 
+  // A header bar carries the language and the copy control, so neither sits
+  // over the first line of code. A live fence is still growing — a copy would
+  // capture a partial snippet — so it shows the language alone.
+  const showHead = Boolean(language) || !live;
   return (
-    <div className="md-fence">
+    <div className="md-fence" data-head={showHead || undefined}>
+      {showHead ? (
+        <div className="md-fence-head">
+          <span className="agent-code-lang">{language ?? ""}</span>
+          {live ? null : <CopyFenceButton text={code} />}
+        </div>
+      ) : null}
       {fence}
-      {/* A live fence is still growing; a copy would capture a partial snippet. */}
-      {live ? null : <CopyFenceButton text={code} />}
     </div>
   );
 }

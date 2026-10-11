@@ -243,18 +243,24 @@
   display: contents;
 }
 
-/* Session phase marker — a quiet label at agent handoffs. No node dot, no
-   trailing rule: the phase reads as a caption between turns, not a third
-   visual row competing with the messages it separates. */
+/* Session phase marker — a quiet caption centred between two hairlines at
+   agent handoffs, the divider Claude and Codex draw between phases of a run.
+   The rules are short and faint, so the phase still reads as a caption between
+   turns rather than a row competing with the messages it separates. */
 .transcript-phase {
-  display: grid;
-  /* Third track is the timestamp gutter. Narrowed to `auto` on phones — see
-     the 820px block below, the app's one phone breakpoint (lib/breakpoints). */
-  grid-template-columns: 20px minmax(0, 1fr) 5.5rem;
-  gap: var(--sp-3);
+  display: flex;
   align-items: center;
+  gap: var(--sp-3);
   padding: var(--sp-1) 0;
   color: var(--ink-4);
+}
+
+.transcript-phase::before,
+.transcript-phase::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--line-1);
 }
 
 .transcript-phase-node {
@@ -262,9 +268,8 @@
 }
 
 .transcript-phase-label {
-  /* The hidden node leaves column 1 to the rail alignment; the label holds
-     column 2 explicitly so it still lines up with the turn bodies. */
-  grid-column: 2;
+  flex: none;
+  max-width: 70%;
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   overflow: hidden;
@@ -287,7 +292,7 @@
    node — so the thread shows work changing hands instead of going still. */
 .team-handoff {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 5.5rem;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   column-gap: var(--sp-3);
   align-items: center;
   color: var(--ink-3);
@@ -354,9 +359,12 @@
 .msg {
   position: relative;
   display: grid;
-  /* Third track is the timestamp gutter; narrowed to `auto` on phones below. */
-  grid-template-columns: 20px minmax(0, 1fr) 5.5rem;
-  column-gap: var(--sp-3);
+  /* Mark, content, and a trailing track that is only as wide as the time it
+     holds. A fixed 5.5rem timestamp gutter used to run down the whole right
+     edge of the transcript — dead width on every turn, there to hold a
+     figure few readers look for. */
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  column-gap: var(--sp-2);
   align-items: start;
   content-visibility: auto;
   contain-intrinsic-size: auto 160px;
@@ -390,30 +398,15 @@
   border-radius: inherit;
 }
 
-.rail-node-user {
-  background: var(--surface-3);
-  border-color: var(--line-1);
-  border-radius: var(--r-2);
-  color: var(--ink-1);
-}
-
-/* ---- Speaker avatars: a matched but distinct pair ------------------------
-   The two voices in the thread read as "human" vs "product" at a glance.
-
-   You    → a round ink-on-neutral avatar. Round reads as "a person" — the
-            circle silhouette is the fast human-vs-machine tell; hue never
-            carries speaker identity (cobalt --action is pressable-only and
-            purple --live means an agent is working right now).
-   Agent  → a square tile carrying that agent's profile image — its upload, or
-            its neutral monogram. The circle-vs-square contrast, not colour,
-            separates the two speakers; the retired per-agent identity hues no
-            longer separate one agent from another across a handoff — the
-            image and the name do. (The generic Relay product mark lives on
-            the agent-phase divider.) */
-.msg-user .rail-node.rail-node-user {
-  border-radius: var(--r-full);
-}
-
+/* ---- Speaker marks ------------------------------------------------------
+   The two voices in the thread read as "human" vs "product" by SIDE, not by
+   face: the user's turn is a bubble on the right with no avatar, an agent's
+   turn opens on the left with a square tile carrying that agent's profile
+   image — its upload, or its neutral monogram. Hue never carries speaker
+   identity (cobalt --action is pressable-only and purple --live means an
+   agent is working right now); across a handoff the image and the name
+   separate one agent from the next. (The generic Relay product mark lives on
+   the agent-phase divider.) */
 .msg-agent .rail-node.rail-node-agent {
   border-radius: var(--r-2);
   background: var(--surface-3);
@@ -441,14 +434,16 @@
   box-shadow: inset 0 0 0 1px var(--tone);
 }
 
-/* A continuation from the same agent drops its header and empties the rail
-   node: the hidden header already carries the grouping cue, so repeating the
-   speaker glyph — even dimmed — is noise, not rhythm. */
-.msg-agent.grouped .turn-body > header {
+/* A continuation from the same agent drops its whole header row — mark, name,
+   and time: the missing header is itself the grouping cue, so repeating the
+   speaker — even dimmed — is noise, not rhythm. */
+.msg-agent.grouped > .msg-speaker,
+.msg-agent.grouped > .msg-time {
   display: none;
 }
 
 .msg-agent.grouped .rail-node-agent {
+  display: none;
   border: none;
   background: transparent;
 }
@@ -481,17 +476,8 @@
   grid-column: 3;
   grid-row: 1;
   justify-self: end;
-  align-self: start;
-  padding-top: var(--sp-0-5);
+  align-self: center;
   text-align: right;
-}
-
-@media (max-width: 820px) {
-  .msg,
-  .transcript-phase,
-  .team-handoff {
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-  }
 }
 
 /* A streaming turn breathes on the rail node so liveness reads even when the
@@ -512,20 +498,27 @@
   100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--live) 0%, transparent); }
 }
 
-/* The user turn is a compact, content-hugging bubble — not a full-width card.
-   A short "who are you" should read as a tight peer turn, not float in an
-   oversized soft box. Hairline + soft fill give it just enough definition to
-   distinguish it from the bubble-less agent turns on the same rail. */
-.msg-user .turn-body {
-  justify-self: start;
-  width: fit-content;
-  max-width: min(100%, 42rem);
+/* The user turn: a content-hugging bubble on the right, its time resolving
+   beneath it on hover. A flex column rather than the turn grid — there is no
+   mark to align against, and the bubble's width is its own content's. */
+.msg.msg-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: var(--sp-1);
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--surface-1);
-  border: 0.5px solid var(--line-2);
+}
+
+/* A soft fill and no hairline: the side already says whose turn it is, so the
+   bubble only needs enough tone to hold its words together. All four corners
+   take the container radius — the old squared "tail" corner pointed at an
+   avatar that is no longer there. */
+.msg-user .turn-body {
+  width: fit-content;
+  max-width: min(85%, 42rem);
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--surface-2);
   border-radius: var(--r-3);
-  border-top-left-radius: var(--r-1);
 }
 
 /* The user's turn is Markdown too (MessageBlock), so markdown.css owns the
@@ -687,19 +680,44 @@
   font: var(--type-label);
 }
 
-/* Per-turn footer — token usage and the copy/retry pills share one
-   right-aligned row at the bottom of each agent turn. */
-.msg-agent .turn-body {
+/* An agent turn's header row — mark, name, time — sits on grid row 1; the
+   answer spans the full column beneath it, flush with the mark's leading edge
+   rather than indented behind it. */
+.msg-agent > .turn-body {
   position: relative;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-top: var(--sp-2);
 }
 
-/* Speaker line: the agent's name on the first row of its turn, level with the
-   mark in the rail. It stays selectable text, since who said a thing is part of
-   what you copy out of a transcript. It used to cancel the turn-body gap almost
-   entirely (a -7px pull) on the reasoning that the gap is meant for blocks, not
-   captions — but against the looser block rhythm the name then collided with
-   the first line of the answer. It now keeps the full --sp-2 turn-body gap. */
+.msg-agent > .rail-node-agent,
+.msg-agent > .msg-time {
+  align-self: center;
+}
+
+.msg-user > .msg-time {
+  padding-inline-end: var(--sp-1);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.msg-user:hover > .msg-time,
+.msg-user:focus-within > .msg-time {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .msg-user > .msg-time { opacity: 1; }
+}
+
+/* Speaker line: the agent's name on its turn's header row, beside the mark.
+   It stays selectable text, since who said a thing is part of what you copy
+   out of a transcript. */
 .msg-speaker {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  min-width: 0;
   margin-bottom: 0;
   color: var(--ink-1);
   font: var(--type-label-strong);
@@ -747,9 +765,11 @@
 .msg-turn-foot {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--sp-2);
-  margin-top: var(--sp-2);
+  /* Pulls the icon row up so its glyphs sit one line under the answer, not a
+     full block away; the buttons' own padding supplies the breathing room. */
+  margin-top: calc(var(--sp-1) * -1);
+  margin-inline-start: calc(var(--sp-1-5) * -1);
 }
 
 /* Streaming turns render an empty footer until actions or usage appear. */
@@ -758,8 +778,9 @@
 }
 
 /* Token usage reads like a CLI status line (Codex/Claude style) — flat,
-   muted, no pill chrome; it visually recedes behind the copy/retry actions. */
+   muted, no pill chrome, trailing at the far edge behind the actions. */
 .msg-tokens {
+  margin-inline-start: auto;
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
@@ -779,38 +800,46 @@
 .msg-turn-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--sp-0-5);
+  /* Resolves when the turn is pointed at or focused — the actions are there
+     when the reader reaches for them, and a settled transcript is not lined
+     with icons. Touch has no hover, so it keeps them. */
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
 }
 
-/* Turn actions are ghost text buttons — no resting fill, no pill chrome —
-   so a completed transcript doesn't accumulate a ladder of grey lozenges
-   down the right edge. The hover hairline is the only affordance. */
+.msg-agent:hover .msg-turn-actions,
+.msg-agent:focus-within .msg-turn-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .msg-turn-actions { opacity: 1; }
+}
+
+/* Turn actions are square ghost icon buttons — no resting fill, no pill
+   chrome; the name rides on the tooltip and the accessible label. A soft
+   fill on hover is the only affordance. */
 .msg-turn-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-1-5);
-  height: var(--sp-6);
-  padding: 0 var(--sp-2);
+  justify-content: center;
+  width: var(--sp-7);
+  height: var(--sp-7);
+  padding: 0;
   border: 0.5px solid transparent;
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-3);
-  /* Turn chrome recedes under the 14px transcript: meta, not label. */
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
   cursor: pointer;
-  white-space: nowrap;
   transition:
     color var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
 }
 
 .msg-turn-action:hover:not(:disabled) {
   color: var(--ink-1);
-  border-color: var(--line-1);
-  background: transparent;
+  background: var(--control-fill-hover);
 }
 
 .msg-turn-action:disabled {
@@ -827,6 +856,21 @@
 
 .msg-turn-action-label {
   font: var(--type-meta);
+}
+
+/* Icon-only: the button's label stays for assistive tech (the tooltip shows
+   it on hover). Scoped to the action buttons — the usage figure shares the
+   label class and must stay visible. */
+.msg-turn-action .msg-turn-action-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (max-width: 820px) {

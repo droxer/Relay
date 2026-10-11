@@ -594,7 +594,11 @@
      1200px until ~1670px (so no screen that was right before changes at all),
      then tracks the viewport up to a bounded 1520px, past which a line of
      agent prose stops scanning. */
-  --thread-measure: clamp(1200px, 72vw, 1520px);
+  /* Revised 2026-10-11: a reading measure now, in line with Claude and
+     Codex. At the old 1200–1520px cap a paragraph ran past 150 characters on
+     a wide monitor; 880px (gutters included) keeps prose near 90 characters
+     while still giving a table or code fence room. */
+  --thread-measure: 880px;
   --space-w: 384px;
   --space-w-min: 288px;
   --space-w-cap: 30vw;
