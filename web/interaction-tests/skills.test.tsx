@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ShareSkillDrawer } from "../src/components/ShareSkillDrawer";
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: any) => ({ "skills.share_managed": "Share managed skill", "skills.close": "Close", "skills.share_delivery_note": "Assignments are resolved on every run.", "skills.employee_scope": "Employee", "skills.all_current_future_agents": "All current and future agents", "skills.teams": "Teams", "skills.agents": "Agents", "skills.granted": "Granted", "skills.revoke": "Revoke", "skills.cancel": "Cancel", "skills.sharing": "Sharing…", "skills.share_with_count": `Share with ${options?.count}`, "skills.member_count": `${options?.count} members` }[key] ?? key) }) }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string, options?: any) => ({ "skills.share_managed": "Share managed skill", "skills.close": "Close", "skills.share_delivery_note": "Assignments are resolved on every run.", "skills.employee_scope": "Employee", "skills.all_current_future_agents": "All current and future agents", "skills.teams": "Teams", "skills.agents": "Agents", "skills.granted": "Granted", "skills.revoke": "Revoke", "skills.cancel": "Cancel", "skills.sharing": "Sharing…", "skills.share": "Share", "skills.share_with_count": `Share with ${options?.count}`, "skills.member_count": `${options?.count} members` }[key] ?? key) }) }));
 
 const { assignSkill, revokeSkillAssignment } = vi.hoisted(() => ({
   assignSkill: vi.fn(async () => ({})),
@@ -28,7 +28,8 @@ function wrapper({ children }: { children: ReactNode }) { return <QueryClientPro
 it("assigns a team scope without expanding it into agent grants", async () => {
   const user = userEvent.setup();
   render(<ShareSkillDrawer skill={skill} agents={agents} teams={teams} employeeId="employee-1" onClose={vi.fn()} />, { wrapper });
-  await user.click(screen.getByRole("button", { name: "Launch team · 2 members" }));
+  expect(screen.getByRole("button", { name: "Share" })).toHaveProperty("disabled", true);
+  await user.click(screen.getByRole("checkbox", { name: /Launch team/ }));
   await user.click(screen.getByRole("button", { name: "Share with 1" }));
   expect(assignSkill).toHaveBeenCalledWith("skill-1", { targetType: "team", targetId: "team-1", mode: "optional", pin: "stable", invocation: "implicit" });
 });

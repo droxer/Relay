@@ -1895,7 +1895,7 @@
     "share_managed": "Share managed skill",
     "share_delivery_note": "Assignments are resolved by Relay on every run. Membership changes apply automatically without copying the skill to each agent.",
     "select_target_required": "Choose at least one agent, team, or scope to share with.",
-    "employee_scope": "Employee",
+    "employee_scope": "Scope",
     "all_current_future_agents": "All current and future agents",
     "teams": "Teams",
     "agents": "Agents",

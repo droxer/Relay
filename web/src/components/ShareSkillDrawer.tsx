@@ -5,10 +5,33 @@ import { assignSkill, revokeSkillAssignment } from "../api";
 import type { AgentTeam, EmployeeAgent, SkillDetail } from "../types";
 import { EMPLOYEE_AGENTS_QUERY_KEY } from "../hooks/useEmployeeAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
+import { labelForExecutor } from "../lib/agentDisplayNames";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Drawer } from "@/components/ui/Drawer";
 import { useTranslation } from "react-i18next";
+
+function TargetRow({
+  checked,
+  disabled,
+  onToggle,
+  label,
+  meta,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+  label: string;
+  meta?: string;
+}) {
+  return (
+    <label className="skill-target" data-selected={checked ? "true" : undefined}>
+      <Checkbox checked={checked} disabled={disabled} onCheckedChange={onToggle} />
+      <span className="skill-target-name">{label}</span>
+      {meta ? <span className="skill-target-meta">{meta}</span> : null}
+    </label>
+  );
+}
 
 export function ShareSkillDrawer({
   skill,
@@ -47,6 +70,10 @@ export function ShareSkillDrawer({
   const candidates = agents.filter(
     (agent) => agent.enabled && !assigned.has(`agent:${agent.id}`),
   );
+  const teamCandidates = teams.filter((team) => !assigned.has(`team:${team.id}`));
+  const scopeTarget = employeeId && !assigned.has(`employee:${employeeId}`)
+    ? `employee:${employeeId}`
+    : null;
   function toggle(id: string) {
     setSelected((value) =>
       value.includes(id) ? value.filter((item) => item !== id) : [...value, id],
@@ -100,72 +127,61 @@ export function ShareSkillDrawer({
         <p className="skill-muted">
           {t("skills.share_delivery_note")}
         </p>
-        {/* The only requirement this drawer has is a target; say so rather than
-            leaving a disabled Share button as the only signal. */}
-        {!selected.length ? (
-          <p className="skill-muted skill-requirement">
-            {t("skills.select_target_required")}
-          </p>
-        ) : null}
-        {employeeId ? (
+        {/* Scope, teams, and agents are one kind of choice — a target to
+            toggle — so they share one quiet checklist row instead of outline
+            chips for two of them and bordered cards for the third. Targets
+            that already hold the skill leave the picker; they are listed
+            under Granted with their Revoke. */}
+        {scopeTarget ? (
           <section>
             <h3>{t("skills.employee_scope")}</h3>
-            <Button
-              variant="outline"
-              className="skill-target-chip"
-              aria-pressed={selected.includes(`employee:${employeeId}`)}
-              data-selected={selected.includes(`employee:${employeeId}`) ? "true" : undefined}
-              onClick={() => toggle(`employee:${employeeId}`)}
-              disabled={busy || assigned.has(`employee:${employeeId}`)}
-            >
-              {t("skills.all_current_future_agents")}
-            </Button>
+            <div className="skill-target-list">
+              <TargetRow
+                checked={selected.includes(scopeTarget)}
+                disabled={busy}
+                onToggle={() => toggle(scopeTarget)}
+                label={t("skills.all_current_future_agents")}
+              />
+            </div>
           </section>
         ) : null}
-        {teams.length ? (
+        {teamCandidates.length ? (
           <section>
             <h3>{t("skills.teams")}</h3>
-            <div className="skill-team-row">
-              {teams.map((team) => (
-                <Button
+            <div className="skill-target-list">
+              {teamCandidates.map((team) => (
+                <TargetRow
                   key={team.id}
-                  variant="outline"
-                  className="skill-target-chip"
-                  aria-pressed={selected.includes(`team:${team.id}`)}
-                  data-selected={selected.includes(`team:${team.id}`) ? "true" : undefined}
-                  onClick={() => toggle(`team:${team.id}`)}
-                  disabled={busy || assigned.has(`team:${team.id}`)}
-                >
-                  {team.name} · {t("skills.member_count", { count: team.memberAgentIds.length })}
-                </Button>
+                  checked={selected.includes(`team:${team.id}`)}
+                  disabled={busy}
+                  onToggle={() => toggle(`team:${team.id}`)}
+                  label={team.name}
+                  meta={t("skills.member_count", { count: team.memberAgentIds.length })}
+                />
               ))}
             </div>
           </section>
         ) : null}
         <section>
           <h3>{t("skills.agents")}</h3>
-          <div className="skill-picker-list">
-            {candidates.map((agent) => (
-              <label
-                key={agent.id}
-                data-selected={selected.includes(`agent:${agent.id}`) ? "true" : undefined}
-              >
-                <Checkbox
+          {candidates.length ? (
+            <div className="skill-target-list">
+              {candidates.map((agent) => (
+                <TargetRow
+                  key={agent.id}
                   checked={selected.includes(`agent:${agent.id}`)}
-                  onCheckedChange={() => toggle(`agent:${agent.id}`)}
+                  disabled={busy}
+                  onToggle={() => toggle(`agent:${agent.id}`)}
+                  label={agent.displayName}
+                  meta={labelForExecutor(agent.executorKind)}
                 />
-                <span>
-                  <strong>{agent.displayName}</strong>
-                  <small>{agent.executorKind}</small>
-                </span>
-              </label>
-            ))}
-            {!candidates.length ? (
-              <p className="skill-muted">
-                {t("skills.all_agents_granted")}
-              </p>
-            ) : null}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="skill-muted">
+              {t("skills.all_agents_granted")}
+            </p>
+          )}
         </section>
         {assignments.length ? (
           <section>
@@ -182,6 +198,8 @@ export function ShareSkillDrawer({
                     <span>{label}</span>
                     <Button
                       variant="ghost"
+                      size="sm"
+                      danger
                       disabled={busy}
                       onClick={() => void revoke(assignment.id)}
                     >
@@ -199,6 +217,13 @@ export function ShareSkillDrawer({
           </p>
         ) : null}
         <footer>
+          {/* The one requirement, stated beside the button it gates. In the
+              body it vanished on the first pick and shifted every row up. */}
+          {!selected.length ? (
+            <p className="skill-muted skill-share-hint">
+              {t("skills.select_target_required")}
+            </p>
+          ) : null}
           <Button variant="outline" onClick={onClose}>
             {t("skills.cancel")}
           </Button>
@@ -206,7 +231,11 @@ export function ShareSkillDrawer({
             disabled={busy || !selected.length}
             onClick={() => void submit()}
           >
-            {busy ? t("skills.sharing") : t("skills.share_with_count", { count: selected.length })}
+            {busy
+              ? t("skills.sharing")
+              : selected.length
+                ? t("skills.share_with_count", { count: selected.length })
+                : t("skills.share")}
           </Button>
         </footer>
     </Drawer>
