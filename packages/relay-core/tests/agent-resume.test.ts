@@ -49,3 +49,26 @@ test("a run reports the session it ran in, and a dead resume falls back to a fre
   assert.equal(patch.last_exit_code, 0);
   assert.equal(patch.runtime_session_id, SESSION.replace("0b", "ff"));
 });
+
+for (const agent of ["codex", "claude"] as const) {
+  for (const exitCode of [0, 1]) {
+    test(`${agent} retains its live session id after transcript truncation (exit ${exitCode})`, async () => {
+      let executions = 0;
+      const patch = await runAgentNode(agent, resuming, { execStream: async (_cmd, _args, options) => {
+        executions++;
+        const start = agent === "codex"
+          ? JSON.stringify({ type: "thread.started", thread_id: SESSION })
+          : JSON.stringify({ type: "system", subtype: "init", session_id: SESSION });
+        // Real adapters deliver every raw chunk, but retain only a transcript tail.
+        options?.stdoutRenderer?.(start.slice(0, 35));
+        options?.stdoutRenderer?.(start.slice(35) + "\n");
+        const tail = JSON.stringify({ type: "unused", text: "x".repeat(300_000) }) + "\n";
+        options?.stdoutRenderer?.(tail);
+        return { exit_code: exitCode, stdout: tail.slice(-262_144), stderr: "" };
+      } });
+      assert.equal(executions, 1, "a run that reached its conversation must not start fresh");
+      assert.equal(patch.runtime_session_id, SESSION);
+      assert.equal(patch.last_exit_code, exitCode);
+    });
+  }
+}

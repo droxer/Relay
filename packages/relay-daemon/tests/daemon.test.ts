@@ -3793,6 +3793,8 @@ async function runThroughOutage(options: {
   heartbeatStatuses?: number[];
   /** Polls hang until the outage ends instead of answering. */
   pollHangs?: boolean;
+  /** Registration is healthy even while the execution endpoints return 5xx. */
+  registrationDuringOutage?: boolean;
 }): Promise<{ events: DaemonNodeEvent[]; aborted: boolean }> {
   let heartbeats = 0;
   const root = mkdtempSync(join(tmpdir(), "relay-outage-grace-"));
@@ -3822,6 +3824,9 @@ async function runThroughOutage(options: {
       fetchFn: async (url, init) => {
         const path = new URL(String(url)).pathname;
         if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path.endsWith("/daemon-node-registrations") && options.registrationDuringOutage) {
+          return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });
+        }
         if (served && down()) {
           if (path.endsWith("/heartbeat") && options.heartbeatStatuses) {
             const statuses = options.heartbeatStatuses;
@@ -3865,6 +3870,15 @@ test("a backend outage longer than the grace still stops the run", async () => {
   const cancelled = events.find((event) => event.type === "run.cancelled");
   assert.ok(cancelled?.type === "run.cancelled");
   assert.match(cancelled.reason, /lease expired/);
+});
+
+test("healthy registration does not end grace while execution endpoints are unavailable", async () => {
+  const { events, aborted } = await runThroughOutage({
+    graceMs: 5000, runMs: 3000, outageMs: 3500, outageStatus: 503,
+    registrationDuringOutage: true,
+  });
+  assert.equal(aborted, false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
 });
 
 test("a proxy refusal during an outage is not a lease revocation", async () => {
