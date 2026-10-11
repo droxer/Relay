@@ -378,6 +378,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_FORWARDED_ALLOW_IPS` | unset | Required comma-separated IP/CIDR allowlist when proxy headers are enabled; `*` is rejected. |
 | `RELAY_EDGE_SECRET` | unset | Comma-separated secrets (32+ chars) a CDN edge sends as `X-Relay-Edge`. Set, requests without one get `403` (except `/healthz`). See [deployment-cloudflare.md](deployment-cloudflare.md). |
 | `RELAY_CLIENT_IP_HEADER` | unset | Header naming the real client on edge-verified requests (e.g. `CF-Connecting-IP`), used by rate limits. Requires `RELAY_EDGE_SECRET`. |
+| `RELAY_BLOB_STORE` | `database` | `r2` keeps workspace-artifact snapshot bytes in Cloudflare R2 instead of Postgres; needs `RELAY_R2_ACCOUNT_ID`, `RELAY_R2_ACCESS_KEY_ID`, `RELAY_R2_SECRET_ACCESS_KEY`, `RELAY_R2_BUCKET` (optional `RELAY_R2_ENDPOINT`). See [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-optional). |
 | `RELAY_MAX_JSON_BODY_BYTES` | `4194304` | Maximum JSON request body size before a `413` response. |
 | `RELAY_STREAM_MAX_SECONDS` | `1800` | Cap on one SSE connection. |
 | `RELAY_ADMIN_TOKEN` | unset | One-time admin bootstrap token. |

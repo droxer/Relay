@@ -12,6 +12,7 @@ from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
 from .core.storage_config import database_url_from_env
+from .persistence.blob_store import blob_store_from_env
 from .persistence.employee_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
 from .persistence.session_store import DatabaseSessionStore
@@ -82,7 +83,8 @@ def main(argv: list[str] | None = None) -> None:
         if not args.data_dir:
             parser.error("migrate-local-sessions requires --data-dir")
         store = DatabaseSessionStore(
-            database_url_from_env(setting="migrate-local-sessions")
+            database_url_from_env(setting="migrate-local-sessions"),
+            blob_store=blob_store_from_env(),
         )
         store.verify_schema()
         report = migrate_local_sessions(args.data_dir, store, dry_run=args.dry_run)

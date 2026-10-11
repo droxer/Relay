@@ -40,7 +40,14 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
+from .artifact_blobs import (
+    artifact_blob_key,
+    blob_metadata,
+    delete_session_blobs,
+    read_blob_snapshot,
+)
 from .automation_store import insert_outbox_rows, session_outbox_rows
+from .blob_store import BlobStore
 from .session_output_compaction import compact_completed_run_output
 from .store_common import (
     DEFAULT_RELAY_DATA_DIR,
@@ -765,8 +772,11 @@ class DatabaseSessionStore:
         database_url: str,
         *,
         create_schema: bool = False,
+        blob_store: BlobStore | None = None,
     ):
         self.engine = shared_engine(database_url)
+        # Where workspace-artifact snapshot bytes go; None keeps them inline.
+        self.blob_store = blob_store
         # Only a running matcher drains the automation outbox; without one,
         # writing rows would grow the table forever. ``create_app`` turns this
         # off when the scheduler is disabled.
@@ -1351,6 +1361,7 @@ class DatabaseSessionStore:
                 delete(self.events).where(self.events.c.session_id == session_pk)
             )
             conn.execute(delete(self.sessions).where(self.sessions.c.id == session_pk))
+        delete_session_blobs(self.blob_store, session_id)
 
     def _insert_tombstone(
         self,
@@ -1438,6 +1449,7 @@ class DatabaseSessionStore:
                 delete(self.events).where(self.events.c.session_id == session_pk)
             )
             conn.execute(delete(self.sessions).where(self.sessions.c.id == session_pk))
+        delete_session_blobs(self.blob_store, session_id)
         return True
 
     def list_sessions(self) -> list[dict[str, Any]]:
@@ -1859,20 +1871,36 @@ class DatabaseSessionStore:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Record a generated workspace file with an optional content snapshot.
 
-        Binary content goes into the artifacts table base64-encoded so the
-        backend can serve it without access to the daemon's filesystem.
+        The bytes go to the blob store when one is configured, and otherwise
+        into the artifacts table base64-encoded; either way the backend can
+        serve them without access to the daemon's filesystem.
         """
         metadata: dict[str, Any] = {
             "extension": artifact_snapshot_extension(artifact.get("title"))
         }
         encoded: str | None = None
+        blob_key: str | None = None
         if content is not None:
-            encoded = base64.b64encode(content).decode("ascii")
-            metadata["contentEncoding"] = "base64"
             artifact = {**artifact, "bytes": len(content)}
-        session = self._insert_artifact_with_event(
-            session_id, artifact, metadata, content=encoded
-        )
+            if self.blob_store is not None:
+                # Uploaded before the row exists, so a committed row never
+                # points at bytes that are not there yet.
+                blob_key = artifact_blob_key(session_id, artifact["id"])
+                self.blob_store.put(blob_key, content, content_type=artifact.get("contentType"))
+                metadata.update(blob_metadata(blob_key, content))
+            else:
+                encoded = base64.b64encode(content).decode("ascii")
+                metadata["contentEncoding"] = "base64"
+        try:
+            session = self._insert_artifact_with_event(
+                session_id, artifact, metadata, content=encoded
+            )
+        except Exception:
+            # Safe to discard: the registry mints a fresh artifact id per
+            # index call, so no committed row can share this key.
+            if blob_key is not None:
+                self._discard_blob(blob_key)
+            raise
         logger.debug(
             "Database workspace artifact indexed",
             session_id=session_id,
@@ -1941,6 +1969,13 @@ class DatabaseSessionStore:
             self._index_workspace_files(conn, session_pk, session, [artifact])
         return self.get_session(session_id)
 
+    def _discard_blob(self, key: str) -> None:
+        assert self.blob_store is not None
+        try:
+            self.blob_store.delete(key)
+        except Exception as error:  # noqa: BLE001 - the original failure matters more
+            logger.warning("Could not remove an unindexed snapshot blob", blob_key=key, error=str(error))
+
     def read_artifact_content(self, session_id: str, artifact_id: str) -> bytes | None:
         """Return the stored snapshot bytes for an artifact, if one was kept."""
         with store_transaction(self.engine) as conn:
@@ -1954,6 +1989,8 @@ class DatabaseSessionStore:
                 .mappings()
                 .first()
             )
+        if row and (row["metadata"] or {}).get("blobKey"):
+            return read_blob_snapshot(self.blob_store, row["metadata"])
         if not row or row["content"] is None:
             return None
         if (row["metadata"] or {}).get("contentEncoding") == "base64":

@@ -20,6 +20,10 @@ dependencies = [
 migration = [
   "alembic>=1.17.0",
 ]
+# Cloudflare R2 (S3-compatible) blob storage, selected with RELAY_BLOB_STORE=r2.
+r2 = [
+  "boto3>=1.36.0",
+]
 dev = [
   "alembic>=1.17.0",
   "pre-commit>=4.0.0",
