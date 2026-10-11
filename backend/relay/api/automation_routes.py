@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
 from ..automations.trigger import trigger_kind
+from ..security.edge import client_ip
 from .contract import API_PREFIX
 from .deps import AppContextDep
 from .helpers import get_task_for_actor, request_actor
@@ -48,7 +49,7 @@ async def receive_automation_webhook(routine_id: str, request: Request) -> dict[
     # Failed tokens are limited per caller and successful calls per automation,
     # so a stranger spamming bad tokens cannot lock out the real sender.
     failures = request.app.state.automation_webhook_failure_limiter
-    caller = request.client.host if request.client else "unknown"
+    caller = client_ip(request)
     retry_after = failures.retry_after(caller)
     if retry_after:
         raise _too_many(retry_after)

@@ -10,6 +10,8 @@
 - [`local-development.md`](local-development.md) — 环境、配置、服务、数据布局和测试流程的权威指南。
 - [`deployment.md`](deployment.md) — 权威托管部署流程（Web UI 部署在 Vercel，后端与
   Postgres 部署在 Railway）及其所需的 origin、cookie 和代理配置。
+- [`deployment-cloudflare.md`](deployment-cloudflare.md) — Railway 后端置于 Cloudflare
+  之后（单一 origin、edge 密钥、缓存规则、SSE）。
 - [`../backend/migrations/README.md`](../backend/migrations/README.md) — 数据库迁移和旧对话导入的权威流程。
 - [`api.md`](api.md) — 当前浏览器路由和 HTTP API 契约。
 - [`../AGENTS.md`](../AGENTS.md) — Codex 使用的仓库结构、工程不变量和验证指南。

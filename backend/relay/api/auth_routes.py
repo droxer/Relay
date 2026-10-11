@@ -13,6 +13,7 @@ from ..security.auth import (
     user_session_cookie_scope,
     user_session_token_from_request,
 )
+from ..security.edge import client_ip
 from ..services.computer_limits import decorate_user_limits
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, string_field
@@ -21,8 +22,7 @@ router = APIRouter()
 
 
 def _auth_rate_key(request: Request, scope: str, identity: str = "") -> str:
-    client_host = request.client.host if request.client else "unknown"
-    return f"{scope}:{client_host}:{identity.strip().lower()}"
+    return f"{scope}:{client_ip(request)}:{identity.strip().lower()}"
 
 
 def _consume_auth_attempt(request: Request, key: str) -> None:
