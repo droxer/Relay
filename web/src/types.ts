@@ -511,8 +511,9 @@ export interface OrgSettingsResponse {
     /** False when the auth store cannot hold employee edits (name, email, limit). */
     employeeEdits?: boolean;
   };
-  /** Admin bearer token for bootstrap/supervisor use. */
-  adminToken?: string | null;
+  /** Whether an admin bearer token exists. Only its hash is stored, so the
+      value itself comes back once, from the reissue route. */
+  adminTokenConfigured?: boolean;
 }
 
 export interface UpdateControlPanelEmployeeInput {

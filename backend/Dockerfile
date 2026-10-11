@@ -45,8 +45,8 @@ ENV HOST=0.0.0.0 \
     RELAY_CHAT_STORE=database \
     RELAY_DATA_DIR=/data
 
-# Operational state that is not in Postgres (profile images, managed-node
-# records) lives here. Mount a volume at /data to keep it across deploys.
+# With the database stores above, all state lives in Postgres and no volume
+# is needed. A legacy admin-token file under /data is imported on first boot.
 RUN useradd --system --uid 10001 --user-group --home-dir /nonexistent --shell /usr/sbin/nologin relay \
     && mkdir -p /data \
     && chown -R relay:relay /data

@@ -212,7 +212,7 @@ def test_auth_status_reports_bootstrap_need(monkeypatch) -> None:
         assert response.json()["requiresBootstrap"] is False
 
 
-def test_bootstrap_uses_generated_token_without_env_token(monkeypatch) -> None:
+def test_bootstrap_without_an_admin_token_is_unavailable(monkeypatch) -> None:
     monkeypatch.delenv("RELAY_ADMIN_TOKEN", raising=False)
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -222,17 +222,9 @@ def test_bootstrap_uses_generated_token_without_env_token(monkeypatch) -> None:
             "username": "admin",
             "password": "kestrel-vault-7719",
         })
-        assert response.status_code == 401
-
-        generated = (Path(root) / "auth" / "admin-token").read_text(
-            encoding="utf-8"
-        ).strip()
-        response = client.post("/api/v1/auth/bootstrap", json={
-            "token": generated,
-            "username": "admin",
-            "password": "kestrel-vault-7719",
-        })
-        assert response.status_code == 200
+        # Nothing is generated: a token only its hash remembers would be lost.
+        assert response.status_code == 503
+        assert not (Path(root) / "auth" / "admin-token").exists()
 
 
 def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:

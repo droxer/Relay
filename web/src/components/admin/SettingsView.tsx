@@ -84,7 +84,7 @@ export function SettingsView() {
         }}
       />
       <AdminTokenCard
-        token={settingsQuery.data?.adminToken ?? null}
+        configured={settingsQuery.data?.adminTokenConfigured ?? false}
         isLoading={settingsQuery.isLoading}
         onReissued={() => void settingsQuery.refetch()}
       />
@@ -92,15 +92,15 @@ export function SettingsView() {
   );
 }
 
-/** The admin bearer token for bootstrap and supervisor requests. Seeded from
-    RELAY_ADMIN_TOKEN on first boot, generated otherwise, and persisted by the
-    backend; reissuing rotates it and kills the old value immediately. */
+/** The admin bearer token for bootstrap and supervisor requests. The backend
+    keeps only its hash, so the value is shown once, right after it is issued;
+    reissuing rotates it and kills the old value immediately. */
 function AdminTokenCard({
-  token,
+  configured,
   isLoading,
   onReissued,
 }: {
-  token: string | null;
+  configured: boolean;
   isLoading: boolean;
   onReissued: () => void;
 }) {
@@ -109,22 +109,29 @@ function AdminTokenCard({
   const { copiedField, copy } = useCopyFeedback();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Held only in this card's state: it is never refetchable, and it should not
+  // outlive the visit that issued it.
+  const [issuedToken, setIssuedToken] = useState<string | null>(null);
 
-  async function handleReissue() {
+  async function handleIssue() {
     /* Reissuing kills the current token immediately — the most destructive
        action in settings — so it goes through the themed danger confirm, not
-       native window.confirm (same pattern as CredentialsDrawer/EmployeesView). */
-    const ok = await confirm({
-      title: t("admin.v2.settings_admin_token_reissue"),
-      message: t("admin.v2.settings_admin_token_reissue_confirm"),
-      confirmLabel: t("admin.v2.settings_admin_token_reissue"),
-      tone: "danger",
-    });
-    if (!ok) return;
+       native window.confirm (same pattern as CredentialsDrawer/EmployeesView).
+       A first issue replaces nothing, so it needs no confirm. */
+    if (configured) {
+      const ok = await confirm({
+        title: t("admin.v2.settings_admin_token_reissue"),
+        message: t("admin.v2.settings_admin_token_reissue_confirm"),
+        confirmLabel: t("admin.v2.settings_admin_token_reissue"),
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
     setIsBusy(true);
     setError(null);
     try {
-      await reissueAdminToken();
+      const { adminToken } = await reissueAdminToken();
+      setIssuedToken(adminToken);
       onReissued();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -132,6 +139,13 @@ function AdminTokenCard({
       setIsBusy(false);
     }
   }
+
+  const actionLabel = configured
+    ? t("admin.v2.settings_admin_token_reissue")
+    : t("admin.v2.settings_admin_token_issue");
+  const busyLabel = configured
+    ? t("admin.v2.settings_admin_token_reissuing")
+    : t("admin.v2.settings_admin_token_issuing");
 
   return (
     <div className="adm-settings-item">
@@ -144,30 +158,37 @@ function AdminTokenCard({
           {error}
         </Alert>
       ) : null}
-      {isLoading ? null : token ? (
+      {isLoading ? null : (
         <>
-          <CredCopyRow
-            label={t("admin.v2.settings_admin_token_label")}
-            value={token}
-            copyLabel={t("admin.v2.settings_admin_token_copy")}
-            copied={copiedField === "admin-token"}
-            onCopy={() => void copy("admin-token", token)}
-          />
+          {issuedToken ? (
+            <>
+              <CredCopyRow
+                label={t("admin.v2.settings_admin_token_label")}
+                value={issuedToken}
+                copyLabel={t("admin.v2.settings_admin_token_copy")}
+                copied={copiedField === "admin-token"}
+                onCopy={() => void copy("admin-token", issuedToken)}
+              />
+              <p className="adm-settings-sub">{t("admin.v2.settings_admin_token_shown_once")}</p>
+            </>
+          ) : (
+            <p className="adm-settings-sub">
+              {configured
+                ? t("admin.v2.settings_admin_token_set")
+                : t("admin.v2.settings_admin_token_unset")}
+            </p>
+          )}
           <div className="adm-settings-control">
             <Button
               type="button"
               variant="secondary"
               disabled={isBusy}
-              onClick={() => void handleReissue()}
+              onClick={() => void handleIssue()}
             >
-              {isBusy
-                ? t("admin.v2.settings_admin_token_reissuing")
-                : t("admin.v2.settings_admin_token_reissue")}
+              {isBusy ? busyLabel : actionLabel}
             </Button>
           </div>
         </>
-      ) : (
-        <p className="adm-settings-sub">{t("admin.v2.settings_admin_token_unset")}</p>
       )}
     </div>
   );
