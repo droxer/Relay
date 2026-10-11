@@ -76,12 +76,12 @@
 
 /* One or two machines, not a fleet: a stack of records rather than an
    auto-fill tile grid, capped so a 2560px display doesn't stretch a
-   three-fact list across the whole canvas. */
+   short runtime list across the whole canvas. */
 .computer-list {
   display: flex;
-  max-width: 68rem;
+  max-width: 60rem;
   flex-direction: column;
-  gap: var(--sp-6);
+  gap: var(--sp-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -89,49 +89,42 @@
 
 /* ---- record ---------------------------------------------------------- */
 
+/* One hairline around the record and nothing inside it: sections are set
+   apart by space, not by rules. The card used to draw four ruled panels plus
+   a boxed avatar, which is most of why the page read as heavy. */
 .computer-card {
   container-type: inline-size;
   container-name: computer;
   display: flex;
   min-width: 0;
   flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-3);
-  background: var(--surface-1);
-  overflow: hidden;
+  background: var(--surface-0);
 }
 
-/* The hero wraps, and identity claims a readable line before the action row
-   is allowed to share it. With identity free to shrink to nothing, five
-   labelled buttons squeezed the name column to ~340px and broke the context
-   line across two — which is how the "·" separators ended up orphaned at a
-   line edge. Actions dropping to their own row is the better trade: the
-   buttons stay legible and the machine's context stays on one line. */
 .computer-card-hero {
   display: flex;
   align-items: flex-start;
-  flex-wrap: wrap;
   gap: var(--sp-3);
-  padding: var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
 }
 
+/* A bare glyph, not a framed tile. Its box matches the name line so the icon
+   centres on the title. */
 .computer-card-avatar {
   display: grid;
-  width: 2.5rem;
-  height: 2.5rem;
+  height: 1.5rem;
   flex: 0 0 auto;
   place-items: center;
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  color: var(--ink-2);
+  color: var(--ink-3);
 }
 
 .computer-card-identity {
   display: flex;
   min-width: 0;
-  flex: 1 1 26rem;
+  flex: 1 1 0;
   flex-direction: column;
   gap: var(--sp-1);
 }
@@ -158,8 +151,7 @@
   white-space: nowrap;
 }
 
-/* Ownership, isolation, and heartbeat on one quiet line. These were three
-   separate chips on the admin tile; here they are context, not status. */
+/* Ownership, isolation, and heartbeat on one quiet line. */
 /* A wrapping text line, not a flex row. A flex row breaks between children,
    so a "·" of its own lands orphaned at the end of a line and a "·" glued to
    the front of an item lands orphaned at the start of the next one. Inline
@@ -186,21 +178,35 @@
 .computer-card-actions {
   display: flex;
   flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
   margin-inline-start: auto;
 }
 
 /* ---- sections -------------------------------------------------------- */
 
-.computer-card-activity,
-.computer-card-panel {
+.computer-card-section {
+  display: flex;
   min-width: 0;
-  padding: var(--sp-4);
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 
-.computer-card-activity {
-  border-bottom: 0.5px solid var(--line-1);
+.computer-card-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.computer-card-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 .computer-card-section-title {
@@ -209,15 +215,12 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  margin: 0 0 var(--sp-3);
+  margin: 0;
   color: var(--ink-3);
 }
 
 .computer-card-count {
-  padding: 0 var(--sp-1-5);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-2);
-  color: var(--ink-3);
+  color: var(--ink-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -233,8 +236,7 @@
 .computer-run-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
-  margin: 0;
+  margin: 0 calc(var(--sp-2) * -1);
   padding: 0;
   list-style: none;
 }
@@ -247,7 +249,7 @@
   width: 100%;
   /* Geometry beats the Button base utilities (h-(--control-h)). */
   height: auto;
-  padding: var(--sp-2);
+  padding: var(--sp-1-5) var(--sp-2);
   border: 0.5px solid transparent;
   border-radius: var(--r-2);
   background: transparent;
@@ -285,8 +287,6 @@ button.computer-run-open:hover {
   white-space: nowrap;
 }
 
-/* The one place the live purple belongs on this surface: a counter that is
-   moving because an agent is working right now. */
 /* Ink, not --live. The pulsing mark at the head of the row is the liveness
    signal; the elapsed time is the text channel that accompanies it, so colour
    is never the only encoding (WCAG 1.4.1). A static purple timer was the one
@@ -298,42 +298,25 @@ button.computer-run-open:hover {
   letter-spacing: var(--type-micro-track);
 }
 
-/* ---- runtimes + facts ------------------------------------------------ */
+/* ---- runtimes -------------------------------------------------------- */
 
-.computer-card-body {
+/* Two columns once the record is wide enough, so four runtimes take two
+   short rows instead of a tall single column beside an empty half. */
+.computer-runtime-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2) var(--sp-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 /* Container, not viewport: the pane's width depends on whether the rail is
    collapsed, so viewport width is not a usable proxy for it. */
 @container computer (min-width: 768px) {
-  .computer-card-body {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  .computer-runtime-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .computer-card-body > .computer-card-panel + .computer-card-panel {
-    border-left: 0.5px solid var(--line-1);
-  }
-}
-
-.computer-card-body > .computer-card-panel + .computer-card-panel {
-  border-top: 0.5px solid var(--line-1);
-}
-
-@container computer (min-width: 768px) {
-  .computer-card-body > .computer-card-panel + .computer-card-panel {
-    border-top: 0;
-  }
-}
-
-.computer-runtime-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 /* Named, versioned, and stated — the admin tile's four bare vendor glyphs
@@ -390,42 +373,28 @@ button.computer-run-open:hover {
   letter-spacing: var(--type-code-track);
 }
 
-.computer-fact-list {
+/* ---- footer facts ---------------------------------------------------- */
+
+/* Workspace path, queue depth, and id are looked up, not read: one quiet
+   line at the foot of the record instead of a labelled panel. */
+.computer-card-meta {
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  margin: 0;
-}
-
-.computer-fact {
-  display: grid;
-  grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--sp-3);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-4);
   min-width: 0;
-}
-
-.computer-fact dt {
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
 
-.computer-fact dd {
-  min-width: 0;
-  margin: 0;
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-}
-
 /* Wraps rather than truncates. A tail ellipsis would cut the identifying
    end of the path, and the `direction: rtl` trick that front-truncates it
-   reorders the leading slash — `/workspace` rendered as `workspace/`. A
-   path is short enough to take a second line. */
+   reorders the leading slash — `/workspace` rendered as `workspace/`. */
 .computer-fact-path {
-  display: block;
   min-width: 0;
-  font-size: var(--fs-2);
+  color: var(--ink-3);
+  font-size: var(--fs-1);
   line-height: var(--leading-snug);
   overflow-wrap: anywhere;
 }
@@ -435,12 +404,13 @@ button.computer-run-open:hover {
   align-items: center;
   gap: var(--sp-1);
   min-width: 0;
+  margin-inline-start: auto;
 }
 
 .computer-fact-id .code {
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
-  font-size: var(--fs-2);
+  font-size: var(--fs-1);
 }
 
 @media (max-width: 820px) {
@@ -460,23 +430,8 @@ button.computer-run-open:hover {
     padding: var(--sp-4);
   }
 
-  /* Actions drop below the identity rather than squeezing it, and wrap among
-     themselves. The card carries five labelled actions now, not the two this
-     rule was written for: `flex: 1` (a zero basis) split one 358px line into
-     five equal ~60px boxes, and every label ran out of its box over the next
-     one — "RenaManage agents". Sizing each button to its label and letting
-     the row wrap gives whole labels on as many lines as they need, each line
-     stretched edge to edge. */
-  .computer-card-hero {
-    flex-wrap: wrap;
-  }
-
-  .computer-card-actions {
-    width: 100%;
-  }
-
-  .computer-card-actions > * {
-    flex: 1 1 auto;
+  .computer-card {
+    padding: var(--sp-4);
   }
 }
 

@@ -82,6 +82,8 @@ describe("My Computer record card", () => {
     const card = await read("web/src/components/computer/ComputerCard.tsx");
     assert.match(card, /\{t\("thread\.rename"\)\}/);
     assert.match(card, /\{t\("admin\.v2\.manage_executors"\)\}/);
+    // The overflow trigger is an icon, so it must carry an accessible name.
+    assert.match(card, /aria-label=\{t\("computer\.more_actions"/);
   });
 
   it("offers the counterpart to self-service enrollment", async () => {
@@ -212,12 +214,11 @@ describe("My Computer record card", () => {
       [".computer-run-mark"],
       "--live belongs to the pulsing run mark, nothing else — not even the static timer beside it",
     );
-    const idleBranch = (card.match(/activeRuns\.length === 0 \?([\s\S]*?)\) : \(/)?.[1] ?? "")
-      // Drop comments, or prose *about* the rule reads as a violation of it.
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
-    assert.notEqual(idleBranch.trim(), "", "the idle branch regex stopped matching — refresh it");
-    assert.doesNotMatch(idleBranch, /live/i, "the idle state must not carry the accent");
+    // An idle computer renders no activity section at all — its presence pill
+    // already says it is idle, so there is nothing to carry the accent.
+    const idleBranch = card.match(/activeRuns\.length === 0 \?\s*(\S+?)\s*:/)?.[1] ?? "";
+    assert.notEqual(idleBranch, "", "the idle branch regex stopped matching — refresh it");
+    assert.equal(idleBranch, "null", "the idle state must not carry the accent");
   });
 });
 
