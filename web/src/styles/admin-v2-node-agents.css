@@ -162,55 +162,124 @@
   margin-bottom: var(--sp-4);
 }
 
+/* One grouped list, not a stack of cards: the agents on a computer are rows
+   of one settings group, divided by hairlines — the same reading the card's
+   Runtimes list gives them. */
 .adm-agent-toggle-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.adm-agent-toggle-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  /* Same list-row edge as .adm-assign-node / .adm-placement-item. */
   border: 0.5px solid var(--line-1);
   border-radius: var(--r-2);
   background: var(--surface-0);
-  transition:
-    border-color var(--t-fast) var(--ease),
-    opacity var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease);
+  overflow: hidden;
 }
 
-.adm-agent-toggle-item.is-disabled {
-  opacity: var(--opacity-disabled);
-  background: var(--surface-1);
+/* mark | name + state | switch. The row is `display: contents` so the
+   inventory disclosure below can sit in the name column and line up with it
+   exactly, whatever width the runtime mark resolves to. */
+.adm-agent-toggle-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.adm-agent-toggle-item + .adm-agent-toggle-item {
+  border-top: 0.5px solid var(--line-2);
+}
+
+/* A staged change is the row the reader has to remember to save. */
+.adm-agent-toggle-item[data-pending="true"] {
+  background: var(--action-soft);
 }
 
 .adm-agent-toggle-row {
+  display: contents;
+}
+
+/* Switched off dims the identity, never the switch or the pending hint: the
+   control that turns it back on, and the note that Save will change it, keep
+   full strength. */
+.adm-agent-toggle-item[data-enabled="false"] .adm-agent-toggle-mark,
+.adm-agent-toggle-item[data-enabled="false"] .adm-agent-toggle-name,
+.adm-agent-toggle-item[data-enabled="false"] .adm-agent-toggle-state-text,
+.adm-agent-toggle-item[data-enabled="false"] .adm-agent-inventory-toggle {
+  opacity: var(--opacity-disabled);
+}
+
+.adm-agent-toggle-mark {
+  color: var(--ink-3);
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.adm-agent-toggle-meta {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-4);
+  flex-direction: column;
+  gap: var(--sp-0-5);
   min-width: 0;
+}
+
+.adm-agent-toggle-name {
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-agent-toggle-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-3);
+}
+
+.adm-agent-toggle-pending {
+  color: var(--action);
+}
+
+/* Inventory sits behind its count. Indented to the name column so the
+   disclosure reads as belonging to the agent above it, not the list. */
+.adm-agent-inventory-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  grid-column: 2 / -1;
+  gap: var(--sp-1);
+  padding: 0;
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.adm-agent-inventory-toggle:hover {
+  color: var(--ink-1);
+}
+
+.adm-agent-inventory-chevron {
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.adm-agent-inventory-toggle[aria-expanded="true"] .adm-agent-inventory-chevron {
+  transform: rotate(180deg);
 }
 
 .adm-agent-inventory {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
-  padding-top: var(--sp-1);
-  border-top: 0.5px solid var(--line-2);
-}
-
-.adm-agent-inventory-empty {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  color: var(--ink-3);
+  grid-column: 2 / -1;
+  gap: var(--sp-2);
 }
 
 .adm-agent-inventory-group {
@@ -239,52 +308,5 @@
 .adm-agent-inventory-pill {
   max-width: 100%;
   color: var(--ink-1);
-  background: var(--surface-0);
-}
-
-.adm-agent-toggle-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.adm-agent-toggle-name {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  color: var(--ink-1);
-}
-
-.adm-agent-toggle-mark {
-  flex: 0 0 auto;
-  opacity: var(--opacity-mark);
-}
-
-/* The toggle itself is the shared Switch primitive (data-checked track +
-   thumb); this wrapper only owns layout and the enabled/disabled caption. */
-.adm-agent-toggle-switch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex: none;
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  color: var(--ink-3);
-  cursor: pointer;
-  user-select: none;
-}
-
-.adm-agent-toggle-label {
-  min-width: 4.5rem;
-  font: var(--type-label-strong);
-  color: var(--ink-2);
-}
-
-.adm-agent-toggle-switch:has([data-slot="switch"]:not([data-checked])) .adm-agent-toggle-label {
-  color: var(--ink-3);
+  background: var(--surface-1);
 }
