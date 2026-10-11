@@ -14,6 +14,7 @@ from .core.logging_config import setup_logging
 from .core.storage_config import database_url_from_env
 from .persistence.blob_migration import migrate_blobs
 from .persistence.blob_store import blob_store_from_env
+from .persistence.database_backup import backup_database, backup_target_from_env
 from .persistence.employee_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
 from .persistence.session_store import DatabaseSessionStore
@@ -63,6 +64,7 @@ def main(argv: list[str] | None = None) -> None:
             "migrate-local-sessions",
             "migrate-local-operational-state",
             "migrate-blobs-to-r2",
+            "backup-database",
             "rehearse-employee-handles",
             "storage-report",
         ],
@@ -79,6 +81,13 @@ def main(argv: list[str] | None = None) -> None:
             parser.error("migrate-local-operational-state requires --data-dir")
         report = migrate_local_operational_state(args.data_dir,
             database_url_from_env(setting="migrate-local-operational-state"), dry_run=args.dry_run)
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "backup-database":
+        client, bucket = backup_target_from_env()
+        report = backup_database(
+            database_url_from_env(setting="backup-database"), client, bucket
+        )
         print(json.dumps(report, indent=2))
         return
     if args.command == "migrate-blobs-to-r2":
