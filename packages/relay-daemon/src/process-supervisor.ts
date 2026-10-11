@@ -40,8 +40,44 @@ export async function superviseLocalProcess(
     if (detached && child.pid) hooks?.onSpawn?.(child.pid);
     const stdoutCapture = new BoundedTextCapture();
     const stderrCapture = new BoundedTextCapture();
-    let released = false;
+    let finished = false;
     let killTimer: NodeJS.Timeout | undefined;
+    let reportTimer: NodeJS.Timeout | undefined;
+    let cleanupTimer: NodeJS.Timeout | undefined;
+    let reported = false;
+    const scheduleExitReport = (): void => {
+      if (reportTimer || reported || finished) return;
+      reportTimer = setTimeout(() => {
+        reportTimer = undefined;
+        if (finished) return;
+        reported = true;
+        hooks?.onExitUnconfirmed?.();
+      }, options.exitUnconfirmedAfterMs ?? 60_000);
+      reportTimer.unref?.();
+    };
+    const settle = (code: number, errorMessage?: string, released = false): void => {
+      if (finished) return;
+      finished = true;
+      if (killTimer) clearTimeout(killTimer);
+      if (reportTimer) clearTimeout(reportTimer);
+      if (cleanupTimer) clearTimeout(cleanupTimer);
+      options.signal?.removeEventListener("abort", abort);
+      hooks?.release?.removeEventListener("abort", release);
+      if (released) {
+        // An operator assertion frees the slot even when the child or its
+        // inherited pipes never close. Stop capturing and retaining handles.
+        child.stdout.destroy();
+        child.stderr.destroy();
+        child.unref();
+      }
+      resolve({
+        exit_code: code,
+        stdout: stdoutCapture.toString(),
+        stderr: stderrCapture.toString(),
+        ...(errorMessage ? { error_message: errorMessage } : {}),
+      });
+    };
+    const release = (): void => settle(-1, RELEASED_EXIT_MESSAGE, true);
     const terminate = (signal: NodeJS.Signals): void => {
       if (detached && child.pid) {
         try {
@@ -54,29 +90,35 @@ export async function superviseLocalProcess(
       child.kill(signal);
     };
     const abort = (): void => {
+      scheduleExitReport();
       terminate("SIGTERM");
       // Escalate in case the agent ignores SIGTERM.
       killTimer = setTimeout(() => terminate("SIGKILL"), SIGKILL_DELAY_MS);
       killTimer.unref?.();
     };
     options.signal?.addEventListener("abort", abort, { once: true });
+    hooks?.release?.addEventListener("abort", release, { once: true });
     if (options.signal?.aborted) abort();
+    if (hooks?.release?.aborted) release();
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (text: string) => {
+      if (finished) return;
       stdoutCapture.append(text);
       const rendered = options.stdoutRenderer ? options.stdoutRenderer(text) : text;
       if (rendered) options.sink?.(rendered);
     });
     child.stderr.on("data", (text: string) => {
+      if (finished) return;
       stderrCapture.append(text);
       const rendered = options.stderrRenderer ? options.stderrRenderer(text) : text;
       if (rendered) options.sink?.(rendered);
     });
     // Parent exit precedes pipe EOF when a descendant inherited stdout/stderr.
     // Clean the process group immediately so those pipes cannot strand exit.
-    child.on("exit", () => { if (detached && child.pid) terminate("SIGKILL"); });
-    child.on("close", async (code) => {
+    child.on("exit", () => { if (!finished && detached && child.pid) terminate("SIGKILL"); });
+    child.on("close", (code) => {
+      if (finished) return;
       if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener("abort", abort);
       if (detached && child.pid) {
@@ -85,58 +127,34 @@ export async function superviseLocalProcess(
         // not cancel escalation just because the parent emitted close.
         terminate("SIGKILL");
         const groupId = child.pid;
-        const cleanupStartedAt = Date.now();
-        const cleanupDeadline = cleanupStartedAt + (options.cleanupTimeoutMs ?? 5_000);
-        const unconfirmedAfterMs = options.exitUnconfirmedAfterMs ?? 60_000;
-        let reported = false;
-        await new Promise<void>((finished) => {
-          let warned = false;
-          const check = (): void => {
-            // Only a person reporting the run gone may end an unverified wait.
-            if (hooks?.release?.aborted) {
-              released = true;
-              finished();
-              return;
+        const cleanupDeadline = Date.now() + (options.cleanupTimeoutMs ?? 5_000);
+        scheduleExitReport();
+        let warned = false;
+        const check = (): void => {
+          if (finished) return;
+          try { process.kill(-groupId, 0); } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+              settle(code ?? -1);
+            } else {
+              if (!warned) { process.stderr.write("[relay] Cannot verify process-group termination; retaining execution.\n"); warned = true; }
+              cleanupTimer = setTimeout(check, 100);
             }
-            if (!reported && Date.now() - cleanupStartedAt >= unconfirmedAfterMs) {
-              reported = true;
-              hooks?.onExitUnconfirmed?.();
-            }
-            try { process.kill(-groupId, 0); } catch (error) {
-              if ((error as NodeJS.ErrnoException).code === "ESRCH") {
-                finished();
-              } else {
-                if (!warned) { process.stderr.write("[relay] Cannot verify process-group termination; retaining execution.\n"); warned = true; }
-                setTimeout(check, 100);
-              }
-              return;
-            }
-            if (!warned && Date.now() >= cleanupDeadline) {
-              process.stderr.write("[relay] Process cleanup overdue; descendants may still be running. Retaining execution.\n");
-              warned = true;
-            }
-            terminate("SIGKILL");
-            setTimeout(check, 100);
-          };
-          check();
-        });
+            return;
+          }
+          if (!warned && Date.now() >= cleanupDeadline) {
+            process.stderr.write("[relay] Process cleanup overdue; descendants may still be running. Retaining execution.\n");
+            warned = true;
+          }
+          terminate("SIGKILL");
+          cleanupTimer = setTimeout(check, 100);
+        };
+        check();
+        return;
       }
-      resolve({
-        exit_code: released ? -1 : code ?? -1,
-        stdout: stdoutCapture.toString(),
-        stderr: stderrCapture.toString(),
-        ...(released ? { error_message: RELEASED_EXIT_MESSAGE } : {}),
-      });
+      settle(code ?? -1);
     });
     child.on("error", (error) => {
-      if (killTimer) clearTimeout(killTimer);
-      options.signal?.removeEventListener("abort", abort);
-      resolve({
-        exit_code: -1,
-        stdout: stdoutCapture.toString(),
-        stderr: stderrCapture.toString(),
-        error_message: error.message,
-      });
+      settle(-1, error.message);
     });
   });
 }

@@ -3881,6 +3881,15 @@ test("healthy registration does not end grace while execution endpoints are unav
   assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
 });
 
+test("a registration fallback heartbeat does not clear an execution outage", async () => {
+  const { events, aborted } = await runThroughOutage({
+    graceMs: 5000, runMs: 3000, outageMs: 3500, outageStatus: 503,
+    heartbeatStatuses: [503, 404], pollHangs: true, registrationDuringOutage: true,
+  });
+  assert.equal(aborted, false);
+  assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
+});
+
 test("a proxy refusal during an outage is not a lease revocation", async () => {
   // A deploy's proxy may answer 403/404 on some routes while the rest time out.
   // That says nothing about who owns the run, so the grace carries on.

@@ -237,8 +237,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
-  // Set while backend calls fail transiently; cleared by a real answer (a
-  // response, or a 401/410 credential rejection). Other 4xx leave it alone.
+  // Set while execution endpoints fail transiently; cleared by an ownership
+  // response or a 401/410 rejection. Registration alone cannot renew a run.
   let backendUnreachable = false;
   const unreachableGraceMs = options.unreachableGraceMs
     ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS")
@@ -473,7 +473,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       signal: runtimeSignal,
       shouldStop: () => stopping,
       onTransientFailure: () => { backendUnreachable = true; },
-      onSuccess: () => { backendUnreachable = false; },
+      onCredentialRejected: () => { backendUnreachable = false; },
     };
     const initialHeartbeatSettings = await withBackendReconnect(
       register, logger, { sandboxId, what: "registration" }, reconnectControl,
@@ -556,6 +556,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           for (const { command } of renewing) executionWatchdog.renew(command.id,
             commandLeaseSeconds * 1000 - (performance.now() - sentAt));
         }
+        backendUnreachable = false;
       } catch (error) {
         // Rolling upgrades may briefly put a new daemon behind an older
         // backend. Registration remains the compatibility heartbeat.
@@ -636,6 +637,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         );
         if (!response.ok) {
           const detail = `Command poll failed: ${response.status} ${await response.text()}`;
+          // A healthy registration route cannot renew execution ownership.
+          // Retry transient poll failures directly so they retain outage grace.
+          if (response.status >= 500 || response.status === 408 || response.status === 429) {
+            throw new DaemonHttpError(detail, response.status);
+          }
           // Gone is permanent: use the same clean shutdown as a deleted-node
           // registration instead of trying to bring the node back.
           if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status);
@@ -656,6 +662,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         leaseObservationStartedAt = commandPollStartedAt + processingMs;
         pollHeartbeat = parsed.heartbeat;
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
+        backendUnreachable = false;
         completedEmptyLongPoll = commandPollWaitMs > 0
           && (parsed.commands?.length ?? 0) === 0
           && performance.now() - commandPollStartedAt >= commandPollWaitMs;
@@ -1906,23 +1913,21 @@ async function withBackendReconnect<T>(
     signal?: AbortSignal;
     shouldStop?: () => boolean;
     onTransientFailure?: () => void;
-    onSuccess?: () => void;
+    onCredentialRejected?: () => void;
   } = {},
 ): Promise<T> {
   let attempt = 0;
   while (true) {
     if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
     try {
-      const result = await action();
-      control.onSuccess?.();
-      return result;
+      return await action();
     } catch (error) {
       if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
       if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) {
         // Only the backend itself revoking credentials speaks for ownership. A
         // proxy's 403/404 mid-deploy says nothing about it, so it neither ends
         // nor starts an outage grace.
-        if (error.status === 401 || error.status === 410) control.onSuccess?.();
+        if (error.status === 401 || error.status === 410) control.onCredentialRejected?.();
         throw error;
       }
       control.onTransientFailure?.();

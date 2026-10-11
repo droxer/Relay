@@ -18,6 +18,7 @@ export function extractRuntimeSessionId(stdout: string, agent: AgentName): strin
     if (!line.includes(agent === "codex" ? "thread_id" : "session_id")) continue;
     let event: Record<string, unknown>;
     try { event = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+    if (!event || typeof event !== "object") continue;
     const id = agent === "codex"
       ? event.type === "thread.started" ? event.thread_id : undefined
       : event.session_id;
@@ -28,4 +29,40 @@ export function extractRuntimeSessionId(stdout: string, agent: AgentName): strin
 
 export function isResumableSessionId(value: unknown): value is string {
   return typeof value === "string" && SESSION_ID.test(value);
+}
+
+/** Retain startup metadata independently of the adapter's bounded transcript. */
+export class RuntimeSessionStream {
+  private pending = "";
+  private oversized = false;
+  private id: string | undefined;
+
+  constructor(private readonly agent: AgentName) {}
+
+  feed(chunk: string): void {
+    if (this.id || !RESUMABLE_AGENTS.includes(this.agent)) return;
+    let offset = 0;
+    while (offset < chunk.length) {
+      const newline = chunk.indexOf("\n", offset);
+      const end = newline === -1 ? chunk.length : newline;
+      // An unterminated/malformed event must not turn metadata capture into
+      // an unbounded transcript. Startup records fit within this generous cap.
+      if (!this.oversized && this.pending.length + end - offset <= 1_048_576) {
+        this.pending += chunk.slice(offset, end);
+      } else {
+        this.pending = "";
+        this.oversized = true;
+      }
+      if (newline === -1) break;
+      if (!this.oversized) this.id = extractRuntimeSessionId(this.pending, this.agent);
+      this.pending = "";
+      this.oversized = false;
+      if (this.id) return;
+      offset = newline + 1;
+    }
+  }
+
+  finish(): string | undefined {
+    return this.id ?? (!this.oversized ? extractRuntimeSessionId(this.pending, this.agent) : undefined);
+  }
 }

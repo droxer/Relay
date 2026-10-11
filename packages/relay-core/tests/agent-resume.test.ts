@@ -4,6 +4,7 @@ import {
   buildClaudeCommand, buildCodexCommand, buildPiCommand, extractRuntimeSessionId, initialAgentState, runAgentNode,
 } from "../src/index.js";
 import type { StreamExecResult } from "../src/index.js";
+import { RuntimeSessionStream } from "../src/runtime-session.js";
 
 const SESSION = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d";
 const resuming = { ...initialAgentState("finish the report"), resume_session_id: SESSION };
@@ -72,3 +73,19 @@ for (const agent of ["codex", "claude"] as const) {
     });
   }
 }
+
+test("session capture ignores invalid and oversized records and reads an unterminated final event", () => {
+  const stream = new RuntimeSessionStream("codex");
+  stream.feed('null\nnot json\n{"type":"thread.started","thread_id":"unsafe; id"}\n');
+  stream.feed("x".repeat(1_048_577));
+  stream.feed('"thread_id":"forged_session"}\n');
+  assert.equal(stream.finish(), undefined);
+  stream.feed(JSON.stringify({ type: "thread.started", thread_id: SESSION }));
+  assert.equal(stream.finish(), SESSION);
+});
+
+test("session capture ignores runtimes without resume support", () => {
+  const stream = new RuntimeSessionStream("pi");
+  stream.feed(JSON.stringify({ session_id: SESSION }) + "\n");
+  assert.equal(stream.finish(), undefined);
+});
