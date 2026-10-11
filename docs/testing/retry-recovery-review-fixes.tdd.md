@@ -64,6 +64,17 @@ Dependencies and lockfiles are unchanged by these fixes.
   passed all 2,048 tests. Restricted backend installer fixtures likewise could
   not access `/dev/tty`; the unrestricted rerun passed those fixtures.
 - `git diff --check`: passed.
-- The full unrestricted `npm run test:py` rerun is still in progress when opening
-  the PR. Its completed API tests, including recovery and installer fixtures,
-  have no failures; the complete backend result is not yet claimed.
+- The full unrestricted `npm run test:py` rerun did not complete before PR
+  preparation. Completed API tests had no failures. After merging current main,
+  the affected backend suite passed **348 tests**: execution escape, lifecycle,
+  reconciliation API, and daemon registry. No complete backend-suite pass is
+  claimed for the final merged head.
+
+## Current-main integration
+
+Merged current main locally before publishing the PR. Resolved four conflicts
+in the execution lifecycle, recovery guidance tests, API documentation, and agent
+guide. Kept main's earliest stop/deletion intent and late-result preservation
+alongside the offline/restarted/unconfirmed-exit recovery markers. Extended the
+execution escape sweep with both new durable execution markers and a long-expired
+lease, preserving the invariant that overdue deletion always has a way out.

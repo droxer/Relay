@@ -607,7 +607,8 @@ in thread detail and list responses. It reports `phase`, `executionConfirmed`,
 `nextRecoveryAt`, plus `canRetrySave` and `canReportGone`. These capabilities
 reflect current execution state; operation routes still check actor authorization
 and revalidate state. `canReportGone` is false outside `recovery_required` and
-when a terminal result is retained for finalization; saved evidence must be
+when a terminal result is retained for finalization (a finalizing request or a
+terminal command, unless its evidence is actually missing); saved evidence must be
 recovered rather than discarded. Clients talking to an older backend must at
 least gate recovery actions on `recovery_required`. Phases are `queued`, `running`, `stopping`, `unresponsive`,
 `finalizing`, `terminal`, and `recovery_required`. A live command lease confirms
@@ -637,28 +638,39 @@ use them.
 
 `POST /api/v1/threads/{id}/execution/recovery` requests another bounded round of
 finalization retries after a `finalization_failed` blocker. It does not clear a
-live execution reservation or treat an unreachable computer as stopped. Missing
-terminal evidence and unconfirmed execution require restoration of the execution
-host/evidence; retrying finalization cannot manufacture proof of exit.
+live execution reservation or treat an unreachable computer as stopped. A
+`missing_terminal_evidence` blocker with no retained report never offers it (`canRetrySave` is false):
+with no evidence to save, a retry only re-marks the evidence lost. It offers
+`canReportGone` instead, since a finalizing request was claimed from an exit
+report and nothing retained remains to protect.
+If a late report restores the evidence, the blocker becomes `finalization_failed`:
+retry saving is available again, and reconciliation and deletion cannot discard
+the retained result.
 
-Stop requests that remain unconfirmed for 60 seconds surface `recovery_required` /
-`termination_unconfirmed`, whether or not the daemon still holds its lease. They
-retain execution ownership. A disconnected daemon surfaces `unresponsive`; once
-the delivered command's lease has been expired for
-`RELAY_EXECUTION_UNRESPONSIVE_RECOVERY_SECONDS` (default 600) and the computer is
-not online, it surfaces `recovery_required` / `execution_lost`. A daemon that
-restarts and reports a journaled command it will not resume surfaces
-`recovery_required` / `execution_interrupted`: a daemon advertising
-`execution-journal-report` sends `journaledCommandIds` on registration, and the
-response's `acknowledgedJournalIds` lists the ones the backend accounted for so
-the daemon can drop their journal records. A daemon that cannot verify a stopped
-run's process exit for a minute sends `run.exit_unconfirmed`, which surfaces
-`recovery_required` / `termination_unconfirmed` at once. Heartbeat and poll lease
-observations list `settledCommandIds`: submitted runs that already have a terminal
-outcome, so a daemon holding a reported-gone run can give back its slot. None of
-these release anything on
-their own: silence is never treated as termination, so a person must still
-report the agent gone (reconcile or deletion) to release the reservation.
+A stop intent — an explicit stop or the thread deletion itself, whichever came
+first — that stays unconfirmed for 60 seconds surfaces `recovery_required` /
+`termination_unconfirmed`, whether the daemon still holds its lease (`stopping`)
+or stopped renewing it (`unresponsive`). Silence alone never releases anything.
+A disconnected daemon surfaces `unresponsive`; once the delivered command's
+lease has been expired for `RELAY_EXECUTION_UNRESPONSIVE_RECOVERY_SECONDS`
+(default 600) and the computer is not online, it surfaces `recovery_required` /
+`execution_lost`. A daemon that restarts and reports a journaled command it will
+not resume surfaces `recovery_required` / `execution_interrupted`: a daemon
+advertising `execution-journal-report` sends `journaledCommandIds` on
+registration, and the response's `acknowledgedJournalIds` lists those the backend
+accounted for so the daemon can drop their journal records. A daemon that cannot
+verify a stopped run's process exit for a minute sends `run.exit_unconfirmed`,
+which surfaces `recovery_required` / `termination_unconfirmed` at once. Heartbeat
+and poll lease observations list `settledCommandIds`: submitted runs that already
+have a terminal outcome, so a daemon holding a reported-gone run can give back
+its slot. None of these release anything automatically; release still needs a
+person's recorded assertion (deletion or reconciliation). A legacy
+`orphaned_run` with no run request may be reported gone even when its last command
+is terminal, because there is no request left to finalize that result into.
+
+`backend/tests/unit/test_execution_escape.py` walks the whole input space of
+the execution status and fails if any overdue deletion has neither a person's
+action nor automatic progress; extend its axes when adding a phase or status.
 
 ## Team responsibilities and work acceptance
 

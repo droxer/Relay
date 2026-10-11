@@ -132,6 +132,6 @@ describe("shortcut resolver", () => {
   it("keeps every go-to letter mapped to a distinct route", () => {
     const routes = Object.values(GO_SHORTCUTS);
     assert.equal(new Set(routes).size, routes.length);
-    assert.deepEqual([...routes].sort(), ["admin", "agents", "backlog", "main", "projects", "routine", "settings", "teams"]);
+    assert.deepEqual([...routes].sort(), ["admin", "agents", "backlog", "computers", "main", "projects", "routine", "settings", "skills", "teams"]);
   });
 });

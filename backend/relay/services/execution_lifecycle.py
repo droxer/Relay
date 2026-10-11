@@ -18,16 +18,18 @@ from ..persistence.daemon_store import (
     EXIT_UNCONFIRMED_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
+    TERMINAL_EVENT_STATE_KEY,
 )
 from ..persistence.store_common import relay_event
 from ..sessions.controller import SessionController
 from ..sessions.task_scope import thread_task_scope
 
 TERMINAL = {"completed", "failed", "cancelled"}
+# How long a requested stop may go unconfirmed before Relay gives up on it.
+STOP_GRACE_SECONDS = 60
 RECONCILED_ERROR = (
     "Execution reported gone by an operator; the computer never sent exit evidence."
 )
-STOP_GRACE_SECONDS = 60
 # How long a delivered run's lease may stay dead on an offline computer before
 # Relay gives up waiting and lets a person report the agent gone. Nothing is
 # released automatically: liveness loss is never exit evidence on its own.
@@ -88,32 +90,61 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         # guess based on a completed/failed session label.
         if session.get("status") != "cancelled":
             phase, reason = "recovery_required", "orphaned_run"
-    # A stop sent to a computer that already died never gets a live lease
-    # back, so the grace applies whether or not the lease is still live.
-    if phase in ("stopping", "unresponsive") and state.get("_relay_stop_requested_at"):
-        try:
-            stopped_at = _parse_time(state["_relay_stop_requested_at"])
-            if (now - stopped_at).total_seconds() >= STOP_GRACE_SECONDS:
-                phase, reason = "recovery_required", "termination_unconfirmed"
-        except (ValueError, TypeError):
-            phase, reason = "recovery_required", "termination_unconfirmed"
+    # A daemon that died mid-run also stops renewing its lease, so a stopped
+    # run can read unresponsive instead of stopping; the grace applies to both.
+    if phase in ("stopping", "unresponsive") and _stop_grace_elapsed(session, state, now):
+        phase, reason = "recovery_required", "termination_unconfirmed"
     if (phase == "unresponsive" and computer_online is not True
             and lease_dead_for is not None
             and lease_dead_for >= UNRESPONSIVE_RECOVERY_SECONDS):
         phase, reason = "recovery_required", "execution_lost"
+    # A late report can restore evidence while the durable recovery flag still
+    # says it is missing. Protect that result and offer saving it again.
+    if reason == "missing_terminal_evidence" and (
+        isinstance(state.get(TERMINAL_EVENT_STATE_KEY), dict)
+        or isinstance(((command or {}).get("command") or {}).get("_terminalEvent"), dict)
+    ):
+        reason = "finalization_failed"
+    # Lost evidence has nothing to save, so retrying the save only re-marks it.
+    evidence_lost = reason == "missing_terminal_evidence"
+    # A finalizing request or a terminal command holds a result the daemon did
+    # report; asserting the run gone would discard it. Without a request there
+    # is nothing left to finalize it into.
+    retained_result = request is not None and not evidence_lost and (
+        request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL
+    )
     return {
         "phase": phase, "executionConfirmed": confirmed,
         "computerOnline": computer_online,
         "deletionRequested": bool(session.get("deletionRequestedAt")),
         "canDelete": phase == "terminal", "blockingReason": reason,
-        "canRetrySave": phase == "recovery_required" and request is not None
+        "canRetrySave": phase == "recovery_required" and request is not None and not evidence_lost
         and request.get("status") == "finalizing" and bool(state.get(TERMINAL_CLAIM_ID_STATE_KEY)),
         "canReportGone": phase == "recovery_required" and reason != "finalization_failed"
-        and (request or {}).get("status") != "finalizing"
-        and (command or {}).get("status") not in TERMINAL,
+        and not retained_result,
         "lastConfirmedAt": (request or {}).get("currentProgressAt"),
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
     }
+
+
+def _stop_grace_elapsed(session: dict[str, Any], state: dict[str, Any], now: datetime) -> bool:
+    """Whether the earliest stop intent has gone unconfirmed past the grace.
+
+    The deletion is itself a stop intent: the run-request stop marker is only
+    written for a running request, so a delete that could not record one must
+    still start the clock, or the thread waits forever.
+    """
+    marks = [state.get("_relay_stop_requested_at"), session.get("deletionRequestedAt")]
+    marks = [mark for mark in marks if mark]
+    if not marks:
+        return False
+    try:
+        asked_at = min(
+            datetime.fromisoformat(str(mark).replace("Z", "+00:00")) for mark in marks
+        )
+        return (now - asked_at).total_seconds() >= STOP_GRACE_SECONDS
+    except (ValueError, TypeError):
+        return True  # An unreadable mark must not hold the thread hostage.
 
 
 class ExecutionLifecycleService:

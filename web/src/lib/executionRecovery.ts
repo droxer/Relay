@@ -16,6 +16,7 @@ export type RecoveryGuide = {
 };
 const executionGuides: Record<string, RecoveryGuide> = {
   finalization_failed: { key: "finalization_failed" },  // the result is retained; retry saves it
+  missing_terminal_evidence: { key: "missing_terminal_evidence", destination: "computer", reportGone: true },  // nothing retained; a retry only re-marks it
   termination_unconfirmed: { key: "termination_unconfirmed", destination: "computer", reportGone: true },
   orphaned_run: { key: "orphaned_run", destination: "computer", reportGone: true },
   execution_unconfirmed: { key: "execution_unconfirmed", destination: "computer", reportGone: true },
