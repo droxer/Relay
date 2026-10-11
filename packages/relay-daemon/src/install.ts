@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
-import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment } from 'relay-core';
+import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
+import { installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { captureRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
 
 interface InstallOptions {
@@ -110,6 +111,51 @@ function installLauncher(binDir: string, name: string, script: string): string |
   return launcher;
 }
 
+/**
+ * The installed computer this run should upgrade: same backend and workspace, a saved token, and
+ * a backend that still accepts it. A deleted or rejected node falls back to a fresh authorization.
+ */
+async function reusableComputer(installed: InstalledComputer[], backendUrl: string, workspace: string): Promise<{ computer: InstalledComputer; token: string } | undefined> {
+  const newestFirst = installed.filter(computer => sameComputer(computer, backendUrl, workspace))
+    .sort((a, b) => statSync(b.file).mtimeMs - statSync(a.file).mtimeMs);
+  for (const computer of newestFirst) {
+    const credentials = join(homedir(), '.relay', 'daemon-nodes', computer.id, 'credentials');
+    const token = readDaemonNodeToken(credentials, computer.employeeId);
+    if (!token) continue;
+    try {
+      const response = await fetch(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(computer.id)}/auth-check`), {
+        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
+      });
+      if (response.ok) return { computer, token };
+      await response.body?.cancel();
+    } catch {
+      // An unreachable backend fails the doctor check below with a clearer message.
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function serviceRunner(): ServiceRunner {
+  return {
+    run: (command, args) => {
+      const result = spawnSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      return { status: result.status, stdout: result.stdout ?? '' };
+    },
+  };
+}
+
+/** Removes every other service installed for this backend and workspace: one computer, one service. */
+function removeSupersededServices(installed: InstalledComputer[], options: InstallOptions): void {
+  const runner = serviceRunner();
+  for (const computer of installed) {
+    if (computer.id === options.sandboxId || !sameComputer(computer, options.backendUrl, options.workspace)) continue;
+    removeService(process.platform, process.getuid?.() ?? 0, computer, runner);
+    console.log(`Removed an older Relay install for this workspace (${computer.id}).`);
+  }
+  if (process.platform === 'linux') spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
+}
+
 async function install(): Promise<void> {
   const options = parseInstallArgs(process.argv.slice(2));
   if (!['darwin', 'linux'].includes(process.platform)) throw new Error('Only macOS and Linux are supported.');
@@ -117,12 +163,22 @@ async function install(): Promise<void> {
     const probe = spawnSync('systemctl', ['--user', 'show-environment'], { stdio: 'ignore' });
     if (probe.status !== 0) throw new Error('A systemd user session is required. Re-run the same installation command with --foreground to run in this terminal.');
   }
+  const installed = installedComputers(process.platform, homedir());
   if (options.deviceSetup) {
     // install.sh prompts for it; reading /dev/tty from Node dies on EINTR under sudo.
     if (!options.workspace) throw new Error('Pass --workspace <absolute path> to choose the local workspace directory.');
     if (!isAbsolute(options.workspace) || !statSync(options.workspace).isDirectory()) throw new Error('Choose an existing absolute workspace directory.');
     accessSync(options.workspace, constants.R_OK | constants.W_OK);
     options.workspace = resolve(options.workspace);
+  }
+  const existing = options.deviceSetup ? await reusableComputer(installed, options.backendUrl, options.workspace) : undefined;
+  if (existing) {
+    // Re-running the install command upgrades this computer in place: same node, same token, new release.
+    console.log('Relay is already installed for this workspace; upgrading it.');
+    options.sandboxId = existing.computer.id;
+    options.employeeId = existing.computer.employeeId;
+    process.env.RELAY_DAEMON_NODE_TOKEN = existing.token;
+  } else if (options.deviceSetup) {
     const authorized = await authorizeComputer({
       backendUrl: options.backendUrl, workspace: options.workspace, displayName: hostname().slice(0, 80),
       openBrowser: url => {
@@ -182,6 +238,13 @@ async function install(): Promise<void> {
   const wrapper = installLauncher(binDir, 'relay-daemon', cli);
   const control = installLauncher(binDir, 'relay', join(dirname(cli), 'control.js'));
   if (options.foreground) {
+    // Keep service files for `relay start`, but prevent a background daemon from sharing this identity.
+    const runner = serviceRunner();
+    for (const computer of installed) {
+      if (computer.id === options.sandboxId || sameComputer(computer, options.backendUrl, options.workspace)) {
+        stopService(process.platform, process.getuid?.() ?? 0, computer, runner);
+      }
+    }
     console.log('Starting Relay in this terminal. Press Ctrl+C to stop.');
     const child = spawnSync(argv[0]!, argv.slice(1), { stdio: 'inherit' });
     process.exitCode = child.status ?? 1;
@@ -215,6 +278,8 @@ async function install(): Promise<void> {
       console.log(`Logs: journalctl --user -u ${service.name}`);
     }
   }
+  // Only after the new service started, so a failed install never leaves the computer with none.
+  removeSupersededServices(installed, options);
   console.log('Connected to Relay. You can close this terminal.');
   console.log('Relay runs in the background and starts automatically when you log in.');
   if (control) {

@@ -34,7 +34,7 @@ test('installed services restart failures but leave deleted-node clean exits sto
 
 import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -56,15 +56,31 @@ test('installer verifies authentication and writes a service using the real pack
   for (const name of ['launchctl', 'systemctl', 'open', 'xdg-open']) {
     const file = join(bin, name);
     writeFileSync(file, '#!/bin/sh\nprintf "%s\\n" "$@" >> "$SERVICE_CALLS"\n');
+    if (name === 'launchctl' || name === 'systemctl') {
+      writeFileSync(file, readFileSync(file, 'utf8') +
+        'case "$*" in\n*disable*) [ "$FAIL_SERVICE_STOP" != 1 ] || exit 1 ;;\n*print*) exit 113 ;;\n*is-active*) printf "inactive\\n"; exit 3 ;;\nesac\n');
+    }
     chmodSync(file, 0o755);
   }
   const registrations: Record<string, unknown>[] = [];
   let deleted = false;
+  let rejected = false;
+  let foreground = false;
   const server = createServer((request, response) => {
     let body = '';
     request.on('data', data => { body += data; });
     request.on('end', () => {
-      if (request.url === '/api/v1/daemon-node-registrations') registrations.push(JSON.parse(body));
+      if (request.url === '/api/v1/daemon-node-registrations') {
+        registrations.push(JSON.parse(body));
+        if (foreground) {
+          const serviceCalls = readFileSync(calls, 'utf8');
+          assert.match(serviceCalls, /disable/);
+          assert.match(serviceCalls, process.platform === 'darwin' ? /bootout/ : /is-active/);
+          response.statusCode = 410;
+          response.end(JSON.stringify({ detail: 'Daemon node was deleted in the control panel.' }));
+          return;
+        }
+      }
       response.setHeader('Content-Type', 'application/json');
       if (request.url === '/api/v1/computer-authorizations') {
         assert.equal(JSON.parse(body).workspacePath, workspace);
@@ -75,6 +91,13 @@ test('installer verifies authentication and writes a service using the real pack
       if (request.url === '/api/v1/computer-authorizations/token') {
         assert.equal(request.headers.authorization, 'Device device-fixture-secret');
         response.end(JSON.stringify({ sandboxId: 'node-install-test', employeeId: 'alice', token: 'fixture-token', workspacePath: workspace }));
+        return;
+      }
+      if (rejected && request.url?.endsWith('/auth-check')) {
+        // Only the installer's reuse probe is rejected; the fresh credential then authenticates.
+        rejected = false;
+        response.statusCode = 401;
+        response.end(JSON.stringify({ detail: 'Unauthorized daemon node.' }));
         return;
       }
       response.statusCode = deleted ? 410 : 200;
@@ -150,9 +173,42 @@ test('installer verifies authentication and writes a service using the real pack
     assert.equal(readFileSync(service, 'utf8'), content);
     assert.equal(registrations.length, 0);
 
-    // New-device setup obtains the credential through browser approval;
+    // Re-running the setup command for an installed workspace upgrades that computer in place:
+    // no browser approval, and an older duplicate install for the workspace is removed.
+    const setupCommand = [command[0]!, '--backend-url', `http://127.0.0.1:${address.port}`, '--workspace', workspace];
+    const stale = service.replace('node-install-test', 'node-stale');
+    writeFileSync(stale, content.replaceAll('node-install-test', 'node-stale'));
+    const upgrade = await exec(process.execPath, setupCommand, {
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
+    });
+    assert.match(upgrade.stdout, /already installed for this workspace; upgrading it/);
+    assert.doesNotMatch(upgrade.stdout, /Confirm this computer in your browser/);
+    assert.match(upgrade.stdout, /Removed an older Relay install for this workspace \(node-stale\)/);
+    assert.doesNotMatch(upgrade.stdout + upgrade.stderr, /fixture-token/);
+    assert.equal(existsSync(stale), false);
+    assert.equal(readFileSync(service, 'utf8'), content);
+
+    // Foreground reuse must stop the background service before registering as the same node.
+    foreground = true;
+    writeFileSync(calls, '');
+    await assert.rejects(exec(process.execPath, [...setupCommand, '--foreground'], {
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, FAIL_SERVICE_STOP: '1' }, timeout: 30_000,
+    }), /Cannot stop/);
+    assert.equal(registrations.length, 0);
+    assert.equal(existsSync(service), true);
+    writeFileSync(calls, '');
+    await exec(process.execPath, [...setupCommand, '--foreground'], {
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
+    });
+    assert.equal(registrations.length, 1);
+    assert.equal(existsSync(service), true);
+    registrations.length = 0;
+    foreground = false;
+
+    // A computer the backend no longer accepts is re-authorized through browser approval;
     // neither credential appears in console output or the service definition.
-    const deviceSetup = await exec(process.execPath, [command[0]!, '--backend-url', `http://127.0.0.1:${address.port}`, '--workspace', workspace], {
+    rejected = true;
+    const deviceSetup = await exec(process.execPath, setupCommand, {
       env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
     });
     assert.match(deviceSetup.stdout, /Confirm this computer in your browser/);
