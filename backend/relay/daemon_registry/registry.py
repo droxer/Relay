@@ -3985,6 +3985,7 @@ class DaemonNodeRegistry:
                     "exitCode": event["exitCode"],
                     "agentLog": agent_log,
                     **({"workResult": work_result} if work_result else {}),
+                    **({"outputTruncated": True} if event.get("outputTruncated") else {}),
                     "tokenUsage": event.get("tokenUsage"),
                     "assignmentId": assignment.get("assignmentId"),
                 },

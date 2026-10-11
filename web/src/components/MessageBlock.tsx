@@ -270,6 +270,9 @@ export const MessageBlock = memo(function MessageBlock({
               />
             </div>
           ) : null}
+          {message.outputTruncated && !message.streaming ? (
+            <p className="msg-turn-note" role="note">{t("thread.output_truncated")}</p>
+          ) : null}
           <footer className="msg-turn-foot">
             {message.tokenUsage ? (
               <TurnTokenUsage usage={message.tokenUsage} />

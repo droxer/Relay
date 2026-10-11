@@ -304,6 +304,7 @@
     "tokens_short": "tokens",
     "token_usage_title": "Input {{input}} · Output {{output}} · Cache write {{cacheWrite}} · Cache read {{cacheRead}}",
     "token_usage_unreported": "Token usage not reported by this runtime",
+    "output_truncated": "Part of this run's live output was not saved. The final result is complete.",
     "no_sessions": "—",
     "rename": "Rename",
     "rename_prompt": "Rename thread",

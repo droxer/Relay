@@ -364,6 +364,20 @@ describe("projectMessages artifact projection", () => {
     assert.equal(userMessages[1].text, "Now add a dark mode toggle");
   });
 
+  it("carries a truncated-output flag from the completed run onto its turn", () => {
+    const messages = projectMessages(session([
+      { id: "ev_start_cut", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_cut", agent: "codex", role: "fixer" },
+      { id: "ev_done_cut", type: "agent.completed", sessionId: "ses_1", timestamp, runId: "run_cut", agent: "codex",
+        status: "completed", exitCode: 0, agentLog: "", outputTruncated: true },
+      { id: "ev_start_ok", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_ok", agent: "codex", role: "fixer" },
+      { id: "ev_done_ok", type: "agent.completed", sessionId: "ses_1", timestamp, runId: "run_ok", agent: "codex",
+        status: "completed", exitCode: 0, agentLog: "" },
+    ] as RelaySession["events"]), t);
+    const turns = new Map(messages.flatMap((message) => message.kind === "agent" ? [[message.runId, message] as const] : []));
+    assert.equal(turns.get("run_cut")?.outputTruncated, true);
+    assert.equal(turns.get("run_ok")?.outputTruncated, undefined);
+  });
+
   it("marks every finished turn without counts as unreported and preserves reported usage", () => {
     const run = (runId: string, status: "completed" | "failed" | "cancelled", tokenUsage?: { input: number; output: number; cache: number; total: number }) => [
       { id: `ev_start_${runId}`, type: "agent.started", sessionId: "ses_1", timestamp, runId, agent: "kimi", role: "fixer" },

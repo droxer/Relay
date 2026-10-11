@@ -8182,3 +8182,24 @@ def test_run_completed_keeps_the_output_truncated_flag():
             "agent": "codex", "exitCode": 0, "agentLog": ""}
     assert daemon_node_event({**base, "outputTruncated": True})["outputTruncated"] is True
     assert "outputTruncated" not in daemon_node_event(base)
+
+
+def test_a_completed_run_remembers_its_output_was_truncated():
+    async def flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions = LocalSessionStore(root)
+            registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
+            registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                               "workspacePath": "/workspace/alice", "protocolVersion": 2,
+                               "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"], "status": "ready"})
+            await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "verbose", "assignments": [{"agent": "codex"}]})
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            registry.handle_event("sbx_alice", {
+                "type": "run.completed", "commandId": command["id"], "runId": command["runId"],
+                "sessionId": command["sessionId"], "agent": "codex", "exitCode": 0,
+                "agentLog": "done", "leaseId": command["leaseId"], "outputTruncated": True,
+            }, "node_token")
+            [run] = sessions.get_session(command["sessionId"])["agentRuns"]
+            assert run["status"] == "completed"
+            assert run["outputTruncated"] is True
+    asyncio.run(flow())

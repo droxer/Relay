@@ -302,6 +302,7 @@
     "tokens_short": "Token",
     "token_usage_title": "输入 {{input}} · 输出 {{output}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}}",
     "token_usage_unreported": "该运行时未上报 Token 用量",
+    "output_truncated": "此运行的部分实时输出未能保存，最终结果是完整的。",
     "no_sessions": "—",
     "rename": "重命名",
     "rename_prompt": "重命名对话",

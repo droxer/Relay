@@ -58,6 +58,8 @@ export interface AgentRun {
   exitCode?: number;
   agentLog?: string;
   tokenUsage?: TokenUsage;
+  /** The backend refused part of the live output; the result itself is whole. */
+  outputTruncated?: boolean;
   artifactIds: string[];
 }
 
@@ -436,6 +438,7 @@ export type RelayEvent =
       exitCode: number;
       agentLog?: string;
       tokenUsage?: TokenUsage;
+      outputTruncated?: boolean;
     }
   | {
       id: string;
