@@ -197,7 +197,7 @@ export function EmployeesView({
             const active = filter === id;
             return (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="dense"
                 key={id}
                 type="button"

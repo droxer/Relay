@@ -3,7 +3,6 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { createControlPanelEmployee } from "../../api";
-import { initialsOf } from "../../lib/adminHelpers";
 import type {
   ControlPanelDaemonNodeRecord,
   CreateControlPanelEmployeeResponse,
@@ -84,10 +83,10 @@ export function AddEmployeeDrawer({
   );
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
-  // The preview shows the NORMALIZED handle, so it cannot promise an identity
-  // the backend will not create — `@Alice Chen` is not what gets stored.
-  const handlePreview = normalizeEmployeeHandle(employeeId);
-  const namePreview = displayName.trim();
+  // When the typed id is not what gets stored (`@Alice` → `alice`), the hint
+  // says so — the form never promises an identity the backend will not create.
+  const normalizedHandle = normalizeEmployeeHandle(employeeId);
+  const handleIsNormalized = Boolean(normalizedHandle) && normalizedHandle !== employeeId.trim();
 
   useOnOpen(open, () => {
     setEmployeeId("");
@@ -197,33 +196,16 @@ export function AddEmployeeDrawer({
     >
       <form className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         <section className="adm-provision-section" aria-labelledby="adm-emp-identity">
-          <header className="adm-provision-section-head">
-            <h3 id="adm-emp-identity" className="adm-provision-section-title">
-              {t("admin.v2.section_identity")}
-            </h3>
-          </header>
-
-          {/* Not a live region: it mirrors the field being typed into, so
-              announcing it re-read the whole block on every keystroke on top of
-              the input's own echo. Sighted reinforcement only. */}
-          <div className={`adm-provision-preview ${handlePreview ? "is-live" : ""}`} aria-hidden="true">
-            <span className="adm-assign-avatar">
-              {handlePreview ? initialsOf(handlePreview) : "?"}
-            </span>
-            <div className="adm-provision-preview-text">
-              <span className="adm-provision-preview-handle code" translate="no">
-                {handlePreview ? `@${handlePreview}` : t("admin.v2.provision_preview_placeholder")}
-              </span>
-              <span className="adm-provision-preview-name">
-                {namePreview || t("admin.v2.provision_preview_name_hint")}
-              </span>
-            </div>
-          </div>
+          <h3 id="adm-emp-identity" className="adm-provision-section-title">
+            {t("admin.v2.section_identity")}
+          </h3>
 
           <Field
             label={t("admin.employee_id")}
             required
-            hint={t("admin.v2.employee_id_hint")}
+            hint={handleIsNormalized
+              ? t("admin.v2.employee_id_normalized", { handle: normalizedHandle })
+              : t("admin.v2.employee_id_hint")}
             error={fieldErrors.employeeId}
             errorId="add-emp-employee-id-error"
           >
@@ -248,36 +230,36 @@ export function AddEmployeeDrawer({
             />
           </Field>
 
-          <Field label={t("admin.display_name")} optional={t("admin.v2.optional")}>
-            <Input
-              name="display-name"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              autoComplete="off"
-              placeholder={t("admin.v2.placeholder_display_name")}
-            />
-          </Field>
+          <div className="adm-provision-pair">
+            <Field label={t("admin.display_name")} optional={t("admin.v2.optional")}>
+              <Input
+                name="display-name"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                autoComplete="off"
+                placeholder={t("admin.v2.placeholder_display_name")}
+              />
+            </Field>
 
-          <Field label={t("admin.email")} optional={t("admin.v2.optional")}>
-            <Input
-              name="email"
-              className="code"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder={t("admin.v2.placeholder_email")}
-            />
-          </Field>
+            <Field label={t("admin.email")} optional={t("admin.v2.optional")}>
+              <Input
+                name="email"
+                className="code"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={t("admin.v2.placeholder_email")}
+              />
+            </Field>
+          </div>
         </section>
 
         <section className="adm-provision-section" aria-labelledby="adm-emp-credentials">
-          <header className="adm-provision-section-head">
-            <h3 id="adm-emp-credentials" className="adm-provision-section-title">
-              {t("admin.v2.section_credentials")}
-            </h3>
-          </header>
+          <h3 id="adm-emp-credentials" className="adm-provision-section-title">
+            {t("admin.v2.section_credentials")}
+          </h3>
 
           <Field
             label={t("admin.username")}
@@ -327,17 +309,50 @@ export function AddEmployeeDrawer({
           </Field>
         </section>
 
-        {/* The computer limit is a quota, not an identity fact — same section
-            it lives in when editing the employee later. */}
-        {allowLimitOverride ? (
-          <section className="adm-provision-section" aria-labelledby="adm-emp-limits">
-            <header className="adm-provision-section-head">
-              <h3 id="adm-emp-limits" className="adm-provision-section-title">
-                {t("admin.v2.section_limits")}
-              </h3>
-              <span className="adm-provision-section-meta">{t("admin.v2.optional")}</span>
-            </header>
+        {/* Everything about the employee's machines, and all of it optional:
+            a computer to hand over now, and the quota for the ones they
+            enroll themselves. One section instead of two half-empty ones. */}
+        <section className="adm-provision-section" aria-labelledby="adm-emp-computers">
+          <h3 id="adm-emp-computers" className="adm-provision-section-title">
+            {t("admin.v2.section_computers")}
+            <span className="adm-provision-section-meta">{t("admin.v2.optional")}</span>
+          </h3>
 
+          {unassignedNodes.length === 0 ? (
+            <Field label={t("admin.assign_node")} wrapper="div" hint={t("admin.unassigned_hint")}>
+              {null}
+            </Field>
+          ) : (
+            <Field label={t("admin.assign_node")} labelId={nodeLabelId} wrapper="div">
+              <Select
+                value={selectedNodeId || null}
+                onValueChange={(value) => setSelectedNodeId(value ?? "")}
+              >
+                <SelectTrigger className="w-full code" aria-labelledby={nodeLabelId}>
+                  <SelectValue placeholder={t("admin.select_node")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* Same row grammar as the employee picker in AddNodeDrawer:
+                      the name leads, the identifier trails in muted ink. */}
+                  {unassignedNodes.map((node) => (
+                    <SelectItem key={node.id} value={node.id}>
+                      {node.displayName && node.displayName !== node.id
+                        ? `${node.displayName} / `
+                        : ""}
+                      <span className="text-muted-foreground">
+                        {node.id}
+                        {node.workspacePath ? ` · ${node.workspacePath}` : ""}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          {/* Left out entirely when the auth store cannot keep a per-employee
+              limit, rather than offered and then refused. */}
+          {allowLimitOverride ? (
             <Field
               label={t("admin.v2.emp_limit_label")}
               hint={t("admin.v2.emp_limit_hint")}
@@ -366,46 +381,7 @@ export function AddEmployeeDrawer({
                 describedBy={fieldErrors.maxLocalComputers ? "add-emp-limit-error" : undefined}
               />
             </Field>
-          </section>
-        ) : null}
-
-        <section className="adm-provision-section" aria-labelledby="adm-emp-assignment">
-          <header className="adm-provision-section-head">
-            <h3 id="adm-emp-assignment" className="adm-provision-section-title">
-              {t("admin.v2.section_assignment")}
-            </h3>
-            <span className="adm-provision-section-meta">{t("admin.v2.optional")}</span>
-          </header>
-
-          {unassignedNodes.length === 0 ? (
-            <p className="adm-form-hint adm-form-hint--notice">{t("admin.unassigned_hint")}</p>
-          ) : (
-            <Field label={t("admin.assign_node")} labelId={nodeLabelId} wrapper="div">
-              <Select
-                value={selectedNodeId || null}
-                onValueChange={(value) => setSelectedNodeId(value ?? "")}
-              >
-                <SelectTrigger className="w-full code" aria-labelledby={nodeLabelId}>
-                  <SelectValue placeholder={t("admin.select_node")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {/* Same row grammar as the employee picker in AddNodeDrawer:
-                      the name leads, the identifier trails in muted ink. */}
-                  {unassignedNodes.map((node) => (
-                    <SelectItem key={node.id} value={node.id}>
-                      {node.displayName && node.displayName !== node.id
-                        ? `${node.displayName} / `
-                        : ""}
-                      <span className="text-muted-foreground">
-                        {node.id}
-                        {node.workspacePath ? ` · ${node.workspacePath}` : ""}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          )}
+          ) : null}
         </section>
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}

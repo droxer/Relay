@@ -5,8 +5,11 @@
    the shared form stack, and the assign-node drawer stay there. */
 
 /* ── Provision forms (add employee / add node) ────────────────────── */
+/* Sections separate by space alone. Each used to sit under a dotted rule
+   with a micro-caps title and a right-aligned "Optional", which turned a
+   short form into a stack of ruled boxes. */
 .adm-provision-form {
-  gap: var(--sp-7);
+  gap: var(--sp-6);
 }
 
 .adm-provision-section {
@@ -20,21 +23,46 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-4);
-  padding-bottom: var(--sp-1);
-  border-bottom: 1px dotted var(--line-1);
 }
 
 .adm-provision-section-title {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
   margin: 0;
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  /* A group label, not a field label: muted so it never reads as one more
+     field among the fields it introduces. */
   color: var(--ink-3);
 }
 
 .adm-provision-section-meta {
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-  color: var(--ink-4);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* Guidance under a field is supporting text, one step below the label it
+   follows — at the body size it out-weighed the labels themselves. */
+.adm-provision-form [data-slot="field"] > p {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+/* Two short, related fields on one row (display name + email). */
+.adm-provision-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+@media (max-width: 820px) {
+  .adm-provision-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .create-agent-computer-option {
@@ -162,53 +190,6 @@
 .create-agent-runtime-option.is-selected .create-agent-runtime-check {
   border: 3px solid var(--action);
   background: var(--surface-1);
-}
-
-.adm-provision-preview {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-6);
-  border: 1px dashed var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
-  opacity: var(--opacity-disabled);
-  transition:
-    opacity var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    border-style var(--t-fast) var(--ease);
-}
-
-.adm-provision-preview.is-live {
-  opacity: 1;
-  border-style: solid;
-  border-left: var(--accent-bar-w) solid var(--action);
-}
-
-.adm-provision-preview-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-0-5);
-  min-width: 0;
-}
-
-.adm-provision-preview-handle {
-  font: var(--type-heading);
-  letter-spacing: var(--type-heading-track);
-  color: var(--ink-1);
-  word-break: break-all;
-}
-
-.adm-provision-preview:not(.is-live) .adm-provision-preview-handle {
-  color: var(--ink-3);
-  font-weight: 400;
-}
-
-.adm-provision-preview-name {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  color: var(--ink-3);
-  word-break: break-all;
 }
 
 .adm-provision-outcome {

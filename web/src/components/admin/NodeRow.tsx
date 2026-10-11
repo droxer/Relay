@@ -3,19 +3,11 @@
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { useNodeDelete } from "../../hooks/useNodeDelete";
-import {
-  nodeOwnershipProfile,
-  type StoredNodeTokenMap,
-} from "./helpers";
+import { nodeOwnershipProfile } from "./helpers";
 import { NodeActions } from "./NodeActions";
-import { NodeProfileBadges } from "./NodeProfileBadges";
 import { NodePresence } from "./NodePresence";
 import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
-import {
-  AdminEmployees,
-  ICON,
-  NodeOwnershipIcon,
-} from "../icons";
+import { ICON, NodeOwnershipIcon } from "../icons";
 
 /* The nodes list is a TanStack table now (see NodesView): a "row" here is one
    component per column, and flexRender mounts each as a real component —
@@ -29,28 +21,27 @@ import {
 
 export function NodeIdentityCell({
   node,
-  storedTokens,
-  colocated,
   t,
 }: {
   node: ControlPanelDaemonNodeRecord;
-  storedTokens: StoredNodeTokenMap;
-  colocated: boolean;
   t: TFunction;
 }) {
   const nodeName = node.displayName || node.id;
   /* No status pill. The list bands BY status, so the band above this row is
      that pill — said once for the whole group. The presence pill stays:
      online/offline is a fact about the connection, not the lifecycle, and a
-     stopped computer can still be reachable. */
+     stopped computer can still be reachable. Ownership reads from the leading
+     glyph; its name is in the glyph's title rather than a second chip. */
   const ownership = nodeOwnershipProfile(node);
 
   return (
     <span className="adm-node-row-id">
       <span
-        className="adm-node-avatar adm-node-avatar--machine group-data-[online=false]:text-(--ink-4)"
+        className="adm-node-row-mark group-data-[online=false]:text-(--ink-4)"
         data-ownership={ownership}
-        translate="no"
+        role="img"
+        aria-label={t(`admin.v2.node_ownership_${ownership}`)}
+        title={t(`admin.v2.node_ownership_${ownership}`)}
       >
         <NodeOwnershipIcon ownership={ownership} size={ICON.md} aria-hidden="true" />
       </span>
@@ -62,16 +53,6 @@ export function NodeIdentityCell({
           <NodePresence node={node} t={t} withLabel />
         </span>
         <span className="adm-node-card-handle code" translate="no">{node.id}</span>
-        <NodeProfileBadges
-          node={node}
-          storedTokens={storedTokens}
-          colocated={colocated}
-          t={t}
-          compact
-          hideSandbox
-          hideThisHost
-          hideSavedHere
-        />
       </span>
     </span>
   );
@@ -80,11 +61,8 @@ export function NodeIdentityCell({
 export function NodeEmployeeCell({ employeeName }: { employeeName?: string }) {
   if (!employeeName) return null;
   return (
-    <span className="adm-node-row-employee">
-      <span className="adm-node-row-employee-label" translate="no">
-        <AdminEmployees size={ICON.xs} className="adm-node-row-employee-icon" aria-hidden="true" />
-        {employeeName}
-      </span>
+    <span className="adm-node-row-employee" translate="no" title={employeeName}>
+      {employeeName}
     </span>
   );
 }

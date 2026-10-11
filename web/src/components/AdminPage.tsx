@@ -632,7 +632,6 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   <NodesView
                     nodes={nodes}
                     employees={employees}
-                    storedTokens={storedTokens}
                     layout={layout}
                     onLayoutChange={setLayout}
                     onRevealCredentials={handleRevealCredentials}

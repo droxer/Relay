@@ -3,13 +3,24 @@
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import { Button } from "@/components/ui/button";
+import { useDialogs } from "@/components/ui/DialogProvider";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  ActionCopy,
   ActionEdit,
   ActionKey,
   AdminDelete,
   AdminManageExecutors,
   ICON,
+  NavMore,
 } from "../icons";
+import { copyText } from "./helpers";
 
 interface NodeActionsProps {
   node: ControlPanelDaemonNodeRecord;
@@ -22,66 +33,67 @@ interface NodeActionsProps {
   t: TFunction;
 }
 
-/** Shared reveal/manage/delete icon-action trio for node surfaces (NodeRow, NodeCard). */
+/** One overflow menu for a computer on the fleet card and list row. The
+    actions are occasional, so they stay labelled but out of sight until asked
+    for — the same grammar as the personal Computers page. */
 export function NodeActions({ node, onReveal, onRename, onManageExecutors, onDelete, deletePending, onDeleteRequest, t }: NodeActionsProps) {
+  const { announce } = useDialogs();
+  const name = node.displayName || node.id;
+  const canReveal = Boolean(onReveal) && !node.managedNodeId;
+
+  async function handleCopyId() {
+    await copyText(node.id);
+    announce(t("admin.copied"));
+  }
+
   return (
-    <>
-      <Button
-        variant="icon"
-        size="icon-dense"
-        tinted
-        type="button"
-        className="adm-node-card-icon-btn adm-node-action--rename"
-        onClick={() => onRename(node)}
-        aria-label={t("admin.v2.rename_computer_for", { id: node.id })}
-        tooltip={t("thread.rename_computer")}
-      >
-        <ActionEdit size={ICON.sm} aria-hidden="true" />
-      </Button>
-      {node.managedNodeId || !onReveal ? null : (
-        <Button
-          variant="icon"
-          size="icon-dense"
-          tinted
-          type="button"
-          className="adm-node-card-icon-btn adm-node-action--credentials"
-          onClick={() => onReveal(node)}
-          aria-label={t("admin.v2.reveal_credentials_for", { id: node.id })}
-          tooltip={t("admin.v2.reveal_credentials")}
-        >
-          <ActionKey size={ICON.sm} aria-hidden="true" />
-        </Button>
-      )}
-      {!node.provisioningPlaceholder ? (
-        <Button
-          variant="icon"
-          size="icon-dense"
-          tinted
-          type="button"
-          className="adm-node-card-icon-btn adm-node-action--agents"
-          onClick={() => onManageExecutors(node)}
-          aria-label={t("admin.v2.manage_executors_for", { id: node.id })}
-          tooltip={t("admin.v2.manage_executors")}
-        >
-          <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
-        </Button>
-      ) : null}
-      {onDelete ? (
-        <Button
-          variant="icon"
-          size="icon-dense"
-          tinted
-          type="button"
-          danger
-          className="adm-node-card-icon-btn adm-node-action--delete"
-          onClick={onDeleteRequest}
-          disabled={deletePending}
-          aria-label={t("admin.v2.delete_node_for", { id: node.id })}
-          tooltip={t("admin.v2.delete_action")}
-        >
-          <AdminDelete size={ICON.sm} aria-hidden="true" />
-        </Button>
-      ) : null}
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="icon"
+            size="icon-dense"
+            className="adm-node-actions-trigger"
+            disabled={deletePending}
+            aria-label={t("computer.more_actions", { name })}
+            title={t("computer.more_actions", { name })}
+          >
+            <NavMore size={ICON.md} aria-hidden="true" />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => void handleCopyId()}>
+          <ActionCopy size={ICON.sm} aria-hidden="true" />
+          {t("admin.copy_node_id")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onRename(node)}>
+          <ActionEdit size={ICON.sm} aria-hidden="true" />
+          {t("thread.rename_computer")}
+        </DropdownMenuItem>
+        {canReveal ? (
+          <DropdownMenuItem onClick={() => onReveal?.(node)}>
+            <ActionKey size={ICON.sm} aria-hidden="true" />
+            {t("admin.v2.reveal_credentials")}
+          </DropdownMenuItem>
+        ) : null}
+        {node.provisioningPlaceholder ? null : (
+          <DropdownMenuItem onClick={() => onManageExecutors(node)}>
+            <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
+            {t("admin.v2.manage_executors")}
+          </DropdownMenuItem>
+        )}
+        {onDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem danger onClick={onDeleteRequest}>
+              <AdminDelete size={ICON.sm} aria-hidden="true" />
+              {t("admin.v2.delete_action")}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
