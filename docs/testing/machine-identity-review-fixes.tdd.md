@@ -60,6 +60,7 @@ Existing uncommitted changes were preserved; no checkpoint commits were created.
   failure is also documented in `installer-service-shutdown.tdd.md`; no Python
   implementation or backend test files changed in this fix.
 - `git diff --check`: passed.
-- Pre-commit `npm audit`: the configured mirror was unreachable. Automatic
-  approval review blocked retrying against npm's public registry because the
-  request sends dependency metadata; no audit result is available.
+- `npm audit --json --registry=https://registry.npmjs.org`: completed after
+  explicit user approval and reported 26 dependency vulnerabilities (1 critical,
+  15 high, 4 moderate, 6 low). No dependency manifests or lockfiles changed in
+  this PR. The configured mirror was initially unreachable.
