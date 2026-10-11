@@ -358,6 +358,33 @@ button.inline-field[aria-expanded="true"] {
   background: var(--surface-0);
 }
 
+/* The rail already dims an empty section; on this rail its "0" goes too, so
+   the only numbers left in the column are the ones worth reading. The active
+   section keeps its count, whatever it is. */
+.routine-page .sec-nav-btn[data-empty="true"]:not([data-active="true"]) .sec-nav-count {
+  visibility: hidden;
+}
+
+/* Row actions are two icon buttons — assign, start. The column only needs
+   their width, and the buttons surface with the row the pointer or focus is
+   on, the same on-demand rule the selection checkbox follows. A pending start
+   stays visible so its spinner is never hidden. Touch has no hover, so coarse
+   pointers always see them. */
+.routine-table .task-col-actions { width: 80px; }
+
+@media (hover: hover) {
+  .routine-table .backlog-action-group {
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+
+  .routine-table tr:hover .backlog-action-group,
+  .routine-table tr:focus-within .backlog-action-group,
+  .routine-table .backlog-action-group:has([aria-busy="true"]) {
+    opacity: 1;
+  }
+}
+
 /* The enabled switch is its own full-width row beneath the field grid — a
    horizontal label+control pair, not a grid cell. */
 .routine-toggle {

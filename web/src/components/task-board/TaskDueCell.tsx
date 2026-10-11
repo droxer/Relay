@@ -10,7 +10,9 @@ import { ActionCalendar, ICON } from "../icons";
  * An unset date used to print "No due date" in the same ink as a real one,
  * which spends a column on a fact nobody acts on. Empty is now an
  * affordance: it opens the record where the date is set, so the column reads
- * as work to do rather than as a filled-in nothing.
+ * as work to do rather than as a filled-in nothing. A set date carries no
+ * glyph: the column header already says what the value is, and a calendar on
+ * every row was a column of identical icons.
  */
 export function TaskDueCell({
   date,
@@ -36,7 +38,6 @@ export function TaskDueCell({
   }
   return (
     <span className={cn("backlog-due-value", tone !== "neutral" && tone)}>
-      <ActionCalendar size={ICON.sm} />
       {format(date)}
     </span>
   );
