@@ -63,6 +63,7 @@ export {
   type AgentExecutor,
   type AgentRunOptions,
   type AgentState,
+  type ProjectSetupBrief,
   type StreamExecResult,
 } from "./state.js";
 
@@ -94,6 +95,7 @@ export {
   DAEMON_CAPABILITY_PRODUCED_FILES,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
   DAEMON_CAPABILITY_ROUND_RESULT,
+  DAEMON_CAPABILITY_PROJECT_SETUP,
   DAEMON_CAPABILITY_WORK_RESULTS,
   DAEMON_CAPABILITY_AGENT_MODEL,
   DAEMON_CAPABILITY_ENDPOINT_MODELS,

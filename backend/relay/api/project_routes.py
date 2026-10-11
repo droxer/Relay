@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -14,7 +15,21 @@ from ..services.project_catalog import (
     resolve_target_node_id,
     update_project_payload,
 )
-from ..services.project_runtime import project_runtime_node
+from ..collaboration.models import RunIntent
+from ..collaboration.service import CollaborationConductor, CollaborationError
+from ..services.project_runtime import project_runtime_node, project_work_error
+from ..services.project_setup import (
+    PROJECT_SETUP_CAPABILITY,
+    ProjectSetupError,
+    annotate_setup,
+    choose_setup_agent,
+    drafting_setup,
+    setup_candidates,
+    setup_in_progress,
+    setup_intent,
+    setup_manifest_block,
+    setup_task_goal,
+)
 from ..services.project_deletion import delete_project as delete_project_record
 from .deps import AppContextDep
 from .helpers import JsonBodyDep, request_actor
@@ -197,6 +212,140 @@ def update_project(
     except (ProjectValidationError, ProjectVersionConflict, ValueError) as error:
         raise _project_error(error) from error
     return {"project": project}
+
+
+@router.get("/projects/{project_id}/setup")
+def get_project_setup(
+    project_id: str, request: Request, ctx: AppContextDep
+) -> dict[str, Any]:
+    """The project's agent-drafted setup, with each proposed member's current
+    eligibility, and the agents a setup could staff."""
+    actor = request_actor(request, ctx.auth_store)
+    project = project_for_owner(ctx, project_id, actor["employeeId"])
+    return {
+        "setup": annotate_setup(
+            project,
+            agent_store=ctx.agent_store,
+            placement_store=ctx.agent_placement_store,
+        ),
+        "candidates": setup_candidates(
+            project,
+            agent_store=ctx.agent_store,
+            placement_store=ctx.agent_placement_store,
+        ),
+    }
+
+
+@router.post("/projects/{project_id}/setup", status_code=202)
+async def start_project_setup(
+    project_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    """Ask an agent on the project's computer to draft the project's setup.
+
+    With `revise: true` the same thread drafts again from the last proposal
+    and the owner's note; otherwise a fresh setup thread starts.
+    """
+    actor = request_actor(request, ctx.auth_store)
+    project = project_for_owner(ctx, project_id, actor["employeeId"])
+    body = _request_body
+    if code := project_work_error(project):
+        raise HTTPException(409, code)
+    try:
+        intent = setup_intent(body.get("intent"))
+        candidates = setup_candidates(
+            project,
+            agent_store=ctx.agent_store,
+            placement_store=ctx.agent_placement_store,
+        )
+        previous = project.get("setup") or None
+        revising = bool(body.get("revise")) and bool(previous and previous.get("threadId"))
+        if setup_in_progress(previous, ctx.session_store):
+            raise ProjectSetupError("project_setup_in_progress")
+        agent_id = choose_setup_agent(
+            candidates,
+            body.get("agentId") or (previous.get("agentId") if revising else None),
+            lead_agent_id=project.get("leadAgentId"),
+        )
+        node = project_runtime_node(project, ctx.registry.monitor_nodes())
+        if node is None:
+            raise ProjectSetupError("project_computer_offline")
+        if PROJECT_SETUP_CAPABILITY not in (node.get("capabilities") or []):
+            raise ProjectSetupError("project_setup_unsupported")
+    except ProjectSetupError as error:
+        raise HTTPException(error.status, error.code) from error
+    previous_proposal = (previous or {}).get("proposal") if revising else None
+    thread_id = previous["threadId"] if revising else None
+    # Record the draft before dispatch so a fast result always finds it.
+    draft = drafting_setup(
+        intent=intent, agent_id=agent_id, thread_id=thread_id, previous=previous if revising else None,
+    )
+
+    def claim_draft(latest: dict[str, Any]) -> dict[str, Any]:
+        if code := project_work_error(latest):
+            raise ProjectSetupError(code)
+        if setup_in_progress(latest.get("setup"), ctx.session_store):
+            raise ProjectSetupError("project_setup_in_progress")
+        if (latest.get("setup") or None) != previous:
+            raise ProjectVersionConflict(project_id)
+        return draft
+
+    _mutate_setup(ctx, project_id, claim_draft)
+    try:
+        session = await CollaborationConductor(ctx).submit(
+            RunIntent(
+                task_goal=setup_task_goal(intent, revising=revising),
+                session_id=thread_id,
+                raw_assignments=[{"agentId": agent_id, "mode": "action"}],
+                requested_project_id=project_id,
+                idempotency_key=body.get("idempotencyKey") if isinstance(body.get("idempotencyKey"), str) else None,
+                source="project_setup",
+                project_setup=setup_manifest_block(
+                    intent=intent,
+                    candidates=candidates,
+                    previous_proposal=previous_proposal,
+                    draft_id=draft["draftId"],
+                ),
+            ),
+            actor,
+        )
+    except CollaborationError as error:
+        # Undo only our own draft: a revise falls back to the setup it was
+        # revising, a fresh start is marked failed so it never waits forever.
+        def restore(latest: dict[str, Any]) -> dict[str, Any] | None:
+            current = latest.get("setup") or {}
+            if current.get("state") != "drafting" or current.get("draftId") != draft["draftId"]:
+                return None
+            return previous if revising and previous else {**current, "state": "failed", "error": error.code}
+
+        _mutate_setup(ctx, project_id, restore)
+        detail: Any = str(error) if error.status in (400, 403) else {"code": error.code, "message": str(error)}
+        raise HTTPException(error.status, detail) from error
+
+    def attach_thread(latest: dict[str, Any]) -> dict[str, Any] | None:
+        current = latest.get("setup") or {}
+        if (
+            current.get("state") != "drafting"
+            or current.get("draftId") != draft["draftId"]
+            or current.get("threadId") == session["id"]
+        ):
+            return None
+        return {**current, "threadId": session["id"]}
+
+    project = _mutate_setup(ctx, project_id, attach_thread)
+    return {"project": project, "threadId": session["id"]}
+
+
+def _mutate_setup(
+    ctx: Any, project_id: str, change: Callable[[dict[str, Any]], dict[str, Any] | None]
+) -> dict[str, Any]:
+    try:
+        return ctx.project_store.mutate_setup(project_id, change)
+    except KeyError as error:
+        raise HTTPException(404, "Project not found.") from error
+    except ProjectVersionConflict as error:
+        raise _project_error(error) from error
+    except ProjectSetupError as error:
+        raise HTTPException(error.status, error.code) from error
 
 
 @router.post("/projects/{project_id}/archive")

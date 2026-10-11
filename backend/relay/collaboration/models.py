@@ -65,3 +65,6 @@ class RunIntent:
     decision: dict[str, Any] | None = None
     source: str = "legacy"
     style: str | None = None
+    # A project setup round: the intent, candidate agents, and any earlier
+    # proposal the setup agent drafts from (services/project_setup.py).
+    project_setup: dict[str, Any] | None = None

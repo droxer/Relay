@@ -208,6 +208,83 @@ class DatabaseProjectStore:
             mutate=mutate,
         )
 
+    def record_setup(self, project_id: str, setup: dict[str, Any]) -> dict[str, Any]:
+        """Record an agent-drafted setup's progress on the project."""
+        return self.mutate_setup(project_id, lambda _latest: setup)
+
+    def mutate_setup(
+        self,
+        project_id: str,
+        change: Callable[[dict[str, Any]], dict[str, Any] | None],
+    ) -> dict[str, Any]:
+        """Transition a setup against the locked project; None means no change.
+
+        Re-evaluate on a version conflict, so results cannot overwrite an
+        owner's resolution or a newer draft between reading and recording.
+        """
+
+        def fields(latest: dict[str, Any]) -> dict[str, Any] | None:
+            setup = change(latest)
+            return {"setup": setup} if setup is not None else None
+
+        return self._mutate_current(project_id, "project.setup_recorded", fields)
+
+    def add_context_suggestions(
+        self,
+        project_id: str,
+        merge: Callable[[dict[str, Any]], list[dict[str, Any]]],
+    ) -> dict[str, Any]:
+        """Record context lines a run proposed; `merge` folds them into the
+        latest pending list so concurrent runs never drop each other's."""
+        return self._mutate_current(
+            project_id,
+            "project.context_suggested",
+            lambda latest: {"contextSuggestions": merge(latest)},
+        )
+
+    def _mutate_current(
+        self,
+        project_id: str,
+        event_type: str,
+        change: Callable[[dict[str, Any]], dict[str, Any] | None],
+    ) -> dict[str, Any]:
+        """Apply an execution-plane change against whatever revision is current.
+
+        Run results do not come from an editor holding a revision. The change
+        still bumps the version, so an editor's stale save surfaces as the
+        usual conflict instead of erasing what the run recorded.
+        """
+        for _ in range(3):
+            current = self.get_project(project_id)
+            if current is None:
+                raise KeyError(project_id)
+
+            def mutate(
+                latest: dict[str, Any],
+            ) -> tuple[dict[str, Any], dict[str, Any]] | None:
+                fields = change(latest)
+                if fields is None:
+                    return None
+                updated = {
+                    **latest,
+                    **fields,
+                    "version": int(latest["version"]) + 1,
+                    "updatedAt": now_iso(),
+                }
+                return updated, {**fields, "project": updated}
+
+            try:
+                return self._mutate(
+                    project_id,
+                    event_type,
+                    expected_version=int(current["version"]),
+                    mutate=mutate,
+                )
+            except ProjectVersionConflict:
+                if current.get("archivedAt"):
+                    raise
+        raise ProjectVersionConflict(project_id)
+
     def archive_project(
         self, project_id: str, *, expected_version: int
     ) -> dict[str, Any]:
@@ -264,7 +341,7 @@ class DatabaseProjectStore:
         event_type: str,
         *,
         expected_version: int,
-        mutate: Callable[[dict[str, Any]], tuple[dict[str, Any], dict[str, Any]]],
+        mutate: Callable[[dict[str, Any]], tuple[dict[str, Any], dict[str, Any]] | None],
     ) -> dict[str, Any]:
         for attempt in range(3):
             try:
@@ -289,7 +366,10 @@ class DatabaseProjectStore:
                     current = dict(row["snapshot"])
                     if int(current["version"]) != expected_version:
                         raise ProjectVersionConflict(project_id)
-                    project, payload = mutate(current)
+                    result = mutate(current)
+                    if result is None:
+                        return current
+                    project, payload = result
                     sequence = int(row["event_version"])
                     claimed = conn.execute(
                         update(self.projects)
@@ -351,6 +431,9 @@ def _new_project(owner_employee_id: str, payload: dict[str, Any]) -> dict[str, A
             max_length=PROJECT_NAME_MAX_LENGTH,
         ),
         "description": payload.get("description") or "",
+        "goal": payload.get("goal") or "",
+        "context": payload.get("context") or "",
+        "contextRevision": 1 if payload.get("context") else 0,
         "computerId": _required_text(
             payload.get("computerId"), "project_computer_required"
         ),
@@ -366,7 +449,18 @@ def _new_project(owner_employee_id: str, payload: dict[str, Any]) -> dict[str, A
 
 
 def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
-    allowed = {"name", "description", "leadAgentId", "members", "enabled"}
+    allowed = {
+        "name",
+        "description",
+        "goal",
+        "context",
+        "contextRevision",
+        "setup",
+        "contextSuggestions",
+        "leadAgentId",
+        "members",
+        "enabled",
+    }
     unknown = set(patch) - allowed
     if unknown:
         raise ProjectValidationError("project_patch_unsupported")
@@ -379,8 +473,16 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
         )
     if "enabled" in normalized and not isinstance(normalized["enabled"], bool):
         raise ProjectValidationError("project_enabled_invalid")
-    if "description" in normalized and not isinstance(normalized["description"], str):
-        raise ProjectValidationError("project_description_invalid")
+    for key in ("description", "goal", "context"):
+        if key in normalized and not isinstance(normalized[key], str):
+            raise ProjectValidationError(f"project_{key}_invalid")
+    if "setup" in normalized and not isinstance(normalized["setup"], dict):
+        raise ProjectValidationError("project_setup_invalid")
+    if "contextRevision" in normalized and (
+        not isinstance(normalized["contextRevision"], int)
+        or isinstance(normalized["contextRevision"], bool)
+    ):
+        raise ProjectValidationError("project_context_revision_invalid")
     return normalized
 
 

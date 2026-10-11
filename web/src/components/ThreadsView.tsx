@@ -540,6 +540,7 @@ export function ThreadsView({
       <ProjectDrawer
         open={projectDrawerOpen}
         computers={runtimeNodes}
+        employeeId={currentUser.employeeId}
         onClose={() => setProjectDrawerOpen(false)}
         onSaved={(project) => onSelectProject(project.id)}
       />

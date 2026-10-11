@@ -286,6 +286,15 @@ class ProjectStore(Protocol):
     def archive_project(
         self, project_id: str, *, expected_version: int
     ) -> dict[str, Any]: ...
+    def record_setup(
+        self, project_id: str, setup: dict[str, Any]
+    ) -> dict[str, Any]: ...
+    def mutate_setup(
+        self, project_id: str, change: Callable[[dict[str, Any]], dict[str, Any] | None]
+    ) -> dict[str, Any]: ...
+    def add_context_suggestions(
+        self, project_id: str, merge: Any
+    ) -> dict[str, Any]: ...
 
 
 class AuthStore(Protocol):

@@ -65,7 +65,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume";
+export type DaemonNodeCapability = "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup";
 /** The daemon can materialize and isolate skill revisions attached to a run. */
 export const DAEMON_CAPABILITY_AGENT_SKILLS: DaemonNodeCapability = "agent-skills";
 /** Checks recorded handoff hashes under the workspace gate before starting an agent. */
@@ -104,6 +104,12 @@ export const DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT: DaemonNodeCapability = 
 /** Terminal events carry `runtimeSessionId`, and `AgentState.resume_session_id` resumes it. */
 export const DAEMON_CAPABILITY_AGENT_RESUME: DaemonNodeCapability = "agent-resume";
 /**
+ * The daemon reads the proposal a project setup round leaves at
+ * `.relay/project-setup-<runId>.json` and reports it as `projectSetup`; the backend
+ * validates it and the project owner decides whether to apply it.
+ */
+export const DAEMON_CAPABILITY_PROJECT_SETUP: DaemonNodeCapability = "project-setup";
+/**
  * "produced-files" means the daemon reports every file a run changed, not only
  * document types, and states why any file arrived without a snapshot. A daemon
  * without it reports the older document-only set, which the backend still
@@ -123,6 +129,8 @@ export interface DaemonRoundResult {
   note?: string;
   /** Answers a blocked round offers its human to pick from. */
   options?: string[];
+  /** Lines a project run proposes for the project's standing context; the owner adopts or dismisses them. */
+  contextSuggestions?: Array<{ text: string; evidence?: string }>;
 }
 
 /**
@@ -404,6 +412,8 @@ export type DaemonNodeEvent =
       tokenUsage?: TokenUsage;
       generatedFiles?: DaemonGeneratedFile[];
       roundResult?: DaemonRoundResult;
+      /** A setup round's proposal as the agent wrote it; the backend validates it. */
+      projectSetup?: Record<string, unknown>;
       /** The backend rejected at least one output batch; the streamed log has gaps. */
       outputTruncated?: boolean;
       /** The runtime CLI's own conversation id, for a later resume. */

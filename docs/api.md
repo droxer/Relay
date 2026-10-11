@@ -308,7 +308,7 @@ POST /api/v1/projects
 }
 
 GET    /api/v1/projects/{id}
-PATCH  /api/v1/projects/{id}     { expectedVersion, name?, leadAgentId?, members?, enabled? }
+PATCH  /api/v1/projects/{id}     { expectedVersion, name?, description?, goal?, context?, leadAgentId?, members?, enabled?, setupResolution?, resolveContextSuggestions? }
 POST   /api/v1/projects/{id}/archive?expectedVersion={version}
 DELETE /api/v1/projects/{id}?expectedVersion={version}
 GET    /api/v1/projects/{id}/workspace/files?path={relativePath}
@@ -406,6 +406,51 @@ the record; the `id` stays the key in every URL and request.
 Task/thread creation accepts `projectId`. Project dispatch rejects Computer,
 team, or non-member overrides; the backend resolves the fixed roster and the
 current daemon instance for the project's stable Computer identity.
+
+### Project brief, agent-drafted setup, and context suggestions
+
+A project carries a brief every run in it reads: `description`, a one-line
+`goal` (280 characters), and a markdown `context` (8,000 characters) of
+standing conventions, constraints, and definition of done. Changing `context`
+bumps `contextRevision`. The round's pinned project snapshot carries the brief;
+the backend renders it, with the enabled crew, into the agent's `[Project]`
+prompt section (`services/project_context.py`), and a daemon mirrors it to
+`.relay/PROJECT.md` in the project workspace for that run.
+
+```text
+GET  /api/v1/projects/{id}/setup   → { setup, candidates }
+POST /api/v1/projects/{id}/setup   { intent, agentId?, revise? } → 202 { project, threadId }
+```
+
+Setup asks one agent on the project's computer to draft a proposal; nothing
+changes until the owner applies it. The drafter is any owner agent placed on
+that computer (the project-task admission rule), defaulting to the project's
+lead, then a planner. `revise: true` drafts again in the same thread from the
+last proposal and the owner's note. The run writes
+`.relay/project-setup-<runId>.json`; a daemon advertising `project-setup` reports it as
+`projectSetup` on `run.completed`, and the backend holds it to the shape the
+PATCH accepts (`services/project_setup.py`). `project.setup.state` moves
+`drafting` → `proposed` or `failed`, then `applied` or `dismissed` through the
+PATCH's `setupResolution` — applying is the same PATCH that carries the
+accepted name, brief, and roster, so every roster rule runs when it takes
+effect. `GET …/setup` marks each proposed member with an `issue`
+(`agent_not_found`, `agent_wrong_owner`, `agent_disabled`,
+`agent_off_computer`) when Apply would refuse it. Errors:
+`project_setup_unsupported` (daemon too old), `project_setup_no_agents`,
+`project_setup_in_progress`, `project_setup_not_proposed`,
+`project_computer_offline`.
+
+Each draft has a `draftId` pinned in its round manifest. Setup transitions
+check the current draft and state inside the project mutation, so a late
+result cannot reopen a dismissed setup or replace a newer draft. Definitive
+failures before daemon delivery also close the draft as `failed`.
+
+A project run's round result may carry up to three `contextSuggestions`
+(`{ text, evidence? }`). They are kept, attributed to their run, on
+`project.contextSuggestions` (at most 20 pending, de-duplicated against the
+context) and never change the context on their own. A PATCH with
+`resolveContextSuggestions: [id…]` removes adopted or dismissed suggestions,
+normally alongside the edited `context`.
 
 ## Daemon node workspace reads
 

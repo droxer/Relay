@@ -6,8 +6,10 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-/** Backend cap on a project's description (PROJECT_DESCRIPTION_MAX_LENGTH). */
+/** Backend caps (PROJECT_*_MAX_LENGTH in backend/relay/services/project_catalog.py). */
 const PROJECT_DESCRIPTION_MAX_LENGTH = 4000;
+const PROJECT_GOAL_MAX_LENGTH = 280;
+const PROJECT_CONTEXT_MAX_LENGTH = 8000;
 const PROJECT_NAME_MAX_LENGTH = 120;
 
 /** The project's name, shared by the create drawer and the Settings tab so the
@@ -60,6 +62,58 @@ export function ProjectDescriptionField({
         rows={4}
         maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
         placeholder={t("project.description_placeholder")}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
+}
+
+/** The outcome the project commits to. Every run in the project is told it. */
+export function ProjectGoalField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Field label={t("project.goal")} hint={t("project.goal_hint")}>
+      <Input
+        name="project-goal"
+        autoComplete="off"
+        maxLength={PROJECT_GOAL_MAX_LENGTH}
+        placeholder={t("project.goal_placeholder")}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
+}
+
+/** The standing brief every run in the project reads: conventions,
+ *  constraints, and what done means. */
+export function ProjectContextField({
+  value,
+  revision,
+  onChange,
+}: {
+  value: string;
+  revision?: number;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  const hint = revision
+    ? `${t("project.context_hint")} ${t("project.context_revision", { revision })}`
+    : t("project.context_hint");
+  return (
+    <Field label={t("project.context")} hint={hint}>
+      <Textarea
+        name="project-context"
+        rows={8}
+        maxLength={PROJECT_CONTEXT_MAX_LENGTH}
+        placeholder={t("project.context_placeholder")}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

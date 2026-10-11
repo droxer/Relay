@@ -228,6 +228,7 @@ Key modules:
   `mergeAgentState` and object spreads.
 - Agent names are currently `claude`, `pi`, `codex`, and `kimi`. Adding another agent
   requires validation, command, prompt, routing, and renderer changes.
+- **A project's brief reaches every run; agents propose, owners apply.** `goal`/`context` ride the round's pinned project snapshot, and the backend renders them with the enabled crew into the `[Project]` prompt section (`project_context_brief` in `backend/relay/services/project_context.py`); the daemon mirrors it to `.relay/PROJECT.md`. Agent-drafted setup (`backend/relay/services/project_setup.py`, `POST /projects/{id}/setup`) is an ordinary daemon run whose drafter is admitted by the project-task rule, not roster membership; its proposal (`.relay/project-setup-<runId>.json`, reported as `projectSetup` behind the `project-setup` capability) is only stored — applying it is the normal project PATCH plus `setupResolution`, so roster rules run when it takes effect. Round-result `contextSuggestions` likewise wait on the project until the owner adopts or dismisses them (`resolveContextSuggestions`); nothing an agent writes changes the brief by itself. See ADR-022.
 - Never mock or seed data in the server; it reads the configured database and
   real operational state under `.relay/`.
 

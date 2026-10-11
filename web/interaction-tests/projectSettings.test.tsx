@@ -8,6 +8,7 @@ vi.mock("../src/api", async (original) => ({ ...await original<typeof import("..
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   updateProjectMutation: { isPending: false, mutateAsync: update },
   createProjectMutation: { isPending: false, mutateAsync: create },
+  startProjectSetupMutation: { isPending: false, mutateAsync: vi.fn() },
   deleteProjectMutation: { isPending: false, mutateAsync: vi.fn() },
   archiveProjectMutation: { isPending: false, mutateAsync: archive },
 }) }));

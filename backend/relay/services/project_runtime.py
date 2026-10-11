@@ -231,6 +231,11 @@ def project_runtime_snapshot(project: dict[str, Any]) -> dict[str, Any]:
     return {
         "projectId": project["id"],
         "projectRevision": project["version"],
+        "name": project.get("name") or "",
+        "description": project.get("description") or "",
+        "goal": project.get("goal") or "",
+        "context": project.get("context") or "",
+        "contextRevision": int(project.get("contextRevision") or 0),
         "computerId": project["computerId"],
         "workspaceSubpath": project["workspaceSubpath"],
         "leadAgentId": project["leadAgentId"],

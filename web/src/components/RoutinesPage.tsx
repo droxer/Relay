@@ -476,7 +476,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           onDeleted={() => onOpenRecord(null)}
         />
       ) : null}
-      <ProjectDrawer open={creatingProject} computers={nodes} layer={drawerRecord ? 2 : 1}
+      <ProjectDrawer open={creatingProject} computers={nodes} employeeId={currentUser.employeeId} layer={drawerRecord ? 2 : 1}
         onClose={() => setCreatingProject(false)}
         onSaved={(project) => setForm((current) => current ? { ...current, projectId: project.id } : current)} />
     </section>

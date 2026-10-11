@@ -10,6 +10,7 @@ import {
   cancelRun,
   createTask,
   createProject,
+  startProjectSetup,
   createTeam,
   deleteSession,
   deleteTask,
@@ -25,7 +26,7 @@ import {
   updateProject,
   updateTeam,
 } from "../api";
-import type { AgentRunInput, CreateProjectInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import type { AgentRunInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, RELAY_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
@@ -301,6 +302,16 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to create project", "errors.save_project"),
   });
 
+  const startProjectSetupMutation = useMutation({
+    mutationFn: ({ projectId, input }: { projectId: string; input: StartProjectSetupInput }) =>
+      startProjectSetup(projectId, input),
+    onSuccess: ({ project }) => {
+      cacheProject(project);
+      void invalidateProjects();
+    },
+    onError: onRelayError("Failed to start project setup", "errors.start_project_setup"),
+  });
+
   const updateProjectMutation = useMutation({
     mutationFn: ({ projectId, input }: { projectId: string; input: UpdateProjectInput }) =>
       updateProject(projectId, input),
@@ -397,6 +408,7 @@ export function useRelayMutations() {
     startTaskMutation,
     createTeamMutation,
     createProjectMutation,
+    startProjectSetupMutation,
     updateProjectMutation,
     archiveProjectMutation,
     deleteProjectMutation,

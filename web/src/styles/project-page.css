@@ -706,3 +706,92 @@
     align-items: stretch;
   }
 }
+
+/* ── Agent-drafted setup ─────────────────────────────────────────────────
+   The setup panel opens the Dashboard tab while a draft needs the owner. It
+   wears the Settings section's hairline card so it reads as part of the
+   record, not as a banner bolted on top of it. */
+.project-setup-panel {
+  margin: 0 auto var(--sp-6);
+}
+
+.project-setup-group {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.project-setup-subhead {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-track);
+}
+
+.project-setup-rationale {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: pre-line;
+}
+
+.project-setup-list {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One proposed member or task: a hairline row the owner can opt out of. An
+   excluded row recedes but stays readable, so the decision is reversible. */
+.project-setup-item {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-2);
+}
+
+.project-setup-item[data-excluded] {
+  background: var(--surface-1);
+}
+
+.project-setup-item[data-excluded] strong {
+  color: var(--ink-3);
+}
+
+.project-setup-member-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.project-setup-member-head .project-member-flag:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-1);
+}
+
+.project-setup-role {
+  min-width: 9rem;
+}
+
+.project-setup-detail {
+  padding-left: calc(var(--sp-2) + 1rem);
+  white-space: pre-line;
+}
+
+.project-setup-error {
+  margin: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+/* The mode switch leads the drawer's action bar; Cancel and the primary
+   action keep their place on the right. */
+.adm-form-actions .project-setup-mode {
+  margin-right: auto;
+}
