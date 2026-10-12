@@ -1,6 +1,6 @@
 # Automation triggers design
 
-Status: proposed (2026-10-02). Implementation plan: `docs/automation-triggers-plan.md` — read its "Deviations from the spec" section; it overrides this document where they differ.
+Status: shipped (2026-10-02). Implementation plan: `docs/automation-triggers-plan.md` — read its "Deviations from the spec" section; it overrides this document where they differ. The data model and firing sections are superseded by `docs/automation-v2-design.md`.
 
 ## Goal
 
