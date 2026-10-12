@@ -379,7 +379,7 @@
     "delete_blocked": "Cancel the active run before deleting this thread",
     "delete_confirm": "Delete thread “{{name}}”?",
     "stop_and_delete": "Stop and delete",
-    "delete_message": "This permanently removes the thread and its history. Active work will be stopped first; deletion finishes after the computer confirms it has stopped. This cannot be undone.",
+    "delete_message": "This permanently removes the thread and its history, and any task it was the only thread of (automations are kept). Active work will be stopped first; deletion finishes after the computer confirms it has stopped. This cannot be undone.",
     "execution_queued": "Queued",
     "execution_running": "Running",
     "execution_stopping": "Stopping agent",

@@ -1,11 +1,97 @@
 from __future__ import annotations
 
 from tempfile import TemporaryDirectory
+from threading import Event, Thread
 
 import pytest
 
 from relay.persistence.session_store import LocalSessionStore
 from relay.sessions import SessionController, initial_agent_state
+
+
+@pytest.mark.parametrize("mutation", ["link", "claim"])
+def test_fallback_thread_delete_serializes_concurrent_task_mutations(monkeypatch, mutation) -> None:
+    from relay.persistence.task_store import LocalTaskStore
+
+    with TemporaryDirectory() as root:
+        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
+        controller = SessionController(sessions, task_store=tasks)
+        old_thread = controller.create_session("Old thread")
+        new_thread = controller.create_session("New thread")
+        task = tasks.create_task({"title": "Task", "assignedAgent": "codex", "status": "assigned"})
+        tasks.link_session(task["id"], old_thread["id"])
+        attempted, finished = Event(), Event()
+        errors = []
+
+        def mutate_task():
+            attempted.set()
+            try:
+                if mutation == "link":
+                    tasks.link_session(task["id"], new_thread["id"])
+                else:
+                    tasks.claim_task_for_dispatch(task["id"], "codex")
+            except Exception as error:
+                errors.append(error)
+            finally:
+                finished.set()
+
+        worker = Thread(target=mutate_task)
+        original_unlink = tasks.unlink_session
+
+        def unlink_with_concurrent_mutation(task_id, session_id):
+            unlinked = original_unlink(task_id, session_id)
+            worker.start()
+            assert attempted.wait(2)
+            # Before the fix the mutation completes while the controller is
+            # still holding the now-stale result of unlink_session.
+            finished.wait(0.2)
+            return unlinked
+
+        monkeypatch.setattr(tasks, "unlink_session", unlink_with_concurrent_mutation)
+        try:
+            controller.delete_session(old_thread["id"], deleted_by="alice")
+        finally:
+            worker.join(2)
+        assert not worker.is_alive()
+        assert not errors
+        result = tasks.get_task(task["id"])
+        assert result.get("deletedAt")
+        assert result["deletedByEmployeeId"] == "alice"
+        assert result["linkedSessionIds"] == []
+        assert not result.get("dispatchClaim")
+        assert sessions.get_session(new_thread["id"])["id"] == new_thread["id"]
+
+
+@pytest.mark.parametrize("mutation", ["link", "claim"])
+def test_fallback_thread_delete_keeps_task_mutated_before_unlink(monkeypatch, mutation) -> None:
+    from relay.persistence.task_store import LocalTaskStore
+
+    with TemporaryDirectory() as root:
+        sessions, tasks = LocalSessionStore(root), LocalTaskStore(root)
+        controller = SessionController(sessions, task_store=tasks)
+        old_thread = controller.create_session("Old thread")
+        new_thread = controller.create_session("New thread")
+        task = tasks.create_task({"title": "Task", "assignedAgent": "codex", "status": "assigned"})
+        tasks.link_session(task["id"], old_thread["id"])
+        original_list = tasks.list_tasks
+
+        def list_before_mutation():
+            listed = original_list()
+            if mutation == "link":
+                tasks.link_session(task["id"], new_thread["id"])
+            else:
+                assert tasks.claim_task_for_dispatch(task["id"], "codex")
+            return listed
+
+        monkeypatch.setattr(tasks, "list_tasks", list_before_mutation)
+        controller.delete_session(old_thread["id"])
+        result = tasks.get_task(task["id"])
+        assert not result.get("deletedAt")
+        assert old_thread["id"] not in result["linkedSessionIds"]
+        if mutation == "link":
+            assert result["linkedSessionIds"] == [new_thread["id"]]
+        else:
+            assert result.get("dispatchClaim")
 
 
 def test_local_controller_leaves_linked_task_without_explicit_task_id() -> None:

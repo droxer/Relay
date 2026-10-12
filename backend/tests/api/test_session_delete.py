@@ -239,3 +239,53 @@ def test_delete_clears_chat_conversation_binding(monkeypatch) -> None:
 
         assert response.status_code == 204
         assert app.state.chat_store.get_conversation_session(conversation) is None
+
+
+def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> None:
+    from relay.persistence.store_common import relay_event
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap(client)
+        tasks = client.app.state.task_store
+        sessions = client.app.state.session_store
+
+        def finished_thread() -> str:
+            session = sessions.create_session({
+                "workspacePath": root, "taskGoal": "Run",
+                "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+            })
+            sessions.append_event(session["id"], relay_event(
+                "session.completed", session["id"], {"outcome": "Done"}))
+            return session["id"]
+
+        solo = client.post("/api/v1/tasks", json={"title": "Solo task"}).json()
+        shared = client.post("/api/v1/tasks", json={"title": "Two rounds"}).json()
+        routine = client.post("/api/v1/tasks", json={
+            "title": "Nightly", "isRoutine": True,
+            "routineType": "task", "routineCadence": "daily",
+            "routineEnabled": False,
+        }).json()
+        occurrence = tasks.create_routine_occurrence(routine["id"], "2026-10-12")
+
+        thread = finished_thread()
+        other_round = finished_thread()
+        tasks.link_session(solo["id"], thread)
+        tasks.link_session(shared["id"], thread)
+        tasks.link_session(shared["id"], other_round)
+        tasks.link_session(occurrence["id"], thread)
+        tasks.link_session(routine["id"], thread)
+
+        assert client.delete(f"/api/v1/threads/{thread}").status_code == 204
+
+        # The thread was the solo task's and the run's only thread.
+        assert client.get(f"/api/v1/tasks/{solo['id']}").status_code == 404
+        assert client.get(f"/api/v1/tasks/{occurrence['id']}").status_code == 404
+        # A task with another round only loses the link.
+        remaining = client.get(f"/api/v1/tasks/{shared['id']}").json()
+        assert remaining["linkedSessionIds"] == [other_round]
+        # The automation outlives any one of its runs.
+        automation = client.get(f"/api/v1/tasks/{routine['id']}").json()
+        assert thread not in automation["linkedSessionIds"]
+        assert client.get(f"/api/v1/threads/{other_round}").status_code == 200

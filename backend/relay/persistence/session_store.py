@@ -1439,7 +1439,8 @@ class DatabaseSessionStore:
             for task in tasks:
                 if session_id in (task["snapshot"] or {}).get("linkedSessionIds", []):
                     task_store.unlink_session_in_transaction(
-                        conn, task["id"], session_id
+                        conn, task["id"], session_id,
+                        delete_orphan=True, deleted_by=deleted_by,
                     )
             self._insert_tombstone(conn, session_pk, snapshot, deleted_by)
             conn.execute(

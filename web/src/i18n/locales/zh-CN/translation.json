@@ -377,7 +377,7 @@
     "delete_blocked": "删除此对话前请先取消正在进行的运行",
     "delete_confirm": "删除对话“{{name}}”？",
     "stop_and_delete": "停止并删除",
-    "delete_message": "这将永久删除对话及其历史记录。正在执行的工作会先停止，电脑确认停止后完成删除。此操作无法撤销。",
+    "delete_message": "这将永久删除对话及其历史记录，以及仅关联此对话的任务（自动化会保留）。正在执行的工作会先停止，电脑确认停止后完成删除。此操作无法撤销。",
     "execution_queued": "排队中",
     "execution_running": "运行中",
     "execution_stopping": "正在停止智能体",
