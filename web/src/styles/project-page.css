@@ -275,6 +275,17 @@
   }
 }
 
+/* Dashboard, Members, and Settings panels take the height under the header
+   and scroll; without min-height: 0 a panel grows to its content and the
+   page clips the bottom. Tasks and Workspace size their own scrollers. */
+.project-workspace-page .workspace-body > [data-slot="tabs-content"]:not(.project-tasks-panel):not(.workspace-inspect) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* The Tasks tab embeds the backlog board itself. The panel only lends it
    the height under the header; the board scrolls its own lanes and rows. */
 .project-tasks-panel {
