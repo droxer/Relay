@@ -60,6 +60,22 @@ for (const mobile of [false, true]) {
     await expect(details.getByRole("textbox", { name: "Description" })).toHaveValue(project.description);
     await expect(details.getByText("projects/launch")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Danger zone", exact: true })).toBeVisible();
+    // On a short window the panel scrolls rather than the shell clipping
+    // the bottom: a wheel scroll (not scrollIntoView, which also moves
+    // overflow:hidden boxes) must bring the last control into reach.
+    await page.setViewportSize({ width: mobile ? 390 : 1440, height: 480 });
+    const deleteButton = page.getByRole("button", { name: "Delete project", exact: true });
+    await details.hover();
+    await page.mouse.wheel(0, 4000);
+    await expect.poll(() => deleteButton.evaluate(
+      (el) => el.getBoundingClientRect().bottom <= window.innerHeight,
+    )).toBe(true);
+    expect(await deleteButton.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return box.bottom <= window.innerHeight && !!hit && el.contains(hit);
+    })).toBe(true);
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-settings-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
