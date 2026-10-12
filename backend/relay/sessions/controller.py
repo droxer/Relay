@@ -11,6 +11,7 @@ from ..core.ids import new_relay_id, now_iso
 from ..persistence.protocols import SessionStore, TaskStore
 from ..persistence.store_common import store_transaction
 from ..persistence.stores import relay_event, relay_task_event
+from ..persistence.task_store import orphaned_by_thread_delete
 
 
 def initial_agent_state(task_goal: str) -> dict[str, Any]:
@@ -590,7 +591,15 @@ class SessionController:
         if self.task_store:
             for task in self.task_store.list_tasks():
                 if session_id in task.get("linkedSessionIds", []):
-                    self.task_store.unlink_session(task["id"], session_id)
+                    # Keep the orphan check and deletion in the same write
+                    # scope as unlinking so links and dispatch claims cannot
+                    # arrive between the check and the delete.
+                    with self.task_store.task_write_scope(task["id"]) as current:
+                        if session_id not in current.get("linkedSessionIds", []):
+                            continue
+                        unlinked = self.task_store.unlink_session(task["id"], session_id)
+                        if orphaned_by_thread_delete(unlinked):
+                            self.task_store.delete_task(task["id"], deleted_by=deleted_by)
         self.store.delete_session(session_id, deleted_by=deleted_by)
         logger.info("Session deleted", session_id=session_id)
 

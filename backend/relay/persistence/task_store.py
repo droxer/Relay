@@ -199,6 +199,20 @@ def _task_session_unlink_events(task_id: str, session_id: str) -> list[dict[str,
     ]
 
 
+def orphaned_by_thread_delete(task: dict[str, Any]) -> bool:
+    """A task whose last thread was just deleted goes with it.
+
+    An automation outlives any one run, a task with other rounds keeps them,
+    and a task mid-dispatch is about to get a new thread.
+    """
+    return not (
+        task.get("isRoutine")
+        or task.get("deletedAt")
+        or task.get("linkedSessionIds")
+        or dispatch_claim_active(task)
+    )
+
+
 def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
     created_payload = {
         "title": payload["title"],
@@ -2215,8 +2229,15 @@ class DatabaseTaskStore:
         )
 
     def unlink_session_in_transaction(
-        self, conn: Any, task_id: str, session_id: str
+        self,
+        conn: Any,
+        task_id: str,
+        session_id: str,
+        *,
+        delete_orphan: bool = False,
+        deleted_by: str | None = None,
     ) -> dict[str, Any]:
+        """Unlink a deleted thread; with `delete_orphan`, drop a task left threadless."""
         row = (
             conn.execute(
                 select(self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version)
@@ -2233,7 +2254,14 @@ class DatabaseTaskStore:
             return current
         events = _task_session_unlink_events(task_id, session_id)
         sequence = int(row["version"] or 0)
-        task = apply_task_events(current, events, version=sequence)
+        unlinked = apply_task_events(current, events, version=sequence)
+        orphaned = delete_orphan and orphaned_by_thread_delete(unlinked)
+        if orphaned:
+            events = [*events, relay_task_event(
+                "task.deleted", task_id,
+                {"actorEmployeeId": deleted_by} if deleted_by else {},
+            )]
+        task = apply_task_events(current, events, version=sequence) if orphaned else unlinked
         claimed = conn.execute(
             update(self.tasks)
             .where(self.tasks.c.id == row["id"], self.tasks.c.version == sequence)
@@ -2258,6 +2286,10 @@ class DatabaseTaskStore:
             .where(self.task_sessions.c.task_id == row["id"])
             .where(self.task_sessions.c.session_id == session_id)
         )
+        if orphaned:
+            logger.info("Database task deleted with its last thread", task_id=task_id, deleted_by=deleted_by)
+            if self.emit_automation_events:
+                insert_outbox_rows(conn, task_outbox_rows(current, task))
         return self._hydrate_task(task) if _HYDRATE_TASK_WRITES.get() else task
 
     def record_activity(

@@ -362,12 +362,12 @@ def test_database_session_delete_rolls_back_task_unlinks_atomically(
     original = task_store.unlink_session_in_transaction
     calls = 0
 
-    def fail_after_first_unlink(conn, task_id: str, session_id: str):
+    def fail_after_first_unlink(conn, task_id: str, session_id: str, **options):
         nonlocal calls
         calls += 1
         if calls == 2:
             raise RuntimeError("simulated unlink failure")
-        return original(conn, task_id, session_id)
+        return original(conn, task_id, session_id, **options)
 
     monkeypatch.setattr(
         task_store, "unlink_session_in_transaction", fail_after_first_unlink
