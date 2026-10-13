@@ -37,7 +37,6 @@ from .api import (
     team_routes,
     web_routes,
 )
-from .api.public_json import PublicJSONResponse
 from .api.contract import (
     API_DOCS_PATH,
     API_OPENAPI_PATH,
@@ -361,7 +360,6 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         docs_url=API_DOCS_PATH,
         openapi_url=API_OPENAPI_PATH,
         redoc_url=API_REDOC_PATH,
-        default_response_class=PublicJSONResponse,
     )
     app.add_middleware(ServerTimingMiddleware)
     app.add_middleware(CookieRequestGuardMiddleware)

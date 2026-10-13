@@ -2065,34 +2065,3 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
         assert client.get(f"/api/v1/tasks/{task['id']}").status_code == (200 if reserved else 404)
         assert client.get(f"/api/v1/threads/{session['id']}").status_code == (
             404 if routine and not reserved else 200)
-
-
-def test_legacy_accumulator_never_reaches_the_api(monkeypatch) -> None:
-    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    with TemporaryDirectory() as root:
-        client = TestClient(create_app(root))
-        _bootstrap_admin(client)
-        _create_user(client, "alice", employee_id="alice")
-        created = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "Digest",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
-                "isRoutine": True,
-                "routineType": "job",
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": False,
-            },
-        )
-        assert created.status_code == 201, created.text
-        task_id = created.json()["id"]
-        bodies = [
-            created.json(),
-            client.get(f"/api/v1/tasks/{task_id}").json(),
-            client.get("/api/v1/tasks").json(),
-        ]
-        assert bodies[1]["routineState"] == "paused"
-        for body in bodies:
-            assert "_legacyRoutine" not in str(body)

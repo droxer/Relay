@@ -70,3 +70,22 @@ def test_turning_legacy_routine_off_drops_all_routine_fields():
     ])
     stamps = {"routineTriggerKind", "routineTriggerDepth", "routineTriggerSummary"}
     assert not [key for key in task if key.startswith(("routine", "_legacy")) and key not in stamps]
+
+
+def test_pre_v2_snapshot_upgrades_from_its_stored_legacy_keys():
+    from relay.persistence.task_store import apply_task_events
+
+    stored = {"id": "t1", "isRoutine": True, "routineCadence": "daily",
+              "routineNextRunDate": "2026-10-14", "routineEnabled": True}
+    task = apply_task_events(stored, [ev("task.updated", 1, routineNextRunDate="2026-10-15", routineEnabled=True)], version=1)
+    assert task["routineTriggers"][0]["schedule"]["repeat"] == {"every": "day", "at": "00:00"}
+    assert task["routineState"] == "active"
+
+
+def test_pre_v2_webhook_snapshot_keeps_its_trigger_when_disabled():
+    from relay.persistence.task_store import apply_task_events
+
+    stored = {"id": "t1", "isRoutine": True, "routineTrigger": {"kind": "webhook"}, "routineEnabled": True}
+    task = apply_task_events(stored, [ev("task.updated", 1, routineEnabled=False)], version=1)
+    assert task["routineTriggers"] == [{"kind": "webhook"}]
+    assert task["routineState"] == "paused"

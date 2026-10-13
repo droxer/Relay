@@ -876,7 +876,7 @@ def _apply_task_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> N
     if "isRoutine" in event and event["isRoutine"] is not None:
         task["isRoutine"] = bool(event["isRoutine"])
         if not task["isRoutine"]:
-            for key in (*V2_ROUTINE_FIELDS, *LEGACY_FIELDS, "_legacyRoutine"):
+            for key in (*V2_ROUTINE_FIELDS, *LEGACY_FIELDS):
                 task.pop(key, None)
             return
     if not task.get("isRoutine"):
@@ -892,7 +892,7 @@ def _apply_v2_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> Non
 
     # A v2 write is a decision made with the upgraded fields in view; the
     # retained legacy seed no longer applies.
-    for key in (*LEGACY_FIELDS, "_legacyRoutine"):
+    for key in LEGACY_FIELDS:
         task.pop(key, None)
     if isinstance(event.get("routineTriggers"), list):
         task["routineTriggers"] = [dict(trigger) for trigger in event["routineTriggers"]]
@@ -909,22 +909,21 @@ def _apply_v2_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> Non
 
 
 def _apply_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:
-    """An old event: fold it into the retained legacy view, then re-derive v2."""
+    """An old event: mirror it onto the legacy keys, then re-derive v2 from them.
+
+    The mirrored keys are the accumulator, so a snapshot stored before v2 existed
+    upgrades correctly when its next legacy event arrives.
+    """
     from ..automations.model import LEGACY_FIELDS, upgrade_legacy
 
     _mirror_legacy_routine_fields(task, event)
-    legacy = dict(task.get("_legacyRoutine") or {})
-    for key in LEGACY_FIELDS:
-        if event.get(key) is not None:
-            legacy[key] = event[key]
-    if event.get("routineEnabled") is True:
-        legacy.pop("routineDisabledReason", None)
-    for key in ("routineDisabledReason", "routineNextRunDate"):
-        if legacy.get(key) == "":
-            legacy.pop(key)
-    task["_legacyRoutine"] = legacy
-    task.pop("routinePauseReason", None)
-    task.update(upgrade_legacy(legacy))
+    upgraded = upgrade_legacy({key: task[key] for key in LEGACY_FIELDS if key in task})
+    task["routineTriggers"] = upgraded["routineTriggers"]
+    task["routineState"] = upgraded["routineState"]
+    if "routinePauseReason" in upgraded:
+        task["routinePauseReason"] = upgraded["routinePauseReason"]
+    else:
+        task.pop("routinePauseReason", None)
 
 
 def _mirror_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:
