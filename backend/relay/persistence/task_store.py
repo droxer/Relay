@@ -41,7 +41,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
-from ..automations.model import is_active, listens, schedule_triggers, state_of, trigger_kind
+from ..automations.model import is_active, listens, schedule_triggers, state_of
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
 from .automation_store import insert_outbox_rows, task_outbox_rows
@@ -1007,24 +1007,6 @@ class DatabaseTaskStore:
             ),
             sqlite_where=text(
                 "status = 'assigned' AND is_routine IS 0 AND deleted_at IS NULL"
-            ),
-        ),
-        Index(
-            "ix_tasks_due_routines",
-            "routine_next_run_date",
-            postgresql_where=text("is_routine IS true AND routine_enabled IS true"),
-            sqlite_where=text("is_routine IS 1 AND routine_enabled IS 1"),
-        ),
-        Index(
-            "ix_tasks_triggered_routines",
-            "created_at",
-            postgresql_where=text(
-                "is_routine IS true AND routine_enabled IS true"
-                " AND routine_trigger_kind IS NOT NULL"
-            ),
-            sqlite_where=text(
-                "is_routine IS 1 AND routine_enabled IS 1"
-                " AND routine_trigger_kind IS NOT NULL"
             ),
         ),
         Index(
@@ -2165,12 +2147,13 @@ def task_to_row(
         "assignee_employee_id": task.get("assigneeEmployeeId"),
         "due_date": _parse_date(task.get("dueDate")),
         "is_routine": bool(task.get("isRoutine")),
-        "routine_type": task.get("routineType"),
-        "routine_cadence": task.get("routineCadence"),
-        "routine_next_run_date": _parse_date(task.get("routineNextRunDate")),
-        # Legacy columns stay until the scheduler reads the v2 ones.
+        # Legacy columns: nothing reads them since the v2 clock; they are
+        # written empty until a later migration drops them.
+        "routine_type": None,
+        "routine_cadence": None,
+        "routine_next_run_date": None,
         "routine_enabled": bool(task.get("isRoutine")) and state_of(task) == "active",
-        "routine_trigger_kind": trigger_kind(task) if task.get("isRoutine") else None,
+        "routine_trigger_kind": None,
         "routine_next_run_at": _parse_datetime(task.get("routineNextRunAt")),
         "routine_state": state_of(task) if task.get("isRoutine") else None,
         "routine_listens": bool(task.get("isRoutine")) and listens(task),

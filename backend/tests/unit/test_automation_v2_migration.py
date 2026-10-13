@@ -7,6 +7,8 @@ from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect, text
 
 MIGRATION = Path(__file__).parents[2] / "migrations/versions/20261013_0091_automation_v2.py"
+DROP_LEGACY_INDEXES = Path(__file__).parents[2] / "migrations/versions/20261013_0092_drop_legacy_routine_indexes.py"
+LEGACY_INDEXES = {"ix_tasks_due_routines", "ix_tasks_triggered_routines"}
 
 ROWS = {
     "a": {
@@ -25,8 +27,8 @@ ROWS = {
 }
 
 
-def _load():
-    spec = importlib.util.spec_from_file_location("automation_v2_migration", MIGRATION)
+def _load(path=MIGRATION):
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -90,3 +92,29 @@ def test_upgrade_backfills_columns_and_snapshots_then_downgrades():
             columns = {c["name"] for c in inspector.get_columns("tasks")}
             assert not columns & {"routine_next_run_at", "routine_state", "routine_listens", "routine_has_schedule"}
             assert "consecutive_failures" not in {c["name"] for c in inspector.get_columns("automation_state")}
+
+
+def test_drop_legacy_routine_indexes_round_trips():
+    module = _load(DROP_LEGACY_INDEXES)
+    assert module.down_revision == "20261013_0091"
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        _seed(conn)
+        with Operations.context(MigrationContext.configure(conn)):
+            module.upgrade()
+            assert not LEGACY_INDEXES & {i["name"] for i in inspect(conn).get_indexes("tasks")}
+            # The columns stay; only their indexes go.
+            columns = {c["name"] for c in inspect(conn).get_columns("tasks")}
+            assert {"routine_enabled", "routine_trigger_kind", "routine_next_run_date"} <= columns
+
+            module.downgrade()
+            assert LEGACY_INDEXES <= {i["name"] for i in inspect(conn).get_indexes("tasks")}
+            predicates = dict(conn.execute(text(
+                "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tasks'"
+            )).all())
+            assert predicates["ix_tasks_due_routines"].endswith(
+                "WHERE is_routine IS 1 AND routine_enabled IS 1"
+            )
+            assert predicates["ix_tasks_triggered_routines"].endswith(
+                "WHERE is_routine IS 1 AND routine_enabled IS 1 AND routine_trigger_kind IS NOT NULL"
+            )
