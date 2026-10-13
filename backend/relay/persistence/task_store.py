@@ -29,7 +29,6 @@ from sqlalchemy import (
     UniqueConstraint,
     and_,
     case,
-    cast,
     delete,
     func,
     insert,
@@ -775,51 +774,6 @@ class LocalTaskStore:
                 occurrence_id=occurrence["id"],
                 agent=agent,
             )
-            return occurrence
-
-    def create_routine_occurrence(
-        self,
-        routine_id: str,
-        scheduled_for: str,
-        *,
-        agent_override: AgentName | None = None,
-    ) -> dict[str, Any] | None:
-        with self._lock:
-            routine = self.get_task(routine_id)
-            if routine.get("deletedAt"):
-                return None
-            existing = _open_routine_occurrence(
-                routine,
-                self.get_task,
-                scheduled_for=scheduled_for,
-            )
-            if existing:
-                return existing
-            agent = routine.get("assignedAgent") or agent_override
-            occurrence_events = routine_occurrence_events(
-                routine, agent, scheduled_for=scheduled_for, fired_by="manual"
-            )
-            occurrence_events = number_task_events(
-                occurrence_events, self._next_task_number
-            )
-            occurrence = materialize_task_events(occurrence_events)
-            self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
-            self._events_path(occurrence["id"]).write_text(
-                "".join(
-                    json.dumps(item, separators=(",", ":")) + "\n"
-                    for item in occurrence_events
-                ),
-                encoding="utf-8",
-            )
-            _write_json(self._snapshot_path(occurrence["id"]), occurrence)
-            event = relay_task_event(
-                "task.occurrence_created",
-                routine_id,
-                {"occurrenceId": occurrence["id"], "scheduledFor": scheduled_for},
-            )
-            _append_jsonl(self._events_path(routine_id), event)
-            updated = materialize_task_events([*routine.get("events", []), event])
-            _write_json(self._snapshot_path(routine_id), updated)
             return occurrence
 
     def create_triggered_occurrence(
@@ -1989,95 +1943,6 @@ class DatabaseTaskStore:
         )
         return occurrence
 
-    def create_routine_occurrence(
-        self,
-        routine_id: str,
-        scheduled_for: str,
-        *,
-        agent_override: AgentName | None = None,
-    ) -> dict[str, Any] | None:
-        with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version)
-                    .where(self.tasks.c.id == routine_id)
-                    .with_for_update()
-                )
-                .mappings()
-                .first()
-            )
-            if not row:
-                raise KeyError(routine_id)
-            routine = self._current_snapshot(conn, row)
-            if routine.get("deletedAt"):
-                return None
-
-            existing = conn.scalar(
-                select(self.tasks.c.snapshot)
-                .join(
-                    self.events,
-                    self.tasks.c.id
-                    == cast(
-                        self.events.c.payload["occurrenceId"].as_string(),
-                        entity_uuid_type(),
-                    ),
-                )
-                .where(
-                    self.events.c.task_id == routine_id,
-                    self.events.c.type == "task.occurrence_created",
-                    self.events.c.payload["scheduledFor"].as_string() == scheduled_for,
-                )
-                .order_by(self.events.c.sequence.desc())
-                .limit(1)
-            )
-            if existing:
-                return existing
-
-            agent = routine.get("assignedAgent") or agent_override
-            occurrence_events = routine_occurrence_events(
-                routine, agent, scheduled_for=scheduled_for, fired_by="manual"
-            )
-            occurrence_events = number_task_events(
-                occurrence_events, partial(self._next_task_number, conn)
-            )
-            occurrence = materialize_task_events(occurrence_events)
-            occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
-            conn.execute(insert(self.tasks).values(**occurrence_row))
-            for sequence, occurrence_event in enumerate(occurrence_events):
-                conn.execute(
-                    insert(self.events).values(
-                        **task_event_to_row(
-                            occurrence_row["id"], sequence, occurrence_event
-                        )
-                    )
-                )
-
-            event = relay_task_event(
-                "task.occurrence_created",
-                routine_id,
-                {"occurrenceId": occurrence["id"], "scheduledFor": scheduled_for},
-            )
-            task_pk = row["id"]
-            sequence = int(row["version"] or 0)
-            conn.execute(
-                insert(self.events).values(
-                    **task_event_to_row(task_pk, sequence, event)
-                )
-            )
-            updated = apply_task_events(routine, [event], version=sequence)
-            conn.execute(
-                update(self.tasks)
-                .where(self.tasks.c.id == task_pk)
-                .values(
-                    **task_to_row(
-                        updated,
-                        version=sequence + 1,
-                        database_id=task_pk,
-                    )
-                )
-            )
-        return occurrence
-
     def create_triggered_occurrence(
         self,
         routine_id: str,
@@ -2594,28 +2459,6 @@ def triggered_occurrence_allowed(routine: dict[str, Any]) -> bool:
             or routine.get("projectId")
         )
     )
-
-
-def _open_routine_occurrence(
-    routine: dict[str, Any],
-    load_task: Any,
-    *,
-    scheduled_for: str | None = None,
-) -> dict[str, Any] | None:
-    for event in reversed(routine.get("events", [])):
-        if event.get("type") != "task.occurrence_created":
-            continue
-        if scheduled_for is not None and event.get("scheduledFor") != scheduled_for:
-            continue
-        occurrence_id = event.get("occurrenceId")
-        if not isinstance(occurrence_id, str) or not occurrence_id:
-            continue
-        try:
-            occurrence = load_task(occurrence_id)
-        except (KeyError, FileNotFoundError):
-            continue
-        return occurrence
-    return None
 
 
 def routine_promotion_events(

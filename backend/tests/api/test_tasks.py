@@ -5,10 +5,8 @@ import pytest
 import asyncio
 from datetime import date
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
-from relay.api import task_routes
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import active_routine_occurrence
@@ -407,22 +405,6 @@ def test_routine_api_uses_the_scheduler_calendar(monkeypatch) -> None:
 
         assert created.status_code == 201
         assert created.json()["routineNextRunDate"] == "2026-07-08"
-
-
-def test_manual_routine_start_uses_the_scheduler_calendar(monkeypatch) -> None:
-    observed: dict[str, date] = {}
-
-    async def dispatch(*args, run_date: date, **kwargs):
-        observed["run_date"] = run_date
-
-    monkeypatch.setattr(task_routes, "dispatch_routine_occurrence", dispatch)
-    ctx = SimpleNamespace(today=lambda: date(2026, 7, 7))
-
-    asyncio.run(
-        task_routes.start_routine_occurrence_on_ready_node(ctx, {}, {}, agent=None)
-    )
-
-    assert observed["run_date"] == date(2026, 7, 7)
 
 
 def test_routine_cadence_change_and_reenable_recalculate_next_run(monkeypatch) -> None:
@@ -1997,7 +1979,8 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
         }).json()
         tasks = client.app.state.task_store
         sessions = client.app.state.session_store
-        occurrences = [tasks.create_routine_occurrence(routine["id"], day)
+        tasks.update_task(routine["id"], {"routineEnabled": True, "assignedAgent": "codex", "assignedAgentId": "agent_test"})
+        occurrences = [tasks.create_triggered_occurrence(routine["id"], run_date=day, trigger_kind="manual", depth=0, context="")
                        for day in ["2026-09-18", "2026-09-19"]]
         linked = []
         for index, task in enumerate([routine, *occurrences]):
@@ -2058,7 +2041,9 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
             payload.update(isRoutine=True, routineType="task", routineCadence="daily", routineEnabled=False)
         task = client.post("/api/v1/tasks", json=payload).json()
         tasks = client.app.state.task_store
-        linked_task = tasks.create_routine_occurrence(task["id"], "2026-09-21") if routine else task
+        if routine:
+            tasks.update_task(task["id"], {"routineEnabled": True, "assignedAgent": "codex", "assignedAgentId": "agent_test"})
+        linked_task = tasks.create_triggered_occurrence(task["id"], run_date="2026-09-21", trigger_kind="manual", depth=0, context="") if routine else task
         sessions = client.app.state.session_store
         session = sessions.create_session({
             "workspacePath": root, "taskGoal": "Linked work",

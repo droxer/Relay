@@ -99,7 +99,7 @@ def test_routine_occurrences_are_numbered_as_issues_of_their_scope(store) -> Non
     routine = _automation(store, "alice", projectId="project_a")
 
     occurrence = store.promote_due_routine(routine["id"], "2026-07-01", "2026-07-08")
-    manual = store.create_routine_occurrence(routine["id"], "2026-07-02")
+    manual = store.create_triggered_occurrence(routine["id"], run_date="2026-07-02", trigger_kind="manual", depth=0, context="")
 
     assert routine["number"] == 1
     assert occurrence["number"] == 2

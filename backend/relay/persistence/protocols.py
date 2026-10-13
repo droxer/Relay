@@ -166,13 +166,6 @@ class TaskStore(Protocol):
         *,
         agent_override: str | None = None,
     ) -> dict[str, Any] | None: ...
-    def create_routine_occurrence(
-        self,
-        routine_id: str,
-        scheduled_for: str,
-        *,
-        agent_override: str | None = None,
-    ) -> dict[str, Any] | None: ...
     def create_triggered_occurrence(
         self,
         routine_id: str,

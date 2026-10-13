@@ -40,9 +40,6 @@ from ..services.task_dispatch import (
     implicit_group_assignments_for_task,
     start_task_on_ready_node,
 )
-from ..services.task_dispatch import (
-    start_routine_occurrence_on_ready_node as dispatch_routine_occurrence,
-)
 from ..services.task_workspace import (
     recorded_task_workspace,
     task_workspace_subpath,
@@ -392,25 +389,6 @@ def validate_trigger_scope(
     if project:
         validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
                                     assigned_team_id=filters.get("assignedTeamId"))
-
-
-async def start_routine_occurrence_on_ready_node(
-    ctx: AppContextDep,
-    routine: dict[str, Any],
-    actor: dict[str, Any],
-    *,
-    agent: str | None,
-    assignments: list[dict[str, Any]] | None = None,
-) -> dict[str, Any] | None:
-    return await dispatch_routine_occurrence(
-        ctx,
-        routine,
-        actor,
-        agent=agent,
-        assignments=assignments,
-        run_date=ctx.today(),
-        retry_blocked=True,
-    )
 
 
 def complete_linked_task_sessions(

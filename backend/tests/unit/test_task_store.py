@@ -518,47 +518,6 @@ def test_task_store_updates_routine_and_assignment_in_one_event_batch() -> None:
         ]
 
 
-def assert_manual_routine_occurrence_is_idempotent(
-    store: LocalTaskStore | DatabaseTaskStore,
-) -> None:
-    routine = store.create_task(
-        {
-            "title": "Run once",
-            "isRoutine": True,
-            "routineEnabled": True,
-            "routineCadence": "custom",
-            "routineNextRunDate": "2026-07-31",
-            "assignedAgent": "codex",
-            "assignedAgentId": "agent_builder",
-        }
-    )
-
-    first = store.create_routine_occurrence(routine["id"], "2026-07-30")
-    second = store.create_routine_occurrence(routine["id"], "2026-07-30")
-
-    store.update_task(first["id"], {"status": "review"})
-    while_in_review = store.create_routine_occurrence(routine["id"], "2026-07-30")
-    store.update_task(first["id"], {"status": "done"})
-    after_completion = store.create_routine_occurrence(routine["id"], "2026-07-30")
-
-    assert second["id"] == first["id"]
-    assert while_in_review["id"] == first["id"]
-    assert after_completion["id"] == first["id"]
-    assert store.get_task(routine["id"])["occurrenceIds"] == [first["id"]]
-
-
-def test_local_manual_routine_occurrence_is_idempotent() -> None:
-    with TemporaryDirectory() as root:
-        assert_manual_routine_occurrence_is_idempotent(LocalTaskStore(root))
-
-
-def test_database_manual_routine_occurrence_is_idempotent() -> None:
-    with TemporaryDirectory() as root:
-        assert_manual_routine_occurrence_is_idempotent(
-            DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
-        )
-
-
 def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
     with TemporaryDirectory() as root:
         store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
@@ -979,7 +938,7 @@ def assert_store_delete_hides_task_everywhere(store, session_store) -> None:
     assert store.claim_next_task_for_agent("codex") is None
     assert store.claim_task_for_dispatch(assigned["id"], "codex") is None
     assert store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02") is None
-    assert store.create_routine_occurrence(routine["id"], "2026-06-25") is None
+    assert store.create_triggered_occurrence(routine["id"], run_date="2026-06-25", trigger_kind="manual", depth=0, context="") is None
 
     persisted = store.get_task(routine["id"])
     assert persisted["deletedAt"] == deleted["deletedAt"]
