@@ -189,9 +189,12 @@ Pending events older than 24 hours are still dropped and shown in the ledger.
 
 ### Auto-pause on failure
 
-`automation_state.consecutive_failures` counts finished occurrences:
-`run.failed` increments it, `run.completed` resets it, a human cancel does
-neither. At 3, Relay sets `paused_by_relay` / `failing`. Resume resets it.
+`automation_state.consecutive_failures` counts finished occurrences, once per
+occurrence, through `occurrence_outcome` outbox rows. Reaching `done` resets
+the count; a terminal execution failure or dispatch refusal increments it.
+Individual agent failures that the round can repair, human cancels, operator
+blocks, and waiting for review do neither. At 3, Relay sets
+`paused_by_relay` / `failing`. Resume resets it.
 
 ### Run now
 
@@ -299,3 +302,11 @@ banner; locale keys present in both languages.
    adaptation, docs (`api.md`, the CLAUDE.md automations invariant, a
    superseded note on `automation-triggers-design.md`).
 3. **Auto-pause on failure,** the resume route, and the banner.
+
+### Deployment
+
+Apply migrations through `20261013_0093` before starting the v2 backend.
+Stop the old scheduler during cutover and run a single scheduler until every
+backend instance uses v2; an older scheduler does not participate in the v2
+automation transaction lock. Existing events remain unchanged and replay
+through the legacy upgrade; the migrations backfill their projections.

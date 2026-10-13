@@ -90,6 +90,12 @@ and `titleContains` (up to 120 characters); `fromStatus` and `toStatus` apply
 only to task status changes. Filters on project/team/agent require the owner's
 assignment access, and broadcast events are scoped to work visible to that owner.
 
+Creating an active automation, changing its triggers while active, or resuming
+it rejects an expired one-off with 400 naming
+`routineTriggers[index].schedule.repeat.once`. A paused draft may retain a
+past date, and an already-active, completed one-off remains editable. With no
+future firing it appears as On demand; Run now remains available.
+
 `routineState` is `active`, `paused`, or `paused_by_relay`. A paused automation
 carries `routinePauseReason`: `rate_limited`, `failing`, `no_target`, or
 `invalid_schedule`. Owners set `active` or `paused`; they cannot set
@@ -125,6 +131,9 @@ task. Resuming a `paused_by_relay`
 automation also starts a fresh hourly rate window. Resuming an owner pause
 keeps the window, so pausing and resuming can't get around the hourly cap.
 `PATCH` with `routineState: "active"` runs the same reset.
+Only an owner or admin may lift a Relay pause through PATCH, including moving
+it to an ordinary `paused` state. An assignee may still edit the definition
+without lifting that pause and toggle an ordinary owner pause.
 
 The v1 fields (`routineTrigger`, `routineCadence`, `routineEnabled`,
 `routineDisabledReason`, `routineNextRunDate`, ...) answer 400 on write and never
@@ -144,6 +153,11 @@ schedules included, and slots missed while the backend was down collapse into
 one catch-up. Schedule fires are exempt from the hourly cap
 (`RELAY_AUTOMATION_MAX_RUNS_PER_HOUR`, default 6). An active automation with
 nowhere to run is paused with `paused_by_relay` / `no_target` instead of retried.
+
+Each automation's schedule advance, pending deliveries, and occurrence creation
+share a savepoint. A failing automation rolls back its own work while healthy
+automations continue. Failed recipients of broadcast events retain targeted
+outbox retries, so retrying does not deliver the event again to healthy recipients.
 
 `POST /tasks/{id}/runs` (Run now) is available to the owner or an admin,
 including on a `paused` automation, but not on one paused by Relay for
