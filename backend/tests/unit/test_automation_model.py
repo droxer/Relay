@@ -65,3 +65,71 @@ def test_context_block_truncates_webhook_payload() -> None:
     block = trigger_context_block([{"eventType": "webhook", "payload": {"blob": "x" * 20000}, "depth": 0}])
     assert "(truncated)" in block
     assert len(block.encode()) < 9 * 1024
+
+
+import pytest
+from relay.automations.model import TriggerError, listens, normalize_triggers, state_of, upgrade_legacy
+
+DAILY = {"kind": "schedule", "schedule": {"timezone": None, "repeat": {"every": "day", "at": "09:00"}}}
+BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
+
+
+def test_normalize_list_round_trips():
+    assert normalize_triggers([DAILY, BLOCKED, {"kind": "webhook"}]) == [DAILY, BLOCKED, {"kind": "webhook"}]
+
+
+def test_empty_list_is_run_now_only():
+    assert normalize_triggers([]) == []
+
+
+@pytest.mark.parametrize("raw, message", [
+    ("nope", "routineTriggers must be a list"),
+    ([DAILY] * 6, "at most 5"),
+    ([{"kind": "webhook"}, {"kind": "webhook"}], "one webhook"),
+    ([{"kind": "manual"}], r"routineTriggers\[0\]\.kind"),
+    ([DAILY, {"kind": "schedule", "schedule": {"timezone": None, "repeat": {"cron": "* * * * *"}}}],
+     r"routineTriggers\[1\]\..*15 minutes"),
+    ([{"kind": "schedule"}], r"routineTriggers\[0\]\.schedule"),
+])
+def test_invalid_lists_name_the_index(raw, message):
+    with pytest.raises(TriggerError, match=message):
+        normalize_triggers(raw)
+
+
+def _schedule(repeat):
+    return [{"kind": "schedule", "schedule": {"timezone": None, "repeat": repeat}}]
+
+
+@pytest.mark.parametrize("legacy, triggers", [
+    ({"routineCadence": "daily", "routineNextRunDate": "2026-10-14"}, _schedule({"every": "day", "at": "00:00"})),
+    ({"routineCadence": "weekly", "routineNextRunDate": "2026-10-14"},  # a Wednesday
+     _schedule({"every": "week", "at": "00:00", "days": [3]})),
+    ({"routineCadence": "monthly", "routineNextRunDate": "2026-10-31"},
+     _schedule({"every": "month", "at": "00:00", "day": 31})),
+    ({"routineCadence": "custom", "routineNextRunDate": "2026-10-20"}, _schedule({"once": "2026-10-20T00:00"})),
+    ({"routineCadence": "custom"}, []),
+    ({"routineCadence": "weekly"}, []),  # unscheduled
+    ({"routineTrigger": {"kind": "manual"}, "routineCadence": "weekly", "routineNextRunDate": "2026-10-14"}, []),
+    ({"routineTrigger": BLOCKED}, [BLOCKED]),
+    ({"routineTrigger": {"kind": "webhook"}}, [{"kind": "webhook"}]),
+])
+def test_upgrade_legacy_triggers(legacy, triggers):
+    assert upgrade_legacy(legacy)["routineTriggers"] == triggers
+
+
+@pytest.mark.parametrize("legacy, state, reason", [
+    ({"routineEnabled": True}, "active", None),
+    ({"routineEnabled": False}, "paused", None),
+    ({}, "paused", None),
+    ({"routineEnabled": False, "routineDisabledReason": "rate_limited"}, "paused_by_relay", "rate_limited"),
+])
+def test_upgrade_legacy_state(legacy, state, reason):
+    upgraded = upgrade_legacy(legacy)
+    assert upgraded["routineState"] == state
+    assert upgraded.get("routinePauseReason") == reason
+
+
+def test_listens_and_state_defaults():
+    assert listens({"routineTriggers": [DAILY]}) is False
+    assert listens({"routineTriggers": [DAILY, BLOCKED]}) is True
+    assert state_of({}) == "paused"
