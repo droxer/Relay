@@ -8,7 +8,7 @@ for (const mobile of [false, true]) {
     const tasks = [
       { id: "ship", title: "Ship the release", projectId: "launch", status: "review", assignedTeamId: "team-a" },
       { id: "answer", title: "Answer customers", projectId: "support", status: "running" },
-    ].map((task) => ({ ...task, description: "Check the execution results before completing this task.", priority: "normal", isRoutine: false, routineEnabled: false, linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] }));
+    ].map((task) => ({ ...task, description: "Check the execution results before completing this task.", priority: "normal", isRoutine: false, linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] }));
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let body: unknown = { sessions: [], agents: [], teams: [{ id: "team-a", name: "Launch team", enabled: true, members: [] }], nodes: [], projects, tasks, sandboxes: [], skills: [], files: [], entries: [] };

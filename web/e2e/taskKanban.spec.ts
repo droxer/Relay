@@ -8,7 +8,7 @@ const project = { id: "p", name: "Launch", ownerEmployeeId: "review-user", compu
 function task(id: string, status: string, extra: Record<string, unknown> = {}) {
   return { id, title: id, description: "", priority: "normal", status, workflowStage: status, projectId: project.id,
     ownerEmployeeId: "review-user", assignedAgentId: "agent", acceptancePolicy: "human",
-    isRoutine: false, routineEnabled: false, linkedSessionIds: [], createdAt: stamp, updatedAt: stamp,
+    isRoutine: false, linkedSessionIds: [], createdAt: stamp, updatedAt: stamp,
     eventCount: 1, activityCount: 0, ...extra };
 }
 

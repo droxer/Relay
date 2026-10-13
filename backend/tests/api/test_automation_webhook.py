@@ -9,7 +9,7 @@ HEADER = "X-Relay-Automation-Token"
 
 
 def _webhook_automation(client, agent) -> tuple[dict, str]:
-    routine = _routine(client, agent, routineTrigger={"kind": "webhook"})
+    routine = _routine(client, agent, routineTriggers=[{"kind": "webhook"}])
     response = client.post(f"/api/v1/tasks/{routine['id']}/automation/webhook-secret")
     assert response.status_code == 201, response.text
     body = response.json()
@@ -55,11 +55,21 @@ def test_webhook_to_paused_automation_is_refused(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         routine, secret = _webhook_automation(client, agent)
-        client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineEnabled": False})
+        assert client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineState": "paused"}).status_code == 200
         url = f"/api/v1/automations/{routine['id']}/webhook"
         assert client.post(url, json={}, headers={HEADER: secret}).status_code == 409
-        client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineEnabled": True})
+        client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineState": "active"})
         assert client.app.state.automation_store.claim_outbox(10, datetime.now(timezone.utc)) == []
+
+
+def test_webhook_beside_a_schedule_is_accepted(monkeypatch) -> None:
+    from test_automation_triggers_api import DAILY_9
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine = _routine(client, agent, routineTriggers=[*DAILY_9, {"kind": "webhook"}])
+        secret = client.post(f"/api/v1/tasks/{routine['id']}/automation/webhook-secret").json()["secret"]
+        response = client.post(f"/api/v1/automations/{routine['id']}/webhook", json={}, headers={HEADER: secret})
+        assert response.status_code == 202
 
 
 def test_rotating_invalidates_the_old_secret_and_status_reports_it(monkeypatch) -> None:
@@ -79,7 +89,7 @@ def test_leaving_webhook_deletes_the_secret(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         routine, secret = _webhook_automation(client, agent)
-        client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTrigger": {"kind": "manual"}})
+        client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTriggers": []})
         assert client.app.state.automation_store.has_webhook_secret(routine["id"]) is False
 
 
@@ -157,7 +167,7 @@ def test_non_owner_assignee_cannot_rotate_secret(monkeypatch):
         client, _ = _client(monkeypatch, root)
         _create_user(client, "bob", employee_id="bob")
         agent = _create_agent(client, "bob")
-        routine = _routine(client, agent, assigneeEmployeeId="bob", routineTrigger={"kind": "webhook"})
+        routine = _routine(client, agent, assigneeEmployeeId="bob", routineTriggers=[{"kind": "webhook"}])
         _login(client, "bob")
         path = f"/api/v1/tasks/{routine['id']}/automation/webhook-secret"
         assert client.get(path).status_code == 403

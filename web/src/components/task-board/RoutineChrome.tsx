@@ -10,9 +10,7 @@ import { RosterAgentMark } from "../roster/RosterOption";
 import { selectionsFromState, stateFromSelections } from "../../lib/filterSelections";
 import {
   ROUTINE_STATE_ORDER,
-  type RoutineState,
-  TASK_ROUTINE_CADENCES,
-  TASK_ROUTINE_TYPES,
+  type RoutineListState,
   type RoutineFilters,
 } from "../../lib/routine";
 import { TRIGGER_KINDS } from "../../lib/automationTrigger";
@@ -32,8 +30,6 @@ import type { EmployeeAgent } from "../../types";
 export const initialRoutineFilters: RoutineFilters = {
   trigger: "all",
   query: "",
-  type: "all",
-  cadence: "all",
   agent: "all",
   assignee: "",
   state: "all",
@@ -42,11 +38,12 @@ export const initialRoutineFilters: RoutineFilters = {
 /* The query params the routine filter bar owns — must stay in sync with
    LIST_FILTER_PARAMS.routines in lib/appRoute.ts, which decides which of
    these survive canonicalization. */
+/** The trigger filter's choices: each kind, and `none` for Run now only. */
+const TRIGGER_FILTER_VALUES = [...TRIGGER_KINDS, "none"] as const;
+
 export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
-  trigger: { param: "trigger", allowed: TRIGGER_KINDS },
+  trigger: { param: "trigger", allowed: TRIGGER_FILTER_VALUES },
   query: { param: "q" },
-  type: { param: "type", allowed: TASK_ROUTINE_TYPES },
-  cadence: { param: "cadence", allowed: TASK_ROUTINE_CADENCES },
   agent: { param: "agent" },
   assignee: { param: "assignee" },
   state: { param: "state", allowed: ROUTINE_STATE_ORDER },
@@ -55,11 +52,20 @@ export const ROUTINE_FILTER_SPEC: FilterSpec<RoutineFilters> = {
 export function activeRoutineFilterCount(filters: RoutineFilters): number {
   let count = 0;
   if (filters.trigger !== "all") count += 1;
-  if (filters.type !== "all") count += 1;
-  if (filters.cadence !== "all") count += 1;
   if (filters.agent !== "all") count += 1;
   if (filters.assignee.trim()) count += 1;
   return count;
+}
+
+/** A next-run instant (ISO UTC) in the viewer's zone, or "—" when none. */
+export function formatNextRunAt(value: string | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(document.documentElement.lang || undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 /* Date-only values ("2026-07-19") parse as UTC midnight; construct a local
@@ -77,17 +83,13 @@ export function formatNextRunDate(value: string): string {
   }).format(date);
 }
 
-const ROUTINE_BAR_KEYS = ["trigger", "type", "cadence", "agent", "assignee"] as const;
+const ROUTINE_BAR_KEYS = ["trigger", "agent", "assignee"] as const;
 
 export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { filters: RoutineFilters; agents: EmployeeAgent[]; onChange: (next: RoutineFilters) => void; sortMenu?: ReactNode }) {
   const { t } = useTranslation();
   const fields = useMemo<FilterBarField[]>(() => [
     { id: "trigger", label: t("automation.trigger"), kind: "select",
-      options: TRIGGER_KINDS.map((kind) => ({ value: kind, label: t(`automation.kinds.${kind}`) })) },
-    { id: "type", label: t("routine.type"), kind: "select",
-      options: TASK_ROUTINE_TYPES.map((type) => ({ value: type, label: t(`routine.types.${type}`) })) },
-    { id: "cadence", label: t("routine.cadence"), kind: "select",
-      options: TASK_ROUTINE_CADENCES.map((cadence) => ({ value: cadence, label: t(`routine.cadences.${cadence}`) })) },
+      options: TRIGGER_FILTER_VALUES.map((kind) => ({ value: kind, label: t(`automation.kinds.${kind}`) })) },
     { id: "agent", label: t("backlog.agent"), kind: "select",
       options: agents.map((agent) => ({ value: agent.id, label: agent.displayName, icon: <RosterAgentMark agent={agent} /> })) },
     { id: "assignee", label: t("backlog.assignee_filter"), kind: "text" },
@@ -112,7 +114,7 @@ export function RoutineFiltersBar({ filters, agents, onChange, sortMenu }: { fil
 }
 
 /** The rail's own vocabulary: every schedule state, under an "all" section. */
-type RoutineSection = "all" | RoutineState;
+type RoutineSection = "all" | RoutineListState;
 
 /**
  * The routine board's section rail — schedule health as a list of
@@ -131,7 +133,7 @@ export function RoutineStateNav({
   onChange,
 }: {
   value: RoutineSection;
-  counts: Record<RoutineState, number>;
+  counts: Record<RoutineListState, number>;
   total: number;
   onChange: (next: RoutineSection) => void;
 }) {

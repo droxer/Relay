@@ -13,7 +13,6 @@ describe("task summary projection", () => {
       priority: "normal",
       status: "backlog",
       isRoutine: false,
-      routineEnabled: false,
       linkedSessionIds: [],
       createdAt: "2026-08-02T00:00:00.000Z",
       updatedAt: "2026-08-02T00:00:01.000Z",

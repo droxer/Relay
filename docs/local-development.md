@@ -294,7 +294,8 @@ to 6 per automation, `RELAY_AUTOMATION_OUTBOX_BATCH` to 200 rows per tick, and
 automation, and `RELAY_AUTOMATION_WEBHOOK_FAILURE_LIMIT` to 20 rejected tokens
 per minute per caller IP, so bad tokens cannot use up an automation's budget.
 Webhook rate limiting is per backend process; multiple replicas also need an
-edge limiter. Disabling the task scheduler stops recording task and run events
+edge limiter. `RELAY_AUTOMATION_TRIGGERS_ENABLED` (default on) set to 0 limits new
+triggers to schedules. Disabling the task scheduler stops recording task and run events
 for automations (nothing would drain them), and leaves webhook events queued
 until it resumes (or retention removes them). Override the port with:
 

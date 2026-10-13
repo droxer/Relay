@@ -21,7 +21,7 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
     assigneeEmployeeId: input.assigneeEmployeeId,
     dueDate: input.dueDate,
     isRoutine: input.isRoutine ?? false,
-    routineEnabled: input.routineEnabled ?? false,
+    routineState: input.routineState,
     sourceRoutineId: input.sourceRoutineId,
     startedAt: input.startedAt,
     blockerReason: input.blockerReason,

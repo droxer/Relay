@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 
+from ..automations.service import automation_triggers_enabled
 from ..daemon_registry import public_sandbox_record
 from ..persistence.store_common import split_cache_tokens
 from ..persistence.org_settings_store import (
@@ -91,6 +92,8 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         # instead of offering an edit that would come back a 400.
         "capabilities": {
             "employeeEdits": hasattr(ctx.auth_store, "update_employee"),
+            # Off: automations may hold only schedule triggers.
+            "automationTriggers": automation_triggers_enabled(),
         },
         # Whether the bootstrap/supervisor bearer token exists. Only its hash
         # is stored, so the value itself is shown once, by the reissue route.

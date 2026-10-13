@@ -7,7 +7,7 @@ const stamp = "2026-09-01T00:00:00.000Z";
 const user = { id: "u", employeeId: "u", username: "review", role: "employee", theme: "light", language: "en" };
 function task(id: string, priority: string) {
   return { id, title: id, description: "", priority, status: "backlog", workflowStage: "backlog", ownerEmployeeId: "u",
-    acceptancePolicy: "human", isRoutine: false, routineEnabled: false, linkedSessionIds: [], createdAt: stamp,
+    acceptancePolicy: "human", isRoutine: false, linkedSessionIds: [], createdAt: stamp,
     updatedAt: stamp, eventCount: 1, activityCount: 0 };
 }
 

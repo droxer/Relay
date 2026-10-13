@@ -95,3 +95,20 @@ it("replays an intake issue joining a project", () => {
   assert.equal(task.projectId, "project");
   assert.equal(task.assignedAgentId, "agent");
 });
+
+it("replays v2 automation fields and clears the pause reason on resume", () => {
+  const daily = [{ kind: "schedule" as const, schedule: { timezone: "UTC", repeat: { every: "day" as const, at: "09:00" } } }];
+  const paused = materializeTaskEvents([
+    relayTaskEvent("task.created", "auto", {
+      title: "Daily", description: "", priority: "normal", isRoutine: true, routineTriggers: daily, routineState: "active",
+      routineNextRunAt: "2030-01-01T09:00:00Z",
+    }),
+    relayTaskEvent("task.updated", "auto", { routineState: "paused_by_relay", routinePauseReason: "rate_limited", routineNextRunAt: null }),
+  ]);
+  assert.deepEqual(paused.routineTriggers, daily);
+  assert.equal(paused.routinePauseReason, "rate_limited");
+  assert.equal(paused.routineNextRunAt, undefined);
+  const resumed = materializeTaskEvents([...paused.events, relayTaskEvent("task.updated", "auto", { routineState: "active" })]);
+  assert.equal(resumed.routineState, "active");
+  assert.equal(resumed.routinePauseReason, undefined);
+});

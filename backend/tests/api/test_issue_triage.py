@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from automation_helpers import WEEKLY_TRIGGERS
+
 import asyncio
 
 import pytest
@@ -138,8 +140,8 @@ def test_project_move_refusals(triage_context):
 def test_projectless_routines_still_accept_an_agent(triage_context):
     _app, client, _node, _project, lead = triage_context
     created = client.post("/api/v1/tasks", json={
-        "title": "Nightly", "isRoutine": True, "routineCadence": "daily",
-        "routineEnabled": True, "assignedAgentId": lead["id"],
+        "title": "Nightly", "isRoutine": True, "routineState": "active",
+        "routineTriggers": WEEKLY_TRIGGERS, "assignedAgentId": lead["id"],
     })
     assert created.status_code == 201, created.text
 

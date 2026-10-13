@@ -1,10 +1,16 @@
 import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { emptyBacklogForm, emptyRoutineForm, type TaskBoardFormState } from "../src/lib/taskBoardForm";
 import type { CurrentUser, ProjectRecord } from "../src/types";
 
+vi.mock("../src/api", async (original) => ({
+  ...(await original<typeof import("../src/api")>()),
+  getMe: vi.fn(async () => ({ authenticated: true })),
+  previewSchedule: vi.fn(async () => ({ summary: "", next: [] })),
+}));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
 vi.mock("../src/components/assignment/AssignmentField", () => ({ AssignmentField: ({ agents, teams }: any) => <div data-testid="assignment-options">{agents.map((a: any) => a.displayName).join(",")}{teams.map((a: any) => a.name).join(",")}</div> }));
 const user = { employeeId: "u", username: "u" } as CurrentUser;
@@ -17,11 +23,14 @@ const projects = [
 function Form({ initial = { ...emptyBacklogForm(user), title: "Ship" }, save, createProject, choices = projects, projectChoice }: {
   initial?: TaskBoardFormState; save: (form: TaskBoardFormState) => void; createProject?: () => void; choices?: ProjectRecord[]; projectChoice?: "required" | "optional" | "locked";
 }) {
+  const [client] = useState(() => new QueryClient());
   const [form, setForm] = useState(initial);
-  return <TaskDrawer open form={form} projectChoice={projectChoice} onChange={setForm} onSubmit={() => save(form)} onClose={vi.fn()}
-    saving={false} title="New" subtitle="Task" projects={choices} onCreateProject={createProject}
-    logicalAgents={[{ id: "a", displayName: "Member", supervisorEmployeeId: "u" }, { id: "b", displayName: "Outside", supervisorEmployeeId: "u" }] as any}
-    teams={[{ id: "team", name: "Outside team", ownerEmployeeId: "u" }] as any} />;
+  return <QueryClientProvider client={client}>
+    <TaskDrawer open form={form} projectChoice={projectChoice} onChange={setForm} onSubmit={() => save(form)} onClose={vi.fn()}
+      saving={false} title="New" subtitle="Task" projects={choices} onCreateProject={createProject}
+      logicalAgents={[{ id: "a", displayName: "Member", supervisorEmployeeId: "u" }, { id: "b", displayName: "Outside", supervisorEmployeeId: "u" }] as any}
+      teams={[{ id: "team", name: "Outside team", ownerEmployeeId: "u" }] as any} />
+  </QueryClientProvider>;
 }
 
 it("requires a project even when the task has a title", () => {

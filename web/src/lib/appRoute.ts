@@ -314,12 +314,10 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
   },
   routines: {
     q: null,
-    type: new Set(["task", "job"]),
-    cadence: new Set(["daily", "weekly", "monthly", "custom"]),
     agent: null,
     assignee: null,
-    trigger: new Set(["schedule", "task_event", "run_event", "webhook", "manual"]),
-    state: new Set(["running", "overdue", "due", "scheduled", "listening", "on_demand", "unscheduled", "paused"]),
+    trigger: new Set(["schedule", "task_event", "run_event", "webhook", "none"]),
+    state: new Set(["running", "due", "scheduled", "listening", "on_demand", "paused"]),
   },
 };
 

@@ -42,7 +42,8 @@ const task = {
 
 const routine = {
   id: "routine-1", title: "Weekly ledger reconciliation", description: "", priority: "normal", status: "backlog",
-  ownerEmployeeId: "review-user", isRoutine: true, routineType: "task", routineCadence: "weekly", routineEnabled: true,
+  ownerEmployeeId: "review-user", isRoutine: true, routineState: "active",
+  routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "week", at: "09:00", days: [1] } } }],
   linkedSessionIds: [], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
 

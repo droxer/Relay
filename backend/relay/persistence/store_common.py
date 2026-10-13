@@ -19,8 +19,6 @@ from ..core.models import (
     AGENT_NAMES,
     AgentName,
     TaskPriority,
-    TaskRoutineCadence,
-    TaskRoutineType,
     TaskStatus,
 )
 
@@ -654,7 +652,6 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "workflowStage": "backlog",
         "acceptancePolicy": created.get("acceptancePolicy", "automatic"),
         "isRoutine": bool(created.get("isRoutine")),
-        "routineEnabled": bool(created.get("routineEnabled")),
         "linkedSessionIds": [],
         "occurrenceIds": [],
         "activity": [],
@@ -662,6 +659,9 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "updatedAt": created["timestamp"],
         "events": [],
     }
+    if "routineEnabled" in created:
+        # Only a legacy record says this; v2 routines carry routineState.
+        task["routineEnabled"] = bool(created["routineEnabled"])
     if created.get("ownerEmployeeId"):
         task["ownerEmployeeId"] = created["ownerEmployeeId"]
     if created.get("assigneeEmployeeId"):
@@ -867,19 +867,90 @@ TASK_EVENT_HANDLERS: dict[str, TaskEventHandler] = {
 }
 
 
+V2_ROUTINE_FIELDS = ("routineTriggers", "routineState", "routinePauseReason", "routineNextRunAt")
+
+
 def _apply_task_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:
+    from ..automations.model import LEGACY_FIELDS
+
     if "isRoutine" in event and event["isRoutine"] is not None:
         task["isRoutine"] = bool(event["isRoutine"])
         if not task["isRoutine"]:
-            task["routineEnabled"] = False
-            task.pop("routineType", None)
-            task.pop("routineCadence", None)
-            task.pop("routineNextRunDate", None)
-            task.pop("routineTrigger", None)
-            task.pop("routineDisabledReason", None)
+            for key in (*V2_ROUTINE_FIELDS, *LEGACY_FIELDS):
+                task.pop(key, None)
             return
     if not task.get("isRoutine"):
         return
+    if any(key in event for key in V2_ROUTINE_FIELDS):
+        _apply_v2_routine_fields(task, event)
+    elif any(event.get(key) is not None for key in LEGACY_FIELDS):
+        _apply_legacy_routine_fields(task, event)
+
+
+def _apply_v2_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:
+    from ..automations.model import LEGACY_FIELDS, STATES
+
+    # A v2 write is a decision made with the upgraded fields in view; the
+    # retained legacy seed no longer applies.
+    for key in LEGACY_FIELDS:
+        task.pop(key, None)
+    if isinstance(event.get("routineTriggers"), list):
+        task["routineTriggers"] = [dict(trigger) for trigger in event["routineTriggers"]]
+    if event.get("routineState") in STATES:
+        task["routineState"] = event["routineState"]
+        if event["routineState"] != "paused_by_relay":
+            task.pop("routinePauseReason", None)
+    for key in ("routinePauseReason", "routineNextRunAt"):
+        if key in event:
+            if event[key]:
+                task[key] = event[key]
+            else:
+                task.pop(key, None)
+
+
+def _apply_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:
+    """An old event: mirror it onto the legacy keys, then re-derive v2 from them.
+
+    The mirrored keys are the accumulator, so a snapshot stored before v2 existed
+    upgrades correctly when its next legacy event arrives.
+    """
+    from ..automations.model import LEGACY_FIELDS, upgrade_legacy
+
+    if "routineTriggers" in task and not any(key in task for key in LEGACY_FIELDS):
+        _apply_legacy_state_to_v2(task, event)
+        return
+    _mirror_legacy_routine_fields(task, event)
+    upgraded = upgrade_legacy({key: task[key] for key in LEGACY_FIELDS if key in task})
+    task["routineTriggers"] = upgraded["routineTriggers"]
+    task["routineState"] = upgraded["routineState"]
+    if "routinePauseReason" in upgraded:
+        task["routinePauseReason"] = upgraded["routinePauseReason"]
+    else:
+        task.pop("routinePauseReason", None)
+
+
+def _apply_legacy_state_to_v2(task: dict[str, Any], event: dict[str, Any]) -> None:
+    """A legacy-shaped write on a v2 snapshot (a v1 API PATCH, an old writer).
+
+    The triggers were decided in v2, so the event's legacy timing —
+    cadence, next run date, trigger, type — must not re-derive them, and no
+    legacy key comes back. Only ``routineEnabled`` carries over, as state.
+    """
+    enabled = event.get("routineEnabled")
+    if enabled is True:
+        task["routineState"] = "active"
+        task.pop("routinePauseReason", None)
+    elif enabled is False:
+        if event.get("routineDisabledReason") == "rate_limited":
+            task["routineState"] = "paused_by_relay"
+            task["routinePauseReason"] = "rate_limited"
+        else:
+            task["routineState"] = "paused"
+            task.pop("routinePauseReason", None)
+
+
+def _mirror_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:
+    # Compatibility mirror for legacy readers; removed in the v2 API task.
     if "routineEnabled" in event and event["routineEnabled"] is not None:
         task["routineEnabled"] = bool(event["routineEnabled"])
     if event.get("routineEnabled") is True:
@@ -939,11 +1010,3 @@ def task_status(value: Any) -> TaskStatus | None:
         )
         else None
     )
-
-
-def task_routine_type(value: Any) -> TaskRoutineType | None:
-    return value if value in ("task", "job") else None
-
-
-def task_routine_cadence(value: Any) -> TaskRoutineCadence | None:
-    return value if value in ("daily", "weekly", "monthly", "custom") else None

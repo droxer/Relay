@@ -1,25 +1,33 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
-from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
-from ..automations.matcher import AutomationMatcher, in_flight_occurrence
-from ..automations.trigger import TriggerError, normalize_trigger, trigger_kind, trigger_of
+from ..automations.model import (
+    EVENT_KINDS,
+    TriggerError,
+    has_webhook,
+    public_task_result,
+    state_of,
+    without_legacy_fields,
+)
+from ..automations.service import (
+    automation_triggers_enabled,
+    lock_automation_state,
+    prepare_resume,
+    request_manual_occurrence,
+    routine_fields_v2,
+)
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
-from ..persistence.automation_store import AUTOMATION_LOCK_KEY
 from ..persistence.store_common import store_transaction
 from ..persistence.stores import (
     task_priority,
-    task_routine_cadence,
-    task_routine_type,
     task_status,
     valid_agent,
 )
@@ -36,12 +44,8 @@ from ..services.task_deletion import (
     delete_task as delete_task_record,
 )
 from ..services.task_dispatch import (
-    existing_routine_occurrence_result,
     implicit_group_assignments_for_task,
     start_task_on_ready_node,
-)
-from ..services.task_dispatch import (
-    start_routine_occurrence_on_ready_node as dispatch_routine_occurrence,
 )
 from ..services.task_workspace import (
     recorded_task_workspace,
@@ -56,7 +60,6 @@ from ..sessions import SessionController
 from ..tasks import (
     materialize_legacy_agent_assignment,
     materialize_legacy_task_assignment,
-    next_routine_date,
     task_goal_text,
 )
 from .deps import AppContext, AppContextDep
@@ -232,15 +235,6 @@ def date_field(body: dict[str, Any], key: str) -> str | None:
     return value
 
 
-def bool_field(body: dict[str, Any], key: str) -> bool | None:
-    if key not in body:
-        return None
-    raw = body.get(key)
-    if isinstance(raw, bool):
-        return raw
-    raise HTTPException(400, f"{key} must be a boolean.")
-
-
 def _task_collaboration_style(body: dict[str, Any], *, allow_clear: bool) -> str | None:
     value = body.get("collaborationStyle")
     if value is None:
@@ -253,119 +247,33 @@ def _task_collaboration_style(body: dict[str, Any], *, allow_clear: bool) -> str
         raise HTTPException(400, str(error)) from error
 
 
-def routine_fields(
-    body: dict[str, Any],
-    *,
-    current: dict[str, Any] | None = None,
-    calendar_date: date | None = None,
-) -> dict[str, Any]:
-    has_routine_input = any(
-        key in body
-        for key in (
-            "isRoutine",
-            "routineType",
-            "routineCadence",
-            "routineNextRunDate",
-            "routineEnabled",
-            "routineTrigger",
-        )
-    )
-    if not has_routine_input:
-        return {}
-    is_routine = bool_field(body, "isRoutine")
-    enabled = bool_field(body, "routineEnabled")
-    routine_type = (
-        task_routine_type(body.get("routineType")) if "routineType" in body else None
-    )
-    cadence = (
-        task_routine_cadence(body.get("routineCadence"))
-        if "routineCadence" in body
-        else None
-    )
-    if "routineType" in body and body.get("routineType") and not routine_type:
-        raise HTTPException(400, "routineType must be one of: task, job.")
-    if "routineCadence" in body and body.get("routineCadence") and not cadence:
-        raise HTTPException(
-            400, "routineCadence must be one of: daily, weekly, monthly, custom."
-        )
-    trigger = None
-    if "routineTrigger" in body:
-        try:
-            trigger = normalize_trigger(body["routineTrigger"])
-        except TriggerError as error:
-            raise HTTPException(400, str(error)) from error
-    scheduled = (trigger or trigger_of(current or {}))["kind"] == "schedule"
-    became_scheduled = bool(
-        current and trigger and scheduled and trigger_kind(current) != "schedule"
-    )
-    has_next_run_input = "routineNextRunDate" in body
-    next_run = date_field(body, "routineNextRunDate") if has_next_run_input else None
-    next_is_routine = bool(
-        is_routine
-        if is_routine is not None
-        else current.get("isRoutine")
-        if current
-        else True
-    )
-    next_enabled = (
-        enabled
-        if enabled is not None
-        else (
-            bool((current or {}).get("routineEnabled")) if current else next_is_routine
-        )
-    )
-    resolved_cadence = cadence or (current or {}).get("routineCadence") or "weekly"
-    cadence_changed = bool(
-        current and cadence and cadence != current.get("routineCadence")
-    )
-    reenabled = bool(current and enabled is True and not current.get("routineEnabled"))
+def routine_fields(body: dict[str, Any], *, current: dict[str, Any] | None) -> dict[str, Any]:
+    """``routine_fields_v2`` answered over HTTP, behind the triggers switch."""
+    try:
+        fields = routine_fields_v2(body, current=current, now=datetime.now(timezone.utc))
+    except TriggerError as error:
+        raise HTTPException(400, str(error)) from error
     if (
-        next_is_routine
-        and scheduled
-        and resolved_cadence != "custom"
-        and (
-            (current is None and not has_next_run_input)
-            or cadence_changed
-            or reenabled
-            or became_scheduled
-        )
+        "routineTriggers" in body
+        and not automation_triggers_enabled()
+        and any(trigger["kind"] != "schedule" for trigger in fields.get("routineTriggers", []))
     ):
-        today = calendar_date or datetime.now(timezone.utc).date()
-        calculated_next_run = next_routine_date(today, resolved_cadence, today)
-        next_run = calculated_next_run.isoformat() if calculated_next_run else None
-    effective_next_run = (
-        next_run
-        if has_next_run_input or next_run is not None
-        else (current or {}).get("routineNextRunDate")
-    )
-    if not scheduled:
-        next_run = ""
-        effective_next_run = ""
-    if (
-        next_is_routine
-        and scheduled
-        and next_enabled
-        and resolved_cadence == "custom"
-        and not effective_next_run
-    ):
-        raise HTTPException(
-            400, "routineNextRunDate is required for an enabled custom routine."
-        )
-    return {
-        "isRoutine": is_routine if is_routine is not None else next_is_routine,
-        "routineType": routine_type or (current or {}).get("routineType") or "task",
-        "routineCadence": resolved_cadence,
-        "routineNextRunDate": next_run,
-        "routineEnabled": next_enabled,
-        **({"routineTrigger": trigger} if trigger else {}),
-    }
+        raise HTTPException(400, "Only schedule triggers are enabled on this server.")
+    return fields
 
 
 def validate_trigger_scope(
-    ctx: AppContext, trigger: dict[str, Any] | None, *, owner: str | None,
+    ctx: AppContext, triggers: list[dict[str, Any]] | None, *, owner: str | None,
 ) -> None:
     """Filters may observe only work their owner is allowed to assign."""
-    filters = (trigger or {}).get("filters") or {}
+    for index, trigger in enumerate(triggers or []):
+        if trigger.get("kind") in EVENT_KINDS:
+            _validate_filter_scope(ctx, trigger.get("filters") or {}, f"routineTriggers[{index}]", owner=owner)
+
+
+def _validate_filter_scope(
+    ctx: AppContext, filters: dict[str, Any], at: str, *, owner: str | None,
+) -> None:
     if not any(key in filters for key in ("projectId", "assignedAgentId", "assignedTeamId")):
         return
     if not owner:
@@ -384,7 +292,7 @@ def validate_trigger_scope(
         except KeyError:
             found = None
         if not found:
-            raise HTTPException(400, f"routineTrigger filters.{key} does not exist.")
+            raise HTTPException(400, f"{at} filters.{key} does not exist.")
     owner_actor = {"employeeId": owner, "isAdmin": False}
     logical_agent_for_assignment(ctx, owner_actor, filters.get("assignedAgentId"), expected_employee_id=owner)
     team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_employee_id=owner)
@@ -392,25 +300,6 @@ def validate_trigger_scope(
     if project:
         validate_project_assignment(ctx, project, assigned_agent_id=filters.get("assignedAgentId"),
                                     assigned_team_id=filters.get("assignedTeamId"))
-
-
-async def start_routine_occurrence_on_ready_node(
-    ctx: AppContextDep,
-    routine: dict[str, Any],
-    actor: dict[str, Any],
-    *,
-    agent: str | None,
-    assignments: list[dict[str, Any]] | None = None,
-) -> dict[str, Any] | None:
-    return await dispatch_routine_occurrence(
-        ctx,
-        routine,
-        actor,
-        agent=agent,
-        assignments=assignments,
-        run_date=ctx.today(),
-        retry_blocked=True,
-    )
 
 
 def complete_linked_task_sessions(
@@ -495,7 +384,10 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             employee_id=None if actor["isAdmin"] else actor["employeeId"],
             limit=limit,
         )
-    return {"tasks": tasks, "flowPolicy": {"wipLimit": wip_limit(), "scope": "employee"}}
+    return {
+        "tasks": [without_legacy_fields(task) for task in tasks],
+        "flowPolicy": {"wipLimit": wip_limit(), "scope": "employee"},
+    }
 
 
 @router.post("/tasks", status_code=201)
@@ -545,8 +437,9 @@ def create_task(
     collaboration_style = _task_collaboration_style(body, allow_clear=False)
     if "status" in body and not status:
         raise HTTPException(400, "status is not a recognized task status.")
-    routine = routine_fields(body, calendar_date=ctx.today())
-    validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=owner)
+    routine = routine_fields(body, current=None)
+    if "routineTriggers" in body:
+        validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=owner)
     creates_thread = body.get("createSession") is True or isinstance(
         body.get("assignments"), list
     )
@@ -558,16 +451,10 @@ def create_task(
         raise HTTPException(400, "assigned status requires an agent or team.")
     if status and status not in ("backlog", "assigned"):
         raise HTTPException(400, "New tasks must enter Backlog or Ready.")
-    if (
-        routine.get("isRoutine")
-        and not (project or assigned_agent_id or assigned_team_id)
-        and "routineEnabled" not in body
-    ):
-        routine["routineEnabled"] = False
-    if routine.get("routineEnabled") and not (
+    if routine.get("routineState") == "active" and not (
         project or assigned_agent_id or assigned_team_id
     ):
-        raise HTTPException(400, "An enabled routine requires an agent or team.")
+        raise HTTPException(400, "An active automation requires an agent, team, or project.")
     if creates_thread and assigned_team_id:
         try:
             task_thread_ownership(
@@ -648,13 +535,26 @@ def create_task(
         if assignments:
             controller.assign_session(session["id"], assignments)
         task = ctx.task_store.link_session(task["id"], session["id"])
-    return task
+    return without_legacy_fields(task)
 
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    return get_task_for_actor(ctx.task_store, task_id, actor)
+    return without_legacy_fields(get_task_for_actor(ctx.task_store, task_id, actor))
+
+
+def ensure_relay_pause_transition_allowed(
+    current: dict[str, Any], routine: dict[str, Any], actor: dict[str, Any]
+) -> None:
+    if (
+        state_of(current) == "paused_by_relay"
+        and (routine.get("routineState") in ("active", "paused") or routine.get("isRoutine") is False)
+        and not actor.get("isAdmin")
+        and current.get("ownerEmployeeId") != actor.get("employeeId")
+    ):
+        # An ordinary pause or conversion would let the assignee activate it later.
+        raise HTTPException(403, "Only the automation's owner or an admin can resume it.")
 
 
 @router.patch("/tasks/{task_id}")
@@ -708,8 +608,10 @@ def update_task(
     if status == "blocked" and (not blocker_reason or len(blocker_reason) > 2000):
         raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
     due_date = date_field(body, "dueDate")
-    routine = routine_fields(body, current=current, calendar_date=ctx.today())
-    validate_trigger_scope(ctx, routine.get("routineTrigger"), owner=current.get("ownerEmployeeId"))
+    routine = routine_fields(body, current=current)
+    ensure_relay_pause_transition_allowed(current, routine, actor)
+    if "routineTriggers" in body:
+        validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=current.get("ownerEmployeeId"))
     assignee = (
         assignee_employee_id_for_task(actor, body, current.get("assigneeEmployeeId"))
         if "assigneeEmployeeId" in body or "assignee_employee_id" in body
@@ -810,7 +712,7 @@ def update_task(
             400,
             "PATCH requires title, description, priority, dueDate, assigneeEmployeeId, assignedAgentId, assignedTeamId, projectId, or status.",
         )
-    next_routine_enabled = routine.get("routineEnabled", current.get("routineEnabled"))
+    next_routine_active = routine.get("routineState", state_of(current)) == "active"
     next_is_routine = routine.get("isRoutine", current.get("isRoutine"))
     next_agent_id = (
         assigned_agent_id
@@ -833,10 +735,10 @@ def update_task(
         raise HTTPException(409, "task_execution_active")
     if (
         next_is_routine
-        and next_routine_enabled
+        and next_routine_active
         and not (effective.get("projectId") or next_agent_id or next_team_id)
     ):
-        raise HTTPException(400, "An enabled routine requires an agent or team.")
+        raise HTTPException(400, "An active automation requires an agent, team, or project.")
     if move_project and (next_agent_id or next_team_id):
         # A kept legacy assignment must still be someone on the project's computer.
         validate_project_assignment(
@@ -898,13 +800,21 @@ def update_task(
         **routine,
         **assignment_patch,
     }
-    reset_rate_window = (
-        current.get("routineDisabledReason") == "rate_limited"
-        and not current.get("routineEnabled") and routine.get("routineEnabled") is True
-    )
+    # Resuming here shares the resume route's state reset (prepare_resume).
     with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
-        if reset_rate_window and conn.dialect.name == "postgresql":
-            conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
+        if routine:
+            # The scheduler can pause it after the initial request validation.
+            # Read again under its lock before judging or writing automation state.
+            lock_automation_state(conn)
+            current = get_task_for_actor(ctx.task_store, task_id, actor)
+            for field in routine:
+                update_payload.pop(field, None)
+            routine = routine_fields(body, current=current)
+            ensure_relay_pause_transition_allowed(current, routine, actor)
+            update_payload.update(routine)
+        resumed = routine.get("routineState") == "active" and state_of(current) != "active"
+        if resumed:
+            prepare_resume(conn, request.app.state.automation_store, ctx.task_store, current, actor)
         if status:
             try:
                 validate_manual_transition(
@@ -932,15 +842,13 @@ def update_task(
             )
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
-        if reset_rate_window:
-            request.app.state.automation_store.reset_rate_window(task_id)
         if status == "done":
             complete_linked_task_sessions(ctx, task, "Task accepted after review.")
             task = ctx.task_store.get_task(task_id)
 
-    if trigger_kind(current) == "webhook" and (not task.get("isRoutine") or trigger_kind(task) != "webhook"):
+    if has_webhook(current) and (not task.get("isRoutine") or not has_webhook(task)):
         request.app.state.automation_store.delete_webhook_secret(task_id)
-    return task
+    return without_legacy_fields(task)
 
 
 @router.delete("/tasks/{task_id}")
@@ -968,7 +876,7 @@ def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
         actor=actor.get("employeeId") or actor.get("username"),
         outcome=result["outcome"],
     )
-    return result
+    return public_task_result(result)
 
 
 @router.put("/tasks/{task_id}/assignment")
@@ -1013,7 +921,7 @@ def assign_task(
             )
         except TeamDispatchError as error:
             raise HTTPException(409, error.code) from error
-        return update_task_unless_dispatching(
+        return public_task_result(update_task_unless_dispatching(
             ctx,
             task_id,
             {
@@ -1021,7 +929,7 @@ def assign_task(
                 "assignedAgentId": None,
                 "assignedTeamId": assigned_team_id,
             },
-        )
+        ))
     logical_agent = logical_agent_for_assignment(
         ctx,
         actor,
@@ -1032,7 +940,7 @@ def assign_task(
     )
     if not logical_agent or not assigned_agent_id:
         raise HTTPException(400, "agentId is required for task assignment.")
-    return update_task_unless_dispatching(
+    return public_task_result(update_task_unless_dispatching(
         ctx,
         task_id,
         {
@@ -1041,7 +949,7 @@ def assign_task(
             "assignedAgentId": assigned_agent_id,
             "assignedTeamId": None,
         },
-    )
+    ))
 
 
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
@@ -1195,61 +1103,15 @@ def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], bo
     return task, agent, assignments
 
 
-def _request_manual_occurrence(request: Request, ctx: AppContext, task: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
-    if not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
-        raise HTTPException(403, "Only the automation's owner or an admin can run it.")
-    if not task.get("routineEnabled"):
-        return {"task": task, "session": None, "dispatch": {
-            "state": "rejected", "code": task.get("routineDisabledReason") or "automation_disabled",
-            "message": "Enable this automation before running it.",
-        }}
-    # A run already queued or running answers the click. Queueing a manual
-    # event behind it would start a second run the user never asked for.
-    active = in_flight_occurrence(ctx.task_store, task)
-    if active:
-        return _active_occurrence_result(ctx, task, active)
-    store = request.app.state.automation_store
-    store.enqueue_manual(task["id"])
-    # Use the same transactional matcher and lock as scheduler ticks. Running
-    # it here preserves the endpoint's immediate-dispatch response when free.
-    matcher = AutomationMatcher(task_store=ctx.task_store, session_store=ctx.session_store,
-        automation_store=store, today=ctx.today,
-        max_runs_per_hour=max(1, int(os.environ.get("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "6"))))
-    matcher.run()
-    refreshed = ctx.task_store.get_task(task["id"])
-    previous = set(task.get("occurrenceIds") or [])
-    new_ids = [item for item in refreshed.get("occurrenceIds", []) if item not in previous]
-    if new_ids:
-        return ctx.task_store.get_task(new_ids[-1])
-    return {"task": refreshed, "session": None, "dispatch": {
-        "state": "queued" if refreshed.get("routineEnabled") else "rejected",
-        "code": refreshed.get("routineDisabledReason") or "automation_pending",
-        "message": "Run now is coalesced with pending automation events." if refreshed.get("routineEnabled") else "Automation paused by its hourly run limit.",
-    }}
-
-
-def _active_occurrence_result(
-    ctx: AppContext, routine: dict[str, Any], active: dict[str, Any]
-) -> dict[str, Any]:
-    """Answer Run now with the occurrence already in flight. A queued one may
-    need waking after its computer comes online; its assignment is immutable
-    even if the definition was edited later."""
-    if active.get("linkedSessionIds"):
-        existing = existing_routine_occurrence_result(ctx, routine, active)
-        if existing:
-            return existing
-    if active.get("status") in ("backlog", "assigned"):
-        return active
-    return {"task": routine, "session": None, "dispatch": {
-        "state": "queued", "code": "automation_running",
-        "message": "This automation is already running.",
-    }}
-
-
 @router.post("/tasks/{task_id}/runs", status_code=202)
 async def start_task(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
+    # Every answer below carries a task (often the routine definition).
+    return public_task_result(await _start_task(task_id, request, ctx))
+
+
+async def _start_task(task_id: str, request: Request, ctx: AppContext) -> dict[str, Any]:
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await json_body(request)
     prepared = await run_in_threadpool(_prepare_task_start, task_id, ctx, actor, body)
@@ -1257,7 +1119,9 @@ async def start_task(
         return prepared
     task, agent, assignments = prepared
     if task.get("isRoutine"):
-        occurrence = await run_in_threadpool(_request_manual_occurrence, request, ctx, task, actor)
+        occurrence = await run_in_threadpool(
+            request_manual_occurrence, request.app.state.automation_store, ctx, task, actor
+        )
         if "dispatch" in occurrence:
             return occurrence
         result = await start_task_on_ready_node(
@@ -1348,7 +1212,7 @@ async def pickup_task(
         session_id=(result.get("session") or {}).get("id"),
         agent=agent,
     )
-    return result
+    return public_task_result(result)
 
 
 def occurrence_tasks(

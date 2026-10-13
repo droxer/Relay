@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { listedOpeningEvents, openingTriggerLabel, parseAutomationOpening } from "../src/lib/automationOpening.js";
 
-// Fixtures mirror backend/relay/automations/trigger.py `trigger_context_block`
+// Fixtures mirror backend/relay/automations/context.py `trigger_context_block`
 // appended to a routine occurrence's description (`routine_occurrence_events`)
 // and joined to its title by `task_goal_text`.
 const goal = (description: string, block?: string) =>
@@ -72,6 +72,14 @@ describe("parseAutomationOpening", () => {
     ]);
   });
 
+  it("reads a schedule slot and its summary", () => {
+    const block = "---\nTrigger context\nFired by: Schedule\n- Schedule: Daily at 09:00 (UTC)";
+    assert.deepEqual(parseAutomationOpening(goal("Brief", block))?.trigger, {
+      eventType: "schedule", eventCount: 1, dropped: 0,
+      events: [{ kind: "schedule", summary: "Daily at 09:00 (UTC)" }],
+    });
+  });
+
   it("passes an unrecognised event line through as text", () => {
     const block = "---\nTrigger context\nFired by: Something new\n- A shape this build does not know";
     const trigger = parseAutomationOpening(goal("", block))?.trigger;
@@ -101,6 +109,7 @@ describe("openingTriggerLabel", () => {
     assert.equal(openingTriggerLabel(null, t), "automation.ledger.schedule");
     assert.equal(openingTriggerLabel(trigger("manual"), t), "automation.ledger.manual");
     assert.equal(openingTriggerLabel(trigger("webhook"), t), "automation.ledger.webhook");
+    assert.equal(openingTriggerLabel(trigger("schedule"), t), "automation.ledger.schedule");
     assert.equal(
       openingTriggerLabel(trigger("task.status_changed", { toStatus: "done", eventCount: 3 }), t),
       'automation.ledger.status_changed{"status":"backlog.statuses.done"} · automation.ledger.event_count{"count":3}',

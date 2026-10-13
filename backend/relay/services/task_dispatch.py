@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from starlette.concurrency import run_in_threadpool
 
-from datetime import date
 from typing import Any, Protocol, TypedDict
 
 from loguru import logger
@@ -28,7 +27,6 @@ from ..persistence.stores import valid_agent
 from ..persistence.task_store import dispatch_claim_active
 from ..tasks import (
     ensure_managed_capacity_for_task,
-    next_routine_date,
     ready_node_for_task,
     task_goal_text,
 )
@@ -43,7 +41,7 @@ from .dispatch_failure import (
     safe_dispatch_error_message,
 )
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
-from .project_runtime import ProjectDispatchError, project_work_error, resolve_project_task_assignments
+from .project_runtime import ProjectDispatchError, resolve_project_task_assignments
 from .task_workspace import (
     recorded_task_workspace,
     resolve_task_workspace,
@@ -762,94 +760,6 @@ async def start_task_on_ready_node(
     ).start()
 
 
-async def start_routine_occurrence_on_ready_node(
-    ctx: TaskDispatchContext,
-    routine: dict[str, Any],
-    actor: dict[str, Any],
-    *,
-    agent: str | None,
-    run_date: date,
-    assignments: list[dict[str, Any]] | None = None,
-    retry_blocked: bool = False,
-) -> DispatchResult | None:
-    prepared = await run_in_threadpool(_prepare_routine_occurrence, ctx, routine, agent, run_date)
-    if prepared is None or "dispatch" in prepared:
-        return prepared
-    occurrence = prepared
-    # The occurrence is an immutable assignment snapshot. A routine may be
-    # reassigned after promotion, but that must only affect later occurrences.
-    result = await start_task_on_ready_node(
-        ctx, occurrence, actor, assignments=None,
-        retry_blocked=retry_blocked,
-    )
-    if result and result.get("session"):
-        await run_in_threadpool(ctx.task_store.link_session, routine["id"], result["session"]["id"])
-    return result
-
-
-def _prepare_routine_occurrence(ctx: TaskDispatchContext, routine: dict[str, Any], agent: str | None, run_date: date) -> Any:
-    if not routine.get("isRoutine") or not routine.get("routineEnabled"):
-        return None
-    if project_id := routine.get("projectId"):
-        if code := project_work_error(ctx.project_store.get_project(project_id)):
-            return _result(routine, "rejected", code=code, message="This project is closed for work.")
-    today = run_date
-    today_iso = today.isoformat()
-    scheduled_run_date = routine_next_run_date(routine)
-    occurrence = active_routine_occurrence(ctx.task_store, routine)
-    if not occurrence and scheduled_run_date and scheduled_run_date <= today:
-        next_run = next_routine_date(
-            scheduled_run_date, routine.get("routineCadence") or "weekly", today
-        )
-        occurrence = ctx.task_store.promote_due_routine(
-            routine["id"],
-            today_iso,
-            next_run.isoformat() if next_run else None,
-            agent_override=agent,
-        )
-        if not occurrence:
-            refreshed = ctx.task_store.get_task(routine["id"])
-            occurrence = active_routine_occurrence_for_date(
-                ctx.task_store,
-                refreshed,
-                scheduled_run_date.isoformat(),
-            )
-            if not occurrence:
-                return None
-    elif not occurrence:
-        occurrence = _create_manual_occurrence(ctx, routine, agent, today_iso)
-        if not occurrence:
-            return None
-    if occurrence.get("status") in {"running", "review"} or (
-        occurrence.get("status") == "assigned"
-        and occurrence.get("linkedSessionIds")
-    ):
-        existing = existing_routine_occurrence_result(ctx, routine, occurrence)
-        if existing:
-            return existing
-        if occurrence.get("status") in {"running", "review"}:
-            return _result(
-                occurrence,
-                "queued",
-                code="already_active",
-                message="The current routine occurrence is already active.",
-            )
-    return occurrence
-
-
-def _create_manual_occurrence(
-    ctx: TaskDispatchContext,
-    routine: dict[str, Any],
-    agent: str | None,
-    scheduled_for: str,
-) -> dict[str, Any] | None:
-    return ctx.task_store.create_routine_occurrence(
-        routine["id"],
-        scheduled_for,
-        agent_override=agent,
-    )
-
-
 def existing_routine_occurrence_result(
     ctx: TaskDispatchContext,
     routine: dict[str, Any],
@@ -871,29 +781,6 @@ def existing_routine_occurrence_result(
     return None
 
 
-def active_routine_occurrence_for_date(
-    task_store: TaskStore,
-    routine: dict[str, Any],
-    scheduled_for: str,
-) -> dict[str, Any] | None:
-    for event in reversed(routine.get("events", [])):
-        if (
-            event.get("type") != "task.occurrence_created"
-            or event.get("scheduledFor") != scheduled_for
-        ):
-            continue
-        occurrence_id = event.get("occurrenceId")
-        if not isinstance(occurrence_id, str) or not occurrence_id:
-            continue
-        try:
-            occurrence = task_store.get_task(occurrence_id)
-        except (KeyError, FileNotFoundError):
-            continue
-        if not occurrence.get("deletedAt") and occurrence.get("status") in {"backlog", "assigned", "running", "review", "blocked", "waiting_for_human"}:
-            return occurrence
-    return None
-
-
 def active_routine_occurrence(
     task_store: TaskStore,
     routine: dict[str, Any],
@@ -911,13 +798,3 @@ def active_routine_occurrence(
         if not occurrence.get("deletedAt") and occurrence.get("status") in {"backlog", "assigned", "running", "review", "blocked", "waiting_for_human"}:
             return occurrence
     return None
-
-
-def routine_next_run_date(routine: dict[str, Any]) -> date | None:
-    next_run = routine.get("routineNextRunDate")
-    if not next_run:
-        return None
-    try:
-        return date.fromisoformat(next_run)
-    except ValueError:
-        return None

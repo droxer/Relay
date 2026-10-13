@@ -13,7 +13,6 @@ function task(input: Partial<RelayTask> & { id: string }): RelayTask {
     status: input.status ?? "backlog",
     ownerEmployeeId: "alice",
     isRoutine: false,
-    routineEnabled: false,
     assignedAgentId: input.assignedAgentId,
     assignedTeamId: input.assignedTeamId,
     linkedSessionIds: [],

@@ -146,10 +146,8 @@
    data-routine-state. Accents mirror the .routine-state pill. Routine rows
    carry no .backlog-row class — these selectors are attribute-only. */
 tr[data-routine-state="running"] { --row-accent: var(--live); }
-tr[data-routine-state="overdue"] { --row-accent: var(--err); }
 tr[data-routine-state="due"] { --row-accent: var(--warn); }
 tr[data-routine-state="scheduled"] { --row-accent: var(--ink-3); }
-tr[data-routine-state="unscheduled"],
 tr[data-routine-state="paused"] { --row-accent: var(--ink-4); }
 
 tr[data-routine-state] .state-mark:not([data-shape="live"]) { --mark-accent: var(--row-accent); }

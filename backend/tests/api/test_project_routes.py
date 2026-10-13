@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import WEEKLY_TRIGGERS
+
 import asyncio
 from tempfile import TemporaryDirectory
 
@@ -1097,8 +1099,8 @@ def test_manual_project_routine_dispatches_project_roster(monkeypatch) -> None:
                 "title": "Weekly project report",
                 "projectId": project["id"],
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineEnabled": True,
+                "routineState": "active",
+                "routineTriggers": WEEKLY_TRIGGERS,
             },
         )
         assert routine.status_code == 201, routine.text

@@ -1,58 +1,30 @@
-"""Turn outbox rows into automation runs.
+"""Turn outbox rows into pending automation events.
 
-Each scheduler tick drains the outbox, matches every row against the
-enabled event and webhook automations, and parks matches as pending state
-per automation. It then fires at most one occurrence per pending automation:
-events that arrive while a run is in flight collapse into the next run's
-Trigger context instead of each starting their own.
+Each tick drains the outbox, matches every row against the active event and
+webhook automations, and parks matches as pending state per automation.
+Firing (``firing.py``) then starts at most one occurrence per pending
+automation: events that arrive while a run is in flight collapse into the
+next run's Trigger context instead of each starting their own.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import text
+from sqlalchemy import insert
 
-from ..persistence.automation_store import AUTOMATION_LOCK_KEY, subject_of
-from ..persistence.store_common import store_transaction
-from ..tasks import next_routine_date
-from .trigger import TriggerError, event_matches, normalize_trigger, trigger_context_block, trigger_kind, trigger_of
+from ..persistence.automation_store import automation_outbox, subject_of
+from ..persistence.store_common import new_database_id, store_transaction
+from .model import EVENT_KINDS, event_matches, has_webhook, is_active, triggers_of
 
 MAX_AUTOMATION_DEPTH = 3
-MAX_PENDING_EVENTS = 20
-PENDING_TTL = timedelta(hours=24)
 OUTBOX_RETENTION = timedelta(days=7)
-RATE_WINDOW = timedelta(hours=1)
-IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "running"})
-# Occurrences are appended in creation order, so an in-flight one is among the
-# newest. Bounding the scan keeps a long-lived routine's check constant-time.
-IN_FLIGHT_LOOKBACK = 10
-RATE_LIMITED = "rate_limited"
 
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _aware(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
-
-
-def in_flight_occurrence(task_store: Any, routine: dict[str, Any]) -> dict[str, Any] | None:
-    """The newest occurrence of ``routine`` still queued or running, if any."""
-    for occurrence_id in reversed((routine.get("occurrenceIds") or [])[-IN_FLIGHT_LOOKBACK:]):
-        try:
-            occurrence = task_store.get_task(occurrence_id)
-        except (KeyError, FileNotFoundError):
-            continue
-        if not occurrence.get("deletedAt") and occurrence.get("status") in IN_FLIGHT_STATUSES:
-            return occurrence
-    return None
+# An outcome has no trigger event; ordinary rows carry their enriched event.
+Delivery = tuple[dict[str, Any], dict[str, Any] | None]
+Deliveries = dict[str, list[Delivery]]
 
 
 class AutomationMatcher:
@@ -62,76 +34,111 @@ class AutomationMatcher:
         task_store: Any,
         session_store: Any,
         automation_store: Any,
-        now: Callable[[], datetime] = _utcnow,
-        today: Callable[[], date] = date.today,
+        firing: Any = None,
         max_depth: int = MAX_AUTOMATION_DEPTH,
-        max_runs_per_hour: int = 6,
         batch: int = 200,
     ) -> None:
         self.task_store = task_store
         self.session_store = session_store
         self.automation_store = automation_store
-        self._now = now
-        self._today = today
+        # The ``AutomationFiring`` that counts occurrence outcomes and pauses
+        # an automation whose runs keep failing.
+        self.firing = firing
         self.max_depth = max_depth
-        self.max_runs_per_hour = max_runs_per_hour
         self.batch = batch
 
-    def run(self) -> int:
-        now = self._now()
-        # A failed tick must not lose outbox events or leave a partially fired run.
-        with store_transaction(self.automation_store.engine) as conn:
-            # Claims partition outbox rows, but pending states are shared across
-            # ticks. One database-wide transaction lock prevents two replicas
-            # firing the same pending state; a busy replica leaves it for later.
-            if conn.dialect.name == "postgresql" and not conn.scalar(
-                text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY}
-            ):
-                return 0
-            self._drain(now)
-            return self._fire(now)
-
-    # -- draining ---------------------------------------------------------
-
-    def _drain(self, now: datetime) -> None:
+    def prepare(self, now: datetime) -> tuple[list[dict[str, Any]], Deliveries]:
+        """Claim a batch and route it without changing any automation state."""
         rows = self.automation_store.claim_outbox(self.batch, now)
-        if rows:
-            automations = {task["id"]: task for task in self.task_store.list_trigger_automations()}
-            for row in rows:
-                event = self._enrich(row)
-                if event is None:
+        automations = {task["id"]: task for task in self.task_store.list_trigger_automations()}
+        deliveries: Deliveries = {}
+        for row in rows:
+            if row["kind"] == "occurrence_outcome":
+                origin = row.get("origin_automation_id")
+                if origin:
+                    deliveries.setdefault(origin, []).append((row, None))
+                continue
+            event = self._enrich(row)
+            if event is None:
+                continue
+            for automation in self._targets(row, event, automations):
+                if self._is_loop(automation, event):
+                    logger.info("Automation event dropped as a loop", routine_id=automation["id"],
+                                event_type=event["eventType"], depth=event["depth"])
                     continue
-                for automation in self._targets(row, event, automations):
-                    if self._is_loop(automation, event):
-                        logger.info("Automation event dropped as a loop", routine_id=automation["id"],
-                                    event_type=event["eventType"], depth=event["depth"])
-                        continue
-                    self._mark_pending(automation["id"], event, now)
+                deliveries.setdefault(automation["id"], []).append((row, event))
+        return rows, deliveries
+
+    def deliver(self, routine_id: str, deliveries: list[Delivery], now: datetime) -> None:
+        """Apply one recipient's rows inside its schedule/firing savepoint."""
+        for row, event in deliveries:
+            if event is None:
+                self._record_outcome(row)
+                continue
+            # An earlier outcome may have paused this recipient. Recheck the
+            # current definition before parking the following event.
+            routine = self._load(routine_id)
+            if routine and self._targets({**row, "target_routine_id": routine_id}, event, {routine_id: routine}):
+                self.automation_store.mark_pending(routine_id, event, now)
+
+    def finish(self, rows: list[dict[str, Any]], failed: Deliveries, now: datetime) -> None:
+        """Replace broadcast rows by retries for only their failed recipients.
+
+        The outer transaction atomically deletes the claimed originals and
+        inserts these retries. Original timestamps and provenance survive,
+        so retries cannot extend retention or redeliver to healthy recipients.
+        """
+        with store_transaction(self.automation_store.engine) as conn:
+            for routine_id, deliveries in failed.items():
+                for row, _ in deliveries:
+                    values = {key: value for key, value in row.items() if key not in ("id", "target_routine_id", "claimed_at")}
+                    conn.execute(insert(automation_outbox).values(
+                        **values, id=new_database_id(), claimed_at=None,
+                        target_routine_id=routine_id,
+                    ))
             self.automation_store.delete_outbox([row["id"] for row in rows])
-        self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
+            self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
+
+    def drain(self, now: datetime) -> None:
+        """Match a batch without firing (also used by pending-state tooling)."""
+        rows, deliveries = self.prepare(now)
+        for routine_id, events in deliveries.items():
+            self.deliver(routine_id, events, now)
+        self.finish(rows, {}, now)
+
+    def _record_outcome(self, row: dict[str, Any]) -> None:
+        """An automation's own occurrence reaching a verdict feeds its failure
+        streak, once per occurrence (see ``occurrence_outcome``): ``done``
+        resets it and a terminal failure extends it. Agent runs inside an
+        occurrence never count: a round may fail a run and still succeed."""
+        origin = row.get("origin_automation_id")
+        occurrence_id = (row.get("payload") or {}).get("occurrenceId") or row.get("source_id")
+        if origin and occurrence_id and self.firing is not None:
+            self.firing.record_outcome(origin, occurrence_id, failed=row["event_type"] == "occurrence.failed")
 
     def _targets(self, row: dict[str, Any], event: dict[str, Any],
                  automations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         target_id = row.get("target_routine_id")
         if target_id:
             target = self._load(target_id)
-            if not target or not target.get("routineEnabled"):
+            if not target:
                 return []
             if row["kind"] == "manual":
-                return [target]
-            return [target] if trigger_kind(target) == "webhook" else []
+                # Run now speaks for itself, even on a paused automation — but not
+                # when Relay paused it for runaway volume.
+                return [] if target.get("routinePauseReason") == "rate_limited" else [target]
+            if row["kind"] == "webhook":
+                return [target] if is_active(target) and has_webhook(target) else []
+            # A targeted event row is a retry of a broadcast delivery. Apply
+            # the same state, ownership, and current trigger checks again.
+            automations = {target_id: target} if is_active(target) else {}
         matched = []
         for task in automations.values():
             owner = task.get("ownerEmployeeId")
             subject = event.get("subject") or {}
             if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
                 continue
-            try:
-                trigger = normalize_trigger(trigger_of(task))
-            except TriggerError as error:
-                logger.warning("Invalid stored automation trigger", routine_id=task["id"], error=str(error))
-                continue
-            if event_matches(trigger, event):
+            if listens_for(task, event):
                 matched.append(task)
         return matched
 
@@ -167,93 +174,25 @@ class AutomationMatcher:
         return {"eventType": row["event_type"], "subject": subject, "sessionId": session_id,
                 "error": payload.get("error"), "originAutomationId": origin, "depth": depth}
 
-    def _mark_pending(self, routine_id: str, event: dict[str, Any], now: datetime) -> None:
-        state = self.automation_store.get_state(routine_id)
-        events = list(state["pending_events"])
-        dropped = int(state["pending_dropped"])
-        if len(events) < MAX_PENDING_EVENTS:
-            events = [*events, event]
-        else:
-            dropped += 1
-        self.automation_store.save_state(routine_id, {
-            **state, "pending": True, "pending_events": events, "pending_dropped": dropped,
-            "pending_since": state["pending_since"] or now,
-        })
-
-    # -- firing -----------------------------------------------------------
-
-    def _fire(self, now: datetime) -> int:
-        fired = 0
-        for state in self.automation_store.list_pending_states():
-            if self._fire_one(state, now):
-                fired += 1
-        return fired
-
-    def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
-        routine_id = state["routine_id"]
-        routine = self._load(routine_id)
-        events = state["pending_events"]
-        manual = any(event.get("eventType") == "manual" for event in events)
-        if not routine or not routine.get("routineEnabled") or (
-            trigger_kind(routine) in ("schedule", "manual") and not manual
-        ):
-            self.automation_store.clear_state(routine_id)
-            return False
-        if now - _aware(state["pending_since"]) > PENDING_TTL:
-            count = len(state["pending_events"]) + int(state["pending_dropped"])
-            self.task_store.record_activity(routine_id, f"Automation dropped {count} pending events after 24 hours without a run.")
-            logger.warning("Automation pending events expired", routine_id=routine_id, count=count)
-            self.automation_store.clear_state(routine_id)
-            return False
-        if in_flight_occurrence(self.task_store, routine):
-            return False
-        window_start = _aware(state["fired_window_start"])
-        count = int(state["fired_count"])
-        if window_start is None or now - window_start >= RATE_WINDOW:
-            window_start, count = now, 0
-        if count >= self.max_runs_per_hour:
-            self.task_store.update_task(routine_id, {"routineEnabled": False, "routineDisabledReason": RATE_LIMITED})
-            self.task_store.record_activity(routine_id, f"Automation paused: more than {self.max_runs_per_hour} runs in an hour.")
-            logger.warning("Automation paused by rate cap", routine_id=routine_id)
-            self.automation_store.clear_state(routine_id)
-            return False
-        events = state["pending_events"]
-        today = self._today()
-        run_date = today.isoformat()
-        due_date = routine.get("routineNextRunDate") if manual and trigger_kind(routine) == "schedule" else None
-        if due_date and due_date <= run_date:
-            run_date = due_date
-        occurrence = self.task_store.create_triggered_occurrence(
-            routine_id,
-            run_date=run_date,
-            trigger_kind="manual" if manual else trigger_kind(routine),
-            summary={"eventType": "manual" if manual else events[0]["eventType"],
-                     "eventCount": len(events) + int(state["pending_dropped"]),
-                     **({"toStatus": events[0]["toStatus"]} if events[0].get("toStatus") else {})},
-            # A manual click must not reset a chain's depth: coalesced chain
-            # events would otherwise start counting again from zero.
-            depth=max(int(event.get("depth") or 0) for event in events),
-            context=trigger_context_block(events, int(state["pending_dropped"]),
-                                          fired_by="manual" if manual else None),
-        )
-        if not occurrence:
-            # No agent, team, or project yet: keep the events until one is
-            # assigned or they expire, and say so once.
-            logger.info("Automation could not start", routine_id=routine_id)
-            return False
-        if due_date and due_date <= today.isoformat():
-            next_date = next_routine_date(date.fromisoformat(due_date), routine.get("routineCadence") or "weekly", today)
-            self.task_store.update_task(routine_id, {"routineNextRunDate": next_date.isoformat() if next_date else ""})
-        self.automation_store.save_state(routine_id, {
-            "routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
-            "pending_since": None, "fired_window_start": window_start, "fired_count": count + 1,
-        })
-        logger.info("Automation fired", routine_id=routine_id, occurrence_id=occurrence["id"], events=len(events))
-        return True
-
     def _load(self, task_id: str) -> dict[str, Any] | None:
         try:
             task = self.task_store.get_task(task_id)
         except (KeyError, FileNotFoundError):
             return None
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
+
+
+def listens_for(task: dict[str, Any], event: dict[str, Any]) -> bool:
+    """Whether any of the task's event triggers matches; duplicates match
+    once. A stored trigger that no longer evaluates counts as no match, so
+    one bad trigger silences neither its siblings nor other automations."""
+    for index, trigger in enumerate(triggers_of(task)):
+        if trigger.get("kind") not in EVENT_KINDS:
+            continue
+        try:
+            if event_matches(trigger, event):
+                return True
+        except (AttributeError, TypeError) as error:
+            logger.warning("Invalid stored automation trigger", routine_id=task.get("id"),
+                           trigger_index=index, error=str(error))
+    return False

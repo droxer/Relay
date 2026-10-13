@@ -1,34 +1,28 @@
-import { triggerOf } from "./automationTrigger.ts";
+import { triggersOf } from "./automationTrigger.ts";
 import { taskRef } from "./taskRef.ts";
 import { TASK_PRIORITIES } from "./backlog.ts";
 import { byDate, byRank, byText, type SortColumn } from "./listSort.ts";
-import type { RelaySession, RelayTaskListItem, RoutineTriggerKind, TaskRoutineCadence, TaskRoutineType } from "../types.js";
-
-export const TASK_ROUTINE_TYPES: TaskRoutineType[] = ["task", "job"];
-export const TASK_ROUTINE_CADENCES: TaskRoutineCadence[] = ["daily", "weekly", "monthly", "custom"];
+import type { RelaySession, RelayTaskListItem, RoutineTriggerKind } from "../types.js";
 
 export interface RoutineFilters {
-  trigger: "all" | RoutineTriggerKind;
+  /** `none` is a Run-now-only automation: one with no triggers. */
+  trigger: "all" | "none" | RoutineTriggerKind;
   query: string;
-  type: "all" | TaskRoutineType;
-  cadence: "all" | TaskRoutineCadence;
   agent: string;
   assignee: string;
-  state: "all" | RoutineState;
+  state: "all" | RoutineListState;
 }
 
-export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineFilters, today = isoToday()): RelayTaskListItem[] {
+export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineFilters, now = new Date()): RelayTaskListItem[] {
   const query = filters.query.trim().toLowerCase();
   const assignee = filters.assignee.trim().toLowerCase();
   const running = runningRoutineIds(tasks);
   return tasks.filter((task) => {
     if (!task.isRoutine) return false;
-    if (filters.trigger !== "all" && triggerOf(task).kind !== filters.trigger) return false;
-    if (filters.type !== "all" && task.routineType !== filters.type) return false;
-    if (filters.cadence !== "all" && task.routineCadence !== filters.cadence) return false;
+    if (!matchesTriggerFilter(task, filters.trigger)) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
     if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
-    if (filters.state !== "all" && routineState(task, running, today) !== filters.state) return false;
+    if (filters.state !== "all" && routineState(task, running, now) !== filters.state) return false;
     if (query) {
       const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();
       if (!haystack.includes(query)) return false;
@@ -37,60 +31,72 @@ export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineF
   }).sort(compareRoutineTasks);
 }
 
+function matchesTriggerFilter(task: RelayTaskListItem, filter: RoutineFilters["trigger"]): boolean {
+  if (filter === "all") return true;
+  const triggers = triggersOf(task);
+  if (filter === "none") return triggers.length === 0;
+  return triggers.some((trigger) => trigger.kind === filter);
+}
+
 /**
- * Routine state is *schedule health*, not backlog lifecycle. A routine
+ * The list's state is *schedule health*, not backlog lifecycle. An automation
  * definition never moves through the board, so its own `status` field stays
  * at whatever it was created with — surfaces that render it are showing
- * noise. Every routine surface derives state from the three facts that
- * actually vary: is an occurrence executing right now, is the schedule on,
- * and where does the next run date sit relative to today.
+ * noise. Every automation surface derives state from the facts that actually
+ * vary: is an occurrence executing right now, is it on, what starts it, and
+ * when its next scheduled run is. Not the wire `RoutineState`, which is only
+ * the on/off half of it.
  */
-export type RoutineState =
+export type RoutineListState =
   | "running"
-  | "overdue"
   | "due"
-  | "unscheduled"
   | "listening"
   | "on_demand"
   | "scheduled"
   | "paused";
 
 /**
- * Routines whose latest occurrence is still in flight. `running` outranks
- * `paused`: pausing a schedule stops future dispatches, it does not abort the
- * run already underway, and a live run is the more urgent fact to show.
+ * Automations whose latest occurrence is still in flight. `running` outranks
+ * `paused`: pausing stops future dispatches, it does not abort the run
+ * already underway, and a live run is the more urgent fact to show.
  */
 export function routineState(
   routine: RelayTaskListItem,
   running: ReadonlySet<string>,
-  today = isoToday(),
-): RoutineState {
+  now = new Date(),
+): RoutineListState {
   if (running.has(routine.id)) return "running";
-  if (!routine.routineEnabled) return "paused";
-  const kind = triggerOf(routine).kind;
-  /* A manual-only automation watches for nothing; "Listening" would say it does. */
-  if (kind === "manual") return "on_demand";
-  if (kind !== "schedule") return "listening";
-  if (!routine.routineNextRunDate) return "unscheduled";
-  if (routine.routineNextRunDate < today) return "overdue";
-  if (routine.routineNextRunDate === today) return "due";
+  if (routine.routineState !== "active") return "paused";
+  const triggers = triggersOf(routine);
+  const next = routine.routineNextRunAt;
+  if (!next && triggers.some((trigger) => trigger.kind !== "schedule")) return "listening";
+  /* A Run-now-only automation watches for nothing; "Listening" would say it does. */
+  if (triggers.length === 0) return "on_demand";
+  // A completed one-off has no future automatic run, but Run now still works.
+  if (!next && triggers.every((trigger) => trigger.kind === "schedule" && "once" in trigger.schedule.repeat)) {
+    return "on_demand";
+  }
+  if (next && Date.parse(next) <= now.getTime()) return "due";
   return "scheduled";
+}
+
+/** Run now works in every state but a rate-limit pause, which it would only defeat. */
+export function runNowRefused(routine: Pick<RelayTaskListItem, "routineState" | "routinePauseReason">): boolean {
+  return routine.routineState === "paused_by_relay" && routine.routinePauseReason === "rate_limited";
 }
 
 /**
  * Schedule urgency, most urgent first — the order the state column sorts by.
- * It is not the order `RoutineState` happens to be declared in: that union
- * lists the states, this ranks them. A live run outranks an overdue schedule
+ * It is not the order `RoutineListState` happens to be declared in: that union
+ * lists the states, this ranks them. A live run outranks a due schedule
  * because it is the thing you can still act on.
  */
-export const ROUTINE_STATE_ORDER: readonly RoutineState[] = [
+export const ROUTINE_STATE_ORDER: readonly RoutineListState[] = [
   "running",
-  "overdue",
   "due",
   "scheduled",
   "listening",
   "on_demand",
-  "unscheduled",
   "paused",
 ];
 
@@ -109,12 +115,12 @@ export const ROUTINE_STATE_ORDER: readonly RoutineState[] = [
 export function routineStateCounts(
   routines: RelayTaskListItem[],
   running: ReadonlySet<string>,
-  today = isoToday(),
-): Record<RoutineState, number> {
+  now = new Date(),
+): Record<RoutineListState, number> {
   const counts = Object.fromEntries(
     ROUTINE_STATE_ORDER.map((state) => [state, 0]),
-  ) as Record<RoutineState, number>;
-  for (const routine of routines) counts[routineState(routine, running, today)] += 1;
+  ) as Record<RoutineListState, number>;
+  for (const routine of routines) counts[routineState(routine, running, now)] += 1;
   return counts;
 }
 
@@ -143,17 +149,10 @@ export function routineSortColumns(
     },
     {
       key: "nextRun",
-      compare: byDate((task) => task.routineNextRunDate),
-      isMissing: (task) => !task.routineNextRunDate,
+      compare: byDate((task) => task.routineNextRunAt),
+      isMissing: (task) => !task.routineNextRunAt,
     },
   ];
-}
-
-export function routineDueTone(task: RelayTaskListItem, today = isoToday()): "neutral" | "warn" | "bad" {
-  if (!task.routineEnabled || !task.routineNextRunDate) return "neutral";
-  if (task.routineNextRunDate < today) return "bad";
-  if (task.routineNextRunDate === today) return "warn";
-  return "neutral";
 }
 
 export function latestRoutineSession(
@@ -200,11 +199,11 @@ function compareRoutineTasks(left: RelayTaskListItem, right: RelayTaskListItem):
 }
 
 function enabledRank(task: RelayTaskListItem): number {
-  return task.routineEnabled ? 0 : 1;
+  return task.routineState === "active" ? 0 : 1;
 }
 
 function routineDate(task: RelayTaskListItem): string {
-  return task.routineNextRunDate ?? "9999-12-31";
+  return task.routineNextRunAt ?? "9999-12-31";
 }
 
 export function isoToday(date = new Date()): string {

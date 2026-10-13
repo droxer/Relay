@@ -158,21 +158,6 @@ class TaskStore(Protocol):
         self, task_id: str, team_id: str
     ) -> dict[str, Any]: ...
     def unassign_task(self, task_id: str) -> dict[str, Any]: ...
-    def promote_due_routine(
-        self,
-        routine_id: str,
-        today: str,
-        next_run_date: str | None,
-        *,
-        agent_override: str | None = None,
-    ) -> dict[str, Any] | None: ...
-    def create_routine_occurrence(
-        self,
-        routine_id: str,
-        scheduled_for: str,
-        *,
-        agent_override: str | None = None,
-    ) -> dict[str, Any] | None: ...
     def create_triggered_occurrence(
         self,
         routine_id: str,
@@ -182,6 +167,7 @@ class TaskStore(Protocol):
         depth: int,
         context: str,
         summary: dict[str, Any] | None = None,
+        allow_paused: bool = False,
     ) -> dict[str, Any] | None: ...
     def list_trigger_automations(self) -> list[dict[str, Any]]: ...
 

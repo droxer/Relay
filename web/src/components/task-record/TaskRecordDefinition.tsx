@@ -47,15 +47,10 @@ export function TaskRecordDefinition({
   ];
   if (variant === "routine") {
     // Routine settings use the same collaboration override as tasks.
-    rows.unshift({
-      key: "type",
-      label: t("routine.type"),
-      value: task.routineType ? t(`routine.types.${task.routineType}`) : "—",
-    });
     rows.push({
       key: "enabled",
       label: t("routine.enabled"),
-      value: t(task.routineEnabled ? "record.enabled_yes" : "record.enabled_no"),
+      value: t(task.routineState === "active" ? "record.enabled_yes" : "record.enabled_no"),
     });
   }
   if (task.assignedTeamId) rows.push({

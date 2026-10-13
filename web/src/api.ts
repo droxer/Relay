@@ -74,6 +74,7 @@ import type {
   SkillRecord,
   SkillsResponse,
   SkillVisibility,
+  RoutineSchedule,
 } from "./types.js";
 import type { Language, Theme } from "./lib/appStorage.js";
 
@@ -531,8 +532,14 @@ export function getAuthStatus(signal?: AbortSignal): Promise<{ requiresBootstrap
   return apiJson<{ requiresBootstrap: boolean }>("/auth/status", { signal });
 }
 
-export function getMe(signal?: AbortSignal): Promise<{ authenticated: boolean; user?: CurrentUser }> {
-  return apiJson<{ authenticated: boolean; user?: CurrentUser }>("/auth/me", { signal });
+/** Server switches every signed-in employee's UI depends on. */
+export interface SessionCapabilities {
+  /** False when the server limits new automation triggers to schedules. */
+  automationTriggers?: boolean;
+}
+
+export function getMe(signal?: AbortSignal): Promise<{ authenticated: boolean; user?: CurrentUser; capabilities?: SessionCapabilities }> {
+  return apiJson<{ authenticated: boolean; user?: CurrentUser; capabilities?: SessionCapabilities }>("/auth/me", { signal });
 }
 
 export function updateUserPreferences(input: { theme?: Theme; language?: Language }): Promise<{ user: CurrentUser }> {
@@ -1124,4 +1131,17 @@ export function webhookSecretStatus(taskId: string, signal?: AbortSignal): Promi
 
 export function rotateWebhookSecret(taskId: string): Promise<WebhookSecretStatus & { secret: string }> {
   return apiJson(`/tasks/${encodeURIComponent(taskId)}/automation/webhook-secret`, { method: "POST" });
+}
+
+/** Turn a paused automation back on (owner or admin). Clears Relay's pause,
+ *  its pending events, rate window, and failure streak; a no-op when active. */
+export function resumeAutomation(taskId: string): Promise<RelayTask> {
+  return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}/automation/resume`, { method: "POST" });
+}
+
+/** A schedule's summary and next three fires (ISO UTC), before it is saved. */
+export type SchedulePreview = { summary: string; next: string[] };
+
+export function previewSchedule(schedule: RoutineSchedule, signal?: AbortSignal): Promise<SchedulePreview> {
+  return apiJson("/automations/schedule-preview", { method: "POST", body: { schedule }, signal });
 }

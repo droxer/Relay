@@ -189,7 +189,6 @@ describe("project page behavior", () => {
           projectId: "project-1",
           title: "Current project task",
           isRoutine: false,
-          routineEnabled: false,
           linkedSessionIds: [],
         },
         {
@@ -197,7 +196,6 @@ describe("project page behavior", () => {
           projectId: "project-2",
           title: "Other project task",
           isRoutine: false,
-          routineEnabled: false,
           linkedSessionIds: [],
         },
       ],

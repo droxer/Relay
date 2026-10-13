@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { filterRoutineTasks, latestRoutineSession, routineDueTone, routineState, routineStateCounts, ROUTINE_STATE_ORDER, runningRoutineIds, type RoutineFilters } from "../src/lib/routine.js";
+import { filterRoutineTasks, latestRoutineSession, routineState, routineStateCounts, ROUTINE_STATE_ORDER, runningRoutineIds, type RoutineFilters } from "../src/lib/routine.js";
 import type { RelaySession, RelayTask } from "../src/types.js";
 
 const baseFilters: RoutineFilters = {
   trigger: "all",
   query: "",
-  type: "all",
-  cadence: "all",
   agent: "all",
   assignee: "",
   state: "all",
@@ -25,11 +23,10 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
     assigneeEmployeeId: input.assigneeEmployeeId,
     dueDate: input.dueDate,
     isRoutine: input.isRoutine ?? false,
-    routineType: input.routineType,
-    routineCadence: input.routineCadence,
-    routineNextRunDate: input.routineNextRunDate,
-    routineEnabled: input.routineEnabled ?? false,
-    routineTrigger: input.routineTrigger,
+    routineTriggers: input.routineTriggers,
+    routineState: input.routineState,
+    routinePauseReason: input.routinePauseReason,
+    routineNextRunAt: input.routineNextRunAt,
     assignedAgent: input.assignedAgent,
     assignedAgentId: input.assignedAgentId,
     sourceRoutineId: input.sourceRoutineId,
@@ -43,42 +40,62 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
   } as RelayTask;
 }
 
+const DAILY = [{ kind: "schedule" as const, schedule: { timezone: "UTC", repeat: { every: "day" as const, at: "09:00" } } }];
+const NOW = new Date("2026-06-24T12:00:00Z");
+const PAST = "2026-06-24T09:00:00Z";
+const FUTURE = "2026-06-25T09:00:00Z";
+
+function automation(id: string, extra: Partial<RelayTask> = {}): RelayTask {
+  return task({ id, title: id, isRoutine: true, routineState: "active", routineTriggers: DAILY, routineNextRunAt: FUTURE, ...extra });
+}
+
 describe("filterRoutineTasks", () => {
   it("keeps only routine tasks and filters by routine metadata", () => {
     const tasks = [
-      task({ id: "a", title: "Daily health check", isRoutine: true, routineType: "job", routineCadence: "daily", routineEnabled: true, routineNextRunDate: "2026-06-24", assignedAgent: "codex", assignedAgentId: "agent_health", assigneeEmployeeId: "alice" }),
-      task({ id: "b", title: "Weekly report", isRoutine: true, routineType: "task", routineCadence: "weekly", routineEnabled: true, routineNextRunDate: "2026-06-30", assignedAgent: "claude", assigneeEmployeeId: "bob" }),
+      automation("a", { title: "Daily health check", routineNextRunAt: PAST, assignedAgent: "codex", assignedAgentId: "agent_health", assigneeEmployeeId: "alice" }),
+      automation("b", { title: "Weekly report", assignedAgent: "claude", assigneeEmployeeId: "bob" }),
       task({ id: "c", title: "Plain backlog item", isRoutine: false, assignedAgent: "codex", assigneeEmployeeId: "alice" }),
     ];
 
     const result = filterRoutineTasks(tasks, {
       ...baseFilters,
       query: "health",
-      type: "job",
-      cadence: "daily",
+      trigger: "schedule",
       agent: "agent_health",
       assignee: "ali",
       state: "due",
-    }, "2026-06-24");
+    }, NOW);
 
     assert.deepEqual(result.map((item) => item.id), ["a"]);
   });
 
+  it("filters by trigger kind, with none meaning Run now only", () => {
+    const tasks = [
+      automation("schedule"),
+      automation("webhook", { routineTriggers: [{ kind: "webhook" }], routineNextRunAt: undefined }),
+      automation("both", { routineTriggers: [...DAILY, { kind: "webhook" }] }),
+      automation("none", { routineTriggers: [], routineNextRunAt: undefined }),
+    ];
+    const ids = (trigger: RoutineFilters["trigger"]) =>
+      filterRoutineTasks(tasks, { ...baseFilters, trigger }, NOW).map((item) => item.id).sort();
+    assert.deepEqual(ids("webhook"), ["both", "webhook"]);
+    assert.deepEqual(ids("schedule"), ["both", "schedule"]);
+    assert.deepEqual(ids("none"), ["none"]);
+  });
+
   it("filters by the exact schedule states shown in routine records", () => {
     const tasks = [
-      task({ id: "running", title: "Running", isRoutine: true, routineEnabled: false }),
+      automation("running", { routineState: "paused" }),
       task({ id: "running-occurrence", title: "Running occurrence", sourceRoutineId: "running", status: "running" }),
-      task({ id: "overdue", title: "Overdue", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-23" }),
-      task({ id: "due", title: "Due", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-24" }),
-      task({ id: "scheduled", title: "Scheduled", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-25" }),
-      task({ id: "listening", title: "Listening", isRoutine: true, routineEnabled: true, routineTrigger: { kind: "webhook" } }),
-      task({ id: "on_demand", title: "On demand", isRoutine: true, routineEnabled: true, routineTrigger: { kind: "manual" } }),
-      task({ id: "unscheduled", title: "Unscheduled", isRoutine: true, routineEnabled: true }),
-      task({ id: "paused", title: "Paused", isRoutine: true, routineEnabled: false }),
+      automation("due", { routineNextRunAt: PAST }),
+      automation("scheduled"),
+      automation("listening", { routineTriggers: [{ kind: "webhook" }], routineNextRunAt: undefined }),
+      automation("on_demand", { routineTriggers: [], routineNextRunAt: undefined }),
+      automation("paused", { routineState: "paused_by_relay", routinePauseReason: "rate_limited" }),
     ];
 
     for (const state of ROUTINE_STATE_ORDER) {
-      const result = filterRoutineTasks(tasks, { ...baseFilters, state }, "2026-06-24");
+      const result = filterRoutineTasks(tasks, { ...baseFilters, state }, NOW);
       assert.deepEqual(result.map((item) => item.id), [state], state);
     }
   });
@@ -106,38 +123,39 @@ describe("latestRoutineSession", () => {
   });
 });
 
-describe("routineDueTone", () => {
-  it("uses enabled state and next-run dates independently from backlog status", () => {
-    assert.equal(routineDueTone(task({ id: "a", title: "A", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-23" }), "2026-06-24"), "bad");
-    assert.equal(routineDueTone(task({ id: "b", title: "B", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-24" }), "2026-06-24"), "warn");
-    assert.equal(routineDueTone(task({ id: "c", title: "C", isRoutine: true, routineEnabled: false, routineNextRunDate: "2026-06-23" }), "2026-06-24"), "neutral");
-    assert.equal(routineDueTone(task({ id: "d", title: "D", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-23", status: "done" }), "2026-06-24"), "bad");
-  });
-});
-
 describe("routineState", () => {
   const none = new Set<string>();
 
-  it("derives schedule health from the enabled flag and the next-run date", () => {
-    const routine = (id: string, extra: Partial<RelayTask>) =>
-      task({ id, title: id, isRoutine: true, routineEnabled: true, ...extra });
+  it("derives one state per branch", () => {
+    assert.equal(routineState(automation("run"), new Set(["run"]), NOW), "running");
+    assert.equal(routineState(automation("p", { routineState: "paused" }), none, NOW), "paused");
+    assert.equal(routineState(automation("r", { routineState: "paused_by_relay" }), none, NOW), "paused");
+    assert.equal(routineState(automation("l", { routineTriggers: [{ kind: "task_event", on: "created" }], routineNextRunAt: undefined }), none, NOW), "listening");
+    assert.equal(routineState(automation("o", { routineTriggers: [], routineNextRunAt: undefined }), none, NOW), "on_demand");
+    assert.equal(routineState(automation("d", { routineNextRunAt: PAST }), none, NOW), "due");
+    assert.equal(routineState(automation("d2", { routineNextRunAt: NOW.toISOString() }), none, NOW), "due");
+    assert.equal(routineState(automation("s"), none, NOW), "scheduled");
+  });
 
-    assert.equal(routineState(routine("a", { routineNextRunDate: "2026-06-23" }), none, "2026-06-24"), "overdue");
-    assert.equal(routineState(routine("b", { routineNextRunDate: "2026-06-24" }), none, "2026-06-24"), "due");
-    assert.equal(routineState(routine("c", { routineNextRunDate: "2026-06-25" }), none, "2026-06-24"), "scheduled");
-    assert.equal(routineState(routine("d", {}), none, "2026-06-24"), "unscheduled");
-    assert.equal(routineState(routine("e", { routineEnabled: false, routineNextRunDate: "2026-06-23" }), none, "2026-06-24"), "paused");
+  it("shows an exhausted one-off as on demand, retaining listening for mixed triggers", () => {
+    const once = { kind: "schedule" as const, schedule: { timezone: "UTC", repeat: { once: "2026-01-01T09:00" } } };
+    assert.equal(routineState(automation("finished", { routineTriggers: [once], routineNextRunAt: undefined }), none, NOW), "on_demand");
+    assert.equal(routineState(automation("mixed", { routineTriggers: [once, { kind: "webhook" }], routineNextRunAt: undefined }), none, NOW), "listening");
+  });
+
+  it("calls a schedule plus an event trigger scheduled while a run is coming", () => {
+    const mixed = automation("m", { routineTriggers: [...DAILY, { kind: "webhook" }] });
+    assert.equal(routineState(mixed, none, NOW), "scheduled");
   });
 
   it("ignores the routine's own backlog status, which never advances", () => {
-    const routine = task({ id: "a", title: "A", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-25", status: "blocked" });
-    assert.equal(routineState(routine, none, "2026-06-24"), "scheduled");
+    assert.equal(routineState(automation("a", { status: "blocked" }), none, NOW), "scheduled");
   });
 
   it("reports a live occurrence ahead of every scheduling state, including paused", () => {
     const running = new Set(["a", "b"]);
-    assert.equal(routineState(task({ id: "a", title: "A", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-06-23" }), running, "2026-06-24"), "running");
-    assert.equal(routineState(task({ id: "b", title: "B", isRoutine: true, routineEnabled: false }), running, "2026-06-24"), "running");
+    assert.equal(routineState(automation("a", { routineNextRunAt: PAST }), running, NOW), "running");
+    assert.equal(routineState(automation("b", { routineState: "paused" }), running, NOW), "running");
   });
 });
 
@@ -158,33 +176,30 @@ describe("runningRoutineIds", () => {
 describe("routineStateCounts", () => {
   it("counts every routine under the state its own row would render", () => {
     const routines = [
-      task({ id: "a", title: "A", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-01-01" }),
-      task({ id: "b", title: "B", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-05-05" }),
-      task({ id: "c", title: "C", isRoutine: true, routineEnabled: false, routineNextRunDate: "2026-05-05" }),
-      task({ id: "d", title: "D", isRoutine: true, routineEnabled: true }),
+      automation("a", { routineNextRunAt: PAST }),
+      automation("b"),
+      automation("c", { routineState: "paused" }),
+      automation("d", { routineTriggers: [], routineNextRunAt: undefined }),
     ];
 
-    const counts = routineStateCounts(routines, new Set(), "2026-05-05");
+    const counts = routineStateCounts(routines, new Set(), NOW);
 
-    assert.equal(counts.overdue, 1);
     assert.equal(counts.due, 1);
+    assert.equal(counts.scheduled, 1);
     assert.equal(counts.paused, 1);
-    assert.equal(counts.unscheduled, 1);
+    assert.equal(counts.on_demand, 1);
     // A section the rail renders has to hold a number even when nothing is in
     // it, or the row reads `counts[state]` as undefined and prints nothing
     // where a `0` belongs.
     assert.equal(counts.running, 0);
-    assert.equal(counts.scheduled, 0);
+    assert.equal(counts.listening, 0);
     for (const state of ROUTINE_STATE_ORDER) assert.equal(typeof counts[state], "number");
   });
 
   it("counts a routine in exactly one section", () => {
-    const routines = [
-      task({ id: "a", title: "A", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-05-05" }),
-      task({ id: "b", title: "B", isRoutine: true, routineEnabled: false }),
-    ];
+    const routines = [automation("a"), automation("b", { routineState: "paused" })];
 
-    const counts = routineStateCounts(routines, new Set(["a"]), "2026-05-05");
+    const counts = routineStateCounts(routines, new Set(["a"]), NOW);
     const total = ROUTINE_STATE_ORDER.reduce((sum, state) => sum + counts[state], 0);
 
     assert.equal(total, routines.length);

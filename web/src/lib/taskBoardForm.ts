@@ -1,6 +1,10 @@
-import type { AgentName, CollaborationStyle, CurrentUser, RoutineTrigger, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../types.js";
+import type {
+  AgentName, CollaborationStyle, CurrentUser, RelayTaskListItem, RoutinePauseReason, RoutineState, RoutineTrigger,
+  TaskMutationInput, TaskPriority, TaskStatus,
+} from "../types.js";
 
-import { SCHEDULE_TRIGGER, triggersEqual } from "./automationTrigger.ts";
+import { defaultSchedule } from "./automationSchedule.ts";
+import { normalizeTriggerForSave, triggersEqual, triggersOf } from "./automationTrigger.ts";
 
 export type TaskBoardFormBase = {
   id?: string;
@@ -27,12 +31,9 @@ export type BacklogTaskFormState = TaskBoardFormBase & {
 
 export type RoutineTaskFormState = TaskBoardFormBase & {
   variant: "routine";
-  routineType: TaskRoutineType;
-  routineCadence: TaskRoutineCadence;
-  routineNextRunDate: string;
-  routineEnabled: boolean;
-  routineTrigger: RoutineTrigger;
-  routineDisabledReason?: string;
+  routineTriggers: RoutineTrigger[];
+  routineState: RoutineState;
+  routinePauseReason?: RoutinePauseReason;
 };
 
 export type TaskBoardFormState = BacklogTaskFormState | RoutineTaskFormState;
@@ -53,7 +54,7 @@ export function emptyBacklogForm(currentUser: CurrentUser): BacklogTaskFormState
   };
 }
 
-export function emptyRoutineForm(currentUser: CurrentUser, date = new Date()): RoutineTaskFormState {
+export function emptyRoutineForm(currentUser: CurrentUser): RoutineTaskFormState {
   return {
     variant: "routine",
     title: "",
@@ -64,26 +65,35 @@ export function emptyRoutineForm(currentUser: CurrentUser, date = new Date()): R
     assignedAgent: "",
     assignedAgentId: "",
     assignedTeamId: "",
-    routineType: "task",
-    routineCadence: "weekly",
-    routineNextRunDate: nextRoutineRunDate("weekly", date),
-    routineEnabled: false,
-    routineTrigger: { ...SCHEDULE_TRIGGER },
+    routineTriggers: [{ kind: "schedule", schedule: defaultSchedule() }],
+    routineState: "paused",
   };
 }
 
-export function nextRoutineRunDate(cadence: TaskRoutineCadence, date = new Date()): string {
-  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  if (cadence === "custom") return "";
-  if (cadence === "daily") next.setDate(next.getDate() + 1);
-  else if (cadence === "weekly") next.setDate(next.getDate() + 7);
-  else {
-    const targetMonth = next.getMonth() + 1;
-    const lastDay = new Date(next.getFullYear(), targetMonth + 1, 0).getDate();
-    next.setDate(Math.min(next.getDate(), lastDay));
-    next.setMonth(targetMonth);
-  }
-  return localDateKey(next);
+/** The automation half of an edit form, read from a saved task. */
+export function routineFormFields(
+  task: Pick<RelayTaskListItem, "routineTriggers" | "routineState" | "routinePauseReason">,
+): Pick<RoutineTaskFormState, "routineTriggers" | "routineState" | "routinePauseReason"> {
+  return {
+    routineTriggers: triggersOf(task),
+    routineState: task.routineState ?? "paused",
+    ...(task.routineState === "paused_by_relay" && task.routinePauseReason ? { routinePauseReason: task.routinePauseReason } : {}),
+  };
+}
+
+/**
+ * The automation fields of a create or update body. A Relay pause is left
+ * out: only the server sets it, and sending it back would be refused. The
+ * owner resumes by switching the form to active.
+ */
+export function routineMutationFields(
+  form: Pick<RoutineTaskFormState, "routineTriggers" | "routineState">,
+): Pick<TaskMutationInput, "isRoutine" | "routineTriggers" | "routineState"> {
+  return {
+    isRoutine: true,
+    routineTriggers: form.routineTriggers.map(normalizeTriggerForSave),
+    ...(form.routineState === "paused_by_relay" ? {} : { routineState: form.routineState }),
+  };
 }
 
 export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState): boolean {
@@ -107,11 +117,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     return a.status === b.status && a.dueDate === b.dueDate;
   }
   if (a.variant === "routine" && b.variant === "routine") {
-    return a.routineType === b.routineType
-      && a.routineCadence === b.routineCadence
-      && a.routineNextRunDate === b.routineNextRunDate
-      && a.routineEnabled === b.routineEnabled
-      && triggersEqual(a.routineTrigger, b.routineTrigger);
+    return triggersEqual(a.routineTriggers, b.routineTriggers) && a.routineState === b.routineState;
   }
   return false;
 }
@@ -178,7 +184,7 @@ export function clearTaskAssignment(form: TaskBoardFormState): TaskBoardFormStat
     assignedTeamId: "",
   };
   if (cleared.variant === "routine") {
-    return { ...cleared, routineEnabled: false };
+    return { ...cleared, routineState: "paused" };
   }
   return {
     ...cleared,
@@ -195,11 +201,4 @@ export function teamAssignmentPatch(teamId: string): Pick<
     assignedAgentId: "",
     assignedTeamId: teamId,
   };
-}
-
-function localDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }

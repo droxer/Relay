@@ -4,7 +4,8 @@ import {
   clearTaskAssignment,
   emptyBacklogForm,
   emptyRoutineForm,
-  nextRoutineRunDate,
+  routineFormFields,
+  routineMutationFields,
   parseTaskAssignmentValue,
   taskStartMutationInput,
   teamAssignmentPatch,
@@ -28,19 +29,39 @@ describe("taskBoardForm", () => {
   });
 
   it("detects equal routine forms", () => {
-    const a = emptyRoutineForm(user, new Date(2026, 6, 7, 9));
-    const b: RoutineTaskFormState = { ...a, routineCadence: "daily" };
-    assert.equal(a.routineNextRunDate, "2026-07-14");
+    const a = emptyRoutineForm(user);
+    const b: RoutineTaskFormState = { ...a, routineState: "active" };
     assert.equal(taskBoardFormsEqual(a, a), true);
     assert.equal(taskBoardFormsEqual(a, b), false);
   });
 
-  it("calculates the next run from cadence", () => {
-    const today = new Date(2026, 0, 31, 9);
-    assert.equal(nextRoutineRunDate("daily", today), "2026-02-01");
-    assert.equal(nextRoutineRunDate("weekly", today), "2026-02-07");
-    assert.equal(nextRoutineRunDate("monthly", today), "2026-02-28");
-    assert.equal(nextRoutineRunDate("custom", today), "");
+  it("sends only v2 automation fields", () => {
+    const form = { ...emptyRoutineForm(user), routineState: "active" as const };
+    const body = routineMutationFields(form);
+    assert.deepEqual(body.routineTriggers, form.routineTriggers);
+    assert.equal(body.routineState, "active");
+    assert.equal(body.isRoutine, true);
+    for (const legacy of ["routineType", "routineCadence", "routineNextRunDate", "routineEnabled", "routineTrigger", "routineDisabledReason"]) {
+      assert.equal(legacy in body, false, legacy);
+    }
+  });
+
+  it("leaves a Relay pause for the server to keep", () => {
+    const body = routineMutationFields({ routineTriggers: [], routineState: "paused_by_relay" });
+    assert.equal("routineState" in body, false);
+    assert.deepEqual(body.routineTriggers, []);
+  });
+
+  it("reads the automation fields of a saved task", () => {
+    assert.deepEqual(routineFormFields({ routineTriggers: [{ kind: "webhook" }], routineState: "paused_by_relay", routinePauseReason: "failing" }),
+      { routineTriggers: [{ kind: "webhook" }], routineState: "paused_by_relay", routinePauseReason: "failing" });
+    assert.deepEqual(routineFormFields({}), { routineTriggers: [], routineState: "paused" });
+  });
+
+  it("pauses an automation whose assignment is cleared", () => {
+    const form = { ...emptyRoutineForm(user), routineState: "active" as const, assignedAgentId: "a" };
+    const cleared = clearTaskAssignment(form);
+    assert.equal(cleared.variant === "routine" && cleared.routineState, "paused");
   });
 
   it("rejects mixed variants", () => {
@@ -148,8 +169,12 @@ describe("appRoute path parsing", () => {
   });
 });
 
-it("defaults to schedule and detects changed triggers", () => {
+it("defaults to a paused weekday schedule and detects changed triggers", () => {
   const form = emptyRoutineForm({ id: "u", username: "u", role: "user" });
-  assert.deepEqual(form.routineTrigger, { kind: "schedule" });
-  assert.equal(taskBoardFormsEqual(form, { ...form, routineTrigger: { kind: "webhook" } }), false);
+  assert.equal(form.routineState, "paused");
+  assert.equal(form.routineTriggers.length, 1);
+  const [trigger] = form.routineTriggers;
+  assert.deepEqual(trigger.kind === "schedule" && trigger.schedule.repeat, { every: "weekday", at: "09:00" });
+  assert.equal(taskBoardFormsEqual(form, { ...form, routineTriggers: [{ kind: "webhook" }] }), false);
+  assert.equal(taskBoardFormsEqual(form, { ...form, routineTriggers: [] }), false);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { describeTrigger, triggerOf } from "../../lib/automationTrigger";
+import { describeTriggers, triggersOf } from "../../lib/automationTrigger";
 
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,11 +18,10 @@ import { StateMark } from "../StateMark";
 import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
 import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "./TaskSelection";
-import { formatNextRunDate } from "./RoutineChrome";
-import { routineDueTone, type RoutineState } from "../../lib/routine";
+import { formatNextRunAt } from "./RoutineChrome";
+import { runNowRefused, type RoutineListState } from "../../lib/routine";
 import { pathForAppState } from "../../lib/appRoute";
 import { TaskRefLink } from "./TaskRefLink";
-import { TaskDueCell } from "./TaskDueCell";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import type { RelayTaskListItem } from "../../types";
 import { useManualSortTable } from "../../hooks/useManualSortTable";
@@ -51,7 +50,6 @@ interface RoutineHandlers {
   starting: boolean;
   /** Opens the routine's record. The title is a destination now, not a form. */
   onOpen: () => void;
-  onEdit: () => void;
   onAssign: () => void;
   onStart: () => void;
 }
@@ -116,7 +114,7 @@ interface RoutineCellState {
   selection: ReadonlySet<string>;
   onToggleSelect: (taskId: string) => void;
   onSort: (key: RoutineSortKey) => void;
-  stateFor: (task: RelayTaskListItem) => RoutineState;
+  stateFor: (task: RelayTaskListItem) => RoutineListState;
   assignmentFor: (task: RelayTaskListItem) => RoutineAssignment;
   handlersFor: (task: RelayTaskListItem) => RoutineHandlers;
 }
@@ -155,7 +153,7 @@ export function RoutineTable({
   selectAll: ReactNode;
   selection: ReadonlySet<string>;
   onToggleSelect: (taskId: string) => void;
-  stateFor: (task: RelayTaskListItem) => RoutineState;
+  stateFor: (task: RelayTaskListItem) => RoutineListState;
   assignmentFor: (task: RelayTaskListItem) => RoutineAssignment;
   handlersFor: (task: RelayTaskListItem) => RoutineHandlers;
 }) {
@@ -269,19 +267,15 @@ export function RoutineTable({
       {
         id: "nextRun",
         meta: { headClass: "task-col-due", cellClass: "task-col-due" } satisfies ColumnChrome,
-        header: () => <RoutineCells.Read>{(s) => sortHead("nextRun", s.t("automation.trigger"))}</RoutineCells.Read>,
+        header: () => <RoutineCells.Read>{(s) => sortHead("nextRun", s.t("routine.next_run_column"))}</RoutineCells.Read>,
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
-          const trigger = triggerOf(task);
-          if (trigger.kind !== "schedule") return <span className="task-trigger-label">{describeTrigger(trigger, s.t)}</span>;
+          /* The title names what starts it, so an event automation's "—"
+             still answers "why no next run?" on hover. */
           return (
-            <TaskDueCell
-              date={task.routineNextRunDate}
-              tone={routineDueTone(task)}
-              format={formatNextRunDate}
-              emptyLabel={s.t("routine.set_next_run")}
-              onEdit={() => s.handlersFor(task).onEdit()}
-            />
+            <span className="backlog-due-value" title={describeTriggers(triggersOf(task), s.t)}>
+              {formatNextRunAt(task.routineNextRunAt)}
+            </span>
           );
         }}</RoutineCells.Read>,
       },
@@ -312,7 +306,7 @@ export function RoutineTable({
         cell: ({ row }) => <RoutineCells.Read>{(s) => {
           const task = row.original;
           const { onAssign, onStart, starting } = s.handlersFor(task);
-          const startDisabled = (!task.assignedAgentId && !task.assignedTeamId) || !task.routineEnabled;
+          const startDisabled = (!task.assignedAgentId && !task.assignedTeamId) || runNowRefused(task);
           return (
             <div className="backlog-action-group" role="group" aria-label={s.t("backlog.actions_dispatch")}>
               <RoutineAssignButton onAssign={onAssign} />

@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timezone
 from typing import Any
 
 from loguru import logger
 
+from ..automations.service import AutomationService
 from ..collaboration.service import (
     assignment_team_snapshot,
     compile_assignment_work_graph,
@@ -23,7 +24,6 @@ from ..persistence.stores import valid_agent
 from ..persistence.task_store import (
     compact_task_writes,
     dispatch_claim_active,
-    routine_due_sort_key,
     task_claim_sort_key,
 )
 from ..services.agent_routing import (
@@ -40,7 +40,6 @@ from ..services.dispatch_failure import (
 from ..services.issue_triage import issue_needs_project
 from ..services.project_runtime import (
     ProjectDispatchError,
-    project_work_error,
     resolve_project_task_assignments,
 )
 from ..services.task_rounds import (
@@ -68,10 +67,6 @@ PERMANENT_DISPATCH_CODES = {
     "agent_policy_unsupported",
     "executor_mismatch",
 }
-
-ROUTINE_SKIP_NO_AGENT_MESSAGE = (
-    "Routine skipped: no assigned agent. Assign an agent so the scheduler can run it."
-)
 
 
 def task_goal_text(task: dict[str, Any]) -> str:
@@ -176,12 +171,12 @@ class TaskScheduler:
         project_store: Any | None = None,
         managed_node_store: Any | None = None,
         org_settings_store: Any | None = None,
-        automation_matcher: Any | None = None,
+        automations: AutomationService | None = None,
         interval_seconds: float = 10.0,
         max_dispatches_per_tick: int = 5,
         today: Callable[[], date] = date.today,
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
-        self.automation_matcher = automation_matcher
         self.task_store = task_store
         self.registry = registry
         self.backend = backend
@@ -192,6 +187,8 @@ class TaskScheduler:
         self.interval_seconds = interval_seconds
         self.max_dispatches_per_tick = max_dispatches_per_tick
         self._today = today
+        self._now = now
+        self.automations = automations
         self._loop_task: asyncio.Task[None] | None = None
         self._tick_lock = asyncio.Lock()
 
@@ -230,25 +227,14 @@ class TaskScheduler:
 
     def _tick_sync(self, loop: asyncio.AbstractEventLoop) -> SchedulerTickResult:
         with compact_task_writes():
-            fired = self._fire_automations()
-            today = self._today()
-            promoted, promote_skipped = self._promote_due_routines(today)
-            dispatched, dispatch_skipped = self._dispatch_assigned_tasks(loop)
+            fired = self.automations.tick(self._now()) if self.automations else 0
+            dispatched, skipped = self._dispatch_assigned_tasks(loop)
             return SchedulerTickResult(
                 fired=fired,
-                promoted=promoted,
+                promoted=0,
                 dispatched=dispatched,
-                skipped=promote_skipped + dispatch_skipped,
+                skipped=skipped,
             )
-
-    def _fire_automations(self) -> int:
-        if self.automation_matcher is None:
-            return 0
-        try:
-            return self.automation_matcher.run()
-        except Exception:
-            logger.exception("Automation matching failed")
-            return 0
 
     async def _run_loop(self) -> None:
         while True:
@@ -259,54 +245,6 @@ class TaskScheduler:
             except Exception:
                 logger.exception("Task scheduler tick failed")
             await asyncio.sleep(self.interval_seconds)
-
-    def _promote_due_routines(self, today: date) -> tuple[int, int]:
-        promoted = 0
-        skipped = 0
-        for routine in self._due_routines(today):
-            if project_id := routine.get("projectId"):
-                project = self.project_store.get_project(project_id) if self.project_store else None
-                if project_work_error(project):
-                    skipped += 1
-                    continue
-            routine = self._materialize_legacy_assignment(routine) or routine
-            agent = valid_agent(routine.get("assignedAgent"))
-            if not (
-                routine.get("projectId")
-                or (agent and routine.get("assignedAgentId"))
-                or routine.get("assignedTeamId")
-            ):
-                skipped += 1
-                self._record_routine_skip(routine)
-                continue
-            run_date = (
-                date.fromisoformat(routine["routineNextRunDate"])
-                if routine.get("routineNextRunDate")
-                else today
-            )
-            next_run = next_routine_date(
-                run_date, routine.get("routineCadence") or "weekly", today
-            )
-            occurrence = self.task_store.promote_due_routine(
-                routine["id"],
-                today.isoformat(),
-                next_run.isoformat() if next_run else None,
-            )
-            if occurrence:
-                promoted += 1
-        return promoted, skipped
-
-    def _record_routine_skip(self, routine: dict[str, Any]) -> None:
-        activities = routine.get("activity") or (
-            [routine["lastActivity"]] if routine.get("lastActivity") else []
-        )
-        if (
-            activities
-            and activities[-1].get("message") == ROUTINE_SKIP_NO_AGENT_MESSAGE
-        ):
-            return
-        self.task_store.record_activity(routine["id"], ROUTINE_SKIP_NO_AGENT_MESSAGE)
-        logger.warning("Due routine skipped: no assigned agent", task_id=routine["id"])
 
     def _dispatch_assigned_tasks(self, loop: asyncio.AbstractEventLoop) -> tuple[int, int]:
         dispatched = skipped = attempts = 0
@@ -746,29 +684,6 @@ class TaskScheduler:
             )
             return True
 
-    def _routine_due(self, task: dict[str, Any], today: date) -> bool:
-        if (
-            not task.get("isRoutine")
-            or not task.get("routineEnabled")
-            or not task.get("routineNextRunDate")
-        ):
-            return False
-        try:
-            next_run = date.fromisoformat(task["routineNextRunDate"])
-        except ValueError:
-            return False
-        return next_run <= today
-
-    def _due_routines(self, today: date) -> list[dict[str, Any]]:
-        if hasattr(self.task_store, "list_due_routines"):
-            return list(self.task_store.list_due_routines(today.isoformat()))
-        routines = [
-            task
-            for task in self.task_store.list_tasks()
-            if self._routine_due(task, today)
-        ]
-        return sorted(routines, key=routine_due_sort_key)
-
     def _dispatchable_tasks(self) -> Iterator[dict[str, Any]]:
         if hasattr(self.task_store, "list_dispatchable_tasks"):
             after = None
@@ -852,38 +767,3 @@ def ensure_managed_capacity_for_task(
     if not employee_id or employee_has_device_node(registry, employee_id):
         return None
     return managed_node_store.ensure_node_for_employee(employee_id)
-
-
-def next_routine_date(run_date: date, cadence: str, today: date) -> date | None:
-    if cadence == "custom":
-        return None
-    next_run = _add_interval(run_date, cadence)
-    while next_run <= today:
-        next_run = _add_interval(next_run, cadence)
-    return next_run
-
-
-def _add_interval(value: date, cadence: str) -> date:
-    if cadence == "daily":
-        return value + timedelta(days=1)
-    if cadence == "monthly":
-        return _add_month(value)
-    return value + timedelta(days=7)
-
-
-def _add_month(value: date) -> date:
-    month = value.month + 1
-    year = value.year
-    if month == 13:
-        month = 1
-        year += 1
-    day = min(value.day, _month_days(year, month))
-    return date(year, month, day)
-
-
-def _month_days(year: int, month: int) -> int:
-    if month == 12:
-        following = date(year + 1, 1, 1)
-    else:
-        following = date(year, month + 1, 1)
-    return (following - timedelta(days=1)).day

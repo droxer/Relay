@@ -12,8 +12,6 @@ TaskPriority = Literal["low", "normal", "high"]
 TaskStatus = Literal[
     "backlog", "assigned", "running", "waiting_for_human", "review", "done", "blocked"
 ]
-TaskRoutineType = Literal["task", "job"]
-TaskRoutineCadence = Literal["daily", "weekly", "monthly", "custom"]
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 
 AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi")

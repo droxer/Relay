@@ -4,10 +4,9 @@ import type { AgentName } from "./state.js";
 
 export type TaskPriority = "low" | "normal" | "high";
 export type TaskStatus = "backlog" | "assigned" | "running" | "waiting_for_human" | "review" | "done" | "blocked";
-export type TaskRoutineType = "task" | "job";
-export type TaskRoutineCadence = "daily" | "weekly" | "monthly" | "custom";
-
-export type RoutineTriggerKind = "schedule" | "task_event" | "run_event" | "webhook" | "manual";
+/** What fired an occurrence: a trigger kind, or "manual" for Run now. */
+export type RoutineTriggerKind = RoutineTrigger["kind"];
+export type RoutineOccurrenceTriggerKind = RoutineTriggerKind | "manual";
 export type RoutineTriggerOn = "created" | "status_changed" | "completed" | "failed";
 export interface RoutineTriggerFilters {
   projectId?: string;
@@ -18,11 +17,25 @@ export interface RoutineTriggerFilters {
   priority?: TaskPriority;
   titleContains?: string;
 }
-export interface RoutineTrigger {
-  kind: RoutineTriggerKind;
-  on?: RoutineTriggerOn;
-  filters?: RoutineTriggerFilters;
+/** When a schedule trigger fires. Mirrors backend/relay/automations/schedule.py. */
+export type ScheduleRepeat =
+  | { every: "hour"; minute: number }
+  | { every: "day" | "weekday"; at: string }
+  | { every: "week"; at: string; days: number[] }
+  | { every: "month"; at: string; day: number }
+  | { once: string }
+  | { cron: string };
+/** A schedule; a null timezone means the server's own zone. */
+export interface RoutineSchedule {
+  timezone: string | null;
+  repeat: ScheduleRepeat;
 }
+export type RoutineTrigger =
+  | { kind: "schedule"; schedule: RoutineSchedule }
+  | { kind: "task_event" | "run_event"; on: RoutineTriggerOn; filters?: RoutineTriggerFilters }
+  | { kind: "webhook" };
+export type RoutineState = "active" | "paused" | "paused_by_relay";
+export type RoutinePauseReason = "rate_limited" | "failing" | "no_target" | "invalid_schedule";
 
 export interface TaskExecutionAttention {
   schemaVersion: 1;
@@ -99,14 +112,15 @@ export interface RelayTask {
   /** Date-only due date in YYYY-MM-DD format. */
   dueDate?: string;
   isRoutine: boolean;
-  routineType?: TaskRoutineType;
-  routineCadence?: TaskRoutineCadence;
-  /** Date-only next routine run date in YYYY-MM-DD format. */
-  routineNextRunDate?: string;
-  routineEnabled: boolean;
-  routineTrigger?: RoutineTrigger;
-  routineDisabledReason?: string;
-  routineTriggerKind?: RoutineTriggerKind;
+  /** What starts the automation; empty means Run now only. */
+  routineTriggers?: RoutineTrigger[];
+  routineState?: RoutineState;
+  /** Why Relay paused it; only with `paused_by_relay`. */
+  routinePauseReason?: RoutinePauseReason;
+  /** Next scheduled fire, ISO UTC; absent when nothing is scheduled. */
+  routineNextRunAt?: string;
+  /** On an occurrence: what fired it. */
+  routineTriggerKind?: RoutineOccurrenceTriggerKind;
   routineTriggerDepth?: number;
   /** Parent routine for a generated occurrence. */
   sourceRoutineId?: string;
@@ -187,13 +201,11 @@ export type RelayTaskEvent =
       assigneeEmployeeId?: string;
       dueDate?: string;
       isRoutine?: boolean;
-      routineType?: TaskRoutineType;
-      routineCadence?: TaskRoutineCadence;
-      routineNextRunDate?: string;
-      routineEnabled?: boolean;
-      routineTrigger?: RoutineTrigger;
-      routineDisabledReason?: string;
-      routineTriggerKind?: RoutineTriggerKind;
+      routineTriggers?: RoutineTrigger[];
+      routineState?: RoutineState;
+      routinePauseReason?: RoutinePauseReason | null;
+      routineNextRunAt?: string | null;
+      routineTriggerKind?: RoutineOccurrenceTriggerKind;
       routineTriggerDepth?: number;
       sourceRoutineId?: string;
       scheduledFor?: string;
@@ -211,13 +223,11 @@ export type RelayTaskEvent =
       assigneeEmployeeId?: string;
       dueDate?: string;
       isRoutine?: boolean;
-      routineType?: TaskRoutineType;
-      routineCadence?: TaskRoutineCadence;
-      routineNextRunDate?: string;
-      routineEnabled?: boolean;
-      routineTrigger?: RoutineTrigger;
-      routineDisabledReason?: string;
-      routineTriggerKind?: RoutineTriggerKind;
+      routineTriggers?: RoutineTrigger[];
+      routineState?: RoutineState;
+      routinePauseReason?: RoutinePauseReason | null;
+      routineNextRunAt?: string | null;
+      routineTriggerKind?: RoutineOccurrenceTriggerKind;
       routineTriggerDepth?: number;
     }
   | {
@@ -362,7 +372,6 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     acceptancePolicy: created.acceptancePolicy ?? "automatic",
     ...(created.collaborationStyle ? { collaborationStyle: created.collaborationStyle } : {}),
     isRoutine: Boolean(created.isRoutine),
-    routineEnabled: Boolean(created.routineEnabled),
     ...(created.routineTriggerKind ? { routineTriggerKind: created.routineTriggerKind } : {}),
     ...(created.routineTriggerDepth !== undefined ? { routineTriggerDepth: created.routineTriggerDepth } : {}),
     ...(created.sourceRoutineId ? { sourceRoutineId: created.sourceRoutineId } : {}),
@@ -453,30 +462,26 @@ function applyRoutineFields(task: RelayTask, event: Partial<Extract<RelayTaskEve
   if (event.isRoutine !== undefined) {
     task.isRoutine = event.isRoutine;
     if (!event.isRoutine) {
-      task.routineEnabled = false;
-      delete task.routineType;
-      delete task.routineCadence;
-      delete task.routineNextRunDate;
-      delete task.routineTrigger;
-      delete task.routineDisabledReason;
+      delete task.routineTriggers;
+      delete task.routineState;
+      delete task.routinePauseReason;
+      delete task.routineNextRunAt;
       return;
     }
   }
   if (!task.isRoutine) return;
-  if (event.routineEnabled !== undefined) {
-    task.routineEnabled = event.routineEnabled;
-    if (event.routineEnabled) delete task.routineDisabledReason;
+  if (event.routineTriggers !== undefined) task.routineTriggers = structuredClone(event.routineTriggers);
+  if (event.routineState !== undefined) {
+    task.routineState = event.routineState;
+    if (event.routineState !== "paused_by_relay") delete task.routinePauseReason;
   }
-  if (event.routineTrigger !== undefined) {
-    task.routineTrigger = structuredClone(event.routineTrigger);
-    if (event.routineTrigger.kind !== "schedule") delete task.routineNextRunDate;
+  if (event.routinePauseReason !== undefined) {
+    if (event.routinePauseReason) task.routinePauseReason = event.routinePauseReason;
+    else delete task.routinePauseReason;
   }
-  if (event.routineDisabledReason !== undefined) task.routineDisabledReason = event.routineDisabledReason;
-  if (event.routineType !== undefined) task.routineType = event.routineType;
-  if (event.routineCadence !== undefined) task.routineCadence = event.routineCadence;
-  if (event.routineNextRunDate !== undefined) {
-    if (event.routineNextRunDate) task.routineNextRunDate = event.routineNextRunDate;
-    else delete task.routineNextRunDate;
+  if (event.routineNextRunAt !== undefined) {
+    if (event.routineNextRunAt) task.routineNextRunAt = event.routineNextRunAt;
+    else delete task.routineNextRunAt;
   }
 }
 
@@ -488,14 +493,6 @@ export function taskStatus(value: unknown): TaskStatus | undefined {
   return value === "backlog" || value === "assigned" || value === "running" || value === "waiting_for_human" || value === "review" || value === "done" || value === "blocked"
     ? value
     : undefined;
-}
-
-export function taskRoutineType(value: unknown): TaskRoutineType | undefined {
-  return value === "task" || value === "job" ? value : undefined;
-}
-
-export function taskRoutineCadence(value: unknown): TaskRoutineCadence | undefined {
-  return value === "daily" || value === "weekly" || value === "monthly" || value === "custom" ? value : undefined;
 }
 
 function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type: "task.status" }>): void {

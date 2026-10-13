@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
+from ..automations.service import automation_triggers_enabled
 from ..core import deploy_config
 from ..security.auth import (
     USER_COOKIE_NAME,
@@ -46,6 +47,9 @@ def auth_me(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     return {
         "authenticated": True,
         "user": decorate_user_limits(ctx, ctx.auth_store._public_user(user)),
+        # Server switches every signed-in employee's UI depends on; admin
+        # settings are admin-only, and employees edit automations too.
+        "capabilities": {"automationTriggers": automation_triggers_enabled()},
     }
 
 

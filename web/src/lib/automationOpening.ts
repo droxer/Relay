@@ -3,19 +3,20 @@
 
    The backend writes the occurrence's goal as `title\n\ndescription`
    (scheduler.py `task_goal_text`) and, for a run something fired, appends
-   `trigger_context_block` (automations/trigger.py) to the description. That
+   `trigger_context_block` (automations/context.py) to the description. That
    block stays English on purpose — it is the agent's prompt — so the web
    parses its fixed shapes here and translates them on render. Keep the
    patterns in step with `_event_line`; anything unrecognised passes through
    as text rather than being dropped. */
 
-import type { RoutineTriggerKind } from "../types.js";
+import type { RoutineOccurrenceTriggerKind } from "../types.js";
 import { runTriggerLabel } from "./automationTrigger.ts";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export type OpeningEvent =
   | { kind: "manual" }
+  | { kind: "schedule"; summary: string }
   | { kind: "status_changed"; taskId: string; title: string; from: string; to: string }
   | { kind: "task_created"; taskId: string; title: string }
   | { kind: "run"; outcome: "completed" | "failed"; taskId?: string; title?: string; sessionId?: string; error?: string }
@@ -37,7 +38,7 @@ export type OpeningTrigger = {
 export type AutomationOpening = {
   title: string;
   body: string;
-  /** Null for a scheduled run, which carries no trigger block. */
+  /** Null for a legacy scheduled run, which carries no trigger block. */
   trigger: OpeningTrigger | null;
 };
 
@@ -45,7 +46,7 @@ const BLOCK_MARKER = "---\nTrigger context\n";
 const FIRED_BY_PREFIX = "Fired by: ";
 const EVENT_PREFIX = "- ";
 
-/** trigger.py `EVENT_LABELS`, inverted. */
+/** context.py `EVENT_LABELS`, inverted. */
 const EVENT_TYPES_BY_LABEL: Readonly<Record<string, string>> = {
   "Task created": "task.created",
   "Task status changed": "task.status_changed",
@@ -53,12 +54,14 @@ const EVENT_TYPES_BY_LABEL: Readonly<Record<string, string>> = {
   "Run failed": "run.failed",
   Webhook: "webhook",
   Manual: "manual",
+  Schedule: "schedule",
 };
 
 const TASK = String.raw`Task (\S+) "(.*)"`;
 const STATUS_CHANGED = new RegExp(String.raw`^${TASK} — (\S+) → (\S+)$`);
 const TASK_CREATED = new RegExp(String.raw`^${TASK} — created$`);
 const RUN = new RegExp(String.raw`^(?:${TASK}|Thread (\S+)) — run (completed|failed)(?:: ([\s\S]*))?$`);
+const SCHEDULE = /^Schedule: (.+)$/;
 const WEBHOOK = /^Webhook payload \(JSON\):\n([\s\S]*)$/;
 const FIRED_BY = /^(.*?)(?: \((\d+) events?(?:, (\d+) not listed)?\))?$/;
 
@@ -126,6 +129,8 @@ function eventTexts(lines: readonly string[]): string[] {
 
 function parseEvent(text: string): OpeningEvent {
   if (text === "Run now requested.") return { kind: "manual" };
+  const schedule = SCHEDULE.exec(text);
+  if (schedule) return { kind: "schedule", summary: schedule[1] };
   const status = STATUS_CHANGED.exec(text);
   if (status) return { kind: "status_changed", taskId: status[1], title: status[2], from: status[3], to: status[4] };
   const created = TASK_CREATED.exec(text);
@@ -145,13 +150,14 @@ function parseEvent(text: string): OpeningEvent {
   return { kind: "other", text };
 }
 
-const TRIGGER_KINDS_BY_EVENT: Readonly<Record<string, RoutineTriggerKind>> = {
+const TRIGGER_KINDS_BY_EVENT: Readonly<Record<string, RoutineOccurrenceTriggerKind>> = {
   "task.created": "task_event",
   "task.status_changed": "task_event",
   "run.completed": "run_event",
   "run.failed": "run_event",
   webhook: "webhook",
   manual: "manual",
+  schedule: "schedule",
 };
 
 /** What started the run, in the run ledger's words: "Manual", "Scheduled",

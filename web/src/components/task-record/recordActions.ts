@@ -1,5 +1,6 @@
 import type { RelayTaskListItem } from "../../types.js";
 import { issueNeedsProject } from "../../lib/issueQueues.ts";
+import { runNowRefused } from "../../lib/routine.ts";
 
 /**
  * What a record can do, decided in one place from what it is.
@@ -13,10 +14,10 @@ import { issueNeedsProject } from "../../lib/issueQueues.ts";
  * detail surface for both boards: the backlog's peek drawer carried them,
  * and retiring the peek could not retire the actions with it.
  */
-export type RecordAction = "run" | "retry" | "cancel" | "block" | "unblock" | "done" | "delete" | "triage";
+export type RecordAction = "run" | "retry" | "resume" | "cancel" | "block" | "unblock" | "done" | "delete" | "triage";
 
 export function recordActions(
-  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineEnabled" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId">,
+  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId">,
   /** Set when the task belongs to a project that is closed for work. */
   options?: { readOnly?: boolean },
 ): readonly RecordAction[] {
@@ -25,7 +26,8 @@ export function recordActions(
   if (options?.readOnly) return [];
   const assigned = Boolean(task.assignedAgentId || task.assignedTeamId);
   if (task.status === "running") return ["cancel"];
-  if (task.isRoutine) return assigned && task.routineEnabled ? ["run"] : [];
+  // Run now works on a paused automation too; only a rate-limit pause refuses it.
+  if (task.isRoutine) return assigned && !runNowRefused(task) ? ["run"] : [];
   if (task.status === "done") return [];
   const actions: RecordAction[] = [];
   // Intake: no project means nowhere to run, so the way forward is triage
@@ -38,4 +40,16 @@ export function recordActions(
   actions.push(task.status === "blocked" ? "unblock" : "block");
   if (task.status === "review") actions.push("done");
   return actions;
+}
+
+/**
+ * Whether the record page offers `user` Resume on a paused automation: its
+ * owner or an admin, the rule the resume route enforces.
+ */
+export function canManageAutomation(
+  task: Pick<RelayTaskListItem, "ownerEmployeeId">,
+  user: { role: string; employeeId?: string },
+): boolean {
+  if (user.role === "admin") return true;
+  return Boolean(user.employeeId) && task.ownerEmployeeId === user.employeeId;
 }

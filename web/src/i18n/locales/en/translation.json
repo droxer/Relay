@@ -913,7 +913,6 @@
   },
   "routine": {
     "schedule": "Trigger",
-    "next_run_auto_hint": "Set by the cadence. Select Custom to choose a date.",
     "enabled_needs_target": "Select a project, agent, or team before enabling the automation.",
     "title": "Automations",
     "sub_one": "{{count}} automation",
@@ -923,45 +922,28 @@
     "edit": "Edit automation",
     "new_routine_id": "Draft",
     "search": "Search automations",
-    "type": "Type",
-    "cadence": "Cadence",
     "next_run": "Next run",
     "state": "State",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "due": "Due",
     "unscheduled": "Unscheduled",
-    "all_types": "All types",
-    "all_cadences": "All cadences",
     "all_states": "All states",
     "no_next_run": "No next run",
     "no_routines_title": "No automations yet",
     "no_routines_body": "Create an automation to run work on a schedule or when something happens.",
     "no_match_title": "No matching automations",
     "no_match_body": "Adjust your search or filters.",
-    "types": {
-      "task": "Task",
-      "job": "Job"
-    },
-    "cadences": {
-      "daily": "Daily",
-      "weekly": "Weekly",
-      "monthly": "Monthly",
-      "custom": "Custom"
-    },
     "states": {
       "running": "Running",
-      "overdue": "Overdue",
-      "due": "Due today",
+      "due": "Due",
       "scheduled": "Scheduled",
-      "unscheduled": "Unscheduled",
       "paused": "Paused",
       "listening": "Listening",
       "on_demand": "On demand"
     },
     "meta": "Automation status",
     "no_activity": "No runs yet.",
-    "next_run_hint": "Runs at the start of this day. Choose today or a later date.",
     "enabled_hint": "Disable to pause the automation and stop new runs from being dispatched.",
     "delete_task": "Delete automation",
     "deleting": "Deleting…",
@@ -978,9 +960,9 @@
     "toast_bulk_deleted_one": "1 automation deleted.",
     "toast_bulk_deleted_other": "{{count}} automations deleted.",
     "sort_label": "Sort automations",
-    "set_next_run": "Set next run",
     "save": "Save automation",
-    "create": "Create automation"
+    "create": "Create automation",
+    "next_run_column": "Next run"
   },
   "admin": {
     "control_panel": {
@@ -2416,7 +2398,7 @@
       "task_event": "Task event",
       "run_event": "Run event",
       "webhook": "Webhook",
-      "manual": "Manual only"
+      "none": "Run now only"
     },
     "on": "When",
     "on_values": {
@@ -2448,8 +2430,8 @@
     "webhook_secret_once": "Copy this secret now. It will not be shown again.",
     "webhook_copy": "Copy",
     "webhook_error": "Could not create a secret. Try again.",
-    "reenable": "Re-enable",
-    "rate_limited": "Paused after too many runs in an hour. Turn it back on when ready.",
+    "resume": "Resume",
+    "resumed_toast": "Automation resumed.",
     "ledger": {
       "status_changed": "Task status → {{status}}",
       "event_count_one": "{{count}} event",
@@ -2465,7 +2447,13 @@
       "status_any": "Task status changed"
     },
     "errors": {
-      "title_too_long": "Keep the title filter to 120 characters."
+      "title_too_long": "Keep the title filter to 120 characters.",
+      "time": "Enter a time as HH:MM.",
+      "days": "Pick at least one day.",
+      "month_day": "Pick a day from 1 to 31.",
+      "minute": "Pick a minute from 0 to 59.",
+      "once": "Pick a date and time.",
+      "cron": "A cron expression has five fields."
     },
     "trigger_kind": "Started by",
     "filters_hint": "Leave a filter on Any to match every task.",
@@ -2480,6 +2468,45 @@
       "not_listed_other": "{{count}} more events not listed",
       "thread": "A thread",
       "webhook_payload": "Webhook payload"
-    }
+    },
+    "presets": {
+      "hour": "Every hour",
+      "day": "Every day",
+      "weekday": "Weekdays",
+      "week": "Every week",
+      "month": "Every month",
+      "once": "Once",
+      "cron": "Cron expression"
+    },
+    "weekdays": {
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat",
+      "7": "Sun"
+    },
+    "repeat": "Repeats",
+    "at": "Time",
+    "minute": "Minute past the hour",
+    "month_day": "Day of the month",
+    "once_at": "Date and time",
+    "cron": "Cron",
+    "cron_hint": "Five fields: minute, hour, day, month, weekday. Runs at most once every 15 minutes.",
+    "days": "Days",
+    "timezone": "Time zone",
+    "timezone_server": "Server time",
+    "run_now_only": "Run now only",
+    "trigger_count_one": "{{count}} trigger",
+    "trigger_count_other": "{{count}} triggers",
+    "multi_trigger_readonly": "This automation has more than one trigger. Editing several triggers is not available here yet; they are kept as they are when you save.",
+    "paused_reasons": {
+      "rate_limited": "Paused by Relay after too many runs in an hour. Turn it back on when ready.",
+      "failing": "Paused by Relay after its runs kept failing. Fix the cause, then turn it back on.",
+      "no_target": "Paused by Relay because it has nowhere to run. Assign an agent, team, or open project, then turn it back on.",
+      "invalid_schedule": "Paused by Relay because its schedule can no longer run. Change the schedule, then turn it back on."
+    },
+    "preview_next": "next {{time}}"
   }
 }

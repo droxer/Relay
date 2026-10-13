@@ -3,21 +3,41 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import {
-  describeTrigger, normalizeTriggerForSave, runTriggerLabel, triggerError, triggerForKind, triggerOf, triggersEqual,
+  describeTrigger, describeTriggers, normalizeTriggerForSave, runTriggerLabel, triggerError, triggerForKind, triggersEqual, triggersOf,
 } from "../src/lib/automationTrigger.ts";
+import { SCHEDULE_PRESETS, repeatForPreset } from "../src/lib/automationSchedule.ts";
 import { routineState } from "../src/lib/routine.ts";
 import type { RelayTaskListItem, TaskRun } from "../src/types.ts";
 
 describe("automation triggers", () => {
-  it("reads a missing or unknown trigger as a schedule", () => {
-    assert.deepEqual(triggerOf({}), { kind: "schedule" });
-    assert.deepEqual(triggerOf({ routineTrigger: { kind: "bogus" as never } }), { kind: "schedule" });
+  it("reads missing triggers as none and drops unknown kinds", () => {
+    assert.deepEqual(triggersOf({}), []);
+    assert.deepEqual(triggersOf({ routineTriggers: [{ kind: "bogus" } as never, { kind: "webhook" }] }), [{ kind: "webhook" }]);
   });
 
-  it("gives event kinds a default `on` and others none", () => {
+  it("gives event kinds a default `on` and a schedule a default schedule", () => {
     assert.deepEqual(triggerForKind("task_event"), { kind: "task_event", on: "status_changed" });
     assert.deepEqual(triggerForKind("run_event"), { kind: "run_event", on: "failed" });
     assert.deepEqual(triggerForKind("webhook"), { kind: "webhook" });
+    const schedule = triggerForKind("schedule");
+    assert.equal(schedule.kind, "schedule");
+    assert.deepEqual(schedule.kind === "schedule" && schedule.schedule.repeat, { every: "weekday", at: "09:00" });
+  });
+
+  it("describes trigger lists", () => {
+    const t = (key: string, options?: Record<string, unknown>) => (options?.count ? `${key}:${options.count}` : key);
+    assert.equal(describeTriggers([], t), "automation.run_now_only");
+    assert.equal(describeTriggers([{ kind: "webhook" }, { kind: "webhook" }], t), "automation.trigger_count:2");
+    assert.equal(describeTriggers([{ kind: "schedule", schedule: { timezone: null, repeat: { every: "day", at: "09:00" } } }], t), "automation.presets.day");
+  });
+
+  it("keeps a schedule unchanged on save", () => {
+    const trigger = { kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "day", at: "09:00" } } } as const;
+    assert.deepEqual(normalizeTriggerForSave(trigger), trigger);
+  });
+
+  it("flags a bad schedule through triggerError", () => {
+    assert.equal(triggerError({ kind: "schedule", schedule: { timezone: null, repeat: { every: "day", at: "9am" } } }), "automation.errors.time");
   });
 
   it("drops empty filters and status filters that do not apply", () => {
@@ -25,12 +45,12 @@ describe("automation triggers", () => {
       kind: "task_event", on: "created",
       filters: { projectId: "", toStatus: "blocked", titleContains: "  nightly " },
     }), { kind: "task_event", on: "created", filters: { titleContains: "nightly" } });
-    assert.deepEqual(normalizeTriggerForSave({ kind: "webhook", filters: { projectId: "p" } }), { kind: "webhook" });
+    assert.deepEqual(normalizeTriggerForSave({ kind: "webhook", filters: { projectId: "p" } } as never), { kind: "webhook" });
   });
 
   it("compares triggers by their saved shape", () => {
-    assert.ok(triggersEqual({ kind: "task_event", on: "created", filters: { projectId: "" } }, { kind: "task_event", on: "created" }));
-    assert.ok(!triggersEqual({ kind: "webhook" }, { kind: "manual" }));
+    assert.ok(triggersEqual([{ kind: "task_event", on: "created", filters: { projectId: "" } }], [{ kind: "task_event", on: "created" }]));
+    assert.ok(!triggersEqual([{ kind: "webhook" }], []));
   });
 
   it("flags an over-long title filter", () => {
@@ -39,18 +59,17 @@ describe("automation triggers", () => {
     assert.equal(triggerError({ kind: "webhook" }), null);
   });
 
-  it("shows enabled event automations as listening, not unscheduled", () => {
-    const base = { id: "R-1", isRoutine: true, routineEnabled: true } as RelayTaskListItem;
-    assert.equal(routineState({ ...base, routineTrigger: { kind: "webhook" } }, new Set()), "listening");
-    assert.equal(routineState(base, new Set()), "unscheduled");
-    assert.equal(routineState({ ...base, routineEnabled: false, routineTrigger: { kind: "webhook" } }, new Set()), "paused");
+  it("shows active event automations as listening", () => {
+    const base = { id: "R-1", isRoutine: true, routineState: "active" } as RelayTaskListItem;
+    assert.equal(routineState({ ...base, routineTriggers: [{ kind: "webhook" }] }, new Set()), "listening");
+    assert.equal(routineState({ ...base, routineState: "paused", routineTriggers: [{ kind: "webhook" }] }, new Set()), "paused");
   });
 });
 
 it("compares filters independent of insertion order", () => {
   assert.ok(triggersEqual(
-    { kind: "task_event", on: "created", filters: { priority: "high", projectId: "p" } },
-    { kind: "task_event", on: "created", filters: { projectId: "p", priority: "high" } },
+    [{ kind: "task_event", on: "created", filters: { priority: "high", projectId: "p" } }],
+    [{ kind: "task_event", on: "created", filters: { projectId: "p", priority: "high" } }],
   ));
 });
 
@@ -75,6 +94,7 @@ describe("automation trigger labels", () => {
     { eventType: "run.failed", eventCount: 1 },
     { eventType: "webhook", eventCount: 1 },
     { eventType: "manual", eventCount: 1 },
+    { eventType: "schedule", eventCount: 1 },
   ];
 
   for (const locale of ["en", "zh-CN"]) {
@@ -86,7 +106,13 @@ describe("automation trigger labels", () => {
 
     it(`describes every trigger in ${locale}`, () => {
       const t = strictT(locale);
-      for (const kind of ["schedule", "webhook", "manual"] as const) assert.ok(describeTrigger({ kind }, t));
+      for (const preset of SCHEDULE_PRESETS) {
+        assert.ok(describeTrigger({ kind: "schedule", schedule: { timezone: null, repeat: repeatForPreset(preset) } }, t));
+      }
+      assert.ok(describeTrigger({ kind: "webhook" }, t));
+      assert.ok(describeTriggers([], t));
+      assert.ok(describeTriggers([{ kind: "webhook" }, { kind: "webhook" }], t));
+      assert.ok(runTriggerLabel({ triggerKind: "schedule", triggerSummary: null }, t));
       for (const on of ["created", "status_changed"] as const) assert.ok(describeTrigger({ kind: "task_event", on }, t));
       for (const on of ["completed", "failed"] as const) assert.ok(describeTrigger({ kind: "run_event", on }, t));
     });
@@ -100,9 +126,9 @@ describe("automation trigger labels", () => {
     assert.equal(describeTrigger({ kind: "task_event", on: "status_changed" }, t), "Task status changed");
   });
 
-  it("gives a manual-only automation its own state", () => {
-    const manual = { id: "R-1", routineEnabled: true, routineTrigger: { kind: "manual" } } as RelayTaskListItem;
-    const webhook = { id: "R-2", routineEnabled: true, routineTrigger: { kind: "webhook" } } as RelayTaskListItem;
+  it("gives a Run-now-only automation its own state", () => {
+    const manual = { id: "R-1", routineState: "active", routineTriggers: [] } as unknown as RelayTaskListItem;
+    const webhook = { id: "R-2", routineState: "active", routineTriggers: [{ kind: "webhook" }] } as unknown as RelayTaskListItem;
     assert.equal(routineState(manual, new Set()), "on_demand");
     assert.equal(routineState(webhook, new Set()), "listening");
   });

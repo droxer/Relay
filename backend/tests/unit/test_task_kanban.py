@@ -4,6 +4,8 @@ import pytest
 from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
 from relay.persistence.store_common import relay_task_event
 
+from automation_helpers import fire_now
+
 
 @pytest.fixture(params=["local", "database"])
 def store(request, tmp_path):
@@ -56,7 +58,7 @@ def test_acceptance_policy_survives_events_and_routine_occurrences(store):
             "assignedAgent": "codex",
         }
     )
-    occurrence = store.promote_due_routine(task["id"], "2026-09-13", "2026-09-14")
+    occurrence = fire_now(store, task["id"], run_date="2026-09-13")
     assert occurrence["acceptancePolicy"] == "human"
     task = store.update_task(task["id"], {"acceptancePolicy": "automatic"})
     assert task["acceptancePolicy"] == "automatic"

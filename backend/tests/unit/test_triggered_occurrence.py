@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 import pytest
 from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
 
+from automation_helpers import fire_now
+
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
 
 
@@ -60,7 +62,20 @@ def test_lists_only_enabled_event_and_webhook_automations(store) -> None:
 
 def test_schedule_and_manual_occurrences_record_their_trigger(store):
     routine = _automation(store, routineTrigger={"kind": "schedule"}, routineCadence="daily", routineNextRunDate="2026-10-02")
-    scheduled = store.promote_due_routine(routine["id"], "2026-10-02", "2026-10-03")
+    scheduled = fire_now(store, routine["id"], run_date="2026-10-02")
     assert scheduled["routineTriggerKind"] == "schedule"
-    manual = store.create_routine_occurrence(routine["id"], "2026-10-04")
+    manual = store.create_triggered_occurrence(routine["id"], run_date="2026-10-04", trigger_kind="manual", depth=0, context="")
     assert manual["routineTriggerKind"] == "manual"
+
+
+def test_allow_paused_fires_an_owner_paused_routine_but_not_a_deleted_one(store) -> None:
+    paused = _automation(store, routineEnabled=False)
+    assert store.create_triggered_occurrence(paused["id"], run_date="2026-10-02", trigger_kind="manual",
+                                             depth=0, context="", allow_paused=True)["sourceRoutineId"] == paused["id"]
+    unassigned = store.create_task({"title": "x", "isRoutine": True, "routineState": "paused", "routineTriggers": []})
+    assert store.create_triggered_occurrence(unassigned["id"], run_date="2026-10-02", trigger_kind="manual",
+                                             depth=0, context="", allow_paused=True) is None
+    gone = _automation(store, routineEnabled=False)
+    store.delete_task(gone["id"])
+    assert store.create_triggered_occurrence(gone["id"], run_date="2026-10-02", trigger_kind="manual",
+                                             depth=0, context="", allow_paused=True) is None

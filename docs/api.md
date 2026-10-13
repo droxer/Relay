@@ -68,22 +68,106 @@ truncate either projection.
 
 Automations are stored as routine tasks; the routine* field names are the wire names.
 
-An optional `routineTrigger` selects `schedule` (the default for old records),
-`task_event`, `run_event`, `webhook`, or `manual`. Event triggers require `on`:
-`created` / `status_changed` for tasks, `completed` / `failed` for runs. Optional
-AND-ed filters are `projectId`, `assignedAgentId`, `assignedTeamId`, `priority`,
-and `titleContains` (up to 120 characters). `fromStatus` and `toStatus` apply
-only to task status changes. Non-schedule triggers clear `routineNextRunDate`;
-switching back to a schedule computes it again. `POST /tasks/{id}/runs` remains
-available for every kind to the owner or an admin. Manual requests enter the
-transactional outbox and share event coalescing and the hourly run cap. A free
-automation can dispatch immediately through the existing daemon path; one
-with a run in flight answers with that run (`automation_running` when it has
-no live thread), and one whose request is coalesced with pending events
-returns `automation_pending`. Project/team/agent filters require the owner's
-assignment access. Broadcast events are scoped to work visible to that owner.
-Run ledger rows include nullable `triggerKind` and `triggerSummary`
-(`eventType`, optional `toStatus`, and `eventCount`), persisted on occurrence events.
+An automation carries `routineTriggers`, 0 to 5 triggers that are OR-ed (an
+empty list means Run now only), and at most one `webhook`:
+
+```text
+{ kind: "schedule",   schedule: { timezone: string|null, repeat: ... } }
+{ kind: "task_event", on: "created"|"status_changed", filters?: {...} }
+{ kind: "run_event",  on: "completed"|"failed",       filters?: {...} }
+{ kind: "webhook" }
+repeat: { every: "hour", minute } | { every: "day"|"weekday", at: "HH:MM" }
+      | { every: "week", at, days: [1..7] }   // ISO weekdays, non-empty; duplicates ignored
+      | { every: "month", at, day: 1..31 }    // clamps to the month's end
+      | { once: "YYYY-MM-DDTHH:MM" } | { cron: "<5 fields>" }
+```
+
+A cron repeat may not fire more often than every 15 minutes, and one that never
+fires (for example February 31st) is rejected. A null `timezone` means
+`RELAY_TASK_SCHEDULER_TIMEZONE`, else the host's IANA zone. Event triggers take
+AND-ed `filters`: `projectId`, `assignedAgentId`, `assignedTeamId`, `priority`,
+and `titleContains` (up to 120 characters); `fromStatus` and `toStatus` apply
+only to task status changes. Filters on project/team/agent require the owner's
+assignment access, and broadcast events are scoped to work visible to that owner.
+
+Creating an active automation, changing its triggers while active, or resuming
+it rejects an expired one-off with 400 naming
+`routineTriggers[index].schedule.repeat.once`. A paused draft may retain a
+past date, and an already-active, completed one-off remains editable. With no
+future firing it appears as On demand; Run now remains available.
+
+`routineState` is `active`, `paused`, or `paused_by_relay`. A paused automation
+carries `routinePauseReason`: `rate_limited`, `failing`, `no_target`, or
+`invalid_schedule`. Owners set `active` or `paused`; they cannot set
+`paused_by_relay`. Setting `active` resumes it: from `paused_by_relay` it also
+starts a fresh hourly rate window, and any resume resets the failure counter.
+`routineNextRunAt` is the next schedule firing as an ISO UTC datetime; the
+write path sets it when an automation becomes active or its triggers change
+(cleared when it is not active), and the scheduler clock seeds missing values
+and advances it after each fire.
+
+Relay counts consecutive failed occurrences of an automation, one verdict per
+occurrence (the task's status change, not its agent runs: a round may fail a
+run and still finish). An occurrence that reaches `done` resets the count to
+zero. One whose round failed for good adds one: the closeout blocks it with
+`attention.code: "execution_failed"`, or dispatch refused it
+(`attention.source: "dispatch"`). A failed agent run inside a round
+(`agent_exit_failed`) is not a verdict, because the round may still repair it.
+A cancel, a person's own block, a block with no recorded cause,
+`waiting_for_human`, `review`, and deletion neither count nor reset. Each occurrence counts at most
+once, so a retried occurrence that blocks again is not a second failure. After
+3 failed occurrences in a row (`FAILURE_LIMIT`), Relay pauses an active
+automation with `routineState: "paused_by_relay"` and
+`routinePauseReason: "failing"`, and records it in the automation's activity.
+
+`POST /api/v1/tasks/{id}/automation/resume` turns a paused automation back on.
+Only the automation's owner or an admin may call it; anyone else gets 403. A
+task that is not an automation gets 404. On an already-active automation it
+returns the task unchanged. Otherwise it drops pending events, so stale ones
+can't fire the moment it resumes, and resets the failure count. It sets
+`routineState: "active"`, clears `routinePauseReason`, recomputes
+`routineNextRunAt`, records who resumed it in the activity, and returns the
+task. Resuming a `paused_by_relay`
+automation also starts a fresh hourly rate window. Resuming an owner pause
+keeps the window, so pausing and resuming can't get around the hourly cap.
+`PATCH` with `routineState: "active"` runs the same reset.
+Only an owner or admin may lift a Relay pause through PATCH, including moving
+it to an ordinary `paused` state. An assignee may still edit the definition
+without lifting that pause and toggle an ordinary owner pause.
+
+The v1 fields (`routineTrigger`, `routineCadence`, `routineEnabled`,
+`routineDisabledReason`, `routineNextRunDate`, ...) answer 400 on write and never
+appear in a response. Old records and events still replay: the reducer upgrades
+them, and a legacy-shaped write to an already-v2 automation only maps its state.
+When `RELAY_AUTOMATION_TRIGGERS_ENABLED` is off (default on), writes accept
+schedule triggers only; `capabilities.automationTriggers` in `GET /admin/settings`
+and `/auth/me` (every employee) reports it.
+
+`POST /api/v1/automations/schedule-preview` (any signed-in user) takes
+`{schedule}` and returns `{summary, next: [up to three ISO UTC datetimes]}`; an exhausted `once`
+returns fewer (or no) times; an invalid schedule answers 400 `{detail}` naming the field.
+
+Every trigger (schedule clock, event outbox, webhook, Run now) fires through
+the same pending state. A firing coalesces behind an in-flight occurrence,
+schedules included, and slots missed while the backend was down collapse into
+one catch-up. Schedule fires are exempt from the hourly cap
+(`RELAY_AUTOMATION_MAX_RUNS_PER_HOUR`, default 6). An active automation with
+nowhere to run is paused with `paused_by_relay` / `no_target` instead of retried.
+
+Each automation's schedule advance, pending deliveries, and occurrence creation
+share a savepoint. A failing automation rolls back its own work while healthy
+automations continue. Failed recipients of broadcast events retain targeted
+outbox retries, so retrying does not deliver the event again to healthy recipients.
+
+`POST /tasks/{id}/runs` (Run now) is available to the owner or an admin,
+including on a `paused` automation, but not on one paused by Relay for
+`rate_limited`. With nowhere to run it answers with dispatch code `no_target`,
+and it never changes the automation's state. A free automation dispatches
+immediately through the existing daemon path; one with a run in flight answers
+with that run (`automation_running` when it has no live thread), and one whose
+request is coalesced with pending events returns `automation_pending`. Run ledger
+rows include nullable `triggerKind` and `triggerSummary` (`eventType`, optional
+`toStatus`, and `eventCount`), persisted on occurrence events.
 
 Inbound webhooks use `POST /api/v1/automations/{id}/webhook` with JSON and the
 `X-Relay-Automation-Token` header. A valid request returns `202 {"accepted": true}`
@@ -103,9 +187,9 @@ Matches arriving while an occurrence is queued or running coalesce into one
 next occurrence. Context retains up to 20 events, records overflow counts,
 and clips each webhook payload to 8 KB. Pending events expire after 24 hours.
 Automations skip their own occurrences and stop chains beyond depth 3. The
-hourly cap pauses the definition with `routineDisabledReason: "rate_limited"`;
-re-enabling clears the reason and starts a fresh rate window. The run ledger
-shows the reason and offers Re-enable to the owner or an admin.
+hourly cap pauses the definition (`paused_by_relay`, `rate_limited`);
+resuming clears the reason and starts a fresh rate window. The run ledger
+shows the reason and offers Resume to the owner or an admin.
 
 
 ## Normalized Mutations

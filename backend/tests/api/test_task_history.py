@@ -12,6 +12,8 @@ from relay.app import create_app
 from relay.persistence.stores import relay_event
 from relay.sessions import SessionController
 
+from automation_helpers import WEEKLY_TRIGGERS, fire_now
+
 PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
@@ -36,19 +38,15 @@ def _create_routine(client: TestClient, agent_id: str) -> dict[str, Any]:
         "title": "Weekly status deck",
         "assignedAgentId": agent_id,
         "isRoutine": True,
-        "routineType": "job",
-        "routineCadence": "weekly",
-        "routineNextRunDate": "2026-06-25",
-        "routineEnabled": True,
+        "routineState": "active",
+        "routineTriggers": WEEKLY_TRIGGERS,
     })
     assert response.status_code == 201, response.text
     return response.json()
 
 
 def _promote(app: Any, routine_id: str) -> dict[str, Any]:
-    occurrence = app.state.task_store.promote_due_routine(
-        routine_id, "2026-06-25", "2026-07-02", agent_override="claude"
-    )
+    occurrence = fire_now(app.state.task_store, routine_id, run_date="2026-06-25")
     assert occurrence is not None
     return occurrence
 
@@ -113,9 +111,7 @@ def test_routine_artifacts_dedupe_regenerated_file_across_occurrences(monkeypatc
         routine = _create_routine(client, agent["id"])
         first = _promote(app, routine["id"])
         first_session = _session_for(app, first["id"], ws, agent["id"])
-        second = app.state.task_store.promote_due_routine(
-            routine["id"], "2026-07-02", "2026-07-09", agent_override="claude"
-        )
+        second = fire_now(app.state.task_store, routine["id"], run_date="2026-07-02")
         assert second is not None
         second_session = _session_for(app, second["id"], ws, agent["id"])
 
@@ -188,9 +184,7 @@ def test_routine_runs_list_occurrences_newest_first(monkeypatch) -> None:
         agent = _create_agent(app)
         routine = _create_routine(client, agent["id"])
         first = _promote(app, routine["id"])
-        second = app.state.task_store.promote_due_routine(
-            routine["id"], "2026-07-02", "2026-07-09", agent_override="claude"
-        )
+        second = fire_now(app.state.task_store, routine["id"], run_date="2026-07-02")
         assert second is not None
         session_id = _session_for(app, second["id"], ws, agent["id"])
         deck = _workspace_artifact(ws, "deck.pptx", artifact_id="30000000-0000-4000-8000-000000000011", created_at="2026-07-02T09:00:00.000Z")
@@ -256,9 +250,7 @@ def test_runs_limit_caps_the_ledger(monkeypatch) -> None:
         agent = _create_agent(app)
         routine = _create_routine(client, agent["id"])
         _promote(app, routine["id"])
-        second = app.state.task_store.promote_due_routine(
-            routine["id"], "2026-07-02", "2026-07-09", agent_override="claude"
-        )
+        second = fire_now(app.state.task_store, routine["id"], run_date="2026-07-02")
         assert second is not None
 
         runs = _runs(client, routine["id"], limit=1)

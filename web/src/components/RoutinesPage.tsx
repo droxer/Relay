@@ -11,7 +11,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
-import { normalizeTriggerForSave, triggerError, triggerOf } from "../lib/automationTrigger";
+import { triggerError } from "../lib/automationTrigger";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
 import { paginate } from "../lib/pagination";
@@ -19,7 +19,7 @@ import { usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { emptyRoutineForm, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
+import { emptyRoutineForm, routineFormFields, routineMutationFields, taskAssignmentMutationFields, taskBoardFormsEqual, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
@@ -172,19 +172,14 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
-      routineType: task.routineType ?? "task",
-      routineCadence: task.routineCadence ?? "weekly",
-      routineNextRunDate: task.routineNextRunDate ?? "",
-      routineEnabled: task.routineEnabled,
-      routineTrigger: triggerOf(task),
-      routineDisabledReason: task.routineDisabledReason,
+      ...routineFormFields(task),
     });
   }
 
   async function submitRoutine(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form || !form.title.trim() || (!form.id && !form.projectId)) return;
-    if (triggerError(form.routineTrigger)) return;
+    if (form.routineTriggers.some((trigger) => triggerError(trigger))) return;
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
@@ -193,14 +188,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         description: form.description,
         priority: form.priority,
-        isRoutine: true,
-        routineType: form.routineType,
-        routineTrigger: normalizeTriggerForSave(form.routineTrigger),
-        ...(form.routineTrigger.kind === "schedule" ? { routineCadence: form.routineCadence } : {}),
-        routineEnabled: form.routineEnabled,
-        ...(form.routineTrigger.kind === "schedule" && form.routineCadence === "custom"
-          ? { routineNextRunDate: form.routineNextRunDate }
-          : {}),
+        ...routineMutationFields(form),
         ...taskAssignmentMutationFields(form),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
@@ -314,7 +302,6 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
     return {
       starting: startTaskMutation.isPending && startTaskMutation.variables?.taskId === task.id,
       onOpen: () => onOpenRecord(task.id),
-      onEdit: () => editTask(task),
       onAssign: () => assignTask(task),
       onStart: () => {
         if (startInFlight.current) return;

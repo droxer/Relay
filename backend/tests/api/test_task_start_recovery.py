@@ -1,3 +1,4 @@
+from automation_helpers import WEEKLY_TRIGGERS
 """Task starts recover from unavailable projects and idle precreated threads."""
 
 import asyncio
@@ -117,8 +118,7 @@ def test_explicit_start_retries_blocked_dispatch_without_automatic_retry(setup, 
     assignment = {"projectId": project["id"]} if scope == "project" else {"assignedAgentId": agent["id"], "projectId": project["id"]}
     if scope == "routine":
         assignment.pop("projectId", None)
-        assignment.update(isRoutine=True, routineCadence="weekly", routineEnabled=True,
-                          routineNextRunDate=app.state.today().isoformat())
+        assignment.update(isRoutine=True, routineState="active", routineTriggers=WEEKLY_TRIGGERS)
     created = client.post("/api/v1/tasks", json={"title": "Retry failed work", **assignment})
     assert created.status_code == 201, created.text
     task = created.json()

@@ -114,7 +114,7 @@ export function DesignSystemSpecimen() {
       <Badge variant="state" className="tone-warn" data-testid="warning-badge">Warning</Badge>
       <Badge variant="state" className="tone-bad" data-testid="error-badge">Error</Badge>
       <Badge variant="state" className="tone-live" data-testid="live-badge">Live</Badge>
-      <RoutineStateBadge state="overdue" /><Alert variant="boxed">Unable to save</Alert>
+      <RoutineStateBadge state="due" /><Alert variant="boxed">Unable to save</Alert>
     </div></Card>
 
     {/* ---- Button matrix: every variant at every size ---- */}

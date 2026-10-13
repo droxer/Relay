@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, isEventKind, triggerError, triggerForKind } from "../../lib/automationTrigger";
+import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
 import type { AgentTeam, EmployeeAgent, ProjectRecord, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
@@ -20,18 +20,39 @@ type Props = {
   onChange: (next: RoutineTrigger) => void;
 };
 
-export function TriggerKindField({ trigger, onChange }: Pick<Props, "trigger" | "onChange">) {
+/** "Run now only" in the kind picker: an automation with no triggers. */
+const NO_TRIGGER = "none";
+type KindChoice = RoutineTriggerKind | typeof NO_TRIGGER;
+
+/**
+ * What starts the automation, for one trigger or none. `triggersEnabled`
+ * false (the server's switch) leaves only Schedule and Run now only — plus
+ * the kind already saved, so an existing trigger still reads as itself.
+ */
+export function TriggerKindField({ triggers, triggersEnabled = true, onChange }: {
+  triggers: RoutineTrigger[];
+  triggersEnabled?: boolean;
+  onChange: (next: RoutineTrigger[]) => void;
+}) {
   const { t } = useTranslation();
   const labelId = useId();
+  const current = triggers[0]?.kind;
+  const value: KindChoice = current ?? NO_TRIGGER;
+  const kinds = TRIGGER_KINDS.filter((kind) => triggersEnabled || kind === "schedule" || kind === current);
+  const options: KindChoice[] = [...kinds, NO_TRIGGER];
+  const label = (choice: KindChoice) => t(`automation.kinds.${choice}`);
   return (
     <Field label={t("automation.trigger_kind")} labelId={labelId} wrapper="div">
-      <Select value={trigger.kind} onValueChange={(value) => value && onChange(triggerForKind(value as RoutineTriggerKind))}>
+      <Select<KindChoice> value={value} onValueChange={(next) => {
+        if (!next || next === value) return;
+        onChange(next === NO_TRIGGER ? [] : [triggerForKind(next as RoutineTriggerKind)]);
+      }}>
         <SelectTrigger className="w-full" aria-labelledby={labelId}>
-          <SelectValue>{(value: RoutineTriggerKind) => t(`automation.kinds.${value}`)}</SelectValue>
+          <SelectValue>{label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {TRIGGER_KINDS.map((kind) => (
-            <SelectItem key={kind} value={kind} label={t(`automation.kinds.${kind}`)}>{t(`automation.kinds.${kind}`)}</SelectItem>
+          {options.map((choice) => (
+            <SelectItem key={choice} value={choice} label={label(choice)}>{label(choice)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -45,7 +66,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   const errorId = useId();
   const titleLabelId = useId();
   const filtersLabelId = useId();
-  if (!isEventKind(trigger.kind)) return null;
+  if (trigger.kind === "schedule" || trigger.kind === "webhook") return null;
   const filters = trigger.filters ?? {};
   const setFilter = (key: keyof RoutineTriggerFilters, value: string) =>
     onChange({ ...trigger, filters: { ...filters, [key]: value === ANY ? undefined : value } });

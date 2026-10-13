@@ -4,8 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TaskRecordView } from "../src/components/task-record/TaskRecordView";
 
-const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask, updateTask } = vi.hoisted(() => ({
+const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask, updateTask, resumeAutomation } = vi.hoisted(() => ({
   updateTask: vi.fn(async () => ({})),
+  resumeAutomation: vi.fn(async () => ({})),
   getTask: vi.fn(),
   listTaskRuns: vi.fn(),
   listTaskArtifacts: vi.fn(async () => ({ artifacts: [] })),
@@ -35,6 +36,7 @@ vi.mock("../src/hooks/useRelayMutations", () => ({
     updateTaskMutation: { mutateAsync: updateTask },
     cancelRunMutation: { mutateAsync: vi.fn() },
     deleteTaskMutation: { mutateAsync: vi.fn() },
+    resumeAutomationMutation: { mutateAsync: resumeAutomation, isPending: false },
   }),
 }));
 vi.mock("@/components/ui/DialogProvider", () => ({
@@ -48,10 +50,9 @@ const ROUTINE = {
   priority: "normal",
   status: "backlog",
   isRoutine: true,
-  routineEnabled: true,
-  routineCadence: "daily",
-  routineType: "task",
-  routineNextRunDate: "2026-09-21",
+  routineState: "active",
+  routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "day", at: "09:00" } } }],
+  routineNextRunAt: "2026-09-21T09:00:00Z",
   assignedAgentId: "agent-1",
   assigneeEmployeeId: "fei",
   linkedSessionIds: [],
@@ -187,13 +188,24 @@ it("explains coalesced status triggers in the run ledger", async () => {
   expect(screen.getByText(/automation.ledger.event_count/)).toBeTruthy();
 });
 
-it("offers a direct re-enable action after the rate cap pauses an automation", async () => {
-  getTask.mockResolvedValue({ ...ROUTINE, ownerEmployeeId: "fei", routineEnabled: false,
-    routineDisabledReason: "rate_limited" });
+it("offers one Resume action after the rate cap pauses an automation", async () => {
+  getTask.mockResolvedValue({ ...ROUTINE, ownerEmployeeId: "fei", routineState: "paused_by_relay",
+    routinePauseReason: "rate_limited", routineNextRunAt: undefined });
   renderRecord();
-  expect(await screen.findByText("automation.rate_limited")).toBeTruthy();
-  await userEvent.setup().click(screen.getByRole("button", { name: "automation.reenable" }));
-  await waitFor(() => expect(updateTask).toHaveBeenCalledWith({ taskId: "R-42", input: { routineEnabled: true } }));
+  expect(await screen.findByText("automation.paused_reasons.rate_limited")).toBeTruthy();
+  const [resume, ...others] = screen.getAllByRole("button", { name: "automation.resume" });
+  expect(others).toHaveLength(0);
+  let finish: (value: unknown) => void = () => undefined;
+  resumeAutomation.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  await userEvent.setup().click(resume);
+  await waitFor(() => expect(resumeAutomation).toHaveBeenCalledWith({ taskId: "R-42" }));
+  // The record's other actions wait while it resumes.
+  for (const name of ["record.edit", "backlog.delete_task", "automation.resume"]) {
+    expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+  }
+  finish({});
+  await waitFor(() => expect((screen.getByRole("button", { name: "automation.resume" }) as HTMLButtonElement).disabled).toBe(false));
+  expect(updateTask).not.toHaveBeenCalledWith({ taskId: "R-42", input: { routineState: "active" } });
 });
 
 

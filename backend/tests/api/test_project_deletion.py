@@ -37,7 +37,7 @@ def test_delete_project_cascades_and_queues_workspace_cleanup(project_env):
     app, client, node, agent, project, task, routine, session = project_env
     other_project = client.post("/api/v1/projects", json={"name": "Keep project", "daemonNodeId": node["id"], "members": [], "leadAgentId": None}).json()["project"]
     other = app.state.task_store.create_task({"title": "Keep", "ownerEmployeeId": "alice", "projectId": other_project["id"]})
-    occurrence = app.state.task_store.create_routine_occurrence(routine["id"], "2026-09-22")
+    occurrence = app.state.task_store.create_triggered_occurrence(routine["id"], run_date="2026-09-22", trigger_kind="manual", depth=0, context="")
     assert occurrence is not None
     app.state.task_store.link_session(other["id"], session["id"])
     app.state.session_store.create_artifact(session["id"], {"kind": "document", "title": "Owned artifact", "body": "Project content", "extension": "md"})

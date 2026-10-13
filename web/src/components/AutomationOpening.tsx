@@ -92,6 +92,8 @@ function OpeningEventLine({ event }: { event: OpeningEvent }) {
           {event.error ? <span className="automation-opening-error">{event.error}</span> : null}
         </>
       );
+    case "schedule":
+      return <span className="automation-opening-subject">{event.summary}</span>;
     case "webhook":
       return (
         <>

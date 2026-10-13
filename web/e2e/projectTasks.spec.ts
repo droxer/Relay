@@ -10,7 +10,7 @@ for (const mobile of [false, true]) {
     const tasks = ["backlog", "assigned", "running", "review", "done", "blocked"].map((status, i) => ({
       id: `task_${i}abcdef`, title: ["Write the release brief", "Polish onboarding", "Build the launch page", "Review final copy", "Choose the release date", "Resolve the deployment issue"][i],
       projectId: "launch", status, workflowStage: status === "blocked" ? "running" : status,
-      description: "", priority: "normal", isRoutine: false, routineEnabled: false,
+      description: "", priority: "normal", isRoutine: false,
       linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp,
     }));
     // Another project's task must never reach this project's board.
@@ -137,7 +137,7 @@ test("creating the first project preserves a global task draft", async ({ page }
     if (path.endsWith("/tasks") && route.request().method() === "POST") {
       const input = route.request().postDataJSON();
       expect(input).toMatchObject({ title: "Keep this draft", projectId: "first" });
-      const task = { events: [], activity: [], ...input, id: "task", createdAt: stamp, updatedAt: stamp, linkedSessionIds: [], isRoutine: false, routineEnabled: false, status: "backlog" };
+      const task = { events: [], activity: [], ...input, id: "task", createdAt: stamp, updatedAt: stamp, linkedSessionIds: [], isRoutine: false, status: "backlog" };
       tasks.push(task); body = task;
     }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -298,7 +298,7 @@ test("edits a task's priority, status and due date from its row", async ({ page 
   const project = { id: "launch", name: "Autumn launch", ownerEmployeeId: "u", computerId: "c", enabled: true,
     members: [], leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
   const task = { id: "task_0abcdef", title: "Write the release brief", projectId: "launch", status: "backlog", workflowStage: "backlog",
-    description: "", priority: "normal", isRoutine: false, routineEnabled: false,
+    description: "", priority: "normal", isRoutine: false,
     linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp };
   // One agent placed on the project's computer, so the row may offer it.
   const atlas = { id: "agent-atlas", displayName: "Atlas", executorKind: "codex", enabled: true, availability: "ready",
