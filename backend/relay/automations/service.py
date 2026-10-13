@@ -117,14 +117,15 @@ class AutomationService:
         if previous == "active":
             return task
         with store_transaction(self.task_store.engine) as conn:
-            prepare_resume(conn, self.automation_store, task_id, previous)
+            prepare_resume(conn, self.automation_store, self.task_store, task, actor)
             return self.task_store.update_task(task_id, {
                 "routineState": "active", "routinePauseReason": None,
                 "routineNextRunAt": next_run_at(task, now),
             })
 
 
-def prepare_resume(conn: Any, automation_store: Any, task_id: str, previous_state: str) -> None:
+def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict[str, Any],
+                   actor: dict[str, Any]) -> None:
     """The automation-state side of every resume, run inside the transaction
     that flips ``routineState`` back to ``active``.
 
@@ -133,17 +134,30 @@ def prepare_resume(conn: Any, automation_store: Any, task_id: str, previous_stat
     and drops pending events, so stale events cannot fire the moment it
     turns back on. Resuming what Relay paused also starts a fresh rate
     window; an owner's own pause/resume does not, so the hourly cap cannot be
-    bypassed.
+    bypassed. Records who resumed it, as a pause records why.
     """
+    task_id, previous_state = task["id"], state_of(task)
     if previous_state == "active":
         return
     if conn.dialect.name == "postgresql":
         conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
     if previous_state == "paused_by_relay":
         automation_store.reset_rate_window(task_id)
-        return
-    automation_store.clear_state(task_id)
-    automation_store.reset_failures(task_id)
+    else:
+        automation_store.clear_state(task_id)
+        automation_store.reset_failures(task_id)
+    task_store.record_activity(task_id, f"Automation resumed by {_resumer(task, actor)}.")
+
+
+def _resumer(task: dict[str, Any], actor: dict[str, Any]) -> str:
+    """Who resumed, by role: activity names no raw employee ids."""
+    employee = actor.get("employeeId")
+    if employee and employee == task.get("ownerEmployeeId"):
+        return "its owner"
+    if actor.get("isAdmin"):
+        return "an admin"
+    # PATCH lets an assignee edit the automation too.
+    return "its assignee"
 
 
 def automation_service(automation_store: Any, ctx: AppContext) -> AutomationService:

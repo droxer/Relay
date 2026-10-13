@@ -65,7 +65,7 @@ export function TaskRecordView({
 }) {
   const { t, i18n } = useTranslation();
   const { announce, confirm, prompt } = useDialogs();
-  const { startTaskMutation, cancelRunMutation, deleteTaskMutation, updateTaskMutation } = useRelayMutations();
+  const { startTaskMutation, cancelRunMutation, deleteTaskMutation, updateTaskMutation, resumeAutomationMutation } = useRelayMutations();
   const [busyAction, setBusyAction] = useState<RecordAction | null>(null);
 
   // The record in the path — the run when there is one, otherwise the
@@ -87,6 +87,18 @@ export function TaskRecordView({
       await startTaskMutation.mutateAsync(taskStartMutationInput(task));
     } catch {
       // The mutation's onError raises the toast; the action stays available.
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function resumeRecord(): Promise<void> {
+    if (busyAction || !task) return;
+    setBusyAction("resume");
+    try {
+      await resumeAutomationMutation.mutateAsync({ taskId: task.id });
+    } catch {
+      // The mutation's onError raises the toast; the button comes back.
     } finally {
       setBusyAction(null);
     }
@@ -204,6 +216,7 @@ export function TaskRecordView({
           else onOpenRecord(taskId, nextId);
         }}
         onRun={() => { void runRecord(); }}
+        onResume={() => { void resumeRecord(); }}
         onCancel={() => { void cancelRecord(); }}
         onEdit={() => onEdit(task)}
         onDelete={() => { void deleteRecord(); }}

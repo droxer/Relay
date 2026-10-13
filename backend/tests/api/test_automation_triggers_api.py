@@ -468,6 +468,8 @@ def test_resume_by_owner_succeeds(monkeypatch) -> None:
         response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
         assert response.status_code == 200, response.text
         assert response.json()["routineState"] == "active"
+        activity = client.app.state.task_store.get_task(task["id"])["activity"]
+        assert activity[-1]["message"] == "Automation resumed by its owner."
 
 
 def test_resume_active_is_noop(monkeypatch) -> None:

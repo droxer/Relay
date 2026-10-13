@@ -789,7 +789,7 @@ def update_task(
     resumed = routine.get("routineState") == "active" and state_of(current) != "active"
     with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
         if resumed:
-            prepare_resume(conn, request.app.state.automation_store, task_id, state_of(current))
+            prepare_resume(conn, request.app.state.automation_store, ctx.task_store, current, actor)
         if status:
             try:
                 validate_manual_transition(

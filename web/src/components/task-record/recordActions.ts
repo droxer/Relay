@@ -14,7 +14,7 @@ import { runNowRefused } from "../../lib/routine.ts";
  * detail surface for both boards: the backlog's peek drawer carried them,
  * and retiring the peek could not retire the actions with it.
  */
-export type RecordAction = "run" | "retry" | "cancel" | "block" | "unblock" | "done" | "delete" | "triage";
+export type RecordAction = "run" | "retry" | "resume" | "cancel" | "block" | "unblock" | "done" | "delete" | "triage";
 
 export function recordActions(
   task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId">,
@@ -43,9 +43,8 @@ export function recordActions(
 }
 
 /**
- * Whether `user` may run Run now, Resume, and the other owner controls of an
- * automation: its owner or an admin. The backend enforces the same rule; this
- * only keeps the web from offering a button it would refuse.
+ * Whether the record page offers `user` Resume on a paused automation: its
+ * owner or an admin, the rule the resume route enforces.
  */
 export function canManageAutomation(
   task: Pick<RelayTaskListItem, "ownerEmployeeId">,

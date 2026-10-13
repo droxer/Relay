@@ -27,6 +27,10 @@ AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
 # Pending events kept per automation; the rest are only counted.
 MAX_PENDING_EVENTS = 20
+# Occurrences whose outcome already fed the failure streak, newest last.
+# Occurrences run one at a time, so a re-count can only come from a recent one
+# flipping again (a retry); twenty covers that without growing forever.
+MAX_COUNTED_OCCURRENCES = 20
 SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerEmployeeId", "assigneeEmployeeId")
 
 automation_outbox = Table(
@@ -55,6 +59,7 @@ automation_state = Table(
     Column("fired_window_start", DateTime(timezone=True), nullable=True),
     Column("fired_count", Integer, nullable=False, default=0),
     Column("consecutive_failures", Integer, nullable=False, default=0),
+    Column("counted_occurrence_ids", json_type(), nullable=True),
     Index("ix_automation_state_pending", "pending"),
 )
 
@@ -91,6 +96,11 @@ def task_outbox_rows(before: dict[str, Any] | None, after: dict[str, Any]) -> li
     if before.get("status") == after.get("status"):
         return []
     payload = {"subject": subject_of(after), "from": before.get("status"), "to": after.get("status")}
+    attention = after.get("attention") if after.get("status") == "blocked" else None
+    if isinstance(attention, dict):
+        # Why it blocked: an occurrence's failure streak counts failures, not
+        # cancels or a person's own block.
+        payload["attention"] = {key: attention.get(key) for key in ("code", "source")}
     return [_row("task_event", "task.status_changed", payload=payload, **provenance)]
 
 
@@ -112,7 +122,7 @@ def insert_outbox_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
 def _empty_state(routine_id: str) -> dict[str, Any]:
     return {"routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
             "pending_since": None, "fired_window_start": None, "fired_count": 0,
-            "consecutive_failures": 0}
+            "consecutive_failures": 0, "counted_occurrence_ids": []}
 
 
 def _hash(token: str) -> str:
@@ -163,7 +173,9 @@ class DatabaseAutomationStore:
             row = conn.execute(
                 select(automation_state).where(automation_state.c.routine_id == routine_id)
             ).mappings().first()
-        return dict(row) if row else _empty_state(routine_id)
+        if not row:
+            return _empty_state(routine_id)
+        return {**dict(row), "counted_occurrence_ids": list(row["counted_occurrence_ids"] or [])}
 
     def save_state(self, routine_id: str, state: dict[str, Any]) -> None:
         values = {key: value for key, value in state.items() if key != "routine_id"}
@@ -198,20 +210,31 @@ class DatabaseAutomationStore:
         self.save_state(routine_id, {**_empty_state(routine_id),
                                      "fired_window_start": current["fired_window_start"],
                                      "fired_count": current["fired_count"],
-                                     "consecutive_failures": current["consecutive_failures"]})
+                                     "consecutive_failures": current["consecutive_failures"],
+                                     "counted_occurrence_ids": current["counted_occurrence_ids"]})
 
     def reset_rate_window(self, routine_id: str) -> None:
         """Start over completely: pending events, the rate window, and the
-        failure streak."""
-        self.save_state(routine_id, _empty_state(routine_id))
+        failure streak. Which occurrences were counted stays, so an old one
+        flipping again after a resume still counts only once."""
+        current = self.get_state(routine_id)
+        self.save_state(routine_id, {**_empty_state(routine_id),
+                                     "counted_occurrence_ids": current["counted_occurrence_ids"]})
 
-    def record_outcome(self, routine_id: str, failed: bool) -> int:
-        """Count a finished occurrence run; a success ends the streak.
-        Returns the new consecutive-failure count."""
+    def record_outcome(self, routine_id: str, occurrence_id: str, failed: bool) -> int | None:
+        """Count one finished occurrence: a failure extends the streak, a
+        success ends it. Each occurrence counts once; a repeat returns
+        ``None``. Otherwise returns the new consecutive-failure count."""
         with store_transaction(self.engine):
             state = self.get_state(routine_id)
+            counted = list(state.get("counted_occurrence_ids") or [])
+            if occurrence_id in counted:
+                return None
             count = int(state.get("consecutive_failures") or 0) + 1 if failed else 0
-            self.save_state(routine_id, {**state, "consecutive_failures": count})
+            self.save_state(routine_id, {
+                **state, "consecutive_failures": count,
+                "counted_occurrence_ids": [*counted, occurrence_id][-MAX_COUNTED_OCCURRENCES:],
+            })
         return count
 
     def reset_failures(self, routine_id: str) -> None:

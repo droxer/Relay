@@ -62,12 +62,27 @@ class AutomationMatcher:
         self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
 
     def _record_outcome(self, row: dict[str, Any], event: dict[str, Any]) -> None:
-        """A finished run of an automation's own occurrence feeds its failure
-        streak. Only completed and failed runs reach the outbox, so a human
-        cancel neither counts nor resets."""
+        """An automation's own occurrence finishing feeds its failure streak,
+        once per occurrence: ``done`` resets it and a failed round (``blocked``
+        by execution or dispatch) extends it. A cancel, a person's own block,
+        a wait for a human, review, and deletion are no verdict on the
+        automation, so they neither count nor reset. Agent runs inside an
+        occurrence never count: a round may fail a run and still succeed."""
         origin = event.get("originAutomationId")
-        if row["kind"] == "run_event" and origin and self.firing is not None:
-            self.firing.record_outcome(origin, failed=row["event_type"] == "run.failed")
+        if (row["kind"] != "task_event" or row["event_type"] != "task.status_changed"
+                or not origin or self.firing is None):
+            return
+        payload = row.get("payload") or {}
+        occurrence_id = row.get("source_id") or (payload.get("subject") or {}).get("id")
+        to_status = payload.get("to")
+        if to_status == "done":
+            failed = False
+        elif to_status == "blocked" and is_failure(payload.get("attention")):
+            failed = True
+        else:
+            return
+        if occurrence_id:
+            self.firing.record_outcome(origin, occurrence_id, failed=failed)
 
     def _targets(self, row: dict[str, Any], event: dict[str, Any],
                  automations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -129,6 +144,13 @@ class AutomationMatcher:
         except (KeyError, FileNotFoundError):
             return None
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
+
+
+def is_failure(attention: Any) -> bool:
+    """Whether a blocked occurrence failed, rather than being cancelled or
+    blocked by a person. Older blocks without a recorded cause count."""
+    attention = attention if isinstance(attention, dict) else {}
+    return attention.get("code") != "execution_cancelled" and attention.get("source") != "operator"
 
 
 def listens_for(task: dict[str, Any], event: dict[str, Any]) -> bool:

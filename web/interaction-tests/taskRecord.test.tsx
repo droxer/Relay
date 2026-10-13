@@ -195,8 +195,16 @@ it("offers one Resume action after the rate cap pauses an automation", async () 
   expect(await screen.findByText("automation.paused_reasons.rate_limited")).toBeTruthy();
   const [resume, ...others] = screen.getAllByRole("button", { name: "automation.resume" });
   expect(others).toHaveLength(0);
+  let finish: (value: unknown) => void = () => undefined;
+  resumeAutomation.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   await userEvent.setup().click(resume);
   await waitFor(() => expect(resumeAutomation).toHaveBeenCalledWith({ taskId: "R-42" }));
+  // The record's other actions wait while it resumes.
+  for (const name of ["record.edit", "backlog.delete_task", "automation.resume"]) {
+    expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+  }
+  finish({});
+  await waitFor(() => expect((screen.getByRole("button", { name: "automation.resume" }) as HTMLButtonElement).disabled).toBe(false));
   expect(updateTask).not.toHaveBeenCalledWith({ taskId: "R-42", input: { routineState: "active" } });
 });
 

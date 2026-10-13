@@ -533,6 +533,7 @@ def test_run_now_request_without_target_is_rejected_up_front(world) -> None:
     assert tasks.get_task(routine["id"])["routineState"] == "active"
 
 
+
 def _finish(world, occurrence, status):
     """Complete one agent run on a session linked to ``occurrence``."""
     from relay.persistence.store_common import relay_event
@@ -545,6 +546,21 @@ def _finish(world, occurrence, status):
     }))
 
 
+FAILED = {"code": "execution_failed", "source": "execution"}
+CANCELLED = {"code": "execution_cancelled", "source": "execution"}
+
+
+def _end(world, occurrence, status, attention=FAILED):
+    """Move ``occurrence`` to ``status`` the way the round closeout does: a
+    failed round blocks it with execution attention."""
+    tasks = world[0]
+    fields = {"status": status}
+    if status == "blocked":
+        fields = {**fields, "blockerReason": "Round failed.", "attention": attention}
+    tasks.update_task(occurrence["id"], fields)
+    run(world)
+
+
 def _fired_occurrence(world, routine):
     tasks, automations, _, _ = world
     automations.enqueue_manual(routine["id"])
@@ -553,61 +569,124 @@ def _fired_occurrence(world, routine):
     return tasks.get_task(tasks.get_task(routine["id"])["occurrenceIds"][-1])
 
 
-def test_three_consecutive_failures_pause_with_failing(world):
+def _failures(world, routine):
+    return world[1].get_state(routine["id"])["consecutive_failures"]
+
+
+def test_three_failed_occurrences_pause_with_failing(world):
     tasks, _, _, _ = world
     routine = _automation(tasks, routineTriggers=[])
     for _ in range(3):
-        occurrence = _fired_occurrence(world, routine)
-        _finish(world, occurrence, "failed")
-        tasks.update_task(occurrence["id"], {"status": "done"})
-        run(world)
+        _end(world, _fired_occurrence(world, routine), "blocked")
     task = tasks.get_task(routine["id"])
     assert (task["routineState"], task["routinePauseReason"]) == ("paused_by_relay", "failing")
     assert len(_occurrences(tasks, routine["id"])) == 3
+    assert any("last 3 runs failed" in item.get("message", "") for item in task.get("activity", []))
 
 
-def test_success_resets_failure_count(world):
-    tasks, automations, _, _ = world
+def test_a_done_occurrence_resets_the_streak(world):
+    tasks, _, _, _ = world
     routine = _automation(tasks, routineTriggers=[])
-    for status in ("failed", "failed", "completed", "failed", "failed"):
-        occurrence = _fired_occurrence(world, routine)
-        _finish(world, occurrence, status)
-        tasks.update_task(occurrence["id"], {"status": "done"})
-        run(world)
+    for status in ("blocked", "blocked", "done", "blocked", "blocked"):
+        _end(world, _fired_occurrence(world, routine), status)
     assert tasks.get_task(routine["id"])["routineState"] == "active"
-    assert automations.get_state(routine["id"])["consecutive_failures"] == 2
+    assert _failures(world, routine) == 2
 
 
-def test_human_cancel_does_not_count(world):
-    tasks, automations, _, _ = world
+def test_failed_runs_inside_an_occurrence_that_ends_done_do_not_count(world):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    _end(world, _fired_occurrence(world, routine), "blocked")
+    occurrence = _fired_occurrence(world, routine)
+    for _ in range(3):
+        _finish(world, occurrence, "failed")
+        run(world)
+    _end(world, occurrence, "done")
+    assert tasks.get_task(routine["id"])["routineState"] == "active"
+    assert _failures(world, routine) == 0
+
+
+def test_one_occurrence_counts_once(world):
+    tasks, _, _, _ = world
     routine = _automation(tasks, routineTriggers=[])
     occurrence = _fired_occurrence(world, routine)
-    _finish(world, occurrence, "failed")
-    run(world)
-    _finish(world, occurrence, "cancelled")
-    run(world)
-    # A cancel neither counts as a failure nor resets the streak.
-    assert automations.get_state(routine["id"])["consecutive_failures"] == 1
+    _end(world, occurrence, "blocked")
+    _end(world, occurrence, "running")
+    _end(world, occurrence, "blocked")
+    _end(world, occurrence, "done")
+    assert _failures(world, routine) == 1
 
 
-def test_failures_of_unrelated_sessions_do_not_count(world):
-    tasks, automations, _, _ = world
+@pytest.mark.parametrize("ending", ["cancelled", "waiting_for_human", "review", "manual_block", "deleted"])
+def test_endings_that_are_not_failures_neither_count_nor_reset(world, ending):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    _end(world, _fired_occurrence(world, routine), "blocked")
+    occurrence = _fired_occurrence(world, routine)
+    if ending == "cancelled":
+        _end(world, occurrence, "blocked", CANCELLED)
+    elif ending == "manual_block":
+        _end(world, occurrence, "blocked", {"code": "manual_block", "source": "operator"})
+    elif ending == "deleted":
+        tasks.update_task(occurrence["id"], {"deletedAt": "2026-10-02T12:00:00+00:00"})
+        run(world)
+    else:
+        _end(world, occurrence, ending)
+    assert _failures(world, routine) == 1
+
+
+def test_run_events_no_longer_touch_the_counter(world):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    occurrence = _fired_occurrence(world, routine)
+    for _ in range(3):
+        _finish(world, occurrence, "failed")
+        run(world)
+    assert _failures(world, routine) == 0
+    assert tasks.get_task(routine["id"])["routineState"] == "active"
+
+
+def test_failures_of_unrelated_tasks_do_not_count(world):
+    tasks, _, _, _ = world
     routine = _automation(tasks, routineTriggers=[])
     plain = tasks.create_task({"title": "plain"})
+    _end(world, plain, "blocked")
     _finish(world, plain, "failed")
     run(world)
-    assert automations.get_state(routine["id"])["consecutive_failures"] == 0
+    assert _failures(world, routine) == 0
 
 
-def test_firing_and_clearing_pending_keep_the_failure_count(world):
+def test_own_occurrence_finishing_does_not_trigger_its_automation(world):
+    tasks, _, _, _ = world
+    on_done = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "done"}}
+    routine = _automation(tasks, on_done)
+    occurrence = _fired_occurrence(world, routine)
+    tasks.update_task(occurrence["id"], {"status": "done"})
+    assert run(world) == 0
+    assert len(_occurrences(tasks, routine["id"])) == 1
+    assert _failures(world, routine) == 0
+
+
+def test_pending_clear_and_firing_keep_the_failure_count(world):
     tasks, automations, _, _ = world
     routine = _automation(tasks, routineTriggers=[])
-    occurrence = _fired_occurrence(world, routine)
-    _finish(world, occurrence, "failed")
-    tasks.update_task(occurrence["id"], {"status": "done"})
-    run(world)
+    _end(world, _fired_occurrence(world, routine), "blocked")
     automations.clear_state(routine["id"])
     _fired_occurrence(world, routine)
-    assert automations.get_state(routine["id"])["consecutive_failures"] == 1
+    assert _failures(world, routine) == 1
     automations.reset_rate_window(routine["id"])
-    assert automations.get_state(routine["id"])["consecutive_failures"] == 0
+    assert _failures(world, routine) == 0
+
+
+def test_resume_drops_stale_pending_events_before_the_next_tick(world):
+    tasks, automations, service, clock = world
+    routine = _automation(tasks)
+    tasks.update_task(routine["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing",
+                                      "routineNextRunAt": None})
+    automations.mark_pending(routine["id"], {"eventType": "task.status_changed", "toStatus": "blocked",
+                                             "subject": {"title": "stale"}, "depth": 0}, clock.value)
+    resumed = service.resume(routine["id"], {"isAdmin": True, "employeeId": "ops"}, clock.value)
+    assert resumed["routineState"] == "active"
+    assert run(world) == 0
+    assert _occurrences(tasks, routine["id"]) == []
+    assert "Automation resumed by an admin." in [item.get("message") for item in tasks.get_task(routine["id"])["activity"]]

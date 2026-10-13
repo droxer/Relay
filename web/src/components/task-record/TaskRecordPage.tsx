@@ -69,6 +69,7 @@ export function TaskRecordPage({
   onOpenThread,
   onOpenRun,
   onRun,
+  onResume,
   onCancel,
   onToggleBlock,
   onDone,
@@ -90,6 +91,7 @@ export function TaskRecordPage({
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
+  onResume: () => void;
   onCancel: () => void;
   onToggleBlock: () => void;
   onDone: () => void;
@@ -227,8 +229,9 @@ export function TaskRecordPage({
             <AutomationPauseBanner
               task={task}
               className="record-automation-paused"
-              canResume={!readOnly && canManageAutomation(task, currentUser)}
-              disabled={busyAction !== null}
+              onResume={!readOnly && canManageAutomation(task, currentUser) ? onResume : undefined}
+              busy={busyAction !== null}
+              resuming={busyAction === "resume"}
             />
             <RecordRuns
               taskId={task.id}

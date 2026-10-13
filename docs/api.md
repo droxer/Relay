@@ -100,11 +100,15 @@ write path sets it when an automation becomes active or its triggers change
 (cleared when it is not active), and the scheduler clock seeds missing values
 and advances it after each fire.
 
-Relay counts consecutive failed runs of an automation's own occurrences. A
-failed run adds one and a completed run resets the count to zero. A cancelled
-run does neither, so a human cancel never counts. Runs of other work don't
-count either. After 3 failures in a row (`FAILURE_LIMIT`), Relay pauses an
-active automation with `routineState: "paused_by_relay"` and
+Relay counts consecutive failed occurrences of an automation, one verdict per
+occurrence (the task's status change, not its agent runs: a round may fail a
+run and still finish). An occurrence that reaches `done` resets the count to
+zero. One that reaches `blocked` because its round failed or could not be
+dispatched adds one. A cancel, a person's own block, `waiting_for_human`,
+`review`, and deletion neither count nor reset. Each occurrence counts at most
+once, so a retried occurrence that blocks again is not a second failure. After
+3 failed occurrences in a row (`FAILURE_LIMIT`), Relay pauses an active
+automation with `routineState: "paused_by_relay"` and
 `routinePauseReason: "failing"`, and records it in the automation's activity.
 
 `POST /api/v1/tasks/{id}/automation/resume` turns a paused automation back on.
@@ -113,7 +117,8 @@ task that is not an automation gets 404. On an already-active automation it
 returns the task unchanged. Otherwise it drops pending events, so stale ones
 can't fire the moment it resumes, and resets the failure count. It sets
 `routineState: "active"`, clears `routinePauseReason`, recomputes
-`routineNextRunAt`, and returns the task. Resuming a `paused_by_relay`
+`routineNextRunAt`, records who resumed it in the activity, and returns the
+task. Resuming a `paused_by_relay`
 automation also starts a fresh hourly rate window. Resuming an owner pause
 keeps the window, so pausing and resuming can't get around the hourly cap.
 `PATCH` with `routineState: "active"` runs the same reset.
