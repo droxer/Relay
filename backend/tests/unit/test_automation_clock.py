@@ -125,3 +125,35 @@ def test_failed_firing_rolls_back_the_clock_advance(world, monkeypatch):
     assert service.tick(datetime(2026, 10, 13, 9, 1, tzinfo=UTC)) == 0
     assert tasks.get_task(routine["id"])["routineNextRunAt"] == "2026-10-13T09:00:00+00:00"
     assert automations.get_state(routine["id"])["pending"] is False
+
+
+def test_bad_schedule_firing_does_not_roll_back_healthy_schedule(world, monkeypatch):
+    from relay.automations.service import AutomationService
+    from relay.persistence.session_store import DatabaseSessionStore
+
+    tasks, automations, _ = world
+    sessions = DatabaseSessionStore(str(tasks.engine.url), create_schema=True)
+    service = AutomationService(task_store=tasks, session_store=sessions, automation_store=automations,
+                                project_store=None)
+    bad = _routine(tasks, routineNextRunAt="2026-10-13T09:00:00+00:00")
+    good = _routine(tasks, routineNextRunAt="2026-10-13T09:00:00+00:00")
+    original = tasks.create_triggered_occurrence
+
+    def fail_bad(routine_id, **kwargs):
+        result = original(routine_id, **kwargs)
+        if routine_id == bad["id"]:
+            raise RuntimeError("failed after creating the occurrence")
+        return result
+
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", fail_bad)
+    now = datetime(2026, 10, 13, 9, 1, tzinfo=UTC)
+    assert service.tick(now) == 1
+    assert tasks.get_task(bad["id"])["routineNextRunAt"] == "2026-10-13T09:00:00+00:00"
+    assert tasks.get_task(bad["id"]).get("occurrenceIds", []) == []
+    assert automations.get_state(bad["id"])["pending"] is False
+    assert tasks.get_task(good["id"])["routineNextRunAt"] == "2026-10-14T09:00:00+00:00"
+    assert len(tasks.get_task(good["id"])["occurrenceIds"]) == 1
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", original)
+    assert service.tick(now) == 1
+    assert len(tasks.get_task(bad["id"])["occurrenceIds"]) == 1
+    assert len(tasks.get_task(good["id"])["occurrenceIds"]) == 1

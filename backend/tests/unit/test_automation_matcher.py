@@ -760,3 +760,30 @@ def test_a_block_with_no_recorded_cause_does_not_count(world):
     run(world)
     assert tasks.get_task(occurrence["id"])["attention"]["source"] == "legacy"
     assert _failures(world, routine) == 0
+
+
+def test_broadcast_failure_retries_only_failed_recipient(world, monkeypatch):
+    tasks, automations, _, clock = world
+    bad = _automation(tasks)
+    good = _automation(tasks)
+    _block(tasks)
+    original = tasks.create_triggered_occurrence
+
+    def fail_bad(routine_id, **kwargs):
+        occurrence = original(routine_id, **kwargs)
+        if routine_id == bad["id"]:
+            raise RuntimeError("failure after occurrence writes")
+        return occurrence
+
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", fail_bad)
+    assert run(world) == 1
+    assert _occurrences(tasks, bad["id"]) == []
+    assert len(_occurrences(tasks, good["id"])) == 1
+    assert automations.get_state(bad["id"])["pending"] is False
+    # Even after the healthy occurrence ends, retry must not redeliver to it.
+    tasks.update_task(_occurrences(tasks, good["id"])[0]["id"], {"status": "done"})
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", original)
+    assert run(world) == 1
+    assert len(_occurrences(tasks, bad["id"])) == 1
+    assert len(_occurrences(tasks, good["id"])) == 1
+    assert run(world) == 0
