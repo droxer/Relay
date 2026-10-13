@@ -482,6 +482,29 @@ def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> 
         assert automations.get_state(task["id"]) == before_state
 
 
+@pytest.mark.parametrize("actor, expected_status", [("bob", 403), ("alice", 200), ("admin", 200)])
+def test_only_owner_or_admin_can_convert_a_relay_paused_automation(monkeypatch, actor: str, expected_status: int) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        task = _routine(client, agent)
+        store = client.app.state.task_store
+        store.update_task(task["id"], {
+            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay",
+            "routinePauseReason": "failing", "routineNextRunAt": None,
+        })
+        before = store.get_task(task["id"])
+        if actor != "admin":
+            _login(client, actor)
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"isRoutine": False})
+        assert response.status_code == expected_status, response.text
+        if expected_status == 403:
+            assert "owner or an admin" in response.json()["detail"]
+            assert store.get_task(task["id"]) == before
+        else:
+            assert response.json()["isRoutine"] is False
+
+
 @pytest.mark.parametrize("actor", ["alice", "admin"])
 def test_owner_or_admin_can_lift_relay_pause_via_patch(monkeypatch, actor: str) -> None:
     with TemporaryDirectory() as root:
