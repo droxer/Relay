@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { listedOpeningEvents, openingTriggerLabel, parseAutomationOpening } from "../src/lib/automationOpening.js";
 
-// Fixtures mirror backend/relay/automations/trigger.py `trigger_context_block`
+// Fixtures mirror backend/relay/automations/context.py `trigger_context_block`
 // appended to a routine occurrence's description (`routine_occurrence_events`)
 // and joined to its title by `task_goal_text`.
 const goal = (description: string, block?: string) =>

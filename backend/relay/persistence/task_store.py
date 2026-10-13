@@ -40,7 +40,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
-from ..automations.trigger import trigger_kind
+from ..automations.model import trigger_kind
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
 from .automation_store import insert_outbox_rows, task_outbox_rows

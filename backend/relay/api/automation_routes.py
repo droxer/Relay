@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from ..automations.trigger import trigger_kind
+from ..automations.model import trigger_kind
 from ..security.edge import client_ip
 from .contract import API_PREFIX
 from .deps import AppContextDep

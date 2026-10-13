@@ -11,7 +11,7 @@ from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
 from ..automations.matcher import AutomationMatcher, in_flight_occurrence
-from ..automations.trigger import TriggerError, normalize_trigger, trigger_kind, trigger_of
+from ..automations.model import TriggerError, normalize_trigger, trigger_kind, trigger_of
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
 from ..persistence.automation_store import AUTOMATION_LOCK_KEY

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from relay.automations.trigger import (
-    TriggerError, event_matches, normalize_trigger, trigger_context_block, trigger_kind,
-)
+from relay.automations.context import trigger_context_block
+from relay.automations.model import TriggerError, event_matches, normalize_trigger, trigger_kind
 
 
 def test_schedule_and_webhook_take_no_options() -> None:

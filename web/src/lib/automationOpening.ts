@@ -3,7 +3,7 @@
 
    The backend writes the occurrence's goal as `title\n\ndescription`
    (scheduler.py `task_goal_text`) and, for a run something fired, appends
-   `trigger_context_block` (automations/trigger.py) to the description. That
+   `trigger_context_block` (automations/context.py) to the description. That
    block stays English on purpose — it is the agent's prompt — so the web
    parses its fixed shapes here and translates them on render. Keep the
    patterns in step with `_event_line`; anything unrecognised passes through

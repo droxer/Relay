@@ -2,7 +2,7 @@ import type { RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, Routine
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-/* What starts an automation. Mirrors backend/relay/automations/trigger.py —
+/* What starts an automation. Mirrors backend/relay/automations/model.py —
    keep the kinds, `on` values, and filter rules in step with it. */
 
 export const TRIGGER_KINDS: readonly RoutineTriggerKind[] = ["schedule", "task_event", "run_event", "webhook", "manual"];
