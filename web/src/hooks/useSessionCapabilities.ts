@@ -16,6 +16,9 @@ import { AUTH_CAPABILITIES_QUERY_KEY } from "./useAuthSession";
 export function useSessionCapabilities(): Required<SessionCapabilities> {
   const query = useQuery<SessionCapabilities>({
     queryKey: AUTH_CAPABILITIES_QUERY_KEY,
+    // `enabled: false` keeps this read-only, but react-query v5 still
+    // requires a queryFn; it is never invoked.
+    queryFn: () => ({}),
     enabled: false,
     staleTime: Infinity,
   });
