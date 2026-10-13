@@ -95,7 +95,9 @@ from .services.event_notifier import (
 )
 from .services.team_membership import reconcile_team_memberships
 from .services.workspace_query import WorkspaceQueryBroker
-from .tasks import TaskScheduler
+from .tasks import TaskScheduler, materialize_legacy_task_assignment
+from .automations.clock import ScheduleClock
+from .automations.service import AutomationService
 from .automations.matcher import AutomationMatcher
 from .persistence.automation_store import DatabaseAutomationStore
 
@@ -326,7 +328,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         org_settings_store=org_settings_store,
         today=today,
     )
-    if scheduler is None or scheduler.automation_matcher is None:
+    if scheduler is None or scheduler.automations.matcher is None:
         for store in (task_store, session_store):
             if hasattr(store, "emit_automation_events"):
                 store.emit_automation_events = False
@@ -628,13 +630,31 @@ def task_scheduler_from_env(
     enabled = os.environ.get("RELAY_TASK_SCHEDULER_ENABLED", "1").strip().lower()
     if enabled in ("0", "false", "no", "off"):
         return None
-    return TaskScheduler(
-        automation_matcher=AutomationMatcher(
+    matcher = (
+        AutomationMatcher(
             task_store=task_store, session_store=session_store, automation_store=automation_store,
             today=today or scheduler_today_from_env(),
             max_runs_per_hour=max(1, int(os.environ.get("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "6"))),
             batch=max(1, int(os.environ.get("RELAY_AUTOMATION_OUTBOX_BATCH", "200"))),
-        ) if automation_store is not None and session_store is not None else None,
+        )
+        if automation_store is not None and session_store is not None
+        else None
+    )
+    return TaskScheduler(
+        automations=AutomationService(
+            matcher=matcher,
+            clock=ScheduleClock(
+                task_store=task_store,
+                project_store=project_store,
+                materialize_assignment=lambda task: materialize_legacy_task_assignment(
+                    task,
+                    task_store=task_store,
+                    registry=registry,
+                    agent_store=backend.agent_store,
+                    placement_store=backend.agent_placement_store,
+                ),
+            ),
+        ),
         task_store=task_store,
         registry=registry,
         backend=backend,

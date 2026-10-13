@@ -13,7 +13,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..tasks import next_routine_date
+from .clock import next_routine_date
 from .context import trigger_context_block
 from .model import trigger_kind
 

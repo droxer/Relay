@@ -136,7 +136,7 @@ def test_scheduler_database_phase_runs_off_event_loop(monkeypatch):
             assert threading.get_ident() != loop_thread
             return 0, 0
 
-        monkeypatch.setattr(scheduler, "_promote_due_routines", promote)
+        monkeypatch.setattr(scheduler.automations.clock, "run", promote)
         monkeypatch.setattr(scheduler, "_dispatchable_tasks", lambda: [])
         await scheduler.tick()
 
@@ -258,7 +258,7 @@ def test_scheduler_shutdown_waits_for_worker(tmp_path, monkeypatch):
         finished.set()
         return 0, 0
 
-    monkeypatch.setattr(scheduler, "_promote_due_routines", promote)
+    monkeypatch.setattr(scheduler.automations.clock, "run", promote)
     monkeypatch.setattr(scheduler, "_dispatchable_tasks", lambda: [])
 
     async def run():

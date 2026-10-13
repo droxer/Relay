@@ -111,7 +111,7 @@ def test_closed_project_routines_do_not_promote_or_advance_schedule(project_cont
     assert created.status_code == 201, created.text
     routine = created.json()
     close_project(client, project, state)
-    promoted, skipped = app.state.task_scheduler._promote_due_routines(date(2026, 9, 21))
+    promoted, skipped = app.state.task_scheduler.automations.clock.run(date(2026, 9, 21))
     assert (promoted, skipped) == (0, 1)
     started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
     assert started.status_code == 409
