@@ -167,6 +167,7 @@ class TaskStore(Protocol):
         depth: int,
         context: str,
         summary: dict[str, Any] | None = None,
+        allow_paused: bool = False,
     ) -> dict[str, Any] | None: ...
     def list_trigger_automations(self) -> list[dict[str, Any]]: ...
 

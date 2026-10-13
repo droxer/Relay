@@ -1,6 +1,6 @@
 """Turn outbox rows into pending automation events.
 
-Each tick drains the outbox, matches every row against the enabled event and
+Each tick drains the outbox, matches every row against the active event and
 webhook automations, and parks matches as pending state per automation.
 Firing (``firing.py``) then starts at most one occurrence per pending
 automation: events that arrive while a run is in flight collapse into the
@@ -15,7 +15,7 @@ from typing import Any
 from loguru import logger
 
 from ..persistence.automation_store import subject_of
-from .model import TriggerError, event_matches, is_active, normalize_trigger, trigger_kind, trigger_of
+from .model import EVENT_KINDS, event_matches, has_webhook, is_active, triggers_of
 
 MAX_AUTOMATION_DEPTH = 3
 OUTBOX_RETENTION = timedelta(days=7)
@@ -61,23 +61,20 @@ class AutomationMatcher:
         target_id = row.get("target_routine_id")
         if target_id:
             target = self._load(target_id)
-            if not target or not is_active(target):
+            if not target:
                 return []
             if row["kind"] == "manual":
-                return [target]
-            return [target] if trigger_kind(target) == "webhook" else []
+                # Run now speaks for itself, even on a paused automation — but not
+                # when Relay paused it for runaway volume.
+                return [] if target.get("routinePauseReason") == "rate_limited" else [target]
+            return [target] if is_active(target) and has_webhook(target) else []
         matched = []
         for task in automations.values():
             owner = task.get("ownerEmployeeId")
             subject = event.get("subject") or {}
             if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
                 continue
-            try:
-                trigger = normalize_trigger(trigger_of(task))
-            except TriggerError as error:
-                logger.warning("Invalid stored automation trigger", routine_id=task["id"], error=str(error))
-                continue
-            if event_matches(trigger, event):
+            if listens_for(task, event):
                 matched.append(task)
         return matched
 
@@ -119,3 +116,15 @@ class AutomationMatcher:
         except (KeyError, FileNotFoundError):
             return None
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
+
+
+def listens_for(task: dict[str, Any], event: dict[str, Any]) -> bool:
+    """Whether any of the task's event triggers matches. Duplicate triggers
+    match once. A stored trigger that no longer evaluates is skipped so one
+    bad record cannot fail the tick for every other automation."""
+    try:
+        return any(trigger.get("kind") in EVENT_KINDS and event_matches(trigger, event)
+                   for trigger in triggers_of(task))
+    except (AttributeError, TypeError) as error:
+        logger.warning("Invalid stored automation trigger", routine_id=task.get("id"), error=str(error))
+        return False

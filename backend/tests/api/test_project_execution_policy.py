@@ -102,7 +102,7 @@ def test_closed_project_blocks_user_writes_but_keeps_history_readable(project_co
 
 
 @pytest.mark.parametrize("state", ["disabled", "archived"])
-def test_closed_project_routines_do_not_promote_or_advance_schedule(project_context, state):
+def test_closed_project_routines_pause_instead_of_promoting(project_context, state):
     app, client, node, project, lead, worker = project_context
     created = client.post("/api/v1/tasks", json={
         "title": "Daily", "projectId": project["id"], "isRoutine": True,
@@ -115,7 +115,10 @@ def test_closed_project_routines_do_not_promote_or_advance_schedule(project_cont
     started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
     assert started.status_code == 409
     after = app.state.task_store.get_task(routine["id"])
-    assert after["routineNextRunDate"] == routine["routineNextRunDate"]
+    # A closed project is no target: the due slot pauses the automation and
+    # clears its next run rather than promoting or silently advancing.
+    assert (after["routineState"], after["routinePauseReason"]) == ("paused_by_relay", "no_target")
+    assert after.get("routineNextRunAt") is None
     assert after["occurrenceIds"] == []
 
 

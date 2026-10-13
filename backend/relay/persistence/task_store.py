@@ -736,13 +736,14 @@ class LocalTaskStore:
         depth: int,
         context: str,
         summary: dict[str, Any] | None = None,
+        allow_paused: bool = False,
     ) -> dict[str, Any] | None:
         with self._lock:
             try:
                 routine = self.get_task(routine_id)
             except KeyError:
                 return None
-            if not triggered_occurrence_allowed(routine):
+            if not triggered_occurrence_allowed(routine, allow_paused=allow_paused):
                 return None
             occurrence_events = routine_occurrence_events(
                 routine,
@@ -1827,6 +1828,7 @@ class DatabaseTaskStore:
         depth: int,
         context: str,
         summary: dict[str, Any] | None = None,
+        allow_paused: bool = False,
     ) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
@@ -1841,7 +1843,7 @@ class DatabaseTaskStore:
             if not row:
                 return None
             routine = self._current_snapshot(conn, row)
-            if not triggered_occurrence_allowed(routine):
+            if not triggered_occurrence_allowed(routine, allow_paused=allow_paused):
                 return None
             occurrence_events = routine_occurrence_events(
                 routine,
@@ -2340,9 +2342,16 @@ def triggered_occurrence_routine_events(
     ]
 
 
-def triggered_occurrence_allowed(routine: dict[str, Any]) -> bool:
+def triggered_occurrence_allowed(
+    routine: dict[str, Any], *, allow_paused: bool = False
+) -> bool:
+    """An active routine with a target may fire; ``allow_paused`` lets Run
+    now fire a paused one too."""
+    runnable = is_active(routine) or (
+        allow_paused and routine.get("isRoutine") and not routine.get("deletedAt")
+    )
     return bool(
-        is_active(routine)
+        runnable
         and (
             routine.get("assignedAgent")
             or routine.get("assignedTeamId")

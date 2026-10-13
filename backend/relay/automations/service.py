@@ -47,7 +47,7 @@ class AutomationService:
         self.matcher = AutomationMatcher(task_store=task_store, session_store=session_store,
                                          automation_store=automation_store, batch=batch)
         self.firing = AutomationFiring(task_store=task_store, automation_store=automation_store,
-                                       max_runs_per_hour=max_runs_per_hour)
+                                       project_store=project_store, max_runs_per_hour=max_runs_per_hour)
 
     def tick(self, now: datetime) -> int:
         """Return the number of occurrences fired."""

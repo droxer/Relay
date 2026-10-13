@@ -2,7 +2,9 @@
 
 The matcher parks matched events as pending state per automation; this
 module turns that state into at most one triggered occurrence per tick,
-subject to the in-flight, expiry, and hourly rate-cap rules.
+subject to the in-flight, expiry, target, and hourly rate-cap rules. An
+automation Relay cannot run — no target, or runaway volume — is paused
+rather than left holding events.
 """
 
 from __future__ import annotations
@@ -12,8 +14,10 @@ from typing import Any
 
 from loguru import logger
 
+from ..services.project_runtime import project_work_error
 from .context import trigger_context_block
-from .model import is_active, trigger_kind
+from .matcher import listens_for
+from .model import has_webhook, is_active
 from .schedule import resolve_timezone
 
 PENDING_TTL = timedelta(hours=24)
@@ -49,10 +53,12 @@ class AutomationFiring:
         *,
         task_store: Any,
         automation_store: Any,
+        project_store: Any = None,
         max_runs_per_hour: int = 6,
     ) -> None:
         self.task_store = task_store
         self.automation_store = automation_store
+        self.project_store = project_store
         self.max_runs_per_hour = max_runs_per_hour
 
     def fire(self, now: datetime) -> int:
@@ -65,14 +71,15 @@ class AutomationFiring:
     def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
         routine_id = state["routine_id"]
         routine = self._load(routine_id)
-        events = state["pending_events"]
+        events = [event for event in state["pending_events"] if routine and still_listened(routine, event)]
         manual = any(event.get("eventType") == "manual" for event in events)
-        scheduled = bool(events) and all(event.get("eventType") == "schedule" for event in events)
-        # Event or webhook events left over after a switch to a schedule or
-        # manual trigger are stale; the clock's own schedule events are not.
-        if not routine or not is_active(routine) or (
-            trigger_kind(routine) in ("schedule", "manual") and not manual and not scheduled
-        ):
+        scheduled_only = all(event.get("eventType") == "schedule" for event in events)
+        # Run now speaks for itself, even on a paused automation — but not
+        # when Relay paused it for runaway volume.
+        runnable = routine and events and (
+            is_active(routine) or (manual and routine.get("routinePauseReason") != RATE_LIMITED)
+        )
+        if not runnable:
             self.automation_store.clear_state(routine_id)
             return False
         if now - _aware(state["pending_since"]) > PENDING_TTL:
@@ -83,25 +90,23 @@ class AutomationFiring:
             return False
         if in_flight_occurrence(self.task_store, routine):
             return False
+        if not triggered_target(routine, self.project_store):
+            self.pause(routine_id, "no_target", "Automation paused: it has no agent, team, or open project to run on.")
+            return False
         window_start = _aware(state["fired_window_start"])
         count = int(state["fired_count"])
         if window_start is None or now - window_start >= RATE_WINDOW:
             window_start, count = now, 0
-        if count >= self.max_runs_per_hour:
-            self.task_store.update_task(routine_id, {"routineState": "paused_by_relay", "routinePauseReason": RATE_LIMITED,
-                                                     "routineNextRunAt": None})
-            self.task_store.record_activity(routine_id, f"Automation paused: more than {self.max_runs_per_hour} runs in an hour.")
-            logger.warning("Automation paused by rate cap", routine_id=routine_id)
-            self.automation_store.clear_state(routine_id)
+        # A schedule fires at most once per slot, so only event, webhook, and
+        # manual firings count toward the hourly cap.
+        if not scheduled_only and count >= self.max_runs_per_hour:
+            self.pause(routine_id, RATE_LIMITED, f"Automation paused: more than {self.max_runs_per_hour} runs in an hour.")
             return False
-        events = state["pending_events"]
-        # The occurrence's calendar day is the server's, like the legacy
-        # due date it replaces.
-        run_date = now.astimezone(resolve_timezone(None)).date().isoformat()
-        kind = "manual" if manual else "schedule" if scheduled else trigger_kind(routine)
+        kind = fired_kind(events, manual)
         occurrence = self.task_store.create_triggered_occurrence(
             routine_id,
-            run_date=run_date,
+            # The occurrence's calendar day is the server's.
+            run_date=now.astimezone(resolve_timezone(None)).date().isoformat(),
             trigger_kind=kind,
             summary={"eventType": "manual" if manual else events[0]["eventType"],
                      "eventCount": len(events) + int(state["pending_dropped"]),
@@ -111,18 +116,25 @@ class AutomationFiring:
             depth=max(int(event.get("depth") or 0) for event in events),
             context=trigger_context_block(events, int(state["pending_dropped"]),
                                           fired_by="manual" if manual else None),
+            allow_paused=manual,
         )
         if not occurrence:
-            # No agent, team, or project yet: keep the events until one is
-            # assigned or they expire, and say so once.
             logger.info("Automation could not start", routine_id=routine_id)
             return False
         self.automation_store.save_state(routine_id, {
-            "routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
-            "pending_since": None, "fired_window_start": window_start, "fired_count": count + 1,
+            **state, "pending": False, "pending_events": [], "pending_dropped": 0, "pending_since": None,
+            "fired_window_start": window_start, "fired_count": count if scheduled_only else count + 1,
         })
-        logger.info("Automation fired", routine_id=routine_id, occurrence_id=occurrence["id"], events=len(events))
+        logger.info("Automation fired", routine_id=routine_id, occurrence_id=occurrence["id"], kind=kind,
+                    events=len(events))
         return True
+
+    def pause(self, routine_id: str, reason: str, message: str) -> None:
+        self.task_store.update_task(routine_id, {"routineState": "paused_by_relay", "routinePauseReason": reason,
+                                                 "routineNextRunAt": None})
+        self.task_store.record_activity(routine_id, message)
+        logger.warning("Automation paused", routine_id=routine_id, reason=reason)
+        self.automation_store.clear_state(routine_id)
 
     def _load(self, task_id: str) -> dict[str, Any] | None:
         try:
@@ -130,3 +142,33 @@ class AutomationFiring:
         except (KeyError, FileNotFoundError):
             return None
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
+
+
+def still_listened(routine: dict[str, Any], event: dict[str, Any]) -> bool:
+    """Whether a pending event still belongs to the routine's triggers. An
+    event or webhook left over after its trigger was removed is stale; Run
+    now and the clock's own schedule slots always stand."""
+    event_type = event.get("eventType")
+    if event_type in ("manual", "schedule"):
+        return True
+    if event_type == "webhook":
+        return has_webhook(routine)
+    return listens_for(routine, event)
+
+
+def fired_kind(events: list[dict[str, Any]], manual: bool) -> str:
+    if manual:
+        return "manual"
+    event_type = events[0]["eventType"]
+    if event_type in ("schedule", "webhook"):
+        return event_type
+    return "task_event" if event_type.startswith("task.") else "run_event"
+
+
+def triggered_target(routine: dict[str, Any], project_store: Any) -> bool:
+    """Whether the routine has somewhere to run: an open project, or an
+    assigned agent or team."""
+    if routine.get("projectId"):
+        project = project_store.get_project(routine["projectId"]) if project_store else None
+        return not project_work_error(project)
+    return bool(routine.get("assignedAgent") or routine.get("assignedTeamId"))

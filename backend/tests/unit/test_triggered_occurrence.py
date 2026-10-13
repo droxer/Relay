@@ -66,3 +66,16 @@ def test_schedule_and_manual_occurrences_record_their_trigger(store):
     assert scheduled["routineTriggerKind"] == "schedule"
     manual = store.create_triggered_occurrence(routine["id"], run_date="2026-10-04", trigger_kind="manual", depth=0, context="")
     assert manual["routineTriggerKind"] == "manual"
+
+
+def test_allow_paused_fires_an_owner_paused_routine_but_not_a_deleted_one(store) -> None:
+    paused = _automation(store, routineEnabled=False)
+    assert store.create_triggered_occurrence(paused["id"], run_date="2026-10-02", trigger_kind="manual",
+                                             depth=0, context="", allow_paused=True)["sourceRoutineId"] == paused["id"]
+    unassigned = store.create_task({"title": "x", "isRoutine": True, "routineState": "paused", "routineTriggers": []})
+    assert store.create_triggered_occurrence(unassigned["id"], run_date="2026-10-02", trigger_kind="manual",
+                                             depth=0, context="", allow_paused=True) is None
+    gone = _automation(store, routineEnabled=False)
+    store.delete_task(gone["id"])
+    assert store.create_triggered_occurrence(gone["id"], run_date="2026-10-02", trigger_kind="manual",
+                                             depth=0, context="", allow_paused=True) is None
