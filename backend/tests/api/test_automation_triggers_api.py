@@ -646,3 +646,56 @@ def test_completed_once_remains_editable_and_active_resume_is_noop(monkeypatch) 
         assert response.status_code == 200, response.text
         assert response.json()["title"] == "Finished"
         assert client.post(path + "/automation/resume").status_code == 200
+
+
+@pytest.mark.parametrize("body, status", [({"routineState": "active"}, 403), ({"isRoutine": False}, 403), ({"routineTriggers": DAILY_9}, 200)])
+def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body: dict, status: int) -> None:
+    from relay.api import task_routes
+
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        task = _routine(client, agent)
+        store = client.app.state.task_store
+        store.update_task(task["id"], {"assigneeEmployeeId": "bob"})
+        _login(client, "bob")
+        original = task_routes.routine_fields
+        paused = False
+
+        def racing_fields(payload, *, current=None):
+            nonlocal paused
+            fields = original(payload, current=current)
+            if not paused:
+                paused = True
+                store.update_task(task["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
+            return fields
+
+        monkeypatch.setattr(task_routes, "routine_fields", racing_fields)
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json=body)
+        assert response.status_code == status, response.text
+        current = store.get_task(task["id"])
+        assert current["routineState"] == "paused_by_relay"
+        assert current["routinePauseReason"] == "failing"
+
+
+def test_resume_reads_pause_after_entering_automation_transaction(monkeypatch) -> None:
+    from contextlib import contextmanager
+    from relay.automations import service
+
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent, routineState="paused")
+        store, automations = client.app.state.task_store, client.app.state.automation_store
+        automations.save_state(task["id"], {**automations.get_state(task["id"]), "fired_count": 3, "fired_window_start": datetime.now(timezone.utc)})
+        original = service.store_transaction
+
+        @contextmanager
+        def racing_transaction(engine):
+            store.update_task(task["id"], {"routineState": "paused_by_relay", "routinePauseReason": "rate_limited"})
+            with original(engine) as conn:
+                yield conn
+
+        monkeypatch.setattr(service, "store_transaction", racing_transaction)
+        response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
+        assert response.status_code == 200, response.text
+        assert automations.get_state(task["id"])["fired_count"] == 0
