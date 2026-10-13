@@ -200,10 +200,12 @@ def test_failed_firing_rolls_back_outbox_and_pending(world, monkeypatch):
         original(*args, **kwargs)
         raise RuntimeError("interrupted")
     monkeypatch.setattr(tasks, "create_triggered_occurrence", fail)
-    assert run(world) == 0  # the tick logs the failure and rolls back
+    assert run(world) == 0  # this recipient rolls back and its matched event retries
     assert _occurrences(tasks, routine["id"]) == []
     assert automations.list_pending_states() == []
-    assert len(automations.claim_outbox(10, clock())) == 2
+    [retry] = automations.claim_outbox(10, clock())
+    assert retry["target_routine_id"] == routine["id"]
+    assert retry["event_type"] == "task.status_changed"
 
 
 def test_scheduler_tick_fires_automation_through_app(monkeypatch, tmp_path):
@@ -763,7 +765,7 @@ def test_a_block_with_no_recorded_cause_does_not_count(world):
 
 
 def test_broadcast_failure_retries_only_failed_recipient(world, monkeypatch):
-    tasks, automations, _, clock = world
+    tasks, automations, _, _ = world
     bad = _automation(tasks)
     good = _automation(tasks)
     _block(tasks)
@@ -787,3 +789,67 @@ def test_broadcast_failure_retries_only_failed_recipient(world, monkeypatch):
     assert len(_occurrences(tasks, bad["id"])) == 1
     assert len(_occurrences(tasks, good["id"])) == 1
     assert run(world) == 0
+
+
+@pytest.mark.parametrize("change", [
+    {"routineState": "paused"},
+    {"routineTriggers": []},
+    {"routineTriggers": [{"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "done"}}]},
+])
+def test_targeted_event_retry_rechecks_current_definition(world, monkeypatch, change):
+    tasks, automations, _, _ = world
+    routine = _automation(tasks)
+    _block(tasks)
+    original = tasks.create_triggered_occurrence
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unavailable")))
+    assert run(world) == 0
+    tasks.update_task(routine["id"], change)
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", original)
+    assert run(world) == 0
+    assert _occurrences(tasks, routine["id"]) == []
+    assert automations.get_state(routine["id"])["pending"] is False
+
+
+def test_targeted_retry_preserves_timestamp_provenance_and_event_count(world, monkeypatch):
+    from relay.persistence.automation_store import automation_outbox
+    from relay.persistence.store_common import store_transaction
+    from sqlalchemy import select
+
+    tasks, automations, _, _ = world
+    routine = _automation(tasks)
+    _block(tasks)
+
+    def rows():
+        with store_transaction(automations.engine) as conn:
+            return [dict(row) for row in conn.execute(select(automation_outbox)).mappings()]
+
+    source = next(row for row in rows() if row["event_type"] == "task.status_changed")
+    original = tasks.create_triggered_occurrence
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unavailable")))
+    for _ in range(2):
+        assert run(world) == 0
+        [retry] = rows()
+        assert retry["target_routine_id"] == routine["id"]
+        for field in ("created_at", "source_id", "source_type", "origin_automation_id", "depth", "payload", "kind", "event_type"):
+            assert retry[field] == source[field]
+    monkeypatch.setattr(tasks, "create_triggered_occurrence", original)
+    assert run(world) == 1
+    [occurrence] = _occurrences(tasks, routine["id"])
+    assert occurrence["routineTriggerSummary"]["eventCount"] == 1
+
+
+def test_missing_pending_routine_is_cleared(world):
+    _, automations, _, clock = world
+    automations.mark_pending("missing-routine", {"eventType": "manual", "depth": 0}, clock())
+    assert run(world) == 0
+    assert automations.get_state("missing-routine")["pending"] is False
+
+
+def test_targeted_event_retry_keeps_owner_scope(world):
+    tasks, _, service, _ = world
+    routine = _automation(tasks, ownerEmployeeId="owner-one")
+    event = {"eventType": "task.status_changed", "subject": {"ownerEmployeeId": "owner-two"}, "toStatus": "blocked", "depth": 0}
+    row = {"kind": "task_event", "target_routine_id": routine["id"]}
+    assert service.matcher._targets(row, event, {}) == []
+    event["subject"]["assigneeEmployeeId"] = "owner-one"
+    assert [task["id"] for task in service.matcher._targets(row, event, {})] == [routine["id"]]

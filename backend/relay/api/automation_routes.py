@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from ..automations.model import has_webhook, is_active, public_task_result
+from ..automations.model import TriggerError, has_webhook, is_active, public_task_result
 from ..automations.service import automation_service
 from ..automations.schedule import ScheduleError, next_fires, normalize_schedule, summarize
 from ..security.edge import client_ip
@@ -121,6 +121,8 @@ async def resume_automation(task_id: str, request: Request, ctx: AppContextDep) 
         resumed = await run_in_threadpool(service.resume, task_id, actor, datetime.now(timezone.utc))
     except PermissionError as error:
         raise HTTPException(403, str(error)) from error
+    except TriggerError as error:
+        raise HTTPException(400, str(error)) from error
     return public_task_result(resumed)
 
 

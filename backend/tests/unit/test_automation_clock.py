@@ -121,7 +121,7 @@ def test_failed_firing_rolls_back_the_clock_advance(world, monkeypatch):
     service = AutomationService(task_store=tasks, session_store=sessions, automation_store=automations,
                                 project_store=None)
     routine = _routine(tasks, routineNextRunAt="2026-10-13T09:00:00+00:00")
-    monkeypatch.setattr(service.firing, "fire", lambda now: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(service.firing, "fire_one", lambda *args: (_ for _ in ()).throw(RuntimeError("boom")))
     assert service.tick(datetime(2026, 10, 13, 9, 1, tzinfo=UTC)) == 0
     assert tasks.get_task(routine["id"])["routineNextRunAt"] == "2026-10-13T09:00:00+00:00"
     assert automations.get_state(routine["id"])["pending"] is False
@@ -157,3 +157,19 @@ def test_bad_schedule_firing_does_not_roll_back_healthy_schedule(world, monkeypa
     assert service.tick(now) == 1
     assert len(tasks.get_task(bad["id"])["occurrenceIds"]) == 1
     assert len(tasks.get_task(good["id"])["occurrenceIds"]) == 1
+
+
+def test_outer_failure_rolls_back_released_schedule_savepoint(world, monkeypatch):
+    from relay.automations.service import AutomationService
+    from relay.persistence.session_store import DatabaseSessionStore
+
+    tasks, automations, _ = world
+    sessions = DatabaseSessionStore(str(tasks.engine.url), create_schema=True)
+    service = AutomationService(task_store=tasks, session_store=sessions, automation_store=automations,
+                                project_store=None)
+    routine = _routine(tasks, routineNextRunAt="2026-10-13T09:00:00+00:00")
+    monkeypatch.setattr(service.matcher, "finish", lambda *args: (_ for _ in ()).throw(RuntimeError("outbox finalization failed")))
+    assert service.tick(datetime(2026, 10, 13, 9, 1, tzinfo=UTC)) == 0
+    assert tasks.get_task(routine["id"])["routineNextRunAt"] == "2026-10-13T09:00:00+00:00"
+    assert tasks.get_task(routine["id"]).get("occurrenceIds", []) == []
+    assert automations.get_state(routine["id"])["pending"] is False

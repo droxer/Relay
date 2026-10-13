@@ -1,5 +1,5 @@
 """One tick of automation work: the schedule clock, outbox matching, then
-firing — all in one locked transaction."""
+firing — each automation isolated within one locked transaction."""
 
 from __future__ import annotations
 
@@ -16,7 +16,14 @@ from ..persistence.store_common import store_transaction
 from .clock import ScheduleClock, next_run_at
 from .firing import AutomationFiring, in_flight_occurrence, triggered_target
 from .matcher import AutomationMatcher
-from .model import LEGACY_FIELDS, TriggerError, normalize_triggers, state_of, triggers_of
+from .model import (
+    LEGACY_FIELDS,
+    TriggerError,
+    normalize_triggers,
+    state_of,
+    triggers_of,
+)
+from .schedule import next_fire_after
 
 if TYPE_CHECKING:
     from ..api.deps import AppContext
@@ -56,11 +63,26 @@ def routine_fields_v2(body: dict[str, Any], *, current: dict[str, Any] | None, n
     state = body.get("routineState") or (state_of(current) if current else "paused")
     fields: dict[str, Any] = {"isRoutine": True, "routineTriggers": triggers, "routineState": state}
     if state == "active":
+        # An unchanged, completed one-off remains editable. New schedules and
+        # a transition back to active must still have their one-off in the future.
+        if (not current or not current.get("isRoutine") or state_of(current) != "active"
+                or triggers != triggers_of(current)):
+            validate_future_once(triggers, now)
         fields["routinePauseReason"] = None
         fields["routineNextRunAt"] = next_run_at({"routineTriggers": triggers}, now)
     else:
         fields["routineNextRunAt"] = None
     return fields
+
+
+def validate_future_once(triggers: list[dict[str, Any]], now: datetime) -> None:
+    """Reject an expired one-off when saving or activating a schedule."""
+    for index, trigger in enumerate(triggers):
+        if trigger["kind"] != "schedule":
+            continue
+        schedule = trigger["schedule"]
+        if "once" in schedule["repeat"] and next_fire_after(schedule, now) is None:
+            raise TriggerError(f"routineTriggers[{index}].schedule.repeat.once must be in the future.")
 
 
 def max_runs_per_hour_from_env() -> int:
@@ -100,9 +122,34 @@ class AutomationService:
                     text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY}
                 ):
                     return 0
-                self.clock.run(now)
-                self.matcher.drain(now)
-                return self.firing.fire(now)
+                # SQLite legacy transaction mode does not BEGIN on reads.
+                # Begin explicitly before a savepoint, whose release must
+                # never commit independently of this outer transaction.
+                if conn.dialect.name == "sqlite" and not conn.connection.driver_connection.in_transaction:
+                    conn.exec_driver_sql("BEGIN")
+                rows, deliveries = self.matcher.prepare(now)
+                routine_ids = dict.fromkeys([
+                    *(task["id"] for task in self.task_store.list_unseeded_schedules()),
+                    *(task["id"] for task in self.task_store.list_due_schedules(now)),
+                    *deliveries,
+                    *(state["routine_id"] for state in self.automation_store.list_pending_states()),
+                ])
+                fired = 0
+                failed = {}
+                for routine_id in routine_ids:
+                    try:
+                        # State/outcome writes, schedule advance, and occurrence
+                        # creation either all commit or all roll back together.
+                        with conn.begin_nested():
+                            self.matcher.deliver(routine_id, deliveries.get(routine_id, []), now)
+                            self.clock.run_one(routine_id, now)
+                            did_fire = self.firing.fire_one(routine_id, now)
+                        fired += int(did_fire)
+                    except Exception:  # noqa: BLE001 - isolate a failed automation after savepoint rollback
+                        logger.exception("Automation processing failed", routine_id=routine_id)
+                        failed[routine_id] = deliveries.get(routine_id, [])
+                self.matcher.finish(rows, failed, now)
+                return fired
         except Exception:
             logger.exception("Automation tick failed")
             return 0
@@ -110,18 +157,25 @@ class AutomationService:
     def resume(self, task_id: str, actor: dict[str, Any], now: datetime) -> dict[str, Any]:
         """Turn a paused automation back on. Owner or admin only
         (``PermissionError`` otherwise); an active one is returned as is."""
-        task = self.task_store.get_task(task_id)
-        if not actor.get("isAdmin") and task.get("ownerEmployeeId") != actor.get("employeeId"):
-            raise PermissionError("Only the automation's owner or an admin can resume it.")
-        previous = state_of(task)
-        if previous == "active":
-            return task
         with store_transaction(self.task_store.engine) as conn:
+            lock_automation_state(conn)
+            task = self.task_store.get_task(task_id)
+            if not actor.get("isAdmin") and task.get("ownerEmployeeId") != actor.get("employeeId"):
+                raise PermissionError("Only the automation's owner or an admin can resume it.")
+            if state_of(task) == "active":
+                return task
+            validate_future_once(triggers_of(task), now)
             prepare_resume(conn, self.automation_store, self.task_store, task, actor)
             return self.task_store.update_task(task_id, {
                 "routineState": "active", "routinePauseReason": None,
                 "routineNextRunAt": next_run_at(task, now),
             })
+
+
+def lock_automation_state(conn: Any) -> None:
+    """Serialize user automation state changes with scheduler ticks."""
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
 
 
 def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict[str, Any],
@@ -139,8 +193,7 @@ def prepare_resume(conn: Any, automation_store: Any, task_store: Any, task: dict
     task_id, previous_state = task["id"], state_of(task)
     if previous_state == "active":
         return
-    if conn.dialect.name == "postgresql":
-        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
+    lock_automation_state(conn)
     if previous_state == "paused_by_relay":
         automation_store.reset_rate_window(task_id)
     else:

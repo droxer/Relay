@@ -72,6 +72,10 @@ class AutomationFiring:
                 fired += 1
         return fired
 
+    def fire_one(self, routine_id: str, now: datetime) -> bool:
+        state = self.automation_store.get_state(routine_id)
+        return bool(state["pending"] and self._fire_one(state, now))
+
     def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
         routine_id = state["routine_id"]
         routine = self._load(routine_id)

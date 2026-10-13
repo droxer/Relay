@@ -72,6 +72,10 @@ export function routineState(
   if (!next && triggers.some((trigger) => trigger.kind !== "schedule")) return "listening";
   /* A Run-now-only automation watches for nothing; "Listening" would say it does. */
   if (triggers.length === 0) return "on_demand";
+  // A completed one-off has no future automatic run, but Run now still works.
+  if (!next && triggers.every((trigger) => trigger.kind === "schedule" && "once" in trigger.schedule.repeat)) {
+    return "on_demand";
+  }
   if (next && Date.parse(next) <= now.getTime()) return "due";
   return "scheduled";
 }

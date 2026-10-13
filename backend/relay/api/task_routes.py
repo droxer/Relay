@@ -18,6 +18,7 @@ from ..automations.model import (
 )
 from ..automations.service import (
     automation_triggers_enabled,
+    lock_automation_state,
     prepare_resume,
     request_manual_occurrence,
     routine_fields_v2,
@@ -543,6 +544,19 @@ def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, An
     return without_legacy_fields(get_task_for_actor(ctx.task_store, task_id, actor))
 
 
+def ensure_relay_pause_transition_allowed(
+    current: dict[str, Any], routine: dict[str, Any], actor: dict[str, Any]
+) -> None:
+    if (
+        state_of(current) == "paused_by_relay"
+        and (routine.get("routineState") in ("active", "paused") or routine.get("isRoutine") is False)
+        and not actor.get("isAdmin")
+        and current.get("ownerEmployeeId") != actor.get("employeeId")
+    ):
+        # An ordinary pause or conversion would let the assignee activate it later.
+        raise HTTPException(403, "Only the automation's owner or an admin can resume it.")
+
+
 @router.patch("/tasks/{task_id}")
 def update_task(
     task_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
@@ -595,6 +609,7 @@ def update_task(
         raise HTTPException(400, "Blocking requires a reason of 1–2000 characters.")
     due_date = date_field(body, "dueDate")
     routine = routine_fields(body, current=current)
+    ensure_relay_pause_transition_allowed(current, routine, actor)
     if "routineTriggers" in body:
         validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=current.get("ownerEmployeeId"))
     assignee = (
@@ -786,8 +801,18 @@ def update_task(
         **assignment_patch,
     }
     # Resuming here shares the resume route's state reset (prepare_resume).
-    resumed = routine.get("routineState") == "active" and state_of(current) != "active"
     with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
+        if routine:
+            # The scheduler can pause it after the initial request validation.
+            # Read again under its lock before judging or writing automation state.
+            lock_automation_state(conn)
+            current = get_task_for_actor(ctx.task_store, task_id, actor)
+            for field in routine:
+                update_payload.pop(field, None)
+            routine = routine_fields(body, current=current)
+            ensure_relay_pause_transition_allowed(current, routine, actor)
+            update_payload.update(routine)
+        resumed = routine.get("routineState") == "active" and state_of(current) != "active"
         if resumed:
             prepare_resume(conn, request.app.state.automation_store, ctx.task_store, current, actor)
         if status:

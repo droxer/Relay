@@ -12,7 +12,7 @@ from typing import Any
 
 from loguru import logger
 
-from .model import schedule_triggers
+from .model import is_active, schedule_triggers
 from .schedule import next_fire_after, resolve_timezone, summarize
 
 _EPSILON = timedelta(seconds=1)
@@ -71,6 +71,22 @@ class ScheduleClock:
         for routine in self.task_store.list_due_schedules(now):
             marked += self._fire_slot(routine, now)
         return marked
+
+    def run_one(self, routine_id: str, now: datetime) -> int:
+        """Seed and advance one schedule inside its firing savepoint."""
+        try:
+            routine = self.task_store.get_task(routine_id)
+        except (KeyError, FileNotFoundError):
+            return 0
+        if routine.get("deletedAt") or not routine.get("isRoutine") or not is_active(routine) or not schedule_triggers(routine):
+            return 0
+        if not routine.get("routineNextRunAt"):
+            self._seed(routine, now)
+            routine = self.task_store.get_task(routine_id)
+        due = routine.get("routineNextRunAt")
+        if due and datetime.fromisoformat(due) <= now:
+            return self._fire_slot(routine, now)
+        return 0
 
     def _seed(self, routine: dict[str, Any], now: datetime) -> None:
         try:

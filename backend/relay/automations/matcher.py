@@ -13,12 +13,18 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import insert
 
-from ..persistence.automation_store import subject_of
+from ..persistence.automation_store import automation_outbox, subject_of
+from ..persistence.store_common import new_database_id, store_transaction
 from .model import EVENT_KINDS, event_matches, has_webhook, is_active, triggers_of
 
 MAX_AUTOMATION_DEPTH = 3
 OUTBOX_RETENTION = timedelta(days=7)
+
+# An outcome has no trigger event; ordinary rows carry their enriched event.
+Delivery = tuple[dict[str, Any], dict[str, Any] | None]
+Deliveries = dict[str, list[Delivery]]
 
 
 class AutomationMatcher:
@@ -41,28 +47,64 @@ class AutomationMatcher:
         self.max_depth = max_depth
         self.batch = batch
 
-    def drain(self, now: datetime) -> None:
-        """Match one batch of outbox rows. Run inside the tick's transaction
-        so a failed tick loses no outbox events."""
+    def prepare(self, now: datetime) -> tuple[list[dict[str, Any]], Deliveries]:
+        """Claim a batch and route it without changing any automation state."""
         rows = self.automation_store.claim_outbox(self.batch, now)
-        if rows:
-            automations = {task["id"]: task for task in self.task_store.list_trigger_automations()}
-            for row in rows:
-                if row["kind"] == "occurrence_outcome":
-                    # Feeds the failure streak only; no automation listens for it.
-                    self._record_outcome(row)
+        automations = {task["id"]: task for task in self.task_store.list_trigger_automations()}
+        deliveries: Deliveries = {}
+        for row in rows:
+            if row["kind"] == "occurrence_outcome":
+                origin = row.get("origin_automation_id")
+                if origin:
+                    deliveries.setdefault(origin, []).append((row, None))
+                continue
+            event = self._enrich(row)
+            if event is None:
+                continue
+            for automation in self._targets(row, event, automations):
+                if self._is_loop(automation, event):
+                    logger.info("Automation event dropped as a loop", routine_id=automation["id"],
+                                event_type=event["eventType"], depth=event["depth"])
                     continue
-                event = self._enrich(row)
-                if event is None:
-                    continue
-                for automation in self._targets(row, event, automations):
-                    if self._is_loop(automation, event):
-                        logger.info("Automation event dropped as a loop", routine_id=automation["id"],
-                                    event_type=event["eventType"], depth=event["depth"])
-                        continue
-                    self.automation_store.mark_pending(automation["id"], event, now)
+                deliveries.setdefault(automation["id"], []).append((row, event))
+        return rows, deliveries
+
+    def deliver(self, routine_id: str, deliveries: list[Delivery], now: datetime) -> None:
+        """Apply one recipient's rows inside its schedule/firing savepoint."""
+        for row, event in deliveries:
+            if event is None:
+                self._record_outcome(row)
+                continue
+            # An earlier outcome may have paused this recipient. Recheck the
+            # current definition before parking the following event.
+            routine = self._load(routine_id)
+            if routine and self._targets({**row, "target_routine_id": routine_id}, event, {routine_id: routine}):
+                self.automation_store.mark_pending(routine_id, event, now)
+
+    def finish(self, rows: list[dict[str, Any]], failed: Deliveries, now: datetime) -> None:
+        """Replace broadcast rows by retries for only their failed recipients.
+
+        The outer transaction atomically deletes the claimed originals and
+        inserts these retries. Original timestamps and provenance survive,
+        so retries cannot extend retention or redeliver to healthy recipients.
+        """
+        with store_transaction(self.automation_store.engine) as conn:
+            for routine_id, deliveries in failed.items():
+                for row, _ in deliveries:
+                    values = {key: value for key, value in row.items() if key not in ("id", "target_routine_id", "claimed_at")}
+                    conn.execute(insert(automation_outbox).values(
+                        **values, id=new_database_id(), claimed_at=None,
+                        target_routine_id=routine_id,
+                    ))
             self.automation_store.delete_outbox([row["id"] for row in rows])
-        self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
+            self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
+
+    def drain(self, now: datetime) -> None:
+        """Match a batch without firing (also used by pending-state tooling)."""
+        rows, deliveries = self.prepare(now)
+        for routine_id, events in deliveries.items():
+            self.deliver(routine_id, events, now)
+        self.finish(rows, {}, now)
 
     def _record_outcome(self, row: dict[str, Any]) -> None:
         """An automation's own occurrence reaching a verdict feeds its failure
@@ -85,7 +127,11 @@ class AutomationMatcher:
                 # Run now speaks for itself, even on a paused automation — but not
                 # when Relay paused it for runaway volume.
                 return [] if target.get("routinePauseReason") == "rate_limited" else [target]
-            return [target] if is_active(target) and has_webhook(target) else []
+            if row["kind"] == "webhook":
+                return [target] if is_active(target) and has_webhook(target) else []
+            # A targeted event row is a retry of a broadcast delivery. Apply
+            # the same state, ownership, and current trigger checks again.
+            automations = {target_id: target} if is_active(target) else {}
         matched = []
         for task in automations.values():
             owner = task.get("ownerEmployeeId")
