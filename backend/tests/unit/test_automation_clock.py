@@ -110,3 +110,18 @@ def test_exhausted_schedule_is_not_rewritten_every_tick(world):
     clock.run(datetime(2026, 10, 13, 9, 2, tzinfo=UTC))
     clock.run(datetime(2026, 10, 13, 9, 3, tzinfo=UTC))
     assert len(tasks.get_task(routine["id"])["events"]) == version
+
+
+def test_failed_firing_rolls_back_the_clock_advance(world, monkeypatch):
+    from relay.automations.service import AutomationService
+    from relay.persistence.session_store import DatabaseSessionStore
+
+    tasks, automations, _ = world
+    sessions = DatabaseSessionStore(str(tasks.engine.url), create_schema=True)
+    service = AutomationService(task_store=tasks, session_store=sessions, automation_store=automations,
+                                project_store=None)
+    routine = _routine(tasks, routineNextRunAt="2026-10-13T09:00:00+00:00")
+    monkeypatch.setattr(service.firing, "fire", lambda now: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert service.tick(datetime(2026, 10, 13, 9, 1, tzinfo=UTC)) == 0
+    assert tasks.get_task(routine["id"])["routineNextRunAt"] == "2026-10-13T09:00:00+00:00"
+    assert automations.get_state(routine["id"])["pending"] is False

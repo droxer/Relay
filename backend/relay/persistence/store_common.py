@@ -916,6 +916,9 @@ def _apply_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) ->
     """
     from ..automations.model import LEGACY_FIELDS, upgrade_legacy
 
+    if "routineTriggers" in task and not any(key in task for key in LEGACY_FIELDS):
+        _apply_legacy_state_to_v2(task, event)
+        return
     _mirror_legacy_routine_fields(task, event)
     upgraded = upgrade_legacy({key: task[key] for key in LEGACY_FIELDS if key in task})
     task["routineTriggers"] = upgraded["routineTriggers"]
@@ -924,6 +927,26 @@ def _apply_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) ->
         task["routinePauseReason"] = upgraded["routinePauseReason"]
     else:
         task.pop("routinePauseReason", None)
+
+
+def _apply_legacy_state_to_v2(task: dict[str, Any], event: dict[str, Any]) -> None:
+    """A legacy-shaped write on a v2 snapshot (a v1 API PATCH, an old writer).
+
+    The triggers were decided in v2, so the event's legacy timing —
+    cadence, next run date, trigger, type — must not re-derive them, and no
+    legacy key comes back. Only ``routineEnabled`` carries over, as state.
+    """
+    enabled = event.get("routineEnabled")
+    if enabled is True:
+        task["routineState"] = "active"
+        task.pop("routinePauseReason", None)
+    elif enabled is False:
+        if event.get("routineDisabledReason") == "rate_limited":
+            task["routineState"] = "paused_by_relay"
+            task["routinePauseReason"] = "rate_limited"
+        else:
+            task["routineState"] = "paused"
+            task.pop("routinePauseReason", None)
 
 
 def _mirror_legacy_routine_fields(task: dict[str, Any], event: dict[str, Any]) -> None:

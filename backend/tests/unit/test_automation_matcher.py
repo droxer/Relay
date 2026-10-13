@@ -144,8 +144,8 @@ def test_rate_cap_pauses_the_automation(world) -> None:
         clock.value += timedelta(minutes=1)
     paused = tasks.get_task(routine["id"])
     assert len(_occurrences(tasks, routine["id"])) == 6
-    assert paused["routineEnabled"] is False
-    assert paused["routineDisabledReason"] == "rate_limited"
+    # The cap pauses through the v2 fields, which drop the legacy keys.
+    assert (paused["routineState"], paused["routinePauseReason"]) == ("paused_by_relay", "rate_limited")
 
 
 def test_webhook_rows_reach_only_their_automation(world) -> None:
@@ -302,7 +302,7 @@ def test_manual_requests_share_coalescing_and_hourly_cap(world, kind) -> None:
     assert len(automations.get_state(routine["id"])["pending_events"]) == 2
     tasks.update_task(first["id"], {"status": "done"})
     assert matcher.run() == 0
-    assert tasks.get_task(routine["id"])["routineDisabledReason"] == "rate_limited"
+    assert tasks.get_task(routine["id"])["routinePauseReason"] == "rate_limited"
     assert len(_occurrences(tasks, routine["id"])) == 1
 
 
@@ -373,3 +373,41 @@ def test_outbox_rows_are_written_only_when_a_matcher_drains_them(monkeypatch, tm
     _block(app.state.task_store)
     rows = app.state.automation_store.claim_outbox(100, datetime.now(timezone.utc))
     assert bool(rows) is expected
+
+
+DAILY_9_UTC = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
+
+
+def test_rate_cap_on_a_seeded_schedule_keeps_its_triggers(world) -> None:
+    tasks, automations, matcher, clock = world
+    routine = tasks.create_task({"title": "Digest", "isRoutine": True, "routineState": "active",
+                                 "routineTriggers": DAILY_9_UTC, "routineNextRunAt": "2026-10-03T09:00:00+00:00",
+                                 "assignedAgent": "codex", "assignedAgentId": "agent_1"})
+    matcher.max_runs_per_hour = 1
+    automations.enqueue_manual(routine["id"])
+    assert matcher.run() == 1
+    [first] = _occurrences(tasks, routine["id"])
+    tasks.update_task(first["id"], {"status": "done"})
+    automations.enqueue_manual(routine["id"])
+    assert matcher.run() == 0
+    paused = tasks.get_task(routine["id"])
+    assert paused["routineTriggers"] == DAILY_9_UTC
+    assert (paused["routineState"], paused["routinePauseReason"]) == ("paused_by_relay", "rate_limited")
+    assert "routineNextRunAt" not in paused
+    assert not {"routineEnabled", "routineDisabledReason", "routineCadence"} & paused.keys()
+
+
+def test_run_now_on_a_rate_limited_v2_routine_answers_rate_limited() -> None:
+    from relay.automations.service import request_manual_occurrence
+    routine = {"id": "r1", "isRoutine": True, "routineState": "paused_by_relay", "routinePauseReason": "rate_limited",
+               "routineTriggers": DAILY_9_UTC}
+    result = request_manual_occurrence(None, None, routine, {"isAdmin": True})
+    assert result["dispatch"]["state"] == "rejected"
+    assert result["dispatch"]["code"] == "rate_limited"
+
+
+def test_run_now_on_a_legacy_snapshot_falls_back_to_routine_enabled() -> None:
+    from relay.automations.service import request_manual_occurrence
+    routine = {"id": "r1", "isRoutine": True, "routineEnabled": False, "routineDisabledReason": "rate_limited"}
+    result = request_manual_occurrence(None, None, routine, {"isAdmin": True})
+    assert result["dispatch"]["code"] == "rate_limited"

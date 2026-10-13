@@ -70,12 +70,24 @@ class AutomationService:
             return 0
 
 
+def _runnable(task: dict[str, Any]) -> bool:
+    """Active in v2; a snapshot without ``routineState`` answers by its
+    legacy ``routineEnabled``."""
+    if "routineState" in task:
+        return is_active(task)
+    return bool(task.get("isRoutine") and task.get("routineEnabled") and not task.get("deletedAt"))
+
+
+def _pause_reason(task: dict[str, Any]) -> str | None:
+    return task.get("routinePauseReason") or task.get("routineDisabledReason")
+
+
 def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
     if not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
         raise HTTPException(403, "Only the automation's owner or an admin can run it.")
-    if not is_active(task):
+    if not _runnable(task):
         return {"task": task, "session": None, "dispatch": {
-            "state": "rejected", "code": task.get("routineDisabledReason") or "automation_disabled",
+            "state": "rejected", "code": _pause_reason(task) or "automation_disabled",
             "message": "Enable this automation before running it.",
         }}
     # A run already queued or running answers the click. Queueing a manual
@@ -95,9 +107,9 @@ def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict
     if new_ids:
         return ctx.task_store.get_task(new_ids[-1])
     return {"task": refreshed, "session": None, "dispatch": {
-        "state": "queued" if is_active(refreshed) else "rejected",
-        "code": refreshed.get("routineDisabledReason") or "automation_pending",
-        "message": "Run now is coalesced with pending automation events." if is_active(refreshed) else "Automation paused by its hourly run limit.",
+        "state": "queued" if _runnable(refreshed) else "rejected",
+        "code": _pause_reason(refreshed) or "automation_pending",
+        "message": "Run now is coalesced with pending automation events." if _runnable(refreshed) else "Automation paused by its hourly run limit.",
     }}
 
 

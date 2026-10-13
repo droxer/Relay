@@ -89,3 +89,49 @@ def test_pre_v2_webhook_snapshot_keeps_its_trigger_when_disabled():
     task = apply_task_events(stored, [ev("task.updated", 1, routineEnabled=False)], version=1)
     assert task["routineTriggers"] == [{"kind": "webhook"}]
     assert task["routineState"] == "paused"
+
+
+DAILY_TRIGGERS = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
+
+
+def _v2_created():
+    return created(routineTriggers=DAILY_TRIGGERS, routineState="active")
+
+
+def test_legacy_rate_limit_on_v2_snapshot_only_maps_state():
+    task = materialize_task_events([
+        _v2_created(),
+        ev("task.updated", 1, routineEnabled=False, routineDisabledReason="rate_limited"),
+    ])
+    assert task["routineTriggers"] == DAILY_TRIGGERS
+    assert (task["routineState"], task["routinePauseReason"]) == ("paused_by_relay", "rate_limited")
+    assert not {"routineEnabled", "routineDisabledReason", "routineCadence", "routineNextRunDate"} & task.keys()
+
+
+def test_legacy_reenable_on_v2_snapshot_ignores_legacy_timing():
+    task = materialize_task_events([
+        _v2_created(),
+        ev("task.updated", 1, routineEnabled=False, routineDisabledReason="rate_limited"),
+        ev("task.updated", 2, routineEnabled=True, routineCadence="weekly", routineNextRunDate="2026-10-20"),
+    ])
+    assert task["routineTriggers"] == DAILY_TRIGGERS
+    assert task["routineState"] == "active" and "routinePauseReason" not in task
+    assert not {"routineEnabled", "routineCadence", "routineNextRunDate", "routineType"} & task.keys()
+
+
+def test_legacy_disable_on_v2_snapshot_pauses_without_reason():
+    task = materialize_task_events([
+        _v2_created(),
+        ev("task.updated", 1, routineEnabled=False),
+    ])
+    assert task["routineTriggers"] == DAILY_TRIGGERS
+    assert task["routineState"] == "paused" and "routinePauseReason" not in task
+
+
+def test_lone_legacy_reason_on_v2_snapshot_is_ignored():
+    task = materialize_task_events([
+        _v2_created(),
+        ev("task.updated", 1, routineDisabledReason="rate_limited", routineTrigger={"kind": "webhook"}),
+    ])
+    assert task["routineTriggers"] == DAILY_TRIGGERS and task["routineState"] == "active"
+    assert not {"routineDisabledReason", "routineTrigger"} & task.keys()

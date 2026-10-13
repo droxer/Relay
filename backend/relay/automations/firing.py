@@ -88,7 +88,8 @@ class AutomationFiring:
         if window_start is None or now - window_start >= RATE_WINDOW:
             window_start, count = now, 0
         if count >= self.max_runs_per_hour:
-            self.task_store.update_task(routine_id, {"routineEnabled": False, "routineDisabledReason": RATE_LIMITED})
+            self.task_store.update_task(routine_id, {"routineState": "paused_by_relay", "routinePauseReason": RATE_LIMITED,
+                                                     "routineNextRunAt": None})
             self.task_store.record_activity(routine_id, f"Automation paused: more than {self.max_runs_per_hour} runs in an hour.")
             logger.warning("Automation paused by rate cap", routine_id=routine_id)
             self.automation_store.clear_state(routine_id)
