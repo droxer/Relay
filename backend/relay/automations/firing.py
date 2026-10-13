@@ -27,6 +27,7 @@ IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "running"})
 # newest. Bounding the scan keeps a long-lived routine's check constant-time.
 IN_FLIGHT_LOOKBACK = 10
 RATE_LIMITED = "rate_limited"
+NO_TARGET_RUN_NOW = "Run now could not start: the automation has no agent, team, or open project."
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -91,6 +92,11 @@ class AutomationFiring:
         if in_flight_occurrence(self.task_store, routine):
             return False
         if not triggered_target(routine, self.project_store):
+            if not is_active(routine):
+                # Run now on a paused automation never changes its state.
+                self.task_store.record_activity(routine_id, NO_TARGET_RUN_NOW)
+                self.automation_store.clear_state(routine_id)
+                return False
             self.pause(routine_id, "no_target", "Automation paused: it has no agent, team, or open project to run on.")
             return False
         window_start = _aware(state["fired_window_start"])

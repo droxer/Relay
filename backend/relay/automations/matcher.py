@@ -119,12 +119,16 @@ class AutomationMatcher:
 
 
 def listens_for(task: dict[str, Any], event: dict[str, Any]) -> bool:
-    """Whether any of the task's event triggers matches. Duplicate triggers
-    match once. A stored trigger that no longer evaluates is skipped so one
-    bad record cannot fail the tick for every other automation."""
-    try:
-        return any(trigger.get("kind") in EVENT_KINDS and event_matches(trigger, event)
-                   for trigger in triggers_of(task))
-    except (AttributeError, TypeError) as error:
-        logger.warning("Invalid stored automation trigger", routine_id=task.get("id"), error=str(error))
-        return False
+    """Whether any of the task's event triggers matches; duplicates match
+    once. A stored trigger that no longer evaluates counts as no match, so
+    one bad trigger silences neither its siblings nor other automations."""
+    for index, trigger in enumerate(triggers_of(task)):
+        if trigger.get("kind") not in EVENT_KINDS:
+            continue
+        try:
+            if event_matches(trigger, event):
+                return True
+        except (AttributeError, TypeError) as error:
+            logger.warning("Invalid stored automation trigger", routine_id=task.get("id"),
+                           trigger_index=index, error=str(error))
+    return False

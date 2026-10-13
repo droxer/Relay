@@ -14,7 +14,7 @@ from sqlalchemy import text
 from ..persistence.automation_store import AUTOMATION_LOCK_KEY
 from ..persistence.store_common import store_transaction
 from .clock import ScheduleClock
-from .firing import AutomationFiring, in_flight_occurrence
+from .firing import AutomationFiring, in_flight_occurrence, triggered_target
 from .matcher import AutomationMatcher
 from .model import is_active
 
@@ -89,6 +89,11 @@ def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict
         return {"task": task, "session": None, "dispatch": {
             "state": "rejected", "code": _pause_reason(task) or "automation_disabled",
             "message": "Enable this automation before running it.",
+        }}
+    if not triggered_target(task, ctx.project_store):
+        return {"task": task, "session": None, "dispatch": {
+            "state": "rejected", "code": "no_target",
+            "message": "Assign an agent, team, or open project before running this automation.",
         }}
     # A run already queued or running answers the click. Queueing a manual
     # event behind it would start a second run the user never asked for.

@@ -492,3 +492,42 @@ def test_schedule_occurrence_is_stamped_schedule(world):
     [occurrence] = _occurrences(tasks, routine["id"])
     assert occurrence["routineTriggerKind"] == "schedule"
     assert "Fired by: Schedule" in occurrence["description"]
+
+
+@pytest.mark.parametrize("state, reason", [("paused", None), ("paused_by_relay", "failing"),
+                                           ("paused_by_relay", "no_target"), ("paused_by_relay", "invalid_schedule")])
+def test_run_now_without_target_leaves_a_paused_state_alone(world, state, reason):
+    tasks, automations, _, _ = world
+    routine = _automation(tasks, assignedAgent=None, assignedAgentId=None, routineState=state,
+                          **({"routinePauseReason": reason} if reason else {}))
+    automations.enqueue_manual(routine["id"])
+    assert run(world) == 0
+    after = tasks.get_task(routine["id"])
+    assert (after["routineState"], after.get("routinePauseReason")) == (state, reason)
+    assert _occurrences(tasks, routine["id"]) == []
+    assert automations.list_pending_states() == []
+    assert any(item["message"] == "Run now could not start: the automation has no agent, team, or open project."
+               for item in after.get("activity", []))
+
+
+def test_bad_trigger_does_not_silence_the_automations_valid_one(world) -> None:
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[
+        {"kind": "task_event", "on": "status_changed", "filters": {"titleContains": 42}}, ON_BLOCKED])
+    _block(tasks)
+    assert run(world) == 1
+    assert len(_occurrences(tasks, routine["id"])) == 1
+
+
+def test_run_now_request_without_target_is_rejected_up_front(world) -> None:
+    from types import SimpleNamespace
+    from relay.automations.service import request_manual_occurrence
+    tasks, automations, service, _ = world
+    routine = _automation(tasks, assignedAgent=None, assignedAgentId=None)
+    ctx = SimpleNamespace(task_store=tasks, session_store=service.matcher.session_store, project_store=None)
+    result = request_manual_occurrence(automations, ctx, routine, {"isAdmin": True})
+    assert result == {"task": routine, "session": None, "dispatch": {
+        "state": "rejected", "code": "no_target",
+        "message": "Assign an agent, team, or open project before running this automation."}}
+    assert automations.list_pending_states() == []
+    assert tasks.get_task(routine["id"])["routineState"] == "active"
