@@ -12,7 +12,7 @@ from relay.app import create_app
 from relay.persistence.stores import relay_event
 from relay.sessions import SessionController
 
-from automation_helpers import fire_now
+from automation_helpers import WEEKLY_TRIGGERS, fire_now
 
 PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
@@ -38,10 +38,8 @@ def _create_routine(client: TestClient, agent_id: str) -> dict[str, Any]:
         "title": "Weekly status deck",
         "assignedAgentId": agent_id,
         "isRoutine": True,
-        "routineType": "job",
-        "routineCadence": "weekly",
-        "routineNextRunDate": "2026-06-25",
-        "routineEnabled": True,
+        "routineState": "active",
+        "routineTriggers": WEEKLY_TRIGGERS,
     })
     assert response.status_code == 201, response.text
     return response.json()

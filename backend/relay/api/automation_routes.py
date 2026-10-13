@@ -7,21 +7,24 @@ scheduler's matcher turns the row into a run, the same as any other trigger.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from ..automations.model import trigger_kind
+from ..automations.model import has_webhook, is_active
+from ..automations.schedule import ScheduleError, next_fires, normalize_schedule, summarize
 from ..security.edge import client_ip
 from .contract import API_PREFIX
 from .deps import AppContextDep
-from .helpers import get_task_for_actor, request_actor
+from .helpers import get_task_for_actor, json_body, request_actor
 
 router = APIRouter()
 
 WEBHOOK_TOKEN_HEADER = "X-Relay-Automation-Token"
 WEBHOOK_BODY_LIMIT = 64 * 1024
+PREVIEW_FIRES = 3
 
 
 def webhook_path(routine_id: str) -> str:
@@ -74,7 +77,7 @@ async def receive_automation_webhook(routine_id: str, request: Request) -> dict[
         routine = await run_in_threadpool(request.app.state.task_store.get_task, routine_id)
     except (KeyError, FileNotFoundError) as error:
         raise HTTPException(409, "automation_unavailable") from error
-    if routine.get("deletedAt") or not routine.get("routineEnabled") or trigger_kind(routine) != "webhook":
+    if not (is_active(routine) and has_webhook(routine)):
         raise HTTPException(409, "automation_unavailable")
     await run_in_threadpool(store.enqueue_webhook, routine_id, payload)
     return {"accepted": True}
@@ -83,7 +86,7 @@ async def receive_automation_webhook(routine_id: str, request: Request) -> dict[
 def _webhook_automation_for_actor(request: Request, ctx: AppContextDep, task_id: str) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     task = get_task_for_actor(ctx.task_store, task_id, actor)
-    if not task.get("isRoutine") or trigger_kind(task) != "webhook":
+    if not task.get("isRoutine") or not has_webhook(task):
         raise HTTPException(409, "automation_not_webhook")
     editors = {task.get("ownerEmployeeId")} - {None}
     if not actor["isAdmin"] and actor.get("employeeId") not in editors:
@@ -103,3 +106,16 @@ def rotate_webhook_secret(task_id: str, request: Request, ctx: AppContextDep) ->
     _webhook_automation_for_actor(request, ctx, task_id)
     secret = request.app.state.automation_store.set_webhook_secret(task_id)
     return {"secret": secret, "path": webhook_path(task_id), "header": WEBHOOK_TOKEN_HEADER}
+
+
+@router.post("/automations/schedule-preview")
+async def preview_schedule(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    """The summary and next fires of a schedule, before it is saved."""
+    await run_in_threadpool(request_actor, request, ctx.auth_store)
+    body = await json_body(request)
+    try:
+        schedule = normalize_schedule(body.get("schedule"))
+    except ScheduleError as error:
+        raise HTTPException(400, str(error)) from error
+    fires = next_fires(schedule, datetime.now(timezone.utc), PREVIEW_FIRES)
+    return {"summary": summarize(schedule), "next": [fire.isoformat() for fire in fires]}

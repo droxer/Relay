@@ -13,7 +13,7 @@ from relay.api import task_routes
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
-from automation_helpers import fire_now
+from automation_helpers import WEEKLY_TRIGGERS, fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents, project_for_team
 
 # Delegated team work — one employee's task, another employee's team — cannot
@@ -1633,9 +1633,8 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
                 "assigneeEmployeeId": "alice",
                 "assignedTeamId": team["id"],
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2099-01-01",
-                "routineEnabled": True,
+                "routineState": "active",
+                "routineTriggers": WEEKLY_TRIGGERS,
             },
         ).json()
 
@@ -1707,9 +1706,8 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
                 "assigneeEmployeeId": "alice",
                 "assignedTeamId": team["id"],
                 "isRoutine": True,
-                "routineCadence": "daily",
-                "routineNextRunDate": "2026-07-23",
-                "routineEnabled": True,
+                "routineState": "active",
+                "routineTriggers": WEEKLY_TRIGGERS,
             },
         ).json()
         promoted = fire_now(app.state.task_store, routine["id"], run_date="2026-07-23")

@@ -12,6 +12,8 @@ would be caught the same way a daemon would see it: a wrong or missing
 
 from __future__ import annotations
 
+from automation_helpers import WEEKLY_TRIGGERS
+
 import asyncio
 from datetime import date
 from tempfile import TemporaryDirectory
@@ -325,9 +327,8 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": True,
+                "routineState": "active",
+                "routineTriggers": WEEKLY_TRIGGERS,
             },
         ).json()
 

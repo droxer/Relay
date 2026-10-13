@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import WEEKLY_TRIGGERS
+
 import asyncio
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -195,9 +197,8 @@ def routine_with_occurrence(client: TestClient):
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": True,
+                "routineState": "active",
+                "routineTriggers": WEEKLY_TRIGGERS,
             },
         )
         assert created.status_code == 201, created.text

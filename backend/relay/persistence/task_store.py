@@ -2232,11 +2232,11 @@ def routine_occurrence_events(
     routine: dict[str, Any],
     agent: AgentName | None,
     *,
-    scheduled_for: str | None = None,
+    scheduled_for: str,
     trigger: dict[str, Any] | None = None,
     fired_by: str = "schedule",
 ) -> list[dict[str, Any]]:
-    occurrence_date = scheduled_for or routine["routineNextRunDate"]
+    occurrence_date = scheduled_for
     occurrence_id = new_database_id()
     description = routine.get("description", "")
     if trigger and trigger.get("context"):

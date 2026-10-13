@@ -401,11 +401,11 @@ def test_run_now_on_a_rate_limited_v2_routine_answers_rate_limited() -> None:
     assert result["dispatch"]["code"] == "rate_limited"
 
 
-def test_run_now_on_a_legacy_snapshot_falls_back_to_routine_enabled() -> None:
+def test_run_now_refuses_a_rate_limited_automation_up_front() -> None:
     from relay.automations.service import request_manual_occurrence
-    routine = {"id": "r1", "isRoutine": True, "routineEnabled": False, "routineDisabledReason": "rate_limited"}
+    routine = {"id": "r1", "isRoutine": True, "routineState": "paused_by_relay", "routinePauseReason": "rate_limited"}
     result = request_manual_occurrence(None, None, routine, {"isAdmin": True})
-    assert result["dispatch"]["code"] == "rate_limited"
+    assert (result["dispatch"]["state"], result["dispatch"]["code"]) == ("rejected", "rate_limited")
 
 
 def test_any_of_several_triggers_fires(world):

@@ -11,7 +11,7 @@ from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import active_routine_occurrence
 
-from automation_helpers import fire_now
+from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS, fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents
 
 # A routine's run is the one kind of work that dispatches outside a project.
@@ -155,10 +155,8 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
                 "assigneeEmployeeId": "alice",
                 "dueDate": "2026-06-30",
                 "isRoutine": True,
-                "routineType": "job",
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": False,
+                "routineTriggers": WEEKLY_TRIGGERS,
+                "routineState": "paused",
             },
         )
         assert created.status_code == 201
@@ -166,25 +164,24 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         assert task["assigneeEmployeeId"] == "alice"
         assert task["dueDate"] == "2026-06-30"
         assert task["isRoutine"] is True
-        assert task["routineType"] == "job"
-        assert task["routineCadence"] == "weekly"
-        assert task["routineNextRunDate"] == "2026-06-25"
-        assert task["routineEnabled"] is False
+        assert task["routineTriggers"] == WEEKLY_TRIGGERS
+        assert task["routineState"] == "paused"
+        assert "routineNextRunAt" not in task
 
         updated = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={
                 "priority": "low",
                 "assignedAgentId": agent["id"],
-                "routineNextRunDate": "2026-07-02",
-                "routineEnabled": False,
+                "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "paused",
             },
         )
         assert updated.status_code == 200
         assert updated.json()["assignedAgent"] == "codex"
         assert updated.json()["status"] == "backlog"
-        assert updated.json()["routineNextRunDate"] == "2026-07-02"
-        assert updated.json()["routineEnabled"] is False
+        assert updated.json()["routineTriggers"] == DAILY_TRIGGERS
+        assert updated.json()["routineState"] == "paused"
 
         skipped_routine = client.post(
             "/api/v1/tasks/claim-next",
@@ -323,17 +320,10 @@ def test_task_summary_view_without_limit_preserves_complete_list(monkeypatch) ->
         assert observed == {"employee_id": None, "limit": None}
 
 
-def test_routine_create_defaults_next_run_when_omitted(monkeypatch) -> None:
-    class FixedDate(date):
-        @classmethod
-        def today(cls) -> date:
-            return cls(2026, 7, 7)
-
+def test_routine_create_defaults_to_paused(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        app.state.today = FixedDate.today
-        client = TestClient(app)
+        client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
 
@@ -344,81 +334,60 @@ def test_routine_create_defaults_next_run_when_omitted(monkeypatch) -> None:
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "isRoutine": True,
-                "routineCadence": "daily",
+                "routineTriggers": DAILY_TRIGGERS,
             },
         )
 
         assert created.status_code == 201
         task = created.json()
-        assert task["routineNextRunDate"] == "2026-07-08"
-        assert task["routineEnabled"] is False
+        assert task["routineState"] == "paused"
+        assert "routineNextRunAt" not in task
 
-        disabled = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "Disabled weekly routine",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
-                "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineEnabled": False,
-            },
-        )
-
-        assert disabled.status_code == 201
-        assert disabled.json()["routineNextRunDate"] == "2026-07-14"
-        assert disabled.json()["routineEnabled"] is False
-
-        explicit_unscheduled = client.post(
+        run_now_only = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Manual routine",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "isRoutine": True,
-                "routineNextRunDate": "",
             },
         )
 
-        assert explicit_unscheduled.status_code == 201
-        assert "routineNextRunDate" not in explicit_unscheduled.json()
+        assert run_now_only.status_code == 201
+        assert run_now_only.json()["routineTriggers"] == []
+        assert "routineNextRunAt" not in run_now_only.json()
 
 
-def test_routine_api_uses_the_scheduler_calendar(monkeypatch) -> None:
+def test_routine_next_run_follows_the_schedule_timezone(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        app.state.today = lambda: date(2026, 7, 7)
-        client = TestClient(app)
+        client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
+        agent = _create_agent(client, "alice")
 
+        tokyo = [{"kind": "schedule", "schedule": {"timezone": "Asia/Tokyo", "repeat": {"every": "day", "at": "09:00"}}}]
         created = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Timezone-aware routine",
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
+                "assignedAgentId": agent["id"],
                 "isRoutine": True,
-                "routineCadence": "daily",
+                "routineState": "active",
+                "routineTriggers": tokyo,
             },
         )
 
-        assert created.status_code == 201
-        assert created.json()["routineNextRunDate"] == "2026-07-08"
+        assert created.status_code == 201, created.text
+        assert created.json()["routineNextRunAt"].endswith("T00:00:00+00:00")
 
 
-def test_routine_cadence_change_and_reenable_recalculate_next_run(monkeypatch) -> None:
-    class FixedDate(date):
-        @classmethod
-        def today(cls) -> date:
-            return cls(2026, 7, 7)
-
+def test_routine_schedule_change_and_resume_recalculate_next_run(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
-        app = create_app(root)
-        app.state.today = FixedDate.today
-        client = TestClient(app)
+        client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
         agent = _create_agent(client, "alice")
@@ -429,42 +398,26 @@ def test_routine_cadence_change_and_reenable_recalculate_next_run(monkeypatch) -
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-01",
-                "routineEnabled": False,
+                "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "paused",
                 "assignedAgentId": agent["id"],
             },
         )
         assert created.status_code == 201
+        path = f"/api/v1/tasks/{created.json()['id']}"
 
-        reenabled = client.patch(
-            f"/api/v1/tasks/{created.json()['id']}",
-            json={
-                "routineEnabled": True,
-                "routineNextRunDate": "2026-06-01",
-            },
-        )
-        assert reenabled.status_code == 200
-        assert reenabled.json()["routineNextRunDate"] == "2026-07-14"
+        resumed = client.patch(path, json={"routineState": "active"})
+        assert resumed.status_code == 200
+        assert resumed.json()["routineNextRunAt"].endswith("T09:00:00+00:00")
 
-        cadence_changed = client.patch(
-            f"/api/v1/tasks/{created.json()['id']}",
-            json={
-                "routineCadence": "daily",
-                "routineNextRunDate": "2026-07-14",
-            },
-        )
-        assert cadence_changed.status_code == 200
-        assert cadence_changed.json()["routineNextRunDate"] == "2026-07-08"
+        ten = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "10:00"}}}]
+        schedule_changed = client.patch(path, json={"routineTriggers": ten})
+        assert schedule_changed.status_code == 200
+        assert schedule_changed.json()["routineNextRunAt"].endswith("T10:00:00+00:00")
 
-        title_changed = client.patch(
-            f"/api/v1/tasks/{created.json()['id']}",
-            json={
-                "title": "Renamed routine",
-            },
-        )
+        title_changed = client.patch(path, json={"title": "Renamed routine"})
         assert title_changed.status_code == 200
-        assert title_changed.json()["routineNextRunDate"] == "2026-07-08"
+        assert title_changed.json()["routineNextRunAt"] == schedule_changed.json()["routineNextRunAt"]
 
 
 @pytest.mark.parametrize("owns_task", [False, True])
@@ -1136,9 +1089,8 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": False,
+                "routineTriggers": WEEKLY_TRIGGERS,
+                "routineState": "paused",
             },
         )
         assert created.status_code == 201
@@ -1255,9 +1207,8 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
-                "routineCadence": "weekly",
-                "routineNextRunDate": "2026-06-25",
-                "routineEnabled": True,
+                "routineTriggers": WEEKLY_TRIGGERS,
+                "routineState": "active",
             },
         )
         assert created.status_code == 201
@@ -1313,12 +1264,13 @@ def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
-                "routineCadence": "daily",
-                "routineNextRunDate": "2020-01-01",
-                "routineEnabled": True,
+                "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "active",
             },
         )
         assert created.status_code == 201
+        # Overdue: the schedule's slot has already passed.
+        app.state.task_store.update_task(created.json()["id"], {"routineNextRunAt": "2020-01-01T09:00:00+00:00"})
 
         fired = asyncio.run(app.state.task_scheduler.tick())
         assert fired.fired == 1
@@ -1387,9 +1339,8 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
                 "assigneeEmployeeId": "alice",
                 "assignedAgentId": original_agent["id"],
                 "isRoutine": True,
-                "routineCadence": "daily",
-                "routineNextRunDate": "2020-01-01",
-                "routineEnabled": True,
+                "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "active",
             },
         ).json()
         occurrence = fire_now(app.state.task_store, routine["id"], run_date="2026-08-30")
@@ -1606,58 +1557,40 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         _create_user(client, "alice", employee_id="alice")
-        agent = _create_agent(client, "alice")
 
-        invalid_type = client.post(
+        for field in ("routineType", "routineCadence", "routineNextRunDate", "routineEnabled"):
+            legacy = client.post(
+                "/api/v1/tasks",
+                json={"title": "Legacy routine", "isRoutine": True, field: "daily"},
+            )
+            assert legacy.status_code == 400
+            assert field in legacy.json()["detail"]
+
+        invalid_state = client.post(
             "/api/v1/tasks",
-            json={"title": "Bad routine", "isRoutine": True, "routineType": "cron"},
+            json={"title": "Bad state", "isRoutine": True, "routineState": "yes"},
         )
-        assert invalid_type.status_code == 400
-        assert "routineType" in invalid_type.json()["detail"]
+        assert invalid_state.status_code == 400
+        assert "routineState" in invalid_state.json()["detail"]
 
-        invalid_cadence = client.post(
+        invalid_flag = client.post(
+            "/api/v1/tasks",
+            json={"title": "Bad flag", "isRoutine": "yes"},
+        )
+        assert invalid_flag.status_code == 400
+        assert "isRoutine" in invalid_flag.json()["detail"]
+
+        active_without_target = client.post(
             "/api/v1/tasks",
             json={
-                "title": "Bad cadence",
-                "isRoutine": True,
-                "routineCadence": "hourly",
-            },
-        )
-        assert invalid_cadence.status_code == 400
-        assert "routineCadence" in invalid_cadence.json()["detail"]
-
-        invalid_date = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "Bad next run",
-                "isRoutine": True,
-                "routineNextRunDate": "06/30/2026",
-            },
-        )
-        assert invalid_date.status_code == 400
-        assert "YYYY-MM-DD" in invalid_date.json()["detail"]
-
-        invalid_enabled = client.post(
-            "/api/v1/tasks",
-            json={"title": "Bad enabled", "isRoutine": True, "routineEnabled": "yes"},
-        )
-        assert invalid_enabled.status_code == 400
-        assert "routineEnabled" in invalid_enabled.json()["detail"]
-
-        enabled_custom_without_date = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "Never scheduled",
+                "title": "Never assigned",
                 "assigneeEmployeeId": "alice",
-                "assignedAgentId": agent["id"],
                 "isRoutine": True,
-                "routineCadence": "custom",
-                "routineEnabled": True,
-                "routineNextRunDate": "",
+                "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "active",
             },
         )
-        assert enabled_custom_without_date.status_code == 400
-        assert "routineNextRunDate" in enabled_custom_without_date.json()["detail"]
+        assert active_without_target.status_code == 400
 
 
 def test_clearing_a_legacy_ready_intake_issue_returns_it_to_backlog(monkeypatch) -> None:
@@ -1811,9 +1744,8 @@ def test_task_delete_hides_task_from_list_and_get(monkeypatch) -> None:
                 "ownerEmployeeId": "alice",
                 "assigneeEmployeeId": "alice",
                 "isRoutine": True,
-                "routineType": "task",
-                "routineCadence": "daily",
-                "routineEnabled": False,
+                "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "paused",
             },
         )
         assert created.status_code == 201
@@ -1974,12 +1906,11 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
         _bootstrap_admin(client)
         routine = client.post("/api/v1/tasks", json={
             "title": "Routine cleanup", "isRoutine": True,
-            "routineType": "task", "routineCadence": "daily",
-            "routineEnabled": False,
+            "routineTriggers": DAILY_TRIGGERS, "routineState": "paused",
         }).json()
         tasks = client.app.state.task_store
         sessions = client.app.state.session_store
-        tasks.update_task(routine["id"], {"routineEnabled": True, "assignedAgent": "codex", "assignedAgentId": "agent_test"})
+        tasks.update_task(routine["id"], {"routineState": "active", "assignedAgent": "codex", "assignedAgentId": "agent_test"})
         occurrences = [tasks.create_triggered_occurrence(routine["id"], run_date=day, trigger_kind="manual", depth=0, context="")
                        for day in ["2026-09-18", "2026-09-19"]]
         linked = []
@@ -2038,11 +1969,11 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
         _bootstrap_admin(client)
         payload = {"title": "Delete idle work"}
         if routine:
-            payload.update(isRoutine=True, routineType="task", routineCadence="daily", routineEnabled=False)
+            payload.update(isRoutine=True, routineTriggers=DAILY_TRIGGERS, routineState="paused")
         task = client.post("/api/v1/tasks", json=payload).json()
         tasks = client.app.state.task_store
         if routine:
-            tasks.update_task(task["id"], {"routineEnabled": True, "assignedAgent": "codex", "assignedAgentId": "agent_test"})
+            tasks.update_task(task["id"], {"routineState": "active", "assignedAgent": "codex", "assignedAgentId": "agent_test"})
         linked_task = tasks.create_triggered_occurrence(task["id"], run_date="2026-09-21", trigger_kind="manual", depth=0, context="") if routine else task
         sessions = client.app.state.session_store
         session = sessions.create_session({

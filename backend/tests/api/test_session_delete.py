@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import WEEKLY_TRIGGERS
+
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -264,10 +266,9 @@ def test_delete_thread_deletes_tasks_it_was_the_last_thread_of(monkeypatch) -> N
         shared = client.post("/api/v1/tasks", json={"title": "Two rounds"}).json()
         routine = client.post("/api/v1/tasks", json={
             "title": "Nightly", "isRoutine": True,
-            "routineType": "task", "routineCadence": "daily",
-            "routineEnabled": False,
+            "routineState": "paused", "routineTriggers": WEEKLY_TRIGGERS,
         }).json()
-        tasks.update_task(routine["id"], {"routineEnabled": True, "assignedAgent": "codex", "assignedAgentId": "agent_test"})
+        tasks.update_task(routine["id"], {"routineState": "active", "assignedAgent": "codex", "assignedAgentId": "agent_test"})
         occurrence = tasks.create_triggered_occurrence(routine["id"], run_date="2026-10-12", trigger_kind="manual", depth=0, context="")
 
         thread = finished_thread()

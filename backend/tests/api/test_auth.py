@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import WEEKLY_TRIGGERS
+
 import json
 import uuid
 from pathlib import Path
@@ -416,7 +418,7 @@ def test_user_routes_are_scoped_to_authenticated_employee(monkeypatch) -> None:
         task_response = alice_client.post("/api/v1/tasks", json={
             "title": "Alice task",
             "ownerEmployeeId": "bob",
-            "isRoutine": True, "routineEnabled": False, "createSession": True,
+            "isRoutine": True, "routineState": "paused", "createSession": True,
             "assignments": [{"agent": "claude"}],
         })
         assert task_response.status_code == 201
@@ -548,10 +550,8 @@ def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
             "status": "assigned",
             "assignedAgentId": agent["id"],
             "isRoutine": True,
-            "routineType": "job",
-            "routineCadence": "weekly",
-            "routineNextRunDate": "2026-07-07",
-            "routineEnabled": True,
+            "routineState": "active",
+            "routineTriggers": WEEKLY_TRIGGERS,
         })
         assert task.status_code == 201
         bob_session = bob_client.post("/api/v1/threads", json={
@@ -581,9 +581,10 @@ def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
         assert brief["sessions"][0]["id"] == session.json()["id"]
         assert "events" not in brief["sessions"][0]
         assert brief["tasks"][0]["id"] == task.json()["id"]
-        assert brief["tasks"][0]["routineType"] == "job"
-        assert brief["tasks"][0]["routineCadence"] == "weekly"
-        assert brief["tasks"][0]["routineNextRunDate"] == "2026-07-07"
+        assert brief["tasks"][0]["routineTriggers"] == WEEKLY_TRIGGERS
+        assert brief["tasks"][0]["routineState"] == "active"
+        assert brief["tasks"][0]["routineNextRunAt"]
+        assert "routineCadence" not in brief["tasks"][0]
         assert brief["artifacts"][0]["sessionId"] == session.json()["id"]
 
         assert alice_client.get("/api/v1/workspace/brief?employeeId=bob").status_code == 403
@@ -683,7 +684,7 @@ def test_admin_can_create_resources_for_specific_employee(monkeypatch) -> None:
         response = client.post("/api/v1/tasks", json={
             "title": "Bob task",
             "ownerEmployeeId": "bob",
-            "isRoutine": True, "routineEnabled": False, "createSession": True,
+            "isRoutine": True, "routineState": "paused", "createSession": True,
         })
 
         assert response.status_code == 201
@@ -1120,7 +1121,7 @@ def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch)
         response = client.post("/api/v1/tasks", json={
             "title": "Persist task in DB",
             "description": "Create a DB-backed session too.",
-            "isRoutine": True, "routineEnabled": False, "createSession": True,
+            "isRoutine": True, "routineState": "paused", "createSession": True,
             "workspacePath": "/workspace",
         })
         assert response.status_code == 201

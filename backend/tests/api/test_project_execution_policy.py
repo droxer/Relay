@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS
+
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,7 +37,7 @@ def test_explicit_project_assignee_runs_without_unavailable_siblings(project_con
     created = client.post("/api/v1/tasks", json={
         "title": "Worker only", "projectId": project["id"], "assignedAgentId": worker["id"],
         "status": "assigned",
-        **({"isRoutine": True, "routineCadence": "daily", "routineEnabled": True} if entry == "routine" else {}),
+        **({"isRoutine": True, "routineState": "active", "routineTriggers": WEEKLY_TRIGGERS} if entry == "routine" else {}),
     })
     assert created.status_code == 201, created.text
     task = created.json()
@@ -106,12 +108,12 @@ def test_closed_project_routines_pause_instead_of_promoting(project_context, sta
     app, client, node, project, lead, worker = project_context
     created = client.post("/api/v1/tasks", json={
         "title": "Daily", "projectId": project["id"], "isRoutine": True,
-        "routineCadence": "daily", "routineEnabled": True, "routineNextRunDate": "2026-09-21",
+        "routineState": "active", "routineTriggers": DAILY_TRIGGERS,
     })
     assert created.status_code == 201, created.text
     routine = created.json()
     close_project(client, project, state)
-    assert app.state.task_scheduler.automations.tick(datetime(2026, 9, 21, 12, tzinfo=timezone.utc)) == 0
+    assert app.state.task_scheduler.automations.tick(datetime.now(timezone.utc) + timedelta(days=2)) == 0
     started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
     assert started.status_code == 409
     after = app.state.task_store.get_task(routine["id"])

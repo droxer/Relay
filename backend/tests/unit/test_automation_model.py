@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import pytest
 from relay.automations.context import trigger_context_block
-from relay.automations.model import TriggerError, event_matches, normalize_trigger, trigger_kind
+from relay.automations.model import (
+    LEGACY_FIELDS,
+    TriggerError,
+    event_matches,
+    normalize_triggers,
+    triggers_of,
+    without_legacy_fields,
+)
 
 
-def test_schedule_and_webhook_take_no_options() -> None:
-    assert normalize_trigger({"kind": "schedule"}) == {"kind": "schedule"}
-    assert normalize_trigger({"kind": "webhook"}) == {"kind": "webhook"}
-    with pytest.raises(TriggerError):
-        normalize_trigger({"kind": "webhook", "on": "created"})
+def test_webhook_takes_no_options() -> None:
+    assert normalize_triggers([{"kind": "webhook"}]) == [{"kind": "webhook"}]
+    with pytest.raises(TriggerError, match=r"^routineTriggers\[0\] webhook trigger takes no on or filters\.$"):
+        normalize_triggers([{"kind": "webhook", "on": "created"}])
 
 
 @pytest.mark.parametrize("raw", [
@@ -23,22 +29,44 @@ def test_schedule_and_webhook_take_no_options() -> None:
     {"kind": "schedule", "extra": True},
 ])
 def test_rejects_malformed_triggers(raw) -> None:
-    with pytest.raises(TriggerError):
-        normalize_trigger(raw)
+    with pytest.raises(TriggerError, match=r"^routineTriggers\[0\]"):
+        normalize_triggers([raw])
+
+
+@pytest.mark.parametrize("raw, message", [
+    ({"kind": "task_event", "on": "created", "zz": 1}, "routineTriggers[0] has unknown keys: zz."),
+    ({"kind": "task_event", "on": "created", "filters": {"zz": 1}},
+     "routineTriggers[0].filters has unknown keys: zz."),
+    ({"kind": "task_event", "on": "created", "filters": {"priority": "urgent"}},
+     "routineTriggers[0].filters.priority must be low, normal, or high."),
+    ({"kind": "run_event", "on": "created"}, "routineTriggers[0].on for run_event must be one of: completed, failed."),
+])
+def test_messages_keep_their_subject(raw, message) -> None:
+    with pytest.raises(TriggerError) as error:
+        normalize_triggers([raw])
+    assert str(error.value) == message
 
 
 def test_drops_empty_filters_and_trims_title() -> None:
-    assert normalize_trigger({
+    assert normalize_triggers([{
         "kind": "task_event", "on": "status_changed",
         "filters": {"toStatus": "blocked", "projectId": "", "titleContains": "  nightly "},
-    }) == {"kind": "task_event", "on": "status_changed",
-           "filters": {"toStatus": "blocked", "titleContains": "nightly"}}
+    }]) == [{"kind": "task_event", "on": "status_changed",
+             "filters": {"toStatus": "blocked", "titleContains": "nightly"}}]
 
 
-def test_missing_trigger_reads_as_schedule() -> None:
-    assert trigger_kind({}) == "schedule"
-    assert trigger_kind({"routineTrigger": {"kind": "bogus"}}) == "schedule"
-    assert trigger_kind({"routineTrigger": {"kind": "webhook"}}) == "webhook"
+def test_triggers_of_tolerates_missing_and_malformed_lists() -> None:
+    assert triggers_of({}) == []
+    assert triggers_of({"routineTriggers": "webhook"}) == []
+    assert triggers_of({"routineTriggers": [{"kind": "webhook"}, "bad"]}) == [{"kind": "webhook"}]
+
+
+def test_without_legacy_fields_strips_only_legacy_keys() -> None:
+    task = {"id": "t", "routineState": "active", **{field: "x" for field in LEGACY_FIELDS}}
+    assert without_legacy_fields(task) == {"id": "t", "routineState": "active"}
+    assert set(LEGACY_FIELDS) <= set(task)
+    clean = {"id": "t"}
+    assert without_legacy_fields(clean) is clean
 
 
 def _status_event(**subject) -> dict:
@@ -67,8 +95,7 @@ def test_context_block_truncates_webhook_payload() -> None:
     assert len(block.encode()) < 9 * 1024
 
 
-import pytest
-from relay.automations.model import TriggerError, listens, normalize_triggers, state_of, upgrade_legacy
+from relay.automations.model import listens, state_of, upgrade_legacy
 
 DAILY = {"kind": "schedule", "schedule": {"timezone": None, "repeat": {"every": "day", "at": "09:00"}}}
 BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}

@@ -19,8 +19,6 @@ from ..core.models import (
     AGENT_NAMES,
     AgentName,
     TaskPriority,
-    TaskRoutineCadence,
-    TaskRoutineType,
     TaskStatus,
 )
 
@@ -1010,11 +1008,3 @@ def task_status(value: Any) -> TaskStatus | None:
         )
         else None
     )
-
-
-def task_routine_type(value: Any) -> TaskRoutineType | None:
-    return value if value in ("task", "job") else None
-
-
-def task_routine_cadence(value: Any) -> TaskRoutineCadence | None:
-    return value if value in ("daily", "weekly", "monthly", "custom") else None

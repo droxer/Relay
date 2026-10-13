@@ -2629,10 +2629,11 @@ def test_employee_task_writes_require_named_agents_and_preserve_status(
             json={
                 "title": "Unsafe routine",
                 "isRoutine": True,
-                "routineEnabled": True,
+                "routineState": "active",
             },
         )
         assert agentless_routine.status_code == 400
+        assert "requires an agent" in agentless_routine.json()["detail"]
 
         project = project_for_agents(client.app.state.project_store, "alice", [agent])
         created = client.post(

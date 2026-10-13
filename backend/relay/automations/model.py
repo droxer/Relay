@@ -1,8 +1,10 @@
 """What starts an automation, and whether an event is one of its starts.
 
-An automation is still a routine task record; ``routineTrigger`` on it says
-what fires it. Everything here is pure so the API, the store replay, and the
-matcher read a trigger the same way.
+An automation is still a routine task record; ``routineTriggers`` on it says
+what fires it (an empty list: Run now only) and ``routineState`` whether it
+may fire. Everything here is pure so the API, the store replay, and the
+matcher read a trigger the same way. The legacy single ``routineTrigger`` and
+cadence fields survive only as ``upgrade_legacy`` input.
 """
 
 from __future__ import annotations
@@ -24,7 +26,6 @@ EVENT_TYPES = {
     ("run_event", "completed"): "run.completed",
     ("run_event", "failed"): "run.failed",
 }
-SCHEDULE_TRIGGER: dict[str, Any] = {"kind": "schedule"}
 SCOPE_FILTERS = ("projectId", "assignedAgentId", "assignedTeamId")
 FILTER_KEYS = (*SCOPE_FILTERS, "fromStatus", "toStatus", "priority", "titleContains")
 TASK_STATUSES = ("backlog", "assigned", "running", "waiting_for_human", "review", "done", "blocked")
@@ -37,66 +38,52 @@ class TriggerError(ValueError):
     """A trigger the API refuses with a 400."""
 
 
-def normalize_trigger(raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise TriggerError("routineTrigger must be an object.")
+def _normalize_event_trigger(raw: dict[str, Any], at: str) -> dict[str, Any]:
+    """An event or webhook trigger; ``at`` names it in error messages."""
     unknown = set(raw) - {"kind", "on", "filters"}
     if unknown:
-        raise TriggerError(f"routineTrigger has unknown keys: {', '.join(sorted(unknown))}.")
-    kind = raw.get("kind")
-    if kind not in TRIGGER_KINDS:
-        raise TriggerError(f"routineTrigger.kind must be one of: {', '.join(TRIGGER_KINDS)}.")
+        raise TriggerError(f"{at} has unknown keys: {', '.join(sorted(unknown))}.")
+    kind = raw["kind"]
     if kind not in TRIGGER_ON:
         if raw.get("on") is not None or raw.get("filters"):
-            raise TriggerError(f"A {kind} trigger takes no on or filters.")
+            raise TriggerError(f"{at} {kind} trigger takes no on or filters.")
         return {"kind": kind}
     on = raw.get("on")
     if on not in TRIGGER_ON[kind]:
-        raise TriggerError(f"routineTrigger.on for {kind} must be one of: {', '.join(TRIGGER_ON[kind])}.")
-    filters = _normalize_filters(on, raw.get("filters") or {})
+        raise TriggerError(f"{at}.on for {kind} must be one of: {', '.join(TRIGGER_ON[kind])}.")
+    filters = _normalize_filters(on, raw.get("filters") or {}, f"{at}.filters")
     return {"kind": kind, "on": on, **({"filters": filters} if filters else {})}
 
 
-def _normalize_filters(on: str, raw: Any) -> dict[str, str]:
+def _normalize_filters(on: str, raw: Any, at: str) -> dict[str, str]:
     if not isinstance(raw, dict):
-        raise TriggerError("routineTrigger.filters must be an object.")
+        raise TriggerError(f"{at} must be an object.")
     unknown = set(raw) - set(FILTER_KEYS)
     if unknown:
-        raise TriggerError(f"routineTrigger.filters has unknown keys: {', '.join(sorted(unknown))}.")
+        raise TriggerError(f"{at} has unknown keys: {', '.join(sorted(unknown))}.")
     present = {key: value for key, value in raw.items() if value not in (None, "")}
     if ("fromStatus" in present or "toStatus" in present) and on != "status_changed":
-        raise TriggerError("fromStatus and toStatus apply only to status_changed.")
+        raise TriggerError(f"{at}: fromStatus and toStatus apply only to status_changed.")
     filters: dict[str, str] = {}
     for key, value in present.items():
         if key in SCOPE_FILTERS:
             if not isinstance(value, str) or len(value) > ID_MAX:
-                raise TriggerError(f"filters.{key} must be an id.")
+                raise TriggerError(f"{at}.{key} must be an id.")
             filters[key] = value
         elif key in ("fromStatus", "toStatus"):
             if value not in TASK_STATUSES:
-                raise TriggerError(f"filters.{key} must be a task status.")
+                raise TriggerError(f"{at}.{key} must be a task status.")
             filters[key] = value
         elif key == "priority":
             if value not in TASK_PRIORITIES:
-                raise TriggerError("filters.priority must be low, normal, or high.")
+                raise TriggerError(f"{at}.priority must be low, normal, or high.")
             filters[key] = value
         else:
             title = value.strip() if isinstance(value, str) else ""
             if not title or len(value) > TITLE_CONTAINS_MAX:
-                raise TriggerError(f"filters.titleContains must be 1–{TITLE_CONTAINS_MAX} characters.")
+                raise TriggerError(f"{at}.titleContains must be 1–{TITLE_CONTAINS_MAX} characters.")
             filters[key] = title
     return filters
-
-
-def trigger_of(task: dict[str, Any]) -> dict[str, Any]:
-    trigger = task.get("routineTrigger")
-    if isinstance(trigger, dict) and trigger.get("kind") in TRIGGER_KINDS:
-        return trigger
-    return SCHEDULE_TRIGGER
-
-
-def trigger_kind(task: dict[str, Any]) -> str:
-    return str(trigger_of(task)["kind"])
 
 
 def event_matches(trigger: dict[str, Any], event: dict[str, Any]) -> bool:
@@ -130,23 +117,24 @@ def normalize_triggers(raw: Any) -> list[dict[str, Any]]:
         raise TriggerError(f"routineTriggers may hold at most {MAX_TRIGGERS} triggers.")
     triggers = []
     for index, item in enumerate(raw):
+        at = f"routineTriggers[{index}]"
         try:
-            triggers.append(_normalize_one(item))
-        except (TriggerError, ScheduleError) as error:
-            detail = str(error).removeprefix("routineTrigger.").removeprefix("routineTrigger ")
-            raise TriggerError(f"routineTriggers[{index}].{detail}") from error
+            triggers.append(_normalize_one(item, at))
+        except ScheduleError as error:
+            # Schedule messages name their path from ``schedule.`` down.
+            raise TriggerError(f"{at}.{error}") from error
     if sum(1 for trigger in triggers if trigger["kind"] == "webhook") > 1:
         raise TriggerError("routineTriggers may hold only one webhook trigger.")
     return triggers
 
 
-def _normalize_one(item: Any) -> dict[str, Any]:
+def _normalize_one(item: Any, at: str) -> dict[str, Any]:
     if not isinstance(item, dict) or item.get("kind") not in TRIGGER_KINDS:
-        raise TriggerError(f"kind must be one of: {', '.join(TRIGGER_KINDS)}.")
+        raise TriggerError(f"{at}.kind must be one of: {', '.join(TRIGGER_KINDS)}.")
     if item["kind"] != "schedule":
-        return normalize_trigger(item)
+        return _normalize_event_trigger(item, at)
     if "schedule" not in item or set(item) - {"kind", "schedule"}:
-        raise TriggerError("schedule is required and is the only other key of a schedule trigger.")
+        raise TriggerError(f"{at}.schedule is required and is the only other key of a schedule trigger.")
     return {"kind": "schedule", "schedule": normalize_schedule(item["schedule"])}
 
 
@@ -174,6 +162,15 @@ def state_of(task: dict[str, Any]) -> str:
 
 def is_active(task: dict[str, Any]) -> bool:
     return bool(task.get("isRoutine")) and state_of(task) == "active" and not task.get("deletedAt")
+
+
+def without_legacy_fields(task: dict[str, Any]) -> dict[str, Any]:
+    """The task as the API shows it. A routine whose history is still legacy
+    keeps the legacy keys in its snapshot (replay needs them); responses
+    carry only the v2 fields derived from them."""
+    if not any(key in task for key in LEGACY_FIELDS):
+        return task
+    return {key: value for key, value in task.items() if key not in LEGACY_FIELDS}
 
 
 def upgrade_legacy(legacy: dict[str, Any]) -> dict[str, Any]:
