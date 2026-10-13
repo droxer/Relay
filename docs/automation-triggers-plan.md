@@ -1,7 +1,5 @@
 # Automation Triggers Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Rename Routines to Automations in the product, and let an automation fire on Relay task/run events and inbound webhooks, not only on a schedule.
 
 **Architecture:** An automation stays a routine task record with a new `routineTrigger` field. Task and session stores write a transactional `automation_outbox` row for trigger-eligible events; a matcher in the scheduler tick drains it, coalesces matches per automation, and promotes an occurrence through a new `create_triggered_occurrence` store method. The existing daemon dispatch path runs it.

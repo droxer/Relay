@@ -2,8 +2,7 @@
 
 When a session contains runs from multiple agents, the daemon prompt for the
 next agent gets a short prepended block summarizing completed current-turn
-agent runs' last assistant text. See
-``docs/superpowers/specs/2026-06-17-shared-agent-thread-design.md``.
+agent runs' last assistant text.
 """
 
 from __future__ import annotations

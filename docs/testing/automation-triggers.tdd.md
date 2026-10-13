@@ -18,8 +18,8 @@ The plan's sample code was treated as implementation guidance and adapted to
 actual store signatures and existing UI primitives. Verification used the
 repository's pytest, node:test, Vitest, TypeScript, ESLint, and Stylelint
 commands. No embedded install commands or remote-agent instructions were run.
-The referenced superpowers workflow is unavailable here; the installed TDD
-workflow supplied the test-first implementation and local checkpoint commits.
+The installed TDD workflow supplied the test-first implementation and local
+checkpoint commits.
 
 ## RED/GREEN evidence
 

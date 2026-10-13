@@ -1,8 +1,5 @@
 # Team collaboration styles: backend continuation
 
-Source: `docs/superpowers/specs/2026-09-24-team-collaboration-styles-design.md`
-and `docs/superpowers/plans/2026-09-24-team-collaboration-styles.md`.
-
 ## Resume point and scope
 
 Tasks 1–5 were committed before this continuation. Task 6 production changes

@@ -1,8 +1,6 @@
 # Automation v2 final review evidence
 
 Source plan: [automation v2](../plans/2026-10-13-automation-v2.md).
-This completes the final-review findings recorded in
-`.superpowers/sdd/2026-10-13-automation-v2/progress.md`.
 
 ## Guarantees
 

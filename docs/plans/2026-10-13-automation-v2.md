@@ -1,7 +1,5 @@
 # Automations v2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Ship the v2 automation trigger model (multi-trigger, time-of-day/cron schedules, one state field, auto-pause) behind one `relay/automations/` seam, with every trigger firing through one path.
 
 **Architecture:** PR 1 moves existing logic into `backend/relay/automations/` with no behavior change. PR 2 adds the v2 model: pure `model.py` + `schedule.py`, a reducer that upgrades legacy fields on replay, new materialized columns, a clock that marks schedules pending instead of promoting directly, and the API/web contract. PR 3 adds auto-pause on repeated failure and the resume route.
