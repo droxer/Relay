@@ -290,7 +290,11 @@ class SessionController:
             outcome = session.get("finalOutcome") or outcome
             if self.task_store and self.task_id:
                 task = self.task_store.get_task(self.task_id)
-                if task.get("status") != "blocked" or task.get("blockerReason") != outcome:
+                # A failed agent run may already have blocked the task with the
+                # same words; the closeout still records that the round failed.
+                attention = task.get("attention") or {}
+                if (task.get("status") != "blocked" or task.get("blockerReason") != outcome
+                        or attention.get("code") != "execution_failed"):
                     self._update_task_status("blocked", outcome, {"sessionId": session_id, "code": "execution_failed"})
             logger.info("Session failed", session_id=session_id, outcome=outcome)
             return session

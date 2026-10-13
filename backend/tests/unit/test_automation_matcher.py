@@ -690,3 +690,73 @@ def test_resume_drops_stale_pending_events_before_the_next_tick(world):
     assert run(world) == 0
     assert _occurrences(tasks, routine["id"]) == []
     assert "Automation resumed by an admin." in [item.get("message") for item in tasks.get_task(routine["id"])["activity"]]
+
+
+def _controller(world, occurrence):
+    """The session controller a round runs an occurrence through."""
+    from relay.sessions.controller import SessionController
+    tasks, _, service, _ = world
+    sessions = service.matcher.session_store
+    session = sessions.create_session({"workspacePath": "/w", "taskGoal": "Run", "participants": ["human"]})
+    tasks.link_session(occurrence["id"], session["id"])
+    return SessionController(sessions, task_store=tasks, task_id=occurrence["id"]), session["id"]
+
+
+def _failed_run(controller, session_id, run_id="r1"):
+    controller.record_agent_completed(session_id, {}, {
+        "runId": run_id, "agent": "codex", "status": "failed", "exitCode": 1, "agentLog": "boom",
+    })
+
+
+def test_a_repaired_failed_run_does_not_count_when_the_round_ends_done(world):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    _end(world, _fired_occurrence(world, routine), "blocked")
+    occurrence = _fired_occurrence(world, routine)
+    controller, session_id = _controller(world, occurrence)
+    _failed_run(controller, session_id)
+    # The per-run write blocks the occurrence before the round decides to repair.
+    assert tasks.get_task(occurrence["id"])["attention"]["code"] == "agent_exit_failed"
+    run(world)
+    assert _failures(world, routine) == 1
+    controller.complete_session(session_id, "Repaired.", task_status="done")
+    run(world)
+    # Occurrences wait for acceptance; review is no verdict yet.
+    assert tasks.get_task(occurrence["id"])["status"] == "review"
+    assert _failures(world, routine) == 1
+    tasks.update_task(occurrence["id"], {"status": "done"})
+    run(world)
+    assert _failures(world, routine) == 0
+
+
+def test_a_round_that_fails_terminally_counts_once(world):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    occurrence = _fired_occurrence(world, routine)
+    controller, session_id = _controller(world, occurrence)
+    _failed_run(controller, session_id)
+    # The closeout's reason can match the per-run one exactly.
+    controller.fail_session(session_id, "codex failed with exit code 1.")
+    run(world)
+    assert tasks.get_task(occurrence["id"])["attention"]["code"] == "execution_failed"
+    assert _failures(world, routine) == 1
+    controller.fail_session(session_id, "codex failed with exit code 1.")
+    run(world)
+    assert _failures(world, routine) == 1
+
+
+def test_a_dispatch_failure_counts(world):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    _end(world, _fired_occurrence(world, routine), "blocked", {"code": "no_ready_node", "source": "dispatch"})
+    assert _failures(world, routine) == 1
+
+
+def test_a_block_with_no_recorded_cause_does_not_count(world):
+    tasks, _, _, _ = world
+    routine = _automation(tasks, routineTriggers=[])
+    occurrence = _fired_occurrence(world, routine)
+    tasks.update_task(occurrence["id"], {"status": "blocked", "blockerReason": "?"})
+    run(world)
+    assert tasks.get_task(occurrence["id"])["attention"]["source"] == "legacy"
+    assert _failures(world, routine) == 0

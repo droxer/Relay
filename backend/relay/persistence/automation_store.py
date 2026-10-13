@@ -93,15 +93,38 @@ def task_outbox_rows(before: dict[str, Any] | None, after: dict[str, Any]) -> li
         if origin:
             return []
         return [_row("task_event", "task.created", payload={"subject": subject_of(after)}, **provenance)]
-    if before.get("status") == after.get("status"):
-        return []
-    payload = {"subject": subject_of(after), "from": before.get("status"), "to": after.get("status")}
-    attention = after.get("attention") if after.get("status") == "blocked" else None
-    if isinstance(attention, dict):
-        # Why it blocked: an occurrence's failure streak counts failures, not
-        # cancels or a person's own block.
-        payload["attention"] = {key: attention.get(key) for key in ("code", "source")}
-    return [_row("task_event", "task.status_changed", payload=payload, **provenance)]
+    rows = []
+    outcome = occurrence_outcome(before, after) if origin else None
+    if outcome:
+        rows.append(_row("occurrence_outcome", f"occurrence.{outcome}",
+                         payload={"occurrenceId": after["id"]}, **provenance))
+    if before.get("status") != after.get("status"):
+        payload = {"subject": subject_of(after), "from": before.get("status"), "to": after.get("status")}
+        rows.append(_row("task_event", "task.status_changed", payload=payload, **provenance))
+    return rows
+
+
+def terminal_failure(task: dict[str, Any]) -> bool:
+    """Whether ``task`` is blocked because its work definitively failed: the
+    round's closeout (``execution_failed``) or a refused dispatch. A failed
+    agent run inside a round (``agent_exit_failed``) is not one: the round may
+    still repair it. Cancels, a person's block, and blocks with no recorded
+    cause are not failures either."""
+    attention = task.get("attention") if task.get("status") == "blocked" else None
+    if not isinstance(attention, dict):
+        return False
+    return attention.get("code") == "execution_failed" or attention.get("source") == "dispatch"
+
+
+def occurrence_outcome(before: dict[str, Any], after: dict[str, Any]) -> str | None:
+    """``done`` or ``failed`` when an occurrence reaches that verdict in this
+    write. A failure can land on an already-blocked occurrence: a failed
+    agent run blocks it first, and the round's closeout confirms it."""
+    if after.get("status") == "done" and before.get("status") != "done":
+        return "done"
+    if terminal_failure(after) and not terminal_failure(before):
+        return "failed"
+    return None
 
 
 def session_outbox_rows(session_id: str, event: dict[str, Any]) -> list[dict[str, Any]]:

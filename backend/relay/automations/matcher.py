@@ -48,10 +48,13 @@ class AutomationMatcher:
         if rows:
             automations = {task["id"]: task for task in self.task_store.list_trigger_automations()}
             for row in rows:
+                if row["kind"] == "occurrence_outcome":
+                    # Feeds the failure streak only; no automation listens for it.
+                    self._record_outcome(row)
+                    continue
                 event = self._enrich(row)
                 if event is None:
                     continue
-                self._record_outcome(row, event)
                 for automation in self._targets(row, event, automations):
                     if self._is_loop(automation, event):
                         logger.info("Automation event dropped as a loop", routine_id=automation["id"],
@@ -61,28 +64,15 @@ class AutomationMatcher:
             self.automation_store.delete_outbox([row["id"] for row in rows])
         self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
 
-    def _record_outcome(self, row: dict[str, Any], event: dict[str, Any]) -> None:
-        """An automation's own occurrence finishing feeds its failure streak,
-        once per occurrence: ``done`` resets it and a failed round (``blocked``
-        by execution or dispatch) extends it. A cancel, a person's own block,
-        a wait for a human, review, and deletion are no verdict on the
-        automation, so they neither count nor reset. Agent runs inside an
+    def _record_outcome(self, row: dict[str, Any]) -> None:
+        """An automation's own occurrence reaching a verdict feeds its failure
+        streak, once per occurrence (see ``occurrence_outcome``): ``done``
+        resets it and a terminal failure extends it. Agent runs inside an
         occurrence never count: a round may fail a run and still succeed."""
-        origin = event.get("originAutomationId")
-        if (row["kind"] != "task_event" or row["event_type"] != "task.status_changed"
-                or not origin or self.firing is None):
-            return
-        payload = row.get("payload") or {}
-        occurrence_id = row.get("source_id") or (payload.get("subject") or {}).get("id")
-        to_status = payload.get("to")
-        if to_status == "done":
-            failed = False
-        elif to_status == "blocked" and is_failure(payload.get("attention")):
-            failed = True
-        else:
-            return
-        if occurrence_id:
-            self.firing.record_outcome(origin, occurrence_id, failed=failed)
+        origin = row.get("origin_automation_id")
+        occurrence_id = (row.get("payload") or {}).get("occurrenceId") or row.get("source_id")
+        if origin and occurrence_id and self.firing is not None:
+            self.firing.record_outcome(origin, occurrence_id, failed=row["event_type"] == "occurrence.failed")
 
     def _targets(self, row: dict[str, Any], event: dict[str, Any],
                  automations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -144,13 +134,6 @@ class AutomationMatcher:
         except (KeyError, FileNotFoundError):
             return None
         return None if task.get("deletedAt") or not task.get("isRoutine") else task
-
-
-def is_failure(attention: Any) -> bool:
-    """Whether a blocked occurrence failed, rather than being cancelled or
-    blocked by a person. Older blocks without a recorded cause count."""
-    attention = attention if isinstance(attention, dict) else {}
-    return attention.get("code") != "execution_cancelled" and attention.get("source") != "operator"
 
 
 def listens_for(task: dict[str, Any], event: dict[str, Any]) -> bool:

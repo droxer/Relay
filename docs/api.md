@@ -103,9 +103,12 @@ and advances it after each fire.
 Relay counts consecutive failed occurrences of an automation, one verdict per
 occurrence (the task's status change, not its agent runs: a round may fail a
 run and still finish). An occurrence that reaches `done` resets the count to
-zero. One that reaches `blocked` because its round failed or could not be
-dispatched adds one. A cancel, a person's own block, `waiting_for_human`,
-`review`, and deletion neither count nor reset. Each occurrence counts at most
+zero. One whose round failed for good adds one: the closeout blocks it with
+`attention.code: "execution_failed"`, or dispatch refused it
+(`attention.source: "dispatch"`). A failed agent run inside a round
+(`agent_exit_failed`) is not a verdict, because the round may still repair it.
+A cancel, a person's own block, a block with no recorded cause,
+`waiting_for_human`, `review`, and deletion neither count nor reset. Each occurrence counts at most
 once, so a retried occurrence that blocks again is not a second failure. After
 3 failed occurrences in a row (`FAILURE_LIMIT`), Relay pauses an active
 automation with `routineState: "paused_by_relay"` and
