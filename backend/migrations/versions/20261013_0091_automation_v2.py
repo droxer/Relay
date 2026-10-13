@@ -35,17 +35,25 @@ down_revision = "20261011_0090"
 branch_labels = None
 depends_on = None
 
-ACTIVE = "is_routine AND routine_state = 'active'"
 BATCH = 1000
+# Predicates are spelled as the store queries render them (`IS true` on
+# Postgres, `IS 1` on SQLite); the planner only matches an identical term.
 INDEXES = (
-    ("ix_tasks_due_schedules", "routine_next_run_at", ACTIVE),
-    ("ix_tasks_listening_routines", "created_at", f"{ACTIVE} AND routine_listens"),
+    ("ix_tasks_due_schedules", "routine_next_run_at", ()),
+    ("ix_tasks_listening_routines", "created_at", ("routine_listens IS {true}",)),
     (
         "ix_tasks_unseeded_schedules",
         "created_at",
-        f"{ACTIVE} AND routine_has_schedule AND routine_next_run_at IS NULL",
+        ("routine_has_schedule IS {true}", "routine_next_run_at IS NULL"),
     ),
 )
+
+
+def _where(dialect: str, extra: tuple[str, ...]) -> sa.TextClause:
+    true = "true" if dialect == "postgresql" else "1"
+    terms = [f"is_routine IS {true}", "routine_state = 'active'", "deleted_at IS NULL"]
+    terms.extend(term.format(true=true) for term in extra)
+    return sa.text(" AND ".join(terms))
 
 
 def _tasks_table() -> sa.Table:
@@ -111,14 +119,18 @@ def upgrade() -> None:
         sa.Column("consecutive_failures", sa.Integer(), nullable=False, server_default="0"),
     )
     backfill(op.get_bind())
-    for name, column, where in INDEXES:
+    for name, column, extra in INDEXES:
         op.create_index(
-            name, "tasks", [column], postgresql_where=sa.text(where), sqlite_where=sa.text(where)
+            name,
+            "tasks",
+            [column],
+            postgresql_where=_where("postgresql", extra),
+            sqlite_where=_where("sqlite", extra),
         )
 
 
 def downgrade() -> None:
-    for name, _column, _where in reversed(INDEXES):
+    for name, _column, _extra in reversed(INDEXES):
         op.drop_index(name, table_name="tasks")
     op.drop_column("automation_state", "consecutive_failures")
     for column in ("routine_has_schedule", "routine_listens", "routine_state", "routine_next_run_at"):

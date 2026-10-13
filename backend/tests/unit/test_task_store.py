@@ -1249,3 +1249,43 @@ def test_listening_automations_query(which) -> None:
         )
         _v2_routine(store, "s")
         assert [task["id"] for task in store.list_trigger_automations()] == [hook["id"]]
+
+
+def test_schedule_queries_use_their_partial_indexes_on_sqlite() -> None:
+    from datetime import datetime, timezone
+
+    with TemporaryDirectory() as root:
+        store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
+        now = datetime(2026, 10, 13, tzinfo=timezone.utc)
+        expected = {
+            "ix_tasks_listening_routines": store.listening_query(),
+            "ix_tasks_due_schedules": store.due_schedules_query(now),
+            "ix_tasks_unseeded_schedules": store.unseeded_schedules_query(),
+        }
+        with store.engine.connect() as conn:
+            for index, query in expected.items():
+                compiled = str(query.compile(store.engine, compile_kwargs={"literal_binds": True}))
+                # SQLite refuses INDEXED BY an index whose predicate the query
+                # does not imply, so this fails when the index is unusable.
+                pinned = compiled.replace("FROM tasks", f"FROM tasks INDEXED BY {index}", 1)
+                plan = " ".join(
+                    str(row[-1]) for row in conn.execute(text(f"EXPLAIN QUERY PLAN {pinned}"))
+                )
+                assert index in plan, (index, plan)
+
+
+def test_deleted_routines_are_not_listed_by_schedule_queries() -> None:
+    from datetime import datetime, timezone
+
+    with TemporaryDirectory() as root:
+        store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
+        task = _v2_routine(store, "gone", routineNextRunAt="2026-10-13T09:00:00+00:00")
+        store.delete_task(task["id"])
+        assert store.list_due_schedules(datetime(2026, 10, 14, tzinfo=timezone.utc)) == []
+
+
+def test_create_keeps_an_empty_trigger_list() -> None:
+    with TemporaryDirectory() as root:
+        store = LocalTaskStore(root)
+        task = store.create_task({"title": "t", "isRoutine": True, "routineTriggers": [], "routineState": "paused"})
+        assert task["routineTriggers"] == []

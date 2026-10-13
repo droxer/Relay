@@ -35,19 +35,19 @@ def _load():
 def _seed(conn):
     conn.execute(text(
         "CREATE TABLE tasks (id TEXT PRIMARY KEY, is_routine BOOLEAN NOT NULL, routine_enabled BOOLEAN NOT NULL,"
-        " routine_trigger_kind TEXT, routine_next_run_date DATE, snapshot TEXT NOT NULL, created_at TEXT)"
+        " routine_trigger_kind TEXT, routine_next_run_date DATE, snapshot TEXT NOT NULL, created_at TEXT, deleted_at TEXT)"
     ))
     conn.execute(text("CREATE INDEX ix_tasks_due_routines ON tasks (routine_next_run_date)"))
     conn.execute(text("CREATE INDEX ix_tasks_triggered_routines ON tasks (created_at)"))
     conn.execute(text("CREATE TABLE automation_state (routine_id TEXT PRIMARY KEY)"))
     for key, row in ROWS.items():
         conn.execute(
-            text("INSERT INTO tasks VALUES (:id, 1, :enabled, :kind, :next, :snapshot, '2026-10-01')"),
+            text("INSERT INTO tasks VALUES (:id, 1, :enabled, :kind, :next, :snapshot, '2026-10-01', NULL)"),
             {"id": key, "enabled": row["enabled"], "kind": row["kind"], "next": row["next"],
              "snapshot": json.dumps(row["snapshot"])},
         )
     conn.execute(text(
-        "INSERT INTO tasks VALUES ('plain', 0, 0, NULL, NULL, '{}', '2026-10-01')"
+        "INSERT INTO tasks VALUES ('plain', 0, 0, NULL, NULL, '{}', '2026-10-01', NULL)"
     ))
 
 

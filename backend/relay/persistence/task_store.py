@@ -34,6 +34,7 @@ from sqlalchemy import (
     insert,
     inspect,
     or_,
+    literal_column,
     select,
     text,
     update,
@@ -233,12 +234,11 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "routineTrigger",
         "routineTriggerKind",
         "routineTriggerSummary",
-        "routineTriggers",
-        "routineState",
-        "routinePauseReason",
-        "routineNextRunAt",
     ):
         if payload.get(field):
+            created_payload[field] = payload[field]
+    for field in ("routineTriggers", "routineState", "routinePauseReason", "routineNextRunAt"):
+        if field in payload:
             created_payload[field] = payload[field]
     for field in ("isRoutine", "routineEnabled", "routineTriggerDepth"):
         if field in payload:
@@ -965,7 +965,17 @@ class LocalTaskStore:
         return self._task_dir(task_id) / "snapshot.json"
 
 
-ACTIVE_ROUTINE_WHERE = "is_routine AND routine_state = 'active'"
+def routine_index_where(dialect: str, *extra: str) -> Any:
+    """Partial-index predicate spelled exactly as the store queries render it
+    (`IS true` on Postgres, `IS 1` on SQLite), or the planner cannot match it."""
+    true = "true" if dialect == "postgresql" else "1"
+    terms = [
+        f"is_routine IS {true}",
+        "routine_state = 'active'",
+        "deleted_at IS NULL",
+        *(term.format(true=true) for term in extra),
+    ]
+    return text(" AND ".join(terms))
 
 
 class DatabaseTaskStore:
@@ -1081,23 +1091,23 @@ class DatabaseTaskStore:
         Index(
             "ix_tasks_due_schedules",
             "routine_next_run_at",
-            postgresql_where=text(ACTIVE_ROUTINE_WHERE),
-            sqlite_where=text(ACTIVE_ROUTINE_WHERE),
+            postgresql_where=routine_index_where("postgresql"),
+            sqlite_where=routine_index_where("sqlite"),
         ),
         Index(
             "ix_tasks_listening_routines",
             "created_at",
-            postgresql_where=text(f"{ACTIVE_ROUTINE_WHERE} AND routine_listens"),
-            sqlite_where=text(f"{ACTIVE_ROUTINE_WHERE} AND routine_listens"),
+            postgresql_where=routine_index_where("postgresql", "routine_listens IS {true}"),
+            sqlite_where=routine_index_where("sqlite", "routine_listens IS {true}"),
         ),
         Index(
             "ix_tasks_unseeded_schedules",
             "created_at",
-            postgresql_where=text(
-                f"{ACTIVE_ROUTINE_WHERE} AND routine_has_schedule AND routine_next_run_at IS NULL"
+            postgresql_where=routine_index_where(
+                "postgresql", "routine_has_schedule IS {true}", "routine_next_run_at IS NULL"
             ),
-            sqlite_where=text(
-                f"{ACTIVE_ROUTINE_WHERE} AND routine_has_schedule AND routine_next_run_at IS NULL"
+            sqlite_where=routine_index_where(
+                "sqlite", "routine_has_schedule IS {true}", "routine_next_run_at IS NULL"
             ),
         ),
     )
@@ -2066,39 +2076,48 @@ class DatabaseTaskStore:
             )
         return occurrence
 
-    def _active_routine_snapshots(self, *conditions: Any, order: Any) -> list[dict[str, Any]]:
-        with store_transaction(self.engine) as conn:
-            rows = (
-                conn.execute(
-                    select(self.tasks.c.snapshot)
-                    .where(self.tasks.c.is_routine.is_(True))
-                    .where(self.tasks.c.routine_state == "active")
-                    .where(*conditions)
-                    .order_by(order)
-                )
-                .mappings()
-                .all()
-            )
-        return [row["snapshot"] for row in rows if not row["snapshot"].get("deletedAt")]
+    def _active_routines_query(self, *conditions: Any, order: Any) -> Any:
+        return (
+            select(self.tasks.c.snapshot)
+            .where(self.tasks.c.is_routine.is_(True))
+            .where(self.tasks.c.routine_state == literal_column("'active'"))
+            .where(self.tasks.c.deleted_at.is_(None))
+            .where(*conditions)
+            .order_by(order)
+        )
 
-    def list_trigger_automations(self) -> list[dict[str, Any]]:
-        return self._active_routine_snapshots(
+    def listening_query(self) -> Any:
+        return self._active_routines_query(
             self.tasks.c.routine_listens.is_(True), order=self.tasks.c.created_at.asc()
         )
 
-    def list_due_schedules(self, now: datetime) -> list[dict[str, Any]]:
-        return self._active_routine_snapshots(
+    def due_schedules_query(self, now: datetime) -> Any:
+        return self._active_routines_query(
             self.tasks.c.routine_next_run_at.is_not(None),
             self.tasks.c.routine_next_run_at <= now,
             order=self.tasks.c.routine_next_run_at.asc(),
         )
 
-    def list_unseeded_schedules(self) -> list[dict[str, Any]]:
-        return self._active_routine_snapshots(
+    def unseeded_schedules_query(self) -> Any:
+        return self._active_routines_query(
             self.tasks.c.routine_has_schedule.is_(True),
             self.tasks.c.routine_next_run_at.is_(None),
             order=self.tasks.c.created_at.asc(),
         )
+
+    def _snapshots(self, query: Any) -> list[dict[str, Any]]:
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(query).mappings().all()
+        return [row["snapshot"] for row in rows]
+
+    def list_trigger_automations(self) -> list[dict[str, Any]]:
+        return self._snapshots(self.listening_query())
+
+    def list_due_schedules(self, now: datetime) -> list[dict[str, Any]]:
+        return self._snapshots(self.due_schedules_query(now))
+
+    def list_unseeded_schedules(self) -> list[dict[str, Any]]:
+        return self._snapshots(self.unseeded_schedules_query())
 
     def assign_task(
         self, task_id: str, agent: AgentName, agent_id: str | None = None
