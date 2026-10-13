@@ -25,6 +25,8 @@ from .store_common import metadata as shared_metadata
 
 AUTOMATION_LOCK_KEY = 738102401
 STALE_CLAIM = timedelta(minutes=5)
+# Pending events kept per automation; the rest are only counted.
+MAX_PENDING_EVENTS = 20
 SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerEmployeeId", "assigneeEmployeeId")
 
 automation_outbox = Table(
@@ -171,6 +173,22 @@ class DatabaseAutomationStore:
             )
             if updated.rowcount == 0:
                 conn.execute(insert(automation_state).values(routine_id=routine_id, **values))
+
+    def mark_pending(self, routine_id: str, event: dict[str, Any], now: datetime) -> None:
+        """Park ``event`` on the automation's pending state. Past
+        ``MAX_PENDING_EVENTS`` an event is counted, not kept."""
+        with store_transaction(self.engine):
+            state = self.get_state(routine_id)
+            events = list(state["pending_events"])
+            dropped = int(state["pending_dropped"])
+            if len(events) < MAX_PENDING_EVENTS:
+                events = [*events, event]
+            else:
+                dropped += 1
+            self.save_state(routine_id, {
+                **state, "pending": True, "pending_events": events, "pending_dropped": dropped,
+                "pending_since": state["pending_since"] or now,
+            })
 
     def clear_state(self, routine_id: str) -> None:
         """Forget pending events but keep the rate window: a fired automation

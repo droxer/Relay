@@ -7,15 +7,14 @@ subject to the in-flight, expiry, and hourly rate-cap rules.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
 
-from .clock import next_routine_date
 from .context import trigger_context_block
-from .model import trigger_kind
+from .model import is_active, trigger_kind
+from .schedule import resolve_timezone
 
 PENDING_TTL = timedelta(hours=24)
 RATE_WINDOW = timedelta(hours=1)
@@ -50,12 +49,10 @@ class AutomationFiring:
         *,
         task_store: Any,
         automation_store: Any,
-        today: Callable[[], date] = date.today,
         max_runs_per_hour: int = 6,
     ) -> None:
         self.task_store = task_store
         self.automation_store = automation_store
-        self._today = today
         self.max_runs_per_hour = max_runs_per_hour
 
     def fire(self, now: datetime) -> int:
@@ -70,8 +67,11 @@ class AutomationFiring:
         routine = self._load(routine_id)
         events = state["pending_events"]
         manual = any(event.get("eventType") == "manual" for event in events)
-        if not routine or not routine.get("routineEnabled") or (
-            trigger_kind(routine) in ("schedule", "manual") and not manual
+        scheduled = bool(events) and all(event.get("eventType") == "schedule" for event in events)
+        # Event or webhook events left over after a switch to a schedule or
+        # manual trigger are stale; the clock's own schedule events are not.
+        if not routine or not is_active(routine) or (
+            trigger_kind(routine) in ("schedule", "manual") and not manual and not scheduled
         ):
             self.automation_store.clear_state(routine_id)
             return False
@@ -94,15 +94,14 @@ class AutomationFiring:
             self.automation_store.clear_state(routine_id)
             return False
         events = state["pending_events"]
-        today = self._today()
-        run_date = today.isoformat()
-        due_date = routine.get("routineNextRunDate") if manual and trigger_kind(routine) == "schedule" else None
-        if due_date and due_date <= run_date:
-            run_date = due_date
+        # The occurrence's calendar day is the server's, like the legacy
+        # due date it replaces.
+        run_date = now.astimezone(resolve_timezone(None)).date().isoformat()
+        kind = "manual" if manual else "schedule" if scheduled else trigger_kind(routine)
         occurrence = self.task_store.create_triggered_occurrence(
             routine_id,
             run_date=run_date,
-            trigger_kind="manual" if manual else trigger_kind(routine),
+            trigger_kind=kind,
             summary={"eventType": "manual" if manual else events[0]["eventType"],
                      "eventCount": len(events) + int(state["pending_dropped"]),
                      **({"toStatus": events[0]["toStatus"]} if events[0].get("toStatus") else {})},
@@ -117,9 +116,6 @@ class AutomationFiring:
             # assigned or they expire, and say so once.
             logger.info("Automation could not start", routine_id=routine_id)
             return False
-        if due_date and due_date <= today.isoformat():
-            next_date = next_routine_date(date.fromisoformat(due_date), routine.get("routineCadence") or "weekly", today)
-            self.task_store.update_task(routine_id, {"routineNextRunDate": next_date.isoformat() if next_date else ""})
         self.automation_store.save_state(routine_id, {
             "routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
             "pending_since": None, "fired_window_start": window_start, "fired_count": count + 1,

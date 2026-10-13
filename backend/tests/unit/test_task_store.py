@@ -15,6 +15,8 @@ from relay.persistence.task_store import (
 )
 from sqlalchemy import event, text
 
+from automation_helpers import fire_now
+
 
 def test_task_store_persists_assignment_status_activity_and_link() -> None:
     with TemporaryDirectory() as root:
@@ -457,7 +459,7 @@ def test_dispatchable_tasks_treat_naive_retry_deadline_as_utc(database: bool) ->
         assert [task["id"] for task in dispatchable] == [ready["id"]]
 
 
-def test_task_store_promotes_due_routine_once() -> None:
+def test_task_store_creates_one_routine_occurrence() -> None:
     with TemporaryDirectory() as root:
         store = LocalTaskStore(root)
         routine = store.create_task(
@@ -475,17 +477,13 @@ def test_task_store_promotes_due_routine_once() -> None:
             }
         )
 
-        first = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
-        second = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-09")
+        first = fire_now(store, routine["id"], run_date="2026-06-25")
 
         assert first is not None
         assert first["status"] == "assigned"
         assert first["isRoutine"] is False
         assert first["assignedAgent"] == "codex"
         assert first["dueDate"] == "2026-06-25"
-        assert second is None
-        updated = store.get_task(routine["id"])
-        assert updated["routineNextRunDate"] == "2026-07-02"
         assert (
             len([task for task in store.list_tasks() if task["id"] != routine["id"]])
             == 1
@@ -666,7 +664,7 @@ def assert_store_lists_scheduler_queues(
             "assignedAgent": "codex",
         }
     )
-    store.create_task(
+    future_routine = store.create_task(
         {
             "title": "Future routine",
             "isRoutine": True,
@@ -697,9 +695,11 @@ def assert_store_lists_scheduler_queues(
         high["id"],
         normal["id"],
     ]
-    assert [task["id"] for task in store.list_due_routines("2026-06-25")] == [
-        due_routine["id"]
-    ]
+    # Neither legacy routine has been seeded by the clock yet.
+    assert {task["id"] for task in store.list_unseeded_schedules()} == {
+        due_routine["id"],
+        future_routine["id"],
+    }
 
 
 def test_local_task_store_lists_scheduler_queues() -> None:
@@ -714,7 +714,7 @@ def test_database_task_store_lists_scheduler_queues() -> None:
         )
 
 
-def test_database_task_store_promotes_due_routine_once() -> None:
+def test_database_task_store_creates_one_routine_occurrence() -> None:
     with TemporaryDirectory() as root:
         store = DatabaseTaskStore(f"sqlite:///{root}/relay.db", create_schema=True)
         routine = store.create_task(
@@ -732,17 +732,13 @@ def test_database_task_store_promotes_due_routine_once() -> None:
             }
         )
 
-        first = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
-        second = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-09")
+        first = fire_now(store, routine["id"], run_date="2026-06-25")
 
         assert first is not None
         assert first["status"] == "assigned"
         assert first["isRoutine"] is False
         assert first["assignedAgent"] == "codex"
         assert first["dueDate"] == "2026-06-25"
-        assert second is None
-        updated = store.get_task(routine["id"])
-        assert updated["routineNextRunDate"] == "2026-07-02"
         assert (
             len([task for task in store.list_tasks() if task["id"] != routine["id"]])
             == 1
@@ -832,7 +828,7 @@ def assert_store_records_routine_occurrence_lineage(store) -> None:
         }
     )
 
-    occurrence = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
+    occurrence = fire_now(store, routine["id"], run_date="2026-06-25")
 
     assert occurrence is not None
     assert occurrence["sourceRoutineId"] == routine["id"]
@@ -933,11 +929,10 @@ def assert_store_delete_hides_task_everywhere(store, session_store) -> None:
     assert late_session["id"] not in relinked["linkedSessionIds"]
 
     assert store.list_tasks() == []
-    assert store.list_due_routines("2026-06-25") == []
+    assert store.list_unseeded_schedules() == []
     assert store.list_dispatchable_tasks() == []
     assert store.claim_next_task_for_agent("codex") is None
     assert store.claim_task_for_dispatch(assigned["id"], "codex") is None
-    assert store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02") is None
     assert store.create_triggered_occurrence(routine["id"], run_date="2026-06-25", trigger_kind="manual", depth=0, context="") is None
 
     persisted = store.get_task(routine["id"])
@@ -1132,7 +1127,7 @@ def test_routine_occurrence_inherits_collaboration_style(database: bool) -> None
             }
         )
 
-        occurrence = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
+        occurrence = fire_now(store, routine["id"], run_date="2026-06-25")
 
         assert occurrence["collaborationStyle"] == "solo"
 
@@ -1158,7 +1153,7 @@ def test_routine_occurrence_without_a_style_inherits_nothing(database: bool) -> 
             }
         )
 
-        occurrence = store.promote_due_routine(routine["id"], "2026-06-25", "2026-07-02")
+        occurrence = fire_now(store, routine["id"], run_date="2026-06-25")
 
         assert "collaborationStyle" not in occurrence
 

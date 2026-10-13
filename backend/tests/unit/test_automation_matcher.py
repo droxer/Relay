@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryDirectory
 
 import pytest
-from relay.automations.matcher import AutomationMatcher
+from relay.automations.service import AutomationService
 from relay.persistence.automation_store import DatabaseAutomationStore
 from relay.persistence.session_store import DatabaseSessionStore
 from relay.persistence.task_store import DatabaseTaskStore
@@ -20,6 +20,27 @@ class Clock:
         return self.value
 
 
+class Ticker:
+    """One automation tick at the test clock's time, as the scheduler runs it."""
+
+    def __init__(self, tasks, sessions, automations, clock: Clock) -> None:
+        self.session_store = sessions
+        self.service = AutomationService(task_store=tasks, session_store=sessions, automation_store=automations,
+                                         project_store=None)
+        self._clock = clock
+
+    @property
+    def max_runs_per_hour(self) -> int:
+        return self.service.firing.max_runs_per_hour
+
+    @max_runs_per_hour.setter
+    def max_runs_per_hour(self, value: int) -> None:
+        self.service.firing.max_runs_per_hour = value
+
+    def run(self) -> int:
+        return self.service.tick(self._clock())
+
+
 @pytest.fixture
 def world():
     with TemporaryDirectory() as root:
@@ -28,9 +49,7 @@ def world():
         sessions = DatabaseSessionStore(url, create_schema=True)
         automations = DatabaseAutomationStore(url, create_schema=True)
         clock = Clock()
-        matcher = AutomationMatcher(task_store=tasks, session_store=sessions, automation_store=automations,
-                                    now=clock, today=lambda: date(2026, 10, 2))
-        yield tasks, automations, matcher, clock
+        yield tasks, automations, Ticker(tasks, sessions, automations, clock), clock
 
 
 def _automation(tasks, trigger=ON_BLOCKED, **extra):
@@ -183,8 +202,7 @@ def test_failed_firing_rolls_back_outbox_and_pending(world, monkeypatch):
         original(*args, **kwargs)
         raise RuntimeError("interrupted")
     monkeypatch.setattr(tasks, "create_triggered_occurrence", fail)
-    with pytest.raises(RuntimeError):
-        matcher.run()
+    assert matcher.run() == 0  # the tick logs the failure and rolls back
     assert _occurrences(tasks, routine["id"]) == []
     assert automations.list_pending_states() == []
     assert len(automations.claim_outbox(10, clock())) == 2

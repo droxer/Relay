@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -111,8 +111,7 @@ def test_closed_project_routines_do_not_promote_or_advance_schedule(project_cont
     assert created.status_code == 201, created.text
     routine = created.json()
     close_project(client, project, state)
-    promoted, skipped = app.state.task_scheduler.automations.clock.run(date(2026, 9, 21))
-    assert (promoted, skipped) == (0, 1)
+    assert app.state.task_scheduler.automations.tick(datetime(2026, 9, 21, 12, tzinfo=timezone.utc)) == 0
     started = client.post(f"/api/v1/tasks/{routine['id']}/runs", json={})
     assert started.status_code == 409
     after = app.state.task_store.get_task(routine["id"])

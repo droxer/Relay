@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timezone
+import calendar
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -51,7 +52,6 @@ from ..sessions import SessionController
 from ..tasks import (
     materialize_legacy_agent_assignment,
     materialize_legacy_task_assignment,
-    next_routine_date,
     task_goal_text,
 )
 from .deps import AppContext, AppContextDep
@@ -248,6 +248,17 @@ def _task_collaboration_style(body: dict[str, Any], *, allow_clear: bool) -> str
         raise HTTPException(400, str(error)) from error
 
 
+def _legacy_next_run_date(today: date, cadence: str) -> date:
+    """The legacy routine API's first run after ``today``: one cadence step.
+    The schedule clock seeds v2 timing from it (``seed_from_legacy``)."""
+    if cadence == "daily":
+        return today + timedelta(days=1)
+    if cadence == "monthly":
+        year, month = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+        return date(year, month, min(today.day, calendar.monthrange(year, month)[1]))
+    return today + timedelta(days=7)
+
+
 def routine_fields(
     body: dict[str, Any],
     *,
@@ -326,8 +337,7 @@ def routine_fields(
         )
     ):
         today = calendar_date or datetime.now(timezone.utc).date()
-        calculated_next_run = next_routine_date(today, resolved_cadence, today)
-        next_run = calculated_next_run.isoformat() if calculated_next_run else None
+        next_run = _legacy_next_run_date(today, resolved_cadence).isoformat()
     effective_next_run = (
         next_run
         if has_next_run_input or next_run is not None

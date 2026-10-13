@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
@@ -11,6 +11,7 @@ from relay.app import create_app
 from relay.core.computer_identity import computer_id
 from relay.services.task_dispatch import active_routine_occurrence
 
+from automation_helpers import fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents
 
 # A routine's run is the one kind of work that dispatches outside a project.
@@ -1272,13 +1273,14 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         assert occurrence["id"] != task["id"]
         assert occurrence["isRoutine"] is False
         assert occurrence["status"] == "assigned"
-        assert occurrence["dueDate"] == "2026-06-25"
+        # Run now runs on the day it is clicked; the overdue schedule slot
+        # coalesces into the same run and the clock advances past it.
+        assert occurrence["dueDate"] == occurrence["scheduledFor"]
         assert occurrence["sourceRoutineId"] == task["id"]
-        assert occurrence["scheduledFor"] == "2026-06-25"
 
         updated_definition = client.get(f"/api/v1/tasks/{task['id']}").json()
         assert updated_definition["status"] == "backlog"
-        assert updated_definition["routineNextRunDate"] == "2026-07-02"
+        assert updated_definition["routineNextRunAt"] > datetime.now(timezone.utc).isoformat()
         assert updated_definition["occurrenceIds"] == [occurrence["id"]]
         assert updated_definition["linkedSessionIds"] == [start.json()["session"]["id"]]
 
@@ -1318,8 +1320,8 @@ def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
         )
         assert created.status_code == 201
 
-        promoted = asyncio.run(app.state.task_scheduler.tick())
-        assert promoted.promoted == 1
+        fired = asyncio.run(app.state.task_scheduler.tick())
+        assert fired.fired == 1
         definition = client.get(f"/api/v1/tasks/{created.json()['id']}").json()
         [occurrence_id] = definition["occurrenceIds"]
         assert app.state.task_store.get_task(occurrence_id)["status"] == "assigned"
@@ -1390,9 +1392,7 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
                 "routineEnabled": True,
             },
         ).json()
-        occurrence = app.state.task_store.promote_due_routine(
-            routine["id"], "2026-08-30", "2026-08-31"
-        )
+        occurrence = fire_now(app.state.task_store, routine["id"], run_date="2026-08-30")
         assert occurrence and occurrence["assignedAgentId"] == original_agent["id"]
         reassigned = client.patch(
             f"/api/v1/tasks/{routine['id']}",

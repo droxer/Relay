@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
@@ -11,17 +11,17 @@ from relay.daemon_registry import DaemonNodeRegistry, ServerDaemonNodeBackend
 from relay.persistence.agent_placement_store import LocalAgentPlacementStore
 from relay.persistence.daemon_store import LocalDaemonStore
 from relay.persistence.agent_store import LocalAgentStore
+from relay.persistence.automation_store import DatabaseAutomationStore
 from relay.persistence.project_store import DatabaseProjectStore
-from relay.persistence.session_store import LocalSessionStore
-from relay.persistence.task_store import LocalTaskStore
+from relay.persistence.session_store import DatabaseSessionStore, LocalSessionStore
+from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
 from relay.persistence.team_store import LocalTeamStore
 from relay.services.managed_nodes import LocalManagedNodeStore
+from relay.automations.service import AutomationService
 from relay.tasks import (
-    ROUTINE_SKIP_NO_AGENT_MESSAGE,
     SchedulerTickResult,
     TaskScheduler,
     materialize_legacy_agent_assignment,
-    next_routine_date,
 )
 
 from issue_projects import PROJECT_CAPABILITY, project_for
@@ -32,6 +32,31 @@ from issue_projects import PROJECT_CAPABILITY, project_for
 # the scheduler's projectless agent and team branches, so their work is a
 # routine run — the one kind of projectless work those branches still serve.
 ROUTINE_RUN = {"sourceRoutineId": "routine_nightly"}
+# Tuesday 2026-10-13, just past a 09:00 UTC slot.
+SLOT_NOW = datetime(2026, 10, 13, 9, 0, 5, tzinfo=timezone.utc)
+DAILY_9_UTC = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}]
+
+
+def _database_stores(root: str):
+    """Automations run only on the database stores (the automation store has
+    no file twin), so the tests that fire one use SQLite."""
+    url = f"sqlite:///{root}/relay.db"
+    return (
+        DatabaseSessionStore(url, create_schema=True),
+        DatabaseTaskStore(url, create_schema=True),
+        DatabaseAutomationStore(url, create_schema=True),
+    )
+
+
+def _automation_service(session_store, task_store, automation_store) -> AutomationService:
+    return AutomationService(
+        task_store=task_store,
+        session_store=session_store,
+        automation_store=automation_store,
+        project_store=None,
+        max_runs_per_hour=6,
+        batch=200,
+    )
 
 
 def _logical_backend(
@@ -131,6 +156,80 @@ def test_scheduler_dispatches_assigned_task_to_ready_node(completed_before_retur
             [manifest] = session_store.get_session(session_id)["collaborationRounds"]
             assert manifest["source"] == "task"
             assert manifest["workGraph"]["items"][0]["ownerAgentId"] == agent["id"]
+
+    asyncio.run(run_flow())
+
+
+def test_scheduler_fires_a_due_v2_schedule_and_dispatches_one_run() -> None:
+    """Spec §5: clock → pending → firing → dispatch in one scheduler tick."""
+
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            session_store, task_store, automation_store = _database_stores(root)
+            registry = DaemonNodeRegistry(
+                session_store, LocalDaemonStore(root), task_store=task_store
+            )
+            registry.register(
+                {
+                    "sandboxId": "sbx_alice",
+                    "employeeId": "alice",
+                    "token": "node_token",
+                    "workspacePath": "/workspace/alice",
+                    "protocolVersion": 1,
+                    "supportedAgents": ["codex"],
+                    "capabilities": ["task-workspaces", "thread-workspaces"],
+                    "status": "ready",
+                },
+                "ui_token",
+            )
+            backend, agent = _logical_backend(root, registry, "sbx_alice")
+            runs = []
+            original_run = backend.run
+
+            async def counting_run(*args, **kwargs):
+                runs.append(args)
+                return await original_run(*args, **kwargs)
+
+            backend.run = counting_run
+            weekdays_9 = [{"kind": "schedule", "schedule": {
+                "timezone": "UTC", "repeat": {"every": "weekday", "at": "09:00"}}}]
+            routine = task_store.create_task(
+                {
+                    "title": "Standup digest",
+                    "assignedAgent": "codex",
+                    "assignedAgentId": agent["id"],
+                    "ownerEmployeeId": "alice",
+                    "assigneeEmployeeId": "alice",
+                    "isRoutine": True,
+                    "routineTriggers": weekdays_9,
+                    "routineState": "active",
+                    "routineNextRunAt": "2026-10-13T09:00:00+00:00",
+                }
+            )
+            scheduler = TaskScheduler(
+                task_store=task_store,
+                registry=registry,
+                backend=backend,
+                automations=_automation_service(session_store, task_store, automation_store),
+                now=lambda: SLOT_NOW,
+            )
+
+            result = await scheduler.tick()
+
+            assert result.fired == 1
+            assert result.dispatched == 1
+            assert len(runs) == 1
+            updated = task_store.get_task(routine["id"])
+            assert updated["routineNextRunAt"] == "2026-10-14T09:00:00+00:00"
+            [occurrence_id] = updated["occurrenceIds"]
+            occurrence = task_store.get_task(occurrence_id)
+            assert occurrence["routineTriggerKind"] == "schedule"
+            assert occurrence["scheduledFor"] == "2026-10-13"
+            assert "Schedule: Weekdays at 09:00 (UTC)" in occurrence["description"]
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            assert command["type"] == "run.start"
+            assert command["logicalAgentId"] == agent["id"]
+            assert automation_store.get_state(routine["id"])["pending"] is False
 
     asyncio.run(run_flow())
 
@@ -506,72 +605,6 @@ def test_scheduler_dispatches_task_by_logical_agent_placement() -> None:
     asyncio.run(run_flow())
 
 
-def test_scheduler_promotes_due_routine_and_advances_next_run() -> None:
-    async def run_flow() -> None:
-        with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
-            registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
-            )
-            registry.register(
-                {
-                    "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
-                    "token": "node_token",
-                    "workspacePath": "/workspace/alice",
-                    "protocolVersion": 1,
-                    "supportedAgents": ["codex"],
-                    "capabilities": ["task-workspaces", "thread-workspaces"],
-                    "status": "ready",
-                },
-                "ui_token",
-            )
-            backend, agent = _logical_backend(root, registry, "sbx_alice")
-            routine = task_store.create_task(
-                {
-                    "title": "Weekly report",
-                    "description": "Prepare the weekly status.",
-                    "priority": "high",
-                    "assignedAgent": "codex",
-                    "assignedAgentId": agent["id"],
-                    "ownerEmployeeId": "alice",
-                    "assigneeEmployeeId": "alice",
-                    "isRoutine": True,
-                    "routineType": "job",
-                    "routineCadence": "weekly",
-                    "routineNextRunDate": "2026-06-25",
-                    "routineEnabled": True,
-                }
-            )
-            scheduler = TaskScheduler(
-                task_store=task_store,
-                registry=registry,
-                backend=backend,
-                today=lambda: date(2026, 6, 25),
-            )
-
-            result = await scheduler.tick()
-
-            assert result.promoted == 1
-            assert result.dispatched == 1
-            updated_routine = task_store.get_task(routine["id"])
-            assert updated_routine["routineNextRunDate"] == "2026-07-02"
-            occurrences = [
-                task for task in task_store.list_tasks() if task["id"] != routine["id"]
-            ]
-            assert len(occurrences) == 1
-            occurrence = occurrences[0]
-            assert occurrence["title"] == "Weekly report"
-            assert occurrence["priority"] == "high"
-            assert occurrence["dueDate"] == "2026-06-25"
-            assert occurrence["isRoutine"] is False
-            assert occurrence["status"] == "assigned"
-            assert occurrence["linkedSessionIds"]
-
-    asyncio.run(run_flow())
-
-
 def test_scheduler_dispatches_by_priority_not_recency() -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
@@ -627,48 +660,6 @@ def test_scheduler_dispatches_by_priority_not_recency() -> None:
             assert result.dispatched == 1
             assert task_store.get_task(high["id"])["status"] == "assigned"
             assert task_store.get_task(low["id"])["status"] == "assigned"
-
-    asyncio.run(run_flow())
-
-
-def test_scheduler_records_skip_activity_once_for_agentless_due_routine() -> None:
-    async def run_flow() -> None:
-        with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
-            registry = DaemonNodeRegistry(
-                session_store, LocalDaemonStore(root), task_store=task_store
-            )
-            backend = ServerDaemonNodeBackend(registry)
-            routine = task_store.create_task(
-                {
-                    "title": "Agentless routine",
-                    "assigneeEmployeeId": "alice",
-                    "isRoutine": True,
-                    "routineCadence": "weekly",
-                    "routineNextRunDate": "2026-06-25",
-                    "routineEnabled": True,
-                }
-            )
-            scheduler = TaskScheduler(
-                task_store=task_store,
-                registry=registry,
-                backend=backend,
-                today=lambda: date(2026, 6, 25),
-            )
-
-            first = await scheduler.tick()
-            second = await scheduler.tick()
-
-            assert first.promoted == 0
-            assert first.skipped == 1
-            assert second.skipped == 1
-            skips = [
-                activity
-                for activity in task_store.get_task(routine["id"])["activity"]
-                if activity["message"] == ROUTINE_SKIP_NO_AGENT_MESSAGE
-            ]
-            assert len(skips) == 1
 
     asyncio.run(run_flow())
 
@@ -816,12 +807,7 @@ def test_scheduler_keeps_the_claim_on_ambiguous_dispatch_failure() -> None:
 def test_scheduler_uses_targeted_task_queue_queries() -> None:
     class QueryOnlyTaskStore:
         def __init__(self) -> None:
-            self.due_queries = 0
             self.dispatch_queries = 0
-
-        def list_due_routines(self, today: str) -> list[dict]:
-            self.due_queries += 1
-            return []
 
         def list_dispatchable_tasks(self, limit=None, *, after=None) -> list[dict]:
             self.dispatch_queries += 1
@@ -844,7 +830,6 @@ def test_scheduler_uses_targeted_task_queue_queries() -> None:
         assert result.promoted == 0
         assert result.dispatched == 0
         assert result.skipped == 0
-        assert store.due_queries == 1
         assert store.dispatch_queries == 1
 
     asyncio.run(run_flow())
@@ -976,15 +961,17 @@ def test_legacy_assignment_reuses_placement_after_runtime_replacement() -> None:
         assert preserved["computerId"] == "device:alice:machine-1"
 
 
-def test_scheduler_materializes_legacy_routine_before_promotion() -> None:
-    """A declared agent for the routine's runtime/computer pair is required
-    before the routine can be promoted; nothing is auto-created."""
+def test_scheduler_fires_legacy_routine_and_materializes_its_occurrence(monkeypatch) -> None:
+    """A legacy routine (executor kind, no logical agent) seeds from its old
+    next run date, fires on the first tick, and its occurrence gets the
+    declared agent for the runtime/computer pair; nothing is auto-created."""
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_TIMEZONE", "UTC")
 
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            task_store = LocalTaskStore(root)
+            session_store, task_store, automation_store = _database_stores(root)
             registry = DaemonNodeRegistry(
-                LocalSessionStore(root), LocalDaemonStore(root), task_store=task_store
+                session_store, LocalDaemonStore(root), task_store=task_store
             )
             node = registry.register(
                 {
@@ -1001,7 +988,7 @@ def test_scheduler_materializes_legacy_routine_before_promotion() -> None:
             )
             agent_store = LocalAgentStore(root)
             placement_store = LocalAgentPlacementStore(root)
-            agent_store.create_agent(
+            agent = agent_store.create_agent(
                 "alice",
                 {
                     "displayName": "Codex",
@@ -1023,19 +1010,25 @@ def test_scheduler_materializes_legacy_routine_before_promotion() -> None:
                     "isRoutine": True,
                     "routineEnabled": True,
                     "routineCadence": "daily",
-                    "routineNextRunDate": "2020-01-01",
+                    "routineNextRunDate": "2026-10-12",
                 }
             )
 
             result = await TaskScheduler(
-                task_store=task_store, registry=registry, backend=backend
+                task_store=task_store,
+                registry=registry,
+                backend=backend,
+                automations=_automation_service(session_store, task_store, automation_store),
+                now=lambda: SLOT_NOW,
             ).tick()
 
-            assert result.promoted == 1
+            assert result.fired == 1
+            assert result.dispatched == 1
             updated = task_store.get_task(routine["id"])
-            assert updated["assignedAgentId"]
+            assert updated["routineNextRunAt"] == "2026-10-14T00:00:00+00:00"
             occurrence = task_store.get_task(updated["occurrenceIds"][0])
-            assert occurrence["assignedAgentId"] == updated["assignedAgentId"]
+            assert occurrence["assignedAgentId"] == agent["id"]
+            assert occurrence["routineTriggerKind"] == "schedule"
 
     asyncio.run(run_flow())
 
@@ -1086,16 +1079,6 @@ def test_scheduler_routes_assignment_through_task_assignee() -> None:
             assert command["logicalAgentId"] == agent["id"]
 
     asyncio.run(run_flow())
-
-
-def test_next_routine_date_skips_past_missed_windows_and_handles_custom() -> None:
-    assert next_routine_date(date(2026, 6, 1), "daily", date(2026, 6, 25)) == date(
-        2026, 6, 26
-    )
-    assert next_routine_date(date(2026, 1, 31), "monthly", date(2026, 2, 1)) == date(
-        2026, 2, 28
-    )
-    assert next_routine_date(date(2026, 6, 25), "custom", date(2026, 6, 25)) is None
 
 
 def test_scheduler_dispatches_all_team_members_lead_first() -> None:
@@ -1254,11 +1237,10 @@ def test_scheduler_dispatches_all_team_members_lead_first() -> None:
 
 
 @pytest.mark.parametrize("style", [None, "build_review", "pipeline"])
-def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
+def test_scheduler_fires_team_routine_into_team_owned_thread(style) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
-            session_store = LocalSessionStore(root)
-            task_store = LocalTaskStore(root)
+            session_store, task_store, automation_store = _database_stores(root)
             registry = DaemonNodeRegistry(
                 session_store, LocalDaemonStore(root), task_store=task_store
             )
@@ -1317,10 +1299,9 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
                     "assigneeEmployeeId": "alice",
                     "assignedTeamId": team["id"],
                     "isRoutine": True,
-                    "routineType": "task",
-                    "routineCadence": "daily",
-                    "routineNextRunDate": "2026-07-23",
-                    "routineEnabled": True,
+                    "routineTriggers": DAILY_9_UTC,
+                    "routineState": "active",
+                    "routineNextRunAt": "2026-10-13T09:00:00+00:00",
                 }
             )
 
@@ -1329,10 +1310,11 @@ def test_scheduler_promotes_team_routine_into_team_owned_thread(style) -> None:
                 registry=registry,
                 backend=backend,
                 team_store=teams,
-                today=lambda: date(2026, 7, 23),
+                automations=_automation_service(session_store, task_store, automation_store),
+                now=lambda: SLOT_NOW,
             ).tick()
 
-            assert result.promoted == 1
+            assert result.fired == 1
             assert result.dispatched == 1
             [occurrence_id] = task_store.get_task(routine["id"])["occurrenceIds"]
             occurrence = task_store.get_task(occurrence_id)

@@ -38,7 +38,7 @@ def test_event_trigger_round_trips_and_clears_next_run(monkeypatch) -> None:
         created = _routine(client, agent, routineTrigger=ON_BLOCKED)
         assert created["routineTrigger"] == ON_BLOCKED
         assert "routineNextRunDate" not in created
-        assert client.app.state.task_store.list_due_routines("2099-01-01") == []
+        assert client.app.state.task_store.list_unseeded_schedules() == []
 
 
 def test_routine_without_trigger_reads_as_schedule(monkeypatch) -> None:
@@ -189,7 +189,9 @@ def test_ownerless_automation_cannot_filter_by_scope(monkeypatch) -> None:
 
 
 def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch) -> None:
-    from relay.automations.matcher import AutomationMatcher
+    from datetime import datetime, timezone
+
+    from relay.automations.service import AutomationService
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         routine = _routine(client, agent, routineTrigger={"kind": "manual"})
@@ -200,6 +202,7 @@ def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch)
         [occurrence_id] = store.get_task(routine["id"])["occurrenceIds"]
         assert client.app.state.automation_store.get_state(routine["id"])["pending"] is False
         store.update_task(occurrence_id, {"status": "done"})
-        AutomationMatcher(task_store=store, session_store=client.app.state.session_store,
-                          automation_store=client.app.state.automation_store).run()
+        AutomationService(task_store=store, session_store=client.app.state.session_store,
+                          automation_store=client.app.state.automation_store,
+                          project_store=client.app.state.project_store).tick(datetime.now(timezone.utc))
         assert len(store.get_task(routine["id"])["occurrenceIds"]) == 1

@@ -13,6 +13,7 @@ from relay.api import task_routes
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
+from automation_helpers import fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents, project_for_team
 
 # Delegated team work — one employee's task, another employee's team — cannot
@@ -1711,9 +1712,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
                 "routineEnabled": True,
             },
         ).json()
-        promoted = app.state.task_store.promote_due_routine(
-            routine["id"], "2026-07-23", "2026-07-24"
-        )
+        promoted = fire_now(app.state.task_store, routine["id"], run_date="2026-07-23")
         assert promoted is not None
         first_start = client.post(f"/api/v1/tasks/{promoted['id']}/runs", json={})
         assert first_start.status_code == 202

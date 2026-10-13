@@ -1,33 +1,24 @@
-"""Turn outbox rows into automation runs.
+"""Turn outbox rows into pending automation events.
 
-Each scheduler tick drains the outbox, matches every row against the
-enabled event and webhook automations, and parks matches as pending state
-per automation. It then fires at most one occurrence per pending automation:
-events that arrive while a run is in flight collapse into the next run's
-Trigger context instead of each starting their own.
+Each tick drains the outbox, matches every row against the enabled event and
+webhook automations, and parks matches as pending state per automation.
+Firing (``firing.py``) then starts at most one occurrence per pending
+automation: events that arrive while a run is in flight collapse into the
+next run's Trigger context instead of each starting their own.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import text
 
-from ..persistence.automation_store import AUTOMATION_LOCK_KEY, subject_of
-from ..persistence.store_common import store_transaction
-from .firing import AutomationFiring
-from .model import TriggerError, event_matches, normalize_trigger, trigger_kind, trigger_of
+from ..persistence.automation_store import subject_of
+from .model import TriggerError, event_matches, is_active, normalize_trigger, trigger_kind, trigger_of
 
 MAX_AUTOMATION_DEPTH = 3
-MAX_PENDING_EVENTS = 20
 OUTBOX_RETENTION = timedelta(days=7)
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 class AutomationMatcher:
@@ -37,51 +28,18 @@ class AutomationMatcher:
         task_store: Any,
         session_store: Any,
         automation_store: Any,
-        now: Callable[[], datetime] = _utcnow,
-        today: Callable[[], date] = date.today,
         max_depth: int = MAX_AUTOMATION_DEPTH,
-        max_runs_per_hour: int = 6,
         batch: int = 200,
     ) -> None:
         self.task_store = task_store
         self.session_store = session_store
         self.automation_store = automation_store
-        self._now = now
-        self._today = today
         self.max_depth = max_depth
         self.batch = batch
-        self.firing = AutomationFiring(
-            task_store=task_store,
-            automation_store=automation_store,
-            today=today,
-            max_runs_per_hour=max_runs_per_hour,
-        )
 
-    @property
-    def max_runs_per_hour(self) -> int:
-        return self.firing.max_runs_per_hour
-
-    @max_runs_per_hour.setter
-    def max_runs_per_hour(self, value: int) -> None:
-        self.firing.max_runs_per_hour = value
-
-    def run(self) -> int:
-        now = self._now()
-        # A failed tick must not lose outbox events or leave a partially fired run.
-        with store_transaction(self.automation_store.engine) as conn:
-            # Claims partition outbox rows, but pending states are shared across
-            # ticks. One database-wide transaction lock prevents two replicas
-            # firing the same pending state; a busy replica leaves it for later.
-            if conn.dialect.name == "postgresql" and not conn.scalar(
-                text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY}
-            ):
-                return 0
-            self._drain(now)
-            return self.firing.fire(now)
-
-    # -- draining ---------------------------------------------------------
-
-    def _drain(self, now: datetime) -> None:
+    def drain(self, now: datetime) -> None:
+        """Match one batch of outbox rows. Run inside the tick's transaction
+        so a failed tick loses no outbox events."""
         rows = self.automation_store.claim_outbox(self.batch, now)
         if rows:
             automations = {task["id"]: task for task in self.task_store.list_trigger_automations()}
@@ -94,7 +52,7 @@ class AutomationMatcher:
                         logger.info("Automation event dropped as a loop", routine_id=automation["id"],
                                     event_type=event["eventType"], depth=event["depth"])
                         continue
-                    self._mark_pending(automation["id"], event, now)
+                    self.automation_store.mark_pending(automation["id"], event, now)
             self.automation_store.delete_outbox([row["id"] for row in rows])
         self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
 
@@ -103,7 +61,7 @@ class AutomationMatcher:
         target_id = row.get("target_routine_id")
         if target_id:
             target = self._load(target_id)
-            if not target or not target.get("routineEnabled"):
+            if not target or not is_active(target):
                 return []
             if row["kind"] == "manual":
                 return [target]
@@ -154,19 +112,6 @@ class AutomationMatcher:
         depth = int(task.get("routineTriggerDepth") or 0) + 1 if origin else 0
         return {"eventType": row["event_type"], "subject": subject, "sessionId": session_id,
                 "error": payload.get("error"), "originAutomationId": origin, "depth": depth}
-
-    def _mark_pending(self, routine_id: str, event: dict[str, Any], now: datetime) -> None:
-        state = self.automation_store.get_state(routine_id)
-        events = list(state["pending_events"])
-        dropped = int(state["pending_dropped"])
-        if len(events) < MAX_PENDING_EVENTS:
-            events = [*events, event]
-        else:
-            dropped += 1
-        self.automation_store.save_state(routine_id, {
-            **state, "pending": True, "pending_events": events, "pending_dropped": dropped,
-            "pending_since": state["pending_since"] or now,
-        })
 
     def _load(self, task_id: str) -> dict[str, Any] | None:
         try:

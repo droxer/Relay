@@ -3,12 +3,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from loguru import logger
 
-from ..automations.clock import ScheduleClock
 from ..automations.service import AutomationService
 from ..collaboration.service import (
     assignment_team_snapshot,
@@ -176,6 +175,7 @@ class TaskScheduler:
         interval_seconds: float = 10.0,
         max_dispatches_per_tick: int = 5,
         today: Callable[[], date] = date.today,
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self.task_store = task_store
         self.registry = registry
@@ -187,14 +187,8 @@ class TaskScheduler:
         self.interval_seconds = interval_seconds
         self.max_dispatches_per_tick = max_dispatches_per_tick
         self._today = today
-        self.automations = automations or AutomationService(
-            matcher=None,
-            clock=ScheduleClock(
-                task_store=task_store,
-                project_store=project_store,
-                materialize_assignment=self._materialize_legacy_assignment,
-            ),
-        )
+        self._now = now
+        self.automations = automations
         self._loop_task: asyncio.Task[None] | None = None
         self._tick_lock = asyncio.Lock()
 
@@ -233,13 +227,13 @@ class TaskScheduler:
 
     def _tick_sync(self, loop: asyncio.AbstractEventLoop) -> SchedulerTickResult:
         with compact_task_writes():
-            fired, promoted, promote_skipped = self.automations.tick(self._today())
-            dispatched, dispatch_skipped = self._dispatch_assigned_tasks(loop)
+            fired = self.automations.tick(self._now()) if self.automations else 0
+            dispatched, skipped = self._dispatch_assigned_tasks(loop)
             return SchedulerTickResult(
                 fired=fired,
-                promoted=promoted,
+                promoted=0,
                 dispatched=dispatched,
-                skipped=promote_skipped + dispatch_skipped,
+                skipped=skipped,
             )
 
     async def _run_loop(self) -> None:

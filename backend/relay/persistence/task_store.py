@@ -542,12 +542,6 @@ class LocalTaskStore:
                 ),
             )
 
-    def list_due_routines(self, today: str) -> list[dict[str, Any]]:
-        tasks = [
-            task for task in self.list_tasks() if routine_due_for_promotion(task, today)
-        ]
-        return sorted(tasks, key=routine_due_sort_key)
-
     def list_dispatchable_tasks(
         self, limit: int | None = None, *, after: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
@@ -732,61 +726,6 @@ class LocalTaskStore:
         if not task.get("dispatchRetry"):
             return task
         return self.append_event(task_id, dispatch_retry_cleared_event(task_id))
-
-    def promote_due_routine(
-        self,
-        task_id: str,
-        today: str,
-        next_run_date: str | None,
-        *,
-        agent_override: AgentName | None = None,
-    ) -> dict[str, Any] | None:
-        with self._lock:
-            routine = self.get_task(task_id)
-            if routine.get("deletedAt"):
-                return None
-            if not routine_due_for_promotion(routine, today):
-                return None
-            agent = routine.get("assignedAgent") or agent_override
-            if not agent and not (
-                routine.get("assignedTeamId") or routine.get("projectId")
-            ):
-                return None
-            occurrence_events = routine_occurrence_events(routine, agent)
-            occurrence_events = number_task_events(
-                occurrence_events, self._next_task_number
-            )
-            occurrence = materialize_task_events(occurrence_events)
-            self._task_dir(occurrence["id"]).mkdir(parents=True, exist_ok=True)
-            self._events_path(occurrence["id"]).write_text(
-                "".join(
-                    json.dumps(item, separators=(",", ":")) + "\n"
-                    for item in occurrence_events
-                ),
-                encoding="utf-8",
-            )
-            _write_json(self._snapshot_path(occurrence["id"]), occurrence)
-
-            routine_events = routine_promotion_events(
-                routine["id"],
-                occurrence["id"],
-                agent,
-                routine["routineNextRunDate"],
-                next_run_date,
-            )
-            for event in routine_events:
-                _append_jsonl(self._events_path(task_id), event)
-            updated = materialize_task_events(
-                [*routine.get("events", []), *routine_events]
-            )
-            _write_json(self._snapshot_path(task_id), updated)
-            logger.debug(
-                "Due routine promoted",
-                task_id=task_id,
-                occurrence_id=occurrence["id"],
-                agent=agent,
-            )
-            return occurrence
 
     def create_triggered_occurrence(
         self,
@@ -1628,35 +1567,6 @@ class DatabaseTaskStore:
             active_linked_session=active_linked_session,
         )
 
-    def list_due_routines(self, today: str) -> list[dict[str, Any]]:
-        try:
-            today_date = _parse_date(today)
-        except ValueError:
-            return []
-        with store_transaction(self.engine) as conn:
-            rows = (
-                conn.execute(
-                    select(self.tasks.c.snapshot)
-                    .where(self.tasks.c.is_routine.is_(True))
-                    .where(self.tasks.c.routine_enabled.is_(True))
-                    .where(self.tasks.c.routine_next_run_date.is_not(None))
-                    .where(self.tasks.c.routine_next_run_date <= today_date)
-                    .order_by(
-                        self.tasks.c.routine_next_run_date.asc(),
-                        _priority_order_expression(),
-                        self.tasks.c.created_at.asc(),
-                    )
-                )
-                .mappings()
-                .all()
-            )
-        return [
-            row["snapshot"]
-            for row in rows
-            if not row["snapshot"].get("deletedAt")
-            and routine_due_for_promotion(row["snapshot"], today)
-        ]
-
     def list_dispatchable_tasks(
         self, limit: int | None = None, *, after: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
@@ -1925,86 +1835,6 @@ class DatabaseTaskStore:
         if not task.get("dispatchRetry"):
             return task
         return self.append_event(task_id, dispatch_retry_cleared_event(task_id))
-
-    def promote_due_routine(
-        self,
-        task_id: str,
-        today: str,
-        next_run_date: str | None,
-        *,
-        agent_override: AgentName | None = None,
-    ) -> dict[str, Any] | None:
-        with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version)
-                    .where(self.tasks.c.id == task_id)
-                    .with_for_update()
-                )
-                .mappings()
-                .first()
-            )
-            if not row:
-                return None
-            routine = row["snapshot"] or {}
-            if routine.get("deletedAt"):
-                return None
-            if not routine_due_for_promotion(routine, today):
-                return None
-            agent = routine.get("assignedAgent") or agent_override
-            if not agent and not (
-                routine.get("assignedTeamId") or routine.get("projectId")
-            ):
-                return None
-
-            occurrence_events = routine_occurrence_events(routine, agent)
-            occurrence_events = number_task_events(
-                occurrence_events, partial(self._next_task_number, conn)
-            )
-            occurrence = materialize_task_events(occurrence_events)
-            occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
-            conn.execute(insert(self.tasks).values(**occurrence_row))
-            for sequence, event in enumerate(occurrence_events):
-                conn.execute(
-                    insert(self.events).values(
-                        **task_event_to_row(occurrence_row["id"], sequence, event)
-                    )
-                )
-
-            routine_events = routine_promotion_events(
-                task_id,
-                occurrence["id"],
-                agent,
-                routine["routineNextRunDate"],
-                next_run_date,
-            )
-            task_pk = row["id"]
-            sequence = int(row["version"] or 0)
-            for offset, event in enumerate(routine_events):
-                conn.execute(
-                    insert(self.events).values(
-                        **task_event_to_row(task_pk, sequence + offset, event)
-                    )
-                )
-            updated = apply_task_events(routine, routine_events, version=sequence)
-            conn.execute(
-                update(self.tasks)
-                .where(self.tasks.c.id == task_pk)
-                .values(
-                    **task_to_row(
-                        updated,
-                        version=sequence + len(routine_events),
-                        database_id=task_pk,
-                    )
-                )
-            )
-        logger.debug(
-            "Database due routine promoted",
-            task_id=task_id,
-            occurrence_id=occurrence["id"],
-            agent=agent,
-        )
-        return occurrence
 
     def create_triggered_occurrence(
         self,
@@ -2400,14 +2230,6 @@ def task_claim_sort_key(task: dict[str, Any]) -> tuple[int, str, str, str]:
     return (priority_rank, due_date, task.get("createdAt") or "", task["id"])
 
 
-def routine_due_sort_key(task: dict[str, Any]) -> tuple[str, int, str]:
-    return (
-        task.get("routineNextRunDate") or "9999-12-31",
-        _priority_rank(task.get("priority")),
-        task.get("createdAt") or "",
-    )
-
-
 def _priority_order_expression() -> Any:
     return case(
         (DatabaseTaskStore.tasks.c.priority == "high", 0),
@@ -2421,22 +2243,6 @@ def _due_date_missing_expression() -> Any:
     return case((DatabaseTaskStore.tasks.c.due_date.is_(None), 1), else_=0)
 
 
-def routine_due_for_promotion(routine: dict[str, Any], today: str) -> bool:
-    if trigger_kind(routine) != "schedule":
-        return False
-    next_run = routine.get("routineNextRunDate")
-    if (
-        not routine.get("isRoutine")
-        or not routine.get("routineEnabled")
-        or not next_run
-    ):
-        return False
-    try:
-        return _date.fromisoformat(next_run) <= _date.fromisoformat(today)
-    except (TypeError, ValueError):
-        return False
-
-
 def routine_occurrence_events(
     routine: dict[str, Any],
     agent: AgentName | None,
@@ -2448,7 +2254,7 @@ def routine_occurrence_events(
     occurrence_date = scheduled_for or routine["routineNextRunDate"]
     occurrence_id = new_database_id()
     description = routine.get("description", "")
-    if trigger:
+    if trigger and trigger.get("context"):
         description = (
             f"{description}\n\n{trigger['context']}"
             if description
@@ -2524,9 +2330,6 @@ def routine_occurrence_events(
     return events
 
 
-TRIGGERED_KINDS = ("task_event", "run_event", "webhook")
-
-
 def triggered_occurrence_routine_events(
     routine_id: str, occurrence_id: str, scheduled_for: str, kind: str
 ) -> list[dict[str, Any]]:
@@ -2556,54 +2359,13 @@ def triggered_occurrence_routine_events(
 
 def triggered_occurrence_allowed(routine: dict[str, Any]) -> bool:
     return bool(
-        routine.get("isRoutine")
-        and routine.get("routineEnabled")
-        and not routine.get("deletedAt")
+        is_active(routine)
         and (
             routine.get("assignedAgent")
             or routine.get("assignedTeamId")
             or routine.get("projectId")
         )
     )
-
-
-def routine_promotion_events(
-    routine_id: str,
-    occurrence_id: str,
-    agent: AgentName | None,
-    scheduled_for: str,
-    next_run_date: str | None,
-) -> list[dict[str, Any]]:
-    return [
-        relay_task_event(
-            "task.occurrence_created",
-            routine_id,
-            {
-                "occurrenceId": occurrence_id,
-                "scheduledFor": scheduled_for,
-            },
-        ),
-        relay_task_event(
-            "task.updated",
-            routine_id,
-            {
-                "routineNextRunDate": next_run_date or "",
-                "routineEnabled": bool(next_run_date),
-            },
-        ),
-        relay_task_event(
-            "task.activity",
-            routine_id,
-            {
-                "activity": {
-                    "id": new_relay_id("act"),
-                    "createdAt": now_iso(),
-                    "message": f"Routine occurrence created: {occurrence_id}.",
-                    **({"agent": agent} if agent else {}),
-                }
-            },
-        ),
-    ]
 
 
 def new_dispatch_claim(

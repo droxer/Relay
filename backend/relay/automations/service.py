@@ -1,47 +1,79 @@
-"""One tick of automation work: event matching, then the schedule clock."""
+"""One tick of automation work: the schedule clock, outbox matching, then
+firing — all in one locked transaction."""
 
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from loguru import logger
+from sqlalchemy import text
 
+from ..persistence.automation_store import AUTOMATION_LOCK_KEY
+from ..persistence.store_common import store_transaction
 from .clock import ScheduleClock
-from .firing import in_flight_occurrence
+from .firing import AutomationFiring, in_flight_occurrence
 from .matcher import AutomationMatcher
+from .model import is_active
 
 if TYPE_CHECKING:
     from ..api.deps import AppContext
 
+DEFAULT_MAX_RUNS_PER_HOUR = 6
+DEFAULT_OUTBOX_BATCH = 200
+
+
+def max_runs_per_hour_from_env() -> int:
+    return max(1, int(os.environ.get("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", str(DEFAULT_MAX_RUNS_PER_HOUR))))
+
 
 class AutomationService:
-    def __init__(self, *, matcher: AutomationMatcher | None, clock: ScheduleClock) -> None:
-        self.matcher = matcher
-        self.clock = clock
+    def __init__(
+        self,
+        *,
+        task_store: Any,
+        session_store: Any,
+        automation_store: Any,
+        project_store: Any,
+        max_runs_per_hour: int = DEFAULT_MAX_RUNS_PER_HOUR,
+        batch: int = DEFAULT_OUTBOX_BATCH,
+    ) -> None:
+        self.task_store = task_store
+        self.automation_store = automation_store
+        self.project_store = project_store
+        self.clock = ScheduleClock(task_store=task_store, automation_store=automation_store)
+        self.matcher = AutomationMatcher(task_store=task_store, session_store=session_store,
+                                         automation_store=automation_store, batch=batch)
+        self.firing = AutomationFiring(task_store=task_store, automation_store=automation_store,
+                                       max_runs_per_hour=max_runs_per_hour)
 
-    def tick(self, today: date) -> tuple[int, int, int]:
-        """Return (fired, promoted, skipped)."""
-        fired = self._fire()
-        promoted, skipped = self.clock.run(today)
-        return fired, promoted, skipped
-
-    def _fire(self) -> int:
-        if self.matcher is None:
-            return 0
+    def tick(self, now: datetime) -> int:
+        """Return the number of occurrences fired."""
         try:
-            return self.matcher.run()
+            # A failed tick must not lose outbox events, advance a schedule
+            # past an unfired slot, or leave a partially fired run.
+            with store_transaction(self.automation_store.engine) as conn:
+                # Claims partition outbox rows, but pending states are shared
+                # across ticks. One database-wide transaction lock keeps two
+                # replicas from firing the same state; a busy one waits a tick.
+                if conn.dialect.name == "postgresql" and not conn.scalar(
+                    text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY}
+                ):
+                    return 0
+                self.clock.run(now)
+                self.matcher.drain(now)
+                return self.firing.fire(now)
         except Exception:
-            logger.exception("Automation matching failed")
+            logger.exception("Automation tick failed")
             return 0
 
 
 def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict[str, Any], actor: dict[str, Any]) -> dict[str, Any]:
     if not actor["isAdmin"] and task.get("ownerEmployeeId") != actor.get("employeeId"):
         raise HTTPException(403, "Only the automation's owner or an admin can run it.")
-    if not task.get("routineEnabled"):
+    if not is_active(task):
         return {"task": task, "session": None, "dispatch": {
             "state": "rejected", "code": task.get("routineDisabledReason") or "automation_disabled",
             "message": "Enable this automation before running it.",
@@ -52,21 +84,20 @@ def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict
     if active:
         return _active_occurrence_result(ctx, task, active)
     automation_store.enqueue_manual(task["id"])
-    # Use the same transactional matcher and lock as scheduler ticks. Running
-    # it here preserves the endpoint's immediate-dispatch response when free.
-    matcher = AutomationMatcher(task_store=ctx.task_store, session_store=ctx.session_store,
-        automation_store=automation_store, today=ctx.today,
-        max_runs_per_hour=max(1, int(os.environ.get("RELAY_AUTOMATION_MAX_RUNS_PER_HOUR", "6"))))
-    matcher.run()
+    # Use the same locked tick as the scheduler. Running it here preserves the
+    # endpoint's immediate-dispatch response when nothing else is in flight.
+    AutomationService(task_store=ctx.task_store, session_store=ctx.session_store,
+                      automation_store=automation_store, project_store=ctx.project_store,
+                      max_runs_per_hour=max_runs_per_hour_from_env()).tick(datetime.now(timezone.utc))
     refreshed = ctx.task_store.get_task(task["id"])
     previous = set(task.get("occurrenceIds") or [])
     new_ids = [item for item in refreshed.get("occurrenceIds", []) if item not in previous]
     if new_ids:
         return ctx.task_store.get_task(new_ids[-1])
     return {"task": refreshed, "session": None, "dispatch": {
-        "state": "queued" if refreshed.get("routineEnabled") else "rejected",
+        "state": "queued" if is_active(refreshed) else "rejected",
         "code": refreshed.get("routineDisabledReason") or "automation_pending",
-        "message": "Run now is coalesced with pending automation events." if refreshed.get("routineEnabled") else "Automation paused by its hourly run limit.",
+        "message": "Run now is coalesced with pending automation events." if is_active(refreshed) else "Automation paused by its hourly run limit.",
     }}
 
 

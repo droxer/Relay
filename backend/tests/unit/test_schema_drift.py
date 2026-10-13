@@ -368,7 +368,7 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
     from concurrent.futures import ThreadPoolExecutor
     from datetime import datetime, timezone
     from threading import Event
-    from relay.automations.matcher import AutomationMatcher
+    from relay.automations.service import AutomationService
     from relay.persistence.automation_store import DatabaseAutomationStore
     from relay.persistence.task_store import DatabaseTaskStore
 
@@ -388,13 +388,16 @@ def test_automation_matchers_do_not_double_fire_shared_pending_state(migrated_sc
         assert release.wait(10)
         return original(*args, **kwargs)
     tasks.create_triggered_occurrence = delayed
-    first = AutomationMatcher(task_store=tasks, session_store=sessions, automation_store=automations)
-    second = AutomationMatcher(task_store=DatabaseTaskStore(url), session_store=sessions, automation_store=automations)
+    first = AutomationService(task_store=tasks, session_store=sessions, automation_store=automations,
+                              project_store=None)
+    second = AutomationService(task_store=DatabaseTaskStore(url), session_store=sessions,
+                               automation_store=automations, project_store=None)
+    now = datetime.now(timezone.utc)
     with ThreadPoolExecutor(max_workers=2) as executor:
-        running = executor.submit(first.run)
+        running = executor.submit(first.tick, now)
         assert entered.wait(10)
         try:
-            second_result = second.run()
+            second_result = second.tick(now)
         finally:
             release.set()
         first_result = running.result(timeout=10)

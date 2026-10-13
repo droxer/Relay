@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 import pytest
 from relay.persistence.task_store import DatabaseTaskStore, LocalTaskStore
 
+from automation_helpers import fire_now
+
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
 
 
@@ -60,7 +62,7 @@ def test_lists_only_enabled_event_and_webhook_automations(store) -> None:
 
 def test_schedule_and_manual_occurrences_record_their_trigger(store):
     routine = _automation(store, routineTrigger={"kind": "schedule"}, routineCadence="daily", routineNextRunDate="2026-10-02")
-    scheduled = store.promote_due_routine(routine["id"], "2026-10-02", "2026-10-03")
+    scheduled = fire_now(store, routine["id"], run_date="2026-10-02")
     assert scheduled["routineTriggerKind"] == "schedule"
     manual = store.create_triggered_occurrence(routine["id"], run_date="2026-10-04", trigger_kind="manual", depth=0, context="")
     assert manual["routineTriggerKind"] == "manual"

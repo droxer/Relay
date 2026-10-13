@@ -16,6 +16,7 @@ EVENT_LABELS = {
     "run.failed": "Run failed",
     "webhook": "Webhook",
     "manual": "Manual",
+    "schedule": "Schedule",
 }
 
 
@@ -47,6 +48,8 @@ def _event_line(event: dict[str, Any]) -> str:
         return f"{where} — run {outcome}{detail}"
     if event_type == "manual":
         return "Run now requested."
+    if event_type == "schedule":
+        return f"Schedule: {event['summary']}"
     payload = json.dumps(event.get("payload"), ensure_ascii=False, sort_keys=True)
     encoded = payload.encode()
     if len(encoded) > WEBHOOK_PAYLOAD_LIMIT:
