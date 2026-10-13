@@ -329,7 +329,7 @@ def test_manual_coalesced_with_a_chain_keeps_its_depth_and_label(world) -> None:
 
 
 def test_in_flight_check_reads_only_recent_occurrences() -> None:
-    from relay.automations.matcher import IN_FLIGHT_LOOKBACK, in_flight_occurrence
+    from relay.automations.firing import IN_FLIGHT_LOOKBACK, in_flight_occurrence
 
     class Store:
         def __init__(self) -> None:

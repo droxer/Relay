@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 from loguru import logger
@@ -25,7 +25,6 @@ from ..persistence.stores import valid_agent
 from ..persistence.task_store import (
     compact_task_writes,
     dispatch_claim_active,
-    routine_due_sort_key,
     task_claim_sort_key,
 )
 from ..services.agent_routing import (
@@ -42,7 +41,6 @@ from ..services.dispatch_failure import (
 from ..services.issue_triage import issue_needs_project
 from ..services.project_runtime import (
     ProjectDispatchError,
-    project_work_error,
     resolve_project_task_assignments,
 )
 from ..services.task_rounds import (
@@ -70,6 +68,7 @@ PERMANENT_DISPATCH_CODES = {
     "agent_policy_unsupported",
     "executor_mismatch",
 }
+
 
 def task_goal_text(task: dict[str, Any]) -> str:
     return (

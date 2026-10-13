@@ -18,7 +18,7 @@ from sqlalchemy import text
 
 from ..persistence.automation_store import AUTOMATION_LOCK_KEY, subject_of
 from ..persistence.store_common import store_transaction
-from .firing import IN_FLIGHT_LOOKBACK, AutomationFiring, in_flight_occurrence  # noqa: F401
+from .firing import AutomationFiring
 from .model import TriggerError, event_matches, normalize_trigger, trigger_kind, trigger_of
 
 MAX_AUTOMATION_DEPTH = 3
