@@ -18,42 +18,16 @@ from sqlalchemy import text
 
 from ..persistence.automation_store import AUTOMATION_LOCK_KEY, subject_of
 from ..persistence.store_common import store_transaction
-from ..tasks import next_routine_date
-from .context import trigger_context_block
+from .firing import IN_FLIGHT_LOOKBACK, AutomationFiring, in_flight_occurrence  # noqa: F401
 from .model import TriggerError, event_matches, normalize_trigger, trigger_kind, trigger_of
 
 MAX_AUTOMATION_DEPTH = 3
 MAX_PENDING_EVENTS = 20
-PENDING_TTL = timedelta(hours=24)
 OUTBOX_RETENTION = timedelta(days=7)
-RATE_WINDOW = timedelta(hours=1)
-IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "running"})
-# Occurrences are appended in creation order, so an in-flight one is among the
-# newest. Bounding the scan keeps a long-lived routine's check constant-time.
-IN_FLIGHT_LOOKBACK = 10
-RATE_LIMITED = "rate_limited"
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _aware(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
-
-
-def in_flight_occurrence(task_store: Any, routine: dict[str, Any]) -> dict[str, Any] | None:
-    """The newest occurrence of ``routine`` still queued or running, if any."""
-    for occurrence_id in reversed((routine.get("occurrenceIds") or [])[-IN_FLIGHT_LOOKBACK:]):
-        try:
-            occurrence = task_store.get_task(occurrence_id)
-        except (KeyError, FileNotFoundError):
-            continue
-        if not occurrence.get("deletedAt") and occurrence.get("status") in IN_FLIGHT_STATUSES:
-            return occurrence
-    return None
 
 
 class AutomationMatcher:
@@ -75,8 +49,21 @@ class AutomationMatcher:
         self._now = now
         self._today = today
         self.max_depth = max_depth
-        self.max_runs_per_hour = max_runs_per_hour
         self.batch = batch
+        self.firing = AutomationFiring(
+            task_store=task_store,
+            automation_store=automation_store,
+            today=today,
+            max_runs_per_hour=max_runs_per_hour,
+        )
+
+    @property
+    def max_runs_per_hour(self) -> int:
+        return self.firing.max_runs_per_hour
+
+    @max_runs_per_hour.setter
+    def max_runs_per_hour(self, value: int) -> None:
+        self.firing.max_runs_per_hour = value
 
     def run(self) -> int:
         now = self._now()
@@ -90,7 +77,7 @@ class AutomationMatcher:
             ):
                 return 0
             self._drain(now)
-            return self._fire(now)
+            return self.firing.fire(now)
 
     # -- draining ---------------------------------------------------------
 
@@ -180,77 +167,6 @@ class AutomationMatcher:
             **state, "pending": True, "pending_events": events, "pending_dropped": dropped,
             "pending_since": state["pending_since"] or now,
         })
-
-    # -- firing -----------------------------------------------------------
-
-    def _fire(self, now: datetime) -> int:
-        fired = 0
-        for state in self.automation_store.list_pending_states():
-            if self._fire_one(state, now):
-                fired += 1
-        return fired
-
-    def _fire_one(self, state: dict[str, Any], now: datetime) -> bool:
-        routine_id = state["routine_id"]
-        routine = self._load(routine_id)
-        events = state["pending_events"]
-        manual = any(event.get("eventType") == "manual" for event in events)
-        if not routine or not routine.get("routineEnabled") or (
-            trigger_kind(routine) in ("schedule", "manual") and not manual
-        ):
-            self.automation_store.clear_state(routine_id)
-            return False
-        if now - _aware(state["pending_since"]) > PENDING_TTL:
-            count = len(state["pending_events"]) + int(state["pending_dropped"])
-            self.task_store.record_activity(routine_id, f"Automation dropped {count} pending events after 24 hours without a run.")
-            logger.warning("Automation pending events expired", routine_id=routine_id, count=count)
-            self.automation_store.clear_state(routine_id)
-            return False
-        if in_flight_occurrence(self.task_store, routine):
-            return False
-        window_start = _aware(state["fired_window_start"])
-        count = int(state["fired_count"])
-        if window_start is None or now - window_start >= RATE_WINDOW:
-            window_start, count = now, 0
-        if count >= self.max_runs_per_hour:
-            self.task_store.update_task(routine_id, {"routineEnabled": False, "routineDisabledReason": RATE_LIMITED})
-            self.task_store.record_activity(routine_id, f"Automation paused: more than {self.max_runs_per_hour} runs in an hour.")
-            logger.warning("Automation paused by rate cap", routine_id=routine_id)
-            self.automation_store.clear_state(routine_id)
-            return False
-        events = state["pending_events"]
-        today = self._today()
-        run_date = today.isoformat()
-        due_date = routine.get("routineNextRunDate") if manual and trigger_kind(routine) == "schedule" else None
-        if due_date and due_date <= run_date:
-            run_date = due_date
-        occurrence = self.task_store.create_triggered_occurrence(
-            routine_id,
-            run_date=run_date,
-            trigger_kind="manual" if manual else trigger_kind(routine),
-            summary={"eventType": "manual" if manual else events[0]["eventType"],
-                     "eventCount": len(events) + int(state["pending_dropped"]),
-                     **({"toStatus": events[0]["toStatus"]} if events[0].get("toStatus") else {})},
-            # A manual click must not reset a chain's depth: coalesced chain
-            # events would otherwise start counting again from zero.
-            depth=max(int(event.get("depth") or 0) for event in events),
-            context=trigger_context_block(events, int(state["pending_dropped"]),
-                                          fired_by="manual" if manual else None),
-        )
-        if not occurrence:
-            # No agent, team, or project yet: keep the events until one is
-            # assigned or they expire, and say so once.
-            logger.info("Automation could not start", routine_id=routine_id)
-            return False
-        if due_date and due_date <= today.isoformat():
-            next_date = next_routine_date(date.fromisoformat(due_date), routine.get("routineCadence") or "weekly", today)
-            self.task_store.update_task(routine_id, {"routineNextRunDate": next_date.isoformat() if next_date else ""})
-        self.automation_store.save_state(routine_id, {
-            "routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
-            "pending_since": None, "fired_window_start": window_start, "fired_count": count + 1,
-        })
-        logger.info("Automation fired", routine_id=routine_id, occurrence_id=occurrence["id"], events=len(events))
-        return True
 
     def _load(self, task_id: str) -> dict[str, Any] | None:
         try:
