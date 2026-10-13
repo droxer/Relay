@@ -10,13 +10,14 @@ exist (spring forward) fires at the first valid instant and an ambiguous one
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from croniter import croniter
+from croniter import CroniterError, croniter
 
 CRON_FLOOR = timedelta(minutes=15)
 FLOOR_SAMPLES = 50
@@ -37,10 +38,28 @@ class ScheduleError(ValueError):
     """A schedule the API refuses with a 400; the message names the field."""
 
 
+@functools.lru_cache(maxsize=1)
+def _host_zone() -> tzinfo:
+    """The server's zone by IANA name (so DST applies), else a fixed offset."""
+    candidates = []
+    env_tz = os.environ.get("TZ", "").strip().lstrip(":")
+    if env_tz:
+        candidates.append(env_tz)
+    target = os.path.realpath("/etc/localtime")
+    if "zoneinfo/" in target:
+        candidates.append(target.split("zoneinfo/", 1)[1])
+    for name in candidates:
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError, OSError):
+            continue
+    return datetime.now().astimezone().tzinfo or timezone.utc
+
+
 def resolve_timezone(name: str | None) -> tzinfo:
     name = name or os.environ.get("RELAY_TASK_SCHEDULER_TIMEZONE", "").strip() or None
     if name is None:
-        return datetime.now().astimezone().tzinfo or timezone.utc
+        return _host_zone()
     return ZoneInfo(name)
 
 
@@ -133,6 +152,8 @@ def _resolve(local: datetime, zone: tzinfo) -> datetime:
 
 
 def next_fire_after(schedule: dict[str, Any], after: datetime) -> datetime | None:
+    if after.tzinfo is None:
+        raise ValueError("after must be timezone-aware")
     zone = resolve_timezone(schedule.get("timezone"))
     repeat = schedule["repeat"]
     if "once" in repeat:
@@ -140,13 +161,16 @@ def next_fire_after(schedule: dict[str, Any], after: datetime) -> datetime | Non
         return moment if moment > after else None
     if repeat.get("every") == "month" and repeat["day"] > 28:
         return _next_clamped_month_day(repeat, after, zone)
-    iterator = croniter(to_cron(repeat), after.astimezone(zone).replace(tzinfo=None))
-    # Iterating in naive local time can step back across a fall-back hour;
-    # skip candidates that are not strictly later in real time.
-    for _ in range(FLOOR_SAMPLES):
-        candidate = _resolve(iterator.get_next(datetime), zone)
-        if candidate > after:
-            return candidate
+    try:
+        iterator = croniter(to_cron(repeat), after.astimezone(zone).replace(tzinfo=None))
+        # Iterating in naive local time can step back across a fall-back hour;
+        # skip candidates that are not strictly later in real time.
+        for _ in range(FLOOR_SAMPLES):
+            candidate = _resolve(iterator.get_next(datetime), zone)
+            if candidate > after:
+                return candidate
+    except CroniterError:
+        return None
     return None
 
 
@@ -178,6 +202,8 @@ def next_fires(schedule: dict[str, Any], after: datetime, count: int) -> list[da
 
 def _check_floor(schedule: dict[str, Any]) -> None:
     fires = next_fires(schedule, _FLOOR_ORIGIN, FLOOR_SAMPLES)
+    if not fires:
+        raise ScheduleError("schedule.repeat.cron never fires.")
     if any(later - earlier < CRON_FLOOR for earlier, later in zip(fires, fires[1:])):
         raise ScheduleError("schedule.repeat.cron must not fire more often than every 15 minutes.")
 

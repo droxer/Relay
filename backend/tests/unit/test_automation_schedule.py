@@ -68,6 +68,7 @@ def test_once_fires_once():
     ({"timezone": None, "repeat": {"cron": "* * * * *"}}, "15 minutes"),
     ({"timezone": None, "repeat": {"cron": "0,5 * * * *"}}, "15 minutes"),
     ({"timezone": None, "repeat": {"cron": "not a cron"}}, "repeat.cron"),
+    ({"timezone": None, "repeat": {"cron": "0 0 30 2 *"}}, "never fires"),
     ({"timezone": None, "repeat": {"once": "tomorrow"}}, "repeat.once"),
     ({"timezone": None, "repeat": {"every": "day", "at": "09:00", "extra": 1}}, "unknown"),
 ])
@@ -80,3 +81,39 @@ def test_summary():
     assert summarize(sched({"every": "weekday", "at": "09:00"}, "Asia/Shanghai")) == "Weekdays at 09:00 (Asia/Shanghai)"
     assert summarize(sched({"every": "week", "at": "09:00", "days": [1, 5]})) == "Every Mon, Fri at 09:00 (UTC)"
     assert summarize(normalize_schedule({"timezone": None, "repeat": {"cron": "0 */2 * * *"}})) == "Cron 0 */2 * * * (server time)"
+
+
+def test_server_timezone_resolves_by_name_and_follows_dst(monkeypatch):
+    from relay.automations import schedule as module
+
+    monkeypatch.delenv("RELAY_TASK_SCHEDULER_TIMEZONE", raising=False)
+    monkeypatch.setenv("TZ", "America/New_York")
+    module._host_zone.cache_clear()
+    try:
+        s = normalize_schedule({"timezone": None, "repeat": {"every": "day", "at": "09:00"}})
+        fires = next_fires(s, datetime(2026, 10, 31, 12, 0, tzinfo=UTC), 3)
+        assert fires == [
+            datetime(2026, 10, 31, 13, 0, tzinfo=UTC),  # EDT
+            datetime(2026, 11, 1, 14, 0, tzinfo=UTC),  # EST
+            datetime(2026, 11, 2, 14, 0, tzinfo=UTC),
+        ]
+    finally:
+        module._host_zone.cache_clear()
+
+
+def test_invalid_tz_env_falls_back_without_raising(monkeypatch):
+    from relay.automations import schedule as module
+
+    monkeypatch.delenv("RELAY_TASK_SCHEDULER_TIMEZONE", raising=False)
+    monkeypatch.setenv("TZ", "Not/AZone")
+    module._host_zone.cache_clear()
+    try:
+        assert module.resolve_timezone(None) is not None
+    finally:
+        module._host_zone.cache_clear()
+
+
+def test_naive_after_is_refused():
+    s = sched({"every": "day", "at": "09:00"})
+    with pytest.raises(ValueError, match="timezone-aware"):
+        next_fire_after(s, datetime(2026, 10, 13, 9, 0))
