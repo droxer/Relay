@@ -422,3 +422,87 @@ def test_any_resume_resets_failures_but_only_a_relay_resume_resets_the_rate_wind
                                           "routineNextRunAt": None})
         assert client.patch(path, json={"routineState": "active"}).status_code == 200
         assert automations.get_state(routine["id"])["fired_count"] == 0
+
+
+def test_resume_clears_pause_pending_and_recomputes_next_run(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task_store, automation_store = client.app.state.task_store, client.app.state.automation_store
+        task = _routine(client, agent)
+        task_store.update_task(task["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing",
+                                            "routineNextRunAt": None})
+        automation_store.mark_pending(task["id"], {"eventType": "manual", "depth": 0}, datetime.now(timezone.utc))
+        automation_store.save_state(task["id"], {**automation_store.get_state(task["id"]), "consecutive_failures": 3})
+        response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
+        assert response.status_code == 200, response.text
+        resumed = response.json()
+        assert resumed["routineState"] == "active" and "routinePauseReason" not in resumed
+        assert resumed["routineNextRunAt"].endswith("T09:00:00+00:00")
+        assert not set(LEGACY_FIELDS) & set(resumed)
+        state = automation_store.get_state(task["id"])
+        assert state["pending"] is False and state["consecutive_failures"] == 0
+
+
+def test_resume_by_non_owner_is_403(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        # Bob can see the automation as its assignee, but only its owner or an admin may resume it.
+        task = _routine(client, agent)
+        client.app.state.task_store.update_task(task["id"], {
+            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
+        _login(client, "bob")
+        response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
+        assert response.status_code == 403
+        assert "owner or an admin" in response.json()["detail"]
+        assert client.app.state.task_store.get_task(task["id"])["routineState"] == "paused_by_relay"
+
+
+def test_resume_by_owner_succeeds(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent)
+        client.app.state.task_store.update_task(task["id"], {
+            "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
+        _login(client, "alice")
+        response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
+        assert response.status_code == 200, response.text
+        assert response.json()["routineState"] == "active"
+
+
+def test_resume_active_is_noop(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent)
+        automation_store = client.app.state.automation_store
+        automation_store.save_state(task["id"], {**automation_store.get_state(task["id"]), "consecutive_failures": 2})
+        before = client.app.state.task_store.get_task(task["id"])
+        response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
+        assert response.status_code == 200, response.text
+        assert response.json()["routineState"] == "active"
+        assert response.json()["routineNextRunAt"] == task["routineNextRunAt"]
+        assert client.app.state.task_store.get_task(task["id"])["updatedAt"] == before["updatedAt"]
+        assert automation_store.get_state(task["id"])["consecutive_failures"] == 2
+
+
+def test_resume_of_a_plain_task_is_404(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, _ = _client(monkeypatch, root)
+        plain = client.post("/api/v1/tasks", json={"title": "plain"}).json()
+        assert client.post(f"/api/v1/tasks/{plain['id']}/automation/resume").status_code == 404
+
+
+def test_patch_resume_of_owner_pause_keeps_the_rate_window(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent, routineTriggers=[])
+        automation_store = client.app.state.automation_store
+        window = datetime.now(timezone.utc)
+        automation_store.save_state(task["id"], {**automation_store.get_state(task["id"]),
+                                                 "fired_window_start": window, "fired_count": 4,
+                                                 "consecutive_failures": 2})
+        path = f"/api/v1/tasks/{task['id']}"
+        assert client.patch(path, json={"routineState": "paused"}).status_code == 200
+        assert client.post(path + "/automation/resume").json()["routineState"] == "active"
+        state = automation_store.get_state(task["id"])
+        assert (state["fired_count"], state["consecutive_failures"]) == (4, 0)

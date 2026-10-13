@@ -82,10 +82,10 @@ class AutomationService:
         self.automation_store = automation_store
         self.project_store = project_store
         self.clock = ScheduleClock(task_store=task_store, automation_store=automation_store)
-        self.matcher = AutomationMatcher(task_store=task_store, session_store=session_store,
-                                         automation_store=automation_store, batch=batch)
         self.firing = AutomationFiring(task_store=task_store, automation_store=automation_store,
                                        project_store=project_store, max_runs_per_hour=max_runs_per_hour)
+        self.matcher = AutomationMatcher(task_store=task_store, session_store=session_store,
+                                         automation_store=automation_store, firing=self.firing, batch=batch)
 
     def tick(self, now: datetime) -> int:
         """Return the number of occurrences fired."""
@@ -106,6 +106,51 @@ class AutomationService:
         except Exception:
             logger.exception("Automation tick failed")
             return 0
+
+    def resume(self, task_id: str, actor: dict[str, Any], now: datetime) -> dict[str, Any]:
+        """Turn a paused automation back on. Owner or admin only
+        (``PermissionError`` otherwise); an active one is returned as is."""
+        task = self.task_store.get_task(task_id)
+        if not actor.get("isAdmin") and task.get("ownerEmployeeId") != actor.get("employeeId"):
+            raise PermissionError("Only the automation's owner or an admin can resume it.")
+        previous = state_of(task)
+        if previous == "active":
+            return task
+        with store_transaction(self.task_store.engine) as conn:
+            prepare_resume(conn, self.automation_store, task_id, previous)
+            return self.task_store.update_task(task_id, {
+                "routineState": "active", "routinePauseReason": None,
+                "routineNextRunAt": next_run_at(task, now),
+            })
+
+
+def prepare_resume(conn: Any, automation_store: Any, task_id: str, previous_state: str) -> None:
+    """The automation-state side of every resume, run inside the transaction
+    that flips ``routineState`` back to ``active``.
+
+    Takes the automation lock so the tick cannot rewrite the state row
+    between the reset and the flip. Any resume starts the failure count over
+    and drops pending events, so stale events cannot fire the moment it
+    turns back on. Resuming what Relay paused also starts a fresh rate
+    window; an owner's own pause/resume does not, so the hourly cap cannot be
+    bypassed.
+    """
+    if previous_state == "active":
+        return
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
+    if previous_state == "paused_by_relay":
+        automation_store.reset_rate_window(task_id)
+        return
+    automation_store.clear_state(task_id)
+    automation_store.reset_failures(task_id)
+
+
+def automation_service(automation_store: Any, ctx: AppContext) -> AutomationService:
+    """The service an API request runs, built from the app's stores."""
+    return AutomationService(task_store=ctx.task_store, session_store=ctx.session_store,
+                             automation_store=automation_store, project_store=ctx.project_store,
+                             max_runs_per_hour=max_runs_per_hour_from_env())
 
 
 def _run_now_refusal(task: dict[str, Any]) -> str | None:
@@ -145,9 +190,7 @@ def request_manual_occurrence(automation_store: Any, ctx: AppContext, task: dict
     automation_store.enqueue_manual(task["id"])
     # Use the same locked tick as the scheduler. Running it here preserves the
     # endpoint's immediate-dispatch response when nothing else is in flight.
-    AutomationService(task_store=ctx.task_store, session_store=ctx.session_store,
-                      automation_store=automation_store, project_store=ctx.project_store,
-                      max_runs_per_hour=max_runs_per_hour_from_env()).tick(datetime.now(timezone.utc))
+    automation_service(automation_store, ctx).tick(datetime.now(timezone.utc))
     refreshed = ctx.task_store.get_task(task["id"])
     previous = set(task.get("occurrenceIds") or [])
     new_ids = [item for item in refreshed.get("occurrenceIds", []) if item not in previous]

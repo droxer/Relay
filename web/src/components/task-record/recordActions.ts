@@ -41,3 +41,16 @@ export function recordActions(
   if (task.status === "review") actions.push("done");
   return actions;
 }
+
+/**
+ * Whether `user` may run Run now, Resume, and the other owner controls of an
+ * automation: its owner or an admin. The backend enforces the same rule; this
+ * only keeps the web from offering a button it would refuse.
+ */
+export function canManageAutomation(
+  task: Pick<RelayTaskListItem, "ownerEmployeeId">,
+  user: { role: string; employeeId?: string },
+): boolean {
+  if (user.role === "admin") return true;
+  return Boolean(user.employeeId) && task.ownerEmployeeId === user.employeeId;
+}

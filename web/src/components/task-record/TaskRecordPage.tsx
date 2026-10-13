@@ -14,7 +14,6 @@ import { RecordLayout } from "../workspace/RecordLayout";
 import { recordBandFacts } from "./recordBandFacts";
 import { TaskRecoveryPanel } from "../ExecutionRecoveryPanel";
 import { taskRecoveryReason } from "../../lib/executionRecovery";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RecordArtifacts } from "./RecordArtifacts";
 import { RecordHistory } from "./RecordHistory";
@@ -22,7 +21,7 @@ import { RecordResultLine } from "./RecordResultLine";
 import { RecordRuns } from "./RecordRuns";
 import { RecordWorkspace } from "./RecordWorkspace";
 import { TaskRecordActions } from "./TaskRecordActions";
-import type { RecordAction } from "./recordActions";
+import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
 import { useTeams } from "../../hooks/useTeams";
@@ -70,7 +69,6 @@ export function TaskRecordPage({
   onOpenThread,
   onOpenRun,
   onRun,
-  onReenable,
   onCancel,
   onToggleBlock,
   onDone,
@@ -92,7 +90,6 @@ export function TaskRecordPage({
   onOpenThread: (sessionId: string) => void;
   onOpenRun: (runTaskId: string) => void;
   onRun: () => void;
-  onReenable?: () => void;
   onCancel: () => void;
   onToggleBlock: () => void;
   onDone: () => void;
@@ -227,11 +224,12 @@ export function TaskRecordPage({
       <div className="workspace-body">
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
-            <AutomationPauseBanner task={task} className="record-automation-paused">
-              {onReenable && !readOnly && (currentUser.role === "admin" || task.ownerEmployeeId === currentUser.employeeId) ? (
-                <Button variant="outline" size="sm" disabled={busyAction !== null} onClick={onReenable}>{t("automation.reenable")}</Button>
-              ) : null}
-            </AutomationPauseBanner>
+            <AutomationPauseBanner
+              task={task}
+              className="record-automation-paused"
+              canResume={!readOnly && canManageAutomation(task, currentUser)}
+              disabled={busyAction !== null}
+            />
             <RecordRuns
               taskId={task.id}
               hrefForRun={(runTaskId) => pathForAppState({

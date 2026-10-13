@@ -13,7 +13,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from ..automations.model import has_webhook, is_active
+from ..automations.model import has_webhook, is_active, public_task_result
+from ..automations.service import automation_service
 from ..automations.schedule import ScheduleError, next_fires, normalize_schedule, summarize
 from ..security.edge import client_ip
 from .contract import API_PREFIX
@@ -106,6 +107,21 @@ def rotate_webhook_secret(task_id: str, request: Request, ctx: AppContextDep) ->
     _webhook_automation_for_actor(request, ctx, task_id)
     secret = request.app.state.automation_store.set_webhook_secret(task_id)
     return {"secret": secret, "path": webhook_path(task_id), "header": WEBHOOK_TOKEN_HEADER}
+
+
+@router.post("/tasks/{task_id}/automation/resume")
+async def resume_automation(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    """Turn a paused automation back on (owner or admin)."""
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
+    if not task.get("isRoutine"):
+        raise HTTPException(404, "Not an automation.")
+    service = automation_service(request.app.state.automation_store, ctx)
+    try:
+        resumed = await run_in_threadpool(service.resume, task_id, actor, datetime.now(timezone.utc))
+    except PermissionError as error:
+        raise HTTPException(403, str(error)) from error
+    return public_task_result(resumed)
 
 
 @router.post("/automations/schedule-preview")

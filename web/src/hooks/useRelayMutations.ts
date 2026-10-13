@@ -19,6 +19,7 @@ import {
   recordDecision,
   renameSession,
   requestThreadRecovery,
+  resumeAutomation,
   runLogicalAgents,
   startTask,
   submitThreadMessage,
@@ -31,6 +32,7 @@ import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, RELAY_QUERY_KEY, SESSIONS_QUERY_KE
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { TEAMS_QUERY_KEY } from "./useTeams";
+import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
 import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
 import { applySessionEventUnchecked } from "../lib/sessionEvents";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
@@ -285,6 +287,19 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to start task", "errors.task_action"),
   });
 
+  const resumeAutomationMutation = useMutation({
+    mutationFn: ({ taskId }: { taskId: string }) => resumeAutomation(taskId),
+    onSuccess: (task) => {
+      cacheTask(task);
+      announce({ message: t("automation.resumed_toast"), tone: "success" });
+    },
+    onError: onRelayError("Failed to resume automation", "errors.task_action"),
+    onSettled: (_task, _error, { taskId }) => {
+      void invalidateTasks();
+      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY, taskId] });
+    },
+  });
+
   const createTeamMutation = useMutation({
     mutationFn: (input: TeamMutationInput) => createTeam(input),
     onSuccess: () => {
@@ -406,6 +421,7 @@ export function useRelayMutations() {
     deleteTasksMutation,
     assignTaskMutation,
     startTaskMutation,
+    resumeAutomationMutation,
     createTeamMutation,
     createProjectMutation,
     startProjectSetupMutation,

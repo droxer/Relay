@@ -2376,7 +2376,8 @@
     "webhook_secret_once": "请立即复制此密钥，之后不会再次显示。",
     "webhook_copy": "复制",
     "webhook_error": "无法生成密钥，请重试。",
-    "reenable": "重新启用",
+    "resume": "恢复",
+    "resumed_toast": "自动化已恢复。",
     "ledger": {
       "status_changed": "任务状态 → {{status}}",
       "event_count": "{{count}} 个事件",

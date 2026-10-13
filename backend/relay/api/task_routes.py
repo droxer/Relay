@@ -6,7 +6,6 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
-from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
 from ..automations.model import (
@@ -19,12 +18,12 @@ from ..automations.model import (
 )
 from ..automations.service import (
     automation_triggers_enabled,
+    prepare_resume,
     request_manual_occurrence,
     routine_fields_v2,
 )
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.ids import new_database_id
-from ..persistence.automation_store import AUTOMATION_LOCK_KEY
 from ..persistence.store_common import store_transaction
 from ..persistence.stores import (
     task_priority,
@@ -786,15 +785,11 @@ def update_task(
         **routine,
         **assignment_patch,
     }
-    # Any resume starts the failure count over. Resuming what Relay paused
-    # also starts a fresh rate window; an owner's pause/resume does not, so
-    # the hourly cap cannot be bypassed.
+    # Resuming here shares the resume route's state reset (prepare_resume).
     resumed = routine.get("routineState") == "active" and state_of(current) != "active"
-    reset_rate_window = resumed and state_of(current) == "paused_by_relay"
     with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
-        # Serialize with the automation tick, which rewrites the same state row.
-        if resumed and conn.dialect.name == "postgresql":
-            conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
+        if resumed:
+            prepare_resume(conn, request.app.state.automation_store, task_id, state_of(current))
         if status:
             try:
                 validate_manual_transition(
@@ -822,10 +817,6 @@ def update_task(
             )
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
-        if reset_rate_window:
-            request.app.state.automation_store.reset_rate_window(task_id)
-        elif resumed:
-            request.app.state.automation_store.reset_failures(task_id)
         if status == "done":
             complete_linked_task_sessions(ctx, task, "Task accepted after review.")
             task = ctx.task_store.get_task(task_id)

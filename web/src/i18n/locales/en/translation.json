@@ -2430,7 +2430,8 @@
     "webhook_secret_once": "Copy this secret now. It will not be shown again.",
     "webhook_copy": "Copy",
     "webhook_error": "Could not create a secret. Try again.",
-    "reenable": "Re-enable",
+    "resume": "Resume",
+    "resumed_toast": "Automation resumed.",
     "ledger": {
       "status_changed": "Task status → {{status}}",
       "event_count_one": "{{count}} event",

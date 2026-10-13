@@ -1133,6 +1133,12 @@ export function rotateWebhookSecret(taskId: string): Promise<WebhookSecretStatus
   return apiJson(`/tasks/${encodeURIComponent(taskId)}/automation/webhook-secret`, { method: "POST" });
 }
 
+/** Turn a paused automation back on (owner or admin). Clears Relay's pause,
+ *  its pending events, rate window, and failure streak; a no-op when active. */
+export function resumeAutomation(taskId: string): Promise<RelayTask> {
+  return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}/automation/resume`, { method: "POST" });
+}
+
 /** A schedule's summary and next three fires (ISO UTC), before it is saved. */
 export type SchedulePreview = { summary: string; next: string[] };
 

@@ -191,15 +191,28 @@ class DatabaseAutomationStore:
             })
 
     def clear_state(self, routine_id: str) -> None:
-        """Forget pending events but keep the rate window: a fired automation
-        still counts toward its hourly cap."""
+        """Forget pending events but keep the rate window and the failure
+        streak: a fired automation still counts toward its hourly cap, and
+        dropping stale events says nothing about how its runs went."""
         current = self.get_state(routine_id)
         self.save_state(routine_id, {**_empty_state(routine_id),
                                      "fired_window_start": current["fired_window_start"],
-                                     "fired_count": current["fired_count"]})
+                                     "fired_count": current["fired_count"],
+                                     "consecutive_failures": current["consecutive_failures"]})
 
     def reset_rate_window(self, routine_id: str) -> None:
+        """Start over completely: pending events, the rate window, and the
+        failure streak."""
         self.save_state(routine_id, _empty_state(routine_id))
+
+    def record_outcome(self, routine_id: str, failed: bool) -> int:
+        """Count a finished occurrence run; a success ends the streak.
+        Returns the new consecutive-failure count."""
+        with store_transaction(self.engine):
+            state = self.get_state(routine_id)
+            count = int(state.get("consecutive_failures") or 0) + 1 if failed else 0
+            self.save_state(routine_id, {**state, "consecutive_failures": count})
+        return count
 
     def reset_failures(self, routine_id: str) -> None:
         """A resumed automation starts its failure count over; its rate window

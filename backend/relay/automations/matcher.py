@@ -28,12 +28,16 @@ class AutomationMatcher:
         task_store: Any,
         session_store: Any,
         automation_store: Any,
+        firing: Any = None,
         max_depth: int = MAX_AUTOMATION_DEPTH,
         batch: int = 200,
     ) -> None:
         self.task_store = task_store
         self.session_store = session_store
         self.automation_store = automation_store
+        # The ``AutomationFiring`` that counts occurrence outcomes and pauses
+        # an automation whose runs keep failing.
+        self.firing = firing
         self.max_depth = max_depth
         self.batch = batch
 
@@ -47,6 +51,7 @@ class AutomationMatcher:
                 event = self._enrich(row)
                 if event is None:
                     continue
+                self._record_outcome(row, event)
                 for automation in self._targets(row, event, automations):
                     if self._is_loop(automation, event):
                         logger.info("Automation event dropped as a loop", routine_id=automation["id"],
@@ -55,6 +60,14 @@ class AutomationMatcher:
                     self.automation_store.mark_pending(automation["id"], event, now)
             self.automation_store.delete_outbox([row["id"] for row in rows])
         self.automation_store.prune_outbox(now - OUTBOX_RETENTION)
+
+    def _record_outcome(self, row: dict[str, Any], event: dict[str, Any]) -> None:
+        """A finished run of an automation's own occurrence feeds its failure
+        streak. Only completed and failed runs reach the outbox, so a human
+        cancel neither counts nor resets."""
+        origin = event.get("originAutomationId")
+        if row["kind"] == "run_event" and origin and self.firing is not None:
+            self.firing.record_outcome(origin, failed=row["event_type"] == "run.failed")
 
     def _targets(self, row: dict[str, Any], event: dict[str, Any],
                  automations: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

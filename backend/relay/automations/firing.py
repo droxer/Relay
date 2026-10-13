@@ -27,6 +27,9 @@ IN_FLIGHT_STATUSES = frozenset({"backlog", "assigned", "running"})
 # newest. Bounding the scan keeps a long-lived routine's check constant-time.
 IN_FLIGHT_LOOKBACK = 10
 RATE_LIMITED = "rate_limited"
+# Consecutive failed occurrence runs before Relay pauses the automation.
+FAILURE_LIMIT = 3
+FAILING = "failing"
 NO_TARGET_RUN_NOW = "Run now could not start: the automation has no agent, team, or open project."
 
 
@@ -134,6 +137,16 @@ class AutomationFiring:
         logger.info("Automation fired", routine_id=routine_id, occurrence_id=occurrence["id"], kind=kind,
                     events=len(events))
         return True
+
+    def record_outcome(self, routine_id: str, failed: bool) -> None:
+        """Count one finished run of an occurrence. ``FAILURE_LIMIT`` failures
+        in a row pause the automation; any success ends the streak."""
+        count = self.automation_store.record_outcome(routine_id, failed)
+        if not failed or count < FAILURE_LIMIT:
+            return
+        routine = self._load(routine_id)
+        if routine and is_active(routine):
+            self.pause(routine_id, FAILING, f"Automation paused: its last {FAILURE_LIMIT} runs failed.")
 
     def pause(self, routine_id: str, reason: str, message: str) -> None:
         self.task_store.update_task(routine_id, {"routineState": "paused_by_relay", "routinePauseReason": reason,

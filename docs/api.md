@@ -98,9 +98,25 @@ starts a fresh hourly rate window, and any resume resets the failure counter.
 `routineNextRunAt` is the next schedule firing as an ISO UTC datetime; the
 write path sets it when an automation becomes active or its triggers change
 (cleared when it is not active), and the scheduler clock seeds missing values
-and advances it after each fire. Automatic
-pause after repeated failures and a dedicated resume route are coming (not
-built yet).
+and advances it after each fire.
+
+Relay counts consecutive failed runs of an automation's own occurrences. A
+failed run adds one and a completed run resets the count to zero. A cancelled
+run does neither, so a human cancel never counts. Runs of other work don't
+count either. After 3 failures in a row (`FAILURE_LIMIT`), Relay pauses an
+active automation with `routineState: "paused_by_relay"` and
+`routinePauseReason: "failing"`, and records it in the automation's activity.
+
+`POST /api/v1/tasks/{id}/automation/resume` turns a paused automation back on.
+Only the automation's owner or an admin may call it; anyone else gets 403. A
+task that is not an automation gets 404. On an already-active automation it
+returns the task unchanged. Otherwise it drops pending events, so stale ones
+can't fire the moment it resumes, and resets the failure count. It sets
+`routineState: "active"`, clears `routinePauseReason`, recomputes
+`routineNextRunAt`, and returns the task. Resuming a `paused_by_relay`
+automation also starts a fresh hourly rate window. Resuming an owner pause
+keeps the window, so pausing and resuming can't get around the hourly cap.
+`PATCH` with `routineState: "active"` runs the same reset.
 
 The v1 fields (`routineTrigger`, `routineCadence`, `routineEnabled`,
 `routineDisabledReason`, `routineNextRunDate`, ...) answer 400 on write and never
