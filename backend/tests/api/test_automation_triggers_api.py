@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.automations.model import LEGACY_FIELDS
 
-from test_tasks import _bootstrap_admin, _create_agent, _create_user
+from test_tasks import _bootstrap_admin, _create_agent, _create_user, _login
 
 WEBHOOK = {"kind": "webhook"}
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
@@ -351,6 +351,16 @@ def test_admin_settings_report_the_triggers_capability(monkeypatch) -> None:
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is True
         monkeypatch.setenv("RELAY_AUTOMATION_TRIGGERS_ENABLED", "0")
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is False
+
+
+def test_employees_learn_the_triggers_capability_from_auth_me(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, _ = _client(monkeypatch, root)
+        _login(client, "alice")
+        assert client.get("/api/v1/admin/settings").status_code in (401, 403)
+        assert client.get("/api/v1/auth/me").json()["capabilities"] == {"automationTriggers": True}
+        monkeypatch.setenv("RELAY_AUTOMATION_TRIGGERS_ENABLED", "0")
+        assert client.get("/api/v1/auth/me").json()["capabilities"] == {"automationTriggers": False}
 
 
 def _legacy_routine(client: TestClient, agent: dict) -> dict:
