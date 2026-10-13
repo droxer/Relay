@@ -217,9 +217,9 @@ describe("backlog columns", () => {
 
 describe("routine columns", () => {
   const routines = [
-    backlogTask({ id: "r1", title: "Nightly", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-04-02" }),
-    backlogTask({ id: "r2", title: "Weekly", isRoutine: true, routineEnabled: false }),
-    backlogTask({ id: "r3", title: "Hourly", isRoutine: true, routineEnabled: true, routineNextRunDate: "2026-04-01" }),
+    backlogTask({ id: "r1", title: "Nightly", isRoutine: true, routineState: "active", routineNextRunAt: "2026-04-02T09:00:00Z" }),
+    backlogTask({ id: "r2", title: "Weekly", isRoutine: true, routineState: "paused" }),
+    backlogTask({ id: "r3", title: "Hourly", isRoutine: true, routineState: "active", routineNextRunAt: "2026-04-01T09:00:00Z" }),
   ];
   const columns = routineSortColumns(() => "");
 

@@ -60,9 +60,13 @@ describe("canonical filter params", () => {
 
   it("keeps the routines' own filter params", () => {
     assert.equal(
-      canonicalBrowserUrl("/routines", "?type=job&state=overdue&cadence=daily"),
-      "/automations?type=job&cadence=daily&state=overdue",
+      canonicalBrowserUrl("/routines", "?trigger=none&state=due"),
+      "/automations?trigger=none&state=due",
     );
+  });
+
+  it("drops the retired automation type and cadence filters", () => {
+    assert.equal(canonicalBrowserUrl("/routines", "?type=job&cadence=daily&state=overdue&trigger=manual"), "/automations");
   });
 
   it("drops enum values the filter cannot take", () => {

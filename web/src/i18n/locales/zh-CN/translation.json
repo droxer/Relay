@@ -897,7 +897,6 @@
   },
   "routine": {
     "schedule": "触发器",
-    "next_run_auto_hint": "根据频率自动设置。选择“自定义”可指定日期。",
     "enabled_needs_target": "启用自动化前，请选择项目、智能体或团队。",
     "title": "自动化",
     "sub_other": "{{count}} 个自动化",
@@ -906,45 +905,28 @@
     "edit": "编辑自动化",
     "new_routine_id": "草稿",
     "search": "搜索自动化",
-    "type": "类型",
-    "cadence": "周期",
     "next_run": "下次运行",
     "state": "状态",
     "enabled": "已启用",
     "disabled": "已禁用",
     "due": "到期",
     "unscheduled": "未排期",
-    "all_types": "全部类型",
-    "all_cadences": "全部周期",
     "all_states": "全部状态",
     "no_next_run": "无下次运行",
     "no_routines_title": "暂无自动化",
     "no_routines_body": "创建自动化，按计划或在事件发生时运行工作。",
     "no_match_title": "没有匹配的自动化",
     "no_match_body": "调整搜索或筛选条件。",
-    "types": {
-      "task": "任务",
-      "job": "作业"
-    },
-    "cadences": {
-      "daily": "每天",
-      "weekly": "每周",
-      "monthly": "每月",
-      "custom": "自定义"
-    },
     "states": {
       "running": "运行中",
-      "overdue": "已逾期",
-      "due": "今日到期",
+      "due": "已到期",
       "scheduled": "已排期",
-      "unscheduled": "未排期",
       "paused": "已暂停",
       "listening": "监听中",
       "on_demand": "按需"
     },
     "meta": "自动化状态",
     "no_activity": "暂无运行记录。",
-    "next_run_hint": "会在当天开始时运行，请选择今天或之后的日期。",
     "enabled_hint": "禁用后将暂停自动化，不再派发新的运行。",
     "delete_task": "删除自动化",
     "deleting": "正在删除…",
@@ -958,9 +940,9 @@
     "bulk_delete_body_other": "将删除所选的 {{count}} 个自动化及其触发器，并且不会再次运行。所有关联的执行记录和对话也将一并删除。此操作无法撤销。",
     "toast_bulk_deleted_other": "已删除 {{count}} 个自动化。",
     "sort_label": "自动化排序",
-    "set_next_run": "设置下次运行",
     "save": "保存自动化",
-    "create": "创建自动化"
+    "create": "创建自动化",
+    "next_run_column": "下次运行"
   },
   "admin": {
     "control_panel": {
@@ -2362,7 +2344,7 @@
       "task_event": "任务事件",
       "run_event": "运行事件",
       "webhook": "Webhook",
-      "manual": "仅手动"
+      "none": "仅立即运行"
     },
     "on": "何时",
     "on_values": {
@@ -2395,7 +2377,6 @@
     "webhook_copy": "复制",
     "webhook_error": "无法生成密钥，请重试。",
     "reenable": "重新启用",
-    "rate_limited": "一小时内运行次数过多，已暂停。准备好后可重新启用。",
     "ledger": {
       "status_changed": "任务状态 → {{status}}",
       "event_count": "{{count}} 个事件",
@@ -2410,7 +2391,13 @@
       "status_any": "任务状态已变更"
     },
     "errors": {
-      "title_too_long": "标题筛选请不超过 120 个字符。"
+      "title_too_long": "标题筛选请不超过 120 个字符。",
+      "time": "请按 HH:MM 输入时间。",
+      "days": "请至少选择一天。",
+      "month_day": "请选择 1 到 31 之间的日期。",
+      "minute": "请选择 0 到 59 之间的分钟。",
+      "once": "请选择日期和时间。",
+      "cron": "Cron 表达式需要五个字段。"
     },
     "trigger_kind": "触发来源",
     "filters_hint": "筛选保持“任意”即匹配所有任务。",
@@ -2424,6 +2411,44 @@
       "not_listed": "另有 {{count}} 个事件未列出",
       "thread": "某个对话",
       "webhook_payload": "Webhook 负载"
-    }
+    },
+    "presets": {
+      "hour": "每小时",
+      "day": "每天",
+      "weekday": "工作日",
+      "week": "每周",
+      "month": "每月",
+      "once": "仅一次",
+      "cron": "Cron 表达式"
+    },
+    "weekdays": {
+      "1": "周一",
+      "2": "周二",
+      "3": "周三",
+      "4": "周四",
+      "5": "周五",
+      "6": "周六",
+      "7": "周日"
+    },
+    "repeat": "重复",
+    "at": "时间",
+    "minute": "每小时的第几分钟",
+    "month_day": "每月第几天",
+    "once_at": "日期和时间",
+    "cron": "Cron",
+    "cron_hint": "五个字段：分、时、日、月、星期。最短间隔 15 分钟。",
+    "days": "星期",
+    "timezone": "时区",
+    "timezone_server": "服务器时间",
+    "run_now_only": "仅立即运行",
+    "trigger_count": "{{count}} 个触发器",
+    "multi_trigger_readonly": "此自动化有多个触发器。这里暂不支持编辑多个触发器；保存时会原样保留。",
+    "paused_reasons": {
+      "rate_limited": "一小时内运行次数过多，Relay 已将其暂停。准备好后可重新启用。",
+      "failing": "运行持续失败，Relay 已将其暂停。排除原因后可重新启用。",
+      "no_target": "没有可运行的位置，Relay 已将其暂停。分配智能体、团队或开放的项目后可重新启用。",
+      "invalid_schedule": "计划已无法运行，Relay 已将其暂停。修改计划后可重新启用。"
+    },
+    "preview_next": "下次 {{time}}"
   }
 }

@@ -17,8 +17,11 @@ import type {
   SandboxRecord,
   SessionStatus,
   TaskPriority,
-  TaskRoutineCadence,
-  TaskRoutineType,
+  RoutineOccurrenceTriggerKind,
+  RoutinePauseReason,
+  RoutineSchedule,
+  RoutineState,
+  ScheduleRepeat,
   RoutineTrigger,
   RoutineTriggerKind,
   RoutineTriggerOn,
@@ -47,8 +50,11 @@ export type {
   SandboxRecord,
   SessionStatus,
   TaskPriority,
-  TaskRoutineCadence,
-  TaskRoutineType,
+  RoutineOccurrenceTriggerKind,
+  RoutinePauseReason,
+  RoutineSchedule,
+  RoutineState,
+  ScheduleRepeat,
   RoutineTrigger,
   RoutineTriggerKind,
   RoutineTriggerOn,
@@ -163,7 +169,7 @@ export interface TaskEventsResponse {
  * For a plain task there is exactly one row, the task's own run.
  */
 export interface TaskRun {
-  triggerKind?: RoutineTriggerKind | null;
+  triggerKind?: RoutineOccurrenceTriggerKind | null;
   triggerSummary?: { eventType: string; toStatus?: TaskStatus; eventCount: number } | null;
   /** The task that carried the run: an occurrence, or the task itself. */
   taskId: string;
@@ -226,12 +232,10 @@ export interface WorkspaceBriefTask {
   assignedTeamId?: string;
   dueDate?: string;
   isRoutine: boolean;
-  routineType?: TaskRoutineType;
-  routineCadence?: TaskRoutineCadence;
-  routineNextRunDate?: string;
-  routineEnabled: boolean;
-  routineTrigger?: RoutineTrigger;
-  routineDisabledReason?: string;
+  routineTriggers?: RoutineTrigger[];
+  routineState?: RoutineState;
+  routinePauseReason?: RoutinePauseReason;
+  routineNextRunAt?: string;
   linkedSessionIds: string[];
   updatedAt?: string;
   createdAt?: string;
@@ -911,12 +915,9 @@ export interface TaskMutationInput {
   status?: TaskStatus;
   dueDate?: string;
   isRoutine?: boolean;
-  routineType?: TaskRoutineType;
-  routineCadence?: TaskRoutineCadence;
-  routineNextRunDate?: string;
-  routineEnabled?: boolean;
-  routineTrigger?: RoutineTrigger;
-  routineDisabledReason?: string;
+  routineTriggers?: RoutineTrigger[];
+  /** Owners set active or paused; only Relay sets paused_by_relay. */
+  routineState?: Exclude<RoutineState, "paused_by_relay">;
   assignedAgentId?: string | null;
   assignedTeamId?: string | null;
   /** Triage: moves an intake issue (one with no project) into a project.

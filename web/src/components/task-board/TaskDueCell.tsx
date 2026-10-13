@@ -22,7 +22,7 @@ export function TaskDueCell({
   onEdit,
 }: {
   date?: string;
-  /** From `dueTone` / `routineDueTone` — `neutral` carries no colour. */
+  /** From `dueTone` — `neutral` carries no colour. */
   tone: string;
   format: (value: string) => string;
   emptyLabel: string;

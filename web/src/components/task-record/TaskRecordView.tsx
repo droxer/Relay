@@ -96,7 +96,7 @@ export function TaskRecordView({
     if (busyAction || !task) return;
     setBusyAction("run");
     try {
-      await updateTaskMutation.mutateAsync({ taskId: task.id, input: { routineEnabled: true } });
+      await updateTaskMutation.mutateAsync({ taskId: task.id, input: { routineState: "active" } });
     } finally {
       setBusyAction(null);
     }

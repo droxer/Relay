@@ -36,7 +36,7 @@ const session = {
 };
 const task = {
   id: "rotate-keys", number: 12, title: "Rotate the staging keys", description: "", priority: "high", status: "waiting_for_human",
-  waitingReason: `The round reported it is blocked. ${QUESTION}`, isRoutine: false, routineEnabled: false,
+  waitingReason: `The round reported it is blocked. ${QUESTION}`, isRoutine: false,
   linkedSessionIds: [session.id], ownerEmployeeId: "u", assignedAgentId: reviewer.id, createdAt: stamp, updatedAt: stamp, events: [], activity: [],
 };
 

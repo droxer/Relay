@@ -1,7 +1,11 @@
 "use client";
 
 import { TriggerKindField, EventTriggerFields } from "./AutomationTriggerFields";
+import { AutomationPauseBanner } from "./AutomationPauseBanner";
+import { ScheduleFields } from "./ScheduleFields";
 import { WebhookSecretPanel } from "./WebhookSecretPanel";
+import { describeTrigger } from "../../lib/automationTrigger";
+import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
 import { effectiveStyle } from "../../lib/collaborationStyle";
@@ -20,14 +24,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentTeam, EmployeeAgent, ProjectRecord, TaskPriority, TaskRoutineCadence, TaskRoutineType, TaskStatus } from "../../types";
+import type { AgentTeam, EmployeeAgent, ProjectRecord, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
 import { manualTaskStatuses } from "../../lib/taskFlow";
-import { TASK_ROUTINE_CADENCES, TASK_ROUTINE_TYPES, isoToday } from "../../lib/routine";
 import { taskAssignmentOptions } from "../../lib/taskAssignment";
 import {
   clearTaskAssignment,
-  nextRoutineRunDate,
   taskAssignmentValue,
   teamAssignmentPatch,
   type BacklogTaskFormState,
@@ -125,100 +127,55 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
   logicalAgents: EmployeeAgent[]; teams: AgentTeam[]; projects: ProjectRecord[];
 }) {
   const { t } = useTranslation();
-  const typeLabelId = useId();
-  const cadenceLabelId = useId();
-  const nextRunLabelId = useId();
   const enabledHintId = useId();
-  const autoNextRun = form.routineCadence !== "custom";
+  const { automationTriggers } = useSessionCapabilities();
+  const active = form.routineState === "active";
   // Nothing to run it on yet: the switch cannot turn on, and says why.
-  const cannotEnable = !form.projectId && !form.assignedAgentId && !form.assignedTeamId && !form.routineEnabled;
+  const cannotEnable = !form.projectId && !form.assignedAgentId && !form.assignedTeamId && !active;
+  const triggers = form.routineTriggers;
+  const setTriggers = (routineTriggers: RoutineTrigger[]) => onChange({ ...form, routineTriggers });
+  const setOnly = (trigger: RoutineTrigger) => setTriggers([trigger]);
+  const [trigger] = triggers;
   return (
     <fieldset className="adm-form-section">
       <legend className="adm-form-legend">{t("routine.schedule")}</legend>
-      <div className="task-drawer-form-grid">
-        {/* What starts it comes first: every field below depends on it. */}
-        <TriggerKindField trigger={form.routineTrigger} onChange={(routineTrigger) => onChange({ ...form, routineTrigger })} />
-        <Field label={t("routine.type")} labelId={typeLabelId} wrapper="div">
-          <Select
-            value={form.routineType}
-            onValueChange={(value) => {
-              if (value == null) return
-              onChange({ ...form, routineType: value as TaskRoutineType })
-            }}
-          >
-            <SelectTrigger className="w-full" aria-labelledby={typeLabelId}>
-              <SelectValue>{(value: TaskRoutineType) => t(`routine.types.${value}`)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_ROUTINE_TYPES.map((type) => (
-                <SelectItem key={type} value={type} label={t(`routine.types.${type}`)}>{t(`routine.types.${type}`)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        {form.routineTrigger.kind === "schedule" ? <>
-          <Field label={t("routine.cadence")} labelId={cadenceLabelId} wrapper="div">
-            <Select
-              value={form.routineCadence}
-              onValueChange={(value) => {
-                if (value == null) return
-                const routineCadence = value as TaskRoutineCadence;
-                onChange({
-                  ...form,
-                  routineCadence,
-                  routineNextRunDate: routineCadence === "custom"
-                    ? form.routineNextRunDate
-                    : nextRoutineRunDate(routineCadence),
-                })
-              }}
-            >
-              <SelectTrigger className="w-full" aria-labelledby={cadenceLabelId}>
-                <SelectValue>{(value: TaskRoutineCadence) => t(`routine.cadences.${value}`)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {TASK_ROUTINE_CADENCES.map((cadence) => (
-                  <SelectItem key={cadence} value={cadence} label={t(`routine.cadences.${cadence}`)}>{t(`routine.cadences.${cadence}`)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field
-            label={t("routine.next_run")}
-            /* A cadence sets the date itself; say so, rather than leaving a
-               field that looks editable and opens nothing. */
-            hint={t(autoNextRun ? "routine.next_run_auto_hint" : "routine.next_run_hint")}
-            className="task-drawer-next-run"
-            wrapper="div"
-            labelId={nextRunLabelId}
-          >
-            <DatePicker
-              labelId={nextRunLabelId}
-              name={`${form.variant}-next-run-date`}
-              min={isoToday()}
-              required={form.routineCadence === "custom" && form.routineEnabled}
-              value={form.routineNextRunDate}
-              readOnly={autoNextRun}
-              onValueChange={(routineNextRunDate) => onChange({ ...form, routineNextRunDate })}
-            />
-          </Field>
-        </> : null}
-        <EventTriggerFields trigger={form.routineTrigger} agents={logicalAgents} teams={teams} projects={projects}
-          onChange={(routineTrigger) => onChange({ ...form, routineTrigger })} />
-        {form.routineTrigger.kind === "webhook" ? <WebhookSecretPanel key={form.id ?? "new"} taskId={form.id} /> : null}
-        {form.routineTrigger.kind === "manual" ? <p className="adm-form-hint">{t("automation.manual_hint")}</p> : null}
-      </div>
+      {triggers.length > 1 ? (
+        /* Several triggers come from the API; this form edits one. They are
+           listed and saved back untouched rather than silently cut to one. */
+        <div className="task-drawer-form-grid">
+          <ul className="trigger-filters-wide">
+            {triggers.map((item, index) => <li key={index}>{describeTrigger(item, t)}</li>)}
+          </ul>
+          <p className="adm-form-hint trigger-filters-wide">{t("automation.multi_trigger_readonly")}</p>
+        </div>
+      ) : (
+        <div className="task-drawer-form-grid">
+          {/* What starts it comes first: every field below depends on it. */}
+          <TriggerKindField triggers={triggers} triggersEnabled={automationTriggers} onChange={setTriggers} />
+          {trigger?.kind === "schedule" ? (
+            <ScheduleFields schedule={trigger.schedule} onChange={(schedule) => setOnly({ kind: "schedule", schedule })} />
+          ) : null}
+          {trigger ? (
+            <EventTriggerFields trigger={trigger} agents={logicalAgents} teams={teams} projects={projects} onChange={setOnly} />
+          ) : null}
+          {trigger?.kind === "webhook" ? <WebhookSecretPanel key={form.id ?? "new"} taskId={form.id} /> : null}
+          {!trigger ? <p className="adm-form-hint">{t("automation.manual_hint")}</p> : null}
+        </div>
+      )}
+      <AutomationPauseBanner task={form} />
       <div className="routine-toggle">
         <span className="routine-toggle-text">
           <Label render={<span />}>{t("routine.enabled")}</Label>
           <span className="adm-form-hint" id={enabledHintId}>
-            {t(!form.routineEnabled && form.routineDisabledReason === "rate_limited" ? "automation.rate_limited" : cannotEnable ? "routine.enabled_needs_target" : "routine.enabled_hint")}
+            {t(cannotEnable ? "routine.enabled_needs_target" : "routine.enabled_hint")}
           </span>
         </span>
         <Switch
           name={`${form.variant}-enabled`}
-          checked={form.routineEnabled}
+          checked={active}
           disabled={cannotEnable}
-          onCheckedChange={(checked) => onChange({ ...form, routineEnabled: checked })}
+          /* Turning it on is also how an owner resumes a Relay pause. */
+          onCheckedChange={(checked) => onChange({ ...form, routineState: checked ? "active" : "paused" })}
           aria-label={t("routine.enabled")}
           aria-describedby={enabledHintId}
         />
@@ -479,7 +436,7 @@ export function TaskDrawer({
                 // An ownerless agent says nothing about who the task is
                 // for, so it leaves the assignee as the employee chose it.
                 assigneeEmployeeId: logicalAgent.supervisorEmployeeId ?? form.assigneeEmployeeId,
-                ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
+                ...(form.variant === "routine" ? { routineState: "active" as const } : {}),
               });
               return;
             }
@@ -487,7 +444,7 @@ export function TaskDrawer({
             if (team) {
               updateBase({
                 ...teamAssignmentPatch(team.id),
-                ...(form.variant === "routine" ? { routineEnabled: true as const } : {}),
+                ...(form.variant === "routine" ? { routineState: "active" as const } : {}),
               });
             }
           }}

@@ -1,10 +1,10 @@
 "use client";
 
-import { describeTrigger, triggerOf } from "../../lib/automationTrigger";
+import { describeTriggers, triggersOf } from "../../lib/automationTrigger";
 import { routineState } from "../../lib/routine";
 import { taskRef } from "../../lib/taskRef";
 import type { RelayTaskListItem } from "../../types";
-import { formatNextRunDate } from "../task-board/RoutineChrome";
+import { formatNextRunAt, formatNextRunDate } from "../task-board/RoutineChrome";
 import { RoutineStateBadge } from "../RoutineStateBadge";
 import { TaskStatusIcon } from "../TaskStatusIcon";
 import type { RecordFact } from "../workspace/RecordBand";
@@ -37,22 +37,12 @@ export function recordBandFacts(
       label: t("routine.state"),
       value: <RoutineStateBadge state={routineState(task, running)} always />,
     });
-    const trigger = triggerOf(task);
-    if (trigger.kind === "schedule") {
-      facts.push({
-        key: "cadence",
-        label: t("routine.cadence"),
-        value: task.routineCadence ? t(`routine.cadences.${task.routineCadence}`) : "—",
-      });
-      facts.push({
-        key: "next-run",
-        label: t("routine.next_run"),
-        value: task.routineNextRunDate ? formatNextRunDate(task.routineNextRunDate) : "—",
-      });
-    } else {
-      /* An event, webhook, or manual automation keeps a stale cadence and
-         has no next run; what starts it is the fact worth a cell. */
-      facts.push({ key: "trigger", label: t("automation.trigger"), value: describeTrigger(trigger, t) });
+    const triggers = triggersOf(task);
+    facts.push({ key: "trigger", label: t("automation.trigger"), value: describeTriggers(triggers, t) });
+    /* Only a schedule has a next run; an event or Run-now-only automation
+       would spend the cell on a permanent "—". */
+    if (task.routineNextRunAt || triggers.some((trigger) => trigger.kind === "schedule")) {
+      facts.push({ key: "next-run", label: t("routine.next_run"), value: formatNextRunAt(task.routineNextRunAt) });
     }
   } else {
     facts.push({

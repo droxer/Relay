@@ -52,8 +52,8 @@ describe("routine section rail", () => {
   it("counts against every filter except the one the rail owns", async () => {
     const page = await read("src/components/RoutinesPage.tsx");
 
-    // Otherwise "Overdue 3" would be computed from a list already narrowed to
-    // overdue, and every other section would read 0.
+    // Otherwise "Due 3" would be computed from a list already narrowed to
+    // due, and every other section would read 0.
     assert.match(page, /filterRoutineTasks\(tasks, \{ \.\.\.filters, state: "all" \}\)/);
     assert.match(page, /routineStateCounts\(/);
   });

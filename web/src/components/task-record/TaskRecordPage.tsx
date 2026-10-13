@@ -28,6 +28,7 @@ import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
+import { AutomationPauseBanner } from "../task-board/AutomationPauseBanner";
 import {
   defaultRecordTab,
   parseRecordTab,
@@ -226,14 +227,11 @@ export function TaskRecordPage({
       <div className="workspace-body">
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
-            {!task.routineEnabled && task.routineDisabledReason === "rate_limited" ? (
-              <div className="record-automation-paused" role="status">
-                <p>{t("automation.rate_limited")}</p>
-                {onReenable && !readOnly && (currentUser.role === "admin" || task.ownerEmployeeId === currentUser.employeeId) ? (
-                  <Button variant="outline" size="sm" disabled={busyAction !== null} onClick={onReenable}>{t("automation.reenable")}</Button>
-                ) : null}
-              </div>
-            ) : null}
+            <AutomationPauseBanner task={task} className="record-automation-paused">
+              {onReenable && !readOnly && (currentUser.role === "admin" || task.ownerEmployeeId === currentUser.employeeId) ? (
+                <Button variant="outline" size="sm" disabled={busyAction !== null} onClick={onReenable}>{t("automation.reenable")}</Button>
+              ) : null}
+            </AutomationPauseBanner>
             <RecordRuns
               taskId={task.id}
               hrefForRun={(runTaskId) => pathForAppState({

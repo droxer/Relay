@@ -15,7 +15,7 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
     collaborationStyle: "build_review", memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
   let task = { id: "task", title: "Ship the fix", description: "Fix and review", status: "backlog", priority: "normal",
     acceptancePolicy: "human", assignedTeamId: team.id, projectId: "project", ownerEmployeeId: "alice",
-    isRoutine: false, routineEnabled: false, linkedSessionIds: [], activity: [], events: [], createdAt: stamp, updatedAt: stamp };
+    isRoutine: false, linkedSessionIds: [], activity: [], events: [], createdAt: stamp, updatedAt: stamp };
   const session = { id: "style-thread", title: "Style thread", taskGoal: "Improve the API", teamId: team.id,
     ownerEmployeeId: "alice", ownerAgentId: "lead", daemonNodeId: "node", computerId,
     workspacePath: "/workspace", status: "completed", phase: "created", participants: ["human"],

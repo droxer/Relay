@@ -9,7 +9,7 @@
    patterns in step with `_event_line`; anything unrecognised passes through
    as text rather than being dropped. */
 
-import type { RoutineTriggerKind } from "../types.js";
+import type { RoutineOccurrenceTriggerKind } from "../types.js";
 import { runTriggerLabel } from "./automationTrigger.ts";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -150,7 +150,7 @@ function parseEvent(text: string): OpeningEvent {
   return { kind: "other", text };
 }
 
-const TRIGGER_KINDS_BY_EVENT: Readonly<Record<string, RoutineTriggerKind>> = {
+const TRIGGER_KINDS_BY_EVENT: Readonly<Record<string, RoutineOccurrenceTriggerKind>> = {
   "task.created": "task_event",
   "task.status_changed": "task_event",
   "run.completed": "run_event",

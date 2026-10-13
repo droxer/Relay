@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { RoutineState } from "../lib/routine";
+import type { RoutineListState } from "../lib/routine";
 import { StateMark, type StateShape } from "./StateMark";
 import { Badge } from "@/components/ui/badge";
 
@@ -7,18 +7,16 @@ import { Badge } from "@/components/ui/badge";
  * Schedule health for a routine, in the shared status-pill grammar so
  * "where does this stand?" reads identically on both boards.
  *
- * Shape does the separating work (see StateMark): a paused routine is muted,
- * a missing next-run date is dashed, an overdue one is a hollow ring, and a
- * live occurrence is the one place a routine surface earns `--live`.
+ * Shape does the separating work (see StateMark): a paused automation is
+ * muted, one whose next run has come is a hollow ring, and a live occurrence
+ * is the one place an automation surface earns `--live`.
  */
-export const ROUTINE_STATE_SHAPE: Record<RoutineState, StateShape> = {
+export const ROUTINE_STATE_SHAPE: Record<RoutineListState, StateShape> = {
   running: "live",
-  overdue: "ring",
-  due: "solid",
+  due: "ring",
   scheduled: "solid",
   listening: "solid",
   on_demand: "solid",
-  unscheduled: "dashed",
   paused: "muted",
 };
 
@@ -26,11 +24,11 @@ export const ROUTINE_STATE_SHAPE: Record<RoutineState, StateShape> = {
  * `scheduled` renders NOTHING on a scanning surface. It is the resting state
  * of a healthy routine — the next-run date beside it already says when, and
  * in its neutral tone — so a pill repeating it turned every quiet row into
- * another object to read past. Overdue, due, running, unscheduled and paused
+ * another object to read past. Due, running, listening, on demand and paused
  * each say something the date cannot, and keep their pill. Pass `always` in
  * the drawer, where the record is being inspected rather than scanned.
  */
-export function RoutineStateBadge({ state, always = false }: { state: RoutineState; always?: boolean }) {
+export function RoutineStateBadge({ state, always = false }: { state: RoutineListState; always?: boolean }) {
   const { t } = useTranslation();
   if (state === "scheduled" && !always) return null;
   /* The shared Badge chrome — `.routine-state` used to restate the same

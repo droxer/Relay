@@ -272,7 +272,7 @@ export const NavProjects = withStandardStroke(Layers, "NavProjects");
 // A trigger firing work, not a point in time or a loop. The section used to
 // be Routines and drew `Repeat`, which said "this happens AGAIN" — true for
 // a schedule, but automations now also fire off a task event, a run event, a
-// webhook, or a manual click (see `routineTrigger` in the backend), and none
+// webhook, or a manual click (see `routineTriggers` in the backend), and none
 // of those are recurrence. `CalendarClock` only covers the schedule case, and
 // a calendar grid plus an overlaid clock face closes up into hatching at
 // 14px anyway. `Zap` reads as "trigger → action" regardless of what tripped

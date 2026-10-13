@@ -48,10 +48,9 @@ const ROUTINE = {
   priority: "normal",
   status: "backlog",
   isRoutine: true,
-  routineEnabled: true,
-  routineCadence: "daily",
-  routineType: "task",
-  routineNextRunDate: "2026-09-21",
+  routineState: "active",
+  routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "day", at: "09:00" } } }],
+  routineNextRunAt: "2026-09-21T09:00:00Z",
   assignedAgentId: "agent-1",
   assigneeEmployeeId: "fei",
   linkedSessionIds: [],
@@ -188,12 +187,12 @@ it("explains coalesced status triggers in the run ledger", async () => {
 });
 
 it("offers a direct re-enable action after the rate cap pauses an automation", async () => {
-  getTask.mockResolvedValue({ ...ROUTINE, ownerEmployeeId: "fei", routineEnabled: false,
-    routineDisabledReason: "rate_limited" });
+  getTask.mockResolvedValue({ ...ROUTINE, ownerEmployeeId: "fei", routineState: "paused_by_relay",
+    routinePauseReason: "rate_limited", routineNextRunAt: undefined });
   renderRecord();
-  expect(await screen.findByText("automation.rate_limited")).toBeTruthy();
+  expect(await screen.findByText("automation.paused_reasons.rate_limited")).toBeTruthy();
   await userEvent.setup().click(screen.getByRole("button", { name: "automation.reenable" }));
-  await waitFor(() => expect(updateTask).toHaveBeenCalledWith({ taskId: "R-42", input: { routineEnabled: true } }));
+  await waitFor(() => expect(updateTask).toHaveBeenCalledWith({ taskId: "R-42", input: { routineState: "active" } }));
 });
 
 

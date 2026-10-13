@@ -219,7 +219,7 @@ describe("record surface hygiene", () => {
 });
 
 describe("record actions", () => {
-  const assigned = { assignedAgentId: "agent-1", assignedTeamId: "", routineEnabled: true, projectId: "project-1" };
+  const assigned = { assignedAgentId: "agent-1", assignedTeamId: "", routineState: "active" as const, projectId: "project-1" };
 
   it("offers an intake issue triage instead of a run", () => {
     /* An issue outside a project cannot run — the server refuses it — so a
@@ -286,12 +286,13 @@ describe("record actions", () => {
   });
 
   it("will not dispatch a record that has nobody to dispatch to", () => {
-    const unassigned = { assignedAgentId: "", assignedTeamId: "", routineEnabled: true, projectId: "project-1" };
+    const unassigned = { assignedAgentId: "", assignedTeamId: "", routineState: "active" as const, projectId: "project-1" };
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: true, status: "backlog" }), []);
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), ["unblock"]);
-    // A paused routine is not run by a button either.
+    // Run now works on a paused automation; only a rate-limit pause refuses it.
+    assert.deepEqual(recordActions({ ...assigned, routineState: "paused", isRoutine: true, status: "backlog" }), ["run"]);
     assert.deepEqual(
-      recordActions({ ...assigned, routineEnabled: false, isRoutine: true, status: "backlog" }),
+      recordActions({ ...assigned, routineState: "paused_by_relay", routinePauseReason: "rate_limited", isRoutine: true, status: "backlog" }),
       [],
     );
   });

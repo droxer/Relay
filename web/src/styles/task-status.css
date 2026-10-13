@@ -202,10 +202,8 @@
 .routine-state .state-mark { --mark-accent: var(--state-accent); }
 
 .routine-state[data-state="running"] { --state-accent: var(--live); color: var(--ink-1); }
-.routine-state[data-state="overdue"] { --state-accent: var(--err); color: var(--ink-1); }
 .routine-state[data-state="due"] { --state-accent: var(--warn); }
 .routine-state[data-state="scheduled"] { --state-accent: var(--ink-3); }
-.routine-state[data-state="unscheduled"] { --state-accent: var(--ink-4); color: var(--ink-3); }
 
 .routine-state[data-state="paused"] {
   --state-accent: var(--ink-4);
