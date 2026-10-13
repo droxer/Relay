@@ -77,7 +77,7 @@ empty list means Run now only), and at most one `webhook`:
 { kind: "run_event",  on: "completed"|"failed",       filters?: {...} }
 { kind: "webhook" }
 repeat: { every: "hour", minute } | { every: "day"|"weekday", at: "HH:MM" }
-      | { every: "week", at, days: [1..7] }   // ISO weekdays, non-empty, unique
+      | { every: "week", at, days: [1..7] }   // ISO weekdays, non-empty; duplicates ignored
       | { every: "month", at, day: 1..31 }    // clamps to the month's end
       | { once: "YYYY-MM-DDTHH:MM" } | { cron: "<5 fields>" }
 ```
@@ -96,7 +96,9 @@ carries `routinePauseReason`: `rate_limited`, `failing`, `no_target`, or
 `paused_by_relay`. Setting `active` resumes it: from `paused_by_relay` it also
 starts a fresh hourly rate window, and any resume resets the failure counter.
 `routineNextRunAt` is the next schedule firing as an ISO UTC datetime; the
-scheduler clock computes and stores it, never the write path. Automatic
+write path sets it when an automation becomes active or its triggers change
+(cleared when it is not active), and the scheduler clock seeds missing values
+and advances it after each fire. Automatic
 pause after repeated failures and a dedicated resume route are coming (not
 built yet).
 
@@ -109,8 +111,8 @@ schedule triggers only; `capabilities.automationTriggers` in `GET /admin/setting
 and `/auth/me` (every employee) reports it.
 
 `POST /api/v1/automations/schedule-preview` (any signed-in user) takes
-`{schedule}` and returns `{summary, next: [three ISO UTC datetimes]}`; an invalid
-schedule answers 400 `{detail}` naming the field.
+`{schedule}` and returns `{summary, next: [up to three ISO UTC datetimes]}`; an exhausted `once`
+returns fewer (or no) times; an invalid schedule answers 400 `{detail}` naming the field.
 
 Every trigger (schedule clock, event outbox, webhook, Run now) fires through
 the same pending state. A firing coalesces behind an in-flight occurrence,

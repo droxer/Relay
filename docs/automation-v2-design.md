@@ -1,6 +1,9 @@
 # Automations v2 design: trigger model, firing, and the automations seam
 
-Status: implemented (PR 2). Deviations: docs/plans/2026-10-13-automation-v2.md#deviations-from-the-spec-decided-while-planning (2026-10-13). Supersedes the data model and firing sections
+Status: implemented (PR 2, 2026-10-13); see the plan's deviations:
+`docs/plans/2026-10-13-automation-v2.md#deviations-from-the-spec-decided-while-planning`.
+
+Supersedes the data model and firing sections
 of `docs/automation-triggers-design.md`; that document's outbox, webhook, and
 rename sections still hold. The setup-flow redesign (a dedicated automation
 composer) is a separate follow-up spec built on this contract.
