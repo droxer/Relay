@@ -173,6 +173,20 @@ def without_legacy_fields(task: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in task.items() if key not in LEGACY_FIELDS}
 
 
+def public_task_result(result: Any) -> Any:
+    """A route answer that is a task, or an envelope carrying one under
+    ``task``, with the legacy routine keys removed."""
+    if not isinstance(result, dict):
+        return result
+    public = without_legacy_fields(result)
+    task = public.get("task")
+    if isinstance(task, dict):
+        stripped = without_legacy_fields(task)
+        if stripped is not task:
+            public = {**public, "task": stripped}
+    return public
+
+
 def upgrade_legacy(legacy: dict[str, Any]) -> dict[str, Any]:
     """What a legacy routine's fields mean in v2. Pure: the server timezone
     stays ``timezone: None`` and is resolved only when a schedule is evaluated."""

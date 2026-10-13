@@ -135,3 +135,13 @@ def test_lone_legacy_reason_on_v2_snapshot_is_ignored():
     ])
     assert task["routineTriggers"] == DAILY_TRIGGERS and task["routineState"] == "active"
     assert not {"routineDisabledReason", "routineTrigger"} & task.keys()
+
+
+def test_only_legacy_records_carry_routine_enabled() -> None:
+    from relay.persistence.store_common import materialize_task_events, relay_task_event
+
+    plain = materialize_task_events([relay_task_event("task.created", "t1", {"title": "Plain"})])
+    assert "routineEnabled" not in plain
+    legacy = materialize_task_events([relay_task_event("task.created", "t2", {
+        "title": "Old", "isRoutine": True, "routineEnabled": True})])
+    assert legacy["routineEnabled"] is True and legacy["routineState"] == "active"

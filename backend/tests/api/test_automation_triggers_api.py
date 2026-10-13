@@ -351,3 +351,64 @@ def test_admin_settings_report_the_triggers_capability(monkeypatch) -> None:
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is True
         monkeypatch.setenv("RELAY_AUTOMATION_TRIGGERS_ENABLED", "0")
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is False
+
+
+def _legacy_routine(client: TestClient, agent: dict) -> dict:
+    return client.app.state.task_store.create_task({
+        "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineType": "task",
+        "routineNextRunDate": "2030-01-02", "routineEnabled": True, "routineTrigger": {"kind": "schedule"},
+        "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerEmployeeId": "alice",
+        "assigneeEmployeeId": "alice",
+    })
+
+
+def test_assignment_of_a_legacy_routine_answers_without_legacy_fields(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        legacy = _legacy_routine(client, agent)
+        assert set(LEGACY_FIELDS) & set(client.app.state.task_store.get_task(legacy["id"]))
+        response = client.put(f"/api/v1/tasks/{legacy['id']}/assignment", json={"agentId": agent["id"]})
+        assert response.status_code == 200, response.text
+        assert not set(LEGACY_FIELDS) & set(response.json())
+
+
+def test_rejected_start_of_a_legacy_routine_answers_without_legacy_fields(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        # A legacy executor-kind assignment with no runtime for it: the start
+        # is answered while preparing, before any automation path.
+        legacy = client.app.state.task_store.create_task({
+            "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineEnabled": True,
+            "routineNextRunDate": "2030-01-02", "assignedAgent": "kimi", "ownerEmployeeId": "alice",
+            "assigneeEmployeeId": "alice",
+        })
+        response = client.post(f"/api/v1/tasks/{legacy['id']}/runs", json={})
+        assert response.status_code == 202, response.text
+        body = response.json()
+        assert body["dispatch"]["code"] == "agent_offline"
+        assert body["task"]["id"] == legacy["id"]
+        assert not set(LEGACY_FIELDS) & set(body["task"])
+
+
+def test_any_resume_resets_failures_but_only_a_relay_resume_resets_the_rate_window(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        routine = _routine(client, agent)
+        store, automations = client.app.state.task_store, client.app.state.automation_store
+        window = datetime.now(timezone.utc)
+        automations.save_state(routine["id"], {**automations.get_state(routine["id"]),
+                                               "consecutive_failures": 3, "fired_count": 2,
+                                               "fired_window_start": window})
+        store.update_task(routine["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing",
+                                          "routineNextRunAt": None})
+        path = f"/api/v1/tasks/{routine['id']}"
+        assert client.patch(path, json={"routineState": "paused"}).status_code == 200
+        assert automations.get_state(routine["id"])["consecutive_failures"] == 3
+        assert client.patch(path, json={"routineState": "active"}).status_code == 200
+        state = automations.get_state(routine["id"])
+        assert state["consecutive_failures"] == 0
+        assert state["fired_count"] == 2
+        store.update_task(routine["id"], {"routineState": "paused_by_relay", "routinePauseReason": "failing",
+                                          "routineNextRunAt": None})
+        assert client.patch(path, json={"routineState": "active"}).status_code == 200
+        assert automations.get_state(routine["id"])["fired_count"] == 0

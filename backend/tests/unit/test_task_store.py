@@ -88,7 +88,7 @@ def test_local_task_store_serializes_concurrent_appends() -> None:
             {"title": "Collect activity", "description": "", "priority": "normal"}
         )
         assert task["isRoutine"] is False
-        assert task["routineEnabled"] is False
+        assert "routineEnabled" not in task
 
         def append(index: int) -> None:
             store.append_event(

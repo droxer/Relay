@@ -652,7 +652,6 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "workflowStage": "backlog",
         "acceptancePolicy": created.get("acceptancePolicy", "automatic"),
         "isRoutine": bool(created.get("isRoutine")),
-        "routineEnabled": bool(created.get("routineEnabled")),
         "linkedSessionIds": [],
         "occurrenceIds": [],
         "activity": [],
@@ -660,6 +659,9 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "updatedAt": created["timestamp"],
         "events": [],
     }
+    if "routineEnabled" in created:
+        # Only a legacy record says this; v2 routines carry routineState.
+        task["routineEnabled"] = bool(created["routineEnabled"])
     if created.get("ownerEmployeeId"):
         task["ownerEmployeeId"] = created["ownerEmployeeId"]
     if created.get("assigneeEmployeeId"):

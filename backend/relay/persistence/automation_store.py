@@ -201,6 +201,13 @@ class DatabaseAutomationStore:
     def reset_rate_window(self, routine_id: str) -> None:
         self.save_state(routine_id, _empty_state(routine_id))
 
+    def reset_failures(self, routine_id: str) -> None:
+        """A resumed automation starts its failure count over; its rate window
+        stays, so pausing and resuming cannot bypass the hourly cap."""
+        with store_transaction(self.engine) as conn:
+            conn.execute(update(automation_state).where(automation_state.c.routine_id == routine_id)
+                         .values(consecutive_failures=0))
+
     def list_pending_states(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             rows = conn.execute(select(automation_state).where(automation_state.c.pending.is_(True))).mappings().all()

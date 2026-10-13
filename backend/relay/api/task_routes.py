@@ -13,6 +13,7 @@ from ..automations.model import (
     EVENT_KINDS,
     TriggerError,
     has_webhook,
+    public_task_result,
     state_of,
     without_legacy_fields,
 )
@@ -785,12 +786,14 @@ def update_task(
         **routine,
         **assignment_patch,
     }
-    # Resuming what Relay paused starts a fresh rate window and failure count.
-    reset_rate_window = (
-        state_of(current) == "paused_by_relay" and routine.get("routineState") == "active"
-    )
+    # Any resume starts the failure count over. Resuming what Relay paused
+    # also starts a fresh rate window; an owner's pause/resume does not, so
+    # the hourly cap cannot be bypassed.
+    resumed = routine.get("routineState") == "active" and state_of(current) != "active"
+    reset_rate_window = resumed and state_of(current) == "paused_by_relay"
     with ctx.registry.dispatch_lock, store_transaction(ctx.task_store.engine) as conn:
-        if reset_rate_window and conn.dialect.name == "postgresql":
+        # Serialize with the automation tick, which rewrites the same state row.
+        if resumed and conn.dialect.name == "postgresql":
             conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": AUTOMATION_LOCK_KEY})
         if status:
             try:
@@ -821,6 +824,8 @@ def update_task(
             raise HTTPException(409, str(error)) from error
         if reset_rate_window:
             request.app.state.automation_store.reset_rate_window(task_id)
+        elif resumed:
+            request.app.state.automation_store.reset_failures(task_id)
         if status == "done":
             complete_linked_task_sessions(ctx, task, "Task accepted after review.")
             task = ctx.task_store.get_task(task_id)
@@ -855,7 +860,7 @@ def delete_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
         actor=actor.get("employeeId") or actor.get("username"),
         outcome=result["outcome"],
     )
-    return result
+    return public_task_result(result)
 
 
 @router.put("/tasks/{task_id}/assignment")
@@ -900,7 +905,7 @@ def assign_task(
             )
         except TeamDispatchError as error:
             raise HTTPException(409, error.code) from error
-        return update_task_unless_dispatching(
+        return public_task_result(update_task_unless_dispatching(
             ctx,
             task_id,
             {
@@ -908,7 +913,7 @@ def assign_task(
                 "assignedAgentId": None,
                 "assignedTeamId": assigned_team_id,
             },
-        )
+        ))
     logical_agent = logical_agent_for_assignment(
         ctx,
         actor,
@@ -919,7 +924,7 @@ def assign_task(
     )
     if not logical_agent or not assigned_agent_id:
         raise HTTPException(400, "agentId is required for task assignment.")
-    return update_task_unless_dispatching(
+    return public_task_result(update_task_unless_dispatching(
         ctx,
         task_id,
         {
@@ -928,7 +933,7 @@ def assign_task(
             "assignedAgentId": assigned_agent_id,
             "assignedTeamId": None,
         },
-    )
+    ))
 
 
 def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], body: dict[str, Any]) -> Any:
@@ -1086,6 +1091,11 @@ def _prepare_task_start(task_id: str, ctx: AppContext, actor: dict[str, Any], bo
 async def start_task(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
+    # Every answer below carries a task (often the routine definition).
+    return public_task_result(await _start_task(task_id, request, ctx))
+
+
+async def _start_task(task_id: str, request: Request, ctx: AppContext) -> dict[str, Any]:
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await json_body(request)
     prepared = await run_in_threadpool(_prepare_task_start, task_id, ctx, actor, body)
@@ -1097,8 +1107,7 @@ async def start_task(
             request_manual_occurrence, request.app.state.automation_store, ctx, task, actor
         )
         if "dispatch" in occurrence:
-            task_view = occurrence.get("task")
-            return {**occurrence, "task": without_legacy_fields(task_view)} if task_view else occurrence
+            return occurrence
         result = await start_task_on_ready_node(
             ctx, occurrence, actor, retry_blocked=True
         )
@@ -1187,7 +1196,7 @@ async def pickup_task(
         session_id=(result.get("session") or {}).get("id"),
         agent=agent,
     )
-    return result
+    return public_task_result(result)
 
 
 def occurrence_tasks(
