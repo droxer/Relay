@@ -58,6 +58,9 @@ node --test dist/web/tests/routine.test.js
   against the public npm registry completed and reported 10 existing
   vulnerabilities (6 low, 1 moderate, 3 high), including `sharp` and
   `source-map-js`. Dependencies were not changed in this continuation.
+  A subsequent [dependency security follow-up](dependency-security.tdd.md)
+  removes all production findings and documents the remaining unpatched
+  development-tool advisory.
 - `npm test` could not finish its default Turbopack build because its CSS
   worker could not bind a local port, including on the permission-enabled
   retry. The Webpack build and split test runs above provide separate evidence.
