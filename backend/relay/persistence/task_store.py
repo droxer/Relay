@@ -40,7 +40,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
-from ..automations.model import trigger_kind
+from ..automations.model import is_active, listens, schedule_triggers, state_of, trigger_kind
 from ..core.ids import new_relay_id
 from ..services.issue_triage import issue_needs_project, project_move_error
 from .automation_store import insert_outbox_rows, task_outbox_rows
@@ -233,6 +233,10 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "routineTrigger",
         "routineTriggerKind",
         "routineTriggerSummary",
+        "routineTriggers",
+        "routineState",
+        "routinePauseReason",
+        "routineNextRunAt",
     ):
         if payload.get(field):
             created_payload[field] = payload[field]
@@ -335,7 +339,15 @@ def task_update_events(
             "routineDisabledReason",
         )
     }
-    for field in ("expectedStatus", "expectedExecutionRevision"):
+    # v2 keys are sent only when supplied: their presence marks a v2 event.
+    for field in (
+        "routineTriggers",
+        "routineState",
+        "routinePauseReason",
+        "routineNextRunAt",
+        "expectedStatus",
+        "expectedExecutionRevision",
+    ):
         if field in payload:
             updated[field] = payload[field]
     events = [relay_task_event("task.updated", task_id, updated)]
@@ -824,13 +836,25 @@ class LocalTaskStore:
             return occurrence
 
     def list_trigger_automations(self) -> list[dict[str, Any]]:
+        return [task for task in self.list_tasks() if is_active(task) and listens(task)]
+
+    def list_due_schedules(self, now: datetime) -> list[dict[str, Any]]:
+        due = [
+            (at, task)
+            for task in self.list_tasks()
+            if is_active(task)
+            and (at := _parse_datetime(task.get("routineNextRunAt"))) is not None
+            and at <= now
+        ]
+        return [task for _, task in sorted(due, key=lambda pair: pair[0])]
+
+    def list_unseeded_schedules(self) -> list[dict[str, Any]]:
         return [
             task
             for task in self.list_tasks()
-            if task.get("isRoutine")
-            and task.get("routineEnabled")
-            and not task.get("deletedAt")
-            and trigger_kind(task) in TRIGGERED_KINDS
+            if is_active(task)
+            and schedule_triggers(task)
+            and _parse_datetime(task.get("routineNextRunAt")) is None
         ]
 
     def assign_task(
@@ -941,6 +965,9 @@ class LocalTaskStore:
         return self._task_dir(task_id) / "snapshot.json"
 
 
+ACTIVE_ROUTINE_WHERE = "is_routine AND routine_state = 'active'"
+
+
 class DatabaseTaskStore:
     @contextmanager
     def task_write_scope(self, task_id: str):
@@ -994,6 +1021,10 @@ class DatabaseTaskStore:
         Column("routine_next_run_date", Date, nullable=True),
         Column("routine_enabled", Boolean, nullable=False, default=False),
         Column("routine_trigger_kind", Text, nullable=True),
+        Column("routine_next_run_at", DateTime(timezone=True), nullable=True),
+        Column("routine_state", Text, nullable=True),
+        Column("routine_listens", Boolean, nullable=False, default=False),
+        Column("routine_has_schedule", Boolean, nullable=False, default=False),
         Column("number_scope", Text, nullable=True),
         Column("number", Integer, nullable=True),
         Column("dispatch_failure_count", Integer, nullable=False, default=0),
@@ -1045,6 +1076,28 @@ class DatabaseTaskStore:
             sqlite_where=text(
                 "is_routine IS 1 AND routine_enabled IS 1"
                 " AND routine_trigger_kind IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_tasks_due_schedules",
+            "routine_next_run_at",
+            postgresql_where=text(ACTIVE_ROUTINE_WHERE),
+            sqlite_where=text(ACTIVE_ROUTINE_WHERE),
+        ),
+        Index(
+            "ix_tasks_listening_routines",
+            "created_at",
+            postgresql_where=text(f"{ACTIVE_ROUTINE_WHERE} AND routine_listens"),
+            sqlite_where=text(f"{ACTIVE_ROUTINE_WHERE} AND routine_listens"),
+        ),
+        Index(
+            "ix_tasks_unseeded_schedules",
+            "created_at",
+            postgresql_where=text(
+                f"{ACTIVE_ROUTINE_WHERE} AND routine_has_schedule AND routine_next_run_at IS NULL"
+            ),
+            sqlite_where=text(
+                f"{ACTIVE_ROUTINE_WHERE} AND routine_has_schedule AND routine_next_run_at IS NULL"
             ),
         ),
     )
@@ -2013,20 +2066,39 @@ class DatabaseTaskStore:
             )
         return occurrence
 
-    def list_trigger_automations(self) -> list[dict[str, Any]]:
+    def _active_routine_snapshots(self, *conditions: Any, order: Any) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             rows = (
                 conn.execute(
                     select(self.tasks.c.snapshot)
                     .where(self.tasks.c.is_routine.is_(True))
-                    .where(self.tasks.c.routine_enabled.is_(True))
-                    .where(self.tasks.c.routine_trigger_kind.in_(TRIGGERED_KINDS))
-                    .order_by(self.tasks.c.created_at.asc())
+                    .where(self.tasks.c.routine_state == "active")
+                    .where(*conditions)
+                    .order_by(order)
                 )
                 .mappings()
                 .all()
             )
         return [row["snapshot"] for row in rows if not row["snapshot"].get("deletedAt")]
+
+    def list_trigger_automations(self) -> list[dict[str, Any]]:
+        return self._active_routine_snapshots(
+            self.tasks.c.routine_listens.is_(True), order=self.tasks.c.created_at.asc()
+        )
+
+    def list_due_schedules(self, now: datetime) -> list[dict[str, Any]]:
+        return self._active_routine_snapshots(
+            self.tasks.c.routine_next_run_at.is_not(None),
+            self.tasks.c.routine_next_run_at <= now,
+            order=self.tasks.c.routine_next_run_at.asc(),
+        )
+
+    def list_unseeded_schedules(self) -> list[dict[str, Any]]:
+        return self._active_routine_snapshots(
+            self.tasks.c.routine_has_schedule.is_(True),
+            self.tasks.c.routine_next_run_at.is_(None),
+            order=self.tasks.c.created_at.asc(),
+        )
 
     def assign_task(
         self, task_id: str, agent: AgentName, agent_id: str | None = None
@@ -2247,8 +2319,13 @@ def task_to_row(
         "routine_type": task.get("routineType"),
         "routine_cadence": task.get("routineCadence"),
         "routine_next_run_date": _parse_date(task.get("routineNextRunDate")),
-        "routine_enabled": bool(task.get("routineEnabled")),
+        # Legacy columns stay until the scheduler reads the v2 ones.
+        "routine_enabled": bool(task.get("isRoutine")) and state_of(task) == "active",
         "routine_trigger_kind": trigger_kind(task) if task.get("isRoutine") else None,
+        "routine_next_run_at": _parse_datetime(task.get("routineNextRunAt")),
+        "routine_state": state_of(task) if task.get("isRoutine") else None,
+        "routine_listens": bool(task.get("isRoutine")) and listens(task),
+        "routine_has_schedule": bool(task.get("isRoutine")) and bool(schedule_triggers(task)),
         "number_scope": task.get("numberScope"),
         "number": task.get("number"),
         "dispatch_failure_count": int(
@@ -2282,6 +2359,16 @@ def _parse_date(value: str | None) -> Any:
     if not value:
         return None
     return _date.fromisoformat(value)
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _priority_rank(priority: Any) -> int:

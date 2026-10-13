@@ -52,6 +52,7 @@ automation_state = Table(
     Column("pending_since", DateTime(timezone=True), nullable=True),
     Column("fired_window_start", DateTime(timezone=True), nullable=True),
     Column("fired_count", Integer, nullable=False, default=0),
+    Column("consecutive_failures", Integer, nullable=False, default=0),
     Index("ix_automation_state_pending", "pending"),
 )
 
@@ -108,7 +109,8 @@ def insert_outbox_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
 
 def _empty_state(routine_id: str) -> dict[str, Any]:
     return {"routine_id": routine_id, "pending": False, "pending_events": [], "pending_dropped": 0,
-            "pending_since": None, "fired_window_start": None, "fired_count": 0}
+            "pending_since": None, "fired_window_start": None, "fired_count": 0,
+            "consecutive_failures": 0}
 
 
 def _hash(token: str) -> str:

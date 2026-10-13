@@ -1198,3 +1198,54 @@ def test_stale_project_move_cannot_replace_the_first_move(database) -> None:
         current = store.get_task(issue["id"])
         assert current["projectId"] == "first"
         assert len([event for event in current["events"] if event["type"] == "task.project_set"]) == 1
+
+
+DAILY_9 = [
+    {"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"every": "day", "at": "09:00"}}}
+]
+
+
+def _stores():
+    from datetime import datetime, timezone  # noqa: F401
+
+    root = TemporaryDirectory()
+    database_url = f"sqlite:///{root.name}/relay.db"
+    return root, DatabaseTaskStore(database_url, create_schema=True), LocalTaskStore(root.name + "/local")
+
+
+def _v2_routine(store, title, **extra):
+    return store.create_task(
+        {"title": title, "isRoutine": True, "routineTriggers": DAILY_9, "routineState": "active", **extra}
+    )
+
+
+@pytest.mark.parametrize("which", [1, 2])
+def test_due_and_unseeded_schedule_queries(which) -> None:
+    from datetime import datetime, timezone
+
+    root, db_store, local_store = _stores()
+    with root:
+        store = (None, db_store, local_store)[which]
+        due = _v2_routine(store, "a", routineNextRunAt="2026-10-13T09:00:00+00:00")
+        later = _v2_routine(store, "b", routineNextRunAt="2026-10-14T09:00:00+00:00")
+        unseeded = _v2_routine(store, "c")
+        _v2_routine(store, "d", routineState="paused", routineNextRunAt="2026-10-13T09:00:00+00:00")
+        now = datetime(2026, 10, 13, 10, tzinfo=timezone.utc)
+        assert [task["id"] for task in store.list_due_schedules(now)] == [due["id"]]
+        assert [task["id"] for task in store.list_unseeded_schedules()] == [unseeded["id"]]
+        assert later["id"] not in [task["id"] for task in store.list_due_schedules(now)]
+
+
+@pytest.mark.parametrize("which", [1, 2])
+def test_listening_automations_query(which) -> None:
+    root, db_store, local_store = _stores()
+    with root:
+        store = (None, db_store, local_store)[which]
+        hook = store.create_task(
+            {"title": "h", "isRoutine": True, "routineTriggers": [{"kind": "webhook"}], "routineState": "active"}
+        )
+        store.create_task(
+            {"title": "p", "isRoutine": True, "routineTriggers": [{"kind": "webhook"}], "routineState": "paused"}
+        )
+        _v2_routine(store, "s")
+        assert [task["id"] for task in store.list_trigger_automations()] == [hook["id"]]
