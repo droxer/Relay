@@ -458,6 +458,69 @@ def test_resume_by_non_owner_is_403(monkeypatch) -> None:
         assert client.app.state.task_store.get_task(task["id"])["routineState"] == "paused_by_relay"
 
 
+@pytest.mark.parametrize("state", ["active", "paused"])
+def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        task = _routine(client, agent)
+        store = client.app.state.task_store
+        store.update_task(task["id"], {
+            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay",
+            "routinePauseReason": "failing", "routineNextRunAt": None,
+        })
+        automations = client.app.state.automation_store
+        automations.record_outcome(task["id"], "failure-1", True)
+        automations.mark_pending(task["id"], {"eventType": "manual", "depth": 0}, datetime.now(timezone.utc))
+        before = store.get_task(task["id"])
+        before_state = automations.get_state(task["id"])
+        _login(client, "bob")
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"routineState": state})
+        assert response.status_code == 403
+        assert "owner or an admin" in response.json()["detail"]
+        assert store.get_task(task["id"]) == before
+        assert automations.get_state(task["id"]) == before_state
+
+
+@pytest.mark.parametrize("actor", ["alice", "admin"])
+def test_owner_or_admin_can_lift_relay_pause_via_patch(monkeypatch, actor: str) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent)
+        client.app.state.task_store.update_task(task["id"], {
+            "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None,
+        })
+        if actor == "alice":
+            _login(client, "alice")
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"routineState": "active"})
+        assert response.status_code == 200, response.text
+        assert response.json()["routineState"] == "active"
+        assert "routinePauseReason" not in response.json()
+
+
+def test_assignee_can_edit_relay_pause_and_toggle_an_ordinary_pause(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        _create_user(client, "bob", employee_id="bob")
+        task = _routine(client, agent)
+        store = client.app.state.task_store
+        store.update_task(task["id"], {
+            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay",
+            "routinePauseReason": "failing", "routineNextRunAt": None,
+        })
+        _login(client, "bob")
+        path = f"/api/v1/tasks/{task['id']}"
+        response = client.patch(path, json={"title": "Updated"})
+        assert response.status_code == 200, response.text
+        assert response.json()["routineState"] == "paused_by_relay"
+        assert response.json()["routinePauseReason"] == "failing"
+        store.update_task(task["id"], {"routineState": "paused", "routinePauseReason": None})
+        for state in ("active", "paused"):
+            response = client.patch(path, json={"routineState": state})
+            assert response.status_code == 200, response.text
+            assert response.json()["routineState"] == state
+
+
 def test_resume_by_owner_succeeds(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
@@ -508,3 +571,55 @@ def test_patch_resume_of_owner_pause_keeps_the_rate_window(monkeypatch) -> None:
         assert client.post(path + "/automation/resume").json()["routineState"] == "active"
         state = automation_store.get_state(task["id"])
         assert (state["fired_count"], state["consecutive_failures"]) == (4, 0)
+
+
+PAST_ONCE = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"once": "2000-01-01T09:00"}}}]
+
+
+def test_active_create_rejects_past_once(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        response = client.post("/api/v1/tasks", json={
+            "title": "Missed", "isRoutine": True, "routineState": "active",
+            "assignedAgentId": agent["id"], "ownerEmployeeId": "alice",
+            "assigneeEmployeeId": "alice", "routineTriggers": PAST_ONCE,
+        })
+        assert response.status_code == 400
+        assert "routineTriggers[0]" in response.json()["detail"]
+        assert "future" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("resume", ["patch", "post"])
+def test_activation_rejects_past_once_without_mutating_pause(monkeypatch, resume) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent, routineState="paused", routineTriggers=PAST_ONCE)
+        path = f"/api/v1/tasks/{task['id']}"
+        response = (client.patch(path, json={"routineState": "active"}) if resume == "patch"
+                    else client.post(path + "/automation/resume"))
+        assert response.status_code == 400
+        assert client.app.state.task_store.get_task(task["id"])["routineState"] == "paused"
+
+
+def test_active_schedule_change_rejects_past_once_even_with_event_trigger(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent)
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"routineTriggers": [WEBHOOK, *PAST_ONCE]})
+        assert response.status_code == 400
+        assert "routineTriggers[1]" in response.json()["detail"]
+        assert client.app.state.task_store.get_task(task["id"])["routineTriggers"] == DAILY_9
+
+
+def test_completed_once_remains_editable_and_active_resume_is_noop(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        client, agent = _client(monkeypatch, root)
+        task = _routine(client, agent)
+        client.app.state.task_store.update_task(task["id"], {
+            "routineTriggers": PAST_ONCE, "routineNextRunAt": None,
+        })
+        path = f"/api/v1/tasks/{task['id']}"
+        response = client.patch(path, json={"title": "Finished", "routineState": "active", "routineTriggers": PAST_ONCE})
+        assert response.status_code == 200, response.text
+        assert response.json()["title"] == "Finished"
+        assert client.post(path + "/automation/resume").status_code == 200

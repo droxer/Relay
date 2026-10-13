@@ -137,6 +137,12 @@ describe("routineState", () => {
     assert.equal(routineState(automation("s"), none, NOW), "scheduled");
   });
 
+  it("shows an exhausted one-off as on demand, retaining listening for mixed triggers", () => {
+    const once = { kind: "schedule" as const, schedule: { timezone: "UTC", repeat: { once: "2026-01-01T09:00" } } };
+    assert.equal(routineState(automation("finished", { routineTriggers: [once], routineNextRunAt: undefined }), none, NOW), "on_demand");
+    assert.equal(routineState(automation("mixed", { routineTriggers: [once, { kind: "webhook" }], routineNextRunAt: undefined }), none, NOW), "listening");
+  });
+
   it("calls a schedule plus an event trigger scheduled while a run is coming", () => {
     const mixed = automation("m", { routineTriggers: [...DAILY, { kind: "webhook" }] });
     assert.equal(routineState(mixed, none, NOW), "scheduled");
