@@ -14,6 +14,9 @@ describe("automationSchedule", () => {
     assert.equal(scheduleError({ timezone: null, repeat: { every: "week", at: "09:00", days: [] } }), "automation.errors.days");
     assert.equal(scheduleError({ timezone: null, repeat: { every: "month", at: "09:00", day: 0 } }), "automation.errors.month_day");
     assert.equal(scheduleError({ timezone: null, repeat: { once: "soon" } }), "automation.errors.once");
+    assert.equal(scheduleError({ timezone: null, repeat: { every: "hour", minute: Number.NaN } }), "automation.errors.minute");
+    assert.equal(scheduleError({ timezone: null, repeat: { every: "hour", minute: 0 } }), null);
+    assert.equal(scheduleError({ timezone: null, repeat: { every: "month", at: "09:00", day: Number.NaN } }), "automation.errors.month_day");
     assert.equal(scheduleError({ timezone: null, repeat: { cron: "* *" } }), "automation.errors.cron");
     assert.equal(scheduleError({ timezone: "UTC", repeat: { every: "weekday", at: "09:00" } }), null);
   });

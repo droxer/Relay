@@ -334,9 +334,9 @@ describe("the record surface owns what the drawer used to", () => {
     // The band names the status; the result line states the run's facts only.
     const result = readWeb("src/components/task-record/RecordResultLine.tsx");
     assert.doesNotMatch(result, /task-result-outcome/);
-    // The band names cadence, next run and assignee; the definition tab must not.
+    // The band names the trigger, next run and assignee; the definition tab must not.
     const definition = readWeb("src/components/task-record/TaskRecordDefinition.tsx");
-    for (const banded of ["routine.cadence", "routine.next_run", "backlog.assignee"]) {
+    for (const banded of ["automation.trigger", "routine.next_run", "backlog.assignee"]) {
       assert.doesNotMatch(definition, new RegExp(banded.replace(".", "\\.")), `definition restates ${banded}`);
     }
   });

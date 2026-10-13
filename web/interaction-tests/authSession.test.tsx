@@ -6,6 +6,7 @@ import { expect, it, vi } from "vitest";
 import * as api from "../src/api";
 import { RelayApiError } from "../src/api";
 import { useAuthSession } from "../src/hooks/useAuthSession";
+import { useSessionCapabilities } from "../src/hooks/useSessionCapabilities";
 import type { CurrentUser } from "../src/types";
 
 const ADMIN = { id: "u1", username: "admin", role: "admin", employeeId: "admin" } as CurrentUser;
@@ -61,4 +62,29 @@ it("does not let a pending probe overwrite a login", async () => {
   await act(async () => { resolve({ authenticated: false }); });
   await waitFor(() => expect(result.current.status).toBe("authenticated"));
   expect(result.current.user).toEqual(ADMIN);
+});
+
+it("hands the probe's capabilities to useSessionCapabilities without a second /auth/me", async () => {
+  const getMe = vi.spyOn(api, "getMe").mockResolvedValue({
+    authenticated: true, user: ADMIN, capabilities: { automationTriggers: false },
+  });
+  const { result } = renderHook(() => ({ session: useAuthSession(), capabilities: useSessionCapabilities() }), { wrapper: wrapper() });
+
+  await waitFor(() => expect(result.current.capabilities.automationTriggers).toBe(false));
+  expect(result.current.session.status).toBe("authenticated");
+  expect(getMe).toHaveBeenCalledTimes(1);
+});
+
+it("fetches the capabilities once after a sign-in, whose response carries none", async () => {
+  const getMe = vi.spyOn(api, "getMe")
+    .mockRejectedValueOnce(new RelayApiError("not signed in", 401))
+    .mockResolvedValue({ authenticated: true, user: ADMIN, capabilities: { automationTriggers: false } });
+  const { result } = renderHook(() => ({ session: useAuthSession(), capabilities: useSessionCapabilities() }), { wrapper: wrapper() });
+  await waitFor(() => expect(result.current.session.status).toBe("anonymous"));
+  expect(result.current.capabilities.automationTriggers).toBe(true);
+
+  act(() => result.current.session.setUser(ADMIN));
+
+  await waitFor(() => expect(result.current.capabilities.automationTriggers).toBe(false));
+  expect(getMe).toHaveBeenCalledTimes(2);
 });

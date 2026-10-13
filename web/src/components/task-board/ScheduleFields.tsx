@@ -90,14 +90,14 @@ export function ScheduleFields({ schedule, onChange }: Props) {
       ) : null}
       {"minute" in repeat ? (
         <Field label={t("automation.minute")}>
-          <Input type="number" name="automation-minute" min={0} max={59} value={repeat.minute} {...invalid("minute")}
-            onChange={(event) => setRepeat({ ...repeat, minute: Number(event.target.value) })} />
+          <Input type="number" name="automation-minute" min={0} max={59} value={numberValue(repeat.minute)}
+            {...invalid("minute")} onChange={(event) => setRepeat({ ...repeat, minute: numberInput(event.target.value) })} />
         </Field>
       ) : null}
       {"day" in repeat ? (
         <Field label={t("automation.month_day")}>
-          <Input type="number" name="automation-month-day" min={1} max={31} value={repeat.day} {...invalid("day")}
-            onChange={(event) => setRepeat({ ...repeat, day: Number(event.target.value) })} />
+          <Input type="number" name="automation-month-day" min={1} max={31} value={numberValue(repeat.day)}
+            {...invalid("day")} onChange={(event) => setRepeat({ ...repeat, day: numberInput(event.target.value) })} />
         </Field>
       ) : null}
       {"once" in repeat ? (
@@ -152,6 +152,16 @@ export function ScheduleFields({ schedule, onChange }: Props) {
       </div>
     </>
   );
+}
+
+/* An emptied number input is NaN, not 0: 0 is a valid minute, so reading
+   "" as 0 would save a schedule the reader never chose. */
+function numberInput(raw: string): number {
+  return raw.trim() === "" ? Number.NaN : Number(raw);
+}
+
+function numberValue(value: number): number | "" {
+  return Number.isNaN(value) ? "" : value;
 }
 
 function primaryField(preset: SchedulePreset): string {

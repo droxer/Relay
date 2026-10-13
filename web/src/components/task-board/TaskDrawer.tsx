@@ -74,6 +74,16 @@ type TaskDrawerProps = {
   projectChoice?: "required" | "optional" | "locked";
 };
 
+/**
+ * Whether choosing an agent or team turns the automation on. A Relay pause
+ * stays put — re-pointing a runaway or failing automation must not re-arm
+ * it — unless the pause was for having no target, which this choice fixes.
+ */
+function activatesOnAssign(form: TaskBoardFormState): boolean {
+  if (form.variant !== "routine") return false;
+  return form.routineState !== "paused_by_relay" || form.routinePauseReason === "no_target";
+}
+
 /** The Select value that stands for "no project" — Select has no null item. */
 const NO_PROJECT = "__none__";
 
@@ -436,7 +446,7 @@ export function TaskDrawer({
                 // An ownerless agent says nothing about who the task is
                 // for, so it leaves the assignee as the employee chose it.
                 assigneeEmployeeId: logicalAgent.supervisorEmployeeId ?? form.assigneeEmployeeId,
-                ...(form.variant === "routine" ? { routineState: "active" as const } : {}),
+                ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
               });
               return;
             }
@@ -444,7 +454,7 @@ export function TaskDrawer({
             if (team) {
               updateBase({
                 ...teamAssignmentPatch(team.id),
-                ...(form.variant === "routine" ? { routineState: "active" as const } : {}),
+                ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
               });
             }
           }}
