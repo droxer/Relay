@@ -167,6 +167,11 @@ everything, the volume can be detached.
 
 ## 7. Nightly database backups to R2
 
+> **Not deployed yet.** The `relay backup-database` command and the image's
+> Postgres client are in place, but no Railway service runs it. The steps
+> below describe the intended setup; the cron service's configuration still
+> has to be settled before following them.
+
 Postgres is the source of truth for every thread, task, and event. A Railway
 cron service on the same image runs `relay backup-database` once a night: it
 `pg_dump`s the database into a temporary file, proves the archive is readable
@@ -185,10 +190,11 @@ uploads nothing.
    `relay-backups` only. Keep it separate from the artifact token so the
    backend's everyday credentials cannot touch backups.
 3. **Service.** In the Railway project → *New* → *GitHub repo* → this repo
-   again. In the new service's *Settings*, set the *Config-as-code* path to
-   `railway.backup.json`; it builds the same image, runs `relay
-   backup-database` at 03:00 UTC (`cronSchedule`), and never restarts. Give it
-   no domain.
+   again, so it builds the same image (`backend/Dockerfile`). In the new
+   service's *Settings*, set the *Custom Start Command* to `relay
+   backup-database`, the *Cron Schedule* to `0 3 * * *` (03:00 UTC), and the
+   *Restart Policy* to *Never*; clear the pre-deploy command and health check
+   it inherits from `railway.json`. Give it no domain.
 4. **Variables** on the backup service:
 
    | Variable | Value |
