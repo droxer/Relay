@@ -39,12 +39,26 @@ def public_backend_url() -> str | None:
     A configured origin is authoritative; never infer it from untrusted
     forwarded headers. Plain HTTP is allowed only for loopback development.
     """
-    raw = os.environ.get("RELAY_PUBLIC_BACKEND_URL", "")
+    return _public_origin("RELAY_PUBLIC_BACKEND_URL")
+
+
+def public_web_url() -> str | None:
+    """Public web UI origin when it is not the backend origin.
+
+    The API host then redirects browser routes there, so a link built on the
+    backend origin (the computer-approval URL the installer opens) still lands
+    in the web UI. Unset means the backend serves the web UI itself.
+    """
+    return _public_origin("RELAY_PUBLIC_WEB_URL")
+
+
+def _public_origin(name: str) -> str | None:
+    raw = os.environ.get(name, "")
     value = raw.strip()
     if not value:
         return None
     message = (
-        "RELAY_PUBLIC_BACKEND_URL must be an HTTPS origin without credentials, "
+        f"{name} must be an HTTPS origin without credentials, "
         "path, query, or fragment (HTTP is allowed for loopback development)."
     )
     try:

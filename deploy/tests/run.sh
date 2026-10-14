@@ -137,7 +137,7 @@ check "both services track droxer/Relay@main" "[$BACKEND, $WEB] | all(.repo == \
 check "both deployments pin the requested commit" "[$BACKEND, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
 check "both services deployed once" "[$BACKEND, $WEB] | all(.deployments | length == 1)"
 check "backend reaches Postgres by reference" "$BACKEND | .variables.DATABASE_URL == \"\${{Postgres.DATABASE_URL}}\""
-check "backend public URL, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
+check "backend public URLs, CORS, and cookie domain" "$BACKEND | .variables | .RELAY_PUBLIC_BACKEND_URL == \"https://api.get-relay.cc\" and .RELAY_PUBLIC_WEB_URL == \"https://get-relay.cc\" and .RELAY_CORS_ALLOW_ORIGINS == \"https://get-relay.cc\" and .RELAY_SESSION_COOKIE_DOMAIN == \".get-relay.cc\""
 check "backend edge lock and client IP header" "$BACKEND | .variables | (.RELAY_EDGE_SECRET | length == 64) and .RELAY_CLIENT_IP_HEADER == \"CF-Connecting-IP\" and .RELAY_FORCE_SECURE_COOKIES == \"1\""
 check "backend admin token generated" "$BACKEND | .variables.RELAY_ADMIN_TOKEN | length == 64"
 check "no R2 variables without R2 config" "$BACKEND | .variables | has(\"RELAY_BLOB_STORE\") | not"

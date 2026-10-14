@@ -10,6 +10,7 @@ from relay.security.auth import user_session_cookie_attrs, user_session_cookie_s
 def clear_deploy_env(monkeypatch) -> None:
     for name in (
         "RELAY_PUBLIC_BACKEND_URL",
+        "RELAY_PUBLIC_WEB_URL",
         "RELAY_CORS_ALLOW_ORIGINS",
         "RELAY_CORS_ALLOW_ORIGIN_REGEX",
         "RELAY_SESSION_COOKIE_DOMAIN",
@@ -186,6 +187,31 @@ class TestPublicBackendUrl:
     def test_allows_http_loopback_for_development(self, monkeypatch, url) -> None:
         monkeypatch.setenv("RELAY_PUBLIC_BACKEND_URL", url)
         assert deploy_config.public_backend_url() == url
+
+
+class TestPublicWebUrl:
+    def test_optional_and_normalizes_trailing_slash(self, monkeypatch) -> None:
+        assert deploy_config.public_web_url() is None
+        monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", " https://relay.example.com/ ")
+        assert deploy_config.public_web_url() == "https://relay.example.com"
+
+    @pytest.mark.parametrize("url", [
+        "relay.example.com", "http://relay.example.com",
+        "https://user:secret@relay.example.com", "https://relay.example.com/app",
+    ])
+    def test_rejects_invalid_public_origins(self, monkeypatch, url) -> None:
+        monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", url)
+        with pytest.raises(RuntimeError, match="RELAY_PUBLIC_WEB_URL"):
+            deploy_config.public_web_url()
+
+
+def test_invalid_public_web_url_fails_before_startup(monkeypatch, tmp_path) -> None:
+    from relay.app import create_app
+
+    monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://user:secret@relay.example.com")
+    with pytest.raises(RuntimeError, match="RELAY_PUBLIC_WEB_URL") as error:
+        create_app(tmp_path)
+    assert "secret" not in str(error.value)
 
 
 def test_invalid_public_backend_url_fails_before_startup(monkeypatch, tmp_path) -> None:

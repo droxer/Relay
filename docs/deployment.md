@@ -171,6 +171,7 @@ This is the better steady state once you have a domain. Requires DNS.
    | `RELAY_STREAM_MAX_SECONDS` | `240` | **Option A only.** See [SSE through a proxy](#sse-through-a-proxy). |
    | `RELAY_LOG_LEVEL` | `INFO` | |
    | `RELAY_PUBLIC_BACKEND_URL` | `https://api.example.com` | Public backend origin used in computer connection commands. Use your Railway/custom API domain, without `/api/v1`. Required for reliable copy-out URLs behind proxies. |
+   | `RELAY_PUBLIC_WEB_URL` | `https://relay.example.com` | Web UI origin when it is not the backend. Browser routes opened on the API host, including the computer-approval link the installer prints, redirect here. |
 
    TLS terminates at Railway's edge, so the app sees plain HTTP. Enable proxy
    headers and restrict them to the edge's socket-peer IPs/CIDRs; Relay then
@@ -396,6 +397,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `HOST` / `BACKEND_HOST` | `127.0.0.1` | Listen interface; the image sets `0.0.0.0`. |
 | `DATABASE_URL` / `RELAY_DATABASE_URL` | — | Postgres URL. Bare `postgres://` and `postgresql://` are normalized to psycopg 3. |
 | `RELAY_PUBLIC_BACKEND_URL` | request base URL | Public HTTPS API origin for enrollment/reconnect commands and daemon environment. No path, credentials, query, or fragment. HTTP allowed only for loopback development. |
+| `RELAY_PUBLIC_WEB_URL` | unset | Public web UI origin for a split deployment; the API host redirects client routes (e.g. `/settings/computers?connect=…`) there. Same validation as `RELAY_PUBLIC_BACKEND_URL`. |
 | `RELAY_CORS_ALLOW_ORIGINS` | unset | Exact browser origins allowed to send credentials. |
 | `RELAY_CORS_ALLOW_ORIGIN_REGEX` | unset | Anchored origin pattern for preview deployments. |
 | `RELAY_SESSION_COOKIE_DOMAIN` | unset (host-only) | Cookie `Domain`, e.g. `.example.com`. |

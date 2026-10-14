@@ -89,7 +89,7 @@ deploy/deploy.sh verify
 ## What it sets
 
 **Backend variables:** `DATABASE_URL` (a reference to `Postgres`),
-`RELAY_PUBLIC_BACKEND_URL`, `RELAY_CORS_ALLOW_ORIGINS`,
+`RELAY_PUBLIC_BACKEND_URL`, `RELAY_PUBLIC_WEB_URL`, `RELAY_CORS_ALLOW_ORIGINS`,
 `RELAY_SESSION_COOKIE_DOMAIN=.get-relay.cc`, `RELAY_FORCE_SECURE_COOKIES`,
 `RELAY_EDGE_SECRET`, `RELAY_CLIENT_IP_HEADER=CF-Connecting-IP`,
 `RELAY_ADMIN_TOKEN`, and the R2 keys when configured. **Web variables:**

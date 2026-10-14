@@ -61,6 +61,7 @@ Cloudflare adds it to every request; the backend refuses requests without it.
    | `RELAY_EDGE_SECRET` | the secret |
    | `RELAY_CLIENT_IP_HEADER` | `CF-Connecting-IP` |
    | `RELAY_PUBLIC_BACKEND_URL` | `https://api.example.com` |
+   | `RELAY_PUBLIC_WEB_URL` | `https://relay.example.com` |
    | `RELAY_FORCE_SECURE_COOKIES` | `1` |
 
    Leave `RELAY_TRUST_PROXY_HEADERS` unset: Railway's edge has no stable
