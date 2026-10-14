@@ -190,12 +190,32 @@ def store_transaction(engine: Any) -> Any:
         yield joined
         return
 
+    pending = getattr(_TRANSACTION_STATE, "after_commit", None)
+    if pending is None:
+        pending = {}
+        _TRANSACTION_STATE.after_commit = pending
+    callbacks: list[Callable[[], None]] = []
     with engine.begin() as connection:
         connections[key] = connection
+        pending[key] = callbacks
         try:
             yield connection
         finally:
             connections.pop(key, None)
+            pending.pop(key, None)
+    # Reached only after the outer transaction committed successfully. Cleanup
+    # runs outside its connection scope, so it cannot participate in a rollback.
+    for callback in callbacks:
+        callback()
+
+
+def after_store_commit(engine: Any, callback: Callable[[], None]) -> None:
+    """Defer a side effect to the enclosing store commit, or run it immediately."""
+    callbacks = getattr(_TRANSACTION_STATE, "after_commit", {}).get(id(engine))
+    if callbacks is None:
+        callback()
+    else:
+        callbacks.append(callback)
 
 
 def json_type() -> Any:

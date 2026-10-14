@@ -4,8 +4,8 @@ from contextlib import nullcontext
 from typing import Any, Literal, Protocol, TypedDict
 
 from ..persistence.protocols import ChatStore, SessionStore, TaskStore
+from ..persistence.resource_lock import resource_transaction
 from ..persistence.task_store import TaskExecutionActiveError, dispatch_claim_active
-from ..persistence.store_common import store_transaction
 from ..sessions.controller import SessionController, SessionRunInFlightError
 
 TERMINAL_SESSION_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -54,7 +54,14 @@ def delete_task(
     execution_lifecycle: Any = None,
 ) -> TaskDeletionResult:
     engine = getattr(ctx.task_store, "engine", None)
-    with store_transaction(engine) if engine is not None else nullcontext():
+    # Lock before any task row is changed. Two replicas deleting tasks that
+    # share a thread must see each other's committed tombstones before deciding
+    # whether to preserve it. A common lock also keeps cascade lock order stable.
+    transaction = (
+        resource_transaction(engine, "relay.task-deletion")
+        if engine is not None else nullcontext()
+    )
+    with transaction:
         return _delete_task(ctx, task_id, actor, execution_lifecycle)
 
 
@@ -96,16 +103,15 @@ def _delete_task(
                 ctx.session_store, current, execution_lifecycle=execution_lifecycle
             ),
         )
+        related = [deleted]
         if task.get("isRoutine"):
             # Reload after locking/deleting the parent: concurrent promotion may
             # have appended an occurrence since the initial read.
-            related = [deleted]
             for occurrence_id in deleted.get("occurrenceIds", []):
                 try:
                     related.append(ctx.task_store.get_task(occurrence_id))
                 except (KeyError, FileNotFoundError):
                     continue
-            session_ids = {sid for record in related for sid in record.get("linkedSessionIds", [])}
             for record in related[1:]:
                 ctx.task_store.delete_task(
                     record["id"], deleted_by=actor_employee_id, reject_active_claim=True,
@@ -113,17 +119,28 @@ def _delete_task(
                         ctx.session_store, current, execution_lifecycle=execution_lifecycle
                     ),
                 )
-            controller = SessionController(ctx.session_store, task_store=ctx.task_store)
-            for session_id in sorted(session_ids):
-                try:
-                    session = ctx.session_store.get_session(session_id)
-                except (KeyError, FileNotFoundError):
-                    continue
-                if execution_lifecycle and not execution_lifecycle.status(session)["canDelete"]:
-                    raise TaskExecutionActiveError(task_id)
-                controller.delete_session(session_id, snapshot=session, deleted_by=actor_employee_id)
-                ctx.chat_store.clear_conversation_sessions(session_id)
-            deleted = ctx.task_store.get_task(task_id)
+        session_ids = {sid for record in related for sid in record.get("linkedSessionIds", [])}
+        _delete_task_threads(ctx, task_id, sorted(session_ids), actor_employee_id, execution_lifecycle)
+        deleted = ctx.task_store.get_task(task_id)
     except (TaskExecutionActiveError, SessionRunInFlightError) as error:
         raise TaskDeletionError("task_execution_active") from error
     return {"task": deleted, "outcome": "deleted"}
+
+
+def _delete_task_threads(
+    ctx: TaskDeletionContext, task_id: str, session_ids: list[str],
+    deleted_by: str | None, execution_lifecycle: Any,
+) -> None:
+    """A deleted task takes its threads with it, except one another live task also ran in."""
+    controller = SessionController(ctx.session_store, task_store=ctx.task_store)
+    for session_id in session_ids:
+        try:
+            session = ctx.session_store.get_session(session_id)
+        except (KeyError, FileNotFoundError):
+            continue
+        if ctx.task_store.list_tasks_for_session(session_id):
+            continue
+        if execution_lifecycle and not execution_lifecycle.status(session)["canDelete"]:
+            raise TaskExecutionActiveError(task_id)
+        controller.delete_session(session_id, snapshot=session, deleted_by=deleted_by)
+        ctx.chat_store.clear_conversation_sessions(session_id)

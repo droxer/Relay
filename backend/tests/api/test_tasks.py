@@ -1957,6 +1957,102 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
             assert client.delete(f"/api/v1/tasks/{routine['id']}").json()["outcome"] == "already_deleted"
 
 
+def test_task_delete_deletes_its_threads(monkeypatch) -> None:
+    from relay.persistence.store_common import relay_event
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        task = client.post("/api/v1/tasks", json={"title": "Backlog cleanup"}).json()
+        other = client.post("/api/v1/tasks", json={"title": "Still here"}).json()
+        tasks = client.app.state.task_store
+        sessions = client.app.state.session_store
+
+        def thread(goal: str) -> str:
+            session = sessions.create_session({
+                "workspacePath": root, "taskGoal": goal,
+                "participants": ["human", "codex"], "ownerEmployeeId": "admin",
+            })
+            sessions.append_event(session["id"], relay_event(
+                "session.completed", session["id"], {"outcome": "Done"}))
+            return session["id"]
+
+        rounds = [thread("Round one"), thread("Round two")]
+        for session_id in rounds:
+            tasks.link_session(task["id"], session_id)
+        # A thread another live task also ran in stays with that task.
+        shared = thread("Shared round")
+        tasks.link_session(task["id"], shared)
+        tasks.link_session(other["id"], shared)
+        unrelated = thread("Plain chat")
+
+        response = client.delete(f"/api/v1/tasks/{task['id']}")
+
+        assert response.status_code == 200
+        for session_id in rounds:
+            assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
+        assert client.get(f"/api/v1/threads/{shared}").status_code == 200
+        assert client.get(f"/api/v1/threads/{unrelated}").status_code == 200
+        assert client.get(f"/api/v1/tasks/{other['id']}").status_code == 200
+
+
+@pytest.mark.parametrize("routine", [False, True])
+def test_task_delete_rollback_preserves_artifact_snapshots(monkeypatch, routine) -> None:
+    from blob_fakes import MemoryBlobStore
+    from relay.persistence.store_common import relay_event
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        task = client.post("/api/v1/tasks", json={
+            "title": "Atomic cleanup",
+            **({"isRoutine": True, "routineTriggers": DAILY_TRIGGERS,
+                "routineState": "paused"} if routine else {}),
+        }).json()
+        sessions = client.app.state.session_store
+        blobs = MemoryBlobStore()
+        sessions.blob_store = blobs
+        ids = []
+        for index in range(2):
+            session = sessions.create_session({
+                "workspacePath": root, "taskGoal": f"Round {index}",
+                "participants": ["human"], "ownerEmployeeId": "admin",
+            })
+            sessions.append_event(session["id"], relay_event(
+                "session.completed", session["id"], {"outcome": "Done"}))
+            client.app.state.task_store.link_session(task["id"], session["id"])
+            ids.append(session["id"])
+        ids.sort()
+        artifact, _ = sessions.index_workspace_artifact(ids[0], {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "createdAt": "2026-10-14T00:00:00.000Z",
+            "kind": "workspace_file", "title": "result.txt",
+            "path": "/workspace/result.txt", "workspaceRelativePath": "result.txt",
+        }, b"saved result")
+        checks = {}
+
+        def status(session):
+            sid = session["id"]
+            checks[sid] = checks.get(sid, 0) + 1
+            # Routine preflight adds one check before the task's write guard.
+            return {"canDelete": sid != ids[-1] or checks[sid] < (3 if routine else 2)}
+
+        monkeypatch.setattr(client.app.state.execution_lifecycle, "status", status)
+        response = client.delete(f"/api/v1/tasks/{task['id']}")
+        assert response.status_code == 409
+        assert client.get(f"/api/v1/tasks/{task['id']}").status_code == 200
+        for sid in ids:
+            assert client.get(f"/api/v1/threads/{sid}").status_code == 200
+        assert sessions.read_artifact_content(ids[0], artifact["id"]) == b"saved result"
+        monkeypatch.setattr(client.app.state.execution_lifecycle, "status", lambda _: {"canDelete": True})
+        assert client.delete(f"/api/v1/tasks/{task['id']}").status_code == 200
+        assert blobs.blobs == {}
+        for sid in ids:
+            assert client.get(f"/api/v1/threads/{sid}").status_code == 404
+
+
 @pytest.mark.parametrize("routine", [False, True])
 @pytest.mark.parametrize("session_status", ["created", "waiting_for_human", "completed"])
 @pytest.mark.parametrize("reserved", [False, True])
@@ -1995,4 +2091,4 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
         assert response.status_code == (409 if reserved else 200), response.text
         assert client.get(f"/api/v1/tasks/{task['id']}").status_code == (200 if reserved else 404)
         assert client.get(f"/api/v1/threads/{session['id']}").status_code == (
-            404 if routine and not reserved else 200)
+            200 if reserved else 404)
