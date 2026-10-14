@@ -46,7 +46,7 @@ devbox/, dockerfile       The BoxLite guest image that sandboxed agents run in
 
 ## Rules the codebase depends on
 
-[`CLAUDE.md`](CLAUDE.md) lists the invariants in full. The ones most often relevant:
+[`AGENTS.md`](AGENTS.md) lists the invariants in full. The ones most often relevant:
 
 - **The backend never executes agents.** All execution flows through daemon commands.
 - **The event log is authoritative.** Snapshots and materialized fields are derived from it.

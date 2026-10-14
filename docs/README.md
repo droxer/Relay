@@ -20,10 +20,9 @@ document.
 - [`../backend/migrations/README.md`](../backend/migrations/README.md) —
   canonical database migration and legacy-session import procedure.
 - [`api.md`](api.md) — current browser-route and HTTP API contract.
-- [`../AGENTS.md`](../AGENTS.md) — Codex repository map, engineering
-  invariants, and verification guidance.
-- [`../CLAUDE.md`](../CLAUDE.md) — Claude Code commands, architecture details,
-  invariants, and test guidance.
+- [`../AGENTS.md`](../AGENTS.md) — the single agent guide (Codex, Claude Code,
+  and others): commands, architecture, invariants, and verification guidance.
+  [`../CLAUDE.md`](../CLAUDE.md) only imports it.
 - [`../CONTEXT.md`](../CONTEXT.md) — short canonical product terminology.
 - [`CODEX-NAVIGATION-GUIDE.md`](CODEX-NAVIGATION-GUIDE.md) — where behavior
   lives, which neighboring surfaces move with it, and what a review diff
