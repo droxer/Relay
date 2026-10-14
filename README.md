@@ -4,7 +4,7 @@
   <img src="assets/brand/relay-logo.svg" alt="Relay logo" width="380">
 </p>
 
-<p align="center"><strong>Every Employee. Amplified.</strong></p>
+<p align="center"><strong>Relay — The control plane for your AI workforce</strong></p>
 
 <p align="center">
   <a href="README.md">English</a> ·

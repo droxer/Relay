@@ -4,7 +4,7 @@
   <img src="assets/brand/relay-logo.svg" alt="Relay 标志" width="380">
 </p>
 
-<p align="center"><strong>让每一位员工，能力倍增。</strong></p>
+<p align="center"><strong>Relay——企业 AI 团队的控制平面</strong></p>
 
 <p align="center">
   <a href="README.md">English</a> ·
