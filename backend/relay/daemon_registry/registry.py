@@ -30,14 +30,18 @@ from ..collaboration.work import (
     is_answer_turn, QUESTION_RESUME, QUESTION_NOTE, predecessor_context, MAX_REPAIRS,
 )
 from ..collaboration.policy import (
+    BLOCKED_ROUND_PREAMBLE,
     PARTICIPANT_FAILURES_STATE_KEY,
     REPAIR_COUNT_STATE_KEY,
     REPAIR_NOTE_STATE_KEY,
     REPAIR_RESUME_INDEX_STATE_KEY,
+    ROUND_RESULT_REJECTED_STATE_KEY,
+    ROUND_RESULT_REJECTIONS,
     ROUND_RESULT_STATE_KEY,
     advance_after_success,
     assignment_reports_round_result,
     decide_failure,
+    is_question,
     next_work_transition,
     validate_round_result,
 )
@@ -197,6 +201,7 @@ CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
         REPAIR_RESUME_INDEX_STATE_KEY,
         REPAIR_NOTE_STATE_KEY,
         ROUND_RESULT_STATE_KEY,
+        ROUND_RESULT_REJECTED_STATE_KEY,
         PARTICIPANT_FAILURES_STATE_KEY,
         COLLABORATION_MANIFEST_STATE_KEY,
         COLLABORATION_FINGERPRINT_STATE_KEY,
@@ -2230,10 +2235,13 @@ class DaemonNodeRegistry:
             )
 
     def cancel_active_run(
-        self, sandbox_id: str, session_id: str, reason: str
+        self, sandbox_id: str, session_id: str, reason: str,
+        *, actor_employee_id: str | None = None,
     ) -> dict[str, Any] | None:
         with self.dispatch_lock:
-            return self._cancel_active_run_unlocked(sandbox_id, session_id, reason)
+            return self._cancel_active_run_unlocked(
+                sandbox_id, session_id, reason, actor_employee_id=actor_employee_id,
+            )
 
     def cancel_run_request_before_delivery(
         self, request_id: str, reason: str
@@ -2276,7 +2284,8 @@ class DaemonNodeRegistry:
             return cancelled
 
     def _cancel_active_run_unlocked(
-        self, sandbox_id: str, session_id: str, reason: str
+        self, sandbox_id: str, session_id: str, reason: str,
+        *, actor_employee_id: str | None = None,
     ) -> dict[str, Any] | None:
         active = next(
             (
@@ -2313,7 +2322,10 @@ class DaemonNodeRegistry:
         cancel_id = new_database_id()
         request = self.daemon_store.run_request_for_command(active["commandId"])
         if request:
-            stopping = self.daemon_store.request_run_stop(request["id"], active["commandId"], reason)
+            stopping = self.daemon_store.request_run_stop(
+                request["id"], active["commandId"], reason,
+                actor_employee_id=actor_employee_id,
+            )
             if not stopping:
                 return active
             cancel_id = stopping["state"]["_relay_stop_command_id"]
@@ -4003,7 +4015,10 @@ class DaemonNodeRegistry:
                     },
                 )
             if session_before.get("status") != "cancelled":
-                controller.cancel_session(run_request["sessionId"], event["reason"])
+                controller.cancel_session(
+                    run_request["sessionId"], event["reason"],
+                    actor_employee_id=state.get("_relay_stop_actor_employee_id"),
+                )
             self.daemon_store.update_run_request_if_claimed(
                 run_request["id"],
                 TERMINAL_CLAIM_ID_STATE_KEY,
@@ -4014,8 +4029,18 @@ class DaemonNodeRegistry:
                 run_request["nodeId"], {"status": "ready", "lastError": event["reason"]}
             )
             return
+        reports_round_result = self._assignment_reports_round_result(
+            assignments, run_request.get("currentIndex", 0)
+        )
+        # An agent that asked its human and then exited badly still asked: the
+        # question is the turn's result, and the exit code after it is noise
+        # (a timeout, a runtime quirk). Failing the run would drop the question
+        # the daemon already consumed and strand the task.
+        succeeded = event["exitCode"] == 0 or (
+            reports_round_result and is_question(self._round_result(event))
+        )
         work_result = None
-        if (run_request.get("state") or {}).get(WORK_PROTOCOL) and event.get("exitCode") == 0:
+        if (run_request.get("state") or {}).get(WORK_PROTOCOL) and succeeded:
             envelope = event.get("roundResult")
             work_result = validate_work_result(envelope.get("work") if isinstance(envelope, dict) else None)
         agent_log = event.get("agentLog") or self.output_for_run(event["runId"])
@@ -4043,25 +4068,31 @@ class DaemonNodeRegistry:
                     **({"runtimeSessionId": event["runtimeSessionId"]} if event.get("runtimeSessionId") else {}),
                     "assignmentId": assignment.get("assignmentId"),
                 },
+                fail_task=not succeeded,
             )
         )
-        if event["exitCode"] == 0:
+        if succeeded:
             self._record_generated_workspace_artifacts(
                 sandbox, run_request, event, artifact_snapshot, assignment
             )
         # Exactly one assignment speaks for the whole round: the last writable
         # member. Earlier per-member verdicts are deliberately ignored.
         round_result = (
-            self._round_result(event)
-            if event["exitCode"] == 0
-            and self._assignment_reports_round_result(
-                assignments, run_request.get("currentIndex", 0)
-            )
-            else None
+            self._round_result(event) if succeeded and reports_round_result else None
         )
         if round_result:
             next_state[ROUND_RESULT_STATE_KEY] = round_result
-        if event["exitCode"] == 0 and not existing_completion:
+        rejected = event.get("roundResultRejected")
+        if (
+            reports_round_result
+            and not round_result
+            and isinstance(rejected, dict)
+            and rejected.get("reason") in ROUND_RESULT_REJECTIONS
+        ):
+            # The daemon found a verdict file and refused it; say why on the
+            # task instead of reporting the verdict as simply missing.
+            next_state[ROUND_RESULT_REJECTED_STATE_KEY] = rejected["reason"]
+        if succeeded and not existing_completion:
             self._record_context_suggestions(run_request, event, assignment)
         if (run_request.get("state") or {}).get(WORK_PROTOCOL):
             next_state = record_work_result(
@@ -4072,7 +4103,7 @@ class DaemonNodeRegistry:
                     run_request.get("state") or {}, run_request.get("currentIndex", 0)
                 ),
             )
-        if event["exitCode"] != 0:
+        if not succeeded:
             # Agent-first assignments carry agentId/executorKind and no "agent"
             # key, so indexing it here raised before the request could be marked
             # failed — leaving it finalizing forever and re-raising on every
@@ -4528,11 +4559,7 @@ class DaemonNodeRegistry:
         # Its own blocked report also trips the acceptance gate, but quoting
         # the gate instead would replace the question with bookkeeping; the
         # gate applies again to the round the answer resumes.
-        asked = (
-            isinstance(round_result, dict)
-            and round_result.get("status") == "blocked"
-            and bool(round_result.get("note") or round_result.get("options"))
-        )
+        asked = is_question(round_result)
         if blockers:
             task_status = "waiting_for_human"
             if not asked:
@@ -4574,6 +4601,13 @@ class DaemonNodeRegistry:
             != "completed"
         ):
             controller.complete_session(
+                run_request["sessionId"], outcome, task_status=task_status,
+                work_outcome=work_outcome, input_request=input_request,
+            )
+        else:
+            # A retried finalization after a crash between the session write
+            # and the task write: settle the task the thread already reports.
+            controller.repair_completion(
                 run_request["sessionId"], outcome, task_status=task_status,
                 work_outcome=work_outcome, input_request=input_request,
             )
@@ -4626,7 +4660,7 @@ class DaemonNodeRegistry:
         if status == "done":
             return task_status, outcome
         if status == "blocked":
-            reason = "The round reported it is blocked."
+            reason = BLOCKED_ROUND_PREAMBLE
             return "waiting_for_human", f"{reason} {note}" if note else reason
         reason = "The round reported it is unfinished and asked to continue."
         # "assigned" puts the task back in the scheduler's queue. The budget is
@@ -4652,11 +4686,16 @@ class DaemonNodeRegistry:
             or DAEMON_CAPABILITY_ROUND_RESULT not in (node.get("capabilities") or [])
         ):
             return
+        rejected = (run_request.get("state") or {}).get(ROUND_RESULT_REJECTED_STATE_KEY)
+        message = (
+            f"Closed out without a round verdict: the agent's {ROUND_RESULT_RELATIVE_PATH} "
+            f"was rejected because {ROUND_RESULT_REJECTIONS[rejected]}."
+            if rejected in ROUND_RESULT_REJECTIONS
+            else "Closed out without a round verdict: the agent did not write "
+            f"{ROUND_RESULT_RELATIVE_PATH}."
+        )
         self.task_store.record_activity(
-            task_id,
-            "Closed out without a round verdict: the agent did not write "
-            f"{ROUND_RESULT_RELATIVE_PATH}.",
-            execution_owner=request_execution_owner(run_request),
+            task_id, message, execution_owner=request_execution_owner(run_request),
         )
 
     def _round_result_was_required(self, run_request: dict[str, Any]) -> bool:
@@ -4699,7 +4738,8 @@ class DaemonNodeRegistry:
         # by answering is attended: it opens a fresh budget, so "keep going"
         # after an exhausted budget buys more than the one round it ran.
         manifest = (run_request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
-        human_started = manifest.get("source") == "message"
+        # Both are person-only routes: an answer, or a rerun/handoff.
+        human_started = manifest.get("source") in ("message", "recovery")
         self.task_store.record_round(
             task_id,
             round_result=round_result,

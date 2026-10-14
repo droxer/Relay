@@ -1483,8 +1483,9 @@ def test_daemon_delivery_output_reaches_the_canonical_session_stream(
         assert any(event.get("type") == "session.completed" for event in payloads)
 
 
+@pytest.mark.parametrize("stop_as_admin", [False, True])
 def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
-    monkeypatch,
+    monkeypatch, stop_as_admin,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
@@ -1523,10 +1524,12 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
             headers={"Authorization": "Bearer node_token"},
         ).json()["commands"]
 
+        if not stop_as_admin:
+            client.cookies.clear()
         cancel = client.post(
             f"/api/v1/threads/{session_id}/cancellations",
             json={"reason": "no longer needed"},
-            headers={"Authorization": "Bearer ui_token"},
+            headers={} if stop_as_admin else {"Authorization": "Bearer ui_token"},
         )
         assert cancel.status_code == 202
         poll_url = (
@@ -1568,6 +1571,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
         stopped = app.state.session_store.get_session(session_id)
         assert stopped["agentRuns"][-1]["tokenUsage"]["total"] == 34
         assert stopped["tokenUsage"]["total"] == 34
+        assert stopped["decisions"][-1]["actorEmployeeId"] == ("admin" if stop_as_admin else "alice")
 
         after_terminal = client.get(
             "/api/v1/daemon-nodes/sbx_alice/commands?leaseMode=explicit&leaseSeconds=1",

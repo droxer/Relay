@@ -41,6 +41,10 @@ export type ComposerSendOptions = {
   intent?: ThreadMessageInput["intent"];
 };
 
+/** How dispatch should read the box. `literal`: the text is a picked answer,
+ *  sent as written — a leading "@" is the agent's wording, not an address. */
+export type ComposerDispatchOptions = { literal?: boolean };
+
 // Message composer: textarea, agent control, and the send/cancel
 // control. Draft state stays inside this component so every
 // keystroke does not re-render the full application shell and transcript.
@@ -76,7 +80,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   /** Agents `@` may name in this thread — the ones on its computer. Empty
    *  while staging a new thread, where the footer picker chooses the target. */
   mentionCandidates?: MentionCandidate[];
-  onSend: (style?: CollaborationStyle, intent?: ThreadMessageInput["intent"]) => void | Promise<boolean | void>;
+  onSend: (style?: CollaborationStyle, intent?: ThreadMessageInput["intent"], options?: ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
@@ -155,24 +159,28 @@ const ComposerView = forwardRef<ComposerHandle, {
   // already drifted: the button also refused a staged thread with no computer
   // picked, but `triggerSend` did not, so ⌘-Enter dispatched a round with no
   // runtime — the very bypass the mention comment below was added to close.
-  const cannotSend = readOnly
+  const cannotSendAsWritten = readOnly
     || !composerText.trim()
-    || parsed.blocked
     || (initializingThread && !projectName && !runtimeNodeId);
-  const triggerSend = async (intent?: ThreadMessageInput["intent"]): Promise<boolean> => {
+  const cannotSend = cannotSendAsWritten || parsed.blocked;
+  const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false): Promise<boolean> => {
     if (running || sendPending) return false;
     // The send button is disabled on a mention that resolves to nobody, and on
     // a staged thread with no computer, but the keyboard shortcut bypasses the
     // button — a blocked draft sent anyway would address the whole room instead
     // of the agent the author named, and one with no computer has nowhere to run.
-    if (cannotSend) return false;
+    // A picked answer names nobody, so only the second half applies to it.
+    if (literal ? cannotSendAsWritten : cannotSend) return false;
     setSendPending(true);
     try {
       // A style shapes team work; a question hands out none.
-      const teamStyle = activeTeamId && !projectName && !addressedLogicalAgentId && (intent ?? "accomplish") === "accomplish"
+      const addressed = literal ? null : addressedLogicalAgentId;
+      const teamStyle = activeTeamId && !projectName && !addressed && (intent ?? "accomplish") === "accomplish"
         ? style ?? undefined
         : undefined;
-      const sent = await (intent ? onSend(teamStyle, intent) : onSend(teamStyle));
+      const sent = await (literal
+        ? onSend(teamStyle, intent, { literal: true })
+        : intent ? onSend(teamStyle, intent) : onSend(teamStyle));
       if (sent === false) return false;
       setStyle(null);
       return true;
@@ -199,6 +207,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // A picked answer lands in the box first, then sends once the box (and the
   // handle dispatch reads it through) holds it.
   const queuedSendRef = useRef<{ text: string; intent?: ThreadMessageInput["intent"]; resolve: (sent: boolean) => void } | null>(null);
+  // A pick's `literal` read reaches the send through the queue, never the box.
   const triggerSendRef = useRef(triggerSend);
   // Declared first so the queued send below sees this render's closure.
   useEffect(() => { triggerSendRef.current = triggerSend; });
@@ -206,7 +215,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     const queued = queuedSendRef.current;
     if (!queued || queued.text !== composerText) return;
     queuedSendRef.current = null;
-    void triggerSendRef.current(queued.intent).then(queued.resolve);
+    void triggerSendRef.current(queued.intent, true).then(queued.resolve);
   }, [composerText]);
   useEffect(() => () => {
     queuedSendRef.current?.resolve(false);
@@ -222,16 +231,21 @@ const ComposerView = forwardRef<ComposerHandle, {
       queuedSendRef.current = null;
       const intent = options?.intent;
       // Whatever the person had started typing is theirs: it goes back in the
-      // box once the picked answer has gone (or failed to).
+      // box once the picked answer has gone. A pick that failed leaves the box
+      // exactly as it was, empty included — the answer was never a draft, and
+      // a stale one sitting there reads as if it still needs sending.
+      const previous = composerText;
       const draft = composerText.trim() && composerText !== text ? composerText : null;
       const sent = text === composerText
-        ? triggerSendRef.current(intent)
+        ? triggerSendRef.current(intent, true)
         : new Promise<boolean>((resolve) => {
           queuedSendRef.current = { text, intent, resolve };
           setComposerText(text);
         });
-      return draft === null ? sent : sent.then((ok) => {
-        setComposerText(draft);
+      return sent.then((ok) => {
+        // Only while the box still holds the pick: a newer pick may own it.
+        if (!ok) setComposerText((current) => (current === text ? previous : current));
+        else if (draft !== null) setComposerText(draft);
         return ok;
       });
     },

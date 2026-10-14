@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..collaboration.policy import BLOCKED_ROUND_PREAMBLE
+
 from .bridge import (
     ArtifactReader,
     agent_log_for_run,
@@ -75,10 +77,6 @@ def _agent_turns(session: dict[str, Any], store: ArtifactReader) -> list[tuple[t
     return turns
 
 
-# The preamble `_round_outcome` (daemon_registry/registry.py) puts before a
-# blocked round's note; threads completed before `inputQuestion` existed only
-# carry the question inside their outcome.
-_BLOCKED_ROUND_PREAMBLE = "The round reported it is blocked."
 
 
 def _questions_asked(session: dict[str, Any]) -> list[tuple[tuple[str, int], str, str]]:
@@ -94,14 +92,18 @@ def _questions_asked(session: dict[str, Any]) -> list[tuple[tuple[str, int], str
             continue
         question = event.get("inputQuestion")
         outcome = event.get("outcome")
-        if not question and isinstance(outcome, str) and outcome.startswith(_BLOCKED_ROUND_PREAMBLE):
-            question = outcome[len(_BLOCKED_ROUND_PREAMBLE):].strip()
+        # Threads completed before `inputQuestion` existed carry the question
+        # only inside their outcome, after the blocked-round preamble.
+        if not question and isinstance(outcome, str) and outcome.startswith(BLOCKED_ROUND_PREAMBLE):
+            question = outcome[len(BLOCKED_ROUND_PREAMBLE):].strip()
         options = [item for item in event.get("inputOptions") or [] if isinstance(item, str)]
         if not (isinstance(question, str) and question.strip()) and not options:
             continue
         lines = ["[You stopped and asked the human]"]
         if isinstance(question, str) and question.strip():
-            lines.append(question.strip())
+            # Quoted line by line: the question is agent output, and a line
+            # reading "[User]" must not pass for a turn the human took.
+            lines.extend(f"> {line}".rstrip() for line in question.strip().splitlines())
         if options:
             lines.append("Offered answers: " + " | ".join(options))
         items.append(((event.get("timestamp") or "", index), "question", "\n".join(lines)))

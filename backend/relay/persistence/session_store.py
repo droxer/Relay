@@ -5,7 +5,8 @@ import json
 import shutil
 import time
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
@@ -282,6 +283,12 @@ class LocalSessionStore:
             self._event_listener(session_id)
         except Exception:  # noqa: BLE001 - notification hints must not fail writes
             logger.exception("Session event listener failed", session_id=session_id)
+
+    @contextmanager
+    def mutation_scope(self, session_id: str) -> Iterator[None]:
+        """Keep a session check and its event append in one critical section."""
+        with self._lock:
+            yield
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         with self._lock:
@@ -1248,6 +1255,13 @@ class DatabaseSessionStore:
             self._event_listener(session_id)
         except Exception:  # noqa: BLE001 - notification hints must not fail writes
             logger.exception("Session event listener failed", session_id=session_id)
+
+    @contextmanager
+    def mutation_scope(self, session_id: str) -> Iterator[None]:
+        """Serialize validation and append with admission on other replicas."""
+        with store_transaction(self.engine) as conn:
+            self._session_pk(conn, _canonical_database_session_id(session_id), lock=True)
+            yield
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         session_pk = _canonical_database_session_id(session_id)

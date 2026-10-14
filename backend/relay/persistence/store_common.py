@@ -448,8 +448,11 @@ def _apply_session_status(session: dict[str, Any], event: dict[str, Any]) -> Non
     if event["status"] not in ("completed", "failed"):
         session.pop("finalOutcome", None)
         session.pop("workOutcome", None)
-        for field in INPUT_REQUEST_FIELDS:
-            session.pop(field, None)
+        # A reject parks the thread for feedback on the turn; the question that
+        # turn asked is still what its task waits on, so it stays quoted.
+        if event.get("pendingDecision") != "feedback":
+            for field in INPUT_REQUEST_FIELDS:
+                session.pop(field, None)
 
 
 def _apply_collaboration_round_started(

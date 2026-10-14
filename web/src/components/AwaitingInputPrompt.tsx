@@ -20,6 +20,9 @@ type Choice = {
 
 /** Typing here is someone writing, not picking an answer. */
 const TYPING_TARGET = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"]';
+/** Long enough after mount that the live region is in the accessibility tree
+ *  before its words arrive; filled at insertion it is not reliably read. */
+const ANNOUNCE_DELAY_MS = 150;
 
 /**
  * The prompt for a thread that is parked on its human.
@@ -32,7 +35,8 @@ const TYPING_TARGET = 'input, textarea, select, [contenteditable=""], [contented
  * Answering should be a pick, not a chore: the agent's offered answers (or,
  * for a gate stop, the two next steps that always make sense) are one click
  * each and send as the reply — by click or by its number key while nothing
- * else has focus. Typing stays available for anything else.
+ * else has focus (or focus is on the prompt itself). Typing stays available
+ * for anything else.
  */
 export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, onReply }: {
   waiting: AwaitingInput;
@@ -45,7 +49,16 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
 }) {
   const { t } = useTranslation();
   const headingId = useId();
+  const sectionRef = useRef<HTMLElement | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
+  // A prompt appearing when a round finishes is news to a screen reader user
+  // whose focus is elsewhere. Said once: the words never change afterwards,
+  // so later renders say nothing.
+  const [announced, setAnnounced] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAnnounced(true), ANNOUNCE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
   const { task } = waiting;
   const ref = task ? taskRef(task) : null;
   const taskHref = task ? pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId: task.id }) : null;
@@ -75,6 +88,11 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.target instanceof Element && event.target.closest(TYPING_TARGET)) return;
+      // An irreversible reply must not fire from a key meant for something
+      // else: with focus on any other control (a row, a link, a button) the
+      // number belongs to that control's surface, not to this prompt.
+      const focused = document.activeElement;
+      if (focused && focused !== document.body && !sectionRef.current?.contains(focused)) return;
       const index = Number(event.key) - 1;
       if (!Number.isInteger(index) || index < 0 || index >= choiceCount) return;
       event.preventDefault();
@@ -88,15 +106,15 @@ export function AwaitingInputPrompt({ waiting, agentName, agentImage, onChoose, 
     : choices.length
       ? (ref ? t("awaiting.hint_choices_task", { ref }) : t("awaiting.hint_choices_thread"))
       : (ref ? t("awaiting.hint_task", { ref }) : t("awaiting.hint_thread"));
+  const title = t(waiting.kind === "question" ? "awaiting.question_title" : "awaiting.check_title", { agent: agentName });
   return (
-    <section className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
+    <section ref={sectionRef} className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
+      <p role="status" className="sr-only">{announced ? title : ""}</p>
       <div className="awaiting-input-head">
         <span className="awaiting-input-avatar" aria-hidden="true">
           <ProfileImage src={agentImage} alt="" fallback={<IdentityMark kind="agent" />} />
         </span>
-        <h2 id={headingId} className="awaiting-input-title">
-          {t(waiting.kind === "question" ? "awaiting.question_title" : "awaiting.check_title", { agent: agentName })}
-        </h2>
+        <h2 id={headingId} className="awaiting-input-title">{title}</h2>
         {task && taskHref ? (
           <a
             className="awaiting-input-task"

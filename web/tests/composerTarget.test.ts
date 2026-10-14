@@ -88,7 +88,10 @@ describe("composer agent selection", () => {
     // now feeds both, which is the property under test — not its exact spelling.
     assert.match(composer, /const cannotSend =/);
     assert.match(composer, /initializingThread && !projectName && !runtimeNodeId/);
-    assert.match(composer, /if \(cannotSend\) return false;/);
+    // A picked answer (`literal`) names nobody, so it skips only the mention
+    // check; the no-computer guard lives in `cannotSendAsWritten` for both.
+    assert.match(composer, /const cannotSend = cannotSendAsWritten \|\| parsed\.blocked;/);
+    assert.match(composer, /if \(literal \? cannotSendAsWritten : cannotSend\) return false;/);
     assert.match(composer, /disabled=\{!running && \(sendPending \|\| cannotSend\)\}/);
     // The guard must not be restated on the button alone.
     assert.equal(composer.match(/initializingThread && !projectName && !runtimeNodeId/g)?.length, 1);
@@ -127,7 +130,7 @@ describe("composer agent selection", () => {
     // directly, and a blocked draft sent that way addresses the whole room
     // instead of the agent the author named.
     assert.match(composer, /const cannotSend =[\s\S]*?parsed\.blocked/);
-    assert.match(composer, /const triggerSend = async \([^)]*\): Promise<boolean> => \{[\s\S]*?if \(cannotSend\) return false;/);
+    assert.match(composer, /const triggerSend = async \([^)]*\): Promise<boolean> => \{[\s\S]*?if \(literal \? cannotSendAsWritten : cannotSend\) return false;/);
   });
 
   it("shows the addressed agent in the footer while the draft names one", async () => {

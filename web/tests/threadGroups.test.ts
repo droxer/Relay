@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { groupThreads } from "../src/lib/threadGroups.js";
 import type { ThreadItem } from "../src/lib/threads.js";
-import type { AgentName, RelaySession } from "../src/types.js";
+import type { AgentName, RelaySession, RelayTaskListItem } from "../src/types.js";
 
 function item(
   id: string,
@@ -77,6 +77,23 @@ describe("groupThreads awaiting an answer", () => {
     const { needsYou, idle } = groupThreads([settled("a", "completed")]);
     assert.deepEqual(needsYou.map((c) => c.session.id), ["a"]);
     assert.equal(idle.length, 0);
+  });
+
+  it("follows the thread's task rather than its stale blocked outcome", () => {
+    const scoped = (id: string): ThreadItem => {
+      const base = settled(id, "completed");
+      return { ...base, session: { ...base.session, activeRoundId: "r", collaborationRounds: [{ roundId: "r", workScope: { kind: "task", taskId: `task_${id}` } }] } as RelaySession };
+    };
+    const tasks = [
+      { id: "task_a", status: "done", isRoutine: false, linkedSessionIds: ["a"] },
+      { id: "task_c", status: "waiting_for_human", isRoutine: false, waitingSessionId: "c", linkedSessionIds: ["c"] },
+    ] as RelayTaskListItem[];
+    const answered = item("c", "completed");
+    const { needsYou, idle } = groupThreads([scoped("a"), scoped("b"), answered], tasks);
+    // a: its task is done. b: its task is not loaded, so its own record stands.
+    // c: its last turn was a status question, but its task still waits here.
+    assert.deepEqual(needsYou.map((c) => c.session.id), ["b", "c"]);
+    assert.deepEqual(idle.map((c) => c.session.id), ["a"]);
   });
 
   it("keeps a failed thread idle even though its outcome reads blocked", () => {
