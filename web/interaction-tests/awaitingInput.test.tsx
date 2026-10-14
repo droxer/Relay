@@ -60,14 +60,25 @@ it("allows another choice and a custom reply after dispatch rejects an answer", 
   finish(true);
 });
 
-it("unlocks the prompt when an answer fails local mention validation", async () => {
+it("sends an answer that starts with @ as plain text, not as a mention", async () => {
   const onSend = vi.fn(async () => true);
   setup(onSend, ["@Unknown deploy", "Staging"]);
   fireEvent.click(screen.getByRole("button", { name: "@Unknown deploy" }));
-  await waitFor(() => expect((screen.getByRole("button", { name: "Staging" }) as HTMLButtonElement).disabled).toBe(false));
-  expect(onSend).not.toHaveBeenCalled();
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  expect(onSend).toHaveBeenLastCalledWith(undefined, undefined, { literal: true });
+});
+
+it("puts the box back exactly as it was when a picked answer fails", async () => {
+  const onSend = vi.fn(async () => false);
+  const { ref } = setup(onSend);
   fireEvent.click(screen.getByRole("button", { name: "Staging" }));
   await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+  await waitFor(() => expect(ref.current?.getText()).toBe(""));
+  await waitFor(() => expect((screen.getByRole("button", { name: "Staging" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Actually, wait" } });
+  fireEvent.click(screen.getByRole("button", { name: "Production" }));
+  await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(ref.current?.getText()).toBe("Actually, wait"));
 });
 
 it("unlocks the prompt when dispatch throws", async () => {
@@ -97,12 +108,40 @@ it("picks an answer by its number key, but never while someone is typing", async
   expect(ref.current?.getText()).toBe("Production");
 });
 
+it("leaves number keys alone while focus is on another control or a modifier is held", async () => {
+  const onSend = vi.fn(async () => true);
+  setup(onSend);
+  const elsewhere = document.createElement("button");
+  elsewhere.textContent = "Open settings";
+  document.body.append(elsewhere);
+  elsewhere.focus();
+  fireEvent.keyDown(elsewhere, { key: "1" });
+  elsewhere.blur();
+  fireEvent.keyDown(document.body, { key: "1", ctrlKey: true });
+  fireEvent.keyDown(document.body, { key: "1", metaKey: true });
+  fireEvent.keyDown(document.body, { key: "1", altKey: true });
+  elsewhere.remove();
+  expect(onSend).not.toHaveBeenCalled();
+  // Inside the prompt the keys are the prompt's own.
+  const first = screen.getByRole("button", { name: "Staging" });
+  first.focus();
+  fireEvent.keyDown(first, { key: "2" });
+  await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+});
+
+it("announces the prompt once, after it has appeared", async () => {
+  setup(vi.fn(async () => true));
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("");
+  await waitFor(() => expect(status.textContent).toBe("awaiting.question_title"));
+});
+
 it("asks for status without handing the agent a task round", async () => {
   const onSend = vi.fn(async () => true);
   setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
   fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_status" }));
   await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
-  expect(onSend).toHaveBeenLastCalledWith(undefined, "discuss");
+  expect(onSend).toHaveBeenLastCalledWith(undefined, "discuss", { literal: true });
 });
 
 it("sends keep-going as an ordinary reply that resumes the work", async () => {
@@ -110,7 +149,7 @@ it("sends keep-going as an ordinary reply that resumes the work", async () => {
   setup(onSend, [], { kind: "check", text: "A required step failed to run.", options: [], notes: [] });
   fireEvent.click(screen.getByRole("button", { name: "awaiting.choice_continue" }));
   await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
-  expect(onSend).toHaveBeenLastCalledWith(undefined);
+  expect(onSend).toHaveBeenLastCalledWith(undefined, undefined, { literal: true });
 });
 
 it("shows what else held the work up under the question", () => {

@@ -35,6 +35,11 @@ def merge_agent_state(state: dict[str, Any], patch: dict[str, Any]) -> dict[str,
     }
 
 
+def _decided_by(actor_employee_id: str | None) -> dict[str, str]:
+    """Who made a human decision — the audit trail of every approval."""
+    return {"actorEmployeeId": actor_employee_id} if actor_employee_id else {}
+
+
 class SessionArchivedError(Exception):
     def __init__(self, session_id: str) -> None:
         super().__init__(f"Session {session_id} is archived.")
@@ -216,39 +221,75 @@ class SessionController:
         self, session_id: str, outcome: str, task_status: str = "done",
         *, work_outcome: str = "unverified",
         input_request: dict[str, Any] | None = None,
+        accepted_by_human: bool = False,
     ) -> dict[str, Any]:
+        """Close the thread and settle its task.
+
+        ``accepted_by_human`` marks a person's own acceptance (mark done): a
+        human-acceptance task then closes as done instead of going to review,
+        which would ask the same person the same question twice.
+        """
         with self._transaction():
+            return self._complete_session(
+                session_id, outcome, task_status, work_outcome, input_request,
+                accepted_by_human=accepted_by_human,
+            )
+
+    def repair_completion(
+        self, session_id: str, outcome: str, task_status: str = "done",
+        *, work_outcome: str = "unverified",
+        input_request: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Finish a completion whose session write landed but task write did not.
+
+        A no-op unless the thread is already completed with exactly this
+        result: a different completion (a person's mark done, say) is newer
+        than the one being retried and must not be overwritten.
+        """
+        with self._transaction():
+            current = self.store.get_session(session_id)
+            if not self._completed_with(current, outcome, work_outcome, input_request):
+                return current
             return self._complete_session(
                 session_id, outcome, task_status, work_outcome, input_request
             )
+
+    @staticmethod
+    def _completed_with(
+        current: dict[str, Any], outcome: str, work_outcome: str,
+        input_request: dict[str, Any] | None,
+    ) -> bool:
+        request = {key: value for key, value in (input_request or {}).items() if value}
+        current_request = {
+            key: current[key] for key in ("inputQuestion", "inputOptions", "inputNotes")
+            if current.get(key)
+        }
+        return (
+            current.get("status") == "completed"
+            and current.get("finalOutcome") == outcome
+            and current.get("workOutcome") == work_outcome
+            and current_request == request
+        )
 
     def _complete_session(
         self, session_id: str, outcome: str, task_status: str = "done",
         work_outcome: str = "unverified",
         input_request: dict[str, Any] | None = None,
+        *, accepted_by_human: bool = False,
     ) -> dict[str, Any]:
         # Keep structured human input fields in both completion
         # events and task closeout, including a retry after a partial write.
         request = {key: value for key, value in (input_request or {}).items() if value}
         task_extras = {"sessionId": session_id, **({"request": request} if request else {})}
         current = self.store.get_session(session_id)
-        current_request = {
-            key: current[key] for key in ("inputQuestion", "inputOptions", "inputNotes")
-            if current.get(key)
-        }
-        if (
-            current.get("status") == "completed"
-            and current.get("finalOutcome") == outcome
-            and current.get("workOutcome") == work_outcome
-            and current_request == request
-        ):
+        if self._completed_with(current, outcome, work_outcome, request):
             # File-backed stores can persist the session before a task write
             # fails. Repair that write, fenced by this execution's original
             # owner, without duplicating the session event or task transition.
             if self.task_store and self.task_id:
                 task = self.task_store.get_task(self.task_id)
                 expected = (
-                    "review" if task_status == "done"
+                    "review" if task_status == "done" and not accepted_by_human
                     and task.get("acceptancePolicy", "automatic") == "human"
                     else task_status
                 )
@@ -262,6 +303,7 @@ class SessionController:
                         execution_owner=self.task_execution_owner or {
                             "requestId": session_id, "revision": 0,
                         },
+                        accepted_by_human=accepted_by_human,
                     )
             return current
 
@@ -272,7 +314,7 @@ class SessionController:
             }),
         )
         self._update_task_status(
-            task_status, outcome, task_extras,
+            task_status, outcome, task_extras, accepted_by_human=accepted_by_human,
         )
         logger.info("Session completed", session_id=session_id, outcome=outcome)
         return session
@@ -341,13 +383,17 @@ class SessionController:
         )
 
     def cancel_session(
-        self, session_id: str, note: str = "Cancelled by human."
+        self, session_id: str, note: str = "Cancelled by human.",
+        *, actor_employee_id: str | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
-            return self._cancel_session(session_id, note)
+            return self._cancel_session(
+                session_id, note, actor_employee_id=actor_employee_id
+            )
 
     def _cancel_session(
-        self, session_id: str, note: str = "Cancelled by human."
+        self, session_id: str, note: str = "Cancelled by human.",
+        *, actor_employee_id: str | None = None,
     ) -> dict[str, Any]:
         current = self.store.get_session(session_id)
         if current["status"] == "cancelled":
@@ -363,6 +409,7 @@ class SessionController:
                         "kind": "cancel",
                         "createdAt": now_iso(),
                         "note": note,
+                        **_decided_by(actor_employee_id),
                     }
                 },
             ),
@@ -379,10 +426,12 @@ class SessionController:
         target_agent: str | None = None,
         *,
         decision_id: str | None = None,
+        actor_employee_id: str | None = None,
     ) -> dict[str, Any]:
         with self._transaction():
             return self._record_decision(
-                session_id, kind, note, target_agent, decision_id=decision_id
+                session_id, kind, note, target_agent, decision_id=decision_id,
+                actor_employee_id=actor_employee_id,
             )
 
     def _record_decision(
@@ -393,9 +442,13 @@ class SessionController:
         target_agent: str | None = None,
         *,
         decision_id: str | None = None,
+        actor_employee_id: str | None = None,
     ) -> dict[str, Any]:
         if kind == "cancel":
-            return self.cancel_session(session_id, note or "Cancelled by human.")
+            return self.cancel_session(
+                session_id, note or "Cancelled by human.",
+                actor_employee_id=actor_employee_id,
+            )
         if decision_id:
             current = self.store.get_session(session_id)
             if any(
@@ -409,6 +462,7 @@ class SessionController:
             "createdAt": now_iso(),
             **({"note": note} if note else {}),
             **({"targetAgent": target_agent} if target_agent else {}),
+            **_decided_by(actor_employee_id),
         }
         logger.info(
             "Human decision recorded",
@@ -460,7 +514,7 @@ class SessionController:
         if kind == "mark_done":
             return self.complete_session(
                 session_id, note or "Marked done from Relay API.",
-                work_outcome="accepted",
+                work_outcome="accepted", accepted_by_human=True,
             )
         if kind == "rerun":
             return self._append(
@@ -497,13 +551,14 @@ class SessionController:
         target_agent_id: str | None = None,
         *,
         decision_id: str | None = None,
+        actor_employee_id: str | None = None,
     ) -> dict[str, Any]:
         # A decision ID is the retry receipt. It must not become durable
         # before the assignment artifact and final handoff status do.
         with self._transaction():
             return self._handoff_session(
                 session_id, target_agent, assignments, note, target_agent_id,
-                decision_id=decision_id,
+                decision_id=decision_id, actor_employee_id=actor_employee_id,
             )
 
     def _handoff_session(
@@ -515,6 +570,7 @@ class SessionController:
         target_agent_id: str | None = None,
         *,
         decision_id: str | None = None,
+        actor_employee_id: str | None = None,
     ) -> dict[str, Any]:
         if decision_id:
             current = self.store.get_session(session_id)
@@ -541,6 +597,7 @@ class SessionController:
                             if target_agent_id
                             else {}
                         ),
+                        **_decided_by(actor_employee_id),
                     }
                 },
             ),
@@ -804,7 +861,8 @@ class SessionController:
         )
 
     def record_agent_completed(
-        self, session_id: str, state: dict[str, Any], step_result: dict[str, Any]
+        self, session_id: str, state: dict[str, Any], step_result: dict[str, Any],
+        *, fail_task: bool = True,
     ) -> dict[str, Any]:
         logger.info(
             "Agent run completed",
@@ -842,7 +900,9 @@ class SessionController:
         self._append(
             session_id, relay_event("agent.completed", session_id, completed_payload)
         )
-        if step_result["status"] == "failed":
+        # A handled human question may have a failed CLI exit. Keep the run's
+        # exit evidence without triggering task failure automations.
+        if step_result["status"] == "failed" and fail_task:
             self._update_task_status(
                 "blocked",
                 f"{step_result['agent']} failed with exit code {step_result['exitCode']}.",
@@ -887,6 +947,7 @@ class SessionController:
     def _update_task_status(
         self, status: str, message: str, extras: dict[str, Any] | None = None,
         *, execution_owner: dict[str, Any] | None = None,
+        accepted_by_human: bool = False,
     ) -> None:
         if not self.task_store:
             return
@@ -899,7 +960,10 @@ class SessionController:
             task_ids = []
         for task_id in task_ids:
             next_status = status
-            if status == "done" and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human":
+            if (
+                status == "done" and not accepted_by_human
+                and self.task_store.get_task(task_id).get("acceptancePolicy", "automatic") == "human"
+            ):
                 next_status = "review"
             payload: dict[str, Any] = {"status": next_status, "reason": message}
             if next_status == "waiting_for_human" and extras.get("sessionId"):

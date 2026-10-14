@@ -128,9 +128,9 @@ function promptPreludes(state: AgentState): string[] {
       [
         "[Finishing]",
         `When you stop, write \`${state.round_result_file}\` as JSON: {"status": "done" | "continue" | "blocked", "note": "<one line>"}.`,
-        'When blocked, "note" is the question for the human. If the answer is one of a few choices, add "options": ["<short answer>", …] (2–6 complete answers the human can pick as is); omit it for open questions.',
+        'When blocked, put the question for the human in "note". If the answer is one of a few choices, add "options": ["<short answer>", …] with 2–6 complete, distinct answers the human can pick as is; otherwise omit "options" entirely (a single option is dropped).',
         ...(state.round_result_run_id
-          ? [`Include "runId": ${JSON.stringify(state.round_result_run_id)} in that JSON; verdicts for other runs are rejected.`]
+          ? [`Include "runId": ${JSON.stringify(state.round_result_run_id)} in that JSON. Copy "runId" exactly; a verdict with any other runId is rejected.`]
           : []),
         '"done" means the requested work is complete, "continue" means real work remains, "blocked" means you cannot proceed without a human.',
         ...(state.project_brief

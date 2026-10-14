@@ -48,7 +48,7 @@ import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { useDialogs } from "./components/ui/DialogProvider";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { ThreadsView } from "./components/ThreadsView";
-import type { ComposerHandle } from "./components/composer/Composer";
+import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
 import type { DerivedMessage } from "./components/MessageBlock";
 import { useProjectedMessages } from "./hooks/useProjectedMessages";
 import type { AppRoute } from "./lib/viewTypes";
@@ -631,7 +631,7 @@ export function App() {
     reportMutationError, t,
   });
 
-  const handleComposerSend = useStableEvent((style?: CollaborationStyle, intent?: ThreadMessageInput["intent"]) => sendMessage(style, intent));
+  const handleComposerSend = useStableEvent((style?: CollaborationStyle, intent?: ThreadMessageInput["intent"], options?: ComposerDispatchOptions) => sendMessage(style, intent, options));
   const handleCancelRun = useStableEvent(() => { void cancelActiveRun(); });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleResumeAgent = useStableEvent((agent: AgentName, agentId?: string) => { void resumeAgentMessage(agent, agentId); });

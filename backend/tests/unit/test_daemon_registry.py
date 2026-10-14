@@ -8276,3 +8276,204 @@ def test_only_a_rerun_decision_can_ask_to_resume():
     assert _validated_decision({"kind": "rerun", "resume": True}, target)["resume"] is True
     assert "resume" not in _validated_decision({"kind": "rerun"}, target)
     assert "resume" not in _validated_decision({"kind": "handoff", "resume": True}, target)
+
+
+def _report_blocked(registry: Any, command: dict[str, Any], **event: Any) -> None:
+    registry.handle_event(
+        "sbx_alice",
+        {
+            "type": "run.completed",
+            "commandId": command["id"],
+            "sessionId": command["sessionId"],
+            "runId": command["runId"],
+            "agent": "codex",
+            "agentLog": "asked",
+            **event,
+        },
+        "node_token",
+    )
+
+
+def test_a_question_survives_the_cli_exiting_badly_after_asking() -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            _report_blocked(registry, command, exitCode=1, roundResult={
+                "status": "blocked", "note": "Which region?", "options": ["eu", "us"],
+            })
+
+            # The agent finished its turn by asking; the exit code that followed
+            # is noise, and dropping the question would strand the task.
+            waiting = task_store.get_task(task["id"])
+            assert waiting["status"] == "waiting_for_human"
+            assert waiting["waitingRequest"]["inputQuestion"] == "Which region?"
+            assert waiting["waitingRequest"]["inputOptions"] == ["eu", "us"]
+            session = sessions.get_session(command["sessionId"])
+            assert session["status"] == "completed"
+            [completed] = [
+                event for event in session["events"] if event["type"] == "agent.completed"
+            ]
+            # The run's own record keeps the truth about how the CLI exited.
+            assert completed["exitCode"] == 1
+            # A handled question must not trigger execution-failure automations.
+            transitions = [event["status"] for event in waiting["events"] if event["type"] == "task.status"]
+            assert "blocked" not in transitions
+
+    asyncio.run(run_flow())
+
+
+@pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
+@pytest.mark.parametrize("terminal_type", ["run.cancelled", "run.completed"])
+def test_stop_keeps_its_actor_across_registry_restart(store_factory, terminal_type) -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root, store_factory)
+            task = tasks.create_task({"title": "Stop audit"})
+            backend = ServerDaemonNodeBackend(registry)
+            command = await _run_task_round(registry, backend, task["id"])
+            backend.cancel_run("sbx_alice", command["sessionId"], "Stop", actor_employee_id="alice")
+            registry.cancel_active_run("sbx_alice", command["sessionId"], "Stop again", actor_employee_id="other")
+            # Finalization may happen on another backend instance.
+            registry = DaemonNodeRegistry(sessions, registry.daemon_store, task_store=tasks)
+            registry.handle_event("sbx_alice", {
+                "type": terminal_type, "commandId": command["id"],
+                "sessionId": command["sessionId"], "runId": command["runId"],
+                "agent": "codex", "reason": "Stop",
+                "exitCode": 0,
+            }, "node_token")
+            decision = sessions.get_session(command["sessionId"])["decisions"][-1]
+            assert decision["actorEmployeeId"] == "alice"
+    asyncio.run(run_flow())
+
+
+def test_a_bad_exit_without_a_question_still_fails() -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            _report_blocked(registry, command, exitCode=1, roundResult={"status": "done"})
+
+            assert sessions.get_session(command["sessionId"])["status"] == "failed"
+
+    asyncio.run(run_flow())
+
+
+def test_a_lone_offered_answer_still_reaches_the_human() -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            _sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            _report_blocked(registry, command, exitCode=0, roundResult={
+                "status": "blocked", "options": ["Deploy to prod"],
+            })
+
+            waiting = task_store.get_task(task["id"])
+            assert waiting["status"] == "waiting_for_human"
+            # One option is not a choice, but it is what the agent wanted to ask.
+            assert "Deploy to prod" in waiting["waitingRequest"]["inputQuestion"]
+            assert "inputOptions" not in waiting["waitingRequest"]
+
+    asyncio.run(run_flow())
+
+
+def test_a_rejected_verdict_file_says_why_on_the_task() -> None:
+    async def run_flow() -> None:
+        with TemporaryDirectory() as root:
+            _sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            _report_blocked(
+                registry, command, exitCode=0,
+                roundResultRejected={"reason": "run_id_mismatch"},
+            )
+
+            waiting = task_store.get_task(task["id"])
+            assert waiting["status"] == "waiting_for_human"
+            messages = [item["message"] for item in waiting["activity"]]
+            assert any("runId" in message for message in messages), messages
+
+    asyncio.run(run_flow())
+
+
+def test_a_retried_completion_repairs_a_missing_task_wait() -> None:
+    async def run_flow() -> None:
+        from relay.collaboration.policy import ROUND_RESULT_STATE_KEY
+
+        with TemporaryDirectory() as root:
+            sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            request = registry.daemon_store.update_run_request(request["id"], {
+                "state": {
+                    **(request.get("state") or {}),
+                    ROUND_RESULT_STATE_KEY: {"status": "blocked", "note": "Which region?"},
+                },
+            })
+            # A file store persisted the thread's completion, then crashed
+            # before the task write: the session is closed, the task is not parked.
+            SessionController(sessions).complete_session(
+                command["sessionId"], "The round reported it is blocked. Which region?",
+                task_status="waiting_for_human", work_outcome="blocked",
+                input_request={"inputQuestion": "Which region?", "inputOptions": [], "inputNotes": []},
+            )
+            assert task_store.get_task(task["id"])["status"] != "waiting_for_human"
+
+            registry._complete_run_request(request, "Codex completed.")
+
+            repaired = task_store.get_task(task["id"])
+            assert repaired["status"] == "waiting_for_human"
+            assert repaired["waitingSessionId"] == command["sessionId"]
+            completions = [
+                event for event in sessions.get_session(command["sessionId"])["events"]
+                if event["type"] == "session.completed"
+            ]
+            assert len(completions) == 1
+
+    asyncio.run(run_flow())
+
+
+def test_a_human_recovery_opens_a_fresh_continuation_budget() -> None:
+    async def run_flow() -> None:
+        from relay.collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
+
+        with TemporaryDirectory() as root:
+            _sessions, task_store, registry = _round_result_registry(root)
+            task = task_store.create_task({"title": "Deploy"})
+            command = await _run_task_round(
+                registry, ServerDaemonNodeBackend(registry), task["id"]
+            )
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            unfinished = {"status": "continue", "note": "more to do"}
+            registry._record_round_result(request, unfinished, "assigned")
+            registry._record_round_result(request, unfinished, "assigned")
+            assert task_store.get_task(task["id"])["roundCount"] == 2
+
+            recovered = {
+                **request,
+                "state": {
+                    **(request.get("state") or {}),
+                    COLLABORATION_MANIFEST_STATE_KEY: {"source": "recovery"},
+                },
+            }
+            registry._record_round_result(recovered, unfinished, "assigned")
+
+            # A person's rerun is attended work, like an answer: it must not be
+            # charged to the unattended budget it was run to get past.
+            assert task_store.get_task(task["id"])["roundCount"] == 1
+
+    asyncio.run(run_flow())

@@ -67,6 +67,18 @@ describe("thread message input", () => {
     );
   });
 
+  it("reads a picked answer as plain text, never as a mention", () => {
+    // An agent's offered answer may start with "@"; picking it answers the
+    // agent that asked rather than re-addressing (or blocking) the round.
+    for (const text of ["@Lead deploy it", "@Nobody deploy it"]) {
+      assert.deepEqual(
+        resolveThreadMessageAddress({ text, candidates, defaultAgentId: "agent_support", literal: true }),
+        { blocked: false, addressAgentIds: ["agent_support"] },
+        text,
+      );
+    }
+  });
+
   it("addresses the room when nobody is mentioned", () => {
     const input = threadMessageInput({
       text: "one more pass",

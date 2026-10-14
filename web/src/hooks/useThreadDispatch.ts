@@ -105,6 +105,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
     intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
+    { literal = false }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
     if (!raw || !selectedEmployee || threadRunning || projectDispatchDisabled) return false;
@@ -154,6 +155,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     // footer selection and never fails open to the room.
     const messageAddress = resolveThreadMessageAddress({
       text: raw,
+      literal,
       candidates: threadMentionCandidates,
       defaultAgentId: projectRoomRound || pendingTeam || roundTeam.teamId
         ? undefined

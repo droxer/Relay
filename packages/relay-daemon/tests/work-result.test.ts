@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseRoundResult } from "../src/round-result.js";
+import { evaluateRoundResult, parseRoundResult } from "../src/round-result.js";
 
 test("work evidence reaches the backend only for the current run", () => {
   const work = { status: "done", evidence: ["12 tests passed"], messages: [{ kind: "handoff", text: "API ready" }] };
@@ -33,5 +33,27 @@ test("a project run's context suggestions pass through, bounded", () => {
       { text: "Second" },
       { text: "Third" },
     ],
+  });
+});
+
+test("a rejected verdict names why, never silently vanishes", () => {
+  const blocked = { status: "blocked", note: "Which env?", runId: "run-1" };
+  const cases: Array<[string, string]> = [
+    ["not json at all", "malformed"],
+    ['["done"]', "not_object"],
+    ["null", "not_object"],
+    ['"done"', "not_object"],
+    [JSON.stringify({ ...blocked, status: "whatever" }), "invalid_status"],
+    [JSON.stringify({ note: "no status", runId: "run-1" }), "invalid_status"],
+    [JSON.stringify({ ...blocked, runId: "run-2" }), "run_id_mismatch"],
+    [JSON.stringify({ status: "blocked", note: "Which env?" }), "run_id_mismatch"],
+  ];
+  for (const [raw, reason] of cases) {
+    assert.deepEqual(evaluateRoundResult(raw, "run-1"), { kind: "rejected", reason }, raw);
+    assert.equal(parseRoundResult(raw, "run-1"), undefined, raw);
+  }
+  assert.deepEqual(evaluateRoundResult(JSON.stringify(blocked), "run-1"), {
+    kind: "accepted",
+    result: { status: "blocked", note: "Which env?" },
   });
 });

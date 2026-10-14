@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { RelaySession, RelayTaskListItem } from "../types";
 import { hrefForRoute, hrefForSettingsSection, navigateToAppPath } from "../lib/appRoute";
 import { executionRecoveryGuide, taskRecoveryGuide, taskRecoveryReason, type RecoveryGuide } from "../lib/executionRecovery";
-import { taskWaitingPrompt } from "../lib/awaitingInput";
+import { taskWaitingPrompt, taskWaitingThreadId } from "../lib/awaitingInput";
 import { AwaitingInputNotes } from "./AwaitingInputPrompt";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -110,7 +110,10 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
   const { t } = useTranslation();
   const guide = taskRecoveryGuide(task);
   if (!guide) return null;
-  const linked = task.workspaceWaiting?.blockingSessionId || (task.status === "blocked" && task.attention ? task.attention.sessionId : task.linkedSessionIds.at(-1));
+  // A waiting task is answered in the thread it waits in, which a later status
+  // question can leave behind its newest link.
+  const linked = task.workspaceWaiting?.blockingSessionId
+    || (task.status === "blocked" && task.attention ? task.attention.sessionId : taskWaitingThreadId(task) ?? task.linkedSessionIds.at(-1));
   const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
   const reason = taskRecoveryReason(task);
   // Waiting on a person: quote what the agent asked, and make answering it

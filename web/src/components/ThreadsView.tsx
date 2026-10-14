@@ -121,7 +121,7 @@ type ThreadsViewProps = {
   onRuntimeNodeChange: (nodeId: string) => void;
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
-  onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"]) => void | Promise<boolean | void>;
+  onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"], options?: import("./composer/Composer").ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
   onResumeAgent: (agent: AgentName, agentId?: string) => void;
@@ -279,6 +279,7 @@ export function ThreadsView({
       {!taskThread && <ThreadListPanel
         directoryMode={directoryMode}
         threads={filteredThreads}
+        tasks={tasks}
         projects={projects}
         projectsStatus={projectsStatus}
         projectsError={projectsError}

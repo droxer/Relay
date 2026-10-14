@@ -398,6 +398,12 @@ describe("prompts", () => {
     assert.match(prompt, /\[Finishing\]\nWhen you stop, write `\.relay\/round-result\.json`/);
     assert.match(prompt, /"status": "done" \| "continue" \| "blocked"/);
     assert.match(prompt, /"runId": "run_current"/);
+    assert.match(prompt, /Copy "runId" exactly/);
+    // A blocked verdict's question lives in note; options are a closed choice
+    // or nothing, so a lone option never stands in for the question.
+    assert.match(prompt, /When blocked, put the question for the human in "note"/);
+    assert.match(prompt, /2–6 complete, distinct answers/);
+    assert.match(prompt, /a single option is dropped/);
     // The verdict file is Relay's control record, not part of the answer:
     // agents otherwise close their reply with "wrote .relay/round-result.json".
     assert.match(prompt, /Do not mention this file, its path, or that you wrote it in your reply/);

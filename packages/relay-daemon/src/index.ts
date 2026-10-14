@@ -30,7 +30,7 @@ import {
 } from "./sandbox-session.js";
 import { GuestPool, type GuestLease } from "./guest-pool.js";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
-import { consumeRoundResult } from "./round-result.js";
+import { consumeRoundResult, readRoundResult } from "./round-result.js";
 import { syncProjectContext } from "./project-context.js";
 import { consumeProjectSetup } from "./project-setup.js";
 import { validateHandoffWorkspace } from "./handoff-validation.js";
@@ -1414,7 +1414,15 @@ async function executeCommand(
     const next = mergeAgentState(state, patch);
     const agentLog = next.agent_logs.slice(-1)[0] ?? "";
     // Consume on every terminal path, including cancellation and delivery failure.
-    const roundResult = consumeRoundResult(threadWorkspace.hostPath, command.runId);
+    const roundOutcome = readRoundResult(threadWorkspace.hostPath, command.runId);
+    const roundResult = roundOutcome.kind === "accepted" ? roundOutcome.result : undefined;
+    if (roundOutcome.kind === "rejected") {
+      // Never log the file itself: it is agent-written and may carry anything.
+      logger.warn("round result rejected", {
+        ...commandLogFields(sandboxId, command),
+        reason: roundOutcome.reason,
+      });
+    }
     const projectSetup = consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
     if (signal?.aborted) {
       logger.info("run cancelled", {
@@ -1463,6 +1471,7 @@ async function executeCommand(
       tokenUsage: next.token_usage,
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
+      ...(roundOutcome.kind === "rejected" ? { roundResultRejected: { reason: roundOutcome.reason } } : {}),
       ...(outputBatchesRejected > 0 ? { outputTruncated: true } : {}),
       ...(next.runtime_session_id ? { runtimeSessionId: next.runtime_session_id } : {}),
       ...(projectSetup && state.project_setup ? { projectSetup } : {}),

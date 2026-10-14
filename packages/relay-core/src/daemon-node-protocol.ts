@@ -134,6 +134,22 @@ export interface DaemonRoundResult {
 }
 
 /**
+ * Why the daemon refused a round-result file the run did leave behind. A
+ * missing file is not a rejection; it is simply no verdict.
+ */
+export type DaemonRoundResultRejectionReason =
+  | "oversize"
+  | "malformed"
+  | "not_object"
+  | "invalid_status"
+  | "run_id_mismatch";
+
+/** A present verdict the daemon refused, so the human's question cannot vanish silently. */
+export interface DaemonRoundResultRejection {
+  reason: DaemonRoundResultRejectionReason;
+}
+
+/**
  * Why a reported file arrived without bytes attached.
  *
  * "too-large" covers both the per-file cap and an exhausted per-event budget;
@@ -412,6 +428,8 @@ export type DaemonNodeEvent =
       tokenUsage?: TokenUsage;
       generatedFiles?: DaemonGeneratedFile[];
       roundResult?: DaemonRoundResult;
+      /** Set instead of `roundResult` when the run left a verdict file the daemon refused. */
+      roundResultRejected?: DaemonRoundResultRejection;
       /** A setup round's proposal as the agent wrote it; the backend validates it. */
       projectSetup?: Record<string, unknown>;
       /** The backend rejected at least one output batch; the streamed log has gaps. */

@@ -14,6 +14,8 @@ const GATE_PREAMBLES = ["The work can't be accepted yet.", "Work needs attention
 /** Bounds mirrored from `round_result_options` (backend/relay/collaboration/policy.py). */
 const OPTIONS_MIN = 2;
 const OPTIONS_MAX = 6;
+/** Per-option length, mirrored from `ROUND_RESULT_OPTION_MAX_CHARS` there. */
+const OPTION_MAX_CHARS = 200;
 
 export type AwaitingInput = {
   /** `question`: the agent stopped to ask. `check`: a gate stopped the round
@@ -52,15 +54,9 @@ export function awaitingInput(
   if (!session || session.status !== "completed") return null;
   // A rejected turn already has its own controls (the decision bar).
   if (isAwaitingFeedbackDecision(session)) return null;
-  const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
-  const task = waitingTask(session, scope, tasks);
-  if (!task) {
-    // The round ran for a task that is not waiting here (anymore): answered
-    // in another thread, moved on the board, or done. Its old blocked outcome
-    // is history, not a question.
-    if (scope?.kind === "task") return null;
-    if (session.workOutcome !== "blocked") return null;
-  }
+  const wait = threadWait(session, tasks);
+  if (!wait) return null;
+  const { task } = wait;
   const run = session.agentRuns.at(-1);
   // The task keeps the question across turns in between; a wait recorded
   // before tasks carried it still has it on this thread's last completion.
@@ -82,6 +78,50 @@ export function awaitingInput(
     run,
     task,
   };
+}
+
+/**
+ * Whether a thread belongs in "needs you" — the prompt's own rule, so the
+ * rail and the composer never disagree. A pending decision is the thread's
+ * own; a settled thread waits when `threadWait` says it does.
+ */
+export function threadAwaitsHuman(
+  session: RelaySession | undefined,
+  tasks: readonly RelayTaskListItem[],
+): boolean {
+  if (!session) return false;
+  if (session.status === "waiting_for_human") return true;
+  return session.status === "completed" && threadWait(session, tasks) !== null;
+}
+
+/**
+ * What a settled thread waits on, or null when it does not. A task that names
+ * this thread is the answer; otherwise the active round's task decides when
+ * the list knows it — answered in another thread, moved on the board, or done
+ * means the old blocked outcome is history. A task the list does not hold (not
+ * loaded yet, or not the viewer's) proves nothing, so the thread's own record
+ * stands.
+ */
+function threadWait(
+  session: RelaySession,
+  tasks: readonly RelayTaskListItem[],
+): { task?: RelayTaskListItem } | null {
+  const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
+  const task = waitingTask(session, scope, tasks);
+  if (task) return { task };
+  if (scope?.kind === "task" && tasks.some((item) => item.id === scope.taskId)) return null;
+  return session.workOutcome === "blocked" ? {} : null;
+}
+
+/**
+ * The thread a waiting task waits in — where a reply resumes it, which need
+ * not be its newest link (a status question asked elsewhere adds one).
+ * Undefined when the task is not waiting or never recorded where.
+ */
+export function taskWaitingThreadId(
+  task: Pick<RelayTaskListItem, "status" | "waitingSessionId">,
+): string | undefined {
+  return task.status === "waiting_for_human" ? task.waitingSessionId || undefined : undefined;
 }
 
 /**
@@ -143,7 +183,7 @@ function plainGateReason(reason: string): string {
 function distinctOptions(raw: readonly string[]): string[] {
   const options: string[] = [];
   for (const item of raw) {
-    const option = item.replace(/\s+/g, " ").trim();
+    const option = item.replace(/\s+/g, " ").trim().slice(0, OPTION_MAX_CHARS);
     if (option && !options.includes(option)) options.push(option);
   }
   return options.slice(0, OPTIONS_MAX);

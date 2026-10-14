@@ -1206,7 +1206,10 @@ class LocalDaemonStore:
             state[key] = now_iso()
             return self.update_run_request(request_id, {"state": state})
 
-    def request_run_stop(self, request_id: str, command_id: str, reason: str) -> dict[str, Any] | None:
+    def request_run_stop(
+        self, request_id: str, command_id: str, reason: str,
+        *, actor_employee_id: str | None = None,
+    ) -> dict[str, Any] | None:
         with self._lock, self._run_request_claim_lock():
             current = self.get_run_request(request_id)
             if not current or current.get("status") != "running" or current.get("currentCommandId") != command_id:
@@ -1214,6 +1217,8 @@ class LocalDaemonStore:
             state = dict(current.get("state") or {})
             state.setdefault("_relay_stop_command_id", new_database_id())
             state.setdefault("_relay_stop_requested_at", now_iso())
+            if actor_employee_id:
+                state.setdefault("_relay_stop_actor_employee_id", actor_employee_id)
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
@@ -3196,7 +3201,10 @@ class DatabaseDaemonStore:
             state[key] = now_iso()
             return self.update_run_request(request_id, {"state": state})
 
-    def request_run_stop(self, request_id: str, command_id: str, reason: str) -> dict[str, Any] | None:
+    def request_run_stop(
+        self, request_id: str, command_id: str, reason: str,
+        *, actor_employee_id: str | None = None,
+    ) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = conn.execute(select(self.run_requests).where(self.run_requests.c.id == request_id).with_for_update()).mappings().first()
             if not row:
@@ -3207,6 +3215,8 @@ class DatabaseDaemonStore:
             state = dict(current.get("state") or {})
             state.setdefault("_relay_stop_command_id", new_database_id())
             state.setdefault("_relay_stop_requested_at", now_iso())
+            if actor_employee_id:
+                state.setdefault("_relay_stop_actor_employee_id", actor_employee_id)
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(
