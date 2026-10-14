@@ -8,7 +8,8 @@
 #   deploy/deploy.sh verify      check the live hostnames
 #
 # Every step is idempotent: re-running converges instead of duplicating.
-# Configuration comes from deploy/.env (or $DEPLOY_CONFIG). See deploy/README.md.
+# Configuration comes from deploy/.env or deploy/config.env (or $DEPLOY_CONFIG).
+# See deploy/README.md.
 set -euo pipefail
 
 DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -22,7 +23,18 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/verify.sh"
 
 usage() {
-  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# $DEPLOY_CONFIG, else deploy/.env, else deploy/config.env (both git-ignored).
+config_path() {
+  if [ -n "${DEPLOY_CONFIG:-}" ]; then
+    printf '%s' "$DEPLOY_CONFIG"
+  elif [ -f "$DEPLOY_DIR/.env" ]; then
+    printf '%s' "$DEPLOY_DIR/.env"
+  else
+    printf '%s' "$DEPLOY_DIR/config.env"
+  fi
 }
 
 # Looks up the context and the two app services; `railway` creates them.
@@ -77,8 +89,8 @@ phase_railway() {
   log "Railway: project $RAILWAY_PROJECT_NAME / $RAILWAY_ENVIRONMENT"
   railway_resolve_context
   railway_ensure_postgres
-  railway_ensure_service "$BACKEND_SERVICE" railway.json
-  railway_ensure_service "$WEB_SERVICE" web/railway.json
+  railway_ensure_service "$BACKEND_SERVICE" backend
+  railway_ensure_service "$WEB_SERVICE" web
   BACKEND_ID=$(railway_service_id "$BACKEND_SERVICE")
   WEB_ID=$(railway_service_id "$WEB_SERVICE")
 
@@ -133,16 +145,20 @@ phase_cloudflare() {
 
 phase_release() {
   log "Release: $GITHUB_REPO@$GITHUB_BRANCH"
+  local postgres_id backend_deployment web_deployment failures=0
+  RELEASE_COMMIT=$(railway_release_commit)
+  info "release commit $RELEASE_COMMIT (GitHub source; local edits are not uploaded)"
+  railway_validate_release
   resolve_services
-  local postgres_id backend_deployment web_deployment
   postgres_id=$(railway_service_id "$POSTGRES_SERVICE")
   [ -n "$postgres_id" ] || die "service $POSTGRES_SERVICE not found — run 'deploy.sh railway' first"
   railway_wait_deployment "$POSTGRES_SERVICE" "$postgres_id"
-  backend_deployment=$(railway_deploy_service "$BACKEND_ID")
-  web_deployment=$(railway_deploy_service "$WEB_ID")
+  backend_deployment=$(railway_deploy_service "$BACKEND_SERVICE" "$BACKEND_ID")
+  web_deployment=$(railway_deploy_service "$WEB_SERVICE" "$WEB_ID")
   info "building $BACKEND_SERVICE and $WEB_SERVICE (this takes a few minutes)"
-  railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment"
-  railway_wait_deployment "$WEB_SERVICE" "$WEB_ID" "$web_deployment"
+  if ! railway_wait_deployment "$BACKEND_SERVICE" "$BACKEND_ID" "$backend_deployment"; then failures=$((failures + 1)); fi
+  if ! railway_wait_deployment "$WEB_SERVICE" "$WEB_ID" "$web_deployment"; then failures=$((failures + 1)); fi
+  [ "$failures" -eq 0 ] || die "$failures service deployment(s) failed for commit $RELEASE_COMMIT (backend: $backend_deployment; web: $web_deployment)"
 }
 
 phase_verify() {
@@ -165,7 +181,7 @@ main() {
       ;;
   esac
   require_cmd curl jq openssl
-  load_config "${DEPLOY_CONFIG:-$DEPLOY_DIR/.env}"
+  load_config "$(config_path)"
   validate_config
 
   case $command in

@@ -41,7 +41,7 @@ import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
 import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/workspace-read.js";
 import { isMainModule } from "../src/cli.js";
-import { consumeRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
+import { consumeRoundResult, readRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
 import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
 import type { AgentName, DaemonNodeCommand, DaemonNodeEvent, DaemonNodeRegistration, DaemonNodeRunCommand, StreamExecResult } from "relay-core";
 
@@ -3692,6 +3692,8 @@ test("daemon cannot inherit a stale verdict from the shared workspace", async ()
     const completed = events.find((event) => event.type === "run.completed");
     assert.ok(completed?.type === "run.completed");
     assert.equal(completed.roundResult, undefined);
+    // The pre-run sweep clears a leftover verdict; it is not this run's rejection.
+    assert.equal(completed.roundResultRejected, undefined);
     assert.equal(existsSync(controlPath), false);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
@@ -3795,6 +3797,83 @@ test("consumes the round result a run leaves behind and refuses malformed ones",
   }
 
   rmSync(workspace, { recursive: true, force: true });
+});
+
+test("reports why a present round result was rejected", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "relay-round-result-outcome-"));
+  const controlPath = join(workspace, ROUND_RESULT_RELATIVE_PATH);
+  mkdirSync(join(workspace, ".relay"), { recursive: true });
+  try {
+    // A missing file is silence, not a rejection.
+    assert.deepEqual(readRoundResult(workspace, "run_1"), { kind: "absent" });
+
+    writeFileSync(controlPath, JSON.stringify({ status: "blocked", note: "x".repeat(70 * 1024), runId: "run_1" }));
+    assert.deepEqual(readRoundResult(workspace, "run_1"), { kind: "rejected", reason: "oversize" });
+    assert.equal(existsSync(controlPath), false);
+
+    writeFileSync(controlPath, "{not json");
+    assert.deepEqual(readRoundResult(workspace, "run_1"), { kind: "rejected", reason: "malformed" });
+    assert.equal(existsSync(controlPath), false);
+
+    writeFileSync(controlPath, JSON.stringify({ status: "blocked", note: "Which env?", runId: "run_1" }));
+    assert.deepEqual(readRoundResult(workspace, "run_1"), {
+      kind: "accepted",
+      result: { status: "blocked", note: "Which env?" },
+    });
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test("daemon reports and logs a rejected verdict without its contents", async () => {
+  const workspace = mkdtempSync(join(tmpdir(), "relay-rejected-verdict-"));
+  const controlPath = join(workspace, ROUND_RESULT_RELATIVE_PATH);
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  const warnings: Array<{ message: string; fields?: Record<string, unknown> }> = [];
+  let served = false;
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
+      workspacePath: workspace, token: "node_token", pollIntervalMs: 5,
+      signal: stop.signal,
+      logger: { ...testLogger(), warn: (message, fields) => { warnings.push({ message, fields }); } },
+      environment: fakeEnvironment({ exec: async () => {
+        mkdirSync(join(workspace, ".relay"), { recursive: true });
+        writeFileSync(controlPath, JSON.stringify({ status: "blocked", note: "secret question", runId: "someone_else" }));
+        return { exit_code: 0, stdout: "done", stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (served) return jsonResponse({ commands: [] });
+          served = true;
+          return jsonResponse({ commands: [{ ...runCommand(), workspacePath: workspace, workspaceLayout: "node-root" }] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (event.type === "run.completed" || event.type === "run.failed") stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    const completed = events.find((event) => event.type === "run.completed");
+    assert.ok(completed?.type === "run.completed");
+    assert.equal(completed.roundResult, undefined);
+    assert.deepEqual(completed.roundResultRejected, { reason: "run_id_mismatch" });
+    const rejection = warnings.find((entry) => entry.fields?.reason === "run_id_mismatch");
+    assert.ok(rejection, JSON.stringify(warnings));
+    assert.equal(rejection.fields?.runId, "run_1");
+    assert.doesNotMatch(JSON.stringify(warnings), /secret question/);
+    assert.equal(existsSync(controlPath), false);
+  } finally {
+    stop.abort();
+    rmSync(workspace, { recursive: true, force: true });
+  }
 });
 
 // Regressions for the execution-blocker review: exercise the full daemon loop.

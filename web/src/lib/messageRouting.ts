@@ -33,12 +33,15 @@ type ThreadMessageAddress = {
  * thread). Supplying a null, unknown, or unavailable selection blocks rather
  * than silently widening the message to the room.
  */
-export function resolveThreadMessageAddress({ text, candidates, defaultAgentId }: {
+export function resolveThreadMessageAddress({ text, candidates, defaultAgentId, literal = false }: {
   text: string;
   candidates: readonly MentionCandidate[];
   defaultAgentId?: string | null;
+  /** The text is a picked answer, sent as written: a leading "@" in it is
+   *  the agent's wording, not an address. */
+  literal?: boolean;
 }): ThreadMessageAddress {
-  const parsed = parseMentions(text, candidates);
+  const parsed = literal ? { blocked: false, addressAgentIds: [] } : parseMentions(text, candidates);
   if (parsed.blocked) {
     return { blocked: true, reason: "mention", addressAgentIds: [] };
   }

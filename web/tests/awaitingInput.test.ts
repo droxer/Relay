@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { awaitingInput, readWaitingReason, taskWaitingPrompt } from "../src/lib/awaitingInput.js";
+import { awaitingInput, readWaitingReason, taskWaitingPrompt, taskWaitingThreadId, threadAwaitsHuman } from "../src/lib/awaitingInput.js";
 import type { RelaySession, RelayTaskListItem } from "../src/types.js";
 
 function session(partial: Partial<RelaySession> = {}): RelaySession {
@@ -174,7 +174,28 @@ describe("awaitingInput", () => {
     for (const status of ["done", "review", "assigned", "running"] as const) {
       assert.equal(awaitingInput(stale, [task({ status })]), null, status);
     }
-    assert.equal(awaitingInput(stale, []), null);
+  });
+
+  it("falls back to the thread's own question while its task is not in the list", () => {
+    // Not loaded yet, or filtered out for someone who does not own it: nothing
+    // says the task moved on, so the thread's own record still stands.
+    const waiting = awaitingInput(session({
+      workOutcome: "blocked",
+      inputQuestion: "Which vault?",
+      inputOptions: ["Ops", "Shared"],
+      inputNotes: ["A required step failed to run."],
+    }), [task({ id: "other-task", status: "done" })]);
+    assert.equal(waiting?.text, "Which vault?");
+    assert.deepEqual(waiting?.options, ["Ops", "Shared"]);
+    assert.deepEqual(waiting?.notes, ["A required step failed to run."]);
+    assert.equal(waiting?.task, undefined);
+    assert.equal(awaitingInput(session({ workOutcome: "reported_done" }), []), null);
+  });
+
+  it("caps each offered answer at the backend's length", () => {
+    const long = "x".repeat(250);
+    const waiting = awaitingInput(threadSession({ workOutcome: "blocked", inputOptions: [long, "Short"] }), []);
+    assert.deepEqual(waiting?.options, ["x".repeat(200), "Short"]);
   });
 
   it("leaves a task waiting in a newer thread to that thread", () => {
@@ -221,6 +242,50 @@ describe("awaitingInput", () => {
     }), []);
     assert.equal(waiting?.text, null);
     assert.deepEqual(waiting?.options, ["Staging", "Prod"]);
+  });
+});
+
+describe("threadAwaitsHuman", () => {
+  const blocked = (partial: Partial<RelaySession> = {}) => session({ workOutcome: "blocked", ...partial });
+
+  it("agrees with the prompt when the scoped task is known to have moved on", () => {
+    for (const status of ["done", "running", "assigned"] as const) {
+      assert.equal(threadAwaitsHuman(blocked(), [task({ status })]), false, status);
+    }
+    assert.equal(threadAwaitsHuman(blocked(), [task({ waitingSessionId: "ses_newer" })]), false);
+  });
+
+  it("trusts the thread's own record while its task is not in the list", () => {
+    assert.equal(threadAwaitsHuman(blocked(), []), true);
+    assert.equal(threadAwaitsHuman(session(), []), false);
+  });
+
+  it("counts a thread a waiting task names, whatever its last outcome", () => {
+    const afterStatus = session({
+      workOutcome: "unverified",
+      activeRoundId: "status-round",
+      collaborationRounds: [{ roundId: "status-round", workScope: { kind: "thread" } }] as RelaySession["collaborationRounds"],
+    });
+    assert.equal(threadAwaitsHuman(afterStatus, [task({ waitingSessionId: "ses_1" })]), true);
+    assert.equal(threadAwaitsHuman(afterStatus, [task({ waitingSessionId: "ses_1", isRoutine: true })]), false);
+    assert.equal(threadAwaitsHuman(afterStatus, [task({ waitingSessionId: "ses_1", deletedAt: "2026-10-10T00:00:00.000Z" })]), false);
+  });
+
+  it("keeps a pending decision and ignores live or failed threads", () => {
+    assert.equal(threadAwaitsHuman(session({ status: "waiting_for_human" }), []), true);
+    assert.equal(threadAwaitsHuman(session({ status: "running" }), [task({ waitingSessionId: "ses_1" })]), false);
+    assert.equal(threadAwaitsHuman(blocked({ status: "failed" }), []), false);
+  });
+});
+
+describe("taskWaitingThreadId", () => {
+  it("names the thread a waiting task waits in, not its newest link", () => {
+    assert.equal(taskWaitingThreadId(task({ waitingSessionId: "ses_1", linkedSessionIds: ["ses_1", "ses_2"] })), "ses_1");
+  });
+
+  it("names nothing once the task is not waiting, or never said where", () => {
+    assert.equal(taskWaitingThreadId(task({ status: "running", waitingSessionId: "ses_1" })), undefined);
+    assert.equal(taskWaitingThreadId(task()), undefined);
   });
 });
 

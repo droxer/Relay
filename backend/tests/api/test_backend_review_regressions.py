@@ -399,3 +399,184 @@ def test_old_round_cannot_settle_newer_task_execution(review_app, review_client,
     response = review_client.post(f"/api/v1/threads/{session['id']}/decisions", json={"kind": kind})
     assert response.status_code == 200
     assert app.state.task_store.get_task(task["id"]) == before
+
+
+def _blocked_task_thread(app, *, policy: str = "automatic"):
+    """A task round that stopped to ask, parked on its thread's human."""
+    task = app.state.task_store.create_task({
+        "title": "Asked a question", "ownerEmployeeId": "admin",
+        "acceptancePolicy": policy,
+    })
+    controller = SessionController(
+        app.state.session_store, task_store=app.state.task_store, task_id=task["id"],
+        workspace_path="/workspace", owner_employee_id="admin",
+    )
+    session = controller.create_session("Asked a question", ["human"])
+    controller.record_collaboration_round_started(session["id"], {
+        "roundId": "round_1", "workScope": {"kind": "task", "taskId": task["id"]},
+    })
+    return task, session, controller
+
+
+def test_thread_decisions_record_who_decided(review_app, review_client):
+    _task, session, controller = _blocked_task_thread(review_app)
+    controller.complete_session(
+        session["id"], "The round reported it is blocked. Which branch?",
+        task_status="waiting_for_human", work_outcome="blocked",
+        input_request={"inputQuestion": "Which branch?"},
+    )
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"}
+    )
+
+    assert response.status_code == 200
+    [decision] = response.json()["decisions"]
+    assert decision["kind"] == "reject"
+    assert decision["actorEmployeeId"] == "admin"
+
+
+def test_cancel_decision_records_who_cancelled(review_app, review_client):
+    session = SessionController(
+        review_app.state.session_store, workspace_path="/workspace",
+        owner_employee_id="admin",
+    ).create_session("Long job", ["human"])
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": "cancel"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["decisions"][-1]["actorEmployeeId"] == "admin"
+
+
+def test_reject_keeps_the_question_the_thread_waits_on(review_app, review_client):
+    task, session, controller = _blocked_task_thread(review_app)
+    request = {"inputQuestion": "Which branch?", "inputOptions": ["main", "dev"]}
+    controller.complete_session(
+        session["id"], "The round reported it is blocked. Which branch?",
+        task_status="waiting_for_human", work_outcome="blocked", input_request=request,
+    )
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"}
+    )
+
+    assert response.status_code == 200
+    rejected = response.json()
+    assert rejected["status"] == "waiting_for_human"
+    assert rejected["inputQuestion"] == "Which branch?"
+    assert rejected["inputOptions"] == ["main", "dev"]
+    waiting = review_app.state.task_store.get_task(task["id"])
+    assert waiting["status"] == "waiting_for_human"
+    assert waiting["waitingSessionId"] == session["id"]
+
+
+def test_reject_is_refused_while_the_thread_runs(review_app, review_client):
+    session = SessionController(
+        review_app.state.session_store, workspace_path="/workspace",
+        owner_employee_id="admin",
+    ).create_session("Still running", ["human"])
+    SessionController(review_app.state.session_store).continue_session(session["id"])
+    review_app.state.session_store.append_event(session["id"], {
+        "type": "session.status", "sessionId": session["id"], "id": "evt_run",
+        "timestamp": now_iso(), "status": "running", "phase": "running",
+    })
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"}
+    )
+
+    assert response.status_code == 409
+    assert review_app.state.session_store.get_session(session["id"])["status"] == "running"
+
+
+def test_reject_is_refused_while_the_threads_task_awaits_review(review_app, review_client):
+    task, session, controller = _blocked_task_thread(review_app, policy="human")
+    controller.complete_session(session["id"], "Done.", work_outcome="needs_review")
+    assert review_app.state.task_store.get_task(task["id"])["status"] == "review"
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"}
+    )
+
+    # The task's review is where its changes are requested; a thread reject
+    # would leave the task in review with nothing to resume it.
+    assert response.status_code == 409
+    assert response.json()["detail"] == "task_review_pending"
+    assert review_app.state.session_store.get_session(session["id"])["status"] == "completed"
+
+
+def test_mark_done_is_the_humans_acceptance(review_app, review_client):
+    task, session, controller = _blocked_task_thread(review_app, policy="human")
+    controller.complete_session(
+        session["id"], "The round reported it is blocked. Ship it?",
+        task_status="waiting_for_human", work_outcome="blocked",
+    )
+
+    response = review_client.post(
+        f"/api/v1/threads/{session['id']}/decisions", json={"kind": "mark_done"}
+    )
+
+    assert response.status_code == 200
+    # A person pressing "mark done" has accepted the work; a second review
+    # step would ask them the same question twice.
+    assert review_app.state.task_store.get_task(task["id"])["status"] == "done"
+
+
+def test_reject_serializes_validation_with_run_admission(review_app, review_client, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from relay.api import session_routes
+
+    _task, session, controller = _blocked_task_thread(review_app)
+    controller.complete_session(session["id"], "Done")
+    original = session_routes._assert_rejectable
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        def validate(snapshot, ctx):
+            original(snapshot, ctx)
+            def can_admit():
+                acquired = ctx.registry.dispatch_lock.acquire(blocking=False)
+                if acquired:
+                    ctx.registry.dispatch_lock.release()
+                return acquired
+            assert not pool.submit(can_admit).result(timeout=2)
+        monkeypatch.setattr(session_routes, "_assert_rejectable", validate)
+        response = review_client.post(f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"})
+    assert response.status_code == 200
+
+
+def test_admin_stop_preserves_identity_for_backend(review_app, review_client, monkeypatch):
+    session = SessionController(review_app.state.session_store, owner_employee_id="admin").create_session("Stop")
+    monkeypatch.setattr(review_app.state.registry, "monitor_nodes", lambda: [{"id": "node", "activeRuns": [{"sessionId": session["id"]}]}])
+    received = {}
+    def cancel_run(node_id, session_id, reason, **kwargs):
+        received.update(kwargs)
+        return session
+    monkeypatch.setattr(review_app.state.backend, "cancel_run", cancel_run)
+    response = review_client.post(f"/api/v1/threads/{session['id']}/cancellations", json={})
+    assert response.status_code == 202
+    assert received["actor_employee_id"] == "admin"
+    assert received["actor_is_admin"] is True
+
+
+def test_reject_rechecks_the_thread_after_acquiring_admission_scope(review_app, review_client, monkeypatch):
+    from contextlib import contextmanager
+
+    _task, session, controller = _blocked_task_thread(review_app)
+    controller.complete_session(session["id"], "Done")
+    original = review_app.state.session_store.mutation_scope
+    @contextmanager
+    def admission_won(session_id):
+        # Admission completed between the route's initial read and row lock.
+        with original(session_id):
+            review_app.state.session_store.append_event(session_id, {
+                "type": "session.status", "sessionId": session_id,
+                "id": "evt_new_run", "timestamp": now_iso(),
+                "status": "running", "phase": "running",
+            })
+            yield
+    monkeypatch.setattr(review_app.state.session_store, "mutation_scope", admission_won)
+    response = review_client.post(f"/api/v1/threads/{session['id']}/decisions", json={"kind": "reject"})
+    assert response.status_code == 409
+    assert response.json()["detail"] == "session_run_in_flight"
+    assert not review_app.state.session_store.get_session(session["id"])["decisions"]

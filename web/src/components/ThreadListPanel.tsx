@@ -25,7 +25,7 @@ import {
   THREAD_LIST_WIDTH_MAX,
   THREAD_LIST_WIDTH_MIN,
 } from "../lib/threadList";
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession } from "../types";
+import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../types";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
@@ -39,6 +39,7 @@ import { useKeyChange } from "../hooks/useKeyChange";
 export function ThreadListPanel({
   directoryMode,
   threads,
+  tasks,
   projects,
   projectsStatus,
   projectsError,
@@ -60,6 +61,9 @@ export function ThreadListPanel({
 }: {
   directoryMode: "threads" | "projects";
   threads: ThreadItem[];
+  /** Read with the threads to say which wait on a person — the same rule the
+   *  thread's own prompt follows (`threadAwaitsHuman`). */
+  tasks: readonly RelayTaskListItem[];
   projects: ProjectRecord[];
   /** The projects query's state, the same one the detail pane resolves its
    *  loading / error / not-found panes from. The rail must not answer "no
@@ -110,7 +114,7 @@ export function ThreadListPanel({
     hasQuery: query.trim().length > 0,
   });
 
-  const railWindow = useRailWindow(directoryMode === "threads" ? threads : hierarchy.unclassified, selectedSessionId, query);
+  const railWindow = useRailWindow(directoryMode === "threads" ? threads : hierarchy.unclassified, tasks, selectedSessionId, query);
 
   const renderThreads = () => {
     const { groups: limited, sentinelRef, limit } = railWindow;
@@ -335,11 +339,11 @@ function useMinuteClock(): number {
  * page when the reset key changes (search query, quick filters), since a
  * filter is a new list.
  */
-function useRailWindow(items: ThreadItem[], selectedSessionId: string | undefined, resetKey: string) {
+function useRailWindow(items: ThreadItem[], tasks: readonly RelayTaskListItem[], selectedSessionId: string | undefined, resetKey: string) {
   const [pages, setPages] = useState(1);
   useKeyChange(resetKey, () => setPages(1));
 
-  const groups = useMemo(() => groupThreads(items), [items]);
+  const groups = useMemo(() => groupThreads(items, tasks), [items, tasks]);
   const selectedIndex = useMemo(() => {
     if (!selectedSessionId) return -1;
     return [...groups.needsYou, ...groups.running, ...groups.idle]

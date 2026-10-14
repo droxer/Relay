@@ -118,6 +118,8 @@ export {
   type DaemonRunSkillBundle,
   type DaemonSkippedSkill,
   type DaemonRoundResult,
+  type DaemonRoundResultRejection,
+  type DaemonRoundResultRejectionReason,
   type DaemonWorkspaceEntry,
   type DaemonWorkspaceErrorCode,
   type DaemonWorkspaceListCommand,

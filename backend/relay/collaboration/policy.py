@@ -25,11 +25,27 @@ REPAIR_NOTE_STATE_KEY = "_relay_repair_note"
 ROUND_RESULT_STATE_KEY = "_relay_round_result"
 PARTICIPANT_FAILURES_STATE_KEY = "_relay_participant_failures"
 ROUND_RESULT_STATUSES = frozenset({"done", "continue", "blocked"})
+# What a blocked round's outcome says before the agent's own note. Older
+# threads carry their question only inside this outcome, so the conversation
+# replay and the web (`BLOCKED_ROUND_PREAMBLE` in web/src/lib/awaitingInput.ts)
+# match on it: change it in all three places or not at all.
+BLOCKED_ROUND_PREAMBLE = "The round reported it is blocked."
 ROUND_RESULT_NOTE_MAX_CHARS = 2000
 # A blocked round may offer the answers it expects, so a person can pick one
 # instead of typing. Bounded: they render as buttons under the question.
 ROUND_RESULT_OPTIONS_MAX = 6
 ROUND_RESULT_OPTION_MAX_CHARS = 200
+# Why a daemon refused a verdict file it found (`roundResultRejected` on
+# run.completed; the codes mirror relay-core's DaemonRoundResultRejectionReason),
+# worded to finish "was rejected because ...".
+ROUND_RESULT_REJECTED_STATE_KEY = "_relay_round_result_rejected"
+ROUND_RESULT_REJECTIONS = {
+    "oversize": "it was larger than 64KB",
+    "malformed": "it was not valid JSON",
+    "not_object": "it was not a JSON object",
+    "invalid_status": "its status was not done, continue, or blocked",
+    "run_id_mismatch": "its runId did not match this run",
+}
 
 
 # Styles whose next member can still inspect the workspace when a member
@@ -225,7 +241,12 @@ def validate_round_result(event: dict[str, Any]) -> dict[str, Any] | None:
     if status not in ROUND_RESULT_STATUSES:
         return None
     note = reported.get("note")
-    options = round_result_options(reported.get("options")) if status == "blocked" else []
+    offered = _distinct_options(reported.get("options")) if status == "blocked" else []
+    options = offered if len(offered) >= 2 else []
+    if len(offered) == 1 and not (isinstance(note, str) and note.strip()):
+        # One option is not a choice, but it is what the agent meant to ask;
+        # without a note, dropping it would leave the human nothing to answer.
+        note = f"Proposed answer: {offered[0]}"
     return {
         "status": status,
         **(
@@ -237,10 +258,24 @@ def validate_round_result(event: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def is_question(round_result: dict[str, Any] | None) -> bool:
+    """Whether a verdict stopped to ask its human something."""
+    return (
+        isinstance(round_result, dict)
+        and round_result.get("status") == "blocked"
+        and bool(round_result.get("note") or round_result.get("options"))
+    )
+
+
 def round_result_options(raw: Any) -> list[str]:
     """The answers a blocked round offers: trimmed, distinct, bounded.
 
     One option is not a choice, so fewer than two offers nothing."""
+    options = _distinct_options(raw)
+    return options if len(options) >= 2 else []
+
+
+def _distinct_options(raw: Any) -> list[str]:
     if not isinstance(raw, list):
         return []
     options: list[str] = []
@@ -252,4 +287,4 @@ def round_result_options(raw: Any) -> list[str]:
             options.append(text)
         if len(options) == ROUND_RESULT_OPTIONS_MAX:
             break
-    return options if len(options) >= 2 else []
+    return options

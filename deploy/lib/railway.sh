@@ -4,12 +4,29 @@
 
 # gql <query> [variables-json] — prints the response's `data` object.
 gql() {
-  local query=$1 vars=${2:-'{}'} body resp
+  local query=$1 vars=${2:-'{}'} body resp attempt=1 attempts=1 status
   body=$(jq -nc --arg q "$query" --argjson v "$vars" '{query: $q, variables: $v}')
-  resp=$(curl -sS --max-time 60 -X POST "$RAILWAY_API_URL" \
-    -H @<(bearer_header "$RAILWAY_API_TOKEN") \
-    -H 'Content-Type: application/json' \
-    --data-binary @- <<<"$body") || die "Railway API unreachable at $RAILWAY_API_URL"
+  # Queries are safe to replay after an interrupted connection. A mutation may
+  # already have taken effect, so leave its recovery to the next ensure_* run.
+  case $query in query\ *) attempts=3 ;; esac
+  while :; do
+    if resp=$(curl -sS --connect-timeout 10 --max-time 60 -X POST "$RAILWAY_API_URL" \
+      -H @<(bearer_header "$RAILWAY_API_TOKEN") \
+      -H 'Content-Type: application/json' \
+      --data-binary @- <<<"$body"); then
+      break
+    else
+      status=$?
+    fi
+    case $status in
+      5 | 6 | 7 | 18 | 28 | 35 | 52 | 55 | 56) ;;
+      *) die "Railway API unreachable at $RAILWAY_API_URL (curl $status)" ;;
+    esac
+    [ "$attempt" -lt "$attempts" ] || die "Railway API unreachable at $RAILWAY_API_URL after $attempt attempt(s) (curl $status); re-run the interrupted phase"
+    warn "Railway connection failed (curl $status); retrying read request ($((attempt + 1))/$attempts)"
+    sleep "$attempt"
+    attempt=$((attempt + 1))
+  done
   jq -e . >/dev/null 2>&1 <<<"$resp" || die "Railway API returned non-JSON: $(head -c 300 <<<"$resp")"
   if jq -e '(.errors // []) | length > 0' >/dev/null <<<"$resp"; then
     die "Railway API: $(jq -r '[.errors[].message] | join("; ")' <<<"$resp")"
@@ -88,11 +105,11 @@ railway_ensure_postgres() {
   info "created service $POSTGRES_SERVICE ($id)"
 }
 
-# railway_ensure_service <name> <config-as-code path>. The repo is connected
-# later (railway_deploy_service), after the config path and variables are in
-# place, so the first build already uses the right Dockerfile.
+# Configure services directly before connecting their repo. New services cannot
+# opt into Config as Code. Profiles use ServiceInstanceUpdateInput fields.
 railway_ensure_service() {
-  local name=$1 config_file=$2 id data
+  local name=$1 profile=$2 id data settings
+  settings=$(cat "$DEPLOY_DIR/services/$profile.json")
   id=$(railway_service_id "$name")
   if [ -n "$id" ]; then
     info "service $name exists ($id)"
@@ -104,9 +121,9 @@ railway_ensure_service() {
   fi
   gql 'mutation ServiceConfig($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) {
          serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }' \
-    "$(jq -nc --arg s "$id" --arg e "$ENVIRONMENT_ID" --arg c "$config_file" \
-      '{serviceId: $s, environmentId: $e, input: {railwayConfigFile: $c}}')" >/dev/null
-  info "$name builds from $config_file"
+    "$(jq -nc --arg s "$id" --arg e "$ENVIRONMENT_ID" --argjson settings "$settings" \
+      '{serviceId: $s, environmentId: $e, input: $settings}')" >/dev/null
+  info "$name settings configured ($profile)"
 }
 
 # Raw (unrendered) variables of a service, as a JSON object.
@@ -180,17 +197,61 @@ railway_service_repo() {
     "$(jq -nc --arg e "$ENVIRONMENT_ID" --arg s "$1" '{e: $e, s: $s}')" | jq -r '.serviceInstance.source.repo // empty'
 }
 
-# Connects the repo on first release, then deploys the branch head. Prints the
-# deployment id when the API returns one.
+# Resolve once so both services release the same branch head. An explicit SHA
+# supports private repos and reproducible releases without a GitHub API token.
+railway_release_commit() {
+  local commit=${RAILWAY_DEPLOY_COMMIT:-}
+  if [ -z "$commit" ]; then
+    require_cmd git
+    commit=$(GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code "https://github.com/$GITHUB_REPO.git" "refs/heads/$GITHUB_BRANCH" | awk '{print $1}') \
+      || die "cannot resolve $GITHUB_REPO@$GITHUB_BRANCH; configure Git credentials or set RAILWAY_DEPLOY_COMMIT"
+  fi
+  printf '%s' "$commit" | grep -Eq '^[0-9a-f]{40}$' || die "RAILWAY_DEPLOY_COMMIT must be a full lowercase commit SHA"
+  printf '%s' "$commit"
+}
+
+# Fetch into an isolated object database and inspect the exact release commit.
+# Never check out or execute files from the remote source.
+railway_validate_release() (
+  set -euo pipefail
+  require_cmd git python3
+  local temporary
+  temporary=$(mktemp -d)
+  trap 'rm -rf "$temporary"' EXIT
+  git init --bare --quiet "$temporary/source.git"
+  GIT_TERMINAL_PROMPT=0 git --git-dir="$temporary/source.git" fetch --quiet --depth=1 \
+    "https://github.com/$GITHUB_REPO.git" "$RELEASE_COMMIT" \
+    || die "cannot fetch release source $RELEASE_COMMIT; check Git credentials and repository access"
+  python3 "$DEPLOY_DIR/validate-source.py" --git-dir "$temporary/source.git" --commit "$RELEASE_COMMIT" >&2
+)
+
+railway_failure_logs() {
+  local deployment_id=$1 data
+  [ -n "$deployment_id" ] || return 0
+  if data=$(gql 'query FailureLogs($id: String!) {
+      buildLogs(deploymentId: $id, limit: 80) { message }
+      deploymentLogs(deploymentId: $id, limit: 40) { message }
+    }' "$(jq -nc --arg id "$deployment_id" '{id: $id}')"); then
+    jq -r '(.buildLogs // []) + (.deploymentLogs // []) | .[] | "    " + .message' <<<"$data" >&2
+  else
+    warn "could not retrieve logs for deployment $deployment_id"
+  fi
+}
+
+# Connect on first release, then explicitly deploy RELEASE_COMMIT.
+# Return the deployment ID so an implicit connect build cannot satisfy the wait.
 railway_deploy_service() {
-  local service_id=$1 data
-  if [ -z "$(railway_service_repo "$service_id")" ]; then
+  local name=$1 service_id=$2 data
+  local repo
+  repo=$(railway_service_repo "$service_id")
+  [ -z "$repo" ] || [ "$repo" = "$GITHUB_REPO" ] || die "$name is connected to $repo, expected $GITHUB_REPO"
+  if [ -z "$repo" ]; then
     gql 'mutation Connect($id: String!, $input: ServiceConnectInput!) { serviceConnect(id: $id, input: $input) { id } }' \
       "$(jq -nc --arg id "$service_id" --arg r "$GITHUB_REPO" --arg b "$GITHUB_BRANCH" '{id: $id, input: {repo: $r, branch: $b}}')" >/dev/null
-    info "connected $GITHUB_REPO@$GITHUB_BRANCH"
+    info "connected $name to $GITHUB_REPO@$GITHUB_BRANCH"
   fi
-  data=$(gql 'mutation Deploy($s: String!, $e: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e) }' \
-    "$(jq -nc --arg s "$service_id" --arg e "$ENVIRONMENT_ID" '{s: $s, e: $e}')")
+  data=$(gql 'mutation Deploy($s: String!, $e: String!, $commitSha: String!) { serviceInstanceDeployV2(serviceId: $s, environmentId: $e, commitSha: $commitSha) }' \
+    "$(jq -nc --arg s "$service_id" --arg e "$ENVIRONMENT_ID" --arg sha "$RELEASE_COMMIT" '{s: $s, e: $e, commitSha: $sha}')")
   jq -r '.serviceInstanceDeployV2 // empty' <<<"$data"
 }
 
@@ -203,18 +264,27 @@ railway_deployments() {
 # railway_wait_deployment <service-name> <service-id> [deployment-id]. Without
 # an id it waits on the newest deployment.
 railway_wait_deployment() {
-  local name=$1 service_id=$2 deployment_id=${3:-} waited=0 status
+  local name=$1 service_id=$2 deployment_id=${3:-} waited=0 status data observed_id
   while :; do
-    status=$(railway_deployments "$service_id" | jq -r --arg id "$deployment_id" \
-      'if $id == "" then (.[0].status // "NONE") else ([.[] | select(.id == $id)][0].status // "PENDING") end')
+    data=$(railway_deployments "$service_id") || { warn "$name status lookup failed"; return 1; }
+    observed_id=$(jq -r --arg id "$deployment_id" 'if $id == "" then (.[0].id // "") else $id end' <<<"$data")
+    status=$(jq -r --arg id "$observed_id" '[.[] | select(.id == $id)][0].status // "PENDING"' <<<"$data")
     case $status in
       SUCCESS)
         info "$name deployed"
         return
         ;;
-      FAILED | CRASHED | REMOVED | SKIPPED) die "$name deployment ended $status — check its build and deploy logs in Railway" ;;
+      FAILED | CRASHED | REMOVED | SKIPPED)
+        warn "$name deployment $observed_id ended $status (commit ${RELEASE_COMMIT:-unknown})"
+        railway_failure_logs "$observed_id"
+        return 1
+        ;;
     esac
-    [ "$waited" -lt "$DEPLOY_TIMEOUT_SECONDS" ] || die "$name still $status after ${DEPLOY_TIMEOUT_SECONDS}s"
+    if [ "$waited" -ge "$DEPLOY_TIMEOUT_SECONDS" ]; then
+      warn "$name deployment $observed_id still $status after ${DEPLOY_TIMEOUT_SECONDS}s"
+      railway_failure_logs "$observed_id"
+      return 1
+    fi
     sleep "$DEPLOY_POLL_SECONDS"
     waited=$((waited + DEPLOY_POLL_SECONDS))
   done

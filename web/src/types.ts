@@ -66,7 +66,7 @@ export type {
 /**
  * Canonical agent ordering for web surfaces. Mirrors AGENT_REGISTRY in
  * relay-core/src/agents.ts (which isn't importable here because web bundles
- * can't pull node-only modules — see CLAUDE.md). Update both when adding an
+ * can't pull node-only modules — see AGENTS.md). Update both when adding an
  * agent.
  */
 export const AGENT_NAMES: AgentName[] = ["claude", "pi", "codex", "kimi"];

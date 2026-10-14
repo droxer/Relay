@@ -1,5 +1,6 @@
 import { readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
+import type { DaemonRoundResultRejectionReason } from "relay-core";
 
 /**
  * A round's own statement of where the task stands, written by the agent.
@@ -30,56 +31,79 @@ const OPTION_MAX_CHARS = 200;
 const CONTEXT_SUGGESTIONS_MAX = 3;
 const CONTEXT_SUGGESTION_MAX_CHARS = 500;
 
+/** What a run's control file amounted to. Only a present file can be rejected. */
+export type RoundResultOutcome =
+  | { kind: "absent" }
+  | { kind: "accepted"; result: RoundResult }
+  | { kind: "rejected"; reason: DaemonRoundResultRejectionReason };
+
+type ParsedRoundResult = Exclude<RoundResultOutcome, { kind: "absent" }>;
+
 /**
  * Read and consume the round result a run left behind, if any.
  *
  * The file is removed after reading: it describes the round that just ended,
  * and leaving it in place would let a later round inherit a stale verdict —
  * the failure mode where a task reports "done" because a previous round said
- * so. Returns undefined when absent or malformed; a broken control file must
- * not fail an otherwise successful run.
+ * so. A broken control file must not fail an otherwise successful run, but
+ * it must not vanish either: the outcome names why it was refused, so a
+ * human's question is never dropped without a trace.
  */
-export function consumeRoundResult(workspacePath: string, expectedRunId?: string): RoundResult | undefined {
+export function readRoundResult(workspacePath: string, expectedRunId?: string): RoundResultOutcome {
   const path = join(workspacePath, ROUND_RESULT_RELATIVE_PATH);
   let raw: string;
   try {
     if (statSync(path).size > ROUND_RESULT_MAX_BYTES) {
       removeQuietly(path);
-      return undefined;
+      return { kind: "rejected", reason: "oversize" };
     }
     raw = readFileSync(path, "utf8");
   } catch {
-    return undefined;
+    return { kind: "absent" };
   }
   removeQuietly(path);
-  return parseRoundResult(raw, expectedRunId);
+  return evaluateRoundResult(raw, expectedRunId);
+}
+
+/** {@link readRoundResult} for callers that only need an accepted verdict. */
+export function consumeRoundResult(workspacePath: string, expectedRunId?: string): RoundResult | undefined {
+  const outcome = readRoundResult(workspacePath, expectedRunId);
+  return outcome.kind === "accepted" ? outcome.result : undefined;
 }
 
 export function parseRoundResult(raw: string, expectedRunId?: string): RoundResult | undefined {
+  const outcome = evaluateRoundResult(raw, expectedRunId);
+  return outcome.kind === "accepted" ? outcome.result : undefined;
+}
+
+export function evaluateRoundResult(raw: string, expectedRunId?: string): ParsedRoundResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return undefined;
+    return { kind: "rejected", reason: "malformed" };
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return undefined;
+    return { kind: "rejected", reason: "not_object" };
   }
   const { status, note, runId, work, options, contextSuggestions } = parsed as { status?: unknown; note?: unknown; runId?: unknown; work?: unknown; options?: unknown; contextSuggestions?: unknown };
-  if (expectedRunId !== undefined && runId !== expectedRunId) return undefined;
+  if (expectedRunId !== undefined && runId !== expectedRunId) return { kind: "rejected", reason: "run_id_mismatch" };
   if (typeof status !== "string" || !ROUND_RESULT_STATUSES.has(status)) {
-    return undefined;
+    return { kind: "rejected", reason: "invalid_status" };
   }
   return {
-    status: status as RoundResult["status"],
-    ...(work && typeof work === "object" && !Array.isArray(work) ? { work: work as Record<string, unknown> } : {}),
-    ...(typeof note === "string" && note.trim()
-      ? { note: note.trim().slice(0, NOTE_MAX_CHARS) }
-      : {}),
-    ...(status === "blocked" && Array.isArray(options)
-      ? { options: options.filter((item): item is string => typeof item === "string").slice(0, OPTIONS_MAX).map((item) => item.slice(0, OPTION_MAX_CHARS)) }
-      : {}),
-    ...contextSuggestionsField(contextSuggestions),
+    kind: "accepted",
+    result: {
+      status: status as RoundResult["status"],
+      ...(work && typeof work === "object" && !Array.isArray(work) ? { work: work as Record<string, unknown> } : {}),
+      ...(typeof note === "string" && note.trim()
+        ? { note: note.trim().slice(0, NOTE_MAX_CHARS) }
+        : {}),
+      ...(status === "blocked" && Array.isArray(options)
+        ? { options: options.filter((item): item is string => typeof item === "string").slice(0, OPTIONS_MAX).map((item) => item.slice(0, OPTION_MAX_CHARS)) }
+        : {}),
+      ...contextSuggestionsField(contextSuggestions),
+    },
   };
 }
 

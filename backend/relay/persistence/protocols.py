@@ -39,6 +39,7 @@ class SessionStore(Protocol):
         hydrate_events: bool = True,
     ) -> dict[str, Any]: ...
     def get_session(self, session_id: str) -> dict[str, Any]: ...
+    def mutation_scope(self, session_id: str) -> AbstractContextManager[Any]: ...
     def record_runtime_affinity(
         self, session_id: str, computer_id: str
     ) -> dict[str, Any]: ...
@@ -308,7 +309,8 @@ class AuthStore(Protocol):
 
 class DaemonStore(Protocol):
     def request_run_stop(
-        self, request_id: str, command_id: str, reason: str
+        self, request_id: str, command_id: str, reason: str,
+        *, actor_employee_id: str | None = None,
     ) -> dict[str, Any] | None: ...
     def mark_run_request_state(
         self, request_id: str, key: str

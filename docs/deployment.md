@@ -128,13 +128,26 @@ This is the better steady state once you have a domain. Requires DNS.
 1. **Create the project and database.** New project → *Provision Postgres*.
    Railway exposes `DATABASE_URL` on the database service.
 
-2. **Add the backend service** from this repo. `railway.json` at the repo root
-   already selects the build and deploy settings:
-   - builds `backend/Dockerfile` (backend only — no agent CLIs, no BoxLite);
-   - runs `alembic -c backend/alembic.ini upgrade head` as the pre-deploy
-     command, so migrations land before the new container takes traffic;
-   - health-checks `/healthz`;
-   - pins `numReplicas: 1` — see [Run one replica](#run-one-replica).
+2. **Create an empty backend service** with the repository root as its
+   root directory. Connect this repo after configuring the settings and
+   variables below. Set `RAILWAY_DOCKERFILE_PATH=backend/Dockerfile` before its
+   first build, and configure these service settings (the automated deploy
+   script sets them through the API):
+   - builder `RAILPACK`, with Dockerfile path `backend/Dockerfile` (Railway
+     builds the Dockerfile when present; no agent CLIs or BoxLite);
+   - start command `relay`;
+   - pre-deploy command `alembic -c backend/alembic.ini upgrade head`, so
+     migrations land before the new container takes traffic;
+   - health check `/healthz`, timeout 120 seconds;
+   - one replica, sleeping disabled, restart on failure (10 retries).
+
+   `railway.json` and `railway.toml` are deprecated and cannot be enabled for
+   new services. This repository uses explicit API settings in
+   `deploy/services/backend.json` and `deploy/services/web.json`. These are
+   script inputs, not Railway Config as Code files. For CLI-managed IaC,
+   migrate/import the existing project into one `.railway/railway.ts` and
+   review the plan before applying it; Railway does not read that file during
+   ordinary deploys. See [Railway's migration guide](https://docs.railway.com/infrastructure-as-code#migrating-from-config-as-code).
 
 3. **Reference the database.** In the backend service's variables, add
    `DATABASE_URL` as a reference to the Postgres service
@@ -326,7 +339,8 @@ calls the backend origin directly with `credentials: "include"`.
 The backend runs a background `TaskScheduler` that promotes due automations and
 dispatches assigned tasks. It is not leader-elected: a second replica would
 promote and dispatch the same work twice. Keep `numReplicas: 1` (as
-`railway.json` sets), and scale up only after giving the scheduler a lock — or
+`deploy/services/backend.json` sets), and scale up only after giving the
+scheduler a lock — or
 by running extra replicas with `RELAY_TASK_SCHEDULER_ENABLED=0` and keeping
 exactly one scheduler instance.
 
@@ -395,7 +409,7 @@ the backend serves at `/`. See [local-development.md](local-development.md).
 | `RELAY_CLIENT_IP_HEADER` | unset | Header naming the real client on edge-verified requests (e.g. `CF-Connecting-IP`), used by rate limits. Requires `RELAY_EDGE_SECRET`. |
 | `RELAY_BLOB_STORE` | `database` | `r2` keeps workspace-artifact snapshots and skill bundle bytes in Cloudflare R2 instead of Postgres and the data dir; needs `RELAY_R2_ACCOUNT_ID`, `RELAY_R2_ACCESS_KEY_ID`, `RELAY_R2_SECRET_ACCESS_KEY`, `RELAY_R2_BUCKET` (optional `RELAY_R2_ENDPOINT`). See [deployment-cloudflare.md](deployment-cloudflare.md#6-r2-for-artifact-snapshots-and-skill-bundles-optional). |
 | `RELAY_BACKUP_R2_BUCKET` | unset | Bucket for `relay backup-database` (the nightly `pg_dump` cron service). Uses `RELAY_BACKUP_R2_ACCESS_KEY_ID`/`RELAY_BACKUP_R2_SECRET_ACCESS_KEY`, falling back to the `RELAY_R2_*` keys. See [deployment-cloudflare.md](deployment-cloudflare.md#7-nightly-database-backups-to-r2). |
-| `PG_CLIENT_MAJOR` | `17` | Image build arg: the `pg_dump` major version installed for backups; must be at least the server's. |
+| `PG_CLIENT_MAJOR` | `18` | Image build arg: the `pg_dump` major version installed for backups; must be at least the server's. |
 | `RELAY_MAX_JSON_BODY_BYTES` | `4194304` | Maximum JSON request body size before a `413` response. |
 | `RELAY_STREAM_MAX_SECONDS` | `1800` | Cap on one SSE connection. |
 | `RELAY_ADMIN_TOKEN` | unset | One-time admin bootstrap token. |

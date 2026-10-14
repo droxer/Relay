@@ -106,7 +106,6 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
         task.pop("waitingReason", None)
         task.pop("waitingSessionId", None)
         task.pop("waitingRequest", None)
-        task.pop("waitingRequest", None)
     if status in ("running", "review", "waiting_for_human") and not task.get(
         "isRoutine"
     ):

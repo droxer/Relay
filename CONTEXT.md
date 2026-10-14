@@ -32,9 +32,10 @@ replaced without moving or recreating the Agent or Placement.
 _Avoid_: Assignment, deployment
 
 **Node-scoped Team**:
-A lead and member Agents whose active placements all reference Agent Runtimes
-on the Thread's Computer. An unplaced Agent or an Agent on another Computer is
-not eligible to join.
+A lead and member Agents bound to one Computer chosen when the Team is set up
+(`computerId`). Every member's active Placement must be on that Computer; an
+unplaced Agent or an Agent on another Computer is not eligible to join. A
+Thread may address a Team only when the Team lives on the Thread's Computer.
 _Avoid_: Cross-node team, shared-path team
 
 **Thread Runtime**:
@@ -44,9 +45,19 @@ eligible to participate in that thread.
 _Avoid_: Per-turn computer, movable thread
 
 **Thread Workspace**:
-The only writable work context. Every Agent participating in one Thread shares
-that Thread's workspace; no Agent workspace survives or spans Threads.
+The writable work context of a Thread that belongs to neither a Task nor a
+Project. Every Agent participating in that Thread shares it; no Agent workspace
+survives or spans Threads.
 _Avoid_: Agent Workspace, shared Computer workspace
+
+**Task Workspace**:
+The writable work context shared by every round of one backlog Task
+(`tasks/<taskId>/`), or of one Automation occurrence
+(`tasks/<routineId>/<taskId>/`). It is bound once at first dispatch
+(`task.workspace_bound`) and reused by every later round; a Computer without
+task-workspace support is refused rather than degraded. A Task in a Project
+uses the Project's workspace instead.
+_Avoid_: Thread Workspace (for task rounds), round directory
 
 **Node Workspace Root**:
 Storage configured on a Computer that contains Thread Workspaces. It is not a

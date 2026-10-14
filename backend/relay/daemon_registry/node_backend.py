@@ -956,6 +956,7 @@ class ServerDaemonNodeBackend:
                 decision,
                 request["assignments"],
                 round_id=(round_id if manifest and manifest.get("handoffContext") else request.get("_admissionId") or round_id),
+                actor_employee_id=actor_employee_id,
             )
         if manifest:
             controller.record_collaboration_round_started(session_id, manifest)
@@ -969,6 +970,7 @@ class ServerDaemonNodeBackend:
         assignments: list[dict[str, Any]],
         *,
         round_id: str | None = None,
+        actor_employee_id: str | None = None,
     ) -> None:
         kind = decision.get("kind")
         note = decision.get("note") if isinstance(decision.get("note"), str) else None
@@ -981,6 +983,7 @@ class ServerDaemonNodeBackend:
                 note,
                 target_agent,
                 decision_id=decision_id,
+                actor_employee_id=actor_employee_id,
             )
         elif kind == "handoff" and target_agent:
             controller.handoff_session(
@@ -990,6 +993,7 @@ class ServerDaemonNodeBackend:
                 note,
                 decision.get("targetAgentId"),
                 decision_id=decision_id,
+                actor_employee_id=actor_employee_id,
             )
 
     def _prepare_run_request(
@@ -1035,6 +1039,7 @@ class ServerDaemonNodeBackend:
         session_id: str,
         reason: str,
         actor_employee_id: str | None = None,
+        *, actor_is_admin: bool = False,
     ) -> dict[str, Any] | None:
         """Cancel the session's active daemon run.
 
@@ -1047,7 +1052,7 @@ class ServerDaemonNodeBackend:
         sandbox = self.registry.get(sandbox_id)
         if not sandbox:
             raise KeyError(f"Sandbox {sandbox_id} has no registered daemon node.")
-        if actor_employee_id:
+        if actor_employee_id and not actor_is_admin:
             assert_session_owned_by_employee(
                 self.registry.store, session_id, actor_employee_id
             )
@@ -1056,7 +1061,9 @@ class ServerDaemonNodeBackend:
         )
         if request:
             self.registry.cancel_run_request_before_delivery(request["id"], reason)
-        active = self.registry.cancel_active_run(sandbox_id, session_id, reason)
+        active = self.registry.cancel_active_run(
+            sandbox_id, session_id, reason, actor_employee_id=actor_employee_id,
+        )
         if not active:
             session = self.registry.store.get_session(session_id)
             if session.get("status") in ("completed", "failed", "cancelled"):

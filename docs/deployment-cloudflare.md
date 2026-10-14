@@ -18,15 +18,30 @@ daemons ─┴─ https ──────▶ │ api.example.com   adds X-Relay
 The examples below use `api.example.com` for the backend. Any hostname works,
 as long as the backend and the UI share one registrable domain.
 
+[`deploy/deploy.sh`](../deploy/README.md) automates sections 1–3, 6 (given an
+existing bucket), 8, and 9 through the Railway and Cloudflare APIs. The steps
+below are what it does, and what to do by hand without it.
+
 ## 1. Domain and TLS
 
 1. Railway → backend service → *Settings* → *Networking* → *Custom Domain*:
-   add `api.example.com`. Railway shows the CNAME target.
-2. Cloudflare → *DNS*: add that CNAME, **proxied** (orange cloud).
+   add `api.example.com`. Railway shows the routing CNAME and ownership TXT.
+2. Cloudflare → *DNS*: add that CNAME, **proxied** (orange cloud), and the
+   verification TXT with exactly the name and value Railway supplies. Keep
+   TXT and any `_acme-challenge` CNAME DNS-only. Both routing and verification
+   records are required; a missing TXT leaves the domain unverified.
 3. Cloudflare → *SSL/TLS*: mode **Full (strict)**. Railway issues the origin
    certificate for the custom domain; if issuance stalls, switch the record to
    DNS-only until Railway reports the certificate, then proxy it again.
 4. Turn on *Always Use HTTPS*.
+
+**Free certificates renew automatically.** Cloudflare Universal SSL handles the
+browser-to-Cloudflare certificate, including renewal, at no certificate cost.
+Railway issues and renews the origin's Let's Encrypt certificate. No Certbot
+container or renewal cron is needed. Keep Universal SSL enabled, the zone
+active, and Railway's verification and ACME records in DNS (ACME records stay
+DNS-only). See [Cloudflare Universal SSL](https://developers.cloudflare.com/ssl/edge-certificates/universal-ssl/)
+and [Railway TLS](https://docs.railway.com/networking/domains/working-with-domains#ssl-certificates).
 
 ## 2. Lock the origin to Cloudflare
 
@@ -35,8 +50,9 @@ Cloudflare adds it to every request; the backend refuses requests without it.
 
 1. Generate a secret: `openssl rand -hex 32`.
 2. Cloudflare → *Rules* → *Transform Rules* → *Modify Request Header* → new
-   rule matching all incoming requests: **Set static** `X-Relay-Edge` to the
-   secret. *Set* overwrites any value a client sends, so the header cannot be
+   rule matching requests to the API host (`http.host eq "api.example.com"`):
+   **Set static** `X-Relay-Edge` to the secret, so it never reaches any other
+   origin. *Set* overwrites any value a client sends, so the header cannot be
    forged through the edge.
 3. Railway backend variables:
 
@@ -105,10 +121,12 @@ responses on that path (Rocket Loader, Email Obfuscation, Zaraz).
 - **Rate limiting** (*Security* → *WAF* → *Rate limiting rules*): add an edge
   limit on `/api/v1/auth/` and `/api/v1/automations/*/webhook` as a first
   line; the backend's own limits stay in force behind it.
-- **Bot protection:** daemons and supervisors are not browsers. If you enable
-  Bot Fight Mode or a managed challenge, add a WAF *Skip* rule for
+- **Bot protection:** daemons and supervisors are not browsers. Keep ordinary
+  Bot Fight Mode disabled: WAF Skip rules cannot bypass it. If you use Super
+  Bot Fight Mode or managed challenge rules, configure supported exceptions for
   `/api/v1/daemon-node`, `/api/v1/computer-authorizations`, `/install.sh`, and
-  `/computer/` so they are never challenged.
+  `/computer/` on the API host. Test enrollment, polling and bundle downloads.
+  See [Cloudflare's limitations](https://developers.cloudflare.com/bots/get-started/bot-fight-mode/#limitations).
 - **Request body size:** Cloudflare's plan limit (100 MB on Free/Pro) sits
   above `RELAY_MAX_JSON_BODY_BYTES`, so the backend's limit is the one users hit.
 
@@ -192,11 +210,11 @@ uploads nothing.
    `relay-backups` only. Keep it separate from the artifact token so the
    backend's everyday credentials cannot touch backups.
 3. **Service.** In the Railway project → *New* → *GitHub repo* → this repo
-   again, so it builds the same image (`backend/Dockerfile`). In the new
-   service's *Settings*, set the *Custom Start Command* to `relay
+   again. Set `RAILWAY_DOCKERFILE_PATH=backend/Dockerfile` before building.
+   In the new service's *Settings*, set the *Custom Start Command* to `relay
    backup-database`, the *Cron Schedule* to `0 3 * * *` (03:00 UTC), and the
    *Restart Policy* to *Never*; clear the pre-deploy command and health check
-   it inherits from `railway.json`. Give it no domain.
+   if copied from the backend service. Give it no domain.
 4. **Variables** on the backup service:
 
    | Variable | Value |
@@ -206,7 +224,7 @@ uploads nothing.
    | `RELAY_R2_ACCOUNT_ID` | your Cloudflare account ID |
    | `RELAY_BACKUP_R2_ACCESS_KEY_ID` | the backup token's access key ID |
    | `RELAY_BACKUP_R2_SECRET_ACCESS_KEY` | the backup token's secret |
-   | `PG_CLIENT_MAJOR` | your Postgres major version (default `17`) |
+   | `PG_CLIENT_MAJOR` | your Postgres major version (image default `18`; match the server) |
 
    `pg_dump` must be at least the server's major version. Railway passes
    `PG_CLIENT_MAJOR` to the image build, which installs that client from the
@@ -243,11 +261,14 @@ backend through Cloudflare from its own address, so `CF-Connecting-IP` would
 name the web service for every user and the backend's login rate limit would
 put them all in one bucket.
 
-1. **Service.** In the Railway project → *New* → *GitHub repo* → this repo. In
-   the new service's *Settings*, set the *Config-as-code* path to
-   `web/railway.json`; without it the service picks up the root
-   `railway.json` and builds the backend. It builds `web/Dockerfile` and
-   checks `/healthz`.
+1. **Service.** Create an empty service, keeping the repository root as its
+   root directory. Set `RAILWAY_DOCKERFILE_PATH=web/Dockerfile`, then configure
+   builder `RAILPACK` with Dockerfile path `web/Dockerfile`, `/healthz` health
+   check (60 seconds), one replica,
+   restart on failure (10 retries), and no custom start or pre-deploy command.
+   Set the API origin below before connecting the GitHub repository. The
+   automated script applies `deploy/services/web.json` directly through the
+   API; it does not use the deprecated Config-as-code path.
 2. **Variable** on the web service:
 
    | Variable | Value |
@@ -257,9 +278,8 @@ put them all in one bucket.
    It is inlined at build time: the build fails without it, and changing it
    takes a redeploy, not a restart.
 3. **Domain.** Add `app.example.com` as the service's custom domain and a
-   proxied CNAME in Cloudflare, as in section 1. The section 2 Transform Rule
-   also stamps `X-Relay-Edge` on these requests; the web service ignores it.
-   The UI's origin needs no lock — it serves only public static files.
+   proxied CNAME in Cloudflare, as in section 1. The UI's origin needs no
+   lock — it serves only public static files.
 4. **Backend variables**, so the browser may call the API from the UI's origin
    with its session cookie:
 

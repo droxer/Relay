@@ -56,6 +56,10 @@ cf_ensure_record() {
   conflicts=$(jq -r --arg t "$type" '[.[] | select((.type == "A" or .type == "AAAA" or .type == "CNAME") and .type != $t) | "\(.type) \(.content)"] | join(", ")' <<<"$existing")
   [ -z "$conflicts" ] || die "$name already has $conflicts in Cloudflare; delete it, then re-run (Railway needs a $type to $content)"
 
+  conflicts=$(jq -r --arg t "$type" --arg c "$(cf_normalize "$content")" \
+    '[.[] | select(.type == $t) | select((.content | ascii_downcase | rtrimstr(".")) != $c) | .content] | join(", ")' <<<"$existing")
+  [ -z "$conflicts" ] || die "$name already points to $conflicts; refusing to overwrite it with $content"
+
   id=$(jq -r --arg t "$type" '[.[] | select(.type == $t)][0].id // empty' <<<"$existing")
   if [ -z "$id" ]; then
     cf POST "/zones/$zone/dns_records" \
