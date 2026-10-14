@@ -128,6 +128,9 @@ newer and `uv` are required for the backend.
   for every daemon it launches so supervisor logs stay lifecycle-only; output
   still streams to the backend and the daemon's JSONL run logs.
 - Stop backend, daemon, and BoxLite processes: `make stop`.
+- Deploy to Railway behind Cloudflare: `deploy/deploy.sh up` (config in
+  git-ignored `deploy/.env`; see `deploy/README.md`). Test it against mock APIs
+  with `deploy/tests/run.sh`.
 - Install pre-commit hooks: `make pre-commit-install`.
 - Run pre-commit hooks on all files: `make pre-commit-run`.
 - Rebuild/export the devbox image only when the image changes: `make run-fresh`.
