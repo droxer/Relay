@@ -16,7 +16,7 @@ the hosting:
 
 | Component | Host | Why |
 | --- | --- | --- |
-| `web/` (Next.js UI) | **Vercel** | Static/edge-friendly client app; no server state. |
+| `web/` (Next.js UI) | **Vercel**, or its own **Railway** service (`web/Dockerfile`) | Static/edge-friendly client app; no server state. For Railway, see [deployment-cloudflare.md § 8](deployment-cloudflare.md#8-the-web-ui-on-railway). |
 | `backend/` (FastAPI) | **Railway** | Long-lived process: SSE streams, daemon command queue, background task scheduler. |
 | Postgres | **Railway** | Sessions, tasks, events, auth, daemon registry. |
 | `relay-daemon` | **Neither** | Runs where the sandbox lives — see below. |
@@ -191,6 +191,9 @@ This is the better steady state once you have a domain. Requires DNS.
    header trust and prevents internal HTTP URLs from appearing in commands.
 
 ## 2. Vercel: the web UI
+
+To host the UI on Railway instead, skip this section and follow
+[deployment-cloudflare.md § 8](deployment-cloudflare.md#8-the-web-ui-on-railway).
 
 Create a Vercel project from the same repo with **Root Directory = `web`**.
 Vercel detects Next.js and installs the npm workspace from the repo root, so

@@ -1,26 +1,27 @@
 # Deploying Relay on Railway behind Cloudflare
 
-This guide puts Cloudflare (DNS, TLS, CDN, WAF) in front of the Railway
-backend. It replaces the Vercel half of [deployment.md](deployment.md): the
-backend keeps serving the exported web UI, so the browser, the API, SSE, and
-every daemon share one origin and the session cookie needs no cross-site
-handling. Follow [deployment.md § 1](deployment.md#1-railway-postgres--backend)
-for the Railway service and Postgres, then come back here.
+This guide puts Cloudflare (DNS, TLS, CDN, WAF) in front of Relay on Railway.
+It replaces the Vercel half of [deployment.md](deployment.md): the web UI runs
+as its own Railway service on a sibling subdomain, and the browser calls the
+backend directly (section 8). The backend image does not include the web UI.
+Follow [deployment.md § 1](deployment.md#1-railway-postgres--backend) for the
+backend service and Postgres, then come back here.
 
 ```
 browser ─┐                ┌──────── Cloudflare (proxied DNS) ────────┐
-daemons ─┴─ https ──────▶ │ relay.example.com                        │
-                          │  adds  X-Relay-Edge: <secret>            │
-                          │  caches /_next/static/*, daemon bundles  │
-                          └──────────────────┬───────────────────────┘
-                                             ▼
-                          Railway: relay backend (1 replica) ─▶ Postgres
+         ├─ https ──────▶ │ app.example.com   caches /_next/static/* │──▶ Railway: relay-web (static UI)
+daemons ─┴─ https ──────▶ │ api.example.com   adds X-Relay-Edge      │──▶ Railway: relay backend (1 replica) ─▶ Postgres
+                          │                   caches daemon bundles  │
+                          └──────────────────────────────────────────┘
 ```
+
+The examples below use `api.example.com` for the backend. Any hostname works,
+as long as the backend and the UI share one registrable domain.
 
 ## 1. Domain and TLS
 
 1. Railway → backend service → *Settings* → *Networking* → *Custom Domain*:
-   add `relay.example.com`. Railway shows the CNAME target.
+   add `api.example.com`. Railway shows the CNAME target.
 2. Cloudflare → *DNS*: add that CNAME, **proxied** (orange cloud).
 3. Cloudflare → *SSL/TLS*: mode **Full (strict)**. Railway issues the origin
    certificate for the custom domain; if issuance stalls, switch the record to
@@ -43,13 +44,13 @@ Cloudflare adds it to every request; the backend refuses requests without it.
    | --- | --- |
    | `RELAY_EDGE_SECRET` | the secret |
    | `RELAY_CLIENT_IP_HEADER` | `CF-Connecting-IP` |
-   | `RELAY_PUBLIC_BACKEND_URL` | `https://relay.example.com` |
+   | `RELAY_PUBLIC_BACKEND_URL` | `https://api.example.com` |
    | `RELAY_FORCE_SECURE_COOKIES` | `1` |
 
    Leave `RELAY_TRUST_PROXY_HEADERS` unset: Railway's edge has no stable
    address range to trust, and `RELAY_FORCE_SECURE_COOKIES` already gives the
-   cookie `Secure`. Leave the cookie host-only and `SameSite=Lax`, and leave
-   CORS unset — everything is same-origin.
+   cookie `Secure`. Leave `SameSite=Lax`; section 8 adds the CORS origin and
+   cookie domain the separately hosted UI needs.
 
 With `RELAY_EDGE_SECRET` set, any request that reaches the Railway domain
 directly (`*.up.railway.app`) gets `403`. `/healthz` stays open because
@@ -230,20 +231,72 @@ To restore over the live database instead, stop the backend first and add
 buckets from section 6, not in the dump; keys in a restored database still
 point at them.
 
-## 8. Verify
+## 8. The web UI on Railway
+
+The UI is a static export served by its own Railway service (`web/Dockerfile`:
+the Next.js export behind Caddy). The browser loads it from `app.example.com`
+and calls `api.example.com` itself — the *direct* model of
+[deployment.md](deployment.md#option-b--direct-on-sibling-subdomains). Do not
+use the proxied model here: a web service that proxied `/api` would reach the
+backend through Cloudflare from its own address, so `CF-Connecting-IP` would
+name the web service for every user and the backend's login rate limit would
+put them all in one bucket.
+
+1. **Service.** In the Railway project → *New* → *GitHub repo* → this repo. In
+   the new service's *Settings*, set the *Config-as-code* path to
+   `web/railway.json`; without it the service picks up the root
+   `railway.json` and builds the backend. It builds `web/Dockerfile` and
+   checks `/healthz`.
+2. **Variable** on the web service:
+
+   | Variable | Value |
+   | --- | --- |
+   | `NEXT_PUBLIC_RELAY_API_ORIGIN` | `https://api.example.com` |
+
+   It is inlined at build time: the build fails without it, and changing it
+   takes a redeploy, not a restart.
+3. **Domain.** Add `app.example.com` as the service's custom domain and a
+   proxied CNAME in Cloudflare, as in section 1. The section 2 Transform Rule
+   also stamps `X-Relay-Edge` on these requests; the web service ignores it.
+   The UI's origin needs no lock — it serves only public static files.
+4. **Backend variables**, so the browser may call the API from the UI's origin
+   with its session cookie:
+
+   | Variable | Value |
+   | --- | --- |
+   | `RELAY_CORS_ALLOW_ORIGINS` | `https://app.example.com` |
+   | `RELAY_SESSION_COOKIE_DOMAIN` | `.example.com` |
+
+   Sibling subdomains are same-site, so the cookie stays `SameSite=Lax`.
+5. **Caching.** The section 3 rules match on path, so they cover both
+   hostnames. The web service sends `immutable` for `/_next/static/*` and
+   `no-cache` for pages, so a deploy is visible immediately.
+
+## 9. Verify
 
 ```bash
 # Through the edge: 200
-curl -sS -o /dev/null -w '%{http_code}\n' https://relay.example.com/api/v1/auth/status
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.example.com/api/v1/auth/status
 # Directly at Railway: 403
 curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/api/v1/auth/status
 # Health check is open on the origin: 200
 curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/healthz
 # Static assets come from the edge cache after the first hit: HIT
-curl -sSI https://relay.example.com/_next/static/<any-asset> | grep -i cf-cache-status
+curl -sSI https://app.example.com/_next/static/<any-asset> | grep -i cf-cache-status
 # The API is never cached: BYPASS or DYNAMIC
-curl -sSI https://relay.example.com/api/v1/auth/status | grep -i cf-cache-status
+curl -sSI https://api.example.com/api/v1/auth/status | grep -i cf-cache-status
 ```
 
-Then open a thread with a running agent and confirm the stream stays live for
-several minutes, and connect a daemon to `https://relay.example.com`.
+The web UI and its CORS grant:
+
+```bash
+# Any client route returns the app shell: 200
+curl -sS -o /dev/null -w '%{http_code}\n' https://app.example.com/threads
+# The API allows the UI's origin with credentials
+curl -sSI -H 'Origin: https://app.example.com' https://api.example.com/api/v1/auth/status \
+  | grep -i '^access-control-allow-'
+```
+
+Then sign in at `https://app.example.com`, open a thread with a running agent
+and confirm the stream stays live for several minutes, and connect a daemon to
+`https://api.example.com`.
