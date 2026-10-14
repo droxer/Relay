@@ -180,3 +180,25 @@ def test_spa_fallback_is_allowlisted_and_never_masks_api_typos(
         assert response.status_code == 404
         assert response.headers["content-type"].startswith("application/json")
         assert response.json() == {"detail": "Not found."}
+
+
+def test_split_deployment_redirects_browser_routes_to_the_web_origin(
+    monkeypatch, tmp_path: Path
+) -> None:
+    # The installer opens the verificationUrl on the backend origin (the daemon
+    # refuses any other origin); the API host must hand it to the web UI.
+    monkeypatch.setenv("RELAY_PUBLIC_WEB_URL", "https://relay.example.com/")
+    client = _client(monkeypatch, tmp_path)
+
+    response = client.get(
+        "/settings/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw",
+        follow_redirects=False,
+    )
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        "https://relay.example.com/settings/computers?connect=T84hj7Ilqp75DKZpCEXQwp5Xv_tFB7Cw"
+    )
+    assert client.get("/", follow_redirects=False).headers["location"] == "https://relay.example.com/"
+
+    for path in ("/api/v1/missing", "/typoed-api/path", "/missing.js"):
+        assert client.get(path, follow_redirects=False).status_code == 404

@@ -227,6 +227,7 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
 
     wip_limit()  # Validate the shared admission policy before starting services.
     deploy_config.public_backend_url()  # Fail before enrollment can emit a bad URL.
+    deploy_config.public_web_url()
     deploy_config.edge_secrets()  # Fail before a weak origin lock goes live.
     deploy_config.client_ip_header()
     root_dir = Path(root_dir)

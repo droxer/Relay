@@ -55,6 +55,7 @@ backend_variables() {
     {
       DATABASE_URL: $db,
       RELAY_PUBLIC_BACKEND_URL: $api,
+      RELAY_PUBLIC_WEB_URL: $web,
       RELAY_CORS_ALLOW_ORIGINS: $web,
       RELAY_SESSION_COOKIE_DOMAIN: $cookie,
       RELAY_FORCE_SECURE_COOKIES: "1",
