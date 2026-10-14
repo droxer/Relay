@@ -69,12 +69,11 @@ ask the user whether to run `codegraph init -i`.
 ## Project Shape
 
 - Workspace packages: root Python backend `backend/`,
-  `packages/relay-core/`, `packages/relay-chat/`, `packages/relay-daemon/`,
+  `packages/relay-core/`, `packages/relay-daemon/`,
   `packages/relay-supervisor/`, and top-level web frontend `web/`.
 - Backend CLI entrypoint: `backend/relay/cli.py`.
 - Daemon CLI entrypoint: `packages/relay-daemon/src/cli.ts`.
 - Shared protocol and agent runtime modules: `packages/relay-core/src/`.
-- Chat gateway and provider adapters: `packages/relay-chat/src/`.
 - Python backend implementation modules: `backend/relay/` — organized as
   `core/` (models, environment, ids, storage config), `persistence/` (event
   stores), `security/` (auth, rate limiting), `sessions/` (session mutation
@@ -102,7 +101,7 @@ Node.js 22.19 or newer is required.
 ## Commands
 
 - Install dependencies: `npm install`.
-- Build packages: `make build-packages` builds `relay-core`, `relay-daemon`, and `relay-supervisor` only. Full build: `npm run build` (includes `relay-chat` and `web`).
+- Build packages: `make build-packages` builds `relay-core`, `relay-daemon`, and `relay-supervisor` only. Full build: `npm run build` (includes `web`).
 - Test: `npm test` or `make test`.
 - Run one built test file: `node --test dist/packages/relay-core/tests/handoff.test.js`
   after a build.
@@ -149,10 +148,6 @@ Key modules:
 - `packages/relay-core/src/token-usage.ts`: `TokenUsage` type and
   `normalizeTokenUsage` — normalizes input/output/cache token counts from any
   agent CLI output format.
-- `packages/relay-chat/src/gateway.ts`: `RelayChatGateway` — routes chat
-  provider events to the backend and streams session updates back.
-- `packages/relay-chat/src/providers/`: Discord, Telegram, and Lark
-  conversation adapters.
 - `backend/relay/cli.py`: Python backend binary entrypoint (`relay`).
 - `packages/relay-daemon/src/cli.ts`: daemon binary entrypoint.
 - `packages/relay-daemon/src/index.ts`: daemon runtime — registers with the
@@ -265,8 +260,6 @@ Test focus:
 
 - `packages/relay-core/tests/handoff.test.ts`: prompt construction, stream rendering, and
   regression guards that review mode omits verdict markers and feedback injection.
-- `packages/relay-chat/tests/chat.test.ts`: chat gateway, provider adapters,
-  command parsing, and relay-client integration.
 - `packages/relay-daemon/tests/daemon.test.ts`: daemon registration, command
   polling, and agent execution.
 - `backend/tests/`: Python controller, event store behavior, daemon registry,

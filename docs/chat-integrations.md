@@ -6,6 +6,11 @@
 > the web UI has no Channels page, command, or shortcut unless it is built with
 > `NEXT_PUBLIC_RELAY_CHANNELS_ENABLED=1`. Everything below describes the
 > feature as it behaves once both are set.
+>
+> **The `relay-chat` gateway package has been removed** (2026-10-14). The
+> backend chat routes and chat store remain, but no gateway client ships with
+> the repo; sections describing `relay-chat` and `relay-chat-server` are
+> historical and kept for reference if the gateway is rebuilt.
 
 Relay supports Discord, Telegram, Lark, and future chat clients through the
 provider-neutral `relay-chat` package. Chat clients are control-plane clients:

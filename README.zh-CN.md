@@ -132,7 +132,6 @@ make web                         # Web 界面，监听 127.0.0.1:5000
 backend/     Python / FastAPI 控制平面：API 路由、事件溯源存储、调度器、数据库迁移
 packages/    TypeScript 工作区
   relay-core/        共享协议、智能体注册表、CLI 命令、提示词
-  relay-chat/        聊天网关及 Discord、Telegram、Lark 适配器
   relay-daemon/      执行平面：注册计算机并运行智能体 CLI
   relay-supervisor/  确保员工守护进程已部署并保持运行
 web/         Next.js Web 界面，静态导出后由后端提供服务

@@ -16,7 +16,6 @@
     "paths": {
       "relay-core": ["packages/relay-core/src/index.ts"],
       "relay-core/api-url": ["packages/relay-core/src/api-url.ts"],
-      "relay-chat": ["packages/relay-chat/src/index.ts"],
       "relay-daemon": ["packages/relay-daemon/src/index.ts"],
       "relay-supervisor": ["packages/relay-supervisor/src/index.ts"]
     }

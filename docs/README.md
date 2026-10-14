@@ -47,9 +47,7 @@ document.
   lease.
 - [`chat-integrations.md`](chat-integrations.md) owns provider setup, identity
   mapping, commands, security, and operations for chat channels, a feature
-  that is disabled by default (`RELAY_CHANNELS_ENABLED`). The
-  [`relay-chat` package README](../packages/relay-chat/README.md) stays limited
-  to package boundaries.
+  that is disabled by default (`RELAY_CHANNELS_ENABLED`).
 - The [`relay-daemon` README](../packages/relay-daemon/README.md) owns the
   daemon environment and delivery contract.
 

@@ -132,7 +132,6 @@ Tests, database migrations, the supervisor, pre-commit hooks, and shutdown comma
 backend/     Python / FastAPI control plane: API routes, event-sourced stores, scheduler, migrations
 packages/    TypeScript workspaces
   relay-core/        Shared protocol, agent registry, CLI commands, prompts
-  relay-chat/        Chat gateway and Discord, Telegram, and Lark adapters
   relay-daemon/      Execution plane: registers a computer and runs agent CLIs
   relay-supervisor/  Keeps employee daemons provisioned and running
 web/         Next.js web UI, exported statically and served by the backend

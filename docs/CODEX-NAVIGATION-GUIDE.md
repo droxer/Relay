@@ -13,7 +13,7 @@ module and responsibility, not a named person or team.
 ## Fast Architecture Map
 
 ```text
-web/ and relay-chat
+web/
         |
         | HTTP / SSE under /api/v1
         v
@@ -66,7 +66,6 @@ relational columns, list summaries, and dashboard rows are projections.
 | Web session streaming | `web/src/hooks/useSessionEvents.ts` | `lib/sessionEvents.ts`, `sessionEventMerge.ts`, `sessionPollMerge.ts` |
 | Issues, project boards, and routines | `web/src/components/IssuesPage.tsx`, `BacklogPage.tsx`, `RoutinesPage.tsx` | `lib/issueQueues.ts`, `backlog.ts`, `routine.ts`, task API contract |
 | Managed computers | `backend/relay/services/managed_nodes.py` | managed-node routes and `packages/relay-supervisor/` |
-| Chat providers | `packages/relay-chat/src/gateway.ts`, `providers/` | backend chat routes and provider tests |
 | Database schema | table declarations under `backend/relay/persistence/` | `backend/migrations/versions/`, schema-drift tests |
 
 Compatibility imports are not the place for new implementation. Put new

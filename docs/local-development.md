@@ -551,13 +551,6 @@ packages/relay-core/src/commands.ts           agent command builders
 packages/relay-core/src/prompts.ts            agent prompt builders
 packages/relay-core/src/renderers.ts          stream-json and JSONL renderers
 packages/relay-core/src/token-usage.ts        TokenUsage type and normalizeTokenUsage
-packages/relay-chat/src/gateway.ts            RelayChatGateway — routes chat events to backend
-packages/relay-chat/src/relay-client.ts       HTTP client for chat → backend calls
-packages/relay-chat/src/identity.ts           StaticChatIdentityResolver
-packages/relay-chat/src/commands.ts           shared /relay command parser
-packages/relay-chat/src/providers/discord.ts  Discord adapter
-packages/relay-chat/src/providers/telegram.ts Telegram adapter
-packages/relay-chat/src/providers/lark.ts     Lark adapter
 packages/relay-daemon/src/cli.ts              daemon binary entrypoint
 packages/relay-daemon/src/index.ts            daemon runtime
 packages/relay-daemon/src/box.ts              BoxLite VM setup
@@ -590,8 +583,6 @@ Test coverage is organized as:
   HTTP API routes.
 - `packages/relay-core/tests/handoff.test.ts`: prompt contracts, Codex verdict
   parsing, command generation, stream renderers, and BoxLite helpers.
-- `packages/relay-chat/tests/chat.test.ts`: chat gateway, provider adapters,
-  command parsing, and relay-client integration.
 - `packages/relay-daemon/tests/daemon.test.ts`: daemon registration, command
   polling, and agent execution.
 - `web/tests/status.test.ts`: web status derivation for daemon nodes and
