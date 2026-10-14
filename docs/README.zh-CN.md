@@ -14,8 +14,7 @@
   之后（单一 origin、edge 密钥、缓存规则、SSE）。
 - [`../backend/migrations/README.md`](../backend/migrations/README.md) — 数据库迁移和旧对话导入的权威流程。
 - [`api.md`](api.md) — 当前浏览器路由和 HTTP API 契约。
-- [`../AGENTS.md`](../AGENTS.md) — Codex 使用的仓库结构、工程不变量和验证指南。
-- [`../CLAUDE.md`](../CLAUDE.md) — Claude Code 使用的命令、架构细节、不变量和测试指南。
+- [`../AGENTS.md`](../AGENTS.md) — 唯一的智能体指南（Codex、Claude Code 等共用）：命令、架构、不变量和验证指南。[`../CLAUDE.md`](../CLAUDE.md) 仅导入它。
 - [`../CONTEXT.md`](../CONTEXT.md) — 简短的权威产品术语表。
 - [`CODEX-NAVIGATION-GUIDE.md`](CODEX-NAVIGATION-GUIDE.md) — 行为的权威来源、
   必须联动变更的相邻表面，以及评审 diff 包中应包含的证据（英文）。
