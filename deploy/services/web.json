@@ -1,0 +1,19 @@
+{
+  "builder": "RAILPACK",
+  "dockerfilePath": "web/Dockerfile",
+  "watchPatterns": [
+    "web/**",
+    "packages/relay-core/**",
+    "package.json",
+    "package-lock.json"
+  ],
+  "healthcheckPath": "/healthz",
+  "healthcheckTimeout": 60,
+  "restartPolicyType": "ON_FAILURE",
+  "restartPolicyMaxRetries": 10,
+  "preDeployCommand": [],
+  "numReplicas": 1,
+  "startCommand": null,
+  "railwayConfigFile": null,
+  "sleepApplication": false
+}

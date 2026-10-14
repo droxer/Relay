@@ -28,7 +28,7 @@ WORKDIR /app
 # image). pg_dump must be at least the server's major version, so the client
 # comes from the PostgreSQL apt repository; set PG_CLIENT_MAJOR to match the
 # database (Railway passes service variables through as build args).
-ARG PG_CLIENT_MAJOR=17
+ARG PG_CLIENT_MAJOR=18
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && install -d /usr/share/postgresql-common/pgdg \
@@ -45,14 +45,14 @@ RUN apt-get update \
 # Resolve dependencies before copying sources so a code-only change reuses the
 # cached dependency layer. The migration extra carries Alembic without shipping
 # test and pre-commit tooling in the runtime image.
+# Railway cache-mount IDs must contain a literal service ID. Keep this image
+# portable across projects and backup services by using Docker layer caching.
 COPY backend/pyproject.toml backend/uv.lock ./backend/
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --extra migration --extra r2 --frozen --no-install-project
+RUN uv sync --project backend --extra migration --extra r2 --frozen --no-install-project
 
 COPY backend/ ./backend/
 COPY --from=computer-client /build/backend/relay/computer/daemon.tar.gz ./backend/relay/computer/daemon.tar.gz
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --extra migration --extra r2 --frozen
+RUN uv sync --project backend --extra migration --extra r2 --frozen
 
 # Bind every interface: the platform routes to the container's published port,
 # which arrives as $PORT and is read by relay.core.deploy_config.

@@ -1,0 +1,46 @@
+# Serves the exported web UI for the standalone web image (web/Dockerfile).
+# TLS terminates at the platform edge, so Caddy only speaks plain HTTP on $PORT.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+
+	# The same response headers web/vercel.json sets.
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Content-Security-Policy "base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Content-hashed filenames never change, so the edge and browser may keep them.
+	@hashed path /_next/static/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+	# A pathname with a file suffix is an asset request, never a client route: a
+	# missing script or image is a 404, not the app shell (the backend's
+	# web_ui_asset_response draws the same line).
+	@asset path_regexp \.[A-Za-z0-9]+$
+	handle @asset {
+		file_server
+	}
+
+	# Everything else is a client route of the single-page app.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} {path}.html /index.html
+		file_server
+	}
+}

@@ -49,3 +49,6 @@ web/playwright-report/
 
 # Generated downloadable computer client
 backend/relay/computer/daemon.tar.gz*
+
+# Deployment API credentials
+deploy/config.env

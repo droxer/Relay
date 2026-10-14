@@ -1,6 +1,6 @@
 # The backend image builds from the repo root as its context (see
-# railway.json). Everything the backend does not need is excluded here so the
-# uploaded context stays small — node_modules and .git alone are most of it.
+# deploy/services/backend.json). Exclude everything the backend does not need
+# so the uploaded context stays small — node_modules and .git are most of it.
 .git/
 .github/
 .worktrees/
@@ -32,6 +32,7 @@ htmlcov/
 .env.*.local
 **/.env
 **/.env.local
+deploy/config.env
 
 # Editor and OS noise.
 .idea/
