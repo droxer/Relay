@@ -118,6 +118,26 @@ def test_deleting_a_session_deletes_its_blobs(store, blobs) -> None:
     assert list(blobs.blobs) == [f"session-artifacts/{keep['id']}/{ARTIFACT_ID}"]
 
 
+@pytest.mark.parametrize("commit", [False, True])
+def test_session_blob_cleanup_waits_for_outer_commit(store, blobs, commit) -> None:
+    from relay.persistence.store_common import store_transaction
+
+    session = _session(store)
+    store.index_workspace_artifact(session["id"], _artifact(session["id"]), CONTENT)
+    try:
+        with store_transaction(store.engine):
+            store.delete_session(session["id"])
+            assert blobs.blobs
+            if not commit:
+                raise RuntimeError("abort outer operation")
+    except RuntimeError:
+        pass
+    if commit:
+        assert blobs.blobs == {}
+    else:
+        assert store.read_artifact_content(session["id"], ARTIFACT_ID) == CONTENT
+
+
 def test_inline_snapshots_still_read_after_the_blob_store_is_enabled(tmp_path, blobs) -> None:
     url = f"sqlite:///{tmp_path}/relay.db"
     inline = DatabaseSessionStore(url, create_schema=True)

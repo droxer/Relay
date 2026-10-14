@@ -59,6 +59,7 @@ from .store_common import (
     _read_json,
     _read_jsonl,
     _write_json,
+    after_store_commit,
     apply_session_event,
     create_all_tables,
     database_id_column,
@@ -1361,7 +1362,9 @@ class DatabaseSessionStore:
                 delete(self.events).where(self.events.c.session_id == session_pk)
             )
             conn.execute(delete(self.sessions).where(self.sessions.c.id == session_pk))
-        delete_session_blobs(self.blob_store, session_id)
+            after_store_commit(
+                self.engine, lambda: delete_session_blobs(self.blob_store, session_id)
+            )
 
     def _insert_tombstone(
         self,
@@ -1450,7 +1453,9 @@ class DatabaseSessionStore:
                 delete(self.events).where(self.events.c.session_id == session_pk)
             )
             conn.execute(delete(self.sessions).where(self.sessions.c.id == session_pk))
-        delete_session_blobs(self.blob_store, session_id)
+            after_store_commit(
+                self.engine, lambda: delete_session_blobs(self.blob_store, session_id)
+            )
         return True
 
     def list_sessions(self) -> list[dict[str, Any]]:
