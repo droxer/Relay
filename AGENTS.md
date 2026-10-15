@@ -244,7 +244,16 @@ migration.
   dashboard (`components/admin/dashboard/` — `DashboardView`, `KpiTile`,
   `NodeStatusCard`, `ActivityChart`, `ActivityFeed`, `TokenUsageChart`,
   `TopUsers`), node management (`NodeCard`, `AssignNodeDrawer`), and
-  executor management (`ManageExecutorsDrawer`).
+  executor management (`ManageExecutorsDrawer`). The page's root is
+  `components/RelayEntry.tsx`: a visitor at `/` without the
+  `relay-web.signedIn` hint gets the landing page alone, and `App.tsx` — with
+  every signed-in surface and `styles/app.css` — is one chunk that loads
+  beside it otherwise. Keep that boundary: the global `styles.css` holds only
+  tokens, the landing page, and the auth gate, and a heavy surface reached
+  from an always-rendered component (as `ProjectWorkspacePage` is from
+  `ThreadsView`) is `lazy`-loaded. The entry renders the loaded app directly
+  rather than through `Suspense`, whose ~300 ms reveal throttle would delay
+  every load.
 
 ### Backend / daemon / client token contract
 

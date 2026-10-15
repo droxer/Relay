@@ -66,6 +66,29 @@ export function writeLanguage(language: Language): void {
   if (typeof window !== "undefined") localStorage.setItem(languageStorageKey, language);
 }
 
+/* Whether this browser's last auth answer was a signed-in user. Only a hint
+   for the first paint: a visitor without it sees the landing page at once
+   while the app loads behind it, and one with it waits for the app instead of
+   flashing the landing page. The real answer is always /auth/me. layout.tsx
+   reads the same key before first paint. */
+export const SIGNED_IN_HINT_KEY = "relay-web.signedIn";
+
+export function readSignedInHint(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return localStorage.getItem(SIGNED_IN_HINT_KEY) === "1"; }
+  catch { return false; }
+}
+
+export function writeSignedInHint(signedIn: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (signedIn) localStorage.setItem(SIGNED_IN_HINT_KEY, "1");
+    else localStorage.removeItem(SIGNED_IN_HINT_KEY);
+  } catch {
+    // Storage can be unavailable (private mode quotas); the hint is optional.
+  }
+}
+
 /* ── Shell layout ──────────────────────────────────────────────────────────
    Panel widths and the rail's expanded flag survive reloads. Layout is a
    convenience, never load-bearing: every read falls back to the default and

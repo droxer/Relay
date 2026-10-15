@@ -93,11 +93,13 @@ def windows_installer(request: Request) -> Response:
     return Response(source, media_type="text/plain; charset=utf-8", headers=_NO_STORE)
 
 
+# The edge caches these paths, so a miss must say no-store: during a rollover an
+# old instance answers for the new digest, and a cached 404 would outlive it.
 @router.get("/computer/daemon-{digest}.tar.gz", include_in_schema=False)
 def bundle(digest: str) -> FileResponse:
     if not re.fullmatch(r"[a-f0-9]{64}", digest):
-        raise HTTPException(404, "Release not found.")
+        raise HTTPException(404, "Release not found.", headers=_NO_STORE)
     path, actual = _bundle()
     if digest != actual:
-        raise HTTPException(404, "Release changed. Copy and run the installation command again.")
+        raise HTTPException(404, "Release changed. Copy and run the installation command again.", headers=_NO_STORE)
     return FileResponse(path, media_type="application/gzip", headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})

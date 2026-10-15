@@ -1,7 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getMe, RelayApiError } from "../api";
 import type { CurrentUser } from "../types";
+import { writeSignedInHint } from "../lib/appStorage";
 
 const AUTH_SESSION_QUERY_KEY = ["auth", "me"] as const;
 /** Where the `/auth/me` probe leaves the server's capability switches, so
@@ -73,6 +74,14 @@ export function useAuthSession(): {
   }, [queryClient]);
 
   const user = query.data ?? null;
+  const known = query.isSuccess;
+  const signedIn = Boolean(query.data);
+  // Only a definitive answer moves the first-paint hint; an unreachable
+  // backend leaves it where it was.
+  useEffect(() => {
+    if (known) writeSignedInHint(signedIn);
+  }, [known, signedIn]);
+
   const status: AuthStatus = query.isSuccess
     ? (user ? "authenticated" : "anonymous")
     : query.failureCount > 0 ? "unreachable" : "checking";

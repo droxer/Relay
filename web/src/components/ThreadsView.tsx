@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type Dispatch, RefObject, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActionRoute,
@@ -41,9 +41,32 @@ import { Composer, type ComposerHandle } from "./composer/Composer";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
 import { buildSpaceItems, threadHasMultipleProducers } from "../lib/threadSpace";
 import { ProjectDrawer } from "./ProjectDrawer";
-import { ProjectWorkspacePage } from "./ProjectWorkspacePage";
+// The project page carries the whole task board (records, board, filters,
+// date picker); load it with the first project opened, not with every thread.
+const ProjectWorkspacePage = lazy(() => import("./ProjectWorkspacePage").then((m) => ({ default: m.ProjectWorkspacePage })));
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
+
+/** The project pane while its record, or the page's own code, is on the way. */
+function ProjectLoadingState() {
+  const { t } = useTranslation();
+  return (
+    <section
+      id="project-detail-panel"
+      className="chat-panel project-directory-empty project-route-state"
+      aria-label={t("project.loading")}
+      aria-busy="true"
+      role="status"
+      tabIndex={-1}
+    >
+      <RelayEmptyState feature="projects"
+        fill
+        title={t("project.loading")}
+        body={t("project.loading_body")}
+      />
+    </section>
+  );
+}
 
 type ThreadsViewProps = {
   taskThread?: boolean;
@@ -304,32 +327,21 @@ export function ThreadsView({
       />}
 
       {projectOverviewState === "ready" && selectedProject ? (
-        <ProjectWorkspacePage
-          project={selectedProject}
-          agents={logicalAgents}
-          tasks={tasks}
-          currentUser={currentUser}
-          computers={runtimeNodes}
-          onOpenThread={onSelectThread}
-          onNewThread={() => onNewThread(selectedProject.id)}
-          onDeleted={() => onSelectProject(null)}
-          onBack={() => onSelectProject(null)}
-        />
-      ) : projectOverviewState === "loading" ? (
-        <section
-          id="project-detail-panel"
-          className="chat-panel project-directory-empty project-route-state"
-          aria-label={t("project.loading")}
-          aria-busy="true"
-          role="status"
-          tabIndex={-1}
-        >
-          <RelayEmptyState feature="projects"
-            fill
-            title={t("project.loading")}
-            body={t("project.loading_body")}
+        <Suspense fallback={<ProjectLoadingState />}>
+          <ProjectWorkspacePage
+            project={selectedProject}
+            agents={logicalAgents}
+            tasks={tasks}
+            currentUser={currentUser}
+            computers={runtimeNodes}
+            onOpenThread={onSelectThread}
+            onNewThread={() => onNewThread(selectedProject.id)}
+            onDeleted={() => onSelectProject(null)}
+            onBack={() => onSelectProject(null)}
           />
-        </section>
+        </Suspense>
+      ) : projectOverviewState === "loading" ? (
+        <ProjectLoadingState />
       ) : projectOverviewState === "error" ? (
         <section
           id="project-detail-panel"

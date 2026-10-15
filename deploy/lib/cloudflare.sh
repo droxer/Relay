@@ -157,7 +157,9 @@ cf_edge_secret_rule() {
   }]'
 }
 
-# Cache rules (deployment-cloudflare.md § 3), in precedence order.
+# Cache rules (deployment-cloudflare.md § 3), in precedence order. Under
+# WEB_HOSTING=workers the Worker answers the web host before the zone cache, so
+# relay_cache_next_static only acts when Railway serves the web UI.
 cf_cache_rules() {
   jq -nc --arg api "$API_DOMAIN" --arg web "$WEB_DOMAIN" '
     def rule(ref; description; expression; params):
@@ -171,7 +173,9 @@ cf_cache_rules() {
         "(http.host eq \"\($api)\" and http.request.uri.path in {\"/install.sh\" \"/computer/install.sh\" \"/install.ps1\" \"/computer/install.ps1\"})"; {cache: false}),
       rule("relay_cache_next_static"; "Relay: content-hashed web assets";
         "(http.host eq \"\($web)\" and starts_with(http.request.uri.path, \"/_next/static/\"))";
-        {cache: true, edge_ttl: {mode: "override_origin", default: 31536000}}),
+        # A rollover can send a new chunk to the old instance; never keep that 404.
+        {cache: true, edge_ttl: {mode: "override_origin", default: 31536000,
+          status_code_ttl: [{status_code_range: {from: 400, to: 599}, value: -1}]}}),
       rule("relay_cache_daemon_bundles"; "Relay: digest-named daemon bundles"; api_path("/computer/daemon-");
         {cache: true, edge_ttl: {mode: "respect_origin"}})
     ]'

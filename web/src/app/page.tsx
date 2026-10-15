@@ -1,5 +1,5 @@
-import { App } from "../App";
+import { RelayEntry } from "../components/RelayEntry";
 
 export default function Page() {
-  return <App />;
+  return <RelayEntry />;
 }

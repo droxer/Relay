@@ -1007,4 +1007,18 @@ def web_ui_asset_response(asset_path: str) -> Response:
     if not asset.exists():
         return JSONResponse({"error": "Web UI asset not found."}, status_code=404)
     content_type = mimetypes.guess_type(asset.name)[0] or "application/octet-stream"
-    return Response(asset.read_bytes(), media_type=content_type)
+    return Response(
+        asset.read_bytes(),
+        media_type=content_type,
+        headers={"Cache-Control": web_ui_cache_control(asset.resolve().relative_to(dist.resolve()))},
+    )
+
+
+def web_ui_cache_control(relative: Path) -> str:
+    """The same split as web/Caddyfile: content-hashed files are kept, while
+    pages and fixed-name files (favicon, images) revalidate so a deploy shows."""
+    if relative.parts[:2] == ("_next", "static"):
+        return "public, max-age=31536000, immutable"
+    if relative.parts[:1] == ("landing",):
+        return "public, max-age=86400"
+    return "no-cache"

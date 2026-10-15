@@ -1,6 +1,9 @@
 # Response headers for the relay-web Worker's static assets, mirroring
 # web/Caddyfile (and web/vercel.json). Pages need no Cache-Control here: Workers
 # assets default to revalidating, so a deploy is visible immediately.
+# Cloudflare skips this file for what worker.js returns (deep links, missing
+# assets), so worker.js carries the /* block too; deploy/tests/worker.mjs
+# fails if the two differ.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -12,3 +15,8 @@
 # Content-hashed filenames never change, so the edge and browser may keep them.
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Landing screenshots keep their names across deploys; a day saves the repeat
+# visitor's revalidations, and a replaced screenshot shows within a day.
+/landing/*
+  Cache-Control: public, max-age=86400

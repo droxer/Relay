@@ -580,3 +580,23 @@ def test_reject_rechecks_the_thread_after_acquiring_admission_scope(review_app, 
     assert response.status_code == 409
     assert response.json()["detail"] == "session_run_in_flight"
     assert not review_app.state.session_store.get_session(session["id"])["decisions"]
+
+
+def test_web_assets_cache_only_content_hashed_files(review_app, monkeypatch, tmp_path):
+    dist = tmp_path / "out"
+    (dist / "_next" / "static" / "chunks").mkdir(parents=True)
+    (dist / "_next" / "static" / "chunks" / "app-1.js").write_text("app")
+    (dist / "index.html").write_text("<html></html>")
+    (dist / "favicon.ico").write_bytes(b"icon")
+    (dist / "landing").mkdir()
+    (dist / "landing" / "threads.webp").write_bytes(b"shot")
+    monkeypatch.setenv("RELAY_WEB_UI_DIST_DIR", str(dist))
+    client = TestClient(review_app)
+    hashed = client.get("/_next/static/chunks/app-1.js")
+    assert hashed.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert client.get("/landing/threads.webp").headers["cache-control"] == "public, max-age=86400"
+    # Fixed names and pages revalidate, so a deploy is visible at once.
+    for path in ("/favicon.ico", "/", "/index.html", "/threads"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["cache-control"] == "no-cache", path

@@ -9,6 +9,7 @@ bash "$TESTS_DIR/transport.sh"
 python3 "$TESTS_DIR/dockerfile.py"
 python3 "$TESTS_DIR/source.py"
 python3 "$TESTS_DIR/workers.py"
+node "$TESTS_DIR/worker.mjs"
 bash "$TESTS_DIR/release.sh"
 DEPLOY=$TESTS_DIR/../deploy.sh
 WORK=$(mktemp -d)
@@ -185,6 +186,7 @@ check "edge rule sends the backend's secret to the API host only" "
   and .[0].expression == \"(http.host eq \\\"api.get-relay.cc\\\")\""
 check "someone else's transform rule is kept" '[.rulesets.http_request_late_transform[] | select(.id == "foreign-1")] | length == 1'
 check "five Relay cache rules" '[.rulesets.http_request_cache_settings[] | select(.ref | startswith("relay_cache_"))] | length == 5'
+check "hashed web assets never keep an error at the edge" '.rulesets.http_request_cache_settings[] | select(.ref == "relay_cache_next_static") | .action_parameters.edge_ttl.status_code_ttl == [{"status_code_range": {"from": 400, "to": 599}, "value": -1}]'
 check "Worker relay-web serves the export through the assets binding" '.workers["relay-web"] | .metadata.main_module == "worker.js" and .metadata.bindings == [{"type": "assets", "name": "ASSETS"}] and (.module | contains("env.ASSETS.fetch"))'
 check "Worker falls through to worker.js on a miss and carries _headers" '.workers["relay-web"].metadata.assets.config | .not_found_handling == "none" and (._headers | contains("immutable"))'
 check "Worker manifest holds the export" '.workers["relay-web"].manifest | keys == ["/_next/static/chunks/app-1.js", "/_next/static/chunks/font.woff2", "/index.html"]'

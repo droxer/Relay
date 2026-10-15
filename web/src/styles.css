@@ -29,77 +29,14 @@
 @import "./styles/tailwind-bridge.css";
 
 /* ── Relay application layer ──────────────────────────────────────────── */
+/* Only what paints before the app's code arrives: tokens, the landing page,
+   and the auth gate. Every app surface is in styles/app.css, which App.tsx
+   imports so it rides the app's chunk. app.css repeats a11y.css at its end,
+   so a11y still wins over every app rule as it always has. */
 @import "./styles/tokens/palette.css" layer(relay);
 @import "./styles/tokens/roles.css" layer(relay);
 @import "./styles/tokens/base.css" layer(relay);
 
-@import "./styles/empty-state.css" layer(relay);
-@import "./styles/shell.css" layer(relay);
-@import "./styles/routes.css" layer(relay);
-@import "./styles/sidenav.css" layer(relay);
-@import "./styles/inputs.css" layer(relay);
-
-@import "./styles/thread.css" layer(relay);
-@import "./styles/chat.css" layer(relay);
-@import "./styles/collab-style.css" layer(relay);
-@import "./styles/agent-stream.css" layer(relay);
-/* KaTeX's own stylesheet, pulled into `relay` so markdown.css can override its
-   display-equation spacing by source order. Unlayered it would outrank every
-   app rule and the adjustments below it would silently do nothing. */
-@import "katex/dist/katex.min.css" layer(relay);
-@import "./styles/markdown.css" layer(relay);
-@import "./styles/syntax.css" layer(relay);
-@import "./styles/artifact.css" layer(relay);
-@import "./styles/thread-space.css" layer(relay);
-@import "./styles/handoff.css" layer(relay);
-@import "./styles/composer.css" layer(relay);
-
-@import "./styles/pills.css" layer(relay);
-
-@import "./styles/login.css" layer(relay);
+@import "./styles/auth-gate.css" layer(relay);
 @import "./styles/landing.css" layer(relay);
-@import "./styles/workspace.css" layer(relay);
-@import "./styles/workspace-files.css" layer(relay);
-@import "./styles/workspace-dossier.css" layer(relay);
-@import "./styles/project-page.css" layer(relay);
-@import "./styles/tasks-workspace.css" layer(relay);
-@import "./styles/backlog.css" layer(relay);
-@import "./styles/task-status.css" layer(relay);
-@import "./styles/roster-select.css" layer(relay);
-@import "./styles/task-drawer.css" layer(relay);
-@import "./styles/task-record.css" layer(relay);
-@import "./styles/record-panels.css" layer(relay);
-@import "./styles/recovery.css" layer(relay);
-@import "./styles/awaiting-input.css" layer(relay);
-@import "./styles/list-sort.css" layer(relay);
-@import "./styles/list-group.css" layer(relay);
-@import "./styles/backlog-list.css" layer(relay);
-@import "./styles/issues.css" layer(relay);
-@import "./styles/agents.css" layer(relay);
-@import "./styles/skills.css" layer(relay);
-@import "./styles/teams.css" layer(relay);
-@import "./styles/computer.css" layer(relay);
-@import "./styles/profile-image.css" layer(relay);
-@import "./styles/avatar-stack.css" layer(relay);
-@import "./styles/overlay.css" layer(relay);
-@import "./styles/command.css" layer(relay);
-@import "./styles/preferences.css" layer(relay);
-@import "./styles/dialog.css" layer(relay);
-@import "./styles/section-rail.css" layer(relay);
-@import "./styles/settings-page.css" layer(relay);
-@import "./styles/admin-v2-shell.css" layer(relay);
-@import "./styles/admin-v2-users.css" layer(relay);
-@import "./styles/admin-v2-nodes.css" layer(relay);
-@import "./styles/admin-v2-node-agents.css" layer(relay);
-@import "./styles/admin-v2-channels.css" layer(relay);
-@import "./styles/admin-v2-settings.css" layer(relay);
-@import "./styles/admin-v2-waitlist.css" layer(relay);
-@import "./styles/admin-v2-drawers.css" layer(relay);
-@import "./styles/admin-v2-provision.css" layer(relay);
-@import "./styles/admin-v2-dashboard.css" layer(relay);
-@import "./styles/mobile-overlays.css" layer(relay);
-
-@import "./styles/atelier.css" layer(relay);
-
-@import "./styles/responsive.css" layer(relay);
 @import "./styles/a11y.css" layer(relay);

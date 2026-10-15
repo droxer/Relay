@@ -55,17 +55,15 @@ def get_profile_image(
     if not stored:
         raise HTTPException(404, "Profile image not found.")
     content, content_type, etag = stored
+    # A 304 repeats the caching headers, so the browser keeps its copy's policy.
+    headers = {
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "ETag": f'"{etag}"',
+        "X-Content-Type-Options": "nosniff",
+    }
     if request.headers.get("if-none-match") == f'"{etag}"':
-        return Response(status_code=304)
-    return Response(
-        content,
-        media_type=content_type,
-        headers={
-            "Cache-Control": "private, max-age=31536000, immutable",
-            "ETag": f'"{etag}"',
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
+        return Response(status_code=304, headers=headers)
+    return Response(content, media_type=content_type, headers=headers)
 
 
 @router.put("/profile-images/{kind}/{entity_id}")

@@ -7,14 +7,17 @@ import { useResolvedTheme } from "../../hooks/useResolvedTheme";
 import type { Theme } from "../../lib/appStorage";
 import {
   LANDING_HERO_SHOT,
+  LANDING_HERO_SIZES,
   LANDING_PRINCIPLES,
   LANDING_SHOT_SIZE,
   LANDING_STEPS,
   LANDING_TOUR,
+  LANDING_TOUR_SIZES,
   RELAY_CLONE_COMMAND,
   RELAY_GITHUB_URL,
   landingCtas,
   landingShotSrc,
+  landingShotSrcSet,
   type LandingCta,
   type LandingShot,
 } from "../../lib/landing";
@@ -66,6 +69,8 @@ function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string;
       {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); pre-sized webp screenshots */}
       <img
         src={landingShotSrc(shot, i18n.language, theme)}
+        srcSet={landingShotSrcSet(shot, i18n.language, theme)}
+        sizes={priority ? LANDING_HERO_SIZES : LANDING_TOUR_SIZES}
         alt={alt}
         width={LANDING_SHOT_SIZE.width}
         height={LANDING_SHOT_SIZE.height}

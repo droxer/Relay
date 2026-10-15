@@ -102,12 +102,18 @@ Cloudflare → *Caching* → *Cache Rules*, in this order:
 | --- | --- | --- |
 | URI path starts with `/api/` | **Bypass cache** | JSON API and SSE streams. |
 | URI path starts with `/profile-images/` | **Bypass cache** | Served `private`; access is per user. |
-| URI path is `/install.sh` or `/computer/install.sh` | **Bypass cache** | Served `no-store`; it embeds the current bundle digest. |
-| URI path starts with `/_next/static/` | Eligible for cache, edge TTL 1 year | Content-hashed filenames. |
-| URI path starts with `/computer/daemon-` | Eligible for cache, respect origin TTL | Digest-named, served `immutable`. |
+| URI path is `/install.sh`, `/computer/install.sh`, `/install.ps1`, or `/computer/install.ps1` | **Bypass cache** | Served `no-store`; it embeds the current bundle digest. |
+| URI path starts with `/_next/static/` | Eligible for cache, edge TTL 1 year; status 400–599 no-store | Content-hashed filenames. A rollover can send a new chunk to the old instance, and that 404 must not stay at the edge. |
+| URI path starts with `/computer/daemon-` | Eligible for cache, respect origin TTL | Digest-named, served `immutable`; a miss is served `no-store`. |
 
 HTML pages fall through to Cloudflare's default (not cached), so a deploy is
-visible immediately.
+visible immediately. Fixed-name files such as `/favicon.ico` are served
+`no-cache` by Caddy and the backend, so the edge revalidates them instead of
+keeping them by extension. Under `WEB_HOSTING=workers` the Worker answers the
+web host ahead of the zone cache, so the `/_next/static/` rule only applies
+when Railway serves the web UI; the Worker's own headers come from
+`deploy/workers/_headers` and, for the responses `worker.js` builds, from
+`worker.js` itself.
 
 **Speed settings.** Turn these on as well; none of them touches response
 bodies, so SSE is unaffected:
