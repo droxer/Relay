@@ -1479,7 +1479,7 @@
     "lede_bootstrap": "粘贴后端启动日志中的 RELAY_ADMIN_TOKEN，然后创建管理员账户。",
     "kicker_setup": "首次配置",
     "kicker_attach": "登录",
-    "cover_headline": "每位用户的 AI 协作伙伴",
+    "cover_headline": "你的 AI 团队的控制平面",
     "username": "用户名",
     "password": "密码",
     "sign_in": "登录",
