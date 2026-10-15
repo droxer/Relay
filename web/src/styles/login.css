@@ -362,6 +362,79 @@
   opacity: 1;
 }
 
+/* ---------- Request access & invite ---------------------------------- */
+
+/* The quieter half of the gate: a sentence above a form, a confirmation that
+   replaces one, the explanation for a dead invite. Supporting text, so it
+   takes the supporting-text role in the pinned muted ink. */
+.login-note {
+  margin: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--lg-muted);
+}
+
+/* "Don't have an account? Request access" — one line under the gate's one
+   action, never a second button competing with it. */
+.login-alt {
+  margin: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--lg-muted);
+}
+
+/* Ink, not the theme register's link blue (dark-on-dark under a saved light
+   theme); the underline is what says link. */
+.login-link {
+  color: var(--lg-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--lg-hairline);
+}
+
+.login-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.login-optional {
+  color: var(--lg-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* The textarea shares the field skin but sizes to its content. */
+.login-textarea {
+  height: auto;
+  min-height: calc(var(--control-h) * 2);
+  padding: var(--sp-2) var(--sp-3);
+  resize: vertical;
+}
+
+/* The Field primitive draws hints and errors in theme-register tones; this
+   canvas is pinned dark and achromatic, so both read from the --lg-* ramp. */
+.login-field > p {
+  color: var(--lg-muted);
+}
+
+.login-field [role="alert"] {
+  color: var(--lg-err);
+  font-weight: 700;
+}
+
+/* The honeypot: out of sight and out of the layout for people, still in the
+   markup for anything that fills forms by reading it. */
+.login-honeypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+  margin: -1px;
+}
+
 /* ---------- Foot ------------------------------------------------------ */
 
 /* A direct grid child, so the split canvas seats it under the cover column

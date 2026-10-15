@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from threading import Lock
 
 
+_PRUNE_THRESHOLD = 10_000
+
+
 @dataclass
 class _Window:
     attempts: int
@@ -41,6 +44,10 @@ class AuthRateLimiter:
         """Record an attempt, returning Retry-After seconds when blocked."""
         now = time.monotonic()
         with self._lock:
+            if len(self._windows) >= _PRUNE_THRESHOLD:
+                # Public endpoints key on client IPs, so expired windows must
+                # not accumulate for every address that ever called.
+                self._windows = {k: w for k, w in self._windows.items() if w.reset_at > now}
             window = self._windows.get(key)
             if window is None or window.reset_at <= now:
                 self._windows[key] = _Window(1, now + self.window_seconds)

@@ -17,6 +17,17 @@ stored in `auth_accounts` and pointing at its User through `userId`. Sessions
 belong to an Account.
 _Avoid_: User (for the credential), Login
 
+**Waitlist Entry**:
+A person's request to try Relay, keyed by a normalized email. It is not a User
+and owns nothing; an accepted Invite creates the User and Account and links the
+entry to that Account (`accountId`).
+_Avoid_: Lead, Signup, Applicant, Pending user
+
+**Invite**:
+A single-use, expiring credential issued to one Waitlist Entry. Redeeming it
+creates an Account; only its SHA-256 is stored, and re-inviting rotates it.
+_Avoid_: Invitation code, access key
+
 **Computer**:
 The product-facing execution host on which agents are placed and collaborate.
 _Avoid_: Machine, worker

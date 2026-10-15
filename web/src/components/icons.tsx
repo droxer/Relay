@@ -60,6 +60,7 @@ import {
   ListFilter,
   ListFilterPlus,
   LoaderCircle,
+  MailPlus,
   RotateCw,
   SlidersHorizontal,
   Ungroup,
@@ -484,6 +485,7 @@ export const AdminLocked = withStandardStroke(LockKeyhole, "AdminLocked");
 export const AdminChannel = withStandardStroke(Hash, "AdminChannel");
 export const AdminVerified = withStandardStroke(ShieldCheck, "AdminVerified");
 export const AdminInbox = withStandardStroke(Inbox, "AdminInbox");
+export const AdminInvite = withStandardStroke(MailPlus, "AdminInvite");
 export const AdminSettings = withStandardStroke(Settings, "AdminSettings");
 
 // ReUI component glyphs. The vendored ReUI components (components/reui/)

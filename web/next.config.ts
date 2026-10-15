@@ -9,6 +9,9 @@ const backendUrl = process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL
 // rewrite that runs after static files are matched).
 const CLIENT_ROUTES = [
   "/login",
+  // Signed-out waitlist pages; an emailed invite hard-loads /join.
+  "/waitlist",
+  "/join",
   "/threads",
   "/threads/:path*",
   "/tasks",

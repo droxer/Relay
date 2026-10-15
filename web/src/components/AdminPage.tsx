@@ -22,6 +22,7 @@ import type {
   CreateControlPanelUserResponse,
   CurrentUser,
   DaemonNodeMonitorRecord,
+  WaitlistInviteResult,
   UserRecord,
   ManagedNodeRecord,
 } from "../types";
@@ -38,6 +39,9 @@ import { AddNodeDrawer, type AddNodeDrawerSuccess } from "./admin/AddNodeDrawer"
 import { UsersView } from "./admin/UsersView";
 import { EditUserDrawer } from "./admin/EditUserDrawer";
 import { SettingsView } from "./admin/SettingsView";
+import { WaitlistView } from "./admin/waitlist/WaitlistView";
+import { InviteNextButton } from "./admin/waitlist/InviteNextButton";
+import { RelayEmptyState } from "./RelayEmptyState";
 import type { AdminLayout } from "./admin/AdminLayoutToggle";
 import { useAdminNodes } from "../hooks/useAdminNodes";
 import { NODES_QUERY_KEY } from "../hooks/useRelayData";
@@ -139,6 +143,12 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
   // Absent while the query is in flight; only a definite false hides the
   // controls, so a slow answer does not flash them away.
   const canEditUsers = orgSettingsQuery.data?.capabilities?.userEdits !== false;
+  // The opposite default: the waitlist is off unless the server says its
+  // routes are mounted, so the rail never offers a section that would 404.
+  const waitlistAvailable = orgSettingsQuery.data?.capabilities?.waitlist === true;
+  /** Invite links minted this visit. Only their hashes are stored, so this is
+      the one place they can still be read; dismissing or leaving drops them. */
+  const [waitlistInvites, setWaitlistInvites] = useState<WaitlistInviteResult[] | null>(null);
   const setAdminView = useRelayStore((state) => state.setAdminView);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [editUserId, setEditUserId] = useState<string | null>(null);
@@ -488,7 +498,8 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
      An EMPTY actions container is not the same as none: the narrow layout
      hides a header that holds nothing but a title (section-rail.css), and an
      empty container kept it on screen as a 1px rule. */
-  const hasHeaderActions = Boolean(headerError) || view === "users" || view === "computers";
+  const showWaitlistInvite = view === "waitlist" && waitlistAvailable;
+  const hasHeaderActions = Boolean(headerError) || view === "users" || view === "computers" || showWaitlistInvite;
   const headerCount = view === "users"
     ? t("admin.user_count", { count: users.length })
     : view === "computers"
@@ -515,7 +526,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
           titleVariant="title"
           layout="stacked"
         />
-        <AdminViewToggle view={view} onChange={setView} />
+        <AdminViewToggle view={view} onChange={setView} showWaitlist={waitlistAvailable} />
       </div>
 
       <div className="sec-main">
@@ -555,6 +566,9 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   <ActionAdd size={ICON.md} aria-hidden="true" />
                   {t("admin.v2.add_user_cta")}
                 </Button>
+              ) : null}
+              {showWaitlistInvite ? (
+                <InviteNextButton onInvited={(results) => setWaitlistInvites(results)} />
               ) : null}
               {view === "computers" ? (
                 <Button
@@ -605,6 +619,18 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                 />
               ) : view === "organization" ? (
                 <SettingsView />
+              ) : view === "waitlist" ? (
+                waitlistAvailable ? (
+                  <WaitlistView
+                    invites={waitlistInvites}
+                    onInvited={(results) => setWaitlistInvites(results)}
+                    onDismissInvites={() => setWaitlistInvites(null)}
+                  />
+                ) : orgSettingsQuery.isPending ? (
+                  <div className="adm-loading" role="status">{t("admin.loading")}</div>
+                ) : (
+                  <RelayEmptyState className="adm-users-empty" fill title={t("admin.waitlist.unavailable")} />
+                )
               ) : (
                 <>
                   <NodesView

@@ -1,0 +1,42 @@
+/* ── Admin → Waitlist ────────────────────────────────────────────────────
+   The queue reuses the admin list grammar (grouped bands, compact tables,
+   the user rows' name/meta lines); this file only holds what a request row
+   has that a user row does not: what they would hand off, and the one fact
+   their band is read for. */
+
+/* The use case is free text up to 1000 characters; the row shows two lines
+   and the full text rides in the title. */
+.adm-waitlist-use-case {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-2);
+}
+
+.adm-waitlist-col-detail {
+  width: 14rem;
+}
+
+.adm-waitlist-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.adm-waitlist-when {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
+}
+
+/* The one-time reveal: a notice, then one copy row per minted link. */
+.adm-waitlist-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}

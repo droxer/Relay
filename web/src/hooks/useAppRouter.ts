@@ -183,6 +183,7 @@ export function useAppRouter({
     adminSection: locationState.adminSection ?? DEFAULT_ADMIN_SECTION,
     notFound: Boolean(locationState.notFound),
     isLoginPath: Boolean(locationState.login),
+    publicPage: locationState.publicPage ?? null,
     navigateToAppState,
     navigateToRoute,
     navigateToMobileView,

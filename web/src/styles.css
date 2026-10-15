@@ -92,6 +92,7 @@
 @import "./styles/admin-v2-node-agents.css" layer(relay);
 @import "./styles/admin-v2-channels.css" layer(relay);
 @import "./styles/admin-v2-settings.css" layer(relay);
+@import "./styles/admin-v2-waitlist.css" layer(relay);
 @import "./styles/admin-v2-drawers.css" layer(relay);
 @import "./styles/admin-v2-provision.css" layer(relay);
 @import "./styles/admin-v2-dashboard.css" layer(relay);

@@ -19,6 +19,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
         "channels",
         "computer",
         "issues",
+        "join",
         "login",
         "projects",
         "routines",
@@ -27,6 +28,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
         "tasks",
         "teams",
         "threads",
+        "waitlist",
     }
 )
 
@@ -39,6 +41,16 @@ CHANNEL_ROUTE_PREFIXES = ("/internal/chat/", "/admin/chat-integrations")
 def is_channel_route(path: str) -> bool:
     """True for a route that belongs to the chat channels feature."""
     return path.startswith(CHANNEL_ROUTE_PREFIXES)
+
+
+# The waitlist: a public, unauthenticated write path, so it is published only
+# when an operator opts in.
+WAITLIST_ROUTE_PREFIXES = ("/waitlist", "/admin/waitlist")
+
+
+def is_waitlist_route(path: str) -> bool:
+    """True for a route that belongs to the waitlist feature."""
+    return path.startswith(WAITLIST_ROUTE_PREFIXES)
 
 
 @dataclass
@@ -82,16 +94,20 @@ def include_api_router(
     router: APIRouter,
     *,
     channels_enabled: bool = True,
+    waitlist_enabled: bool = True,
 ) -> None:
     """Publish a domain router under the canonical versioned API prefix.
 
-    With channels disabled, chat routes are left unpublished: they answer 404
-    and stay out of the OpenAPI document, as if the feature were not built.
+    With channels or the waitlist disabled, their routes are left unpublished:
+    they answer 404 and stay out of the OpenAPI document, as if the feature
+    were not built.
     """
     for route in router.routes:
         if not isinstance(route, APIRoute):
             continue
         if not channels_enabled and is_channel_route(route.path):
+            continue
+        if not waitlist_enabled and is_waitlist_route(route.path):
             continue
         _api_group(groups, route.path).add_api_route(
             f"{API_PREFIX}{route.path}",

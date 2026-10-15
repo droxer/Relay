@@ -75,6 +75,12 @@ validate_config() {
       eval "[ -n \"\${$key:-}\" ]" || die "$key is required when RELAY_R2_BUCKET or any RELAY_R2_* key is set"
     done
   fi
+  if mail_enabled; then
+    local key
+    for key in RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID RELAY_MAIL_CLOUDFLARE_API_TOKEN RELAY_MAIL_FROM; do
+      eval "[ -n \"\${$key:-}\" ]" || die "$key is required when any RELAY_MAIL_* key is set"
+    done
+  fi
 }
 
 validate_hostname() {
@@ -92,6 +98,12 @@ in_zone() {
 # R2 is on when any of its keys is configured; validate_config demands all four.
 r2_enabled() {
   [ -n "${RELAY_R2_BUCKET:-}${RELAY_R2_ACCOUNT_ID:-}${RELAY_R2_ACCESS_KEY_ID:-}${RELAY_R2_SECRET_ACCESS_KEY:-}" ]
+}
+
+# Waitlist email is on when any of its keys is configured; the backend refuses
+# to start half-configured, so validate_config demands all three first.
+mail_enabled() {
+  [ -n "${RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID:-}${RELAY_MAIL_CLOUDFLARE_API_TOKEN:-}${RELAY_MAIL_FROM:-}" ]
 }
 
 random_secret() {
