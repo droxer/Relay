@@ -1509,7 +1509,7 @@
     "lede_bootstrap": "Paste the RELAY_ADMIN_TOKEN from the backend startup log, then create an admin account.",
     "kicker_setup": "First-run setup",
     "kicker_attach": "Sign in",
-    "cover_headline": "AI collaboration for every user",
+    "cover_headline": "The control plane for your AI workforce",
     "username": "Username",
     "password": "Password",
     "sign_in": "Sign in",

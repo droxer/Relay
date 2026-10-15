@@ -4,7 +4,7 @@
   <img src="../assets/brand/relay-logo.svg" alt="Relay logo" width="360">
 </p>
 
-Every User. Amplified.
+Relay — The control plane for your AI workforce
 
 An enterprise Workforce Intelligence Platform for the AI era.
 Goal: maximize user productivity and value creation, not replace users.

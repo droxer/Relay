@@ -23,7 +23,7 @@ const appMono = localFont({
 
 export const metadata: Metadata = {
   title: "Relay",
-  description: "Nodes, daemons, and agent runs.",
+  description: "The control plane for your AI workforce",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
     shortcut: "/favicon.svg",
