@@ -9,6 +9,8 @@ documentation locations, and UI metadata from the backend's shared constants.
 
 ```text
 /login
+/waitlist
+/join#token={inviteToken}
 /threads
 /threads/new
 /threads/{threadId}
@@ -34,7 +36,8 @@ an open thread-space panel writes `space=1` with `artifact`; create dialogs use
 `dialog=create`. IDs are percent-encoded path segments. Navigation to another
 route or entity removes query state owned by the previous destination.
 
-Unauthenticated deep links are replaced with `/login?returnTo=...`. Relay
+Unauthenticated deep links are replaced with `/login?returnTo=...`, except
+`/waitlist` and `/join`, which are the signed-out pages of the waitlist. Relay
 accepts a return path only when it is same-origin and matches a recognized web
 route. `/` is replaced with `/threads`.
 
@@ -56,6 +59,7 @@ route. `/` is replaced with `/threads`.
 | `/api/v1/internal/chat` | Chat-service identity and conversation operations. Mounted, together with `/api/v1/admin/chat-integrations`, only when `RELAY_CHANNELS_ENABLED=1` |
 | `/api/v1/daemon-node-registrations` | Daemon heartbeat registration |
 | `/api/v1/daemon-node-enrollments` | Managed and local daemon enrollment |
+| `/api/v1/waitlist`, `/api/v1/admin/waitlist` | Public waitlist join and invite redemption, and the admin queue. Mounted only when `RELAY_WAITLIST_ENABLED=1` |
 
 Persisted media uses `/profile-images/{kind}/{id}` and intentionally stays
 outside the JSON version namespace.
@@ -993,3 +997,27 @@ Opening a conversation from a task goes to Threads at `/threads/{threadId}`
 with the thread list visible and a project badge on project task threads.
 Sending from Threads preserves that destination. Existing nested task links
 and Threads share the same conversation and provide access to its owning task.
+
+## Waitlist
+
+Mounted only when `RELAY_WAITLIST_ENABLED=1`; `GET /api/v1/auth/status`
+reports it as `waitlistEnabled` and `GET /api/v1/admin/settings` as
+`capabilities.waitlist`. Rules and rationale: `docs/waitlist-design.md`.
+
+| Method and path | Auth | Answer |
+| :- | :- | :- |
+| `POST /waitlist` | none | `202 {"ok": true}` for every valid body — new, known, declined, or honeypot (`website` non-empty). `400` malformed, `429` rate limited, `503` queue full |
+| `POST /waitlist/invites/lookup` | none | Body `{token}`. `{invite: {email, name, suggestedHandle, expiresAt}}`; every dead token is one `404` |
+| `POST /waitlist/invites/accept` | none | Body `{token, handle, password}`. Creates the account, sets the session cookie, returns `{user}`. `400` weak password or bad handle, `409` handle taken, `404` dead invite; a refused accept leaves the invite live |
+| `GET /admin/waitlist?status=&q=&limit=&offset=` | admin | `{entries, total, counts}`, oldest first |
+| `POST /admin/waitlist/{id}/invite` | admin | Rotates the token and emails it. `{entry, inviteUrl, delivery: {status, error}}`; `inviteUrl` is the only time the token appears |
+| `POST /admin/waitlist/invite-batch` | admin | Body `{count}` (1–50, oldest waiting first) or `{ids}`. `{invites: [...]}` with `delivery.status: "queued"`; the emails go out after the response, so the links survive a slow mail service |
+| `POST /admin/waitlist/{id}/decline` | admin | `{entry}`; clears any live invite |
+| `PATCH /admin/waitlist/{id}` | admin | Body `{adminNote}`. `{entry}` |
+| `DELETE /admin/waitlist/{id}` | admin | Erases the entry (an account it created is untouched) |
+
+Invite links carry the token in the URL fragment (`/join#token=…`), and the
+page sends it to the API only in a POST body, so no server or edge access log
+records a redeemable token. `delivery.status` is `queued`, `sent`, `bounced`,
+`failed`, or `skipped` (no mail configured); it never changes the entry's
+status.

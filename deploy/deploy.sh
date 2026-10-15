@@ -68,7 +68,10 @@ backend_variables() {
     --arg edge "$edge_secret" --arg admin "$admin_token" \
     --arg pg "${PG_CLIENT_MAJOR:-}" \
     --arg r2_account "${RELAY_R2_ACCOUNT_ID:-}" --arg r2_key "${RELAY_R2_ACCESS_KEY_ID:-}" \
-    --arg r2_secret "${RELAY_R2_SECRET_ACCESS_KEY:-}" --arg r2_bucket "${RELAY_R2_BUCKET:-}" '
+    --arg r2_secret "${RELAY_R2_SECRET_ACCESS_KEY:-}" --arg r2_bucket "${RELAY_R2_BUCKET:-}" \
+    --arg waitlist "${RELAY_WAITLIST_ENABLED:-}" \
+    --arg mail_account "${RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID:-}" \
+    --arg mail_token "${RELAY_MAIL_CLOUDFLARE_API_TOKEN:-}" --arg mail_from "${RELAY_MAIL_FROM:-}" '
     {
       DATABASE_URL: $db,
       RELAY_PUBLIC_BACKEND_URL: $api,
@@ -87,6 +90,12 @@ backend_variables() {
         RELAY_R2_ACCESS_KEY_ID: $r2_key,
         RELAY_R2_SECRET_ACCESS_KEY: $r2_secret,
         RELAY_R2_BUCKET: $r2_bucket
+      } else {} end)
+    + (if $waitlist != "" then {RELAY_WAITLIST_ENABLED: $waitlist} else {} end)
+    + (if $mail_from != "" then {
+        RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID: $mail_account,
+        RELAY_MAIL_CLOUDFLARE_API_TOKEN: $mail_token,
+        RELAY_MAIL_FROM: $mail_from
       } else {} end)'
 }
 

@@ -26,9 +26,12 @@ function appRoutePaths(): string[] {
   const source = readWeb(path.join("src", "lib", "appRoute.ts"));
   const work = source.match(/WORK_PATHS[^=]*= \{([\s\S]*?)\};/);
   const legacy = source.match(/LEGACY_SECTION_PATHS[^=]*= \{([\s\S]*?)\};/);
-  assert.ok(work && legacy, "route tables not found in appRoute.ts");
+  const publicPages = source.match(/PUBLIC_PAGE_PATHS[^=]*= \{([\s\S]*?)\};/);
+  assert.ok(work && legacy && publicPages, "route tables not found in appRoute.ts");
   const paths = [...work[1].matchAll(/: "(\/[^"]*)"/g)].map((m) => m[1]);
   paths.push(...[...legacy[1].matchAll(/"(\/[^"]*)":/g)].map((m) => m[1]));
+  // Signed-out pages an emailed link hard-loads.
+  paths.push(...[...publicPages[1].matchAll(/"(\/[^"]*)":/g)].map((m) => m[1]));
   // The legacy head aliases registered straight onto WORK_ROUTES.
   paths.push(...[...source.matchAll(/WORK_ROUTES\.set\("(\/[^"]*)"/g)].map((m) => m[1]));
   return paths;

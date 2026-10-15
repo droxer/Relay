@@ -1,0 +1,1 @@
+"""Outbound notifications (transactional email)."""

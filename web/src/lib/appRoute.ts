@@ -65,7 +65,20 @@ export type AppLocationState = {
   adminSection?: AdminSection | null;
   composingNew?: boolean;
   login?: boolean;
+  /** A signed-out page other than sign-in: request access, or redeem an invite. */
+  publicPage?: PublicPage;
   notFound?: boolean;
+};
+
+/** Signed-out destinations beside `/login`. A signed-in visitor has no use
+    for either, so App sends them home. */
+export type PublicPage = "waitlist" | "join";
+
+/** The address of each public page; next.config.ts's CLIENT_ROUTES must list
+    every one or a hard load (an emailed invite link) is a 404. */
+const PUBLIC_PAGE_PATHS: Record<string, PublicPage> = {
+  "/waitlist": "waitlist",
+  "/join": "join",
 };
 
 function decodeSegment(segment: string | undefined): string | null {
@@ -89,6 +102,8 @@ export function parseAppPath(pathname: string): AppLocationState {
   const base = { mobileView: "chat" as const, sessionId: null };
 
   if (normalized === "/login") return { route: "main", ...base, login: true };
+  const publicPage = PUBLIC_PAGE_PATHS[normalized];
+  if (publicPage) return { route: "main", ...base, publicPage };
   if (normalized === "/threads") return { route: "main", mobileView: "threads", sessionId: null };
   if (head === "threads" && second === "new" && rest.length === 0) {
     return { route: "main", ...base, composingNew: true };
@@ -158,12 +173,14 @@ export function pathForAppState({
   teamWorkspaceId,
   composingNew,
   login,
+  publicPage,
   notFound,
   settingsSection,
   adminSection,
 }: AppLocationState): string {
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
+  if (publicPage) return `/${publicPage}`;
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
   if (route === "backlog" && taskId) {
     const taskPath = `${WORK_PATHS.backlog}/${encodeURIComponent(taskId)}`;
@@ -286,7 +303,7 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
  */
 const LANE_PAGE_PARAMS: Record<string, readonly string[]> = {
   backlog: ["lanes"],
-  admin: ["userLanes", "nodeLanes"],
+  admin: ["userLanes", "nodeLanes", "waitlistLanes"],
 };
 
 /**
@@ -411,6 +428,9 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
   if (head === "login" && !entityId) {
     const rawReturnTo = source.get("returnTo");
     if (rawReturnTo) target.set("returnTo", validatedReturnTo(rawReturnTo));
+  } else if (head === "waitlist" && !entityId) {
+    // The request-access form reports where a visitor came from.
+    copyParam(source, target, "utm_source");
   } else if ((head === "computer" && !entityId) || (head === "settings" && entityId === "computers" && rest.length === 0)) {
     const code = source.get("connect");
     if (code && /^[A-Za-z0-9_-]{32}$/.test(code)) target.set("connect", code);
@@ -575,7 +595,7 @@ export function validatedReturnTo(value: string | null, origin = "http://relay.l
     const candidate = new URL(value, origin);
     if (candidate.origin !== origin) return "/threads";
     const state = parseAppPath(candidate.pathname);
-    if (state.notFound || state.login) return "/threads";
+    if (state.notFound || state.login || state.publicPage) return "/threads";
     return canonicalBrowserUrl(candidate.pathname, candidate.search);
   } catch {
     return "/threads";

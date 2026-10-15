@@ -33,7 +33,7 @@ describe("icon system regressions", () => {
     assert.doesNotMatch(mark, /width\?: number|height\?: number/);
 
     for (const path of [
-      "src/components/LoginScreen.tsx",
+      "src/components/AuthCanvas.tsx",
       "src/components/SideNav.tsx",
       "src/components/TranscriptEmpty.tsx",
       "src/components/ThreadsView.tsx",

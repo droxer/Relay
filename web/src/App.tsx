@@ -9,6 +9,8 @@ import type { AgentName, AgentTeam, CollaborationStyle, UserAgent, RelayArtifact
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
+import { WaitlistScreen } from "./components/waitlist/WaitlistScreen";
+import { JoinScreen } from "./components/waitlist/JoinScreen";
 import { RelayEmptyState } from "./components/RelayEmptyState";
 import { Button } from "@/components/ui/button";
 import { useRelayData } from "./hooks/useRelayData";
@@ -62,7 +64,7 @@ import {
   resolveNewThreadComputer,
   teamRosterForThread,
 } from "./lib/threadRuntime";
-import { hrefForRoute, navigateToAppPath, validatedReturnTo } from "./lib/appRoute";
+import { hrefForRoute, navigateToAppPath, parseAppPath, validatedReturnTo } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { showThreadChrome } from "./lib/projectPage";
 
@@ -256,6 +258,7 @@ export function App() {
     adminSection,
     notFound,
     isLoginPath,
+    publicPage,
     navigateToRoute,
     navigateToMobileView,
     hrefForSideNavRoute,
@@ -347,6 +350,12 @@ export function App() {
   useEffect(() => {
     if (!mounted || !authChecked || typeof window === "undefined") return;
     const current = `${window.location.pathname}${window.location.search}`;
+    // Request access and redeem an invite are signed-out pages in their own
+    // right, not doors to be bounced through sign-in — and a signed-in visitor
+    // has no use for either, so they go home. Read from the address bar, not
+    // router state: this can run in the same commit that first parses it.
+    const onPublicPage = Boolean(parseAppPath(window.location.pathname).publicPage);
+    if (!user && onPublicPage) return;
     if (!user && window.location.pathname !== "/login") {
       const returnTo = validatedReturnTo(current, window.location.origin);
       const loginUrl = `/login?returnTo=${encodeURIComponent(returnTo)}`;
@@ -354,12 +363,14 @@ export function App() {
       window.dispatchEvent(new PopStateEvent("popstate"));
       return;
     }
-    if (user && isLoginPath) {
-      const returnTo = validatedReturnTo(new URL(window.location.href).searchParams.get("returnTo"), window.location.origin);
+    if (user && (isLoginPath || onPublicPage)) {
+      const returnTo = onPublicPage
+        ? "/threads"
+        : validatedReturnTo(new URL(window.location.href).searchParams.get("returnTo"), window.location.origin);
       window.history.replaceState(window.history.state, "", returnTo);
       window.dispatchEvent(new PopStateEvent("popstate"));
     }
-  }, [authChecked, isLoginPath, mounted, user]);
+  }, [authChecked, isLoginPath, mounted, publicPage, user]);
 
   // Live SSE tail of the open thread; merges new events into the
   // sessions cache so the active thread updates at push latency.
@@ -673,6 +684,8 @@ export function App() {
   }
 
   if (!user) {
+    if (publicPage === "waitlist") return <WaitlistScreen />;
+    if (publicPage === "join") return <JoinScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
     return <LoginScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
   }
 

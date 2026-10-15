@@ -35,6 +35,7 @@ from .api import (
     skill_routes,
     task_routes,
     team_routes,
+    waitlist_routes,
     web_routes,
 )
 from .api.contract import (
@@ -82,6 +83,7 @@ from .persistence.stores import (
     LocalDaemonStore,
 )
 from .persistence.team_store import DatabaseTeamStore, LocalTeamStore
+from .persistence.waitlist_store import DatabaseWaitlistStore
 from .security.auth import USER_COOKIE_NAME, auth_store_from_env, configure_admin_token
 from .security.edge import EdgeOriginGuardMiddleware
 from .security.rate_limit import AuthRateLimiter
@@ -94,6 +96,8 @@ from .services.event_notifier import (
     workspace_response_key,
 )
 from .services.team_membership import reconcile_team_memberships
+from .services.waitlist import WaitlistService, waitlist_config_from_env
+from .notifications.mailer import mailer_from_env
 from .services.workspace_query import WorkspaceQueryBroker
 from .tasks import TaskScheduler
 from .automations.service import AutomationService, max_runs_per_hour_from_env
@@ -259,6 +263,8 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         create_schema=session_store.engine.dialect.name == "sqlite",
     )
     org_settings_store = org_settings_store_from_env(root_dir)
+    waitlist_enabled = waitlist_enabled_from_env()
+    waitlist = waitlist_service_from_env() if waitlist_enabled else None
     from .persistence.operational_import import require_operational_import
     require_operational_import(root_dir, managed_node_store)
     control_plane_notifier = KeyedEventNotifier()
@@ -387,6 +393,12 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
     app.state.backend = backend
     app.state.auth_store = auth_store
     app.state.auth_rate_limiter = AuthRateLimiter()
+    app.state.waitlist_enabled = waitlist_enabled
+    app.state.waitlist = waitlist
+    app.state.waitlist_rate_limiter = AuthRateLimiter(
+        attempts=int(os.environ.get("RELAY_WAITLIST_RATE_LIMIT_ATTEMPTS", "5")),
+        window_seconds=int(os.environ.get("RELAY_WAITLIST_RATE_LIMIT_WINDOW_SECONDS", "600")),
+    )
     app.state.managed_node_store = managed_node_store
     app.state.agent_store = agent_store
     app.state.team_store = team_store
@@ -439,11 +451,17 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         sandbox_routes.router,
         daemon_node_routes.router,
         managed_node_routes.router,
+        waitlist_routes.router,
     )
     canonical_groups = api_router_groups()
     channels_enabled = channels_enabled_from_env()
     for router in api_routers:
-        include_api_router(canonical_groups, router, channels_enabled=channels_enabled)
+        include_api_router(
+            canonical_groups,
+            router,
+            channels_enabled=channels_enabled,
+            waitlist_enabled=waitlist_enabled,
+        )
     app.include_router(canonical_groups.public)
     app.include_router(canonical_groups.admin)
     app.include_router(canonical_groups.internal_chat)
@@ -604,6 +622,23 @@ def channels_enabled_from_env() -> bool:
     """
     value = os.environ.get("RELAY_CHANNELS_ENABLED", "").strip().lower()
     return value in ("1", "true", "yes", "on")
+
+
+def waitlist_enabled_from_env() -> bool:
+    """Whether the public waitlist is published.
+
+    Off unless ``RELAY_WAITLIST_ENABLED`` opts in, so an install never grows an
+    unauthenticated write endpoint it did not ask for."""
+    value = os.environ.get("RELAY_WAITLIST_ENABLED", "").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+
+def waitlist_service_from_env() -> WaitlistService:
+    # Database-only like org settings; the mailer is built here so a
+    # half-configured mail setup fails startup rather than dropping invites.
+    url = database_url_from_env(setting="database-only waitlist storage")
+    store = DatabaseWaitlistStore(url, create_schema=url.startswith("sqlite"))
+    return WaitlistService(store, mailer_from_env(), config=waitlist_config_from_env())
 
 
 def chat_store_from_env(root_dir: Path) -> Any:

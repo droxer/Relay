@@ -95,6 +95,8 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             "userEdits": hasattr(ctx.auth_store, "update_user"),
             # Off: automations may hold only schedule triggers.
             "automationTriggers": automation_triggers_enabled(),
+            # Off: the waitlist routes are not mounted (RELAY_WAITLIST_ENABLED).
+            "waitlist": bool(getattr(request.app.state, "waitlist_enabled", False)),
         },
         # Whether the bootstrap/supervisor bearer token exists. Only its hash
         # is stored, so the value itself is shown once, by the reissue route.

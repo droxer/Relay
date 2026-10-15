@@ -133,8 +133,10 @@ responses on that path (Rocket Loader, Email Obfuscation, Zaraz).
 ## 5. Security rules
 
 - **Rate limiting** (*Security* → *WAF* → *Rate limiting rules*): add an edge
-  limit on `/api/v1/auth/` and `/api/v1/automations/*/webhook` as a first
-  line; the backend's own limits stay in force behind it.
+  limit on `/api/v1/auth/`, `/api/v1/automations/*/webhook`, and — with the
+  waitlist on — `POST /api/v1/waitlist` and `/api/v1/waitlist/invites/` as a
+  first line; the backend's own limits stay in force behind it but are per
+  process.
 - **Bot protection:** daemons and supervisors are not browsers. Keep ordinary
   Bot Fight Mode disabled: WAF Skip rules cannot bypass it. If you use Super
   Bot Fight Mode or managed challenge rules, configure supported exceptions for
@@ -374,3 +376,39 @@ curl -sSI -H 'Origin: https://app.example.com' https://api.example.com/api/v1/au
 Then sign in at `https://app.example.com`, open a thread with a running agent
 and confirm the stream stays live for several minutes, and connect a daemon to
 `https://api.example.com`.
+
+## 10. Waitlist invite email (optional)
+
+With `RELAY_WAITLIST_ENABLED=1`, the backend emails waitlist invites and "you're
+on the list" confirmations through [Cloudflare Email
+Service](https://developers.cloudflare.com/email-service/) (Email Sending is in
+beta). It calls the REST API from Railway; no Worker is involved. Without the
+three `RELAY_MAIL_*` variables it sends nothing and the admin copies each invite
+link instead.
+
+1. Put the account on the **Workers Paid** plan. Sending to arbitrary
+   recipients needs it; it includes 3,000 emails a month, then $0.35 per 1,000.
+2. *Compute* → *Email Service* → *Email Sending* → **Onboard Domain**, and pick
+   a subdomain such as `mail.get-relay.cc`. Onboarding adds its `cf-bounce` MX,
+   SPF, DKIM, and DMARC records; a subdomain keeps this mail's reputation apart
+   from any human mail on the apex.
+3. Create an API token with **only** the Email Sending send permission. Do not
+   reuse `CLOUDFLARE_API_TOKEN`.
+4. Set, in `deploy/.env`, then run `deploy/deploy.sh railway`:
+
+   ```bash
+   RELAY_WAITLIST_ENABLED=1
+   RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=<account id>
+   RELAY_MAIL_CLOUDFLARE_API_TOKEN=<send-only token>
+   RELAY_MAIL_FROM=Relay <invites@mail.get-relay.cc>
+   ```
+
+   The deploy and the backend both refuse a partial set.
+5. Invite one entry whose address is a verified destination in the account,
+   confirm the admin list shows **sent**, then invite in small batches: new
+   accounts start with a conservative daily quota that grows with reputation.
+
+Tunables: `RELAY_WAITLIST_INVITE_TTL_DAYS` (14), `RELAY_WAITLIST_MAX_WAITING`
+(10000), `RELAY_WAITLIST_RATE_LIMIT_ATTEMPTS` / `_WINDOW_SECONDS` (5 per 600),
+and `RELAY_WAITLIST_CONFIRMATION_EMAIL=0` to stop confirmations if the form is
+abused to mail strangers.

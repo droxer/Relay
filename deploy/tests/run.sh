@@ -269,9 +269,21 @@ STATE=$(state)
 check "R2 variables set" "$BACKEND | .variables.RELAY_BLOB_STORE == \"r2\" and .variables.RELAY_R2_BUCKET == \"relay-artifacts\""
 check "no volume with R2" '.volumes | length == 0'
 
+echo "--- waitlist and email variables pass through"
+start_mock
+write_config 'RELAY_WAITLIST_ENABLED=1
+RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID=acct
+RELAY_MAIL_CLOUDFLARE_API_TOKEN=send-only
+RELAY_MAIL_FROM=invites@mail.get-relay.cc'
+deploy railway 2>/dev/null
+STATE=$(state)
+check "waitlist and mail variables set" "$BACKEND | .variables.RELAY_WAITLIST_ENABLED == \"1\" and .variables.RELAY_MAIL_FROM == \"invites@mail.get-relay.cc\" and .variables.RELAY_MAIL_CLOUDFLARE_API_TOKEN == \"send-only\""
+
 echo "--- failures stop the run"
 write_config 'RELAY_R2_BUCKET=relay-artifacts'
 expect_failure "partial R2 config is refused" "RELAY_R2_ACCOUNT_ID is required" deploy railway
+write_config 'RELAY_MAIL_FROM=invites@mail.get-relay.cc'
+expect_failure "partial mail config is refused" "RELAY_MAIL_CLOUDFLARE_ACCOUNT_ID is required" deploy railway
 write_config 'WEB_DOMAIN=relay.example.com'
 expect_failure "domain outside the zone is refused" "is not inside CLOUDFLARE_ZONE" deploy railway
 write_config 'RAILWAY_API_TOKEN=wrong'

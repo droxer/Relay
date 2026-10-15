@@ -37,8 +37,13 @@ def _consume_auth_attempt(request: Request, key: str) -> None:
 
 
 @router.get("/auth/status")
-def auth_status(ctx: AppContextDep) -> dict[str, Any]:
-    return {"requiresBootstrap": not ctx.auth_store.has_accounts()}
+def auth_status(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    return {
+        "requiresBootstrap": not ctx.auth_store.has_accounts(),
+        # Public, so the sign-in screen can offer "Request access" only when
+        # the waitlist routes are mounted.
+        "waitlistEnabled": bool(getattr(request.app.state, "waitlist_enabled", False)),
+    }
 
 
 @router.get("/auth/me")
