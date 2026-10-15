@@ -32,17 +32,25 @@ describe("landingShotSrc", () => {
     assert.equal(landingShotSrc("threads", "zh-CN"), "/landing/threads-zh-CN.webp");
   });
 
+  it("serves the light cut under the light theme", () => {
+    assert.equal(landingShotSrc("threads", "en", "light"), "/landing/threads-light.webp");
+    assert.equal(landingShotSrc("teams", "zh-CN", "light"), "/landing/teams-light-zh-CN.webp");
+    assert.equal(landingShotSrc("teams", "zh-CN", "dark"), "/landing/teams-zh-CN.webp");
+  });
+
   it("falls back to the English screenshot for any other language", () => {
     assert.equal(landingShotSrc("threads", "en"), "/landing/threads.webp");
     assert.equal(landingShotSrc("teams", undefined), "/landing/teams.webp");
   });
 
-  it("ships every screenshot the page asks for, in both languages", () => {
+  it("ships every screenshot the page asks for, in both languages and both themes", () => {
     const shots = [LANDING_HERO_SHOT, ...LANDING_TOUR.map((item) => item.shot)];
     for (const shot of shots) {
       for (const language of ["en", "zh-CN"]) {
-        const file = path.join(webRoot, "public", landingShotSrc(shot, language));
-        assert.ok(existsSync(file), `missing ${file}`);
+        for (const theme of ["dark", "light"] as const) {
+          const file = path.join(webRoot, "public", landingShotSrc(shot, language, theme));
+          assert.ok(existsSync(file), `missing ${file}`);
+        }
       }
     }
   });

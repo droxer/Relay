@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { fireEvent } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import en from "../src/i18n/locales/en/translation.json";
 import { LandingScreen } from "../src/components/landing/LandingScreen";
 import { useWaitlistEnabled } from "../src/hooks/useAuthStatus";
@@ -10,7 +11,11 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({
   i18n: { language: "en" },
 }) }));
 
-beforeEach(() => { vi.mocked(useWaitlistEnabled).mockReset(); });
+beforeEach(() => {
+  vi.mocked(useWaitlistEnabled).mockReset();
+  document.documentElement.setAttribute("data-theme", "dark");
+});
+afterEach(() => { document.documentElement.removeAttribute("data-theme"); });
 
 it("says what Relay is and shows the real product", () => {
   vi.mocked(useWaitlistEnabled).mockReturnValue(null);
@@ -49,4 +54,20 @@ it("links to the open-source repository from the bar, the hero, its own section,
   }
   expect(screen.getByRole("heading", { name: en.landing.oss_title })).toBeTruthy();
   expect(screen.getByText("git clone https://github.com/droxer/Relay.git")).toBeTruthy();
+});
+
+it("shows the screenshots cut for the active theme", () => {
+  vi.mocked(useWaitlistEnabled).mockReturnValue(null);
+  document.documentElement.setAttribute("data-theme", "light");
+  render(<LandingScreen />);
+  const hero = screen.getByRole("img", { name: en.landing.hero_alt });
+  expect(hero.getAttribute("src")).toBe("/landing/threads-light.webp");
+});
+
+it("flips the theme from the bar", () => {
+  vi.mocked(useWaitlistEnabled).mockReturnValue(null);
+  const onThemeChange = vi.fn();
+  render(<LandingScreen onThemeChange={onThemeChange} />);
+  fireEvent.click(screen.getByRole("button", { name: en.landing.theme_to_light }));
+  expect(onThemeChange).toHaveBeenCalledWith("light");
 });

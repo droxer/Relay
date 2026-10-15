@@ -643,19 +643,19 @@ const FALLBACK = {
 
 const byId = (items, id) => items.find((item) => item.id === id);
 
-export function currentUser(language) {
+export function currentUser(language, theme = "dark") {
   return {
     id: "user_ada", username: "ada", displayName: "Ada Chen", email: "ada@acme.example", role: "admin",
-    userId: USER, theme: "dark", language, effectiveMaxLocalComputers: 3, localComputerCount: 1,
+    userId: USER, theme, language, effectiveMaxLocalComputers: 3, localComputerCount: 1,
   };
 }
 
 /** The JSON body for one GET, or `undefined` when the path is not enumerated. */
-export function routeBody(pathname, params, language) {
+export function routeBody(pathname, params, language, theme = "dark") {
   const path = pathname.replace(/^\/api\/v1/, "");
   const [, head, id, tail, leaf] = path.split("/");
 
-  if (path === "/auth/me") return { authenticated: true, user: currentUser(language) };
+  if (path === "/auth/me") return { authenticated: true, user: currentUser(language, theme) };
   if (path === "/auth/status") return { bootstrapped: true, authenticated: true };
 
   if (path === "/threads") return { sessions };

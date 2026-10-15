@@ -7,8 +7,9 @@
 export const RELAY_GITHUB_URL = "https://github.com/droxer/Relay";
 export const RELAY_CLONE_COMMAND = `git clone ${RELAY_GITHUB_URL}.git`;
 
-/** A product screenshot under public/landing/, exported from the README
-    tour (docs/images) at 1600px wide. Each ships an English and a zh-CN cut. */
+/** A product screenshot under public/landing/, captured by
+    script/readme-snapshots (`--theme dark|light`) and saved as 1600px WebP.
+    Each ships English and zh-CN cuts in both themes. */
 export type LandingShot = "threads" | "projects" | "issues" | "routines" | "teams";
 
 export const LANDING_HERO_SHOT: LandingShot = "threads";
@@ -17,9 +18,14 @@ export const LANDING_HERO_SHOT: LandingShot = "threads";
     image arrives and nothing below it jumps. */
 export const LANDING_SHOT_SIZE = { width: 1600, height: 1000 } as const;
 
-export function landingShotSrc(shot: LandingShot, language: string | undefined): string {
-  const suffix = language === "zh-CN" ? "-zh-CN" : "";
-  return `/landing/${shot}${suffix}.webp`;
+/** The register a screenshot was captured in; each shot ships a cut per
+    theme so the product pictured matches the page around it. */
+export type LandingTheme = "dark" | "light";
+
+export function landingShotSrc(shot: LandingShot, language: string | undefined, theme: LandingTheme = "dark"): string {
+  const themeSuffix = theme === "light" ? "-light" : "";
+  const languageSuffix = language === "zh-CN" ? "-zh-CN" : "";
+  return `/landing/${shot}${themeSuffix}${languageSuffix}.webp`;
 }
 
 export interface LandingStep {
