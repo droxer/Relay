@@ -93,6 +93,8 @@ import {
   X as LucideX,
   type LucideIcon,
   type LucideProps,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { createElement, forwardRef, type ComponentProps } from "react";
 
@@ -487,6 +489,11 @@ export const AdminVerified = withStandardStroke(ShieldCheck, "AdminVerified");
 export const AdminInbox = withStandardStroke(Inbox, "AdminInbox");
 export const AdminInvite = withStandardStroke(MailPlus, "AdminInvite");
 export const AdminSettings = withStandardStroke(Settings, "AdminSettings");
+
+// Theme switch on the signed-out landing page: each glyph names the theme a
+// click moves TO, so the button reads as the destination, not the state.
+export const ThemeLight = withStandardStroke(Sun, "ThemeLight");
+export const ThemeDark = withStandardStroke(Moon, "ThemeDark");
 
 // ReUI component glyphs. The vendored ReUI components (components/reui/)
 // name their icons by lucide name through `IconPlaceholder`

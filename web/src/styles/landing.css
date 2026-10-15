@@ -1,11 +1,11 @@
 /* =====================================================================
    Landing page
 
-   The signed-out front door at `/`. It stands in the sign-in canvas's
-   pinned dark register (the --ld-* names alias the always-dark tokens in
-   tokens/palette.css, exactly as login.css's --lg-* do), so a visitor who
-   walks from here to the gate never changes rooms — and the product
-   screenshots, which are dark, sit on their own canvas.
+   The signed-out front door at `/`. Unlike the sign-in gate it follows the
+   theme: the --ld-* names alias the theme-register tokens in
+   tokens/palette.css, so html[data-theme] (saved, or the system's) repaints
+   the whole page, and the screenshots swap to the cut captured in the same
+   register.
 
    Composition: a sticky bar, a hero (copy over a framed screenshot), then
    three sections on one column measure — how it works, the product tour,
@@ -14,18 +14,13 @@
    ===================================================================== */
 
 .landing {
-  --ld-canvas: var(--dark-canvas);
-  --ld-surface: var(--dark-surface);
-  --ld-elevated: var(--dark-elevated);
-  --ld-ink: var(--dark-ink);
-  --ld-muted: var(--dark-ink-soft);
-  --ld-hairline: var(--dark-line);
-  --ld-hairline-soft: var(--dark-line-soft);
-  /* Pinned-dark canvas, so the shared focus ring binds to dark ink here —
-     the theme-register default would sit dark-on-dark under a light theme. */
-  --focus-outline: var(--focus-w) solid var(--ld-ink);
-  /* RelayMark strokes its lead path with the theme register's --ink-1. */
-  --ink-1: var(--ld-ink);
+  --ld-canvas: var(--surface-0);
+  --ld-surface: var(--surface-1);
+  --ld-elevated: var(--surface-2);
+  --ld-ink: var(--ink-1);
+  --ld-muted: var(--ink-3);
+  --ld-hairline: var(--line-1);
+  --ld-hairline-soft: var(--line-2);
   /* One column measure for every section, and the gutter beside it. */
   --ld-measure: 72rem;
   --ld-gutter: var(--sp-7);
@@ -95,6 +90,22 @@
   color: var(--ld-ink);
 }
 
+/* An icon button on the bar's link ink; it names the theme it moves to. */
+.landing-theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  border-radius: var(--r-2);
+  color: var(--ld-muted);
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.landing-theme-toggle:hover {
+  background: var(--ld-elevated);
+  color: var(--ld-ink);
+}
+
 .landing-nav-github {
   display: inline-flex;
   align-items: center;
@@ -121,13 +132,14 @@
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
 
+/* The product's neutral inverted CTA plate, per register. */
 .landing-button-primary {
-  background: var(--ld-ink);
-  color: var(--ld-canvas);
+  background: var(--cta-fill);
+  color: var(--cta-ink);
 }
 
 .landing-button-primary:hover {
-  background: var(--ld-muted);
+  background: var(--cta-hover);
 }
 
 .landing-button-secondary {

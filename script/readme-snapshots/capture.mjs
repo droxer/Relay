@@ -11,7 +11,9 @@
 
    --out <dir>    write somewhere other than docs/images
    --only <name>  capture one surface (repeatable)
-   --draft        1x pixels, for a quick look while editing fixtures */
+   --draft        1x pixels, for a quick look while editing fixtures
+   --theme <t>    dark (default, the README set) or light; light shots are
+                  written as relay-<name>-light[-zh-CN].png */
 
 import { createServer } from "node:http";
 import { mkdir, readFile } from "node:fs/promises";
@@ -24,6 +26,7 @@ import { FALLBACK, HERO_ID, routeBody } from "./fixtures.mjs";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const WEB_OUT = join(REPO_ROOT, "web/out");
 const VIEWPORT = { width: 1440, height: 900 };
+const THEMES = ["dark", "light"];
 const LANGUAGES = [{ code: "en", suffix: "" }, { code: "zh-CN", suffix: "-zh-CN" }];
 const READY_TIMEOUT_MS = 20_000;
 /* Long enough for web fonts, avatars, and the enter transitions to settle. */
@@ -63,13 +66,15 @@ function parseOptions() {
       out: { type: "string", default: join(REPO_ROOT, "docs/images") },
       only: { type: "string", multiple: true, default: [] },
       draft: { type: "boolean", default: false },
+      theme: { type: "string", default: "dark" },
     },
   });
+  if (!THEMES.includes(values.theme)) throw new Error(`Unknown theme: ${values.theme}. Known: ${THEMES.join(", ")}`);
   const unknown = values.only.filter((name) => !SHOTS.some((shot) => shot.name === name));
   if (unknown.length > 0) {
     throw new Error(`Unknown surface: ${unknown.join(", ")}. Known: ${SHOTS.map((shot) => shot.name).join(", ")}`);
   }
-  return { outDir: resolve(values.out), only: values.only, draft: values.draft };
+  return { outDir: resolve(values.out), only: values.only, draft: values.draft, theme: values.theme };
 }
 
 /** Serves web/out on a free port. The app owns its routing, so any path
@@ -101,14 +106,14 @@ async function serveExport() {
 
 /** Answers every API call from the fixtures; records the paths that fell
  *  through so a missing fixture is named instead of rendering as empty. */
-async function mockApi(page, language, unmatched) {
+async function mockApi(page, language, theme, unmatched) {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     if (/\/threads\/[^/]+\/events$/.test(url.pathname)) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: ": connected\n\n" });
       return;
     }
-    const body = route.request().method() === "GET" ? routeBody(url.pathname, url.searchParams, language) : undefined;
+    const body = route.request().method() === "GET" ? routeBody(url.pathname, url.searchParams, language, theme) : undefined;
     if (body === undefined) unmatched.add(`${route.request().method()} ${url.pathname}`);
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body ?? FALLBACK) });
   });
@@ -121,14 +126,15 @@ async function captureShot(browser, origin, shot, language, options) {
     viewport: VIEWPORT,
     deviceScaleFactor: options.draft ? 1 : 2,
     locale: language.code,
-    colorScheme: "dark",
+    colorScheme: options.theme,
   });
   await context.addInitScript((expanded) => {
     localStorage.setItem("relay-web.sidenavExpanded", expanded);
   }, String(shot.sidenav !== false));
   const page = await context.newPage();
   page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
-  await mockApi(page, language.code, unmatched);
+  await mockApi(page, language.code, options.theme, unmatched);
+  const stem = `relay-${shot.name}${options.theme === "light" ? "-light" : ""}${language.suffix}`;
 
   try {
     await page.goto(`${origin}${shot.path}`);
@@ -136,13 +142,13 @@ async function captureShot(browser, origin, shot, language, options) {
     await shot.prepare?.(page);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(SETTLE_MS);
-    if (await page.locator("html").getAttribute("data-theme") !== "dark") problems.push("dark theme was not applied");
+    if (await page.locator("html").getAttribute("data-theme") !== options.theme) problems.push(`${options.theme} theme was not applied`);
     if (BOUNDARY_TEXT.test(await page.locator("body").innerText())) problems.push("rendered an error boundary");
-    const file = join(options.outDir, `relay-${shot.name}${language.suffix}.png`);
+    const file = join(options.outDir, `${stem}.png`);
     await page.screenshot({ path: file });
     return { file, problems, unmatched: [...unmatched] };
   } catch (error) {
-    await page.screenshot({ path: join(options.outDir, `relay-${shot.name}${language.suffix}.failed.png`) }).catch(() => {});
+    await page.screenshot({ path: join(options.outDir, `${stem}.failed.png`) }).catch(() => {});
     return { file: null, problems: [...problems, error.message.split("\n")[0]], unmatched: [...unmatched] };
   } finally {
     await context.close();

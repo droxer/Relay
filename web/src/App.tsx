@@ -688,7 +688,7 @@ export function App() {
   }
 
   if (!user) {
-    if (isLandingPath(window.location.pathname)) return <LandingScreen />;
+    if (isLandingPath(window.location.pathname)) return <LandingScreen onThemeChange={preferences.setTheme} />;
     if (publicPage === "waitlist") return <WaitlistScreen />;
     if (publicPage === "join") return <JoinScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;
     return <LoginScreen onAuthenticated={(authenticatedUser) => setUser(authenticatedUser)} />;

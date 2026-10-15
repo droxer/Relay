@@ -3,6 +3,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useWaitlistEnabled } from "../../hooks/useAuthStatus";
+import { useResolvedTheme } from "../../hooks/useResolvedTheme";
+import type { Theme } from "../../lib/appStorage";
 import {
   LANDING_HERO_SHOT,
   LANDING_PRINCIPLES,
@@ -18,7 +20,7 @@ import {
 } from "../../lib/landing";
 import { Chevrons } from "../AuthCanvas";
 import { RelayMark } from "../RelayMark";
-import { ICON } from "../icons";
+import { ICON, ThemeDark, ThemeLight } from "../icons";
 import { PublicLink } from "../waitlist/PublicLink";
 import { GithubMark } from "./GithubMark";
 
@@ -58,11 +60,12 @@ function CtaLink({ cta, tone }: { cta: LandingCta; tone: "primary" | "secondary"
     window. Only the hero loads eagerly; the tour waits until it is near. */
 function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string; priority?: boolean }) {
   const { i18n } = useTranslation();
+  const theme = useResolvedTheme();
   return (
     <figure className="landing-shot">
       {/* eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); pre-sized webp screenshots */}
       <img
-        src={landingShotSrc(shot, i18n.language)}
+        src={landingShotSrc(shot, i18n.language, theme)}
         alt={alt}
         width={LANDING_SHOT_SIZE.width}
         height={LANDING_SHOT_SIZE.height}
@@ -81,6 +84,20 @@ function GithubLink({ className, children, label }: { className: string; childre
     <a className={className} href={RELAY_GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label={label}>
       {children}
     </a>
+  );
+}
+
+/** Flips between the light and dark registers. The glyph and label name the
+    theme a click moves to; the choice persists like any saved theme. */
+function ThemeToggle({ onThemeChange }: { onThemeChange: (theme: Theme) => void }) {
+  const { t } = useTranslation();
+  const next = useResolvedTheme() === "dark" ? "light" : "dark";
+  const label = t(next === "light" ? "landing.theme_to_light" : "landing.theme_to_dark");
+  const Glyph = next === "light" ? ThemeLight : ThemeDark;
+  return (
+    <button type="button" className="landing-theme-toggle" aria-label={label} title={label} onClick={() => onThemeChange(next)}>
+      <Glyph size={ICON.md} />
+    </button>
   );
 }
 
@@ -104,11 +121,10 @@ function Brand() {
 
 /**
  * The signed-out front door at `/`: what Relay is, how it works, the product
- * as it really looks, and the one or two doors in. It shares the sign-in
- * canvas's pinned dark register and chevron signature, so walking from here to
- * the gate reads as one place.
+ * as it really looks, and the one or two doors in. It follows the visitor's
+ * theme — saved, or the system's — and shows the product in the same one.
  */
-export function LandingScreen() {
+export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme) => void }) {
   const { t } = useTranslation();
   const ctas = landingCtas(useWaitlistEnabled());
   const year = new Date().getFullYear();
@@ -123,6 +139,7 @@ export function LandingScreen() {
             <SectionLink id={PRODUCT_ID} className="landing-nav-link" label={t("landing.nav_product")} />
           </nav>
           <div className="landing-nav-actions">
+            {onThemeChange ? <ThemeToggle onThemeChange={onThemeChange} /> : null}
             <GithubLink className="landing-nav-link landing-nav-github">
               <GithubMark size={ICON.md} />
               <span>{t("landing.github")}</span>
