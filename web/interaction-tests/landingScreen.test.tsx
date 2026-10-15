@@ -37,3 +37,16 @@ it("never links to a closed waitlist", () => {
   expect(screen.queryByRole("link", { name: en.landing.request_access })).toBeNull();
   expect(screen.getAllByRole("link", { name: en.landing.sign_in })[0].getAttribute("href")).toBe("/login");
 });
+
+it("links to the open-source repository from the bar, the hero, its own section, and the foot", () => {
+  vi.mocked(useWaitlistEnabled).mockReturnValue(null);
+  render(<LandingScreen />);
+  const links = screen.getAllByRole("link").filter((link) => link.getAttribute("href") === "https://github.com/droxer/Relay");
+  expect(links.length).toBe(4);
+  for (const link of links) {
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  }
+  expect(screen.getByRole("heading", { name: en.landing.oss_title })).toBeTruthy();
+  expect(screen.getByText("git clone https://github.com/droxer/Relay.git")).toBeTruthy();
+});

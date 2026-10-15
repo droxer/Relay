@@ -1,6 +1,6 @@
 "use client";
 
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useWaitlistEnabled } from "../../hooks/useAuthStatus";
 import {
@@ -9,6 +9,8 @@ import {
   LANDING_SHOT_SIZE,
   LANDING_STEPS,
   LANDING_TOUR,
+  RELAY_CLONE_COMMAND,
+  RELAY_GITHUB_URL,
   landingCtas,
   landingShotSrc,
   type LandingCta,
@@ -18,6 +20,7 @@ import { Chevrons } from "../AuthCanvas";
 import { RelayMark } from "../RelayMark";
 import { ICON } from "../icons";
 import { PublicLink } from "../waitlist/PublicLink";
+import { GithubMark } from "./GithubMark";
 
 const HOW_ID = "landing-how";
 const PRODUCT_ID = "landing-product";
@@ -71,6 +74,16 @@ function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string;
   );
 }
 
+/** The public repository, opened in a new tab: it is a different site, and
+    a visitor reading the code should not lose their place on this page. */
+function GithubLink({ className, children, label }: { className: string; children: ReactNode; label?: string }) {
+  return (
+    <a className={className} href={RELAY_GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label={label}>
+      {children}
+    </a>
+  );
+}
+
 function SectionHead({ id, kicker, title }: { id: string; kicker: string; title: string }) {
   return (
     <header className="landing-section-head">
@@ -110,6 +123,10 @@ export function LandingScreen() {
             <SectionLink id={PRODUCT_ID} className="landing-nav-link" label={t("landing.nav_product")} />
           </nav>
           <div className="landing-nav-actions">
+            <GithubLink className="landing-nav-link landing-nav-github">
+              <GithubMark size={ICON.md} />
+              <span>{t("landing.github")}</span>
+            </GithubLink>
             {ctas.secondary ? (
               <PublicLink href={ctas.secondary.href} className="landing-nav-link">
                 {t(ctas.secondary.labelKey)}
@@ -126,7 +143,11 @@ export function LandingScreen() {
             <Chevrons />
           </span>
           <div className="landing-hero-copy">
-            <p className="landing-kicker">{t("landing.eyebrow")}</p>
+            <GithubLink className="landing-badge">
+              <GithubMark size={ICON.sm} />
+              <span>{t("landing.open_source_badge")}</span>
+              <span aria-hidden="true">→</span>
+            </GithubLink>
             <h1 className="landing-headline" id="landing-headline">{t("landing.headline")}</h1>
             <p className="landing-lede">{t("landing.lede")}</p>
             <div className="landing-ctas">
@@ -137,6 +158,7 @@ export function LandingScreen() {
                 <SectionLink id={HOW_ID} className="landing-button landing-button-secondary" label={t("landing.cta_secondary")} />
               )}
             </div>
+            <p className="landing-kicker landing-runtimes">{t("landing.eyebrow")}</p>
           </div>
           <div className="landing-hero-shot">
             <Shot shot={LANDING_HERO_SHOT} alt={t("landing.hero_alt")} priority />
@@ -184,6 +206,25 @@ export function LandingScreen() {
           </ul>
         </section>
 
+        <section className="landing-section" aria-labelledby="landing-oss-title">
+          <div className="landing-oss">
+            <div className="landing-oss-copy">
+              <SectionHead id="landing-oss-title" kicker={t("landing.oss_kicker")} title={t("landing.oss_title")} />
+              <p className="landing-card-body">{t("landing.oss_body")}</p>
+              <div className="landing-ctas landing-ctas-start">
+                <GithubLink className="landing-button landing-button-secondary landing-button-icon">
+                  <GithubMark size={ICON.md} />
+                  <span>{t("landing.oss_cta")}</span>
+                </GithubLink>
+              </div>
+            </div>
+            <figure className="landing-terminal">
+              <figcaption className="landing-terminal-label">{t("landing.oss_clone_label")}</figcaption>
+              <code className="landing-terminal-command">{RELAY_CLONE_COMMAND}</code>
+            </figure>
+          </div>
+        </section>
+
         <section className="landing-closer" aria-labelledby="landing-closer-title">
           <RelayMark size={ICON.hero} />
           <h2 className="landing-section-title" id="landing-closer-title">{t("landing.cta_title")}</h2>
@@ -199,6 +240,9 @@ export function LandingScreen() {
         <div className="landing-foot-inner">
           <Brand />
           <span className="landing-foot-tagline">{t("landing.foot_tagline")}</span>
+          <GithubLink className="landing-foot-github" label={t("landing.github")}>
+            <GithubMark size={ICON.md} />
+          </GithubLink>
           <span className="landing-foot-meta">Relay · {year}</span>
         </div>
       </footer>
