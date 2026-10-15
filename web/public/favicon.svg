@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
   <!-- App icon (dark default): ink-deep canvas + cobalt lead chevron. Cobalt is
-       the brand accent — the register-invariant --action — so the mark matches
+       the brand accent — the register-invariant action token — so the mark matches
        the product's primary CTA. At 16px the icon's job is to identify Relay,
        and a neutral chevron on a neutral square vanishes in a tab strip. -->
   <rect x="4" y="4" width="56" height="56" rx="15" fill="#0a1317"/>
