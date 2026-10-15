@@ -103,6 +103,7 @@ load_backend_env()
 
 CONTROL_PANEL_VERSION = os.environ.get("RELAY_CONTROL_PANEL_VERSION") or "python"
 WEB_UI_PATH = "/"
+CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200
 
 
 class ServerTimingMiddleware:
@@ -483,6 +484,10 @@ def _configure_cors(app: FastAPI) -> None:
         # The web client reads Last-Event-ID off SSE frames, not headers, but
         # Server-Timing is read by the browser devtools panel on every request.
         expose_headers=["Server-Timing"],
+        # Credentialed JSON calls each need a preflight; cache it for Chrome's
+        # two-hour ceiling (Starlette's default is ten minutes) so the browser
+        # skips that extra round trip to the origin.
+        max_age=CORS_PREFLIGHT_MAX_AGE_SECONDS,
     )
     logger.info(
         "CORS enabled for cross-origin web UI",

@@ -79,6 +79,27 @@ class TestCors:
         with pytest.raises(RuntimeError, match="not a valid regular expression"):
             deploy_config.cors_allow_origin_regex()
 
+    def test_preflight_is_cached_for_the_browser_maximum(self, monkeypatch) -> None:
+        # The separately hosted UI sends credentialed JSON, so most calls need a
+        # preflight; caching it spares a round trip to the origin region.
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from relay.app import _configure_cors
+
+        monkeypatch.setenv("RELAY_CORS_ALLOW_ORIGINS", "https://app.example.com")
+        app = FastAPI()
+        _configure_cors(app)
+        response = TestClient(app).options(
+            "/api/v1/threads",
+            headers={
+                "Origin": "https://app.example.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-max-age"] == "7200"
+
 
 class TestSessionCookieConfig:
     def test_defaults_match_the_single_origin_install(self) -> None:

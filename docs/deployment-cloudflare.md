@@ -1,15 +1,17 @@
 # Deploying Relay on Railway behind Cloudflare
 
 This guide puts Cloudflare (DNS, TLS, CDN, WAF) in front of Relay on Railway.
-It replaces the Vercel half of [deployment.md](deployment.md): the web UI runs
-as its own Railway service on a sibling subdomain, and the browser calls the
-backend directly (section 8). The backend image does not include the web UI.
+It replaces the Vercel half of [deployment.md](deployment.md): the web UI is a
+Cloudflare Worker serving the static export from every Cloudflare location
+(or, optionally, its own Railway service) on a sibling subdomain, and the
+browser calls the backend directly (section 8). The backend image does not
+include the web UI.
 Follow [deployment.md § 1](deployment.md#1-railway-postgres--backend) for the
 backend service and Postgres, then come back here.
 
 ```
 browser ─┐                ┌──────── Cloudflare (proxied DNS) ────────┐
-         ├─ https ──────▶ │ app.example.com   caches /_next/static/* │──▶ Railway: relay-web (static UI)
+         ├─ https ──────▶ │ app.example.com   Worker: static UI      │   (served at the edge, no origin)
 daemons ─┴─ https ──────▶ │ api.example.com   adds X-Relay-Edge      │──▶ Railway: relay backend (1 replica) ─▶ Postgres
                           │                   caches daemon bundles  │
                           └──────────────────────────────────────────┘
@@ -106,6 +108,18 @@ Cloudflare → *Caching* → *Cache Rules*, in this order:
 
 HTML pages fall through to Cloudflare's default (not cached), so a deploy is
 visible immediately.
+
+**Speed settings.** Turn these on as well; none of them touches response
+bodies, so SSE is unaffected:
+
+| Setting | Where | Effect |
+| --- | --- | --- |
+| HTTP/3 (with QUIC) | *Speed* → *Optimization* → *Protocol* | Faster connection setup, better on lossy mobile links. |
+| 0-RTT Connection Resumption | same | A returning visitor sends its first request with the handshake. |
+| Early Hints | *Speed* → *Optimization* → *Content* | `103` preload hints for scripts and styles while the page is in flight. |
+| Smart Tiered Cache | *Caching* → *Tiered Cache* | An edge miss asks a regional Cloudflare cache before Railway — daemon bundles after a release reach Railway about once, not once per location. |
+
+Leave off anything that rewrites or buffers responses — see section 4.
 
 ## 4. SSE
 
@@ -250,16 +264,61 @@ To restore over the live database instead, stop the backend first and add
 buckets from section 6, not in the dump; keys in a restored database still
 point at them.
 
-## 8. The web UI on Railway
+## 8. The web UI
 
-The UI is a static export served by its own Railway service (`web/Dockerfile`:
-the Next.js export behind Caddy). The browser loads it from `app.example.com`
-and calls `api.example.com` itself — the *direct* model of
+The UI is a static export in *direct* mode: the browser loads it from
+`app.example.com` and calls `api.example.com` itself — the direct model of
 [deployment.md](deployment.md#option-b--direct-on-sibling-subdomains). Do not
-use the proxied model here: a web service that proxied `/api` would reach the
-backend through Cloudflare from its own address, so `CF-Connecting-IP` would
-name the web service for every user and the backend's login rate limit would
-put them all in one bucket.
+put a proxy for `/api` in front of the UI: a proxy reaches the backend through
+Cloudflare from its own address, so `CF-Connecting-IP` would name the proxy for
+every user and the backend's login rate limit would put them all in one bucket.
+
+Whichever host serves it, the backend needs these variables so the browser may
+call the API from the UI's origin with its session cookie:
+
+| Variable | Value |
+| --- | --- |
+| `RELAY_CORS_ALLOW_ORIGINS` | `https://app.example.com` |
+| `RELAY_SESSION_COOKIE_DOMAIN` | `.example.com` |
+
+Sibling subdomains are same-site, so the cookie stays `SameSite=Lax`. The
+backend caches the CORS preflight for two hours, so the cross-origin calls do
+not pay an extra round trip each.
+
+### Cloudflare Workers (default)
+
+The export is uploaded to Workers static assets and served from every
+Cloudflare location, so pages load without a round trip to Railway's region,
+and there is no web container to run. A small Worker
+([`deploy/workers/worker.js`](../deploy/workers/worker.js)) runs only when no
+file matched: a path with a file suffix is a `404`, anything else is a client
+route and gets the app shell — the same line `web/Caddyfile` draws.
+[`deploy/workers/_headers`](../deploy/workers/_headers) carries the security
+headers and marks `/_next/static/*` immutable; pages revalidate, so a deploy is
+visible immediately.
+
+1. **Build.** `NEXT_PUBLIC_RELAY_API_ORIGIN=https://api.example.com npm run
+   build -w web` produces `web/out`. The value is inlined at build time.
+   `deploy.sh` builds it in Docker from `web/Dockerfile`'s `build` stage, from
+   the release commit, so the remote source never runs on the deploying
+   machine.
+2. **Publish** the Worker with its assets (direct-upload API, or `wrangler
+   deploy` with `assets.directory = "web/out"`, `not_found_handling = "none"`,
+   and `worker.js` as `main`). Unchanged files are not uploaded again.
+3. **Route.** `app.example.com` needs a proxied DNS record; with none, add
+   `AAAA app 100::` (proxied). Then add the Worker route `app.example.com/*`.
+   A route answers in front of whatever record is there, so moving from the
+   Railway service is zero-downtime: keep its proxied CNAME, add the route,
+   and deleting the route is the rollback. Remove the Railway `relay-web`
+   service once the checks in section 9 pass.
+
+The section 3 cache rules do not apply to Worker assets, which come from
+Cloudflare's asset store rather than the zone cache.
+
+### Railway
+
+To serve the UI from a Railway service instead (`web/Dockerfile`: the export
+behind Caddy; `WEB_HOSTING=railway` for `deploy.sh`):
 
 1. **Service.** Create an empty service, keeping the repository root as its
    root directory. Set `RAILWAY_DOCKERFILE_PATH=web/Dockerfile`, then configure
@@ -280,16 +339,7 @@ put them all in one bucket.
 3. **Domain.** Add `app.example.com` as the service's custom domain and a
    proxied CNAME in Cloudflare, as in section 1. The UI's origin needs no
    lock — it serves only public static files.
-4. **Backend variables**, so the browser may call the API from the UI's origin
-   with its session cookie:
-
-   | Variable | Value |
-   | --- | --- |
-   | `RELAY_CORS_ALLOW_ORIGINS` | `https://app.example.com` |
-   | `RELAY_SESSION_COOKIE_DOMAIN` | `.example.com` |
-
-   Sibling subdomains are same-site, so the cookie stays `SameSite=Lax`.
-5. **Caching.** The section 3 rules match on path, so they cover both
+4. **Caching.** The section 3 rules match on path, so they cover both
    hostnames. The web service sends `immutable` for `/_next/static/*` and
    `no-cache` for pages, so a deploy is visible immediately.
 
@@ -302,8 +352,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://api.example.com/api/v1/auth/st
 curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/api/v1/auth/status
 # Health check is open on the origin: 200
 curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/healthz
-# Static assets come from the edge cache after the first hit: HIT
-curl -sSI https://app.example.com/_next/static/<any-asset> | grep -i cf-cache-status
+# Static assets are immutable (Workers); on Railway, cf-cache-status is HIT
+# after the first request
+curl -sSI https://app.example.com/_next/static/<any-asset> | grep -iE 'cache-control|cf-cache-status'
 # The API is never cached: BYPASS or DYNAMIC
 curl -sSI https://api.example.com/api/v1/auth/status | grep -i cf-cache-status
 ```
@@ -313,6 +364,8 @@ The web UI and its CORS grant:
 ```bash
 # Any client route returns the app shell: 200
 curl -sS -o /dev/null -w '%{http_code}\n' https://app.example.com/threads
+# A missing asset is not the app shell: 404
+curl -sS -o /dev/null -w '%{http_code}\n' https://app.example.com/_next/static/missing.js
 # The API allows the UI's origin with credentials
 curl -sSI -H 'Origin: https://app.example.com' https://api.example.com/api/v1/auth/status \
   | grep -i '^access-control-allow-'

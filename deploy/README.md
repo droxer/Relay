@@ -3,21 +3,26 @@
 `deploy.sh` automates [docs/deployment-cloudflare.md](../docs/deployment-cloudflare.md):
 it provisions Relay on Railway, puts Cloudflare in front of it, deploys, and
 checks the result. It calls the Railway GraphQL API and the Cloudflare v4 API
-directly, so it needs only `curl`, `jq`, `openssl`, `git`, and `python3` — no `railway` or
-`wrangler` CLI.
+directly, so it needs only `curl`, `jq`, `openssl`, `git`, `python3`, and
+`docker` (to build the web export) — no `railway` or `wrangler` CLI.
 
-| Host | Serves | Railway service |
+| Host | Serves | Runs on |
 | --- | --- | --- |
-| `get-relay.cc` | web UI (`web/Dockerfile`, static export behind Caddy) | `relay-web` |
-| `api.get-relay.cc` | API, SSE, daemons, install script (`backend/Dockerfile`) | `relay-backend` |
-| — | database | `Postgres` (Railway template) |
+| `get-relay.cc` | web UI (static export) | Cloudflare Worker `relay-web` |
+| `api.get-relay.cc` | API, SSE, daemons, install script (`backend/Dockerfile`) | Railway `relay-backend` |
+| — | database | Railway `Postgres` (template) |
+
+Set `WEB_HOSTING=railway` to serve the UI from a Railway `relay-web` service
+(`web/Dockerfile`, the export behind Caddy) instead; `docker` is then not
+needed.
 
 ## Before the first run
 
 1. **Cloudflare:** add `get-relay.cc` as a zone and point the registrar at
    Cloudflare's nameservers. Create an API token scoped to that zone with
    *Zone: Read*, *DNS: Edit*, *Zone Settings: Edit*, *Transform Rules: Edit*,
-   and *Cache Rules: Edit*.
+   *Cache Rules: Edit*, and *Workers Routes: Edit*, plus the account
+   permission *Workers Scripts: Edit*.
 2. **Railway:** create an account or workspace token (a project token cannot
    create projects), and give the Railway GitHub app access to
    `droxer/Relay`.
@@ -34,8 +39,8 @@ directly, so it needs only `curl`, `jq`, `openssl`, `git`, and `python3` — no 
 ```bash
 deploy/deploy.sh up          # everything below, in order
 deploy/deploy.sh railway     # project, Postgres, services, variables, volume, custom domains
-deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules
-deploy/deploy.sh release     # connect the repo (first time), deploy both services, wait
+deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules, speed settings
+deploy/deploy.sh release     # deploy the backend, then build and publish the web UI Worker
 deploy/deploy.sh verify      # probe the live hostnames
 ```
 
@@ -55,6 +60,24 @@ Railway publishes a custom domain's DNS records shortly after the domain is
 added. If `cloudflare` warns that they are not ready, re-run it a minute later.
 Certificates are issued through the `_acme-challenge` records, which stay
 DNS-only, so the traffic records can be proxied from the start.
+
+## The web UI Worker
+
+`release` builds the export of the release commit in Docker (`web/Dockerfile`'s
+`build` stage, fed by `git archive`, so nothing from the working tree is used
+and the remote source never runs on this machine) while Railway builds the
+backend. Once the backend deployment succeeds, it uploads the export through
+the Workers direct-upload API (`workers_deploy.py`; files Cloudflare already
+holds are skipped) together with `workers/worker.js` and `workers/_headers`,
+then routes `get-relay.cc/*` to the Worker. A failed backend leaves the
+previous UI in place.
+
+`cloudflare` gives the web host a proxied record: an existing one is kept,
+otherwise it adds `AAAA 100::`. Moving from the Railway web service is
+therefore zero-downtime — the route answers in front of the old CNAME — and
+deleting the route in the dashboard is the rollback. Once `verify` passes,
+delete `relay-web` in Railway; the script never deletes services, records, or
+someone else's route.
 
 ## Railway service configuration
 
@@ -92,13 +115,15 @@ deploy/deploy.sh verify
 `RELAY_PUBLIC_BACKEND_URL`, `RELAY_PUBLIC_WEB_URL`, `RELAY_CORS_ALLOW_ORIGINS`,
 `RELAY_SESSION_COOKIE_DOMAIN=.get-relay.cc`, `RELAY_FORCE_SECURE_COOKIES`,
 `RELAY_EDGE_SECRET`, `RELAY_CLIENT_IP_HEADER=CF-Connecting-IP`,
-`RELAY_ADMIN_TOKEN`, and the R2 keys when configured. **Web variables:**
-`NEXT_PUBLIC_RELAY_API_ORIGIN`, which is baked in at build time.
+`RELAY_ADMIN_TOKEN`, and the R2 keys when configured. **Web:**
+`NEXT_PUBLIC_RELAY_API_ORIGIN` is baked into the export at build time (a build
+argument for the Worker, a service variable with `WEB_HOSTING=railway`).
 
-**Cloudflare:** proxied CNAMEs for both hosts, DNS-only ACME and ownership
-records, SSL *Full (strict)*, *Always Use HTTPS*, a Transform Rule that adds
-`X-Relay-Edge` to requests for the API host only, and the five cache rules from
-§ 3. Rules the script owns have a `relay_` ref. Rules without one are left
+**Cloudflare:** a proxied CNAME for the API host and a proxied record plus
+Worker route for the web host, DNS-only ACME and ownership records, SSL *Full
+(strict)*, *Always Use HTTPS*, HTTP/3, 0-RTT, Early Hints, Smart Tiered Cache,
+a Transform Rule that adds `X-Relay-Edge` to requests for the API host only,
+and the five cache rules from § 3. Rules the script owns have a `relay_` ref. Rules without one are left
 alone, and it never deletes a DNS record: if a host already points somewhere
 else, the run stops and says which record to remove.
 
@@ -128,8 +153,10 @@ to `<new>` alone and run `railway` and `release` again.
 `release` builds the selected GitHub commit, not the local working tree.
 Before any deployment request, it fetches that exact commit into a temporary
 Git object database and checks required backend/web build files and Railway
-cache-mount constraints. It never checks out or runs remote files. Both services
-are checked even when one fails; failure output includes deployment IDs, the
+cache-mount constraints. It never checks out or runs remote files outside a
+container: Railway builds the services, and the web export builds inside
+Docker. With `WEB_HOSTING=railway`, both services are checked even when one
+fails; failure output includes deployment IDs, the
 commit SHA, and build/runtime log tails. Log retrieval is best effort. Commit
 and push Dockerfile or source fixes to the connected branch before releasing,
 or push a commit and select its full SHA with `RAILWAY_DEPLOY_COMMIT`.
@@ -145,8 +172,10 @@ deploy/tests/run.sh
 ```
 
 This runs the script against `tests/mock_api.py`, an in-memory stand-in for
-both APIs. It runs a full provision, then a second run that must create or
-change nothing, then the failure cases that must stop a run. The source checks validate committed Git fixtures, including a broken commit
+both APIs (including Workers direct upload and routes), with Docker stubbed.
+It runs a full provision, then a second run that must create or change nothing
+and upload no unchanged asset, a move from the Railway-hosted UI, the
+`WEB_HOSTING=railway` path, then the failure cases that must stop a run. The source checks validate committed Git fixtures, including a broken commit
 whose working tree is already fixed. The mock rejects deprecated Config as Code, requires pinned release commits,
 and checks foreign DNS conflicts. The API field shapes were checked against
 Railway's live GraphQL schema, but no real account deployment is validated by
