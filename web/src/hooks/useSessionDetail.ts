@@ -34,7 +34,15 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       }
     };
     void hydrate();
-    const timer = window.setInterval(() => void hydrate(), RELAY_POLL_INTERVALS_MS.sessions);
-    return () => { controller.abort(); window.clearInterval(timer); };
+    // The check is a cache read, but a hidden tab has nothing to reconcile for:
+    // skip its ticks and catch up the moment the tab is shown again.
+    const tick = () => { if (!document.hidden) void hydrate(); };
+    const timer = window.setInterval(tick, RELAY_POLL_INTERVALS_MS.sessions);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [enabled, queryClient, sessionId]);
 }

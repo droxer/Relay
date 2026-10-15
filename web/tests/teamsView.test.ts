@@ -25,7 +25,8 @@ describe("Agent team management", () => {
   });
   it("keeps teams in user agent management instead of standalone admin navigation", async () => {
     const adminPageSource = await readFile(resolve("web/src/components/AdminPage.tsx"), "utf8");
-    const appSource = await readFile(resolve("web/src/App.tsx"), "utf8");
+    // The work-route pages moved out of App into WorkRoutePage.
+    const appSource = await readFile(resolve("web/src/components/WorkRoutePage.tsx"), "utf8");
     const agentsSource = await readFile(resolve("web/src/components/AgentsPage.tsx"), "utf8");
     const teamsSource = await readFile(resolve("web/src/components/TeamsPage.tsx"), "utf8");
     const agentDetailSource = await readFile(resolve("web/src/components/AgentDetailPage.tsx"), "utf8");

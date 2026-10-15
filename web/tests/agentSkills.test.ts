@@ -14,7 +14,7 @@ describe("agent skills on the agent record", () => {
   });
 
   it("carries node-reported skills on the agent record type", async () => {
-    const types = await readFile(resolve("web/src/types.ts"), "utf8");
+    const types = await readFile(resolve("web/src/domain-types/agents.ts"), "utf8");
     assert.match(types, /skills\?: DaemonAgentSkill\[\];/);
   });
 
@@ -49,7 +49,7 @@ describe("agent skills on the agent record", () => {
     // The preview must read the bundle the agent actually gets.
     assert.match(panelSource, /skill\.pin === "latest" \? "latest" : "stable"/);
 
-    const api = await readFile(resolve("web/src/api.ts"), "utf8");
+    const api = await readFile(resolve("web/src/api-client/skills.ts"), "utf8");
     assert.match(api, /\/skills\/\$\{encodeURIComponent\(skillId\)\}\/files\?path=/);
 
     for (const locale of ["en", "zh-CN"]) {

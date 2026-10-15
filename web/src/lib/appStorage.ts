@@ -33,9 +33,22 @@ const sidenavExpandedKey = "relay-web.sidenavExpanded";
 const threadListBesideSpaceKey = "relay-web.threadListBesideSpace";
 const drawerWidthKeyPrefix = "relay-web.drawerWidth.";
 
+/** Keep only the well-formed entries of a stored token map. The value is
+ *  whatever an earlier build (or a hand edit) left in localStorage, so a
+ *  non-object reads as empty and a non-string token is dropped rather than
+ *  sent as `Bearer [object Object]`. */
+export function sanitizeTokenMap(value: unknown): TokenMap {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
 export function readTokens(): TokenMap {
   if (typeof window === "undefined") return {};
-  try { return JSON.parse(localStorage.getItem(tokenStorageKey) ?? "null") as TokenMap ?? {}; }
+  try { return sanitizeTokenMap(JSON.parse(localStorage.getItem(tokenStorageKey) ?? "null")); }
   catch { return {}; }
 }
 

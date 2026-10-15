@@ -28,7 +28,7 @@ import {
   updateTeam,
 } from "../api";
 import type { AgentRunInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
-import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, RELAY_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
+import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { TEAMS_QUERY_KEY } from "./useTeams";
@@ -47,11 +47,12 @@ export function useRelayMutations() {
   const { announce } = useDialogs();
   const { reportMutationError } = useMutationError();
 
-  const invalidateRelay = () => queryClient.invalidateQueries({ queryKey: RELAY_QUERY_KEY });
   const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
   const invalidateNodes = () => queryClient.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
   const invalidateProjects = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY, exact: true });
+  // Prefix on purpose: the teams list is keyed ["teams", userId] and nothing
+  // else lives under "teams", so `exact` here would match no query at all.
   const invalidateTeams = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
   const cacheSession = (session: RelaySession) => {
     queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
@@ -430,6 +431,5 @@ export function useRelayMutations() {
     deleteProjectMutation,
     updateTeamMutation,
     deleteTeamMutation,
-    invalidateRelay,
   };
 }

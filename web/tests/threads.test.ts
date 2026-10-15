@@ -259,6 +259,21 @@ describe("web thread helpers", () => {
     assert.deepEqual(mine.map((s) => s.id), ["d", "a"]);
   });
 
+  it("orders by updatedAt without touching the input and keeps ties stable", () => {
+    const sessions = [
+      session({ id: "old", ownerUserId: "alice", updatedAt: "2026-06-20T01:00:00.000Z" }),
+      session({ id: "tie-1", ownerUserId: "alice", updatedAt: "2026-06-20T04:00:00.000Z" }),
+      session({ id: "new", ownerUserId: "alice", updatedAt: "2026-06-21T00:00:00.000Z" }),
+      session({ id: "tie-2", ownerUserId: "alice", updatedAt: "2026-06-20T04:00:00.000Z" }),
+    ];
+    const before = sessions.map((s) => s.id);
+    assert.deepEqual(myThreadSessions(sessions, "alice").map((s) => s.id), ["new", "tie-1", "tie-2", "old"]);
+    assert.deepEqual(sessions.map((s) => s.id), before);
+    const ordered = myThreadSessions(sessions, "alice");
+    assert.deepEqual(myThreadSessions(ordered, "alice").map((s) => s.id), ["new", "tie-1", "tie-2", "old"]);
+    assert.notEqual(myThreadSessions(ordered, "alice"), ordered, "always a fresh array");
+  });
+
   it("keeps ownerless legacy sessions for the current user", () => {
     const sessions = [session({ id: "legacy", ownerUserId: undefined })];
     assert.deepEqual(myThreadSessions(sessions, "alice").map((s) => s.id), ["legacy"]);

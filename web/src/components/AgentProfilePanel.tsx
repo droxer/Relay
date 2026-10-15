@@ -23,6 +23,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
 import { ADMIN_AGENTS_KEY } from "../lib/adminHelpers";
 import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
+import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { formatRelativeTime } from "./admin/helpers";
 import { IdentityMark } from "./IdentityMark";
 import { AgentProfileEditor } from "./AgentProfileEditor";
@@ -119,10 +120,21 @@ export function AgentProfilePanel({
     });
   }
 
+  /* The agent lists an edit or delete actually changes, and nothing else.
+     Invalidated rather than patched from the response: the lists resolve
+     node-reported fields (availability, models, skills, binding status) on
+     read, which the PATCH responses do not all carry. Teams embed each
+     member's name, avatar, and availability, so they refresh too. */
+  function invalidateAgentLists() {
+    void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY, exact: true });
+    // ["user-agents", userId]: the prefix is the one list, whoever's it is.
+    void queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
+  }
+
   function applyAgentUpdate(updated: UserAgent) {
     queryClient.setQueryData(["admin", "agent", updated.id], { agent: updated });
-    void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY });
-    void queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] });
+    invalidateAgentLists();
     onAgentUpdated?.(updated);
   }
 
@@ -244,7 +256,7 @@ export function AgentProfilePanel({
     setError(null);
     try {
       await deleteUserAgent(agent.id);
-      void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY });
+      invalidateAgentLists();
       onAgentDeleted?.(agent.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

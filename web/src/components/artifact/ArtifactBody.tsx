@@ -14,6 +14,7 @@ import { useArtifactBody } from "../../lib/useArtifactBody";
 import { CodeView, languageForFile } from "../CodeView";
 import { Markdown } from "../LazyMarkdown";
 import type { ArtifactView } from "./ArtifactViewToggle";
+import { PdfFrame } from "./PdfFrame";
 
 type DiffLineKind = "add" | "del" | "meta" | "hunk" | "context";
 
@@ -104,7 +105,7 @@ function blobToDataUrl(blob: Blob, type: string): Promise<string> {
 }
 
 /** A PDF artifact, framed from its fetched bytes — the same `data:` framing the
- *  workspace file preview uses.
+ *  workspace file preview uses (see `PdfFrame` for why it is not sandboxed).
  *
  *  Not `<iframe src={rawHref}>`: the raw route is a download — `attachment`,
  *  CSP `sandbox` and `frame-ancestors 'none'` — so the browser refused to frame
@@ -127,7 +128,7 @@ function PdfPreview({ sessionId, artifact }: { sessionId: string; artifact: Rela
   if (!query.data) {
     return <p className="artifact-viewer-status" role="status">{t("artifact.loading_preview")}</p>;
   }
-  return <iframe className="artifact-frame-preview" src={query.data} title={artifact.title} />;
+  return <PdfFrame src={query.data} title={artifact.title} />;
 }
 
 /** Text body of a generated workspace file. Renderable types (Markdown, HTML)

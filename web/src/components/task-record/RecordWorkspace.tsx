@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskWorkspaceFiles, readTaskWorkspaceFile, taskWorkspaceStatus } from "../../api";
 import type {
+  RelayTask,
+  RelayTaskSummary,
+  TaskRunsResponse,
+  TaskStatus,
   TaskWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
 } from "../../types";
@@ -14,6 +18,21 @@ import { Button } from "@/components/ui/button";
 import { workspaceHomeStatus } from "../../lib/workspaceHome";
 import { ICON, NavRefresh } from "../icons";
 import { taskWorkspaceState } from "./taskWorkspaceState";
+import { TASK_RECORD_QUERY_KEY } from "../../hooks/useTaskRecord";
+import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
+import { taskWorkspaceStatusPollIntervalMs } from "../../lib/relayPolling";
+
+/** The task's status as the cache already knows it: its record (the task
+ *  drawer), its row in a routine's run ledger (the Runs tab), or the list. */
+function cachedTaskStatus(queryClient: QueryClient, taskId: string): TaskStatus | undefined {
+  const record = queryClient.getQueryData<RelayTask>([TASK_RECORD_QUERY_KEY, taskId]);
+  if (record) return record.status;
+  for (const [, runs] of queryClient.getQueriesData<TaskRunsResponse>({ queryKey: ["task-runs"] })) {
+    const run = runs?.runs.find((candidate) => candidate.taskId === taskId);
+    if (run) return run.status;
+  }
+  return queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY)?.find((task) => task.id === taskId)?.status;
+}
 
 /** The directory this task's rounds share, browsed inside the task drawer.
  *
@@ -47,10 +66,17 @@ export function RecordWorkspace({ taskId, rootLabel }: {
   });
   const { view, setView } = useWorkspaceFileView(selectedPath);
 
+  // Polled only while it can still change: while its note shows, or while
+  // the task can still start work. Re-evaluated on every render, so the
+  // parent re-rendering a retried task resumes it.
+  const queryClient = useQueryClient();
   const statusQuery = useQuery({
     queryKey: ["task-workspace-status", taskId],
     queryFn: ({ signal }) => taskWorkspaceStatus(taskId, signal),
-    refetchInterval: 3000,
+    refetchInterval: (query) => taskWorkspaceStatusPollIntervalMs({
+      waiting: query.state.data?.waiting,
+      taskStatus: cachedTaskStatus(queryClient, taskId),
+    }),
     retry: false,
   });
 

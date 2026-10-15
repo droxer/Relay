@@ -7,6 +7,7 @@ import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/
 import { mergeSessionEventsIntoSessions, SessionEventIdIndex } from "../lib/sessionEventMerge";
 import { isTerminalSessionStatus, lastSessionEventId, sessionEventsUrl } from "../lib/sessionEventStream";
 import { browserFrameSchedulerHost, createFrameScheduler } from "../lib/frameScheduler";
+import { setSessionStreamConnected } from "../lib/sessionStreamStatus";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
@@ -16,8 +17,10 @@ type RelayEvent = RelaySession["events"][number];
 // `message` frames (the backend tags control frames `heartbeat`/`done`); each
 // is merged into the cached sessions list so the existing activeSession
 // derivation reflects streamed output at push latency, without the list poll
-// having to run faster. The 3s list query remains the fallback/source of
-// truth for everything else.
+// having to run faster. The list query remains the fallback/source of truth
+// for everything else; it backs off while this stream reports itself
+// connected (lib/sessionStreamStatus) and returns to its fast cadence the
+// moment the stream errors, closes, or unmounts.
 export function useSessionEvents(sessionId: string | undefined, enabled: boolean): void {
   const queryClient = useQueryClient();
   const [connection, setConnection] = useState(0);
@@ -102,9 +105,13 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       } catch {
         // Unknown control frames should not loop forever.
         source.close();
+        setSessionStreamConnected(false);
         return;
       }
-      if (isTerminalSessionStatus(status)) source.close();
+      if (isTerminalSessionStatus(status)) {
+        source.close();
+        setSessionStreamConnected(false);
+      }
     });
 
     // Recreate even CLOSED sources: browsers do not automatically retry some
@@ -112,6 +119,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     source.onerror = () => {
       source.close();
+      setSessionStreamConnected(false);
       if (reconnectTimer !== undefined) return;
       const delay = retryDelay.current.milliseconds;
       retryDelay.current.milliseconds = Math.min(30_000, delay * 2);
@@ -128,11 +136,15 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
         }
       });
     };
-    source.onopen = () => { retryDelay.current.milliseconds = 1_000; };
+    source.onopen = () => {
+      retryDelay.current.milliseconds = 1_000;
+      setSessionStreamConnected(true);
+    };
 
     return () => {
       controller.abort();
       source.close();
+      setSessionStreamConnected(false);
       scheduler.cancel();
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
     };

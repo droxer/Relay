@@ -99,7 +99,7 @@ describe("ProjectMessagesAccumulator", () => {
 
 describe("memoized transcript messages", () => {
   it("passes a stable artifact callback to MessageBlock", () => {
-    const source = readFileSync("web/src/App.tsx", "utf8");
+    const source = readFileSync("web/src/AuthenticatedApp.tsx", "utf8");
 
     assert.match(source, /const handleOpenThreadSpace = useStableEvent\(/);
     assert.match(source, /onOpenArtifacts=\{handleOpenThreadSpace\}/);

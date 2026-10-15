@@ -5,7 +5,8 @@ import { describe, it } from "node:test";
 
 describe("agent detail routing", () => {
   it("resolves the detail page from the route instead of the thread-scoped chat agent", async () => {
-    const source = await readFile(resolve("web/src/App.tsx"), "utf8");
+    // The signed-in tree moved out of the App auth gate into AuthenticatedApp.
+    const source = await readFile(resolve("web/src/AuthenticatedApp.tsx"), "utf8");
 
     // A thread can be pinned to the cloud computer while the user inspects an
     // agent on their local computer. The page identity must therefore come
