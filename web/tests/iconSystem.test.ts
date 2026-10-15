@@ -73,6 +73,19 @@ describe("icon system regressions", () => {
     assert.equal(png.readUInt32BE(20), 180);
   });
 
+  it("ships a favicon an XML parser accepts, plus /favicon.ico for clients that skip the page", () => {
+    // A browser decodes an SVG icon as strict XML; "--" inside a comment (say,
+    // naming a CSS custom property) is a parse error and the tab shows no icon.
+    const svg = readWeb("public/favicon.svg");
+    for (const [, comment] of svg.matchAll(/<!--([\s\S]*?)-->/g)) {
+      assert.doesNotMatch(comment, /--/, "favicon.svg comment contains '--'");
+    }
+
+    const ico = readFileSync(resolve(webRoot, "public/favicon.ico"));
+    assert.deepEqual([...ico.subarray(0, 4)], [0, 0, 1, 0]);
+    assert.ok(ico.readUInt16LE(4) > 0, "favicon.ico holds no images");
+  });
+
   it("uses the large-stroke tier for every hero-sized Lucide illustration", () => {
     const source = readWeb("src/components/ComputerPage.tsx");
 
