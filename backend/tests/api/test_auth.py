@@ -15,7 +15,7 @@ from relay.persistence.stores import (
     DatabaseTaskStore,
     relay_event,
 )
-from relay.security.auth import DatabaseUserAuthStore
+from relay.security.auth import DatabaseAccountAuthStore
 
 
 def _bootstrap_admin(client: TestClient, token: str = "admin_token") -> None:
@@ -35,12 +35,12 @@ def _login(client: TestClient, username: str, password: str) -> None:
     assert response.status_code == 200
 
 
-def _create_user(client: TestClient, username: str, *, employee_id: str | None = None) -> None:
-    response = client.post("/api/v1/admin/users", json={
+def _create_account(client: TestClient, username: str, *, user_id: str | None = None) -> None:
+    response = client.post("/api/v1/admin/accounts", json={
         "username": username,
         "password": "userpass",
         "role": "user",
-        **({"employeeId": employee_id} if employee_id else {}),
+        **({"userId": user_id} if user_id else {}),
     })
     assert response.status_code == 201
 
@@ -236,7 +236,7 @@ def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
             "password": "userpass",
             "role": "manager",
@@ -244,7 +244,7 @@ def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:
         assert response.status_code == 400
         assert response.json()["detail"] == "role must be admin or user."
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": " ",
             "password": "userpass",
             "role": "user",
@@ -252,7 +252,7 @@ def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:
         assert response.status_code == 400
         assert response.json()["detail"] == "username is required."
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
             "password": "",
             "role": "user",
@@ -268,15 +268,15 @@ def test_duplicate_username_validation_normalizes_case_and_spacing(monkeypatch) 
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": " Alice ",
             "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 201
-        assert response.json()["user"]["username"] == "alice"
+        assert response.json()["account"]["username"] == "alice"
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": "ALICE",
             "password": "userpass",
             "role": "user",
@@ -314,58 +314,58 @@ def test_regular_user_can_access_sessions_and_tasks_but_not_admin_panel(monkeypa
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
             "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 201
-        assert response.json()["user"]["role"] == "user"
+        assert response.json()["account"]["role"] == "user"
 
         # Use a fresh client so the admin session cookie is not reused.
-        user_client = TestClient(create_app(root))
-        _login(user_client, "alice", "userpass")
+        account_client = TestClient(create_app(root))
+        _login(account_client, "alice", "userpass")
 
-        response = user_client.get("/api/v1/auth/me")
+        response = account_client.get("/api/v1/auth/me")
         assert response.status_code == 200
         assert response.json()["user"]["role"] == "user"
 
-        response = user_client.get("/api/v1/threads")
+        response = account_client.get("/api/v1/threads")
         assert response.status_code == 200
-        response = user_client.get("/api/v1/tasks")
+        response = account_client.get("/api/v1/tasks")
         assert response.status_code == 200
 
-        response = user_client.get("/api/v1/admin/version")
+        response = account_client.get("/api/v1/admin/version")
         assert response.status_code == 403
         assert response.json()["detail"] == "Admin access required."
 
-        response = user_client.get("/api/v1/admin/users")
+        response = account_client.get("/api/v1/admin/accounts")
         assert response.status_code == 403
         assert response.json()["detail"] == "Admin access required."
 
-        response = user_client.get("/api/v1/admin/employees")
+        response = account_client.get("/api/v1/admin/users")
         assert response.status_code == 403
         assert response.json()["detail"] == "Admin access required."
 
-        response = user_client.get("/api/v1/admin/daemon-nodes")
+        response = account_client.get("/api/v1/admin/daemon-nodes")
         assert response.status_code == 403
         assert response.json()["detail"] == "Admin access required."
 
-        response = user_client.post("/api/v1/admin/users", json={
+        response = account_client.post("/api/v1/admin/accounts", json={
             "username": "bob",
             "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 403
 
-        response = user_client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "alice",
+        response = account_client.post("/api/v1/admin/daemon-nodes", json={
+            "userId": "alice",
             "workspacePath": "/workspace/alice",
         })
         assert response.status_code == 403
 
-        response = user_client.post("/api/v1/admin/employees", json={
-            "employeeId": "alice-2",
+        response = account_client.post("/api/v1/admin/users", json={
+            "userId": "alice-2",
             "username": "alice2",
             "password": "userpass",
             "nodeId": "sbx_unassigned",
@@ -391,8 +391,8 @@ def test_unauthenticated_user_cannot_access_sessions_or_admin_panel(monkeypatch)
         response = client.get("/api/v1/admin/daemon-nodes")
         assert response.status_code == 401
 
-        response = client.post("/api/v1/admin/employees", json={
-            "employeeId": "alice",
+        response = client.post("/api/v1/admin/users", json={
+            "userId": "alice",
             "username": "alice",
             "password": "userpass",
             "nodeId": "sbx_unassigned",
@@ -400,15 +400,15 @@ def test_unauthenticated_user_cannot_access_sessions_or_admin_panel(monkeypatch)
         assert response.status_code == 401
 
 
-def test_user_routes_are_scoped_to_authenticated_employee(monkeypatch) -> None:
+def test_user_routes_are_scoped_to_authenticated_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_user(admin_client, "alice", employee_id="alice")
-        _create_user(admin_client, "bob", employee_id="bob")
+        _create_account(admin_client, "alice", user_id="alice")
+        _create_account(admin_client, "bob", user_id="bob")
 
         alice_client = TestClient(app)
         bob_client = TestClient(app)
@@ -417,16 +417,16 @@ def test_user_routes_are_scoped_to_authenticated_employee(monkeypatch) -> None:
 
         task_response = alice_client.post("/api/v1/tasks", json={
             "title": "Alice task",
-            "ownerEmployeeId": "bob",
+            "ownerUserId": "bob",
             "isRoutine": True, "routineState": "paused", "createSession": True,
             "assignments": [{"agent": "claude"}],
         })
         assert task_response.status_code == 201
         task = task_response.json()
-        assert task["ownerEmployeeId"] == "alice"
+        assert task["ownerUserId"] == "alice"
         session_id = task["linkedSessionIds"][0]
         session = alice_client.get(f"/api/v1/threads/{session_id}").json()
-        assert session["ownerEmployeeId"] == "alice"
+        assert session["ownerUserId"] == "alice"
 
         assert bob_client.get("/api/v1/tasks").json()["tasks"] == []
         assert bob_client.get("/api/v1/threads").json()["sessions"] == []
@@ -446,7 +446,7 @@ def test_user_routes_are_scoped_to_authenticated_employee(monkeypatch) -> None:
 
         bob_task_response = admin_client.post("/api/v1/tasks", json={
             "title": "Bob task",
-            "ownerEmployeeId": "bob",
+            "ownerUserId": "bob",
         })
         assert bob_task_response.status_code == 201
         bob_task = bob_task_response.json()
@@ -456,15 +456,15 @@ def test_user_routes_are_scoped_to_authenticated_employee(monkeypatch) -> None:
         }).status_code == 403
 
 
-def test_artifact_index_is_scoped_to_authenticated_employee(monkeypatch) -> None:
+def test_artifact_index_is_scoped_to_authenticated_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_user(admin_client, "alice")
-        _create_user(admin_client, "bob")
+        _create_account(admin_client, "alice")
+        _create_account(admin_client, "bob")
 
         alice_client = TestClient(app)
         bob_client = TestClient(app)
@@ -496,32 +496,32 @@ def test_artifact_index_is_scoped_to_authenticated_employee(monkeypatch) -> None
         alice_artifacts = alice_client.get("/api/v1/artifacts")
         assert alice_artifacts.status_code == 200
         alice_body = alice_artifacts.json()
-        assert [artifact["ownerEmployeeId"] for artifact in alice_body["artifacts"]] == ["alice", "alice"]
+        assert [artifact["ownerUserId"] for artifact in alice_body["artifacts"]] == ["alice", "alice"]
         assert {artifact["sessionId"] for artifact in alice_body["artifacts"]} == {
             alice_first.json()["id"],
             alice_second.json()["id"],
         }
 
-        assert alice_client.get("/api/v1/artifacts?employeeId=bob").status_code == 403
+        assert alice_client.get("/api/v1/artifacts?userId=bob").status_code == 403
 
-        admin_bob_artifacts = admin_client.get("/api/v1/artifacts?employeeId=bob")
+        admin_bob_artifacts = admin_client.get("/api/v1/artifacts?userId=bob")
         assert admin_bob_artifacts.status_code == 200
-        assert [artifact["ownerEmployeeId"] for artifact in admin_bob_artifacts.json()["artifacts"]] == ["bob"]
+        assert [artifact["ownerUserId"] for artifact in admin_bob_artifacts.json()["artifacts"]] == ["bob"]
 
 
-def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
+def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_user(admin_client, "alice")
-        _create_user(admin_client, "bob")
+        _create_account(admin_client, "alice")
+        _create_account(admin_client, "bob")
 
         register = admin_client.post("/api/v1/daemon-node-registrations", json={
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -569,7 +569,7 @@ def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
         brief_response = alice_client.get("/api/v1/workspace/brief")
         assert brief_response.status_code == 200
         brief = brief_response.json()
-        assert brief["employeeId"] == "alice"
+        assert brief["userId"] == "alice"
         assert "workspacePath" not in brief
         assert "primaryNode" not in brief
         assert brief["nodes"][0]["id"] == "sbx_alice"
@@ -587,11 +587,11 @@ def test_workspace_brief_summarizes_employee_workspace(monkeypatch) -> None:
         assert "routineCadence" not in brief["tasks"][0]
         assert brief["artifacts"][0]["sessionId"] == session.json()["id"]
 
-        assert alice_client.get("/api/v1/workspace/brief?employeeId=bob").status_code == 403
+        assert alice_client.get("/api/v1/workspace/brief?userId=bob").status_code == 403
 
-        admin_bob = admin_client.get("/api/v1/workspace/brief?employeeId=bob")
+        admin_bob = admin_client.get("/api/v1/workspace/brief?userId=bob")
         assert admin_bob.status_code == 200
-        assert admin_bob.json()["employeeId"] == "bob"
+        assert admin_bob.json()["userId"] == "bob"
         assert admin_bob.json()["metrics"]["sessionCount"] == 1
 
 
@@ -602,7 +602,7 @@ def test_workspace_brief_only_lists_generated_artifacts(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_user(admin_client, "alice")
+        _create_account(admin_client, "alice")
 
         alice_client = TestClient(app)
         _login(alice_client, "alice", "userpass")
@@ -637,7 +637,7 @@ def test_workspace_brief_only_lists_generated_artifacts(monkeypatch) -> None:
         assert {artifact["kind"] for artifact in listed} == {"workspace_file"}
 
 
-def test_employee_workspace_file_routes_are_removed(monkeypatch) -> None:
+def test_user_workspace_file_routes_are_removed(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         workspace = Path(root) / "workspaces" / "alice"
@@ -649,12 +649,12 @@ def test_employee_workspace_file_routes_are_removed(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login(admin_client, "admin", "kestrel-vault-7719")
-        _create_user(admin_client, "alice")
-        _create_user(admin_client, "bob")
+        _create_account(admin_client, "alice")
+        _create_account(admin_client, "bob")
 
         register = admin_client.post("/api/v1/daemon-node-registrations", json={
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": str(workspace),
             "protocolVersion": 1,
@@ -671,10 +671,10 @@ def test_employee_workspace_file_routes_are_removed(monkeypatch) -> None:
         assert "workspacePath" not in alice_client.get("/api/v1/workspace/brief").json()
         assert alice_client.get("/api/v1/workspace/files").status_code == 404
         assert alice_client.get("/api/v1/workspace/file", params={"path": "README.md"}).status_code == 404
-        assert bob_client.get("/api/v1/workspace/files?employeeId=alice").status_code == 404
+        assert bob_client.get("/api/v1/workspace/files?userId=alice").status_code == 404
 
 
-def test_admin_can_create_resources_for_specific_employee(monkeypatch) -> None:
+def test_admin_can_create_resources_for_specific_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -683,20 +683,20 @@ def test_admin_can_create_resources_for_specific_employee(monkeypatch) -> None:
 
         response = client.post("/api/v1/tasks", json={
             "title": "Bob task",
-            "ownerEmployeeId": "bob",
+            "ownerUserId": "bob",
             "isRoutine": True, "routineState": "paused", "createSession": True,
         })
 
         assert response.status_code == 201
         task = response.json()
-        assert task["ownerEmployeeId"] == "bob"
+        assert task["ownerUserId"] == "bob"
 
         response = client.post("/api/v1/threads", json={
             "taskGoal": "Admin-linked session",
             "taskId": task["id"],
         })
         assert response.status_code == 201
-        assert response.json()["ownerEmployeeId"] == "bob"
+        assert response.json()["ownerUserId"] == "bob"
 
 
 def test_invalid_session_cookie_is_rejected(monkeypatch) -> None:
@@ -736,8 +736,8 @@ def test_session_for_deleted_user_is_rejected(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        users_path = Path(root) / "auth" / "users.json"
-        users_path.write_text("[]\n", encoding="utf-8")
+        accounts_path = Path(root) / "auth" / "users.json"
+        accounts_path.write_text("[]\n", encoding="utf-8")
 
         response = client.get("/api/v1/auth/me")
 
@@ -768,7 +768,7 @@ def test_auth_responses_do_not_expose_secret_fields(monkeypatch) -> None:
         assert response.status_code == 200
         _assert_no_secret_fields(response.json())
 
-        response = client.post("/api/v1/admin/users", json={
+        response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
             "password": "userpass",
             "role": "user",
@@ -776,7 +776,7 @@ def test_auth_responses_do_not_expose_secret_fields(monkeypatch) -> None:
         assert response.status_code == 201
         _assert_no_secret_fields(response.json())
 
-        response = client.get("/api/v1/admin/users")
+        response = client.get("/api/v1/admin/accounts")
         assert response.status_code == 200
         _assert_no_secret_fields(response.json())
 
@@ -789,7 +789,7 @@ def test_control_panel_node_list_exposes_node_token_for_admins(monkeypatch) -> N
         _login(client, "admin", "kestrel-vault-7719")
 
         create = client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/workspace/alice",
         })
         assert create.status_code == 201
@@ -816,24 +816,24 @@ def test_authenticated_user_can_list_own_sandbox_and_daemon_node_without_token(m
         _login(client, "admin", "kestrel-vault-7719")
 
         response = client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/workspace/alice",
         })
         assert response.status_code == 201
         response = client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "bob",
+            "userId": "bob",
             "workspacePath": "/workspace/bob",
         })
         assert response.status_code == 201
 
         response = client.get("/api/v1/sandboxes")
         assert response.status_code == 200
-        assert {sandbox["employeeId"] for sandbox in response.json()["sandboxes"]} == {"alice", "bob"}
+        assert {sandbox["userId"] for sandbox in response.json()["sandboxes"]} == {"alice", "bob"}
         _assert_no_secret_fields(response.json())
 
         response = client.get("/api/v1/daemon-nodes")
         assert response.status_code == 200
-        assert {node["employeeId"] for node in response.json()["nodes"]} == {"alice", "bob"}
+        assert {node["userId"] for node in response.json()["nodes"]} == {"alice", "bob"}
         _assert_no_secret_fields(response.json())
 
 
@@ -845,12 +845,12 @@ def test_unauthenticated_user_cannot_list_sandboxes_or_daemon_nodes(monkeypatch)
         _login(admin_client, "admin", "kestrel-vault-7719")
 
         response = admin_client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/workspace/alice",
         })
         assert response.status_code == 201
         response = admin_client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "bob",
+            "userId": "bob",
             "workspacePath": "/workspace/bob",
         })
         assert response.status_code == 201
@@ -974,7 +974,7 @@ def test_backend_applies_browser_security_headers(monkeypatch) -> None:
         assert response.headers["Cache-Control"] == "no-store"
 
 
-def test_chat_service_token_can_act_as_employee(monkeypatch) -> None:
+def test_chat_service_token_can_act_as_user(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_CHAT_TOKEN", "chat_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -983,39 +983,39 @@ def test_chat_service_token_can_act_as_employee(monkeypatch) -> None:
             "taskGoal": "invoke from chat",
         }, headers={
             "Authorization": "Bearer chat_token",
-            "X-Relay-Employee-Id": "alice",
+            "X-Relay-User-Id": "alice",
         })
         assert response.status_code == 201
-        assert response.json()["ownerEmployeeId"] == "alice"
+        assert response.json()["ownerUserId"] == "alice"
 
         allowed = client.get(f"/api/v1/threads/{response.json()['id']}", headers={
             "Authorization": "Bearer chat_token",
-            "X-Relay-Employee-Id": "alice",
+            "X-Relay-User-Id": "alice",
         })
         assert allowed.status_code == 200
 
         denied = client.get(f"/api/v1/threads/{response.json()['id']}", headers={
             "Authorization": "Bearer chat_token",
-            "X-Relay-Employee-Id": "bob",
+            "X-Relay-User-Id": "bob",
         })
         assert denied.status_code == 403
 
 
-def test_chat_service_employee_header_requires_configured_token(monkeypatch) -> None:
+def test_chat_service_user_header_requires_configured_token(monkeypatch) -> None:
     monkeypatch.delenv("RELAY_CHAT_TOKEN", raising=False)
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
 
         response = client.get("/api/v1/threads", headers={
             "Authorization": "Bearer wrong",
-            "X-Relay-Employee-Id": "alice",
+            "X-Relay-User-Id": "alice",
         })
         assert response.status_code == 503
 
         monkeypatch.setenv("RELAY_CHAT_TOKEN", "chat_token")
         response = client.get("/api/v1/threads", headers={
             "Authorization": "Bearer wrong",
-            "X-Relay-Employee-Id": "alice",
+            "X-Relay-User-Id": "alice",
         })
         assert response.status_code == 401
 
@@ -1026,7 +1026,7 @@ def test_app_can_use_database_backed_auth_store(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
         monkeypatch.setenv("RELAY_DATABASE_URL", database_url)
-        DatabaseUserAuthStore(database_url, create_schema=True)
+        DatabaseAccountAuthStore(database_url, create_schema=True)
 
         client = TestClient(create_app(root))
         response = client.post("/api/v1/auth/bootstrap", json={
@@ -1035,8 +1035,8 @@ def test_app_can_use_database_backed_auth_store(monkeypatch) -> None:
             "password": "kestrel-vault-7719",
         })
         assert response.status_code == 200
-        admin_employee_id = response.json()["user"]["employeeId"]
-        assert admin_employee_id
+        admin_user_id = response.json()["user"]["userId"]
+        assert admin_user_id
 
         response = client.get("/api/v1/auth/me")
         assert response.status_code == 200
@@ -1049,7 +1049,7 @@ def test_app_can_use_database_backed_auth_store(monkeypatch) -> None:
         })
         assert response.status_code == 200
 
-        response = second_client.get("/api/v1/admin/users")
+        response = second_client.get("/api/v1/admin/accounts")
         assert response.status_code == 200
 
         response = second_client.post("/api/v1/admin/departments", json={
@@ -1064,37 +1064,37 @@ def test_app_can_use_database_backed_auth_store(monkeypatch) -> None:
         assert response.status_code == 200
         assert response.json()["departments"][0]["name"] == "Engineering"
 
-        response = second_client.post("/api/v1/admin/users", json={
+        response = second_client.post("/api/v1/admin/accounts", json={
             "username": "eng-user",
             "password": "kestrel-vault-7719",
             "role": "user",
-            "employeeId": "eng-user",
+            "userId": "eng-user",
             "departmentId": engineering_id,
             "departmentName": "Engineering",
         })
         assert response.status_code == 201
-        eng_employee_id = response.json()["user"]["employeeId"]
-        assert eng_employee_id
+        eng_user_id = response.json()["account"]["userId"]
+        assert eng_user_id
 
-        response = second_client.get("/api/v1/admin/employees")
+        response = second_client.get("/api/v1/admin/users")
         assert response.status_code == 200
-        assert response.json()["employees"][0]["id"] == admin_employee_id
-        employees_by_id = {employee["id"]: employee for employee in response.json()["employees"]}
-        assert employees_by_id[eng_employee_id]["displayName"] == "eng-user"
-        assert employees_by_id[eng_employee_id]["departmentId"] == engineering_id
-        assert employees_by_id[eng_employee_id]["departmentName"] == "Engineering"
+        assert response.json()["users"][0]["id"] == admin_user_id
+        users_by_id = {user["id"]: user for user in response.json()["users"]}
+        assert users_by_id[eng_user_id]["displayName"] == "eng-user"
+        assert users_by_id[eng_user_id]["departmentId"] == engineering_id
+        assert users_by_id[eng_user_id]["departmentName"] == "Engineering"
 
         response = second_client.post("/api/v1/admin/daemon-nodes", json={
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/workspace/alice",
         })
         assert response.status_code == 201
 
-        response = second_client.get("/api/v1/admin/employees")
+        response = second_client.get("/api/v1/admin/users")
         assert response.status_code == 200
-        employees = response.json()["employees"]
-        assert {admin_employee_id, eng_employee_id}.issubset({employee["id"] for employee in employees})
-        assert any(employee["displayName"] == "alice" for employee in employees)
+        users = response.json()["users"]
+        assert {admin_user_id, eng_user_id}.issubset({user["id"] for user in users})
+        assert any(user["displayName"] == "alice" for user in users)
 
 
 def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch) -> None:
@@ -1108,13 +1108,13 @@ def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch)
         DatabaseSessionStore(database_url, create_schema=True)
         DatabaseTaskStore(database_url, create_schema=True)
         DatabaseDaemonStore(database_url, create_schema=True)
-        DatabaseUserAuthStore(database_url, create_schema=True)
+        DatabaseAccountAuthStore(database_url, create_schema=True)
 
         app = create_app(root)
         assert isinstance(app.state.session_store, DatabaseSessionStore)
         assert isinstance(app.state.task_store, DatabaseTaskStore)
         assert isinstance(app.state.registry.daemon_store, DatabaseDaemonStore)
-        assert isinstance(app.state.auth_store, DatabaseUserAuthStore)
+        assert isinstance(app.state.auth_store, DatabaseAccountAuthStore)
 
         client = TestClient(app)
         _bootstrap_admin(client)
@@ -1140,14 +1140,14 @@ def test_relay_storage_postgres_switches_backend_stores_to_database(monkeypatch)
             "status": "ready",
         })
         assert response.status_code == 200
-        assert "employeeId" not in app.state.registry.daemon_store.get_node("sbx_unassigned")
+        assert "userId" not in app.state.registry.daemon_store.get_node("sbx_unassigned")
 
-        response = client.post("/api/v1/admin/employees", json={
-            "employeeId": "db-user",
+        response = client.post("/api/v1/admin/users", json={
+            "userId": "db-user",
             "username": "db-user",
             "password": "kestrel-vault-7719",
             "nodeId": "sbx_unassigned",
         })
         assert response.status_code == 201
-        employee_id = response.json()["employee"]["id"]
-        assert app.state.registry.daemon_store.get_node("sbx_unassigned")["employeeId"] == employee_id
+        user_id = response.json()["user"]["id"]
+        assert app.state.registry.daemon_store.get_node("sbx_unassigned")["userId"] == user_id

@@ -77,14 +77,14 @@ def test_precreated_idle_thread_can_start_without_duplicate_execution(setup, sco
         task = app.state.task_store.create_task({
             "title": "Start precreated thread",
             "sourceRoutineId": "routine_nightly",
-            "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice",
+            "assigneeUserId": "alice",
             "assignedAgentId": agent["id"],
             "assignedAgent": agent["executorKind"],
         })
         controller = SessionController(
             app.state.session_store, task_store=app.state.task_store,
-            task_id=task["id"], owner_employee_id="alice", owner_agent_id=agent["id"],
+            task_id=task["id"], owner_user_id="alice", owner_agent_id=agent["id"],
         )
         controller.create_session(task["title"], ["human", "codex"])
         task = app.state.task_store.get_task(task["id"])

@@ -24,7 +24,7 @@ from ..persistence.store_common import (
 )
 
 MANAGED_NODE_DESIRED_STATES = frozenset({"running", "stopped", "deleted"})
-# "pooled" and "shared" are reserved for future multi-employee node sharing;
+# "pooled" and "shared" are reserved for future multi-user node sharing;
 # only "dedicated" is wired into agent placement sync today, so the other
 # modes are rejected rather than silently accepted with no agents ever synced.
 MANAGED_NODE_ASSIGNMENT_MODES = frozenset({"dedicated"})
@@ -83,7 +83,7 @@ def managed_node_placeholder(node: dict[str, Any]) -> dict[str, Any]:
         "id": node["id"],
         "managedNodeId": node["id"],
         "displayName": node.get("displayName") or node["id"],
-        **({"employeeId": node["employeeId"]} if node.get("employeeId") else {}),
+        **({"userId": node["userId"]} if node.get("userId") else {}),
         "sandboxMode": node.get("sandboxMode") or "boxlite",
         "nodeLocation": "managed",
         "status": _managed_node_status(node),
@@ -133,9 +133,9 @@ def _validate_provider(payload: dict[str, Any]) -> None:
         raise ValueError("provider must be a non-empty string.")
 
 
-def _normalize_employee_id(value: Any) -> str:
+def _normalize_user_id(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("employeeId is required for a dedicated managed node.")
+        raise ValueError("userId is required for a dedicated managed node.")
     return value.strip()
 
 
@@ -147,7 +147,7 @@ def _managed_node_policy_slot(node: dict[str, Any]) -> tuple[Any, ...]:
         node.get("profile") or "standard",
         node.get("sandboxMode") or "boxlite",
         json.dumps(
-            node.get("workspacePolicy") or {"kind": "employee-home"},
+            node.get("workspacePolicy") or {"kind": "user-home"},
             sort_keys=True,
             separators=(",", ":"),
         ),
@@ -189,20 +189,20 @@ class LocalManagedNodeStore:
             raise ValueError("desiredState must be running, stopped, or deleted.")
         _validate_managed_sandbox_mode(sandbox_mode)
         _validate_provider(payload)
-        employee_id = _normalize_employee_id(payload.get("employeeId"))
+        user_id = _normalize_user_id(payload.get("userId"))
         slot_lock = nullcontext() if _policy_slot_locked else self._policy_slot_lock()
         with slot_lock, self._mutation_scope():
             now = now_iso()
             node = {
                 "id": str(uuid4()),
-                "displayName": payload.get("displayName") or f"Managed node for {employee_id or 'pool'}",
-                **({"employeeId": employee_id} if employee_id else {}),
+                "displayName": payload.get("displayName") or f"Managed node for {user_id or 'pool'}",
+                **({"userId": user_id} if user_id else {}),
                 "assignmentMode": assignment_mode,
                 "provider": payload.get("provider") or "local-process",
                 **({"providerConfigRef": payload["providerConfigRef"]} if payload.get("providerConfigRef") else {}),
                 "profile": payload.get("profile") or "standard",
                 "sandboxMode": sandbox_mode,
-                "workspacePolicy": payload.get("workspacePolicy") or {"kind": "employee-home"},
+                "workspacePolicy": payload.get("workspacePolicy") or {"kind": "user-home"},
                 "desiredState": desired_state,
                 "generation": 1,
                 "phase": "requested" if desired_state == "running" else "stopped",
@@ -226,7 +226,7 @@ class LocalManagedNodeStore:
     def _reconcile_legacy_duplicate_policy_slots(self) -> None:
         """Retire duplicate active records written before slot uniqueness.
 
-        Creation has enforced one running record per employee/policy slot since
+        Creation has enforced one running record per user/policy slot since
         the invariant was introduced, but existing JSON records predate that
         guard. Leaving those records active makes every backend restart expose
         and provision all of them again. Prefer an already-enrolled runtime;
@@ -238,10 +238,10 @@ class LocalManagedNodeStore:
             for node in self.list_nodes():
                 if node.get("desiredState") != "running":
                     continue
-                raw_employee_id = node.get("employeeId")
-                if not isinstance(raw_employee_id, str) or not raw_employee_id.strip():
+                raw_user_id = node.get("userId")
+                if not isinstance(raw_user_id, str) or not raw_user_id.strip():
                     continue
-                key = (raw_employee_id.strip(), _managed_node_policy_slot(node))
+                key = (raw_user_id.strip(), _managed_node_policy_slot(node))
                 groups.setdefault(key, []).append(node)
             for candidates in groups.values():
                 if len(candidates) < 2:
@@ -268,23 +268,23 @@ class LocalManagedNodeStore:
                 for node in self.list_nodes()
                 if node["id"] != exclude_node_id
                 and node.get("desiredState") == "running"
-                and node.get("employeeId") == candidate.get("employeeId")
+                and node.get("userId") == candidate.get("userId")
                 and _managed_node_policy_slot(node) == slot
             ),
             None,
         )
         if duplicate:
             raise ValueError(
-                "Employee already has an active managed node in this policy slot."
+                "User already has an active managed node in this policy slot."
             )
 
-    def ensure_node_for_employee(
-        self, employee_id: str, *, policy: dict[str, Any] | None = None
+    def ensure_node_for_user(
+        self, user_id: str, *, policy: dict[str, Any] | None = None
     ) -> ManagedCapacityResolution:
         """Return managed capacity and whether provisioning was newly requested."""
-        employee_id = employee_id.strip()
-        if not employee_id:
-            raise ValueError("employeeId is required for managed capacity.")
+        user_id = user_id.strip()
+        if not user_id:
+            raise ValueError("userId is required for managed capacity.")
         policy = policy or {}
         allowed_policy_fields = {
             "assignmentMode",
@@ -304,7 +304,7 @@ class LocalManagedNodeStore:
             candidates = [
                 node
                 for node in self.list_nodes()
-                if node.get("employeeId") == employee_id
+                if node.get("userId") == user_id
                 and _managed_node_policy_slot(node) == requested_slot
             ]
             existing = next(
@@ -322,7 +322,7 @@ class LocalManagedNodeStore:
                 return ManagedCapacityResolution(existing, False)
             return ManagedCapacityResolution(
                 self.create_node(
-                    {"employeeId": employee_id, **policy},
+                    {"userId": user_id, **policy},
                     _policy_slot_locked=True,
                 ),
                 True,
@@ -381,7 +381,7 @@ class LocalManagedNodeStore:
             provider_fields = {"provider", "providerConfigRef", "profile", "sandboxMode", "workspacePolicy"}
             allowed_fields = provider_fields | {
                 "displayName",
-                "employeeId",
+                "userId",
                 "assignmentMode",
                 "desiredState",
                 "phase",
@@ -402,14 +402,14 @@ class LocalManagedNodeStore:
                 "assignmentMode" in patch or desired_state == "running"
             ) and assignment_mode not in MANAGED_NODE_ASSIGNMENT_MODES:
                 raise ValueError("assignmentMode must be dedicated.")
-            employee_id = patch.get("employeeId", node.get("employeeId"))
+            user_id = patch.get("userId", node.get("userId"))
             if (
-                "employeeId" in patch
+                "userId" in patch
                 or "assignmentMode" in patch
                 or desired_state == "running"
             ) and assignment_mode == "dedicated":
-                employee_id = _normalize_employee_id(employee_id)
-                patch = {**patch, "employeeId": employee_id}
+                user_id = _normalize_user_id(user_id)
+                patch = {**patch, "userId": user_id}
             if "phase" in patch and patch["phase"] not in MANAGED_NODE_PHASES:
                 raise ValueError("Invalid managed node phase.")
             if "conditions" in patch and not isinstance(patch["conditions"], list):

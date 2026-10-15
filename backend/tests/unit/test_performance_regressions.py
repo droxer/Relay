@@ -29,12 +29,12 @@ def test_full_task_list_batches_histories_and_filters_before_limit(tmp_path):
     store = DatabaseTaskStore(f"sqlite:///{tmp_path}/tasks.db", create_schema=True)
     for i in range(12):
         store.create_task(
-            {"title": str(i), "ownerEmployeeId": "alice" if i < 6 else "bob"}
+            {"title": str(i), "ownerUserId": "alice" if i < 6 else "bob"}
         )
     statements = capture_sql(store)
-    tasks = store.list_tasks(employee_id="alice", limit=3)
+    tasks = store.list_tasks(user_id="alice", limit=3)
     assert len(tasks) == 3
-    assert all(t["ownerEmployeeId"] == "alice" and t["events"] for t in tasks)
+    assert all(t["ownerUserId"] == "alice" and t["events"] for t in tasks)
     assert len([s for s in statements if s.startswith("SELECT")]) <= 2
     assert "LIMIT" in statements[0]
 
@@ -149,7 +149,7 @@ def test_artifact_index_deduplicates_before_sql_limit(tmp_path):
     )
     for owner in ("alice", "bob"):
         session = store.create_session(
-            {"taskGoal": owner, "workspacePath": "/work", "ownerEmployeeId": owner}
+            {"taskGoal": owner, "workspacePath": "/work", "ownerUserId": owner}
         )
         for i, name in enumerate(("old.txt", "same.txt", "same.txt")):
             artifact = {
@@ -165,10 +165,10 @@ def test_artifact_index_deduplicates_before_sql_limit(tmp_path):
             )
     statements = capture_sql(store)
     artifacts = store.list_artifact_summaries(
-        owner_employee_id="alice", workspace_path="/work", limit=2
+        owner_user_id="alice", workspace_path="/work", limit=2
     )
     assert [a["id"] for a in artifacts] == ["alice-2", "alice-0"]
-    assert all(a["ownerEmployeeId"] == "alice" for a in artifacts)
+    assert all(a["ownerUserId"] == "alice" for a in artifacts)
     assert len(statements) == 1 and "LIMIT" in statements[0]
     assert "session_events" not in statements[0]
 
@@ -186,7 +186,7 @@ def test_sync_api_reads_and_json_mutations_do_not_block_loop(tmp_path, monkeypat
             assert threading.get_ident() != loop_thread
             return False
 
-        monkeypatch.setattr(app.state.auth_store, "has_users", check_thread)
+        monkeypatch.setattr(app.state.auth_store, "has_accounts", check_thread)
         monkeypatch.setattr(app.state.auth_store, "authenticate", check_thread)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"

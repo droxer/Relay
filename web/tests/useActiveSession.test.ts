@@ -52,25 +52,25 @@ describe("pickInitialActiveSessionId", () => {
 
 describe("shouldDeriveActiveSession", () => {
   it("derives the opening thread once the first load has landed", () => {
-    assert.equal(shouldDeriveActiveSession({ employeeId: "alice", derivedFor: null, sessionCount: 2 }), true);
+    assert.equal(shouldDeriveActiveSession({ userId: "alice", derivedFor: null, sessionCount: 2 }), true);
   });
 
   it("waits for the first load instead of deriving from an empty list", () => {
-    assert.equal(shouldDeriveActiveSession({ employeeId: "alice", derivedFor: null, sessionCount: 0 }), false);
+    assert.equal(shouldDeriveActiveSession({ userId: "alice", derivedFor: null, sessionCount: 0 }), false);
   });
 
   // The regression guard: re-deriving on every poll tick / streamed update
   // drags the selection back to the most recent thread, undoing an explicit
   // "new thread" (which clears both the selection and its stored id).
-  it("does not re-derive when the session list changes for the same employee", () => {
-    assert.equal(shouldDeriveActiveSession({ employeeId: "alice", derivedFor: "alice", sessionCount: 3 }), false);
+  it("does not re-derive when the session list changes for the same user", () => {
+    assert.equal(shouldDeriveActiveSession({ userId: "alice", derivedFor: "alice", sessionCount: 3 }), false);
   });
 
-  it("derives again after switching employee", () => {
-    assert.equal(shouldDeriveActiveSession({ employeeId: "bob", derivedFor: "alice", sessionCount: 3 }), true);
+  it("derives again after switching user", () => {
+    assert.equal(shouldDeriveActiveSession({ userId: "bob", derivedFor: "alice", sessionCount: 3 }), true);
   });
 
-  it("never derives without an employee", () => {
-    assert.equal(shouldDeriveActiveSession({ employeeId: "", derivedFor: null, sessionCount: 3 }), false);
+  it("never derives without a user", () => {
+    assert.equal(shouldDeriveActiveSession({ userId: "", derivedFor: null, sessionCount: 3 }), false);
   });
 });

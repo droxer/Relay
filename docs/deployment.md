@@ -25,7 +25,7 @@ the hosting:
 **Daemons do not belong on Vercel or Railway.** The backend never executes
 agents; it queues commands that daemons poll for. A daemon in its default mode
 boots a BoxLite microVM, which needs hardware virtualization that neither
-platform's containers provide. Daemons run on employee machines (`SANDBOX_MODE=none`)
+platform's containers provide. Daemons run on user machines (`SANDBOX_MODE=none`)
 or on a VM host you control, and they connect *out* to the Railway backend URL —
 so the backend needs a public URL, but daemons never need inbound ports.
 

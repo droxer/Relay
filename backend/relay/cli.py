@@ -15,7 +15,7 @@ from .core.storage_config import database_url_from_env
 from .persistence.blob_migration import migrate_blobs
 from .persistence.blob_store import blob_store_from_env
 from .persistence.database_backup import backup_database, backup_target_from_env
-from .persistence.employee_handle_backfill import plan_handles, summarize
+from .persistence.user_handle_backfill import plan_handles, summarize
 from .persistence.session_import import migrate_local_sessions
 from .persistence.session_store import DatabaseSessionStore
 from .persistence.storage_report import storage_report
@@ -23,32 +23,32 @@ from .persistence.storage_report import storage_report
 load_backend_env()
 
 
-def rehearse_employee_handles(database_url: str) -> dict:
-    """The employee-handle backfill plan for a live database, without writing."""
+def rehearse_user_handles(database_url: str) -> dict:
+    """The user-handle backfill plan for a live database, without writing."""
     from sqlalchemy import create_engine, text
 
     engine = create_engine(database_url)
     with engine.connect() as connection:
-        employees = [
+        users = [
             dict(row)
             for row in connection.execute(
                 text(
-                    "SELECT id, display_name FROM employees "
+                    "SELECT id, display_name FROM users "
                     "ORDER BY created_at, id"
                 )
             ).mappings()
         ]
         usernames = {
-            str(row["employee_id"]): row["username"]
+            str(row["user_id"]): row["username"]
             for row in connection.execute(
                 text(
-                    "SELECT employee_id, username FROM auth_users "
-                    "WHERE employee_id IS NOT NULL"
+                    "SELECT user_id, username FROM auth_accounts "
+                    "WHERE user_id IS NOT NULL"
                 )
             ).mappings()
             if row["username"]
         }
-    plan = plan_handles(employees, usernames)
+    plan = plan_handles(users, usernames)
     return {"plan": plan, **summarize(plan)}
 
 
@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> None:
             "migrate-local-operational-state",
             "migrate-blobs-to-r2",
             "backup-database",
-            "rehearse-employee-handles",
+            "rehearse-user-handles",
             "storage-report",
         ],
     )
@@ -117,13 +117,13 @@ def main(argv: list[str] | None = None) -> None:
         if report["failures"]:
             raise SystemExit(1)
         return
-    if args.command == "rehearse-employee-handles":
+    if args.command == "rehearse-user-handles":
         # Reads only. Point it at a copy of production before running migration
-        # 20260831_0065 for real: it prints the handle every employee would be
+        # 20260831_0065 for real: it prints the handle every user would be
         # given, which source it came from, and every collision that had to be
         # suffixed — the questions a backfill can only answer against real data.
-        report = rehearse_employee_handles(
-            database_url_from_env(setting="rehearse-employee-handles")
+        report = rehearse_user_handles(
+            database_url_from_env(setting="rehearse-user-handles")
         )
         print(json.dumps(report, indent=2))
         return
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
         return
     app = create_app(args.data_dir) if args.data_dir else create_app()
     auth_store = app.state.auth_store
-    if not auth_store.has_users():
+    if not auth_store.has_accounts():
         logger.info(
             "No users yet. Bootstrap the first admin via /api/v1/auth/bootstrap "
             "using the persisted admin token.",

@@ -17,7 +17,7 @@ def test_import_uses_event_log_and_is_idempotent(tmp_path: Path) -> None:
     created = local.create_session(
         {
             "workspacePath": "/workspace",
-            "ownerEmployeeId": "alice",
+            "ownerUserId": "alice",
             "taskGoal": "migrate me",
             "participants": ["human"],
         }

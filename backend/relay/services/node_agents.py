@@ -51,12 +51,12 @@ def assert_node_agent_runs_drained(ctx: NodeAgentContext, node_id: str) -> None:
         )
 
 
-def employee_is_live(ctx: NodeAgentContext, employee_id: str) -> bool:
-    """Whether the employee exists and has not been soft-deleted.
+def user_is_live(ctx: NodeAgentContext, user_id: str) -> bool:
+    """Whether the user exists and has not been soft-deleted.
 
-    `employees.deleted_at` only filters listings, so without this check a node
-    that keeps registering would backfill placements for an employee's
-    already-declared agents even after that employee (and their agents) were
+    `users.deleted_at` only filters listings, so without this check a node
+    that keeps registering would backfill placements for a user's
+    already-declared agents even after that user (and their agents) were
     just deleted.
 
     `auth_store` is not part of NodeAgentContext, so it is read defensively —
@@ -65,39 +65,39 @@ def employee_is_live(ctx: NodeAgentContext, employee_id: str) -> bool:
     auth_store = getattr(ctx, "auth_store", None)
     if auth_store is None:
         return True
-    if hasattr(auth_store, "list_employees"):
-        # list_employees already excludes soft-deleted rows.
+    if hasattr(auth_store, "list_users"):
+        # list_users already excludes soft-deleted rows.
         return any(
-            employee.get("id") == employee_id
-            for employee in auth_store.list_employees()
+            user.get("id") == user_id
+            for user in auth_store.list_users()
         )
-    if hasattr(auth_store, "deleted_employee_ids"):
-        return employee_id not in auth_store.deleted_employee_ids()
+    if hasattr(auth_store, "deleted_user_ids"):
+        return user_id not in auth_store.deleted_user_ids()
     return True
 
 
 def sync_node_agents(ctx: NodeAgentContext, node: dict[str, Any]) -> None:
     """Attach this Computer's already-declared agents to its current node.
 
-    Does not create agents — agents are declared explicitly by employees
-    (POST /agents). An employee can declare an agent while its computer is
+    Does not create agents — agents are declared explicitly by users
+    (POST /agents). A user can declare an agent while its computer is
     offline, when there's no node to place it on yet; this backfills that
     once the computer comes online.
     """
-    employee_id = node.get("employeeId")
-    if not employee_id:
+    user_id = node.get("userId")
+    if not user_id:
         return
-    if not employee_is_live(ctx, employee_id):
+    if not user_is_live(ctx, user_id):
         logger.info(
-            "Skipping agent sync for a deleted employee",
+            "Skipping agent sync for a deleted user",
             node_id=node.get("id"),
-            employee_id=employee_id,
+            user_id=user_id,
         )
         return
     node_computer_id = computer_id(node)
     available = ready_runtimes([node])
     try:
-        owned = ctx.agent_store.list_agents(supervisor_employee_id=employee_id)
+        owned = ctx.agent_store.list_agents(supervisor_user_id=user_id)
     except Exception as error:
         if _missing_agent_table(error):
             logger.warning(
@@ -186,7 +186,7 @@ def _managed_runtime_ids(ctx: NodeAgentContext, managed_node_id: str) -> set[str
 def retire_superseded_compatibility_agents(
     ctx: NodeAgentContext,
     node: dict[str, Any],
-    employee_id: str,
+    user_id: str,
     executor_kind: str,
 ) -> list[str]:
     """Retire duplicate compatibility agents left behind when this computer
@@ -195,14 +195,14 @@ def retire_superseded_compatibility_agents(
     Re-provisioning a computer mints a new node id, and the compatibility key
     embeds it, so the old agent would linger in the roster next to its
     replacement. Only retire when the other node is provably the same computer
-    (same managed node, or — for employee devices — the same stable Computer
+    (same managed node, or — for user devices — the same stable Computer
     identity) and is no longer online, so a legitimately separate second
     computer always keeps its agents.
 
     Also retires legacy compatibility agents keyed by the pre-node-scoped
-    ``<employee>:<kind>`` format (two segments, no node id) once a node-scoped
+    ``<user>:<kind>`` format (two segments, no node id) once a node-scoped
     sibling is placed on the same computer. Those legacy keys predate the
-    ``<employee>:<node>:<kind>`` scheme and are otherwise immortal — the
+    ``<user>:<node>:<kind>`` scheme and are otherwise immortal — the
     superseded-node logic below only understands three-segment keys — so they
     would sit on the roster forever next to their node-scoped replacement.
     """
@@ -215,15 +215,15 @@ def retire_superseded_compatibility_agents(
         _managed_runtime_ids(ctx, managed_node_id) if managed_node_id else set()
     )
     computer_scoped_key = _compatibility_key_for(
-        employee_id, computer_id(node), executor_kind
+        user_id, computer_id(node), executor_kind
     )
     has_computer_scoped_sibling = any(
         agent.get("compatibilityKey") == computer_scoped_key
         and not agent.get("deletedAt")
-        for agent in ctx.agent_store.list_agents(supervisor_employee_id=employee_id)
+        for agent in ctx.agent_store.list_agents(supervisor_user_id=user_id)
     )
     retired: list[str] = []
-    for agent in ctx.agent_store.list_agents(supervisor_employee_id=employee_id):
+    for agent in ctx.agent_store.list_agents(supervisor_user_id=user_id):
         key = agent.get("compatibilityKey")
         if not key or agent.get("deletedAt"):
             continue
@@ -233,14 +233,14 @@ def retire_superseded_compatibility_agents(
         if len(parts) == 2:
             owner, kind = parts
             if (
-                owner != employee_id
+                owner != user_id
                 or kind != executor_kind
                 or not has_computer_scoped_sibling
                 or _node_has_active_work(ctx, node["id"])
                 or not _agent_placed_on_node(ctx, agent["id"], node["id"])
             ):
                 continue
-            if _retire_compatibility_agent(ctx, agent, employee_id):
+            if _retire_compatibility_agent(ctx, agent, user_id):
                 retired.append(agent["id"])
                 logger.info(
                     "Retired legacy compatibility agent",
@@ -253,7 +253,7 @@ def retire_superseded_compatibility_agents(
         if len(parts) != 3:
             continue
         owner, node_id, kind = parts
-        if owner != employee_id or kind != executor_kind or node_id == node["id"]:
+        if owner != user_id or kind != executor_kind or node_id == node["id"]:
             continue
         other = nodes_by_id.get(node_id)
         if other is None:
@@ -263,7 +263,7 @@ def retire_superseded_compatibility_agents(
                 or _node_has_active_work(ctx, node_id)
             ):
                 continue
-            if _retire_compatibility_agent(ctx, agent, employee_id):
+            if _retire_compatibility_agent(ctx, agent, user_id):
                 retired.append(agent["id"])
                 logger.info(
                     "Retired orphaned managed compatibility agent",
@@ -283,7 +283,7 @@ def retire_superseded_compatibility_agents(
             same_computer = computer_id(node) == computer_id(other)
         if not same_computer or _node_has_active_work(ctx, node_id):
             continue
-        if _retire_compatibility_agent(ctx, agent, employee_id):
+        if _retire_compatibility_agent(ctx, agent, user_id):
             retired.append(agent["id"])
             logger.info(
                 "Retired superseded compatibility agent",
@@ -295,8 +295,8 @@ def retire_superseded_compatibility_agents(
     return retired
 
 
-def _compatibility_key_for(employee_id: str, node_id: str, executor_kind: str) -> str:
-    return f"{employee_id}:{node_id}:{executor_kind}"
+def _compatibility_key_for(user_id: str, node_id: str, executor_kind: str) -> str:
+    return f"{user_id}:{node_id}:{executor_kind}"
 
 
 def _agent_placed_on_node(ctx: NodeAgentContext, agent_id: str, node_id: str) -> bool:
@@ -307,7 +307,7 @@ def _agent_placed_on_node(ctx: NodeAgentContext, agent_id: str, node_id: str) ->
 
 
 def _retire_compatibility_agent(
-    ctx: NodeAgentContext, agent: dict[str, Any], employee_id: str
+    ctx: NodeAgentContext, agent: dict[str, Any], user_id: str
 ) -> bool:
     """Remove an agent's live placements and delete it once it holds none.
 
@@ -327,7 +327,7 @@ def _retire_compatibility_agent(
         return False
     ctx.agent_store.delete_agent(agent["id"])
     if getattr(ctx, "team_store", None):
-        remove_agent_from_teams(ctx.team_store, agent["id"], employee_id)
+        remove_agent_from_teams(ctx.team_store, agent["id"], user_id)
     return True
 
 
@@ -350,7 +350,7 @@ def remove_node_agents(ctx: NodeAgentContext, node_id: str) -> list[str]:
 
     Does not delete the agents themselves — only the placements pinned to
     this node. Agents stay on the roster and can only be deleted by the
-    employee who declared them; see `_remove_node_agents_locked`.
+    user who declared them; see `_remove_node_agents_locked`.
     """
     registry = getattr(ctx, "registry", None)
     dispatch_lock = getattr(registry, "dispatch_lock", None)
@@ -363,11 +363,11 @@ def remove_node_agents(ctx: NodeAgentContext, node_id: str) -> list[str]:
 def _remove_node_agents_locked(ctx: NodeAgentContext, node_id: str) -> list[str]:
     """Remove placements on a deleted computer.
 
-    Agents are declared explicitly by employees and can only be deleted by
-    employees. Once the computer is gone, binding_status marks the agent
+    Agents are declared explicitly by users and can only be deleted by
+    users. Once the computer is gone, binding_status marks the agent
     computer_gone and it stays on the roster — the system never erases it.
     Legacy compatibility agents (identified by compatibilityKey) are the
-    exception: they were an internal migration bridge, not an employee-owned
+    exception: they were an internal migration bridge, not a user-owned
     identity, and are retired when their last placement disappears.
     """
     assert_node_agent_runs_drained(ctx, node_id)
@@ -400,7 +400,7 @@ def _remove_node_agents_locked(ctx: NodeAgentContext, node_id: str) -> list[str]
         if not agent or agent.get("deletedAt") or active_elsewhere:
             continue
         if not agent.get("compatibilityKey"):
-            # Employee-declared agents are never auto-deleted; the computer
+            # User-declared agents are never auto-deleted; the computer
             # going away just leaves them unplaced (binding_status flags
             # computer_gone). Report them so callers can log/notify.
             orphaned_agents.append(agent_id)
@@ -412,7 +412,7 @@ def _remove_node_agents_locked(ctx: NodeAgentContext, node_id: str) -> list[str]
         ctx.agent_store.delete_agent(agent_id)
         if getattr(ctx, "team_store", None):
             remove_agent_from_teams(
-                ctx.team_store, agent_id, agent["supervisorEmployeeId"]
+                ctx.team_store, agent_id, agent["supervisorUserId"]
             )
         orphaned_agents.append(agent_id)
     return orphaned_agents

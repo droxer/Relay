@@ -107,7 +107,7 @@ class CollaborationConductor:
             prepared = replace(
                 prepared,
                 idempotency_key=_scoped_idempotency_key(
-                    actor["employeeId"],
+                    actor["userId"],
                     prepared.session_id,
                     prepared.idempotency_key,
                 ),
@@ -116,7 +116,7 @@ class CollaborationConductor:
             if prepared.idempotency_key:
                 existing = self.ctx.backend.idempotent_run(
                     prepared.idempotency_key,
-                    actor["employeeId"],
+                    actor["userId"],
                     actor_is_admin=actor["isAdmin"],
                     expected_fingerprint=fingerprint,
                 )
@@ -125,7 +125,7 @@ class CollaborationConductor:
             elif prepared.session_id:
                 existing = self.ctx.backend.idempotent_session_run(
                     prepared.session_id,
-                    actor["employeeId"],
+                    actor["userId"],
                     actor_is_admin=actor["isAdmin"],
                     expected_fingerprint=fingerprint,
                 )
@@ -314,9 +314,9 @@ class CollaborationConductor:
             if not project or project.get("archivedAt"):
                 raise CollaborationError("project_not_found", status=404)
             expected_owner = (
-                session.get("ownerEmployeeId") if session else actor["employeeId"]
+                session.get("ownerUserId") if session else actor["userId"]
             )
-            if project.get("ownerEmployeeId") != expected_owner:
+            if project.get("ownerUserId") != expected_owner:
                 raise CollaborationError("project_forbidden", status=403)
             if not project.get("enabled", True):
                 raise CollaborationError("project_disabled")
@@ -372,8 +372,8 @@ class CollaborationConductor:
                 team = self.ctx.team_store.get_team(team_id)
                 if not team or team.get("deletedAt"):
                     raise CollaborationError("team_not_found")
-                expected_owner = self._team_employee_id(session, actor)
-                if team.get("ownerEmployeeId") != expected_owner:
+                expected_owner = self._team_user_id(session, actor)
+                if team.get("ownerUserId") != expected_owner:
                     raise CollaborationError("team_forbidden")
                 team_member_ids = set(team.get("memberAgentIds") or [])
                 members = [
@@ -505,7 +505,7 @@ class CollaborationConductor:
         )
         resolved = resolve_agent_assignments(
             assignments,
-            employee_id=actor["employeeId"],
+            user_id=actor["userId"],
             is_admin=actor["isAdmin"],
             agent_store=self.ctx.agent_store,
             placement_store=self.ctx.agent_placement_store,
@@ -537,7 +537,7 @@ class CollaborationConductor:
         parsed: dict[str, Any] = {
             "taskGoal": task_goal,
             "assignments": resolved,
-            "actorEmployeeId": actor["employeeId"],
+            "actorUserId": actor["userId"],
             "actorIsAdmin": actor["isAdmin"],
             "agentFirst": True,
             "daemonNodeId": required_node_id or resolved[0]["daemonNodeId"],
@@ -810,7 +810,7 @@ class CollaborationConductor:
         if not newcomers:
             return session
         return SessionController(self.ctx.session_store).record_participants_joined(
-            session_id, newcomers, actor["employeeId"]
+            session_id, newcomers, actor["userId"]
         )
 
     def _session_for_actor(
@@ -826,7 +826,7 @@ class CollaborationConductor:
             raise CollaborationError("thread_not_found", status=404)
         if (
             not actor["isAdmin"]
-            and session.get("ownerEmployeeId") != actor["employeeId"]
+            and session.get("ownerUserId") != actor["userId"]
         ):
             raise CollaborationError("thread_forbidden", status=403)
         return session
@@ -843,12 +843,12 @@ class CollaborationConductor:
             daemon_store=self.ctx.registry.daemon_store,
         )
 
-    def _team_employee_id(
+    def _team_user_id(
         self, session: dict[str, Any] | None, actor: dict[str, Any]
     ) -> str:
         if actor["isAdmin"] and session:
-            return session.get("ownerEmployeeId") or actor["employeeId"]
-        return actor["employeeId"]
+            return session.get("ownerUserId") or actor["userId"]
+        return actor["userId"]
 
     def _round_team_id(
         self,
@@ -883,7 +883,7 @@ class CollaborationConductor:
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         return team_agents(
             team_id,
-            self._team_employee_id(session, actor),
+            self._team_user_id(session, actor),
             team_store=self.ctx.team_store,
             agent_store=self.ctx.agent_store,
         )
@@ -976,11 +976,11 @@ def _client_assignments(
 
 
 def _scoped_idempotency_key(
-    actor_employee_id: str, session_id: str | None, caller_key: str
+    actor_user_id: str, session_id: str | None, caller_key: str
 ) -> str:
     resource = session_id or "new-thread"
     digest = hashlib.sha256(
-        f"{actor_employee_id}\0{resource}\0{caller_key}".encode()
+        f"{actor_user_id}\0{resource}\0{caller_key}".encode()
     ).hexdigest()
     return f"collaboration:{digest}"
 

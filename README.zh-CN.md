@@ -11,9 +11,9 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Relay 帮助员工通过对话、议题、例行任务和项目与 AI 智能体协作。你可以为智能体命名、配置角色和技能，选择运行位置，并与团队共享需求、运行过程和结果。
+Relay 帮助用户通过对话、议题、例行任务和项目与 AI 智能体协作。你可以为智能体命名、配置角色和技能，选择运行位置，并与团队共享需求、运行过程和结果。
 
-Relay 采用本地优先架构：后端协调工作，守护进程在员工计算机或托管计算机上执行。每个守护进程在主机工作区或 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中运行 [Claude Code](https://github.com/anthropics/claude-code)、Codex、Pi 或 Kimi。
+Relay 采用本地优先架构：后端协调工作，守护进程在用户计算机或托管计算机上执行。每个守护进程在主机工作区或 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中运行 [Claude Code](https://github.com/anthropics/claude-code)、Codex、Pi 或 Kimi。
 
 <p align="center">
   <img src="docs/images/relay-threads-zh-CN.png" alt="Relay 对话：一个智能体修复缺陷后交接给另一个智能体，后者的评审正在实时输出" width="960">
@@ -27,8 +27,8 @@ Relay 采用本地优先架构：后端协调工作，守护进程在员工计�
 - **项目** — 在同一台计算机上组织共享工作区和参与项目的智能体。
 - **智能体与团队** — 为每个智能体配置运行时、角色、个性和技能。将智能体组成团队，协作方式可选单人、构建 → 评审、流水线或负责人主导。
 - **技能** — 发布带版本的技能包，并通过共享技能库授予智能体。
-- **计算机** — 注册员工计算机或托管计算机，查看其健康状态、运行时和正在运行的工作。
-- **管理** — 在同一个管理控制台中管理员工、计算机、活动和令牌用量。
+- **计算机** — 注册用户计算机或托管计算机，查看其健康状态、运行时和正在运行的工作。
+- **管理** — 在同一个管理控制台中管理用户、计算机、活动和令牌用量。
 
 ## 产品导览
 
@@ -133,7 +133,7 @@ backend/     Python / FastAPI 控制平面：API 路由、事件溯源存储、�
 packages/    TypeScript 工作区
   relay-core/        共享协议、智能体注册表、CLI 命令、提示词
   relay-daemon/      执行平面：注册计算机并运行智能体 CLI
-  relay-supervisor/  确保员工守护进程已部署并保持运行
+  relay-supervisor/  确保用户守护进程已部署并保持运行
 web/         Next.js Web 界面，静态导出后由后端提供服务
 docs/        架构、API、部署、设计系统文档及 ADR
 script/      用户初始化、演示数据、README 截图生成脚本

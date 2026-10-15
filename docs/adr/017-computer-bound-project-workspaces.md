@@ -26,7 +26,7 @@ The web client exposes the hierarchy `Projects -> Project -> task conversations`
 
 In this decision, roster members are Logical Agents, canonically called
 **Project Agents**. They are not human collaborators. Project access remains
-owner-scoped until a separate employee membership and role policy is defined;
+owner-scoped until a separate user membership and role policy is defined;
 the agent roster must never be reused as an authorization list.
 
 ## Consequences

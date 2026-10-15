@@ -16,7 +16,7 @@ from .auth_routes import _consume_auth_attempt, _auth_rate_key
 from .computer_installer_routes import computer_setup_command
 from .daemon_node_routes import create_local_device_enrollment
 from .deps import AppContextDep
-from .helpers import JsonBodyDep, backend_base_url, request_actor, valid_employee_workspace_path
+from .helpers import JsonBodyDep, backend_base_url, request_actor, valid_user_workspace_path
 
 router = APIRouter()
 TTL_SECONDS = 600
@@ -24,7 +24,7 @@ TTL_SECONDS = 600
 
 def _human(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    if not actor.get("user"):
+    if not actor.get("account"):
         raise HTTPException(401, "Sign in to connect a computer.")
     return actor
 
@@ -48,7 +48,7 @@ def start_authorization(request: Request, ctx: AppContextDep, response: Response
     _consume_auth_attempt(request, _auth_rate_key(request, "computer-start"))
     path = _request_body.get("workspacePath")
     name = _request_body.get("displayName")
-    if not isinstance(path, str) or len(path) > 4096 or any(ord(c) < 32 for c in path) or not valid_employee_workspace_path(path):
+    if not isinstance(path, str) or len(path) > 4096 or any(ord(c) < 32 for c in path) or not valid_user_workspace_path(path):
         raise HTTPException(400, "An absolute local workspace path is required.")
     if not isinstance(name, str) or not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
         raise HTTPException(400, "A computer name of at most 80 characters is required.")
@@ -82,7 +82,7 @@ def redeem_authorization(request: Request, ctx: AppContextDep, response: Respons
         if row["status"] != "approved":
             raise HTTPException(410, "This device credential has already been used.")
         node = ctx.registry.get(row["node_id"])
-        if not node or node.get("status") == "deleted" or node.get("employeeId") != row["employee_id"]:
+        if not node or node.get("status") == "deleted" or node.get("userId") != row["user_id"]:
             raise HTTPException(410, "Computer authorization is no longer available.")
         consumed = conn.execute(update(grants).where(grants.c.device_hash == digest).where(
             grants.c.status == "approved").values(status="consumed"))
@@ -91,8 +91,9 @@ def redeem_authorization(request: Request, ctx: AppContextDep, response: Respons
         # Issue only at the one-time exchange; the database keeps its hash.
         # Store transactions enlist in the surrounding grant-consumption transaction.
         _, token = ctx.registry.reissue_node_token(node["id"])
-        return {"sandboxId": node["id"], "employeeId": row["employee_id"], "token": token,
-                "workspacePath": row["workspace_path"]}
+        # `employeeId` keeps installers that predate the user rename working.
+        return {"sandboxId": node["id"], "userId": row["user_id"], "employeeId": row["user_id"],
+                "token": token, "workspacePath": row["workspace_path"]}
 
 
 @router.get("/computer-authorizations/{code}")
@@ -107,7 +108,7 @@ def authorization_details(code: str, request: Request, ctx: AppContextDep, respo
 @router.post("/computer-authorizations/{code}/approve")
 def approve_authorization(code: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = _human(request, ctx)
-    _consume_auth_attempt(request, _auth_rate_key(request, "computer-approve", actor["employeeId"]))
+    _consume_auth_attempt(request, _auth_rate_key(request, "computer-approve", actor["userId"]))
     with store_transaction(ctx.session_store.engine) as conn:
         row = _current(conn, code)
         if row["status"] != "pending":
@@ -119,5 +120,5 @@ def approve_authorization(code: str, request: Request, ctx: AppContextDep) -> di
         enrolled = create_local_device_enrollment(request, ctx, _request_body={
             "workspacePath": row["workspace_path"], "displayName": row["display_name"], "sandboxMode": "none"})
         conn.execute(update(grants).where(grants.c.device_hash == row["device_hash"]).values(
-            node_id=enrolled["node"]["id"], employee_id=actor["employeeId"]))
+            node_id=enrolled["node"]["id"], user_id=actor["userId"]))
     return {"status": "approved"}

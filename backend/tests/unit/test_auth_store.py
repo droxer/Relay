@@ -12,8 +12,8 @@ from fastapi import HTTPException
 from relay.persistence.admin_token_store import DatabaseAdminTokenStore
 from relay.security import auth as auth_module
 from relay.security.auth import (
-    DatabaseUserAuthStore,
-    UserAuthStore,
+    DatabaseAccountAuthStore,
+    AccountAuthStore,
     configure_admin_token,
     hash_session_token,
     reissue_admin_token,
@@ -23,16 +23,16 @@ from sqlalchemy import create_engine, text
 
 def test_local_auth_store_hashes_session_tokens_and_restricts_files() -> None:
     with TemporaryDirectory() as root:
-        store = UserAuthStore(root)
-        user = store.create_user("alice", "kestrel-vault-7719")
-        session = store.create_session(user["id"])
+        store = AccountAuthStore(root)
+        account = store.create_account("alice", "kestrel-vault-7719")
+        session = store.create_session(account["id"])
 
         persisted = json.loads(store.sessions_path.read_text(encoding="utf-8"))
         assert persisted[0]["tokenHash"] == hash_session_token(session["token"])
         assert "token" not in persisted[0]
-        assert store.get_session_by_token(session["token"])["userId"] == user["id"]
+        assert store.get_session_by_token(session["token"])["accountId"] == account["id"]
         assert stat.S_IMODE(store.auth_dir.stat().st_mode) == 0o700
-        assert stat.S_IMODE(store.users_path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(store.accounts_path.stat().st_mode) == 0o600
         assert stat.S_IMODE(store.sessions_path.stat().st_mode) == 0o600
 
 
@@ -42,11 +42,11 @@ def test_database_auth_store_preserves_utc_timestamps_outside_utc() -> None:
     time.tzset()
     try:
         with TemporaryDirectory() as root:
-            store = DatabaseUserAuthStore(
+            store = DatabaseAccountAuthStore(
                 f"sqlite:///{root}/auth.db", create_schema=True
             )
-            created = store.create_user("alice", "kestrel-vault-7719")
-            persisted = store.get_user_by_id(created["id"])
+            created = store.create_account("alice", "kestrel-vault-7719")
+            persisted = store.get_account_by_id(created["id"])
 
             assert persisted is not None
             assert persisted["createdAt"] == created["createdAt"]
@@ -61,21 +61,21 @@ def test_database_auth_store_preserves_utc_timestamps_outside_utc() -> None:
 def test_database_auth_store_persists_users_and_hashes_session_tokens() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
-        store = DatabaseUserAuthStore(database_url, create_schema=True)
+        store = DatabaseAccountAuthStore(database_url, create_schema=True)
 
-        user = store.create_user(
+        account = store.create_account(
             " Alice ", "kestrel-vault-7719", role="admin", email="alice@example.com"
         )
-        assert user["username"] == "alice"
-        assert user["role"] == "admin"
-        assert user["employeeId"]
-        assert "passwordHash" not in user
+        assert account["username"] == "alice"
+        assert account["role"] == "admin"
+        assert account["userId"]
+        assert "passwordHash" not in account
 
-        assert store.authenticate("ALICE", "kestrel-vault-7719")["id"] == user["id"]
+        assert store.authenticate("ALICE", "kestrel-vault-7719")["id"] == account["id"]
         assert store.authenticate("alice", "wrong") is None
 
-        session = store.create_session(user["id"])
-        assert store.get_session_by_token(session["token"])["userId"] == user["id"]
+        session = store.create_session(account["id"])
+        assert store.get_session_by_token(session["token"])["accountId"] == account["id"]
 
         engine = create_engine(database_url, future=True)
         with engine.begin() as conn:
@@ -84,16 +84,16 @@ def test_database_auth_store_persists_users_and_hashes_session_tokens() -> None:
                 .mappings()
                 .one()
             )
-            employee = (
-                conn.execute(text("select id, display_name, email from employees"))
+            user = (
+                conn.execute(text("select id, display_name, email from users"))
                 .mappings()
                 .one()
             )
 
         assert row["token_hash"] == hash_session_token(session["token"])
         assert row["token_hash"] != session["token"]
-        assert dict(employee) == {
-            "id": user["employeeId"],
+        assert dict(user) == {
+            "id": account["userId"],
             "display_name": "alice",
             "email": "alice@example.com",
         }
@@ -111,18 +111,18 @@ def test_database_ids_reject_human_handles_for_uuid_queries() -> None:
 
 def test_database_auth_store_maps_human_handles_independently_and_stably() -> None:
     with TemporaryDirectory() as root:
-        store = DatabaseUserAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
+        store = DatabaseAccountAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
 
-        alice = store.create_user(
-            "alice", "kestrel-vault-7719", employee_id="alice", display_name="Same"
+        alice = store.create_account(
+            "alice", "kestrel-vault-7719", user_id="alice", display_name="Same"
         )
-        bob = store.create_user(
-            "bob", "kestrel-vault-7719", employee_id="bob", display_name="Same"
+        bob = store.create_account(
+            "bob", "kestrel-vault-7719", user_id="bob", display_name="Same"
         )
-        alice_again = store.ensure_employee("alice", display_name="Renamed Alice")
+        alice_again = store.ensure_user("alice", display_name="Renamed Alice")
 
-        assert alice["employeeId"] != bob["employeeId"]
-        assert alice_again["id"] == alice["employeeId"]
+        assert alice["userId"] != bob["userId"]
+        assert alice_again["id"] == alice["userId"]
         assert alice_again["displayName"] == "Renamed Alice"
 
 
@@ -134,11 +134,11 @@ def test_bootstrap_allows_exactly_one_concurrent_first_admin(store_kind: str) ->
         )
         token = reissue_admin_token()
         if store_kind == "database":
-            store = DatabaseUserAuthStore(
+            store = DatabaseAccountAuthStore(
                 f"sqlite:///{root}/auth.db", create_schema=True
             )
         else:
-            store = UserAuthStore(root)
+            store = AccountAuthStore(root)
 
         def bootstrap(index: int) -> str:
             try:
@@ -151,16 +151,16 @@ def test_bootstrap_allows_exactly_one_concurrent_first_admin(store_kind: str) ->
             outcomes = list(pool.map(bootstrap, range(2)))
 
         assert sorted(outcomes) == ["created", "http-409"]
-        assert len(store.list_users()) == 1
+        assert len(store.list_accounts()) == 1
 
 
 def test_database_auth_store_enforces_unique_normalized_usernames() -> None:
     with TemporaryDirectory() as root:
-        store = DatabaseUserAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
-        store.create_user("Alice", "kestrel-vault-7719")
+        store = DatabaseAccountAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
+        store.create_account("Alice", "kestrel-vault-7719")
 
         try:
-            store.create_user(" alice ", "kestrel-vault-7719")
+            store.create_account(" alice ", "kestrel-vault-7719")
         except ValueError as error:
             assert str(error) == "username already exists."
         else:
@@ -172,11 +172,11 @@ def test_database_auth_store_enforces_unique_normalized_usernames() -> None:
 def test_database_auth_store_persists_user_preferences() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
-        store = DatabaseUserAuthStore(database_url, create_schema=True)
-        user = store.create_user("alice", "kestrel-vault-7719")
+        store = DatabaseAccountAuthStore(database_url, create_schema=True)
+        account = store.create_account("alice", "kestrel-vault-7719")
 
         updated = store.update_user_preferences(
-            user["id"],
+            account["id"],
             theme="dark",
             language="zh-CN",
         )
@@ -184,8 +184,8 @@ def test_database_auth_store_persists_user_preferences() -> None:
         assert updated["theme"] == "dark"
         assert updated["language"] == "zh-CN"
 
-        reopened = DatabaseUserAuthStore(database_url)
-        persisted = reopened.get_user_by_id(user["id"])
+        reopened = DatabaseAccountAuthStore(database_url)
+        persisted = reopened.get_account_by_id(account["id"])
         assert persisted is not None
         assert persisted["theme"] == "dark"
         assert persisted["language"] == "zh-CN"
@@ -194,19 +194,19 @@ def test_database_auth_store_persists_user_preferences() -> None:
 def test_retired_traditional_chinese_preference_is_rejected_and_reads_as_simplified() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
-        store = DatabaseUserAuthStore(database_url, create_schema=True)
-        user = store.create_user("alice", "kestrel-vault-7719")
+        store = DatabaseAccountAuthStore(database_url, create_schema=True)
+        account = store.create_account("alice", "kestrel-vault-7719")
 
         with pytest.raises(ValueError, match="language must be en or zh-CN"):
-            store.update_user_preferences(user["id"], language="zh-TW")  # type: ignore[arg-type]
+            store.update_user_preferences(account["id"], language="zh-TW")  # type: ignore[arg-type]
 
         # A row written while Traditional Chinese was still offered.
         engine = create_engine(database_url)
         with engine.begin() as conn:
-            conn.execute(text("UPDATE auth_users SET language = 'zh-TW'"))
+            conn.execute(text("UPDATE auth_accounts SET language = 'zh-TW'"))
         engine.dispose()
 
-        persisted = DatabaseUserAuthStore(database_url).get_user_by_id(user["id"])
+        persisted = DatabaseAccountAuthStore(database_url).get_account_by_id(account["id"])
         assert persisted is not None
         assert persisted["language"] == "zh-CN"
 

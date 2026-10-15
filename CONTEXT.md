@@ -1,9 +1,21 @@
 # Relay Orchestration
 
-Relay coordinates employee-owned agents while keeping execution on registered
+Relay coordinates user-owned agents while keeping execution on registered
 computers outside the control plane.
 
 ## Language
+
+**User**:
+The person who owns agents, computers, threads, tasks, and projects. Stored in
+`users`; owner fields read `ownerUserId` / `owner_user_id`.
+_Avoid_: Employee (the pre-rename name; old data and daemons are upgraded by
+`backend/relay/core/legacy_names.py`), Member
+
+**Account**:
+A User's login credential — username, password hash, role, preferences —
+stored in `auth_accounts` and pointing at its User through `userId`. Sessions
+belong to an Account.
+_Avoid_: User (for the credential), Login
 
 **Computer**:
 The product-facing execution host on which agents are placed and collaborate.
@@ -14,7 +26,7 @@ The execution-plane runtime registered for one computer.
 _Avoid_: Sandbox, agent
 
 **Logical Agent**:
-The durable employee-owned identity built on an Agent Runtime through a
+The durable user-owned identity built on an Agent Runtime through a
 Placement. Its configuration is independent of the computer that executes it,
 and it does not own a workspace.
 _Avoid_: Executor, CLI
@@ -65,7 +77,7 @@ workspace, identity, or scheduling boundary by itself.
 _Avoid_: Workspace, Agent home
 
 **Project**:
-An employee-owned collaboration boundary with one persistent workspace, an
+A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
 _Avoid_: Folder, Team
 
@@ -82,6 +94,6 @@ persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
 **Project Owner**:
-The employee who owns and can currently access a Project. Human collaborator
+The user who owns and can currently access a Project. Human collaborator
 membership is a separate future authorization concept, not the Project Agent roster.
 _Avoid_: Project Agent, lead Agent

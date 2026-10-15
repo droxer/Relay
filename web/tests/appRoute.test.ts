@@ -71,8 +71,12 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/admin"), {
       route: "admin", mobileView: "chat", sessionId: null, adminSection: "dashboard",
     });
+    assert.deepEqual(parseAppPath("/admin/users"), {
+      route: "admin", mobileView: "chat", sessionId: null, adminSection: "users",
+    });
+    // Bookmarks from before the user rename still open the Users section.
     assert.deepEqual(parseAppPath("/admin/employees"), {
-      route: "admin", mobileView: "chat", sessionId: null, adminSection: "employees",
+      route: "admin", mobileView: "chat", sessionId: null, adminSection: "users",
     });
     assert.deepEqual(parseAppPath("/admin/computers"), {
       route: "admin", mobileView: "chat", sessionId: null, adminSection: "computers",
@@ -83,6 +87,13 @@ describe("app pathname routes", () => {
     // An unknown section is a bad link, not the default section — same rule
     // the settings sections follow.
     assert.equal(parseAppPath("/admin/nope").notFound, true);
+  });
+
+  it("keeps an admin view saved before the user rename", () => {
+    assert.equal(
+      canonicalBrowserUrl("/admin/employees", "?employeePage=3&employeeSort=-employee&nodeSort=employee"),
+      "/admin/users?userSort=-user&nodeSort=user&userPage=3",
+    );
   });
 
   it("writes only the canonical control-panel path", () => {
@@ -98,15 +109,15 @@ describe("app pathname routes", () => {
     // The section segment made /admin look like an entity path, which would
     // have dropped every sort, page, and filter the two tables write.
     assert.equal(
-      canonicalBrowserUrl("/admin/employees", "?employeeSort=-running&employeePage=2"),
-      "/admin/employees?employeeSort=-running&employeePage=2",
+      canonicalBrowserUrl("/admin/users", "?userSort=-running&userPage=2"),
+      "/admin/users?userSort=-running&userPage=2",
     );
     assert.equal(
       canonicalBrowserUrl("/admin/computers", "?nodeSort=node&nodeLanes=ready%3A2"),
       "/admin/computers?nodeSort=node&nodeLanes=ready%3A2",
     );
     // A param the path does not own still goes.
-    assert.equal(canonicalBrowserUrl("/admin/employees", "?sort=-due"), "/admin/employees");
+    assert.equal(canonicalBrowserUrl("/admin/users", "?sort=-due"), "/admin/users");
   });
 
   it("writes only the canonical settings path", () => {
@@ -255,8 +266,8 @@ describe("app pathname routes", () => {
     assert.equal(canonicalBrowserUrl("/routines", "?sort=title"), "/automations?sort=title");
     // The admin page keeps two tables on one path, so each owns its own key.
     assert.equal(
-      canonicalBrowserUrl("/admin", "?employeeSort=-running&nodeSort=node"),
-      "/admin?employeeSort=-running&nodeSort=node",
+      canonicalBrowserUrl("/admin", "?userSort=-running&nodeSort=node"),
+      "/admin?userSort=-running&nodeSort=node",
     );
   });
 
@@ -267,8 +278,8 @@ describe("app pathname routes", () => {
     assert.equal(canonicalBrowserUrl("/routines", "?page=2"), "/automations?page=2");
     assert.equal(canonicalBrowserUrl("/settings/computers", "?page=2"), "/settings/computers?page=2");
     assert.equal(
-      canonicalBrowserUrl("/admin", "?employeePage=2&nodePage=4"),
-      "/admin?employeePage=2&nodePage=4",
+      canonicalBrowserUrl("/admin", "?userPage=2&nodePage=4"),
+      "/admin?userPage=2&nodePage=4",
     );
   });
 

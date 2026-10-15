@@ -1,6 +1,6 @@
-"""How many personal computers an employee may enroll.
+"""How many personal computers a user may enroll.
 
-Covers the global default, the per-employee override, and the two paths that
+Covers the global default, the per-user override, and the two paths that
 can bring a personal computer into existence.
 """
 
@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from relay.app import create_app
 from relay.daemon_registry import DaemonNodeRegistry
-from relay.security.auth import DatabaseUserAuthStore
+from relay.security.auth import DatabaseAccountAuthStore
 
 
 def _bootstrap_admin(client: TestClient) -> None:
@@ -40,18 +40,18 @@ def _login_admin(client: TestClient) -> None:
     _login(client, "admin", "kestrel-vault-7719")
 
 
-def _create_employee(client: TestClient, employee_id: str, **extra: object) -> dict:
+def _create_user(client: TestClient, user_id: str, **extra: object) -> dict:
     response = client.post(
-        "/api/v1/admin/employees",
+        "/api/v1/admin/users",
         json={
-            "employeeId": employee_id,
-            "username": employee_id,
+            "userId": user_id,
+            "username": user_id,
             "password": "userpass",
             **extra,
         },
     )
     assert response.status_code == 201, response.text
-    return response.json()["employee"]
+    return response.json()["user"]
 
 
 def _enroll(client: TestClient, workspace_path: str) -> object:
@@ -63,7 +63,7 @@ def _enroll(client: TestClient, workspace_path: str) -> object:
 
 def _set_global_limit(client: TestClient, limit: int) -> None:
     response = client.put(
-        "/api/v1/admin/settings", json={"maxLocalComputersPerEmployee": limit}
+        "/api/v1/admin/settings", json={"maxLocalComputersPerUser": limit}
     )
     assert response.status_code == 200, response.text
 
@@ -72,7 +72,7 @@ def _set_global_limit(client: TestClient, limit: int) -> None:
 def _client(monkeypatch: pytest.MonkeyPatch, *, database_auth: bool) -> Iterator[TestClient]:
     """A signed-out client, admin-bootstrapped.
 
-    The per-employee override lives on the employees table, so tests that need
+    The per-user override lives on the users table, so tests that need
     one run against the database auth store; the rest exercise the file store
     that the backend defaults to.
     """
@@ -82,7 +82,7 @@ def _client(monkeypatch: pytest.MonkeyPatch, *, database_auth: bool) -> Iterator
             monkeypatch.setenv("RELAY_AUTH_STORE", "database")
             database_url = f"sqlite:///{root}/auth.db"
             monkeypatch.setenv("RELAY_DATABASE_URL", database_url)
-            DatabaseUserAuthStore(database_url, create_schema=True)
+            DatabaseAccountAuthStore(database_url, create_schema=True)
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
         yield client
@@ -92,28 +92,28 @@ def test_settings_default_and_update(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         response = client.get("/api/v1/admin/settings")
         assert response.status_code == 200
-        assert response.json()["settings"]["maxLocalComputersPerEmployee"] == 3
+        assert response.json()["settings"]["maxLocalComputersPerUser"] == 3
 
         _set_global_limit(client, 7)
         assert (
             client.get("/api/v1/admin/settings").json()["settings"][
-                "maxLocalComputersPerEmployee"
+                "maxLocalComputersPerUser"
             ]
             == 7
         )
 
 
-def test_settings_report_whether_employee_edits_are_storable(
+def test_settings_report_whether_user_edits_are_storable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         assert (
-            client.get("/api/v1/admin/settings").json()["capabilities"]["employeeEdits"]
+            client.get("/api/v1/admin/settings").json()["capabilities"]["userEdits"]
             is False
         )
     with _client(monkeypatch, database_auth=True) as client:
         assert (
-            client.get("/api/v1/admin/settings").json()["capabilities"]["employeeEdits"]
+            client.get("/api/v1/admin/settings").json()["capabilities"]["userEdits"]
             is True
         )
 
@@ -127,7 +127,7 @@ def test_settings_report_the_admin_token_without_revealing_it(
         assert "adminToken" not in body
         assert "admin_token" not in json.dumps(body)
 
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         assert client.get("/api/v1/admin/settings").status_code == 401
 
@@ -188,14 +188,14 @@ def test_settings_reject_out_of_range_and_non_numeric(
     with _client(monkeypatch, database_auth=False) as client:
         for value in (-1, 51, "many", None):
             response = client.put(
-                "/api/v1/admin/settings", json={"maxLocalComputersPerEmployee": value}
+                "/api/v1/admin/settings", json={"maxLocalComputersPerUser": value}
             )
             assert response.status_code == 400, value
 
 
 def test_settings_require_admin_session(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, database_auth=False) as client:
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         assert client.get("/api/v1/admin/settings").status_code == 401
 
@@ -203,7 +203,7 @@ def test_settings_require_admin_session(monkeypatch: pytest.MonkeyPatch) -> None
         assert client.get("/api/v1/admin/settings").status_code == 403
         assert (
             client.put(
-                "/api/v1/admin/settings", json={"maxLocalComputersPerEmployee": 9}
+                "/api/v1/admin/settings", json={"maxLocalComputersPerUser": 9}
             ).status_code
             == 403
         )
@@ -212,7 +212,7 @@ def test_settings_require_admin_session(monkeypatch: pytest.MonkeyPatch) -> None
 def test_enrollment_stops_at_the_global_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 2)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
@@ -229,7 +229,7 @@ def test_re_enrolling_an_adopted_computer_is_allowed_at_the_limit(
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 1)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
@@ -242,7 +242,7 @@ def test_re_enrolling_an_adopted_computer_is_allowed_at_the_limit(
 def test_zero_limit_blocks_every_enrollment(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 0)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
@@ -254,7 +254,7 @@ def test_lowering_the_limit_grandfathers_existing_computers(
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 3)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
         assert _enroll(client, "/Users/alice/one").status_code == 201
@@ -265,7 +265,7 @@ def test_lowering_the_limit_grandfathers_existing_computers(
         _set_global_limit(client, 1)
 
         nodes = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
-        assert len([node for node in nodes if node.get("employeeId") == "alice"]) == 2
+        assert len([node for node in nodes if node.get("userId") == "alice"]) == 2
 
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
@@ -279,14 +279,14 @@ def test_admin_node_creation_respects_the_limit(
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 1)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
 
         first = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "sandboxMode": "none",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
                 "workspacePath": "/Users/alice/one",
             },
         )
@@ -295,9 +295,9 @@ def test_admin_node_creation_respects_the_limit(
         second = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "sandboxMode": "none",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
                 "workspacePath": "/Users/alice/two",
             },
         )
@@ -309,21 +309,21 @@ def test_managed_node_creation_ignores_the_limit(
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 0)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
 
         response = client.post(
             "/api/v1/admin/daemon-nodes",
-            json={"employeeId": "alice", "sandboxMode": "boxlite"},
+            json={"userId": "alice", "sandboxMode": "boxlite"},
         )
         assert response.status_code == 201
 
 
-def test_employee_override_beats_the_global(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_user_override_beats_the_global(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, database_auth=True) as client:
         _set_global_limit(client, 1)
-        employee = _create_employee(client, "alice", maxLocalComputers=2)
-        assert employee["maxLocalComputers"] == 2
-        assert employee["effectiveMaxLocalComputers"] == 2
+        user = _create_user(client, "alice", maxLocalComputers=2)
+        assert user["maxLocalComputers"] == 2
+        assert user["effectiveMaxLocalComputers"] == 2
 
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
@@ -332,20 +332,20 @@ def test_employee_override_beats_the_global(monkeypatch: pytest.MonkeyPatch) -> 
         assert _enroll(client, "/Users/alice/three").status_code == 409
 
 
-def test_employees_without_an_override_follow_the_global(
+def test_users_without_an_override_follow_the_global(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=True) as client:
-        # The database auth store mints its own employee id, so read it back
+        # The database auth store mints its own user id, so read it back
         # rather than assuming the requested one.
-        alice_id = _create_employee(client, "alice")["id"]
+        alice_id = _create_user(client, "alice")["id"]
         _set_global_limit(client, 8)
 
-        employees = {
-            employee["id"]: employee
-            for employee in client.get("/api/v1/admin/employees").json()["employees"]
+        users = {
+            user["id"]: user
+            for user in client.get("/api/v1/admin/users").json()["users"]
         }
-        alice = employees[alice_id]
+        alice = users[alice_id]
         assert alice["maxLocalComputers"] is None
         assert alice["effectiveMaxLocalComputers"] == 8
         assert alice["localComputerCount"] == 0
@@ -354,56 +354,56 @@ def test_employees_without_an_override_follow_the_global(
 def test_patch_sets_and_clears_the_override(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, database_auth=True) as client:
         _set_global_limit(client, 4)
-        alice_id = _create_employee(client, "alice")["id"]
+        alice_id = _create_user(client, "alice")["id"]
 
         response = client.patch(
-            f"/api/v1/admin/employees/{alice_id}",
+            f"/api/v1/admin/users/{alice_id}",
             json={"displayName": "Alice A", "email": "alice@example.com",
                   "maxLocalComputers": 1},
         )
         assert response.status_code == 200, response.text
-        employee = response.json()["employee"]
-        assert employee["displayName"] == "Alice A"
-        assert employee["email"] == "alice@example.com"
-        assert employee["maxLocalComputers"] == 1
-        assert employee["effectiveMaxLocalComputers"] == 1
+        user = response.json()["user"]
+        assert user["displayName"] == "Alice A"
+        assert user["email"] == "alice@example.com"
+        assert user["maxLocalComputers"] == 1
+        assert user["effectiveMaxLocalComputers"] == 1
 
         cleared = client.patch(
-            f"/api/v1/admin/employees/{alice_id}", json={"maxLocalComputers": None}
+            f"/api/v1/admin/users/{alice_id}", json={"maxLocalComputers": None}
         )
         assert cleared.status_code == 200
-        assert cleared.json()["employee"]["maxLocalComputers"] is None
+        assert cleared.json()["user"]["maxLocalComputers"] is None
         # Back to inheriting, so a later global change moves them again.
-        assert cleared.json()["employee"]["effectiveMaxLocalComputers"] == 4
+        assert cleared.json()["user"]["effectiveMaxLocalComputers"] == 4
         # An unrelated edit leaves the cleared override alone.
         assert (
             client.patch(
-                f"/api/v1/admin/employees/{alice_id}", json={"displayName": "Alice B"}
-            ).json()["employee"]["maxLocalComputers"]
+                f"/api/v1/admin/users/{alice_id}", json={"displayName": "Alice B"}
+            ).json()["user"]["maxLocalComputers"]
             is None
         )
 
 
-def test_patch_rejects_unknown_employee_and_bad_limit(
+def test_patch_rejects_unknown_user_and_bad_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=True) as client:
-        alice_id = _create_employee(client, "alice")["id"]
+        alice_id = _create_user(client, "alice")["id"]
         assert (
             client.patch(
-                "/api/v1/admin/employees/nobody", json={"displayName": "Ghost"}
+                "/api/v1/admin/users/nobody", json={"displayName": "Ghost"}
             ).status_code
             == 404
         )
         assert (
             client.patch(
-                f"/api/v1/admin/employees/{alice_id}", json={"maxLocalComputers": 99}
+                f"/api/v1/admin/users/{alice_id}", json={"maxLocalComputers": 99}
             ).status_code
             == 400
         )
         assert (
             client.patch(
-                f"/api/v1/admin/employees/{alice_id}", json={"displayName": "  "}
+                f"/api/v1/admin/users/{alice_id}", json={"displayName": "  "}
             ).status_code
             == 400
         )
@@ -414,9 +414,9 @@ def test_override_at_creation_needs_the_database_auth_store(
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         response = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice",
                 "password": "userpass",
                 "maxLocalComputers": 2,
@@ -431,7 +431,7 @@ def test_disconnecting_a_computer_frees_a_slot(
 ) -> None:
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 1)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
@@ -482,7 +482,7 @@ def test_saving_one_setting_leaves_the_other_alone(
         )
 
         settings = client.get("/api/v1/admin/settings").json()["settings"]
-        assert settings["maxLocalComputersPerEmployee"] == 7
+        assert settings["maxLocalComputersPerUser"] == 7
         assert settings["maxTaskRounds"] == 2
 
         assert (
@@ -495,10 +495,10 @@ def test_auth_me_carries_the_caller_limit_and_usage(
 ) -> None:
     """Self-service surfaces gate their connect action on /auth/me, so the
     session payload must carry the resolved limit and live usage — an
-    admin-only endpoint cannot serve the employee's own page."""
+    admin-only endpoint cannot serve the user's own page."""
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 2)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
@@ -511,12 +511,12 @@ def test_auth_me_carries_the_caller_limit_and_usage(
         assert me["localComputerCount"] == 1
 
 
-def test_auth_me_reflects_the_employee_override(
+def test_auth_me_reflects_the_user_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=True) as client:
         _set_global_limit(client, 5)
-        _create_employee(client, "alice", maxLocalComputers=1)
+        _create_user(client, "alice", maxLocalComputers=1)
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
@@ -525,10 +525,10 @@ def test_auth_me_reflects_the_employee_override(
         assert me["effectiveMaxLocalComputers"] == 1
 
 
-def test_auth_me_omits_limits_for_users_without_an_employee(
+def test_auth_me_omits_limits_for_users_without_an_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A user with no employee link cannot enroll a computer at all, so their
+    # A user with no user link cannot enroll a computer at all, so their
     # payload stays bare rather than implying a limit of zero.
     with _client(monkeypatch, database_auth=False) as client:
         me = client.get("/api/v1/auth/me").json()["user"]
@@ -544,15 +544,15 @@ def test_preferences_response_keeps_the_limit_fields(
     # next reload.
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 2)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
         _login(client, "alice")
 
         response = client.patch("/api/v1/auth/preferences", json={"theme": "dark"})
         assert response.status_code == 200
-        user = response.json()["user"]
-        assert user["effectiveMaxLocalComputers"] == 2
-        assert user["localComputerCount"] == 0
+        account = response.json()["user"]
+        assert account["effectiveMaxLocalComputers"] == 2
+        assert account["localComputerCount"] == 0
 
 
 def test_login_response_carries_the_limit_fields(
@@ -562,7 +562,7 @@ def test_login_response_carries_the_limit_fields(
     # there is no /auth/me round trip before the My Computer page can render.
     with _client(monkeypatch, database_auth=False) as client:
         _set_global_limit(client, 4)
-        _create_employee(client, "alice")
+        _create_user(client, "alice")
         assert client.post("/api/v1/auth/logout").status_code == 200
 
         response = client.post(
@@ -572,26 +572,26 @@ def test_login_response_carries_the_limit_fields(
         assert response.json()["user"]["effectiveMaxLocalComputers"] == 4
 
 
-def test_employee_id_collision_is_rejected_not_merged(
+def test_user_id_collision_is_rejected_not_merged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A second "alice" is a collision, not a second employee.
+    """A second "alice" is a collision, not a second user.
 
-    The stores' ensure_employee reuses a matching row and patches the profile
+    The stores' ensure_user reuses a matching row and patches the profile
     onto it, so without a check the create route silently rewrote the live
-    employee's display name, email, and computer limit and attached a second
+    user's display name, email, and computer limit and attached a second
     login to them.
     """
     with _client(monkeypatch, database_auth=True) as client:
         _login_admin(client)
-        first = _create_employee(
+        first = _create_user(
             client, "alice", displayName="Alice Chen", maxLocalComputers=2
         )
 
         clash = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "alice",
+                "userId": "alice",
                 "username": "alice2",
                 "password": "userpass",
                 "displayName": "Someone Else",
@@ -600,16 +600,16 @@ def test_employee_id_collision_is_rejected_not_merged(
         )
         assert clash.status_code == 409, clash.text
 
-        employees = {
-            employee["id"]: employee
-            for employee in client.get("/api/v1/admin/employees").json()["employees"]
+        users = {
+            user["id"]: user
+            for user in client.get("/api/v1/admin/users").json()["users"]
         }
-        untouched = employees[first["id"]]
+        untouched = users[first["id"]]
         assert untouched["displayName"] == "Alice Chen"
         assert untouched["maxLocalComputers"] == 2
 
 
-def test_employee_id_is_normalized_and_validated(
+def test_user_id_is_normalized_and_validated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _client(monkeypatch, database_auth=True) as client:
@@ -617,9 +617,9 @@ def test_employee_id_is_normalized_and_validated(
 
         for bad in ("a b", "Alice/Bob", "a", "@@", "-"):
             response = client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": bad,
+                    "userId": bad,
                     "username": f"user-{abs(hash(bad))}",
                     "password": "userpass",
                 },
@@ -629,9 +629,9 @@ def test_employee_id_is_normalized_and_validated(
         # A decorated, upper-cased handle is accepted and canonicalized, so the
         # form's "@alice" preview matches what is actually created.
         created = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "  @Alice  ",
+                "userId": "  @Alice  ",
                 "username": "alice",
                 "password": "userpass",
             },
@@ -639,28 +639,28 @@ def test_employee_id_is_normalized_and_validated(
         assert created.status_code == 201, created.text
         # ...and the canonical form now collides with the decorated one.
         again = client.post(
-            "/api/v1/admin/employees",
-            json={"employeeId": "alice", "username": "alice3", "password": "userpass"},
+            "/api/v1/admin/users",
+            json={"userId": "alice", "username": "alice3", "password": "userpass"},
         )
         assert again.status_code == 409, again.text
 
 
-def test_employee_survives_a_computer_claimed_mid_create(
+def test_user_survives_a_computer_claimed_mid_create(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The employee is committed before assignment, so a lost race is a warning.
+    """The user is committed before assignment, so a lost race is a warning.
 
-    Raising here left a created employee behind an error message, and the retry
+    Raising here left a created user behind an error message, and the retry
     then failed on "username already exists" with no way forward.
     """
     with _client(monkeypatch, database_auth=True) as client:
         _login_admin(client)
-        # An unassigned computer for the new employee to be given.
+        # An unassigned computer for the new user to be given.
         created_node = client.post(
             "/api/v1/admin/daemon-nodes",
             json={
                 "sandboxMode": "none",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
                 "workspacePath": "/Users/bob/one",
             },
         )
@@ -671,12 +671,12 @@ def test_employee_survives_a_computer_claimed_mid_create(
         def _claimed(*_args: object, **_kwargs: object) -> dict:
             raise ValueError("Daemon node is already assigned.")
 
-        monkeypatch.setattr(DaemonNodeRegistry, "assign_employee", _claimed)
+        monkeypatch.setattr(DaemonNodeRegistry, "assign_user", _claimed)
 
         response = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "bob",
+                "userId": "bob",
                 "username": "bob",
                 "password": "userpass",
                 "nodeId": node_id,
@@ -687,17 +687,17 @@ def test_employee_survives_a_computer_claimed_mid_create(
         assert body["assignmentError"] == "Daemon node is already assigned."
         assert "node" not in body
 
-        # The employee is real, and is not a half-created ghost the admin has to
+        # The user is real, and is not a half-created ghost the admin has to
         # fight past on a retry.
         monkeypatch.undo()
         handles = {
-            employee["displayName"]
-            for employee in client.get("/api/v1/admin/employees").json()["employees"]
+            user["displayName"]
+            for user in client.get("/api/v1/admin/users").json()["users"]
         }
         assert "bob" in handles
 
 
-def test_unknown_computer_is_still_refused_before_the_employee_exists(
+def test_unknown_computer_is_still_refused_before_the_user_exists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The pre-check stays: a node id that never existed is a bad request, and
@@ -705,9 +705,9 @@ def test_unknown_computer_is_still_refused_before_the_employee_exists(
     with _client(monkeypatch, database_auth=True) as client:
         _login_admin(client)
         response = client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": "carol",
+                "userId": "carol",
                 "username": "carol",
                 "password": "userpass",
                 "nodeId": "computer-that-does-not-exist",
@@ -715,8 +715,8 @@ def test_unknown_computer_is_still_refused_before_the_employee_exists(
         )
         assert response.status_code == 404, response.text
         names = {
-            employee["displayName"]
-            for employee in client.get("/api/v1/admin/employees").json()["employees"]
+            user["displayName"]
+            for user in client.get("/api/v1/admin/users").json()["users"]
         }
         assert "carol" not in names
 
@@ -727,36 +727,36 @@ def test_password_policy_is_enforced_wherever_a_password_is_set(
     with _client(monkeypatch, database_auth=True) as client:
         _login_admin(client)
         short = client.post(
-            "/api/v1/admin/employees",
-            json={"employeeId": "dave", "username": "dave", "password": "short"},
+            "/api/v1/admin/users",
+            json={"userId": "dave", "username": "dave", "password": "short"},
         )
         assert short.status_code == 400, short.text
         assert "8 characters" in short.json()["detail"]
 
         long = client.post(
-            "/api/v1/admin/employees",
-            json={"employeeId": "erin", "username": "erin", "password": "x" * 257},
+            "/api/v1/admin/users",
+            json={"userId": "erin", "username": "erin", "password": "x" * 257},
         )
         assert long.status_code == 400, long.text
 
         ok = client.post(
-            "/api/v1/admin/employees",
-            json={"employeeId": "dave", "username": "dave", "password": "userpass"},
+            "/api/v1/admin/users",
+            json={"userId": "dave", "username": "dave", "password": "userpass"},
         )
         assert ok.status_code == 201, ok.text
 
 
-def test_employee_carries_a_handle_not_a_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_user_carries_a_handle_not_a_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
     """`id` is a UUID under the database store; the handle is what admins read."""
     with _client(monkeypatch, database_auth=True) as client:
         _login_admin(client)
-        created = _create_employee(client, "alice", displayName="Alice Chen")
+        created = _create_user(client, "alice", displayName="Alice Chen")
         assert created["handle"] == "alice"
         assert created["id"] != "alice"
 
         listed = {
-            employee["id"]: employee
-            for employee in client.get("/api/v1/admin/employees").json()["employees"]
+            user["id"]: user
+            for user in client.get("/api/v1/admin/users").json()["users"]
         }
         assert listed[created["id"]]["handle"] == "alice"
 
@@ -768,19 +768,19 @@ def test_handle_lookup_catches_a_collision_the_uuid_mapping_would_miss(
     resolution consults the handle column before falling back to the mapping."""
     with _client(monkeypatch, database_auth=True) as client:
         _login_admin(client)
-        alice = _create_employee(client, "alice")
+        alice = _create_user(client, "alice")
 
-        store = DatabaseUserAuthStore(os.environ["RELAY_DATABASE_URL"])
+        store = DatabaseAccountAuthStore(os.environ["RELAY_DATABASE_URL"])
         with store.engine.begin() as connection:
             connection.execute(
-                store.employees.update()
-                .where(store.employees.c.id == alice["id"])
+                store.users.update()
+                .where(store.users.c.id == alice["id"])
                 .values(handle="ally")
             )
 
-        assert store.resolve_employee_id("ally") == alice["id"]
+        assert store.resolve_user_id("ally") == alice["id"]
         clash = client.post(
-            "/api/v1/admin/employees",
-            json={"employeeId": "ally", "username": "ally", "password": "userpass"},
+            "/api/v1/admin/users",
+            json={"userId": "ally", "username": "ally", "password": "userpass"},
         )
         assert clash.status_code == 409, clash.text

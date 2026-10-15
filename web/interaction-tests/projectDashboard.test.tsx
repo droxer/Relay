@@ -39,7 +39,7 @@ it("subscribes to the task flow policy cache without requiring a fetch function"
   expect(tileOf("backlog.metric_active").querySelector(".adm-dash-tile-hint")).toBeNull();
 
   act(() => {
-    client.setQueryData(FLOW_POLICY_KEY, { wipLimit: 5, scope: "employee" });
+    client.setQueryData(FLOW_POLICY_KEY, { wipLimit: 5, scope: "user" });
   });
 
   await waitFor(() => {

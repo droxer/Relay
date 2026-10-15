@@ -53,7 +53,7 @@ def test_cancel_before_delivery_preserves_delivered_task_reservation(
         store.register_node(store_node_payload())
         sessions = LocalSessionStore(root)
         session = sessions.create_session({
-            "workspacePath": "/workspace/alice", "ownerEmployeeId": "alice",
+            "workspacePath": "/workspace/alice", "ownerUserId": "alice",
             "taskGoal": "retain ownership until exit",
         })
         task_id = new_database_id()
@@ -141,7 +141,7 @@ def test_database_run_request_status_transition_moves_the_node_reference() -> No
             {
                 **store_node_payload(),
                 "id": "sbx_bob",
-                "employeeId": "bob",
+                "userId": "bob",
                 "workspacePath": "/workspace/bob",
                 "workspaceId": "repo:bob",
             }
@@ -292,7 +292,7 @@ def test_daemon_store_rejects_uncorrelated_workspace_responses(
             {
                 **store_node_payload(),
                 "id": "sbx_bob",
-                "employeeId": "bob",
+                "userId": "bob",
                 "workspaceId": "repo:other",
             }
         )
@@ -332,7 +332,7 @@ def test_registry_hydrates_node_registered_after_replica_start() -> None:
         first.register(
             {
                 "sandboxId": "node_late",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -355,7 +355,7 @@ def test_provisioned_daemon_nodes_use_uuid_ids(daemon_store_factory) -> None:
         )
 
         node, _, _ = registry.provision_pending(
-            "alice", "/Users/alice/project", "boxlite", "employee-device"
+            "alice", "/Users/alice/project", "boxlite", "user-device"
         )
 
         assert str(UUID(node["id"])) == node["id"]
@@ -373,19 +373,19 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
         ]
         both_checked_for_an_existing_node = Barrier(2)
         for registry in registries:
-            original_find = registry.find_by_employee
+            original_find = registry.find_by_user
 
             def synchronized_find(
-                employee_id: str,
+                user_id: str,
                 workspace_path: str | None = None,
                 *,
                 _find=original_find,
             ) -> dict[str, Any] | None:
-                result = _find(employee_id, workspace_path)
+                result = _find(user_id, workspace_path)
                 both_checked_for_an_existing_node.wait(timeout=5)
                 return result
 
-            registry.find_by_employee = synchronized_find  # type: ignore[method-assign]
+            registry.find_by_user = synchronized_find  # type: ignore[method-assign]
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             enrollments = list(
@@ -394,7 +394,7 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
                         "alice",
                         "/Users/alice/project",
                         "none",
-                        "employee-device",
+                        "user-device",
                     ),
                     registries,
                 )
@@ -414,7 +414,7 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
         matches = [
             node
             for node in restarted.sandboxes.values()
-            if node.get("employeeId") == "alice"
+            if node.get("userId") == "alice"
             and workspace_paths_match(
                 node.get("workspacePath"), "/Users/alice/project"
             )
@@ -427,7 +427,7 @@ def test_concurrent_local_enrollment_is_idempotent_across_registries(
 def store_node_payload() -> dict[str, object]:
     return {
         "id": "sbx_alice",
-        "employeeId": "alice",
+        "userId": "alice",
         "workspacePath": "/workspace/alice",
         "workspaceId": "repo:relay",
         "status": "ready",
@@ -476,21 +476,21 @@ def test_daemon_store_retains_managed_runtime_identity_after_delete(
 
 
 @pytest.mark.parametrize("daemon_store_factory", DAEMON_STORE_FACTORIES)
-def test_pending_employee_device_enrollment_rotates_token_after_restart(
+def test_pending_user_device_enrollment_rotates_token_after_restart(
     daemon_store_factory,
 ) -> None:
     # Pending enrollments can be retried, but the old secret is unrecoverable.
     with TemporaryDirectory() as root:
         first = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
         node, _, first_token = first.provision_pending(
-            "alice", "/Users/alice/project", "boxlite", "employee-device"
+            "alice", "/Users/alice/project", "boxlite", "user-device"
         )
 
         restarted = DaemonNodeRegistry(
             LocalSessionStore(root), daemon_store_factory(root)
         )
         retried, _, replacement_token = restarted.provision_pending(
-            "alice", "/Users/alice/project", "boxlite", "employee-device"
+            "alice", "/Users/alice/project", "boxlite", "user-device"
         )
 
         assert retried["id"] == node["id"]
@@ -498,7 +498,7 @@ def test_pending_employee_device_enrollment_rotates_token_after_restart(
         assert replacement_token != first_token
         registration = {
             "sandboxId": node["id"],
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/Users/alice/project",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -516,7 +516,7 @@ def test_reissue_authenticates_after_restart_without_recoverable_secrets(daemon_
     with TemporaryDirectory() as root:
         registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
         node, _, token = registry.provision_pending(
-            "alice", "/Users/alice/project", "none", "employee-device"
+            "alice", "/Users/alice/project", "none", "user-device"
         )
 
         restarted = DaemonNodeRegistry(
@@ -531,7 +531,7 @@ def test_reissue_authenticates_after_restart_without_recoverable_secrets(daemon_
         assert restarted.reveal_node_token(node["id"]) is None
         registration = {
             "sandboxId": node["id"],
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/Users/alice/project",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -552,7 +552,7 @@ def test_managed_node_token_is_neither_persisted_nor_reissuable(
     with TemporaryDirectory() as root:
         registry = DaemonNodeRegistry(LocalSessionStore(root), daemon_store_factory(root))
         node, _ = registry.enroll_managed_node(
-            {"id": "managed_one", "employeeId": "alice"},
+            {"id": "managed_one", "userId": "alice"},
             {"id": "attempt_one"},
             {"workspacePath": "/Users/alice/project"},
         )
@@ -568,7 +568,7 @@ def test_node_token_secret_stays_out_of_daemon_events(daemon_store_factory) -> N
         store = daemon_store_factory(root)
         registry = DaemonNodeRegistry(LocalSessionStore(root), store)
         node, _, token = registry.provision_pending(
-            "alice", "/Users/alice/project", "none", "employee-device"
+            "alice", "/Users/alice/project", "none", "user-device"
         )
         registry.reissue_node_token(node["id"])
 
@@ -594,7 +594,7 @@ def test_explicit_sandbox_provision_targets_requested_node() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_bob",
-                "employeeId": "bob",
+                "userId": "bob",
                 "token": "node_token",
                 "workspacePath": "/workspace/bob",
                 "protocolVersion": 1,
@@ -607,7 +607,7 @@ def test_explicit_sandbox_provision_targets_requested_node() -> None:
 
         sandbox = backend.provision(
             {
-                "employeeId": "admin",
+                "userId": "admin",
                 "sandboxId": "sbx_bob",
                 "workspacePath": "/workspace/admin",
                 "token": "new_ui_token",
@@ -616,7 +616,7 @@ def test_explicit_sandbox_provision_targets_requested_node() -> None:
         )
 
         assert sandbox["id"] == "sbx_bob"
-        assert sandbox["employeeId"] == "bob"
+        assert sandbox["userId"] == "bob"
         assert sandbox["status"] == "ready"
         assert sandbox_ui_token_matches(registry.get("sbx_bob") or {}, "new_ui_token")
 
@@ -631,7 +631,7 @@ def test_daemon_registration_poll_and_completion_updates_session() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -701,7 +701,7 @@ def test_first_dispatch_refuses_to_downgrade_thread_layout_for_old_daemon() -> N
             registry.register(
                 {
                     "sandboxId": "sbx_legacy",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -748,7 +748,7 @@ def test_project_dispatch_carries_shared_workspace_subpath() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "workspaceId": "machine-a",
@@ -770,7 +770,7 @@ def test_project_dispatch_carries_shared_workspace_subpath() -> None:
                     "workspaceSubpath": "projects/prj_one",
                     "projectId": "prj_one",
                     "computerId": "device:alice:machine-a",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "share project state",
                 }
             )
@@ -828,7 +828,7 @@ def test_task_dispatch_carries_shared_workspace_subpath() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "workspaceId": "machine-a",
@@ -849,7 +849,7 @@ def test_task_dispatch_carries_shared_workspace_subpath() -> None:
                     "workspaceLayout": "task",
                     "workspaceSubpath": "tasks/tsk_one",
                     "computerId": "device:alice:machine-a",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "share task state",
                 }
             )
@@ -906,7 +906,7 @@ def test_task_dispatch_fails_if_the_daemon_loses_task_workspace_support() -> Non
             backend = ServerDaemonNodeBackend(registry)
             registration = {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "workspaceId": "machine-a",
@@ -922,7 +922,7 @@ def test_task_dispatch_fails_if_the_daemon_loses_task_workspace_support() -> Non
                     "workspaceLayout": "task",
                     "workspaceSubpath": "tasks/tsk_one",
                     "computerId": "device:alice:machine-a",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "keep task files isolated",
                 }
             )
@@ -972,7 +972,7 @@ def test_command_poll_cannot_observe_run_before_request_links_command() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1043,7 +1043,7 @@ def test_dispatch_claim_prevents_reaper_from_creating_second_command() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1106,7 +1106,7 @@ def test_staged_command_is_published_after_dispatcher_crash() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1166,7 +1166,7 @@ def test_staged_command_is_relinked_after_dispatcher_crash_before_link() -> None
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1212,7 +1212,7 @@ def test_daemon_output_batch_is_persisted_in_order_and_deduplicated_after_restar
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 2,
@@ -1301,7 +1301,7 @@ def test_daemon_output_dedupe_hydrates_existing_sequences_once_after_restart(
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1427,7 +1427,7 @@ def test_daemon_collaboration_retry_after_registry_restart_is_deduplicated() -> 
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1482,7 +1482,7 @@ def test_daemon_fallback_output_buffer_is_bounded(monkeypatch) -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1531,7 +1531,7 @@ def test_daemon_output_retry_survives_event_log_write_failure(monkeypatch) -> No
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -1600,7 +1600,7 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": str(workspace),
                     "protocolVersion": 1,
@@ -1673,7 +1673,7 @@ def test_daemon_completion_indexes_text_files_under_output_folder() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": str(workspace),
                     "protocolVersion": 1,
@@ -1783,7 +1783,7 @@ def test_daemon_reported_generated_files_index_without_shared_filesystem() -> No
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     # This path does not exist on the backend host: the daemon
                     # report alone must be enough to index and serve the artifact.
@@ -1903,7 +1903,7 @@ def _artifacts_from_completed_generated_file_report(
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/remote/daemon/workspace",
                     "protocolVersion": 1,
@@ -1999,7 +1999,7 @@ def test_generated_file_replay_fills_in_partially_indexed_report() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/remote/workspace",
                     "protocolVersion": 1,
@@ -2081,7 +2081,7 @@ def test_regenerated_workspace_file_gets_artifact_per_producing_run() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": str(workspace),
                     "protocolVersion": 1,
@@ -2178,7 +2178,7 @@ def test_daemon_capacity_allows_concurrent_runs() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2231,7 +2231,7 @@ def test_legacy_daemon_capacity_remains_single_slot() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2271,7 +2271,7 @@ def test_daemon_rejects_event_agent_metadata_mismatch() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2321,7 +2321,7 @@ def test_daemon_rejects_event_lease_mismatch() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2388,7 +2388,7 @@ def test_daemon_poll_renews_known_active_command_before_reclaim() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2465,7 +2465,7 @@ def test_daemon_heartbeat_renews_command_dispatched_by_another_backend_replica()
             first.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2528,7 +2528,7 @@ def test_active_run_survives_heartbeat_seen_by_another_backend_replica() -> None
             first.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2596,7 +2596,7 @@ def test_daemon_cancel_finds_run_dispatched_by_another_backend_replica() -> None
             first.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2613,7 +2613,7 @@ def test_daemon_cancel_finds_run_dispatched_by_another_backend_replica() -> None
             second.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2671,7 +2671,7 @@ def test_daemon_events_are_accepted_by_a_replica_that_did_not_dispatch_the_comma
             first.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2790,7 +2790,7 @@ def test_daemon_failed_event_preserves_agent_log_without_artifact() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2844,7 +2844,7 @@ def test_daemon_failed_event_indexes_reported_generated_files() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/remote/workspace",
                     "protocolVersion": 1,
@@ -2916,7 +2916,7 @@ def test_daemon_follow_up_run_gets_prior_conversation_state() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -2981,7 +2981,7 @@ def test_daemon_multi_agent_same_turn_shares_full_handoff_context() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3072,7 +3072,7 @@ def test_daemon_run_records_decision_metadata_after_validation() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3085,7 +3085,7 @@ def test_daemon_run_records_decision_metadata_after_validation() -> None:
             session = session_store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "fix auth",
                     "participants": ["human", "codex"],
                 }
@@ -3120,7 +3120,7 @@ def test_daemon_handoff_decision_injects_note_without_duplicate_user_turn() -> N
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3133,7 +3133,7 @@ def test_daemon_handoff_decision_injects_note_without_duplicate_user_turn() -> N
             session = session_store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "fix auth",
                     "participants": ["human", "claude"],
                 }
@@ -3178,7 +3178,7 @@ def test_daemon_prerecorded_handoff_decision_skips_duplicate_user_turn() -> None
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3191,12 +3191,12 @@ def test_daemon_prerecorded_handoff_decision_skips_duplicate_user_turn() -> None
             session = session_store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "fix auth",
                     "participants": ["human", "claude"],
                 }
             )
-            SessionController(session_store, owner_employee_id="alice").handoff_session(
+            SessionController(session_store, owner_user_id="alice").handoff_session(
                 session["id"],
                 "codex",
                 [{"agent": "codex"}],
@@ -3235,7 +3235,7 @@ def test_daemon_run_does_not_record_decision_when_validation_fails() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3248,7 +3248,7 @@ def test_daemon_run_does_not_record_decision_when_validation_fails() -> None:
             session = session_store.create_session(
                 {
                     "workspacePath": "/workspace/alice",
-                    "ownerEmployeeId": "alice",
+                    "ownerUserId": "alice",
                     "taskGoal": "fix auth",
                     "participants": ["human", "kimi"],
                 }
@@ -3280,7 +3280,7 @@ def test_daemon_terminal_event_after_registry_restart_finalizes_session() -> Non
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3328,7 +3328,7 @@ def test_active_session_run_request_is_global_after_cross_node_handoff() -> None
         session = session_store.create_session(
             {
                 "workspacePath": "/workspace/shared",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "taskGoal": "plan and build",
                 "participants": ["human", "claude", "codex"],
             }
@@ -3484,7 +3484,7 @@ def test_reaper_activates_a_prepared_request_only_after_its_round_is_durable() -
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3497,7 +3497,7 @@ def test_reaper_activates_a_prepared_request_only_after_its_round_is_durable() -
         session = session_store.create_session(
             {
                 "workspacePath": "/workspace/alice",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "taskGoal": "reconcile admission",
             }
         )
@@ -3559,7 +3559,7 @@ def test_cancelling_a_prepared_request_prevents_later_reaper_activation() -> Non
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3572,7 +3572,7 @@ def test_cancelling_a_prepared_request_prevents_later_reaper_activation() -> Non
         session = session_store.create_session(
             {
                 "workspacePath": "/workspace/alice",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "taskGoal": "cancel admission",
             }
         )
@@ -3604,7 +3604,7 @@ def test_direct_activation_refuses_a_cancelled_prepared_request() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3717,7 +3717,7 @@ def test_reaper_never_dispatches_a_running_request_for_a_terminal_session() -> N
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3763,7 +3763,7 @@ def test_stale_activation_cannot_publish_after_persistent_cancellation_fence() -
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -3814,7 +3814,7 @@ def test_command_claim_rejects_queued_work_after_session_terminalization(
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -3929,7 +3929,7 @@ def test_global_reaping_precedes_command_poll_node_scope(monkeypatch) -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -3963,7 +3963,7 @@ def test_cross_replica_node_hydration_precedes_node_scope(monkeypatch) -> None:
         second.register(
             {
                 "sandboxId": "sbx_remote",
-                "employeeId": "remote",
+                "userId": "remote",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -3992,7 +3992,7 @@ def test_daemon_output_retry_after_registry_restart_is_deduplicated() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4049,7 +4049,7 @@ def test_daemon_cancel_event_clears_active_run_request(terminal_log: bool) -> No
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4117,7 +4117,7 @@ def test_terminal_event_wins_over_stale_reaper_on_another_registry(monkeypatch) 
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4266,7 +4266,7 @@ def test_terminal_event_retry_recovers_after_handler_crash() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4315,7 +4315,7 @@ def test_terminal_event_retry_fails_orphaned_run_when_session_was_deleted() -> N
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4380,7 +4380,7 @@ def test_terminal_event_replay_is_claimed_by_only_one_backend_replica() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4451,7 +4451,7 @@ def test_daemon_run_timeout_waits_for_stop_acknowledgement(monkeypatch) -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -4530,7 +4530,7 @@ def _pipeline_registry(root: str, *, work_results: bool = False) -> tuple[Any, A
     registry.register(
         {
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -4613,7 +4613,7 @@ def test_single_agent_protocol_is_frozen_across_capability_changes(mode, require
         request = registry.prepare_run_request("sbx_alice", session["id"], "Resolve", assignments, {})
         assert request["state"]["_relay_work_protocol"] is required
         registry.register({
-            "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
             "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"], "status": "ready",
             "capabilities": ["thread-workspaces", "task-workspaces", "round-result"],
@@ -4640,7 +4640,7 @@ def test_team_work_contract_survives_backend_restart(daemon_store_factory):
             daemon = daemon_store_factory(root)
             registry = DaemonNodeRegistry(sessions, daemon)
             registry.register({
-                "sandboxId": "sbx_alice", "employeeId": "alice",
+                "sandboxId": "sbx_alice", "userId": "alice",
                 "token": "node_token", "workspacePath": "/workspace/alice",
                 "protocolVersion": 1, "supportedAgents": ["codex", "claude"],
                 "capabilities": ["thread-workspaces", "round-result", "work-results"],
@@ -4675,7 +4675,7 @@ def test_daemon_capability_changes_reach_other_backend_replicas(daemon_store_fac
         first = DaemonNodeRegistry(sessions, daemon)
         second = DaemonNodeRegistry(sessions, daemon)
         payload = {
-            "sandboxId": "sbx_alice", "employeeId": "alice",
+            "sandboxId": "sbx_alice", "userId": "alice",
             "token": "node_token", "workspacePath": "/workspace/alice",
             "protocolVersion": 1, "supportedAgents": ["codex"],
             "capabilities": ["thread-workspaces", "work-results"], "status": "ready",
@@ -5376,7 +5376,7 @@ def _round_result_registry(root: str, store_factory=LocalDaemonStore) -> tuple[A
     registry.register(
         {
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -5615,7 +5615,7 @@ def test_task_and_chat_runs_have_a_shared_checkpoint_path() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -5676,7 +5676,7 @@ def test_streaming_output_defers_the_run_timeout(monkeypatch) -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -5746,7 +5746,7 @@ def test_a_silent_run_stays_alive_while_its_daemon_holds_the_lease() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -5794,7 +5794,7 @@ def test_run_progress_is_persisted_at_most_once_per_interval(monkeypatch) -> Non
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -5864,7 +5864,7 @@ def test_logical_assignment_validation_fails_closed_without_stores() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -5903,7 +5903,7 @@ def test_daemon_registration_rejects_wrong_node_token() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -5918,7 +5918,7 @@ def test_daemon_registration_rejects_wrong_node_token() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "wrong_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -5936,7 +5936,7 @@ def test_new_daemon_records_store_only_split_credential_hashes() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -5988,7 +5988,7 @@ def test_database_daemon_store_redacts_plaintext_node_token() -> None:
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "provisioning",
                 "agents": {"codex": "unknown"},
@@ -6032,7 +6032,7 @@ def test_registry_restart_keeps_agents_ready_when_live_daemon_resumes_polling(
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -6060,7 +6060,7 @@ def test_registry_restart_does_not_revive_retired_daemon_on_poll(
         registry.register(
             {
                 "sandboxId": "sbx_retired",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -6088,7 +6088,7 @@ def test_registry_persists_computer_display_name(store_factory) -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspaceId": "mch_alice",
                 "protocolVersion": 1,
@@ -6120,10 +6120,10 @@ def test_daemon_store_persists_sandbox_mode_and_node_location(store_factory) -> 
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "sandboxMode": "boxlite",
-                "nodeLocation": "employee-device",
+                "nodeLocation": "user-device",
                 "status": "ready",
                 "agents": {"codex": "ready"},
                 "token": None,
@@ -6135,7 +6135,7 @@ def test_daemon_store_persists_sandbox_mode_and_node_location(store_factory) -> 
 
         [node] = store.list_nodes()
         assert node["sandboxMode"] == "boxlite"
-        assert node["nodeLocation"] == "employee-device"
+        assert node["nodeLocation"] == "user-device"
 
 
 @pytest.mark.parametrize("store_factory", DAEMON_STORE_FACTORIES)
@@ -6162,7 +6162,7 @@ def test_multi_node_workflow_is_rejected_even_with_shared_workspace_id() -> None
                 registry.register(
                     {
                         "sandboxId": node_id,
-                        "employeeId": "alice",
+                        "userId": "alice",
                         "token": f"token_{node_id}",
                         "workspacePath": workspace_path,
                         "workspaceId": "repo:relay",
@@ -6183,7 +6183,7 @@ def test_multi_node_workflow_is_rejected_even_with_shared_workspace_id() -> None
                     {
                         "taskGoal": "research then implement",
                         "agentFirst": True,
-                        "actorEmployeeId": "alice",
+                        "actorUserId": "alice",
                         "assignments": [
                             {
                                 "agent": "claude",
@@ -6234,7 +6234,7 @@ def test_same_node_workflow_revalidates_placement_before_next_enqueue() -> None:
             registry.register(
                 {
                     "sandboxId": "node_a",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "token_node_a",
                     "workspacePath": "/work/node_a",
                     "workspaceId": "repo:relay",
@@ -6251,7 +6251,7 @@ def test_same_node_workflow_revalidates_placement_before_next_enqueue() -> None:
                 {
                     "taskGoal": "research then implement",
                     "agentFirst": True,
-                    "actorEmployeeId": "alice",
+                    "actorUserId": "alice",
                     "assignments": [
                         {
                             "agentId": researcher["id"],
@@ -6302,7 +6302,7 @@ def test_database_daemon_store_claims_queued_commands_once() -> None:
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -6343,7 +6343,7 @@ def test_database_daemon_store_preserves_artifact_snapshot_state() -> None:
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -6501,7 +6501,7 @@ def test_daemon_store_prunes_command_events_but_keeps_node_lifecycle(
                 "exitCode": 0,
             },
         )
-        store.unassign_node_employee("sbx_alice")
+        store.unassign_node_user("sbx_alice")
 
         before = stored_daemon_event_types(store)
         assert any(event.startswith("daemon.command.") for event in before)
@@ -6535,7 +6535,7 @@ def test_daemon_poll_heartbeats_are_throttled_before_reaching_the_store() -> Non
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -6564,7 +6564,7 @@ def test_daemon_poll_heartbeats_are_throttled_before_reaching_the_store() -> Non
         assert registry.sandboxes["sbx_alice"]["status"] == "ready"
 
 
-@pytest.mark.parametrize("node_location", ["employee-device", "managed"])
+@pytest.mark.parametrize("node_location", ["user-device", "managed"])
 def test_explicit_heartbeat_renews_local_and_managed_node_leases(
     node_location: str,
 ) -> None:
@@ -6576,14 +6576,14 @@ def test_explicit_heartbeat_renews_local_and_managed_node_leases(
         registry.register(
             {
                 "sandboxId": f"node_{node_location}",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
                 "capabilities": ["thread-workspaces"],
                 "status": "ready",
             },
-            authorized_node_location="employee-device",
+            authorized_node_location="user-device",
         )
         node_id = f"node_{node_location}"
         registry.sandboxes[node_id] = {
@@ -6613,7 +6613,7 @@ def test_retired_node_cannot_renew_explicit_heartbeat() -> None:
         registry.register(
             {
                 "sandboxId": "node_retired",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -6634,7 +6634,7 @@ def test_durable_heartbeat_is_visible_to_another_registry_replica() -> None:
         first.register(
             {
                 "sandboxId": "node_shared",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -6675,7 +6675,7 @@ def test_explicit_heartbeat_renews_active_command_leases() -> None:
         registry.register(
             {
                 "sandboxId": "node_busy",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -6720,7 +6720,7 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -6733,7 +6733,7 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_bob",
-                "employeeId": "bob",
+                "userId": "bob",
                 "token": "node_token_bob",
                 "workspacePath": "/workspace/bob",
                 "protocolVersion": 1,
@@ -6759,7 +6759,7 @@ def test_node_monitoring_and_selection_use_grouped_store_queries() -> None:
         assert daemon_store.active_run_calls == [None]
 
         daemon_store.active_run_calls = []
-        assert registry.find_by_employee("alice")["id"] == "sbx_alice"
+        assert registry.find_by_user("alice")["id"] == "sbx_alice"
         assert daemon_store.active_run_calls == [None]
 
 
@@ -6782,7 +6782,7 @@ def test_backend_dispatch_loads_active_runs_once_for_all_assignments() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -6829,7 +6829,7 @@ def test_daemon_store_reclaims_expired_command_leases(store_factory, monkeypatch
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -6886,7 +6886,7 @@ def test_daemon_store_retries_cancel_until_target_run_is_terminal(
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -6940,7 +6940,7 @@ def test_daemon_store_renews_active_command_leases(store_factory) -> None:
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -6987,7 +6987,7 @@ def test_daemon_store_does_not_renew_a_superseded_delivery(store_factory) -> Non
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -7039,7 +7039,7 @@ def test_daemon_store_persists_agent_role_maps(store_factory) -> None:
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspacePath": "/workspace/alice",
                 "status": "ready",
                 "agents": {"codex": "ready"},
@@ -7073,7 +7073,7 @@ def test_daemon_run_rejects_ownerless_sessions() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -7106,7 +7106,7 @@ def test_daemon_run_dispatch_rejects_concurrent_second_claim() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -7149,7 +7149,7 @@ def test_set_disabled_agents_blocks_dispatch_and_survives_restart() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -7247,7 +7247,7 @@ def test_daemon_run_records_effective_agent_role_override() -> None:
             registry.register(
                 {
                     "sandboxId": "sbx_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": "node_token",
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
@@ -7282,7 +7282,7 @@ def test_register_sanitizes_and_exposes_agent_inventory() -> None:
         registry.register(
             {
                 "sandboxId": "sbx_inv",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -7354,7 +7354,7 @@ def test_register_without_inventory_omits_field() -> None:
 def test_reregistering_a_computer_retires_the_previous_daemon_incarnation(
     store_factory,
 ) -> None:
-    """A Computer is (employeeId, workspaceId), not a daemon process id.
+    """A Computer is (userId, workspaceId), not a daemon process id.
 
     A daemon that restarts with a fresh sandboxId used to leave its previous row
     behind as a live node, which is how stale duplicates -- and duplicate
@@ -7366,7 +7366,7 @@ def test_reregistering_a_computer_retires_the_previous_daemon_incarnation(
             registry.register(
                 {
                     "sandboxId": sandbox_id,
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": f"token_{sandbox_id}",
                     "workspaceId": "mch_alice",
                     "protocolVersion": 1,
@@ -7389,7 +7389,7 @@ def test_reregistering_a_computer_retires_the_previous_daemon_incarnation(
 def test_reregistering_a_computer_keeps_other_computers_live(store_factory) -> None:
     with TemporaryDirectory() as root:
         registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
-        for sandbox_id, workspace_id, employee in (
+        for sandbox_id, workspace_id, user in (
             ("sbx_laptop", "mch_laptop", "alice"),
             ("sbx_desktop", "mch_desktop", "alice"),
             ("sbx_bob", "mch_laptop", "bob"),
@@ -7397,7 +7397,7 @@ def test_reregistering_a_computer_keeps_other_computers_live(store_factory) -> N
             registry.register(
                 {
                     "sandboxId": sandbox_id,
-                    "employeeId": employee,
+                    "userId": user,
                     "token": f"token_{sandbox_id}",
                     "workspaceId": workspace_id,
                     "protocolVersion": 1,
@@ -7408,7 +7408,7 @@ def test_reregistering_a_computer_keeps_other_computers_live(store_factory) -> N
                 f"ui_{sandbox_id}",
             )
 
-        # Different workspace, and same workspace under a different employee,
+        # Different workspace, and same workspace under a different user,
         # are different Computers.
         assert not registry.get("sbx_laptop").get("retiredAt")
         assert not registry.get("sbx_desktop").get("retiredAt")
@@ -7421,7 +7421,7 @@ def test_reregistering_the_same_daemon_does_not_retire_itself(store_factory) -> 
         registry = DaemonNodeRegistry(LocalSessionStore(root), store_factory(root))
         payload = {
             "sandboxId": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspaceId": "mch_alice",
             "protocolVersion": 1,
@@ -7463,7 +7463,7 @@ def test_node_agent_maps_round_trip_through_the_child_table() -> None:
         store.register_node(
             {
                 "id": "sbx_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "status": "ready",
                 "agents": {"claude": "ready", "codex": "missing"},
                 "agentDetails": {"claude": {"adapter": "cli"}},
@@ -7617,7 +7617,7 @@ def test_repeat_registrations_do_not_grow_the_event_log() -> None:
         store = database_daemon_store(root)
         payload = {
             "id": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "status": "ready",
             "agents": {"claude": "ready"},
             "nodeTokenHash": "sha256:hash",
@@ -7648,7 +7648,7 @@ def test_a_materially_changed_registration_is_still_recorded() -> None:
         store.register_node(
             {**payload, "agents": {"claude": "ready", "codex": "ready"}}
         )
-        store.register_node({**payload, "employeeId": "alice"})
+        store.register_node({**payload, "userId": "alice"})
 
         events = stored_daemon_event_types(store)
 
@@ -7714,7 +7714,7 @@ def _machine_registry(root: str) -> DaemonNodeRegistry:
 def _machine_payload(**overrides: Any) -> dict[str, Any]:
     return {
         "sandboxId": "node-1",
-        "employeeId": "alice",
+        "userId": "alice",
         "token": "node_token",
         "workspacePath": "/workspace/alice",
         "workspaceId": "machine-a",
@@ -7726,7 +7726,7 @@ def _machine_payload(**overrides: Any) -> dict[str, Any]:
     }
 
 
-def test_same_employee_and_machine_supersedes_across_workspace_paths() -> None:
+def test_same_user_and_machine_supersedes_across_workspace_paths() -> None:
     with TemporaryDirectory() as root:
         registry = _machine_registry(root)
         registry.register(_machine_payload(sandboxId="node-old", workspacePath="/one"))
@@ -7735,13 +7735,13 @@ def test_same_employee_and_machine_supersedes_across_workspace_paths() -> None:
         assert not registry.get("node-new").get("retiredAt")
 
 
-def test_two_employees_on_one_machine_do_not_supersede_each_other() -> None:
+def test_two_users_on_one_machine_do_not_supersede_each_other() -> None:
     with TemporaryDirectory() as root:
         registry = _machine_registry(root)
         registry.register(
-            _machine_payload(sandboxId="node-alice", employeeId="alice")
+            _machine_payload(sandboxId="node-alice", userId="alice")
         )
-        registry.register(_machine_payload(sandboxId="node-bob", employeeId="bob"))
+        registry.register(_machine_payload(sandboxId="node-bob", userId="bob"))
         assert not registry.get("node-alice").get("retiredAt")
         assert not registry.get("node-bob").get("retiredAt")
 
@@ -7922,7 +7922,7 @@ def test_late_output_from_completed_lease_is_recovered_without_reactivating_run(
             sessions = LocalSessionStore(root)
             daemons = LocalDaemonStore(root)
             registry = DaemonNodeRegistry(sessions, daemons)
-            registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            registry.register({"sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                                "workspacePath": "/workspace/alice", "protocolVersion": 2,
                                "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"], "status": "ready"})
             await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "recover output", "assignments": [{"agent": "codex"}]})
@@ -8093,7 +8093,7 @@ def test_journal_report_acknowledges_settled_or_unknown_runs_and_ignores_other_n
         with TemporaryDirectory() as root:
             _sessions, tasks, registry = _round_result_registry(root)
             registry.register({
-                "sandboxId": "sbx_bob", "employeeId": "bob", "token": "bob_token",
+                "sandboxId": "sbx_bob", "userId": "bob", "token": "bob_token",
                 "workspacePath": "/workspace/bob", "protocolVersion": 1,
                 "supportedAgents": ["codex"], "status": "ready",
             })
@@ -8123,7 +8123,7 @@ def test_lost_dispatch_says_never_received_only_when_the_daemon_could_have_said_
             _sessions, tasks, registry = _round_result_registry(root)
             if reports_journal:
                 registry.register({
-                    "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+                    "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                     "workspacePath": "/workspace/alice", "protocolVersion": 1,
                     "supportedAgents": ["codex"], "status": "ready",
                     "capabilities": ["task-workspaces", "thread-workspaces", "round-result",
@@ -8189,7 +8189,7 @@ def test_a_completed_run_remembers_its_output_was_truncated():
         with TemporaryDirectory() as root:
             sessions = LocalSessionStore(root)
             registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
-            registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            registry.register({"sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                                "workspacePath": "/workspace/alice", "protocolVersion": 2,
                                "supportedAgents": ["codex"], "capabilities": ["thread-workspaces"], "status": "ready"})
             await ServerDaemonNodeBackend(registry).run("sbx_alice", {"taskGoal": "verbose", "assignments": [{"agent": "codex"}]})
@@ -8211,7 +8211,7 @@ SESSION_ID = "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d"
 def _resume_registry(root: str, capabilities: list[str]) -> tuple[Any, Any]:
     sessions = LocalSessionStore(root)
     registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
-    registry.register({"sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+    registry.register({"sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
                        "workspacePath": "/workspace/alice", "protocolVersion": 2,
                        "supportedAgents": ["claude"], "capabilities": ["thread-workspaces", *capabilities],
                        "status": "ready"})
@@ -8335,8 +8335,8 @@ def test_stop_keeps_its_actor_across_registry_restart(store_factory, terminal_ty
             task = tasks.create_task({"title": "Stop audit"})
             backend = ServerDaemonNodeBackend(registry)
             command = await _run_task_round(registry, backend, task["id"])
-            backend.cancel_run("sbx_alice", command["sessionId"], "Stop", actor_employee_id="alice")
-            registry.cancel_active_run("sbx_alice", command["sessionId"], "Stop again", actor_employee_id="other")
+            backend.cancel_run("sbx_alice", command["sessionId"], "Stop", actor_user_id="alice")
+            registry.cancel_active_run("sbx_alice", command["sessionId"], "Stop again", actor_user_id="other")
             # Finalization may happen on another backend instance.
             registry = DaemonNodeRegistry(sessions, registry.daemon_store, task_store=tasks)
             registry.handle_event("sbx_alice", {
@@ -8346,7 +8346,7 @@ def test_stop_keeps_its_actor_across_registry_restart(store_factory, terminal_ty
                 "exitCode": 0,
             }, "node_token")
             decision = sessions.get_session(command["sessionId"])["decisions"][-1]
-            assert decision["actorEmployeeId"] == "alice"
+            assert decision["actorUserId"] == "alice"
     asyncio.run(run_flow())
 
 

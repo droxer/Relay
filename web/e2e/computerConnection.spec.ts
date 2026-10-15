@@ -6,7 +6,7 @@ test("computer approval preserves its URL and requires explicit consent", async 
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "computer-user", username: "alice", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "computer-user", username: "alice", role: "user", theme: "light", language: "en" } };
     if (path.endsWith(`/computer-authorizations/${code}`)) body = { displayName: "Alice laptop", workspacePath: "/Users/alice/work", status: "pending" };
     if (path.endsWith(`/computer-authorizations/${code}/approve`)) { approvals++; body = { status: "approved" }; }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });

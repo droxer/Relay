@@ -3,19 +3,19 @@ applies, so a dry run cannot disagree with the real thing."""
 
 from __future__ import annotations
 
-from relay.cli import rehearse_employee_handles
-from relay.persistence.employee_handle_backfill import plan_handles, summarize
+from relay.cli import rehearse_user_handles
+from relay.persistence.user_handle_backfill import plan_handles, summarize
 from sqlalchemy import create_engine, text
 
 
 def test_plan_reports_the_source_and_every_collision() -> None:
-    employees = [
+    users = [
         {"id": "id-1", "display_name": "Alice Chen"},
         {"id": "id-2", "display_name": "Bob Stone"},
         {"id": "id-3", "display_name": "Bob Stone"},
         {"id": "deadbeefcafe", "display_name": "///"},
     ]
-    plan = plan_handles(employees, {"id-1": "alice"})
+    plan = plan_handles(users, {"id-1": "alice"})
 
     assert [row["handle"] for row in plan] == [
         "alice",
@@ -31,7 +31,7 @@ def test_plan_reports_the_source_and_every_collision() -> None:
     ]
 
     report = summarize(plan)
-    assert report["employees"] == 4
+    assert report["users"] == 4
     assert report["bySource"] == {"username": 1, "display_name": 2, "id_prefix": 1}
     assert report["suffixed"] == 1
     # The rows an operator has to look at before applying: one renamed to
@@ -46,22 +46,22 @@ def test_rehearsal_reads_a_real_database_and_writes_nothing(tmp_path) -> None:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "CREATE TABLE employees (id TEXT PRIMARY KEY, "
+                "CREATE TABLE users (id TEXT PRIMARY KEY, "
                 "display_name TEXT NOT NULL, created_at TIMESTAMP NOT NULL)"
             )
         )
         connection.execute(
-            text("CREATE TABLE auth_users (username TEXT NOT NULL, employee_id TEXT)")
+            text("CREATE TABLE auth_accounts (username TEXT NOT NULL, user_id TEXT)")
         )
         connection.execute(
             text(
-                "INSERT INTO employees VALUES ('id-1', 'Alice Chen', '2026-01-01'), "
+                "INSERT INTO users VALUES ('id-1', 'Alice Chen', '2026-01-01'), "
                 "('id-2', 'Alice Chen', '2026-01-02')"
             )
         )
-        connection.execute(text("INSERT INTO auth_users VALUES ('alice', 'id-1')"))
+        connection.execute(text("INSERT INTO auth_accounts VALUES ('alice', 'id-1')"))
 
-    report = rehearse_employee_handles(url)
+    report = rehearse_user_handles(url)
     assert [row["handle"] for row in report["plan"]] == ["alice", "alice-chen"]
     assert report["suffixed"] == 0
 
@@ -70,6 +70,6 @@ def test_rehearsal_reads_a_real_database_and_writes_nothing(tmp_path) -> None:
     with engine.connect() as connection:
         columns = {
             row["name"]
-            for row in connection.execute(text("PRAGMA table_info('employees')")).mappings()
+            for row in connection.execute(text("PRAGMA table_info('users')")).mappings()
         }
     assert "handle" not in columns

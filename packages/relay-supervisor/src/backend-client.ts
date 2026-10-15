@@ -1,5 +1,5 @@
 import { relayApiUrl, type ControlPanelDaemonNodeRecord } from "relay-core";
-import type { EmployeeRecord, ManagedNodeBackend, ManagedNodeRecord, ProvisionedDaemonNode, ProvisioningAttemptRecord, SupervisorBackend } from "./types.js";
+import type { UserRecord, ManagedNodeBackend, ManagedNodeRecord, ProvisionedDaemonNode, ProvisioningAttemptRecord, SupervisorBackend } from "./types.js";
 
 interface SupervisorBackendClientOptions {
   backendUrl: string;
@@ -33,8 +33,8 @@ export class SupervisorBackendClient implements SupervisorBackend, ManagedNodeBa
     this.requestTimeoutMs = options.requestTimeoutMs ?? 30_000;
   }
 
-  async listEmployees(): Promise<EmployeeRecord[]> {
-    return (await this.request<{ employees: EmployeeRecord[] }>("/admin/employees")).employees;
+  async listUsers(): Promise<UserRecord[]> {
+    return (await this.request<{ users: UserRecord[] }>("/admin/users")).users;
   }
 
   async listDaemonNodes(): Promise<ControlPanelDaemonNodeRecord[]> {
@@ -42,7 +42,7 @@ export class SupervisorBackendClient implements SupervisorBackend, ManagedNodeBa
       .filter((node) => !node.provisioningPlaceholder);
   }
 
-  async provisionDaemonNode(input: { employeeId: string; workspacePath?: string }): Promise<ProvisionedDaemonNode> {
+  async provisionDaemonNode(input: { userId: string; workspacePath?: string }): Promise<ProvisionedDaemonNode> {
     return await this.request<ProvisionedDaemonNode>("/admin/daemon-nodes", {
       method: "POST",
       body: JSON.stringify(input),

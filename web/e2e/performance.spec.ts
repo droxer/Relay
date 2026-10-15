@@ -7,10 +7,10 @@ import { expect, test, type Page } from "@playwright/test";
    to a page that never renders markdown. None of it shows in a screenshot,
    which is why it needs a test rather than a review. */
 
-const EMPLOYEE = "perf-user";
+const USER = "perf-user";
 const T0 = Date.parse("2026-09-17T09:00:00Z");
 const hoursAgo = (hours: number) => new Date(T0 - hours * 3_600_000).toISOString();
-const USER = { id: EMPLOYEE, employeeId: EMPLOYEE, username: "perf", role: "employee", theme: "light", language: "en" };
+const USER = { id: USER, userId: USER, username: "perf", role: "user", theme: "light", language: "en" };
 
 function session(id: string, index: number, turns = 0) {
   const events: unknown[] = [];
@@ -18,7 +18,7 @@ function session(id: string, index: number, turns = 0) {
   for (let turn = 0; turn < turns; turn++) {
     const runId = `${id}-run-${turn}`;
     agentRuns.push({ id: runId, agent: "claude", status: "completed", mode: "action", startedAt: hoursAgo(2), completedAt: hoursAgo(2) });
-    if (turn > 0) events.push({ id: `${runId}-user`, type: "user.message", sessionId: id, timestamp: hoursAgo(2), text: `Follow-up ${turn}`, actorEmployeeId: EMPLOYEE });
+    if (turn > 0) events.push({ id: `${runId}-user`, type: "user.message", sessionId: id, timestamp: hoursAgo(2), text: `Follow-up ${turn}`, actorUserId: USER });
     events.push({ id: `${runId}-start`, type: "agent.started", sessionId: id, timestamp: hoursAgo(2), runId, agent: "claude", mode: "action" });
     const text = `Turn ${turn} changed \`verify${turn}.ts\`.\n\n\`\`\`ts\nexport const turn${turn} = ${turn};\n\`\`\``;
     events.push({ id: `${runId}-out`, type: "agent.output", sessionId: id, timestamp: hoursAgo(2), runId, agent: "claude", stream: "stdout",
@@ -27,7 +27,7 @@ function session(id: string, index: number, turns = 0) {
   }
   return {
     id, title: `Thread number ${index}`, taskGoal: `Thread number ${index}`, status: ["completed", "failed"][index % 2],
-    ownerEmployeeId: EMPLOYEE, workspacePath: "/w", phase: "created", participants: ["human"],
+    ownerUserId: USER, workspacePath: "/w", phase: "created", participants: ["human"],
     createdAt: hoursAgo(index + 10), updatedAt: hoursAgo(index + 1),
     events, agentRuns, artifacts: [], decisions: [], collaborationRounds: [],
     eventCount: events.length, runCount: agentRuns.length, artifactCount: 0,

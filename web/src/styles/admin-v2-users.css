@@ -1,4 +1,4 @@
-/* Admin console — content frame, member fieldset, and the EMPLOYEES view
+/* Admin console — content frame, member fieldset, and the USERS view
    (list rows, cards, metrics) plus the fleet filter chips and the shared
    control row both views sit under.
 
@@ -33,7 +33,7 @@
   gap: var(--sp-6);
 }
 
-.adm-employees-empty.relay-empty--fill {
+.adm-users-empty.relay-empty--fill {
   min-height: min(420px, 50vh);
 }
 
@@ -41,10 +41,10 @@
   min-height: min(280px, 40vh);
 }
 
-/* ── Employees view ───────────────────────────────────────────────── */
+/* ── Users view ───────────────────────────────────────────────── */
 
 
-/* Column tracks for the per-band employee tables. Lengths, not scale steps —
+/* Column tracks for the per-band user tables. Lengths, not scale steps —
    the design grid bans arbitrary bracket values in component classes. */
 .adm-emp-col-identity { min-width: 220px; }
 .adm-emp-col-running { width: 5.5rem; }
@@ -128,13 +128,13 @@ tr.is-pulse > td:first-child::after {
   transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
-/* Official vendor glyph — identity, alongside the employee's agent name. */
+/* Official vendor glyph — identity, alongside the user's agent name. */
 .adm-node-chip-mark {
   flex: 0 0 auto;
   opacity: var(--opacity-mark);
 }
 
-/* Computer chip on the employee card/row — a readout, not a control: the
+/* Computer chip on the user card/row — a readout, not a control: the
    machine's actions live on its own node card. It no longer has to say so by
    cancelling a pointer and a hover, because the base chip stopped claiming
    them. Anatomy mirrors the node card: presence dot, ownership mark, name. */
@@ -370,7 +370,7 @@ tr.is-pulse > td:first-child::after {
   letter-spacing: var(--type-code-track);
 }
 
-/* Meta truncates so a long employee id can't wrap and break row rhythm.
+/* Meta truncates so a long user id can't wrap and break row rhythm.
    The delete button's danger ink comes from the destructive Button variant. */
 .adm-node-history-meta {
   min-width: 0;
@@ -397,7 +397,7 @@ tr.is-pulse > td:first-child::after {
 }
 
 /* ── Shared control row (filters/search on the left, card/list toggle on
-   the right) — keeps the Employees and Nodes views chrome-aligned. ─────── */
+   the right) — keeps the Users and Nodes views chrome-aligned. ─────── */
 .adm-view-controls {
   display: flex;
   align-items: center;
@@ -422,10 +422,10 @@ tr.is-pulse > td:first-child::after {
   flex: 0 0 auto;
 }
 
-/* ── Employee card (card view) — inherits the node-card frame so the two
+/* ── User card (card view) — inherits the node-card frame so the two
    views read as one system; only the interior slots differ. ───────────── */
 /* The fleet card's fixed height is sized for a computer's header. An
-   employee card sizes to its content instead — name, one handle line, its
+   user card sizes to its content instead — name, one handle line, its
    computers, the limit — and the grid stretches each row to its tallest
    card, so a row still reads as one even band. A fleet-height floor here
    only left an empty well above the footer. */

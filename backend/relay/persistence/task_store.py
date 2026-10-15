@@ -221,8 +221,8 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "acceptancePolicy": payload.get("acceptancePolicy", "human"),
     }
     for field in (
-        "ownerEmployeeId",
-        "assigneeEmployeeId",
+        "ownerUserId",
+        "assigneeUserId",
         "projectId",
         "dueDate",
         "routineType",
@@ -326,7 +326,7 @@ def task_update_events(
             "title",
             "description",
             "priority",
-            "assigneeEmployeeId",
+            "assigneeUserId",
             "dueDate",
             "isRoutine",
             "routineType",
@@ -386,11 +386,11 @@ def task_update_events(
             status_payload["sessionId"] = payload["statusSessionId"]
         if payload["status"] == "blocked":
             status_payload["attention"] = payload.get("attention") or {
-                "code": "manual_block" if payload.get("actorEmployeeId") else "unknown",
-                "source": "operator" if payload.get("actorEmployeeId") else "legacy",
+                "code": "manual_block" if payload.get("actorUserId") else "unknown",
+                "source": "operator" if payload.get("actorUserId") else "legacy",
             }
-        if payload.get("actorEmployeeId"):
-            status_payload["actorEmployeeId"] = payload["actorEmployeeId"]
+        if payload.get("actorUserId"):
+            status_payload["actorUserId"] = payload["actorUserId"]
         events.append(relay_task_event("task.status", task_id, status_payload))
     return events
 
@@ -474,7 +474,7 @@ class LocalTaskStore:
             return materialize_task_events(events)
 
     def list_tasks(
-        self, *, employee_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
         if not self.tasks_dir.exists():
             return []
@@ -487,8 +487,8 @@ class LocalTaskStore:
         visible = [
             t
             for t in live
-            if employee_id is None
-            or employee_id in (t.get("ownerEmployeeId"), t.get("assigneeEmployeeId"))
+            if user_id is None
+            or user_id in (t.get("ownerUserId"), t.get("assigneeUserId"))
         ]
         ordered = sorted(
             visible, key=lambda item: (item["updatedAt"], item["id"]), reverse=True
@@ -503,15 +503,15 @@ class LocalTaskStore:
         ]
 
     def list_task_summaries(
-        self, *, employee_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
         tasks = self.list_tasks()
-        if employee_id is not None:
+        if user_id is not None:
             tasks = [
                 task
                 for task in tasks
-                if task.get("ownerEmployeeId") == employee_id
-                or task.get("assigneeEmployeeId") == employee_id
+                if task.get("ownerUserId") == user_id
+                or task.get("assigneeUserId") == user_id
             ]
         selected = tasks if limit is None else tasks[: max(1, limit)]
         return [compact_task_summary(task) for task in selected]
@@ -538,7 +538,7 @@ class LocalTaskStore:
                 relay_task_event(
                     "task.deleted",
                     task_id,
-                    {"actorEmployeeId": deleted_by} if deleted_by else {},
+                    {"actorUserId": deleted_by} if deleted_by else {},
                 ),
             )
 
@@ -592,7 +592,7 @@ class LocalTaskStore:
             )
 
     def claim_next_task_for_agent(
-        self, agent: AgentName, assignee_employee_id: str | None = None
+        self, agent: AgentName, assignee_user_id: str | None = None
     ) -> dict[str, Any] | None:
         candidates = [
             task
@@ -601,8 +601,8 @@ class LocalTaskStore:
             and not issue_needs_project(task)
             and not task.get("assignedTeamId")
             and (
-                not assignee_employee_id
-                or task.get("assigneeEmployeeId") == assignee_employee_id
+                not assignee_user_id
+                or task.get("assigneeUserId") == assignee_user_id
             )
         ]
         for task in sorted(candidates, key=task_claim_sort_key):
@@ -962,8 +962,8 @@ class DatabaseTaskStore:
             ForeignKey("projects.id", ondelete="RESTRICT", name="fk_tasks_project"),
             nullable=True,
         ),
-        Column("owner_employee_id", entity_uuid_type(), nullable=True),
-        Column("assignee_employee_id", entity_uuid_type(), nullable=True),
+        Column("owner_user_id", entity_uuid_type(), nullable=True),
+        Column("assignee_user_id", entity_uuid_type(), nullable=True),
         Column("due_date", Date, nullable=True),
         Column("is_routine", Boolean, nullable=False, default=False),
         Column("routine_type", Text, nullable=True),
@@ -996,8 +996,8 @@ class DatabaseTaskStore:
         Index("ix_tasks_assigned_agent_id", "assigned_agent_id"),
         Index("ix_tasks_assigned_team_id", "assigned_team_id"),
         Index("ix_tasks_project_id", "project_id"),
-        Index("ix_tasks_owner_updated_at", "owner_employee_id", "updated_at"),
-        Index("ix_tasks_assignee_updated_at", "assignee_employee_id", "updated_at"),
+        Index("ix_tasks_owner_updated_at", "owner_user_id", "updated_at"),
+        Index("ix_tasks_assignee_updated_at", "assignee_user_id", "updated_at"),
         Index(
             "ix_tasks_dispatch_queue",
             "due_date",
@@ -1277,15 +1277,15 @@ class DatabaseTaskStore:
                 scope = flow_scope(task)
                 scope_filter = (
                     and_(
-                        self.tasks.c.assignee_employee_id.is_(None),
-                        self.tasks.c.owner_employee_id.is_(None),
+                        self.tasks.c.assignee_user_id.is_(None),
+                        self.tasks.c.owner_user_id.is_(None),
                     )
                     if scope == "unowned"
                     else or_(
-                        self.tasks.c.assignee_employee_id == scope,
+                        self.tasks.c.assignee_user_id == scope,
                         and_(
-                            self.tasks.c.assignee_employee_id.is_(None),
-                            self.tasks.c.owner_employee_id == scope,
+                            self.tasks.c.assignee_user_id.is_(None),
+                            self.tasks.c.owner_user_id == scope,
                         ),
                     )
                 )
@@ -1430,18 +1430,18 @@ class DatabaseTaskStore:
             return materialize_task_events(events) if events else row["snapshot"]
 
     def list_tasks(
-        self, *, employee_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
         statement = (
             select(self.tasks.c.id, self.tasks.c.snapshot)
             .where(self.tasks.c.deleted_at.is_(None))
             .order_by(self.tasks.c.updated_at.desc(), self.tasks.c.id.desc())
         )
-        if employee_id is not None:
+        if user_id is not None:
             statement = statement.where(
                 or_(
-                    self.tasks.c.owner_employee_id == employee_id,
-                    self.tasks.c.assignee_employee_id == employee_id,
+                    self.tasks.c.owner_user_id == user_id,
+                    self.tasks.c.assignee_user_id == user_id,
                 )
             )
         if limit is not None:
@@ -1488,7 +1488,7 @@ class DatabaseTaskStore:
             ]
 
     def list_task_summaries(
-        self, *, employee_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
         statement = (
             select(
@@ -1498,11 +1498,11 @@ class DatabaseTaskStore:
             .where(self.tasks.c.deleted_at.is_(None))
             .order_by(self.tasks.c.updated_at.desc())
         )
-        if employee_id is not None:
+        if user_id is not None:
             statement = statement.where(
                 or_(
-                    self.tasks.c.owner_employee_id == employee_id,
-                    self.tasks.c.assignee_employee_id == employee_id,
+                    self.tasks.c.owner_user_id == user_id,
+                    self.tasks.c.assignee_user_id == user_id,
                 )
             )
         if limit is not None:
@@ -1543,7 +1543,7 @@ class DatabaseTaskStore:
                 relay_task_event(
                     "task.deleted",
                     task_id,
-                    {"actorEmployeeId": deleted_by} if deleted_by else {},
+                    {"actorUserId": deleted_by} if deleted_by else {},
                 )
             ],
             reject_active_claim=reject_active_claim,
@@ -1643,7 +1643,7 @@ class DatabaseTaskStore:
         )
 
     def claim_next_task_for_agent(
-        self, agent: AgentName, assignee_employee_id: str | None = None
+        self, agent: AgentName, assignee_user_id: str | None = None
     ) -> dict[str, Any] | None:
         candidates = [
             task
@@ -1652,8 +1652,8 @@ class DatabaseTaskStore:
             and not issue_needs_project(task)
             and not task.get("assignedTeamId")
             and (
-                not assignee_employee_id
-                or task.get("assigneeEmployeeId") == assignee_employee_id
+                not assignee_user_id
+                or task.get("assigneeUserId") == assignee_user_id
             )
         ]
         for task in sorted(candidates, key=task_claim_sort_key):
@@ -2029,7 +2029,7 @@ class DatabaseTaskStore:
         if orphaned:
             events = [*events, relay_task_event(
                 "task.deleted", task_id,
-                {"actorEmployeeId": deleted_by} if deleted_by else {},
+                {"actorUserId": deleted_by} if deleted_by else {},
             )]
         task = apply_task_events(current, events, version=sequence) if orphaned else unlinked
         claimed = conn.execute(
@@ -2145,8 +2145,8 @@ def task_to_row(
         "assigned_agent_id": task.get("assignedAgentId"),
         "assigned_team_id": task.get("assignedTeamId"),
         "project_id": task.get("projectId"),
-        "owner_employee_id": task.get("ownerEmployeeId"),
-        "assignee_employee_id": task.get("assigneeEmployeeId"),
+        "owner_user_id": task.get("ownerUserId"),
+        "assignee_user_id": task.get("assigneeUserId"),
         "due_date": _parse_date(task.get("dueDate")),
         "is_routine": bool(task.get("isRoutine")),
         # Legacy columns: nothing reads them since the v2 clock; they are
@@ -2272,13 +2272,13 @@ def routine_occurrence_events(
                     else {}
                 ),
                 **(
-                    {"ownerEmployeeId": routine["ownerEmployeeId"]}
-                    if routine.get("ownerEmployeeId")
+                    {"ownerUserId": routine["ownerUserId"]}
+                    if routine.get("ownerUserId")
                     else {}
                 ),
                 **(
-                    {"assigneeEmployeeId": routine["assigneeEmployeeId"]}
-                    if routine.get("assigneeEmployeeId")
+                    {"assigneeUserId": routine["assigneeUserId"]}
+                    if routine.get("assigneeUserId")
                     else {}
                 ),
                 **(

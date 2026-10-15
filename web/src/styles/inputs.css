@@ -105,7 +105,7 @@
 }
 
 
-.employee-avatar,
+.user-avatar,
 .agent-avatar {
   display: grid;
   place-items: center;
@@ -120,7 +120,7 @@
   position: relative;
 }
 
-.employee-avatar {
+.user-avatar {
   width: var(--avatar-size, 36px);
   height: var(--avatar-size, 36px);
   font-size: var(--fs-3);
@@ -130,7 +130,7 @@
 
 /* Status pip — single source of truth on the avatar. Drives all
    non-running state colors via tone-*; running adds its own pulse on top. */
-.employee-avatar::after {
+.user-avatar::after {
   content: "";
   position: absolute;
   right: -1px;
@@ -146,13 +146,13 @@
 
 /* Bad shares its brightness with --action/--ink-1; use the hollow-ring
    shape (same as fleet presence + node status dots) instead of a fill. */
-.employee-avatar.tone-bad::after {
+.user-avatar.tone-bad::after {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--tone);
 }
 
 /* Running state — concentric pulse ring around the pip. */
-.employee-avatar.running::before {
+.user-avatar.running::before {
   content: "";
   position: absolute;
   /* -5px is centered, not arbitrary: it puts the 18px ring's center on the
@@ -170,12 +170,12 @@
   animation: pulse-ring var(--t-pulse) var(--ease) infinite;
 }
 
-.employee-avatar.running::after {
+.user-avatar.running::after {
   background: var(--live);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .employee-avatar.running::before { opacity: 0.45; }
+  .user-avatar.running::before { opacity: 0.45; }
 }
 
 .agent-avatar {

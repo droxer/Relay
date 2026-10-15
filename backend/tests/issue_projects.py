@@ -87,11 +87,11 @@ def routine_run_with_session(app: Any, title: str, workspace_path: str = "/works
     from relay.sessions import SessionController
 
     task = app.state.task_store.create_task({
-        "title": title, "ownerEmployeeId": "admin", "sourceRoutineId": "routine_nightly",
+        "title": title, "ownerUserId": "admin", "sourceRoutineId": "routine_nightly",
     })
     controller = SessionController(
         app.state.session_store, task_store=app.state.task_store,
-        task_id=task["id"], workspace_path=workspace_path, owner_employee_id="admin",
+        task_id=task["id"], workspace_path=workspace_path, owner_user_id="admin",
     )
     controller.create_session(title, ["human"])
     return app.state.task_store.get_task(task["id"])

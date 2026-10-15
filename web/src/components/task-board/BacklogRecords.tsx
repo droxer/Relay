@@ -16,7 +16,7 @@ import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
 import { pathForAppState } from "../../lib/appRoute";
 import { TaskRefLink } from "./TaskRefLink";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "./InlineTaskFields";
-import type { AgentTeam, EmployeeAgent, ProjectRecord } from "../../types";
+import type { AgentTeam, UserAgent, ProjectRecord } from "../../types";
 import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 
 export function hrefForTaskRecord(taskId: string): string {
@@ -156,7 +156,7 @@ interface BacklogCellState {
 
 /** The agents and teams a row's assignee picker chooses from. */
 export interface TaskRoster {
-  agents: readonly EmployeeAgent[];
+  agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
 }
 

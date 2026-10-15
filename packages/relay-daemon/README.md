@@ -15,8 +15,8 @@ Required:
   first start this replaces `RELAY_SANDBOX_ID` and
   `RELAY_DAEMON_NODE_TOKEN`; the backend creates the observed daemon identity
   and returns its runtime credential during enrollment.
-- `RELAY_WORKSPACE` or `WORKSPACE`: node workspace root. On an employee-owned
-  computer, the employee selects this existing writable directory during
+- `RELAY_WORKSPACE` or `WORKSPACE`: node workspace root. On a user-owned
+  computer, the user selects this existing writable directory during
   setup. On a managed cloud computer, the supervisor/provider provisions it.
   The daemon creates and reuses `<root>/<thread-id>/` for each new thread.
   Historical threads created before this layout retain the node root so an
@@ -24,13 +24,13 @@ Required:
 
 Optional:
 
-- `RELAY_EMPLOYEE_ID`: employee id bound to this daemon node when preassigned.
+- `RELAY_USER_ID`: user id bound to this daemon node when preassigned.
 - `RELAY_WORKSPACE_ID`: canonical identity for shared workspace storage. Nodes
   may use different local paths in a multi-agent workflow only when this value
   matches. The equivalent CLI option is `--workspace-id`.
 - `RELAY_SANDBOX_MODE`: defaults to `boxlite`, where the daemon boots and owns a
   BoxLite VM. Set `none` for a manual/local node that runs agents in the
-  daemon's current host environment, such as an employee workstation or an
+  daemon's current host environment, such as a user workstation or an
   already-isolated agent box.
 - `RELAY_ALLOW_HOST_AGENT_EXECUTION`: must be `1` when `RELAY_SANDBOX_MODE=none`.
   This explicit opt-in acknowledges that agent commands receive the daemon

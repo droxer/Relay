@@ -17,7 +17,7 @@ from ..persistence.agent_placement_store import placement_status
 from ..security.auth import require_admin_session
 from ..services.agent_binding import binding_status
 from ..services.agent_location import AgentMoveError, place_agent_on_node
-from ..services.agent_creation import AgentCreationError, create_agent_for_employee
+from ..services.agent_creation import AgentCreationError, create_agent_for_user
 from ..services.agent_routing import placement_node
 from ..services.computer_names import computer_display_name
 from ..services.project_catalog import agent_has_active_project
@@ -33,7 +33,7 @@ from .helpers import (
 router = APIRouter()
 
 
-# Employees can adjust their agent's personality and model at any time; the
+# Users can adjust their agent's personality and model at any time; the
 # birth certificate (computerId / executorKind / defaultRole) is fixed at
 # creation — changing the role is like swapping in a different coworker, so it
 # should be a new agent, not an edit. The model is tuning within the runtime
@@ -44,10 +44,10 @@ AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy"})
 @router.get("/agents")
 def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    agents = ctx.agent_store.list_agents(supervisor_employee_id=actor["employeeId"])
+    agents = ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
     nodes = ctx.registry.monitor_nodes()
-    # An agent an employee explicitly created always stays on the roster.
-    # If its computer or runtime is gone, flag it — let the employee decide
+    # An agent a user explicitly created always stays on the roster.
+    # If its computer or runtime is gone, flag it — let the user decide
     # whether to delete it. The system doesn't make that call for them.
     return {
         "agents": [
@@ -68,7 +68,7 @@ def create_agent(
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
     try:
-        agent = create_agent_for_employee(ctx, actor["employeeId"], body)
+        agent = create_agent_for_user(ctx, actor["userId"], body)
     except AgentCreationError as error:
         raise HTTPException(error.status, str(error)) from error
     except ValueError as error:
@@ -86,8 +86,8 @@ def update_agent(
     agent = ctx.agent_store.get_agent(agent_id)
     if not agent or agent.get("deletedAt"):
         raise HTTPException(404, "Agent not found.")
-    if agent.get("supervisorEmployeeId") != actor["employeeId"]:
-        raise HTTPException(403, "Cannot update another employee's agent.")
+    if agent.get("supervisorUserId") != actor["userId"]:
+        raise HTTPException(403, "Cannot update another user's agent.")
     body = _request_body
     unknown = set(body) - AGENT_META_FIELDS
     if unknown:
@@ -107,16 +107,16 @@ def update_agent(
 @router.get("/admin/agents")
 def list_control_panel_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    employee_id = (
-        request.query_params.get("employeeId")
-        or request.query_params.get("supervisorEmployeeId")
+    user_id = (
+        request.query_params.get("userId")
+        or request.query_params.get("supervisorUserId")
         or None
     )
     return {
         "agents": [
             _agent_with_placements(ctx, agent)
             for agent in ctx.agent_store.list_agents(
-                supervisor_employee_id=employee_id, include_deleted=True
+                supervisor_user_id=user_id, include_deleted=True
             )
         ]
     }
@@ -128,11 +128,11 @@ def create_control_panel_agent(
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
-    employee_id = string_field(body, "supervisorEmployeeId")
-    if not _employee_exists(ctx.auth_store, employee_id):
-        raise HTTPException(404, "Employee not found.")
+    user_id = string_field(body, "supervisorUserId")
+    if not _user_exists(ctx.auth_store, user_id):
+        raise HTTPException(404, "User not found.")
     try:
-        agent = create_agent_for_employee(ctx, employee_id, body)
+        agent = create_agent_for_user(ctx, user_id, body)
     except AgentCreationError as error:
         raise HTTPException(error.status, str(error)) from error
     except ValueError as error:
@@ -197,7 +197,7 @@ def delete_control_panel_agent(
     try:
         deleted = ctx.agent_store.delete_agent(agent_id)
         ctx.profile_image_store.delete("agents", agent_id)
-        remove_agent_from_teams(ctx.team_store, agent_id, agent["supervisorEmployeeId"])
+        remove_agent_from_teams(ctx.team_store, agent_id, agent["supervisorUserId"])
         return {"agent": deleted}
     except KeyError as error:
         raise HTTPException(404, "Agent not found.") from error
@@ -338,19 +338,19 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
         raise HTTPException(error.status, detail) from error
 
 
-def _employee_exists(auth_store: Any, employee_id: str) -> bool:
-    if hasattr(auth_store, "list_employees"):
+def _user_exists(auth_store: Any, user_id: str) -> bool:
+    if hasattr(auth_store, "list_users"):
         return any(
-            employee.get("id") == employee_id
-            for employee in auth_store.list_employees()
+            user.get("id") == user_id
+            for user in auth_store.list_users()
         )
     if (
-        hasattr(auth_store, "deleted_employee_ids")
-        and employee_id in auth_store.deleted_employee_ids()
+        hasattr(auth_store, "deleted_user_ids")
+        and user_id in auth_store.deleted_user_ids()
     ):
         return False
     return any(
-        user.get("employeeId") == employee_id for user in auth_store.list_users()
+        account.get("userId") == user_id for account in auth_store.list_accounts()
     )
 
 

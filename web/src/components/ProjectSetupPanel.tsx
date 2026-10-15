@@ -13,7 +13,7 @@ import {
   type SetupDraft,
   type SetupMemberDraft,
 } from "../lib/projectSetup";
-import { AGENT_ROLE_OPTIONS, type AgentRole, type EmployeeAgent, type ProjectRecord, type ProjectSetup } from "../types";
+import { AGENT_ROLE_OPTIONS, type AgentRole, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
@@ -28,7 +28,7 @@ export const PROJECT_SETUP_QUERY_KEY = "project-setup";
 type PanelProps = {
   project: ProjectRecord;
   setup: ProjectSetup;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   onOpenThread: (threadId: string) => void;
   /** Leave the setup to the owner: the Members tab is where a crew is built by hand. */
   onManual: () => void;
@@ -48,7 +48,7 @@ export function ProjectSetupPanel(props: PanelProps) {
   return null;
 }
 
-function useAgentName(agents: EmployeeAgent[]) {
+function useAgentName(agents: UserAgent[]) {
   const { t } = useTranslation();
   return (agentId: string) => agents.find((agent) => agent.id === agentId)?.displayName ?? t("project.setup_unknown_agent");
 }
@@ -340,7 +340,7 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
   member: SetupMemberDraft;
   name: string;
   /** Absent when the proposed agent is no longer on the roster. */
-  agent?: EmployeeAgent;
+  agent?: UserAgent;
   lead: boolean;
   onChange: (patch: Partial<SetupMemberDraft>) => void;
   onMakeLead: () => void;

@@ -15,7 +15,7 @@ interface AdminLayoutToggleProps {
   onChange: (next: AdminLayout) => void;
 }
 
-// Card/list density switch shared by the Employees and Nodes views. Reuses the
+// Card/list density switch shared by the Users and Nodes views. Reuses the
 // backlog toggle geometry so it reads identically to the Backlog/Routine pages.
 export function AdminLayoutToggle({ layout, onChange }: AdminLayoutToggleProps) {
   const { t } = useTranslation();

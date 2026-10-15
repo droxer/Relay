@@ -6,19 +6,19 @@ import {
   buildLogicalAgentImageMap,
   displayNameForExecutor,
   imageForAgentRun,
-  isEmployeeAgentRoutable,
+  isUserAgentRoutable,
   isLogicalAgentRoutable,
   labelForExecutor,
   preferredRoutableAgent,
   visualAvailabilityOf,
 } from "../src/lib/agentDisplayNames.js";
-import type { EmployeeAgent } from "../src/types.js";
+import type { UserAgent } from "../src/types.js";
 
 function agent(
-  input: Partial<EmployeeAgent> & Pick<EmployeeAgent, "id" | "displayName" | "executorKind">,
-): EmployeeAgent {
+  input: Partial<UserAgent> & Pick<UserAgent, "id" | "displayName" | "executorKind">,
+): UserAgent {
   return {
-    supervisorEmployeeId: "alice",
+    supervisorUserId: "alice",
     skillPolicy: {},
     toolPolicy: {},
     modelPolicy: {},
@@ -60,8 +60,8 @@ describe("agentDisplayNames", () => {
       agent({ id: "inactive", displayName: "Inactive", executorKind: "codex", enabled: false }),
     ];
 
-    assert.equal(isEmployeeAgentRoutable(logicalAgents[0]), false);
-    assert.equal(isEmployeeAgentRoutable(logicalAgents[1]), false);
+    assert.equal(isUserAgentRoutable(logicalAgents[0]), false);
+    assert.equal(isUserAgentRoutable(logicalAgents[1]), false);
     assert.equal(preferredRoutableAgent(logicalAgents, "offline"), undefined);
   });
 
@@ -124,7 +124,7 @@ describe("agentDisplayNames", () => {
     // Busy is a live state, not an inactive one: it still routes.
     const busy = agent({ id: "a", displayName: "A", executorKind: "claude", availability: "busy" });
     assert.equal(visualAvailabilityOf(busy), "busy");
-    assert.equal(isEmployeeAgentRoutable(busy), true);
+    assert.equal(isUserAgentRoutable(busy), true);
     // Offline is reported as itself; inactivity is about the agent, not the placement.
     assert.equal(
       visualAvailabilityOf(agent({ id: "a", displayName: "A", executorKind: "claude", availability: "offline" })),

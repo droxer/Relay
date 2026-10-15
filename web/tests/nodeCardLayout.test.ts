@@ -15,7 +15,7 @@ describe("node card layout", () => {
       source("web/src/components/admin/NodeMeta.tsx"),
     ]);
 
-    assert.match(card, /<NodeMeta node=\{node\} employeeName=\{employeeName\}/);
+    assert.match(card, /<NodeMeta node=\{node\} userName=\{userName\}/);
     for (const surface of [card, row]) {
       assert.doesNotMatch(surface, /NodeProfileBadges/, "fleet surfaces no longer render ownership chips");
       assert.doesNotMatch(surface, /<Badge\b/, "the owner is plain text, not a badge");

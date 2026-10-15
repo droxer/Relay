@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getWorkspaceBrief } from "../api";
-import type { EmployeeAgent } from "../types";
+import type { UserAgent } from "../types";
 import { agentLabel } from "../lib/plan";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { AgentMark } from "./AgentMark";
@@ -33,7 +33,7 @@ const DETAIL_TABS: readonly AgentDetailTab[] = ["profile", "skills", "activities
 const ACTIVITY_POLL_MS = 3000;
 
 interface AgentDetailPageProps {
-  agent: EmployeeAgent;
+  agent: UserAgent;
   onOpenThread: (sessionId: string) => void;
   canEditMeta?: boolean;
   onProfileDirtyChange?: (dirty: boolean) => void;

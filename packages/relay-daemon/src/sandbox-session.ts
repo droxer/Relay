@@ -116,7 +116,7 @@ function readyAgentsFor(executionManager: ExecutionManager): Set<AgentName> {
  * A BoxLite home admits exactly one runtime at a time, so the home is the
  * daemon's private property: it is keyed by `sandboxId` and not by the
  * workspace alone. Several daemons on one host routinely share a workspace
- * (each employee's node registers against the same repo root), and keying on
+ * (each user's node registers against the same repo root), and keying on
  * the workspace pointed all of them at one home — whichever started second
  * failed every run with "Another BoxliteRuntime is already using directory".
  *

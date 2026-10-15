@@ -16,7 +16,7 @@ from relay.core.computer_identity import computer_id
 from automation_helpers import WEEKLY_TRIGGERS, fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_agents, project_for_team
 
-# Delegated team work — one employee's task, another employee's team — cannot
+# Delegated team work — one user's task, another user's team — cannot
 # live in a project, whose tasks belong to its owner. Outside a project the
 # only work that still runs is a routine's own run, so that is what these
 # delegation fixtures are.
@@ -37,15 +37,15 @@ def _bootstrap(client: TestClient) -> None:
     )
 
 
-def _employee(client: TestClient, employee_id: str) -> None:
+def _user(client: TestClient, user_id: str) -> None:
     assert (
         client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": employee_id,
-                "username": employee_id,
+                "userId": user_id,
+                "username": user_id,
                 "password": "userpass",
-                "displayName": employee_id.title(),
+                "displayName": user_id.title(),
             },
         ).status_code
         == 201
@@ -97,17 +97,17 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         builder = _agent(client, "alice", "Builder", "claude")
         app.state.registry.register({
-            "sandboxId": "test_node_alice", "employeeId": "alice", "workspaceId": "machine-alice",
+            "sandboxId": "test_node_alice", "userId": "alice", "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         response = client.post("/api/v1/admin/teams", json={
-            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "ownerUserId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"]],
             "memberConfigs": {builder["id"]: {"role": "implementer", "responsibility": "API", "required": True}},
             "acceptanceCriteria": ["Existing clients remain compatible"],
@@ -166,19 +166,19 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         builder = _agent(client, "alice", "Builder", "claude")
         reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
         node_id = "test_node_alice"
         app.state.registry.register({
-            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "sandboxId": node_id, "userId": "alice", "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         team = client.post("/api/v1/admin/teams", json={
-            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "ownerUserId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
             "memberConfigs": {builder["id"]: {"required": False}},
         }).json()["team"]
@@ -234,20 +234,20 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
 
 def _agent(
     client: TestClient,
-    employee_id: str,
+    user_id: str,
     name: str,
     executor: str,
     *,
     place: bool = True,
     role: str = "implementer",
 ) -> dict:
-    # Give this employee's test computer a stable identity so agent creation
+    # Give this user's test computer a stable identity so agent creation
     # can find it. A pre-existing node (registered by the test itself, or by
-    # an earlier _agent() call for the same employee) keeps its status and
+    # an earlier _agent() call for the same user) keeps its status and
     # gains this executor in its supported set; otherwise a fresh offline node
     # is registered so creation succeeds without silently auto-placing the
     # agent (that would make the placement below a duplicate).
-    node_id = f"test_node_{employee_id}"
+    node_id = f"test_node_{user_id}"
     existing_node = client.app.state.registry.get(node_id)
     # supportedAgents is a registration-payload field only; the registry
     # never persists it on the stored node record (it's folded into the
@@ -263,10 +263,10 @@ def _agent(
     node = client.app.state.registry.register(
         {
             "sandboxId": node_id,
-            "employeeId": employee_id,
-            "workspaceId": f"machine-{employee_id}",
+            "userId": user_id,
+            "workspaceId": f"machine-{user_id}",
             "token": "node_token",
-            "workspacePath": f"/workspace/{employee_id}",
+            "workspacePath": f"/workspace/{user_id}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
             "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "agent-resume"],
@@ -276,7 +276,7 @@ def _agent(
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": employee_id,
+            "supervisorUserId": user_id,
             "displayName": name,
             "executorKind": executor,
             "defaultRole": role,
@@ -297,30 +297,30 @@ def _agent(
     return agent
 
 
-def _login(client: TestClient, employee_id: str) -> None:
+def _login(client: TestClient, user_id: str) -> None:
     client.post("/api/v1/auth/logout")
     assert (
         client.post(
             "/api/v1/auth/login",
-            json={"username": employee_id, "password": "userpass"},
+            json={"username": user_id, "password": "userpass"},
         ).status_code
         == 200
     )
 
 
-def test_admin_and_employee_manage_teams(monkeypatch) -> None:
+def test_admin_and_user_manage_teams(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
 
         created = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -328,9 +328,9 @@ def test_admin_and_employee_manage_teams(monkeypatch) -> None:
         )
         assert created.status_code == 201
         team = created.json()["team"]
-        assert team["ownerEmployeeId"] == "alice"
-        assert "employeeId" not in team
-        assert "supervisorEmployeeId" not in team
+        assert team["ownerUserId"] == "alice"
+        assert "userId" not in team
+        assert "supervisorUserId" not in team
         assert team["lead"]["displayName"] == "Lead"
         assert [member["availability"] for member in team["members"]] == [
             "offline",
@@ -371,7 +371,7 @@ def test_team_collaboration_style_round_trips_through_the_api(monkeypatch) -> No
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
 
@@ -424,12 +424,12 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Legacy delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -439,16 +439,16 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
 
         snapshot_path = Path(root) / "teams" / team["id"] / "snapshot.json"
         legacy = json.loads(snapshot_path.read_text(encoding="utf-8"))
-        legacy["supervisorEmployeeId"] = legacy.pop("ownerEmployeeId")
+        legacy["supervisorUserId"] = legacy.pop("ownerUserId")
         snapshot_path.write_text(json.dumps(legacy), encoding="utf-8")
 
         created = client.post(
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Legacy team task",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -457,18 +457,18 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
         assert created.json()["assignedTeamId"] == team["id"]
 
 
-def test_employee_team_routes_cannot_access_another_employee_team(monkeypatch) -> None:
+def test_user_team_routes_cannot_access_another_user_team(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "bob")
+        _user(client, "alice")
+        _user(client, "bob")
         bob_lead = _agent(client, "bob", "Bob lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "bob",
+                "ownerUserId": "bob",
                 "name": "Bob delivery",
                 "leadAgentId": bob_lead["id"],
                 "memberAgentIds": [bob_lead["id"]],
@@ -498,18 +498,18 @@ def test_employee_team_routes_cannot_access_another_employee_team(monkeypatch) -
         )
 
 
-def test_employee_reads_team_profile_and_activity(monkeypatch) -> None:
+def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -520,9 +520,9 @@ def test_employee_reads_team_profile_and_activity(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Team task",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
                 "status": "assigned",
             },
@@ -531,16 +531,16 @@ def test_employee_reads_team_profile_and_activity(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Individual task",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": lead["id"],
             },
         ).json()
         session = app.state.session_store.create_session(
             {
                 "workspacePath": "/workspace/alice",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "ownerAgentId": lead["id"],
                 "teamId": team["id"],
                 "taskGoal": "Ship together",
@@ -549,7 +549,7 @@ def test_employee_reads_team_profile_and_activity(monkeypatch) -> None:
         unrelated_session = app.state.session_store.create_session(
             {
                 "workspacePath": "/workspace/alice",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "ownerAgentId": lead["id"],
                 "taskGoal": "Work alone",
             }
@@ -560,7 +560,7 @@ def test_employee_reads_team_profile_and_activity(monkeypatch) -> None:
             lambda: [
                 {
                     "id": "node_alice",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "activeRuns": [
                         {
                             "runId": "run_team",
@@ -619,15 +619,15 @@ def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "bob")
+        _user(client, "alice")
+        _user(client, "bob")
         alice = _agent(client, "alice", "Lead", "codex")
         bob = _agent(client, "bob", "Outsider", "claude")
 
         rejected = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Invalid",
                 "leadAgentId": alice["id"],
                 "memberAgentIds": [alice["id"], bob["id"]],
@@ -639,7 +639,7 @@ def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": alice["id"],
                 "memberAgentIds": [alice["id"]],
@@ -649,8 +649,8 @@ def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
             "/api/v1/tasks",
             json={
                 "title": "Conflicted",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": alice["id"],
                 "assignedTeamId": team["id"],
             },
@@ -664,13 +664,13 @@ def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> No
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "requester")
-        _employee(client, "alice")
+        _user(client, "requester")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -680,8 +680,8 @@ def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> No
             client.app,
             {
                 "title": "Delegated delivery",
-                "ownerEmployeeId": "requester",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "requester",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -703,7 +703,7 @@ def test_team_task_assignee_can_switch_to_one_of_their_agents(monkeypatch) -> No
         updated = switched.json()
         assert updated["assignedAgentId"] == lead["id"]
         assert "assignedTeamId" not in updated
-        assert updated["assigneeEmployeeId"] == "alice"
+        assert updated["assigneeUserId"] == "alice"
 
         reassigned_team = client.put(
             f"/api/v1/tasks/{task['id']}/assignment", json={"teamId": team["id"]}
@@ -725,12 +725,12 @@ def test_admin_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -738,7 +738,7 @@ def test_admin_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
         ).json()["team"]
         project = project_for_team(client.app, "alice", team)
         legacy = app.state.task_store.create_task(
-            {"title": "Owner-only task", "ownerEmployeeId": "alice", "projectId": project["id"]}
+            {"title": "Owner-only task", "ownerUserId": "alice", "projectId": project["id"]}
         )
 
         assigned = client.patch(
@@ -754,12 +754,12 @@ def test_team_task_cannot_bypass_lead_routing_through_pickup(monkeypatch) -> Non
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -770,9 +770,9 @@ def test_team_task_cannot_bypass_lead_routing_through_pickup(monkeypatch) -> Non
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Keep Team routing",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         ).json()
@@ -794,12 +794,12 @@ def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "requester")
+        _user(client, "alice")
+        _user(client, "requester")
         app.state.registry.register(
             {
                 "sandboxId": "test_node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -813,8 +813,8 @@ def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
             app,
             {
                 "title": "Delegated pickup",
-                "ownerEmployeeId": "requester",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "requester",
+                "assigneeUserId": "alice",
             }
         )
 
@@ -824,8 +824,8 @@ def test_agent_pickup_thread_is_owned_by_the_task_assignee(monkeypatch) -> None:
 
         assert pickup.status_code == 202
         payload = pickup.json()
-        assert payload["task"]["assigneeEmployeeId"] == "alice"
-        assert payload["session"]["ownerEmployeeId"] == "alice"
+        assert payload["task"]["assigneeUserId"] == "alice"
+        assert payload["session"]["ownerUserId"] == "alice"
         assert payload["session"]["ownerAgentId"] == agent["id"]
         duplicate = client.post(
             f"/api/v1/tasks/{task['id']}/pickups", json={"agentId": agent["id"]}
@@ -841,13 +841,13 @@ def test_task_owner_can_edit_delegated_team_task_without_reassigning_it(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "requester")
+        _user(client, "alice")
+        _user(client, "requester")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -857,8 +857,8 @@ def test_task_owner_can_edit_delegated_team_task_without_reassigning_it(
             client.app,
             {
                 "title": "Delegated work",
-                "ownerEmployeeId": "requester",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "requester",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -891,13 +891,13 @@ def test_deleting_lead_agent_promotes_next_member(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -917,12 +917,12 @@ def test_team_emptied_by_agent_deletion_is_disabled_and_restaffable(monkeypatch)
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         only = _agent(client, "alice", "Only", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": only["id"],
                 "memberAgentIds": [only["id"]],
@@ -966,13 +966,13 @@ def test_startup_repairs_team_members_deleted_by_an_older_runtime(monkeypatch) -
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         deleted_lead = _agent(client, "alice", "Deleted lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Legacy delivery",
                 "leadAgentId": deleted_lead["id"],
                 "memberAgentIds": [deleted_lead["id"], support["id"]],
@@ -998,12 +998,12 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "requester")
+        _user(client, "alice")
+        _user(client, "requester")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1025,7 +1025,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -1035,8 +1035,8 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "requester",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "requester",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -1052,7 +1052,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
         payload = started.json()
         assert payload["dispatch"]["state"] == "started"
         assert payload["session"]["teamId"] == team["id"]
-        assert payload["session"]["ownerEmployeeId"] == "alice"
+        assert payload["session"]["ownerUserId"] == "alice"
         assert payload["session"]["ownerAgentId"] == lead["id"]
         assert (
             client.get(f"/api/v1/threads/{payload['session']['id']}").json()["teamId"]
@@ -1091,11 +1091,11 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1117,7 +1117,7 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Reviewers",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -1128,9 +1128,9 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Review with the team",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         ).json()
@@ -1168,7 +1168,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         # This test exercises the legacy phantom-placement attach path
         # (_attach_never_run_agent_to_managed_capacity in
         # relay/services/agent_routing.py): an agent with a placement that
@@ -1176,7 +1176,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
         # registered, representing pre-Task-3 data or anything created by
         # writing directly to the store. computerId is optional at the
         # store layer (Task 1) — only the POST /admin/agents API layer
-        # (create_agent_for_employee) requires one — so this fixture goes
+        # (create_agent_for_user) requires one — so this fixture goes
         # straight to the store to construct that state, bypassing the API.
         lead = app.state.agent_store.create_agent(
             "alice",
@@ -1200,9 +1200,9 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
         task = _routine_run(
             client.app,
             {
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Wait for the lead",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -1219,7 +1219,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
             "Managed node provisioning requested for alice."
         )
         [managed] = app.state.managed_node_store.list_nodes()
-        assert managed["employeeId"] == "alice"
+        assert managed["userId"] == "alice"
         assert client.get(f"/api/v1/tasks/{task['id']}").json()["status"] == "assigned"
 
         attempt = client.post(f"/api/v1/admin/managed-nodes/{managed['id']}/attempts")
@@ -1272,11 +1272,11 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1300,7 +1300,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], reviewer["id"]],
@@ -1312,9 +1312,9 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Build it and check it",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         ).json()
@@ -1382,14 +1382,14 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         # The team is placed here; the decoy below registers later and is
         # therefore the node a plain ready-node scan would hand back first.
         for node_id in ("node_alice_team", "node_alice_idle"):
             app.state.registry.register(
                 {
                     "sandboxId": node_id,
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "token": f"{node_id}_token",
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
@@ -1411,7 +1411,7 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -1422,9 +1422,9 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Ship from the placement node",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         ).json()
@@ -1452,11 +1452,11 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1476,7 +1476,7 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -1487,9 +1487,9 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "Already under way",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         ).json()
@@ -1526,14 +1526,14 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "requester")
+        _user(client, "alice")
+        _user(client, "requester")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -1546,8 +1546,8 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
             json={
                 "projectId": project["id"],
                 "title": "Create the Team thread",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
                 "createSession": True,
             },
@@ -1559,7 +1559,7 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
         # thread's team there. The team's lead still owns the thread.
         assert not session.get("teamId")
         assert session["projectId"] == project["id"]
-        assert session["ownerEmployeeId"] == "alice"
+        assert session["ownerUserId"] == "alice"
         assert session["ownerAgentId"] == lead["id"]
         assert session["participants"] == ["human", "codex", "claude"]
 
@@ -1571,14 +1571,14 @@ def test_linked_session_uses_team_task_assignee_lead_and_team_ownership(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
-        _employee(client, "requester")
+        _user(client, "alice")
+        _user(client, "requester")
         lead = _agent(client, "alice", "Lead", "codex")
         support = _agent(client, "alice", "Support", "claude")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -1588,8 +1588,8 @@ def test_linked_session_uses_team_task_assignee_lead_and_team_ownership(
             client.app,
             {
                 "title": "Link a Team thread",
-                "ownerEmployeeId": "requester",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "requester",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -1602,7 +1602,7 @@ def test_linked_session_uses_team_task_assignee_lead_and_team_ownership(
         assert created.status_code == 201
         session = created.json()
         assert session["teamId"] == team["id"]
-        assert session["ownerEmployeeId"] == "alice"
+        assert session["ownerUserId"] == "alice"
         assert session["ownerAgentId"] == lead["id"]
         assert session["participants"] == ["human", "codex", "claude"]
 
@@ -1615,12 +1615,12 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -1630,7 +1630,7 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
             "/api/v1/tasks",
             json={
                 "title": "Run the Team routine",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -1651,7 +1651,7 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
         refreshed = client.get(f"/api/v1/tasks/{routine['id']}").json()
         assert occurrence["id"] in refreshed["occurrenceIds"]
         [managed] = app.state.managed_node_store.list_nodes()
-        assert managed["employeeId"] == "alice"
+        assert managed["userId"] == "alice"
 
 
 def test_manual_team_routine_start_reuses_occurrence_promoted_today(
@@ -1669,11 +1669,11 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1693,7 +1693,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -1703,7 +1703,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
             "/api/v1/tasks",
             json={
                 "title": "Run today's Team routine",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -1737,12 +1737,12 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -1758,9 +1758,9 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "No lead thread",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
                 "createSession": True,
             },
@@ -1775,9 +1775,9 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "title": "No lead task",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -1790,12 +1790,12 @@ def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -1807,8 +1807,8 @@ def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
             json={
                 "title": "Assignable",
                 "projectId": project["id"],
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             },
         ).json()
 
@@ -1838,11 +1838,11 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -1864,7 +1864,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -1875,8 +1875,8 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2016,11 +2016,11 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2040,7 +2040,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -2050,8 +2050,8 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2091,11 +2091,11 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2115,7 +2115,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -2125,8 +2125,8 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2196,7 +2196,7 @@ def test_agent_runs_still_requires_an_assignment_for_a_solo_thread(monkeypatch) 
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
 
         refused = client.post("/api/v1/agent-runs", json={"taskGoal": "do something"})
 
@@ -2209,11 +2209,11 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2235,7 +2235,7 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "collaborationStyle": "lead_led",
@@ -2256,7 +2256,7 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
         assert started.status_code == 202
         session = started.json()
         assert session["teamId"] == team["id"]
-        assert session["ownerEmployeeId"] == "alice"
+        assert session["ownerUserId"] == "alice"
         request = (
             app.state.registry.daemon_store.active_run_request_for_session_any_node(
                 session["id"]
@@ -2281,11 +2281,11 @@ def test_agent_runs_rejects_a_team_id_that_does_not_match_the_thread(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2305,7 +2305,7 @@ def test_agent_runs_rejects_a_team_id_that_does_not_match_the_thread(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -2339,11 +2339,11 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2365,7 +2365,7 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"]],
@@ -2375,8 +2375,8 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2417,11 +2417,11 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2443,7 +2443,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -2454,8 +2454,8 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2509,15 +2509,15 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
         }
 
 
-def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
+def test_message_to_a_team_thread_runs_every_member_as_the_owning_user(
     monkeypatch,
 ) -> None:
     """Same expansion as the lead-first test above, but exercised as the
-    non-admin employee who owns the team rather than as the bootstrap admin.
+    non-admin user who owns the team rather than as the bootstrap admin.
 
-    `team_employee_id` in agent_routes.run_logical_agents takes the admin
-    branch (`session.get("ownerEmployeeId")`) when the actor is an admin, and
-    the employee branch (`actor["employeeId"]`) otherwise. Every other test in
+    `team_user_id` in agent_routes.run_logical_agents takes the admin
+    branch (`session.get("ownerUserId")`) when the actor is an admin, and
+    the user branch (`actor["userId"]`) otherwise. Every other test in
     this module posts as admin, so only the admin branch had coverage; this
     proves the actual product path -- a non-admin actor continuing their own
     team thread -- still expands to every member.
@@ -2527,11 +2527,11 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2553,7 +2553,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "collaborationStyle": "lead_led",
                 "leadAgentId": lead["id"],
@@ -2564,8 +2564,8 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2624,23 +2624,23 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_employee(
         ]
 
 
-def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
+def test_a_team_thread_narrows_to_one_member_for_the_owning_user(
     monkeypatch,
 ) -> None:
     """Same narrowing as the naming test above, but exercised as the
-    non-admin employee who owns the team, so the employee branch of
-    `team_employee_id` is exercised alongside an explicit assignment.
+    non-admin user who owns the team, so the user branch of
+    `team_user_id` is exercised alongside an explicit assignment.
     """
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         app.state.registry.register(
             {
                 "sandboxId": "node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
@@ -2662,7 +2662,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
@@ -2673,8 +2673,8 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_employee(
             client.app,
             {
                 "title": "Ship with the team",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedTeamId": team["id"],
             },
         )
@@ -2724,14 +2724,14 @@ def recovery_team_thread(monkeypatch, tmp_path):
     app = create_app(str(tmp_path))
     client = TestClient(app)
     _bootstrap(client)
-    _employee(client, "alice")
+    _user(client, "alice")
     lead = _agent(client, "alice", "Lead", "codex", role="planner")
     reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
     app.state.registry.update_status("test_node_alice", {"status": "ready"})
     response = client.post(
         "/api/v1/admin/teams",
         json={
-            "ownerEmployeeId": "alice",
+            "ownerUserId": "alice",
             "name": "Delivery",
             "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], reviewer["id"]],
@@ -2741,7 +2741,7 @@ def recovery_team_thread(monkeypatch, tmp_path):
     team = response.json()["team"]
     controller = SessionController(
         app.state.session_store,
-        owner_employee_id="alice",
+        owner_user_id="alice",
         owner_agent_id=lead["id"],
         team_id=team["id"],
         daemon_node_id="test_node_alice",
@@ -2843,7 +2843,7 @@ def test_task_recovery_preserves_round_verdict(
     registry.register(
         {
             "sandboxId": "test_node_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
@@ -2855,12 +2855,12 @@ def test_task_recovery_preserves_round_verdict(
     )
     store = client.app.state.task_store
     task = store.create_task(
-        {"title": "Unfinished work", "ownerEmployeeId": "alice", "status": "blocked"}
+        {"title": "Unfinished work", "ownerUserId": "alice", "status": "blocked"}
     )
     routine = store.create_task(
-        {"title": "Schedule", "ownerEmployeeId": "alice", "isRoutine": True}
+        {"title": "Schedule", "ownerUserId": "alice", "isRoutine": True}
     )
-    reference = store.create_task({"title": "Related work", "ownerEmployeeId": "alice"})
+    reference = store.create_task({"title": "Related work", "ownerUserId": "alice"})
     for item in (task, routine, reference):
         store.link_session(item["id"], session["id"])
     controller.record_collaboration_round_started(
@@ -2924,7 +2924,7 @@ def _waiting_task_thread(recovery_team_thread):
     # A single-agent thread: a team round would add its own evidence gate.
     controller = SessionController(
         client.app.state.session_store,
-        owner_employee_id="alice",
+        owner_user_id="alice",
         owner_agent_id=reviewer["id"],
         daemon_node_id="test_node_alice",
         workspace_layout="thread",
@@ -2933,7 +2933,7 @@ def _waiting_task_thread(recovery_team_thread):
     client.app.state.registry.register(
         {
             "sandboxId": "test_node_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
@@ -2944,7 +2944,7 @@ def _waiting_task_thread(recovery_team_thread):
         }
     )
     store = client.app.state.task_store
-    task = store.create_task({"title": "Rotate keys", "ownerEmployeeId": "alice"})
+    task = store.create_task({"title": "Rotate keys", "ownerUserId": "alice"})
     store.link_session(task["id"], session["id"])
     controller.record_collaboration_round_started(
         session["id"],
@@ -3225,7 +3225,7 @@ def test_recovery_rejects_ambiguous_task_links(recovery_team_thread):
     client, _controller, session, _team, reviewer = recovery_team_thread
     store = client.app.state.task_store
     for title in ("First", "Second"):
-        task = store.create_task({"title": title, "ownerEmployeeId": "alice"})
+        task = store.create_task({"title": title, "ownerUserId": "alice"})
         store.link_session(task["id"], session["id"])
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
@@ -3275,7 +3275,7 @@ def test_message_and_its_recovery_do_not_inherit_task_ownership(recovery_team_th
     client, controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
     store = client.app.state.task_store
-    task = store.create_task({"title": "Task work", "ownerEmployeeId": "alice"})
+    task = store.create_task({"title": "Task work", "ownerUserId": "alice"})
     store.link_session(task["id"], session["id"])
     before = store.get_task(task["id"])
     controller.record_collaboration_round_started(
@@ -3351,7 +3351,7 @@ def test_handoff_context_survives_prepared_retry_and_reports_real_execution(
             {
                 "title": "Build login",
                 "description": "Acceptance: keyboard navigation works.",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
             }
         )
         client.app.state.task_store.link_session(task["id"], session["id"])
@@ -3543,7 +3543,7 @@ def test_handoff_rejects_replaced_task_generation_and_preserves_rejection(recove
     client, controller, session, _team, reviewer = recovery_team_thread
     tasks = client.app.state.task_store
     registry = client.app.state.registry
-    task = tasks.create_task({"title": "Owned task", "ownerEmployeeId": "alice"})
+    task = tasks.create_task({"title": "Owned task", "ownerUserId": "alice"})
     tasks.link_session(task["id"], session["id"])
     controller.record_collaboration_round_started(session["id"], {
         "roundId": "task-source", "collaborationId": "task-work",
@@ -3650,7 +3650,7 @@ def test_recovery_cannot_take_a_task_reserved_by_another_thread(recovery_team_th
     registry = client.app.state.registry
     registry.update_status("test_node_alice", {"maxConcurrentRuns": 4})
     task_store = client.app.state.task_store
-    task = task_store.create_task({"title": "Shared task", "ownerEmployeeId": "alice", "status": "blocked"})
+    task = task_store.create_task({"title": "Shared task", "ownerUserId": "alice", "status": "blocked"})
     task_store.link_session(task["id"], session["id"])
     controller.record_collaboration_round_started(session["id"], {
         "roundId": "source-task", "collaborationId": "source-work",
@@ -3684,7 +3684,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex")
         members = [_agent(client, "alice", name, "claude") for name in ("API", "UI")]
         node_id = "test_node_alice"
@@ -3692,7 +3692,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
             "status": "ready", "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "work-results"],
         })
         team = client.post("/api/v1/admin/teams", json={
-            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "ownerUserId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], *[member["id"] for member in members]],
             "collaborationStyle": "lead_led",
         }).json()["team"]
@@ -3700,7 +3700,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
         task = None
         if source == "task":
             task = _routine_run(app, {
-                "title": "Deliver feature", "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice",
+                "title": "Deliver feature", "ownerUserId": "alice", "assigneeUserId": "alice",
                 "assignedTeamId": team["id"], "acceptancePolicy": "automatic",
             })
             started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
@@ -3771,24 +3771,24 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex", role="planner")
         builder = _agent(client, "alice", "Builder", "claude")
         reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
         node_id = "test_node_alice"
         app.state.registry.register({
-            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "sandboxId": node_id, "userId": "alice", "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         team = client.post("/api/v1/admin/teams", json={
-            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "ownerUserId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
         }).json()["team"]
         controller = SessionController(
             app.state.session_store,
-            owner_employee_id="alice",
+            owner_user_id="alice",
             owner_agent_id=lead["id"],
             team_id=team["id"],
             daemon_node_id=node_id,
@@ -3864,20 +3864,20 @@ def test_pipeline_continues_to_final_specialist_after_missing_member_report(monk
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex", role="planner")
         builder = _agent(client, "alice", "Builder", "claude", role="implementer")
         reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
         node_id = "test_node_alice"
         app.state.registry.register({
-            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "sandboxId": node_id, "userId": "alice", "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"],
             "status": "ready",
         })
         team = client.post("/api/v1/admin/teams", json={
-            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "ownerUserId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
             "collaborationStyle": "pipeline",
         }).json()["team"]
@@ -3918,24 +3918,24 @@ def test_message_style_is_validated(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
-        _employee(client, "alice")
+        _user(client, "alice")
         lead = _agent(client, "alice", "Lead", "codex", role="planner")
         builder = _agent(client, "alice", "Builder", "claude")
         reviewer = _agent(client, "alice", "Reviewer", "codex", role="reviewer")
         node_id = "test_node_alice"
         app.state.registry.register({
-            "sandboxId": node_id, "employeeId": "alice", "workspaceId": "machine-alice",
+            "sandboxId": node_id, "userId": "alice", "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         team = client.post("/api/v1/admin/teams", json={
-            "ownerEmployeeId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
+            "ownerUserId": "alice", "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
         }).json()["team"]
         team_session = SessionController(
             app.state.session_store,
-            owner_employee_id="alice",
+            owner_user_id="alice",
             owner_agent_id=lead["id"],
             team_id=team["id"],
             daemon_node_id=node_id,
@@ -3943,7 +3943,7 @@ def test_message_style_is_validated(monkeypatch) -> None:
         ).create_session("Fix it")
         solo_session = SessionController(
             app.state.session_store,
-            owner_employee_id="alice",
+            owner_user_id="alice",
             owner_agent_id=builder["id"],
             daemon_node_id=node_id,
             workspace_layout="thread",

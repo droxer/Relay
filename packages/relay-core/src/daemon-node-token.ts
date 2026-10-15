@@ -14,16 +14,16 @@ export interface EnsureDaemonNodeTokenInput {
   credentialDirectory: string;
   /** Previous releases persisted the credential under the mounted workspace. */
   legacyWorkspacePath?: string;
-  employeeId: string;
+  userId: string;
   token?: string;
 }
 
-export function daemonNodeTokenPath(credentialDirectory: string, employeeId: string): string {
-  return join(credentialDirectory, `${safeTokenFileName(employeeId)}.token`);
+export function daemonNodeTokenPath(credentialDirectory: string, userId: string): string {
+  return join(credentialDirectory, `${safeTokenFileName(userId)}.token`);
 }
 
-export function readDaemonNodeToken(credentialDirectory: string, employeeId: string): string | undefined {
-  const path = daemonNodeTokenPath(credentialDirectory, employeeId);
+export function readDaemonNodeToken(credentialDirectory: string, userId: string): string | undefined {
+  const path = daemonNodeTokenPath(credentialDirectory, userId);
   try {
     const token = readFileSync(path, "utf8").trim();
     return token || undefined;
@@ -33,8 +33,8 @@ export function readDaemonNodeToken(credentialDirectory: string, employeeId: str
   }
 }
 
-export function writeDaemonNodeToken(credentialDirectory: string, employeeId: string, token: string): string {
-  const path = daemonNodeTokenPath(credentialDirectory, employeeId);
+export function writeDaemonNodeToken(credentialDirectory: string, userId: string, token: string): string {
+  const path = daemonNodeTokenPath(credentialDirectory, userId);
   mkdirSync(credentialDirectory, { recursive: true, mode: 0o700 });
   chmodSync(credentialDirectory, 0o700);
   writeFileSync(path, `${token.trim()}\n`, { mode: 0o600 });
@@ -49,32 +49,32 @@ export function newDaemonNodeToken(): string {
 export function ensureDaemonNodeToken(input: EnsureDaemonNodeTokenInput): DaemonNodeTokenResolution {
   const explicit = input.token?.trim();
   if (explicit) {
-    writeDaemonNodeToken(input.credentialDirectory, input.employeeId, explicit);
+    writeDaemonNodeToken(input.credentialDirectory, input.userId, explicit);
     removeLegacyToken(input);
     return { token: explicit, source: "explicit" };
   }
 
-  const path = daemonNodeTokenPath(input.credentialDirectory, input.employeeId);
-  const existing = readDaemonNodeToken(input.credentialDirectory, input.employeeId);
+  const path = daemonNodeTokenPath(input.credentialDirectory, input.userId);
+  const existing = readDaemonNodeToken(input.credentialDirectory, input.userId);
   if (existing) {
     return { token: existing, source: "file", path };
   }
 
   const legacy = readLegacyToken(input);
   if (legacy) {
-    writeDaemonNodeToken(input.credentialDirectory, input.employeeId, legacy);
+    writeDaemonNodeToken(input.credentialDirectory, input.userId, legacy);
     removeLegacyToken(input);
     return { token: legacy, source: "file", path };
   }
 
   const generated = newDaemonNodeToken();
-  writeDaemonNodeToken(input.credentialDirectory, input.employeeId, generated);
+  writeDaemonNodeToken(input.credentialDirectory, input.userId, generated);
   return { token: generated, source: "generated", path };
 }
 
 function legacyTokenPath(input: EnsureDaemonNodeTokenInput): string | undefined {
   return input.legacyWorkspacePath
-    ? join(input.legacyWorkspacePath, ".relay", "daemon-nodes", `${safeTokenFileName(input.employeeId)}.token`)
+    ? join(input.legacyWorkspacePath, ".relay", "daemon-nodes", `${safeTokenFileName(input.userId)}.token`)
     : undefined;
 }
 

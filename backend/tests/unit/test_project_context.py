@@ -14,7 +14,7 @@ from relay.services.project_runtime import project_runtime_snapshot
 def _project(**overrides) -> dict:
     return {
         "id": "project-1",
-        "ownerEmployeeId": "alice",
+        "ownerUserId": "alice",
         "name": "Website launch",
         "description": "Marketing site for the spring release.",
         "goal": "Ship the site by Friday",

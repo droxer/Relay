@@ -16,7 +16,7 @@ import {
 } from "../src/lib/projectPage.js";
 import type {
   AgentPlacement,
-  EmployeeAgent,
+  UserAgent,
   ProjectMember,
   ProjectRecord,
   WorkspaceBriefResponse,
@@ -31,9 +31,9 @@ const member = (agentId: string, enabled = true): ProjectMember => ({
 
 const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
   id: "project-1",
-  ownerEmployeeId: "employee-1",
+  ownerUserId: "user-1",
   name: "Project one",
-  computerId: "device:employee-1:main",
+  computerId: "device:user-1:main",
   workspaceLayout: "project",
   workspaceSubpath: "projects/project-1",
   leadAgentId: "lead",
@@ -45,9 +45,9 @@ const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
   ...overrides,
 });
 
-const agent = (overrides: Partial<EmployeeAgent> = {}): EmployeeAgent => ({
+const agent = (overrides: Partial<UserAgent> = {}): UserAgent => ({
   id: "lead",
-  supervisorEmployeeId: "employee-1",
+  supervisorUserId: "user-1",
   displayName: "Lead",
   executorKind: "codex",
   skillPolicy: {},
@@ -140,7 +140,7 @@ describe("project page behavior", () => {
 
   it("shows only activity that belongs to the current project", () => {
     const brief = {
-      employeeId: "employee-1",
+      userId: "user-1",
       projectId: "project-1",
       nodes: [],
       activeRuns: [
@@ -223,7 +223,7 @@ describe("project page behavior", () => {
     const placement = (overrides: Partial<AgentPlacement> = {}): AgentPlacement => ({
       id: "placement-1",
       agentId: "agent-1",
-      employeeId: "employee-1",
+      userId: "user-1",
       daemonNodeId: "node-1",
       executorKind: "codex",
       desiredState: "active",
@@ -236,7 +236,7 @@ describe("project page behavior", () => {
       updatedAt: "2026-08-15T00:00:00Z",
       ...overrides,
     });
-    const computerId = "device:employee-1:main";
+    const computerId = "device:user-1:main";
 
     const eligible = [
       // Stable computer-id match, the common case.
@@ -248,7 +248,7 @@ describe("project page behavior", () => {
     const rejected = [
       // Runtime node matches, but the placement names a DIFFERENT computer —
       // the backend rejects this as project_member_computer_mismatch.
-      agent({ id: "wrong-computer", placements: [placement({ computerId: "device:employee-1:other", runtimeNodeId: "node-1" })] }),
+      agent({ id: "wrong-computer", placements: [placement({ computerId: "device:user-1:other", runtimeNodeId: "node-1" })] }),
       agent({ id: "draining", placements: [placement({ computerId: computerId, desiredState: "draining" })] }),
       agent({ id: "disabled", enabled: false, placements: [placement({ computerId: computerId })] }),
       agent({ id: "deleted", deletedAt: "2026-08-16T00:00:00Z", placements: [placement({ computerId: computerId })] }),

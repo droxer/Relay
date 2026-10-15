@@ -13,7 +13,7 @@ import {
   getWorkspaceBrief,
   listProjectWorkspaceFiles,
   listArtifacts,
-  listEmployeeAgents,
+  listUserAgents,
   listSessionSummaries,
   listTaskArtifacts,
   listTaskFiles,
@@ -28,7 +28,7 @@ import {
   submitThreadMessage,
   updateAgentProfileImage,
   updateComputerDisplayName,
-  updateOwnEmployeeAgent,
+  updateOwnUserAgent,
   updateProject,
   updateUserPreferences,
 } from "../src/api.js";
@@ -152,7 +152,7 @@ describe("apiJson", () => {
     await assignTask("task 1", "agent 1");
     await startTask("task 1");
     await startTask("task 2", { assignments: [{ agentId: "agent selected" }] });
-    await assignControlPanelDaemonNode({ nodeId: "node 1", employeeId: "alice" });
+    await assignControlPanelDaemonNode({ nodeId: "node 1", userId: "alice" });
 
     assert.deepEqual(requests, [
       { path: "/api/v1/threads/thread%201", method: "PATCH", body: { title: "Roadmap" } },
@@ -161,7 +161,7 @@ describe("apiJson", () => {
       { path: "/api/v1/tasks/task%201/assignment", method: "PUT", body: { agentId: "agent 1" } },
       { path: "/api/v1/tasks/task%201/runs", method: "POST", body: {} },
       { path: "/api/v1/tasks/task%202/runs", method: "POST", body: { assignments: [{ agentId: "agent selected" }] } },
-      { path: "/api/v1/admin/daemon-nodes/node%201/assignment", method: "PUT", body: { employeeId: "alice" } },
+      { path: "/api/v1/admin/daemon-nodes/node%201/assignment", method: "PUT", body: { userId: "alice" } },
     ]);
   });
 
@@ -262,14 +262,14 @@ describe("apiJson", () => {
     );
   });
 
-  it("lists employee-owned logical agents", async () => {
+  it("lists user-owned logical agents", async () => {
     let requestedUrl = "";
     globalThis.fetch = (async (input) => {
       requestedUrl = String(input);
       return new Response(JSON.stringify({ agents: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     }) as typeof fetch;
 
-    assert.deepEqual(await listEmployeeAgents(), { agents: [] });
+    assert.deepEqual(await listUserAgents(), { agents: [] });
     assert.equal(requestedUrl, "/api/v1/agents");
   });
 
@@ -287,7 +287,7 @@ describe("apiJson", () => {
     assert.equal(requestedUrl, "/api/v1/threads?view=summary");
   });
 
-  it("updates employee-owned logical agent metadata", async () => {
+  it("updates user-owned logical agent metadata", async () => {
     let requestUrl = "";
     let requestBody: unknown;
     globalThis.fetch = (async (input, init) => {
@@ -302,7 +302,7 @@ describe("apiJson", () => {
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     }) as typeof fetch;
 
-    const result = await updateOwnEmployeeAgent("agent_research", {
+    const result = await updateOwnUserAgent("agent_research", {
       displayName: "Analyst",
       instructions: "Cite sources.",
     });
@@ -341,7 +341,7 @@ describe("apiJson", () => {
     });
   });
 
-  it("lists artifacts with optional employee and workspace filters", async () => {
+  it("lists artifacts with optional user and workspace filters", async () => {
     let requestedUrl = "";
     globalThis.fetch = (async (input) => {
       requestedUrl = String(input);
@@ -351,10 +351,10 @@ describe("apiJson", () => {
       });
     }) as typeof fetch;
 
-    const result = await listArtifacts({ employeeId: "alice", workspacePath: "/workspace/alice repo" });
+    const result = await listArtifacts({ userId: "alice", workspacePath: "/workspace/alice repo" });
 
     assert.deepEqual(result, { artifacts: [] });
-    assert.equal(requestedUrl, "/api/v1/artifacts?employeeId=alice&workspacePath=%2Fworkspace%2Falice+repo");
+    assert.equal(requestedUrl, "/api/v1/artifacts?userId=alice&workspacePath=%2Fworkspace%2Falice+repo");
   });
 
   it("lists a task's generated artifacts", async () => {
@@ -441,12 +441,12 @@ describe("apiJson", () => {
     assert.equal(result.task.deletedAt, "2026-07-24T00:00:00Z");
   });
 
-  it("fetches a workspace brief for a specific employee", async () => {
+  it("fetches a workspace brief for a specific user", async () => {
     let requestedUrl = "";
     globalThis.fetch = (async (input) => {
       requestedUrl = String(input);
       return new Response(JSON.stringify({
-        employeeId: "alice",
+        userId: "alice",
         primaryNode: null,
         nodes: [],
         activeRuns: [],
@@ -469,10 +469,10 @@ describe("apiJson", () => {
       });
     }) as typeof fetch;
 
-    const result = await getWorkspaceBrief({ employeeId: "alice" });
+    const result = await getWorkspaceBrief({ userId: "alice" });
 
-    assert.equal(result.employeeId, "alice");
-    assert.equal(requestedUrl, "/api/v1/workspace/brief?employeeId=alice");
+    assert.equal(result.userId, "alice");
+    assert.equal(requestedUrl, "/api/v1/workspace/brief?userId=alice");
   });
 
   it("fetches team-scoped activity", async () => {
@@ -481,7 +481,7 @@ describe("apiJson", () => {
       const url = String(input);
       requestedUrls.push(url);
       const body = {
-        employeeId: "alice",
+        userId: "alice",
         teamId: "team delivery",
         nodes: [],
         activeRuns: [],

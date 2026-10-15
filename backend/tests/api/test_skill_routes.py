@@ -34,8 +34,8 @@ def client(monkeypatch, tmp_path):
             "token": "admin_token", "username": "admin", "password": "kestrel-vault-7719",
         }).status_code == 200
         for name in ("alice", "bob"):
-            assert client.post("/api/v1/admin/employees", json={
-                "employeeId": name, "username": name, "password": "userpass", "displayName": name,
+            assert client.post("/api/v1/admin/users", json={
+                "userId": name, "username": name, "password": "userpass", "displayName": name,
             }).status_code == 201
         login(client, "alice")
         yield client
@@ -49,7 +49,7 @@ def publish(client: TestClient, **kwargs) -> dict:
 
 def test_publish_list_detail_revision_and_delete(client):
     skill = publish(client)
-    assert skill["ownerEmployeeId"] == "alice"
+    assert skill["ownerUserId"] == "alice"
     assert skill["slug"] == "review"
     assert [item["id"] for item in client.get("/api/v1/skills").json()["skills"]] == [skill["id"]]
     url = f"/api/v1/skills/{skill['id']}"
@@ -100,12 +100,12 @@ def test_invalid_publish_is_atomic(client, mutation, expected):
 
 
 def test_caller_cannot_override_owner_or_identity(client):
-    response = client.post("/api/v1/skills", json={**bundle(), "ownerEmployeeId": "bob"})
+    response = client.post("/api/v1/skills", json={**bundle(), "ownerUserId": "bob"})
     assert response.status_code == 422
     skill = publish(client)
     url = f"/api/v1/skills/{skill['id']}"
-    assert client.patch(url, json={"ownerEmployeeId": "bob", "slug": "other"}).status_code == 422
-    assert client.get(url).json()["ownerEmployeeId"] == "alice"
+    assert client.patch(url, json={"ownerUserId": "bob", "slug": "other"}).status_code == 422
+    assert client.get(url).json()["ownerUserId"] == "alice"
 
 
 def test_skill_routes_require_login(client):
@@ -166,7 +166,7 @@ def test_import_failure_does_not_publish(client, monkeypatch):
 def create_agent(client, owner="alice", executor="claude", name="Reviewer", supports_skills=True):
     from relay.core.computer_identity import computer_id
     node = client.app.state.registry.register({
-        "sandboxId": f"skill-node-{owner}", "employeeId": owner, "token": f"skill-token-{owner}",
+        "sandboxId": f"skill-node-{owner}", "userId": owner, "token": f"skill-token-{owner}",
         "protocolVersion": 1, "supportedAgents": ["claude", "codex"],
         "capabilities": ["thread-workspaces", *(["agent-skills"] if supports_skills else [])], "status": "ready",
         "workspacePath": "/workspace/skills", "workspaceId": f"skill-machine-{owner}",
@@ -175,7 +175,7 @@ def create_agent(client, owner="alice", executor="claude", name="Reviewer", supp
     client.post("/api/v1/auth/logout")
     assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
     response = client.post("/api/v1/admin/agents", json={
-        "supervisorEmployeeId": owner, "displayName": name, "executorKind": executor,
+        "supervisorUserId": owner, "displayName": name, "executorKind": executor,
         "defaultRole": "implementer", "computerId": computer_id(node),
     })
     assert response.status_code == 201, response.text
@@ -277,13 +277,13 @@ def test_same_node_agents_receive_only_their_own_catalog_grants(client):
     assert response.status_code == 404, response.text
 
 
-def test_employee_assignment_dynamically_delivers_to_current_and_future_agents(client):
+def test_user_assignment_dynamically_delivers_to_current_and_future_agents(client):
     first, node = create_agent(client, name="First reviewer")
     skill = publish(client, visibility="org")
     response = client.post(
         f"/api/v1/skills/{skill['id']}/assignments",
         json={
-            "targetType": "employee",
+            "targetType": "user",
             "targetId": "alice",
             "mode": "optional",
             "pin": "stable",
@@ -292,7 +292,7 @@ def test_employee_assignment_dynamically_delivers_to_current_and_future_agents(c
     )
     assert response.status_code == 201, response.text
     assignment = response.json()
-    assert assignment["targetType"] == "employee"
+    assert assignment["targetType"] == "user"
     detail = client.get(f"/api/v1/skills/{skill['id']}").json()
     assert detail["assignments"] == [assignment]
 
@@ -326,11 +326,11 @@ def test_employee_assignment_dynamically_delivers_to_current_and_future_agents(c
     assert client.get(f"/api/v1/skills/{skill['id']}").json()["assignments"] == []
 
 
-def test_assignment_api_prevents_cross_employee_targeting(client):
+def test_assignment_api_prevents_cross_user_targeting(client):
     skill = publish(client, visibility="org")
     response = client.post(
         f"/api/v1/skills/{skill['id']}/assignments",
-        json={"targetType": "employee", "targetId": "bob"},
+        json={"targetType": "user", "targetId": "bob"},
     )
     assert response.status_code == 403, response.text
     assert response.json()["detail"] == "not-target-owner"
@@ -341,12 +341,12 @@ def test_assignment_api_rejects_unknown_fields_and_invalid_policy(client):
     url = f"/api/v1/skills/{skill['id']}/assignments"
     assert client.post(
         url,
-        json={"targetType": "employee", "targetId": "alice", "unexpected": True},
+        json={"targetType": "user", "targetId": "alice", "unexpected": True},
     ).status_code == 422
     response = client.post(
         url,
         json={
-            "targetType": "employee",
+            "targetType": "user",
             "targetId": "alice",
             "mode": "suggested",
             "invocation": "implicit",

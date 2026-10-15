@@ -23,7 +23,7 @@ def computer_setup_command(request: Request) -> str:
 
 
 def computer_install_command(request: Request, node: dict[str, Any]) -> str:
-    args = ["--sandbox-id", node["id"], "--employee-id", node["employeeId"], "--workspace", node["workspacePath"]]
+    args = ["--sandbox-id", node["id"], "--user-id", node["userId"], "--workspace", node["workspacePath"]]
     return f"{computer_setup_command(request)} -s -- {shlex.join(args)}"
 
 

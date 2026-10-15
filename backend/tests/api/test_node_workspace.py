@@ -13,7 +13,7 @@ def _bootstrap(client: TestClient) -> None:
 def _register_node(app, *, capabilities: list[str]) -> None:
     app.state.registry.register({
         "sandboxId": "node_1",
-        "employeeId": "alice",
+        "userId": "alice",
         "token": "node_token",
         "protocolVersion": 1,
         "supportedAgents": ["codex"],
@@ -79,7 +79,7 @@ def test_node_workspace_requires_admin(monkeypatch, tmp_path):
     admin = TestClient(app)
     _bootstrap(admin)
     _register_node(app, capabilities=["workspace-read-shared"])
-    assert admin.post("/api/v1/admin/users", json={"username": "bob", "password": "userpass", "employeeId": "bob"}).status_code == 201
+    assert admin.post("/api/v1/admin/accounts", json={"username": "bob", "password": "userpass", "userId": "bob"}).status_code == 201
     bob = TestClient(app)
     assert bob.post("/api/v1/auth/login", json={"username": "bob", "password": "userpass"}).status_code == 200
     assert bob.get("/api/v1/admin/daemon-nodes/node_1/workspace/files").status_code == 403

@@ -16,6 +16,7 @@ from loguru import logger
 from starlette.requests import ClientDisconnect
 
 from ..core.deploy_config import public_backend_url
+from ..core.legacy_names import upgrade_legacy_names
 from ..daemon_registry import (
     DaemonNodeRegistry,
     sandbox_ui_token_matches,
@@ -25,7 +26,16 @@ from ..persistence.stores import valid_agent
 from ..security.auth import require_user_session
 from .contract import WEB_UI_ROUTE_ROOTS
 
-CHAT_SERVICE_EMPLOYEE_HEADER = "x-relay-employee-id"
+CHAT_SERVICE_USER_HEADER = "x-relay-user-id"
+LEGACY_CHAT_SERVICE_USER_HEADER = "x-relay-employee-id"
+# Bodies from daemons and installers can predate the employee -> user rename.
+LEGACY_NAME_ROUTE_PREFIXES = (
+    "/api/v1/daemon-node",
+    "/api/v1/computer-authorizations",
+    # Older supervisors provision computers and patch managed nodes here.
+    "/api/v1/admin/daemon-nodes",
+    "/api/v1/admin/managed-nodes",
+)
 DEFAULT_MAX_JSON_BODY_BYTES = 4 * 1024 * 1024
 
 
@@ -83,7 +93,11 @@ async def json_body(request: Request) -> dict[str, Any]:
         value = json.loads(body)
     except json.JSONDecodeError:
         return {}
-    return value if isinstance(value, dict) else {}
+    if not isinstance(value, dict):
+        return {}
+    if request.url.path.startswith(LEGACY_NAME_ROUTE_PREFIXES):
+        return upgrade_legacy_names(value)
+    return value
 
 
 # Parse the bounded request stream asynchronously, then let FastAPI run the
@@ -151,11 +165,11 @@ def token_count_field(value: dict[str, Any], key: str) -> int:
     return int(raw)
 
 
-EMPLOYEE_HANDLE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
+USER_HANDLE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 
 
-def normalize_employee_handle(value: str) -> str:
-    """Canonicalize an admin-entered employee handle, or raise 400.
+def normalize_user_handle(value: str) -> str:
+    """Canonicalize an admin-entered user handle, or raise 400.
 
     The handle is rendered as `@alice` and threaded through node paths and
     credential filenames, so it cannot carry whitespace, slashes, or case that
@@ -165,41 +179,41 @@ def normalize_employee_handle(value: str) -> str:
     backend will not create."""
     handle = (value or "").strip().lstrip("@").strip().lower()
     if not handle:
-        raise HTTPException(400, "employeeId is required.")
-    if not EMPLOYEE_HANDLE_PATTERN.match(handle):
+        raise HTTPException(400, "userId is required.")
+    if not USER_HANDLE_PATTERN.match(handle):
         raise HTTPException(
             400,
-            "employeeId must be 2-64 characters of lowercase letters, digits, "
+            "userId must be 2-64 characters of lowercase letters, digits, "
             "dot, dash, or underscore, and start with a letter or digit.",
         )
     return handle
 
 
-def resolve_employee_id(auth_store: Any, employee_id: str) -> str:
-    """The id `employee_id` resolves to in this store (a UUID under the
+def resolve_user_id(auth_store: Any, user_id: str) -> str:
+    """The id `user_id` resolves to in this store (a UUID under the
     database store, the handle itself under the file store)."""
-    if hasattr(auth_store, "resolve_employee_id"):
-        return auth_store.resolve_employee_id(employee_id)
-    return (employee_id or "").strip()
+    if hasattr(auth_store, "resolve_user_id"):
+        return auth_store.resolve_user_id(user_id)
+    return (user_id or "").strip()
 
 
-def employee_record(auth_store: Any, employee_id: str) -> dict[str, Any] | None:
-    if hasattr(auth_store, "list_employees"):
-        for employee in auth_store.list_employees():
-            if employee.get("id") == employee_id:
-                return employee
-    for user in auth_store.list_users():
-        if user.get("employeeId") == employee_id:
+def user_record(auth_store: Any, user_id: str) -> dict[str, Any] | None:
+    if hasattr(auth_store, "list_users"):
+        for user in auth_store.list_users():
+            if user.get("id") == user_id:
+                return user
+    for account in auth_store.list_accounts():
+        if account.get("userId") == user_id:
             return {
                 # The file store keeps the handle as the id, so the two agree.
-                "id": employee_id,
-                "handle": employee_id,
-                "displayName": user.get("displayName")
-                or user.get("username")
-                or employee_id,
-                "email": user.get("email"),
-                "createdAt": user.get("createdAt"),
-                "updatedAt": user.get("createdAt"),
+                "id": user_id,
+                "handle": user_id,
+                "displayName": account.get("displayName")
+                or account.get("username")
+                or user_id,
+                "email": account.get("email"),
+                "createdAt": account.get("createdAt"),
+                "updatedAt": account.get("createdAt"),
             }
     return None
 
@@ -208,22 +222,22 @@ def backend_base_url(request: Request) -> str:
     return public_backend_url() or str(request.base_url).rstrip("/")
 
 
-def valid_employee_workspace_path(value: str | None) -> bool:
+def valid_user_workspace_path(value: str | None) -> bool:
     return bool(value) and (
         PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
     )
 
 
-# An employee device runs its agents as host processes against the installs
+# A user device runs its agents as host processes against the installs
 # already on it. BoxLite isolation belongs to hardware an admin provisions, so
 # `nodeLocation` and `sandboxMode` are not independent settings.
-EMPLOYEE_DEVICE_SANDBOX_MODE = "none"
+USER_DEVICE_SANDBOX_MODE = "none"
 
 
-def assert_employee_device_runtime(
+def assert_user_device_runtime(
     node_location: str | None, sandbox_mode: str | None
 ) -> None:
-    """Reject an employee-device node asking for the isolated runtime.
+    """Reject a user-device node asking for the isolated runtime.
 
     Both the self-service enrollment route and the admin create route land on
     the same `provision_daemon_node`, which stores `sandboxMode` verbatim — so
@@ -232,12 +246,12 @@ def assert_employee_device_runtime(
     with no `--use-local-agent-home`, and the daemon tries to boot a VM on a
     laptop that was never set up for one.
     """
-    if node_location != "employee-device":
+    if node_location != "user-device":
         return
-    if sandbox_mode != EMPLOYEE_DEVICE_SANDBOX_MODE:
+    if sandbox_mode != USER_DEVICE_SANDBOX_MODE:
         raise HTTPException(
             400,
-            'sandboxMode must be "none" for an employee-device computer: '
+            'sandboxMode must be "none" for a user-device computer: '
             "a personal computer runs agents directly.",
         )
 
@@ -255,8 +269,8 @@ def daemon_start_env(
     if sandbox_mode == "none":
         env["RELAY_ALLOW_HOST_AGENT_EXECUTION"] = "1"
         env["RELAY_USE_LOCAL_AGENT_HOME"] = "1"
-    if node.get("employeeId"):
-        env["RELAY_EMPLOYEE_ID"] = node["employeeId"]
+    if node.get("userId"):
+        env["RELAY_USER_ID"] = node["userId"]
     if node.get("nodeToken"):
         env["RELAY_DAEMON_NODE_TOKEN"] = node["nodeToken"]
     if node.get("workspacePath"):
@@ -287,8 +301,8 @@ def daemon_start_command(
     ]
     if sandbox_mode == "none":
         parts.extend(["--allow-host-agent-execution", "--use-local-agent-home"])
-    if node.get("employeeId"):
-        parts.extend(["--employee-id", node["employeeId"]])
+    if node.get("userId"):
+        parts.extend(["--user-id", node["userId"]])
     if node.get("workspacePath"):
         parts.extend(["--workspace", node["workspacePath"]])
     command = " ".join(shlex.quote(part) for part in parts)
@@ -376,7 +390,7 @@ def artifact_index_item(
         "sessionId": session["id"],
         "sessionTitle": session.get("title"),
         "taskGoal": session.get("taskGoal"),
-        "ownerEmployeeId": session.get("ownerEmployeeId"),
+        "ownerUserId": session.get("ownerUserId"),
         "workspacePath": session.get("workspacePath"),
         "sessionUpdatedAt": session.get("updatedAt"),
     }
@@ -386,17 +400,17 @@ def request_actor(request: Request, auth_store: Any) -> dict[str, Any]:
     chat_actor = request_chat_service_actor(request)
     if chat_actor:
         return chat_actor
-    user = require_user_session(request, auth_store)
-    employee_id = user.get("employeeId") or user.get("username") or user["id"]
+    account = require_user_session(request, auth_store)
+    user_id = account.get("userId") or account.get("username") or account["id"]
     return {
-        "user": user,
-        "employeeId": employee_id,
-        "isAdmin": user.get("role") == "admin",
+        "account": account,
+        "userId": user_id,
+        "isAdmin": account.get("role") == "admin",
     }
 
 
 def request_actor_or_none(request: Request, auth_store: Any) -> dict[str, Any] | None:
-    if request.headers.get(CHAT_SERVICE_EMPLOYEE_HEADER):
+    if chat_service_user_header(request):
         return request_chat_service_actor(request)
     try:
         return request_actor(request, auth_store)
@@ -404,9 +418,16 @@ def request_actor_or_none(request: Request, auth_store: Any) -> dict[str, Any] |
         return None
 
 
+def chat_service_user_header(request: Request) -> str:
+    value = request.headers.get(CHAT_SERVICE_USER_HEADER) or request.headers.get(
+        LEGACY_CHAT_SERVICE_USER_HEADER
+    )
+    return (value or "").strip()
+
+
 def request_chat_service_actor(request: Request) -> dict[str, Any] | None:
-    employee_id = (request.headers.get(CHAT_SERVICE_EMPLOYEE_HEADER) or "").strip()
-    if not employee_id:
+    user_id = chat_service_user_header(request)
+    if not user_id:
         return None
     expected = os.environ.get("RELAY_CHAT_TOKEN", "").strip()
     if not expected:
@@ -419,13 +440,13 @@ def request_chat_service_actor(request: Request) -> dict[str, Any] | None:
     ):
         raise HTTPException(401, "Invalid chat service token.")
     return {
-        "user": {
-            "id": f"chat:{employee_id}",
-            "username": employee_id,
-            "employeeId": employee_id,
+        "account": {
+            "id": f"chat:{user_id}",
+            "username": user_id,
+            "userId": user_id,
             "role": "user",
         },
-        "employeeId": employee_id,
+        "userId": user_id,
         "isAdmin": False,
     }
 
@@ -451,16 +472,16 @@ def request_actor_or_sandbox(
         return actor
     token = bearer_token(request)
     sandbox = authorized_sandbox_for_token(registry, token)
-    employee_id = sandbox.get("employeeId") if sandbox else None
-    if isinstance(employee_id, str) and employee_id:
+    user_id = sandbox.get("userId") if sandbox else None
+    if isinstance(user_id, str) and user_id:
         return {
-            "user": {
+            "account": {
                 "id": f"sandbox:{sandbox['id']}",
-                "username": employee_id,
-                "employeeId": employee_id,
+                "username": user_id,
+                "userId": user_id,
                 "role": "user",
             },
-            "employeeId": employee_id,
+            "userId": user_id,
             "isAdmin": False,
         }
     if token:
@@ -468,41 +489,41 @@ def request_actor_or_sandbox(
     return request_actor(request, auth_store)
 
 
-def owner_employee_id_for_create(actor: dict[str, Any], body: dict[str, Any]) -> str:
-    requested = string_field(body, "ownerEmployeeId") or string_field(
-        body, "employeeId"
+def owner_user_id_for_create(actor: dict[str, Any], body: dict[str, Any]) -> str:
+    requested = string_field(body, "ownerUserId") or string_field(
+        body, "userId"
     )
     if actor["isAdmin"] and requested:
         return requested
-    return actor["employeeId"]
+    return actor["userId"]
 
 
-def assignee_employee_id_for_task(
+def assignee_user_id_for_task(
     actor: dict[str, Any], body: dict[str, Any], fallback: str | None = None
 ) -> str:
-    requested = string_field(body, "assigneeEmployeeId") or string_field(
-        body, "assignee_employee_id"
+    requested = string_field(body, "assigneeUserId") or string_field(
+        body, "assignee_user_id"
     )
     if actor["isAdmin"] and requested:
         return requested
-    if requested and requested == actor["employeeId"]:
+    if requested and requested == actor["userId"]:
         return requested
-    return fallback or actor["employeeId"]
+    return fallback or actor["userId"]
 
 
 def actor_can_access_record(actor: dict[str, Any], record: dict[str, Any]) -> bool:
     if actor["isAdmin"]:
         return True
     return (
-        record.get("ownerEmployeeId") == actor["employeeId"]
-        or record.get("assigneeEmployeeId") == actor["employeeId"]
+        record.get("ownerUserId") == actor["userId"]
+        or record.get("assigneeUserId") == actor["userId"]
     )
 
 
 def actor_can_access_sandbox(actor: dict[str, Any], sandbox: dict[str, Any]) -> bool:
     if actor["isAdmin"]:
         return True
-    return sandbox.get("employeeId") == actor["employeeId"]
+    return sandbox.get("userId") == actor["userId"]
 
 
 def get_session_for_actor(

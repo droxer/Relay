@@ -52,7 +52,7 @@ def __getattr__(name: str) -> Any:
             "LocalDaemonStore": LocalDaemonStore,
         }[name]
     if name == "DatabaseUserAuthStore":
-        from .security.auth import DatabaseUserAuthStore
+        from .security.auth import DatabaseAccountAuthStore
 
-        return DatabaseUserAuthStore
+        return DatabaseAccountAuthStore
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

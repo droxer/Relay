@@ -13,7 +13,7 @@ from relay.services.project_runtime import (
 def _project(*, enabled: bool = True) -> dict:
     return {
         "id": "project-1",
-        "ownerEmployeeId": "alice",
+        "ownerUserId": "alice",
         "computerId": "device:alice:main",
         "workspaceSubpath": "projects/project-1",
         "leadAgentId": "lead",
@@ -67,7 +67,7 @@ def test_disabled_project_is_a_transient_dispatch_failure() -> None:
 
     with pytest.raises(ProjectDispatchError) as raised:
         resolve_project_task_assignments(
-            {"projectId": "project-1", "ownerEmployeeId": "alice"},
+            {"projectId": "project-1", "ownerUserId": "alice"},
             project_store=Store(),
             agent_store=None,
             placement_store=None,
@@ -93,26 +93,26 @@ def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style
         for member in project["members"]
     }
     team = {
-        "id": "team", "ownerEmployeeId": "alice", "leadAgentId": "lead",
+        "id": "team", "ownerUserId": "alice", "leadAgentId": "lead",
         "memberAgentIds": ["lead", "builder", "reviewer"],
         "collaborationStyle": "pipeline",
     }
 
     def resolve(assignments, **kwargs):
         assert kwargs["required_node_id"] == "node"
-        assert kwargs["employee_id"] == "alice"
+        assert kwargs["user_id"] == "alice"
         return assignments
 
     monkeypatch.setattr("relay.services.project_runtime.resolve_agent_assignments", resolve)
     assignments, snapshot = resolve_project_task_assignments(
         {"projectId": project["id"], "assignedTeamId": team["id"],
-         "ownerEmployeeId": "alice", "collaborationStyle": task_style},
+         "ownerUserId": "alice", "collaborationStyle": task_style},
         project_store=SimpleNamespace(get_project=lambda _: project),
         team_store=SimpleNamespace(get_team=lambda _: team),
         agent_store=SimpleNamespace(get_agent=agents.get),
         placement_store=None,
         daemon_nodes=[{
-            "id": "node", "employeeId": "alice", "workspaceId": "main", "online": True,
+            "id": "node", "userId": "alice", "workspaceId": "main", "online": True,
             "status": "ready", "capabilities": ["project-workspaces"],
         }],
     )

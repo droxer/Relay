@@ -1,7 +1,7 @@
 import type { ControlPanelDaemonNodeRecord } from "relay-core";
 import type {
   DaemonLauncher,
-  EmployeeRecord,
+  UserRecord,
   ManagedDaemon,
   SupervisorBackend,
   SupervisorLogger,
@@ -10,14 +10,14 @@ import type {
 interface SupervisorOptions {
   backend: SupervisorBackend;
   launcher: DaemonLauncher;
-  workspacePathForEmployee: (employee: EmployeeRecord) => string;
+  workspacePathForUser: (user: UserRecord) => string;
   logger?: SupervisorLogger;
   registrationTimeoutMs?: number;
   now?: () => number;
 }
 
 interface ReconcileResult {
-  employees: number;
+  users: number;
   provisioned: number;
   started: number;
   skipped: number;
@@ -26,7 +26,7 @@ interface ReconcileResult {
 export class RelaySupervisor {
   private readonly backend: SupervisorBackend;
   private readonly launcher: DaemonLauncher;
-  private readonly workspacePathForEmployee: (employee: EmployeeRecord) => string;
+  private readonly workspacePathForUser: (user: UserRecord) => string;
   private readonly logger?: SupervisorLogger;
   private readonly now: () => number;
   private readonly registrationTimeoutMs: number;
@@ -36,7 +36,7 @@ export class RelaySupervisor {
   constructor(options: SupervisorOptions) {
     this.backend = options.backend;
     this.launcher = options.launcher;
-    this.workspacePathForEmployee = options.workspacePathForEmployee;
+    this.workspacePathForUser = options.workspacePathForUser;
     this.logger = options.logger;
     this.now = options.now ?? Date.now;
     this.registrationTimeoutMs = options.registrationTimeoutMs ?? 15 * 60_000;
@@ -44,29 +44,29 @@ export class RelaySupervisor {
 
   async reconcileOnce(): Promise<ReconcileResult> {
     this.pruneExitedDaemons();
-    const employees = await this.backend.listEmployees();
+    const users = await this.backend.listUsers();
     const nodes = await this.backend.listDaemonNodes();
-    const nodesByEmployee = new Map<string, ControlPanelDaemonNodeRecord>();
+    const nodesByUser = new Map<string, ControlPanelDaemonNodeRecord>();
     for (const node of nodes) {
-      if (!node.employeeId) continue;
-      const existing = nodesByEmployee.get(node.employeeId);
-      if (!existing || nodeRank(node) < nodeRank(existing)) nodesByEmployee.set(node.employeeId, node);
+      if (!node.userId) continue;
+      const existing = nodesByUser.get(node.userId);
+      if (!existing || nodeRank(node) < nodeRank(existing)) nodesByUser.set(node.userId, node);
     }
 
     let provisioned = 0;
     let started = 0;
     let skipped = 0;
 
-    for (const employee of employees) {
-      const workspacePath = this.workspacePathForEmployee(employee);
-      let node = nodesByEmployee.get(employee.id);
+    for (const user of users) {
+      const workspacePath = this.workspacePathForUser(user);
+      let node = nodesByUser.get(user.id);
       let env: Record<string, string> | undefined;
       if (!node) {
-        const created = await this.backend.provisionDaemonNode({ employeeId: employee.id, workspacePath });
+        const created = await this.backend.provisionDaemonNode({ userId: user.id, workspacePath });
         node = created.node;
         env = created.daemonEnv;
         provisioned += 1;
-        this.logger?.info("provisioned daemon node", { employeeId: employee.id, nodeId: node.id });
+        this.logger?.info("provisioned daemon node", { userId: user.id, nodeId: node.id });
       }
 
       if (this.launcher.connectionMode === "http" && this.managed.has(node.id)) {
@@ -88,12 +88,12 @@ export class RelaySupervisor {
       }
 
       if (!env) {
-        const created = await this.backend.provisionDaemonNode({ employeeId: employee.id, workspacePath });
+        const created = await this.backend.provisionDaemonNode({ userId: user.id, workspacePath });
         node = created.node;
         env = created.daemonEnv;
       }
       const managed = await this.launcher.start({
-        employee,
+        user,
         node,
         env,
         workspacePath,
@@ -101,10 +101,10 @@ export class RelaySupervisor {
       this.managed.set(node.id, managed);
       this.launchedAt.set(node.id, this.now());
       started += 1;
-      this.logger?.info("started daemon node", { employeeId: employee.id, nodeId: node.id, provider: managed.provider });
+      this.logger?.info("started daemon node", { userId: user.id, nodeId: node.id, provider: managed.provider });
     }
 
-    return { employees: employees.length, provisioned, started, skipped };
+    return { users: users.length, provisioned, started, skipped };
   }
 
   async stop(): Promise<void> {

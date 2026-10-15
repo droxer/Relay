@@ -28,7 +28,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ..core.ids import new_database_id, now_iso
-from ..security.auth import DatabaseUserAuthStore
+from ..security.auth import DatabaseAccountAuthStore
 from .store_common import (
     _format_iso,
     _parse_iso,
@@ -75,15 +75,15 @@ class DatabaseSkillStore:
     """Event-authoritative catalog with immutable bundle revisions."""
 
     metadata = shared_metadata
-    employees = DatabaseUserAuthStore.employees
+    users = DatabaseAccountAuthStore.users
     skills = Table(
         "skills",
         metadata,
         database_id_column(),
         Column(
-            "owner_employee_id",
+            "owner_user_id",
             entity_uuid_type(),
-            ForeignKey("employees.id", ondelete="RESTRICT", name="fk_skills_owner"),
+            ForeignKey("users.id", ondelete="RESTRICT", name="fk_skills_owner"),
             nullable=False,
         ),
         Column("namespace_key", Text, nullable=False),
@@ -98,7 +98,7 @@ class DatabaseSkillStore:
         CheckConstraint(
             "visibility IN ('private', 'org')", name="ck_skills_visibility"
         ),
-        Index("ix_skills_owner_updated", "owner_employee_id", "updated_at"),
+        Index("ix_skills_owner_updated", "owner_user_id", "updated_at"),
         Index(
             "uq_skills_live_slug",
             "slug",
@@ -108,7 +108,7 @@ class DatabaseSkillStore:
         ),
         Index(
             "uq_skills_live_owner_name",
-            "owner_employee_id",
+            "owner_user_id",
             "namespace_key",
             "name_key",
             unique=True,
@@ -131,9 +131,9 @@ class DatabaseSkillStore:
         Column("bytes", BigInteger, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column(
-            "created_by_employee_id",
+            "created_by_user_id",
             entity_uuid_type(),
-            ForeignKey("employees.id", ondelete="RESTRICT"),
+            ForeignKey("users.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         Column("note", Text, nullable=True),
@@ -208,15 +208,15 @@ class DatabaseSkillStore:
         Column("pin", json_type(), nullable=False),
         Column("invocation", Text, nullable=False),
         Column(
-            "created_by_employee_id",
+            "created_by_user_id",
             entity_uuid_type(),
-            ForeignKey("employees.id", ondelete="RESTRICT"),
+            ForeignKey("users.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
         CheckConstraint(
-            "target_type IN ('employee', 'team', 'project', 'agent', 'org')",
+            "target_type IN ('user', 'team', 'project', 'agent', 'org')",
             name="ck_skill_assignments_target_type",
         ),
         CheckConstraint(
@@ -251,7 +251,7 @@ class DatabaseSkillStore:
             create_all_tables(self.engine)
 
     def create_skill(
-        self, owner_employee_id: str, payload: dict[str, Any]
+        self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
         files, manifest = _validate_files(payload.get("files"))
         name = _skill_name(payload.get("name"))
@@ -279,7 +279,7 @@ class DatabaseSkillStore:
                     timestamp = now_iso()
                     skill = {
                         "id": new_database_id(),
-                        "ownerEmployeeId": owner_employee_id,
+                        "ownerUserId": owner_user_id,
                         "namespace": namespace,
                         "name": name,
                         "slug": slug,
@@ -304,7 +304,7 @@ class DatabaseSkillStore:
                         conn,
                         skill["id"],
                         1,
-                        owner_employee_id,
+                        owner_user_id,
                         files,
                         payload.get("note"),
                     )
@@ -336,7 +336,7 @@ class DatabaseSkillStore:
     def add_revision(
         self,
         skill_id: str,
-        created_by_employee_id: str,
+        created_by_user_id: str,
         files: list[dict[str, Any]],
         note: str | None = None,
     ) -> dict[str, Any]:
@@ -376,7 +376,7 @@ class DatabaseSkillStore:
                         conn,
                         row["id"],
                         number,
-                        created_by_employee_id,
+                        created_by_user_id,
                         normalized,
                         note,
                     )
@@ -476,14 +476,14 @@ class DatabaseSkillStore:
             )
             return self._replay(conn, exists) if exists else None
 
-    def list_skills(self, viewer_employee_id: str) -> list[dict[str, Any]]:
+    def list_skills(self, viewer_user_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             ids = conn.scalars(
                 select(self.skills.c.id).where(
                     self.skills.c.deleted_at.is_(None),
                     or_(
                         self.skills.c.visibility == "org",
-                        self.skills.c.owner_employee_id == viewer_employee_id,
+                        self.skills.c.owner_user_id == viewer_user_id,
                     ),
                 )
             ).all()
@@ -524,9 +524,9 @@ class DatabaseSkillStore:
         mode: str,
         pin: str | dict[str, str],
         invocation: str,
-        created_by_employee_id: str,
+        created_by_user_id: str,
     ) -> dict[str, Any]:
-        if target_type not in {"employee", "team", "project", "agent", "org"}:
+        if target_type not in {"user", "team", "project", "agent", "org"}:
             raise SkillValidationError("invalid-assignment-target")
         if not isinstance(target_id, str) or not target_id:
             raise SkillValidationError("invalid-assignment-target")
@@ -576,7 +576,7 @@ class DatabaseSkillStore:
                 "mode": mode,
                 "pin": pin,
                 "invocation": invocation,
-                "createdByEmployeeId": created_by_employee_id,
+                "createdByUserId": created_by_user_id,
                 "createdAt": created_at,
                 "updatedAt": timestamp,
             }
@@ -810,7 +810,7 @@ class DatabaseSkillStore:
         conn: Any,
         skill_id: str,
         number: int,
-        employee_id: str,
+        user_id: str,
         files: list[dict[str, Any]],
         note: str | None,
     ) -> dict[str, Any]:
@@ -822,7 +822,7 @@ class DatabaseSkillStore:
             "manifestSha256": _manifest_sha256(files),
             "bytes": sum(len(item["content"]) for item in files),
             "createdAt": timestamp,
-            "createdByEmployeeId": employee_id,
+            "createdByUserId": user_id,
             "note": note,
         }
         conn.execute(
@@ -833,7 +833,7 @@ class DatabaseSkillStore:
                 manifest_sha256=revision["manifestSha256"],
                 bytes=revision["bytes"],
                 created_at=_parse_iso(timestamp),
-                created_by_employee_id=employee_id,
+                created_by_user_id=user_id,
                 note=note,
             )
         )
@@ -993,7 +993,7 @@ class DatabaseSkillStore:
 def _skill_row(skill: dict[str, Any], *, event_version: int) -> dict[str, Any]:
     return {
         "id": skill["id"],
-        "owner_employee_id": skill["ownerEmployeeId"],
+        "owner_user_id": skill["ownerUserId"],
         "namespace_key": skill.get("namespace") or "",
         "name_key": skill["name"],
         "slug": skill["slug"],
@@ -1014,7 +1014,7 @@ def _revision_dict(row: Any) -> dict[str, Any]:
         "manifestSha256": row["manifest_sha256"],
         "bytes": row["bytes"],
         "createdAt": _format_iso(row["created_at"]),
-        "createdByEmployeeId": str(row["created_by_employee_id"]),
+        "createdByUserId": str(row["created_by_user_id"]),
         "note": row["note"],
     }
 
@@ -1028,7 +1028,7 @@ def _assignment_row(assignment: dict[str, Any]) -> dict[str, Any]:
         "mode": assignment["mode"],
         "pin": assignment["pin"],
         "invocation": assignment["invocation"],
-        "created_by_employee_id": assignment["createdByEmployeeId"],
+        "created_by_user_id": assignment["createdByUserId"],
         "created_at": _parse_iso(assignment["createdAt"]),
         "updated_at": _parse_iso(assignment["updatedAt"]),
     }
@@ -1043,7 +1043,7 @@ def _assignment_dict(row: Any) -> dict[str, Any]:
         "mode": row["mode"],
         "pin": row["pin"],
         "invocation": row["invocation"],
-        "createdByEmployeeId": str(row["created_by_employee_id"]),
+        "createdByUserId": str(row["created_by_user_id"]),
         "createdAt": _format_iso(row["created_at"]),
         "updatedAt": _format_iso(row["updated_at"]),
     }

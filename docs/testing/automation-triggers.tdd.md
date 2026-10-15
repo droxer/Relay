@@ -5,7 +5,7 @@ Design: [automation-triggers-design.md](../automation-triggers-design.md).
 
 ## Delivered behavior
 
-Existing routines remain schedule automations. Employees can configure task
+Existing routines remain schedule automations. Users can configure task
 or run events with filters, inbound webhooks, or manual-only execution through
 the Automations drawer. Events create real occurrence tasks through the
 scheduler and existing daemon dispatch path. The backend never runs agents.
@@ -139,7 +139,7 @@ atomically resets the rate window under the matcher lock.
 | Finding / guarantee | Regression target | RED evidence | GREEN evidence |
 | --- | --- | --- | --- |
 | Filter scopes require the owner's assignment access; admin cannot bypass it | `test_automation_triggers_api.py` | `574514c0`: foreign project filter accepted | Owner project/agent/team checks, create/PATCH parity, and team/computer gate pass |
-| Unfiltered automation cannot observe another employee's private work | `test_automation_matcher.py` | `b99f4d7f`: foreign task fired Alice's automation | Owner/assignee visibility enforced before matching |
+| Unfiltered automation cannot observe another user's private work | `test_automation_matcher.py` | `b99f4d7f`: foreign task fired Alice's automation | Owner/assignee visibility enforced before matching |
 | Switching to Manual only discards automatic pending events | `test_automation_matcher.py` | `574514c0`: matcher fired one unrequested occurrence | No occurrence; pending state cleared |
 | Malformed stored filter is isolated and warned | `test_automation_matcher.py` | `574514c0`: AttributeError aborted the tick | Good automation still fires |
 | Non-owner assignee cannot read secret status or rotate it | `test_automation_webhook.py` | `574514c0`: Bob received 200 | Owner/admin boundary enforced |

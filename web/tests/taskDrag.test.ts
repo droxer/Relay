@@ -11,7 +11,7 @@ function task(input: Partial<RelayTask> & { id: string }): RelayTask {
     description: "",
     priority: "normal",
     status: input.status ?? "backlog",
-    ownerEmployeeId: "alice",
+    ownerUserId: "alice",
     isRoutine: false,
     assignedAgentId: input.assignedAgentId,
     assignedTeamId: input.assignedTeamId,

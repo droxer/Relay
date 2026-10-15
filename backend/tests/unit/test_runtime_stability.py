@@ -12,7 +12,7 @@ from relay.sessions import SessionController
 def registration():
     return {
         "sandboxId": "node_stability",
-        "employeeId": "alice",
+        "userId": "alice",
         "token": "test-token",
         "protocolVersion": 1,
         "supportedAgents": ["codex"],
@@ -54,7 +54,7 @@ def test_run_admission_obeys_terminal_event_lock_order(continuation):
         }
         if continuation:
             request["sessionId"] = SessionController(
-                sessions, owner_employee_id="alice"
+                sessions, owner_user_id="alice"
             ).create_session("Existing thread", ["human", "codex"])["id"]
         result = ServerDaemonNodeBackend(registry)._run_sync("node_stability", request)
         assert result["id"]
@@ -66,7 +66,7 @@ def test_direct_activation_obeys_terminal_event_lock_order():
         sessions = LocalSessionStore(root)
         registry = DaemonNodeRegistry(sessions, LocalDaemonStore(root))
         registry.register(registration())
-        session = SessionController(sessions, owner_employee_id="alice").create_session(
+        session = SessionController(sessions, owner_user_id="alice").create_session(
             "Activate", ["human", "codex"]
         )
         request = registry.prepare_run_request(

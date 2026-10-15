@@ -104,7 +104,7 @@ class _Teams:
     def __init__(self, teams: list[dict[str, Any]]):
         self._teams = teams
 
-    def list_teams(self, owner_employee_id: str | None = None) -> list[dict[str, Any]]:
+    def list_teams(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
         return self._teams
 
 
@@ -117,7 +117,7 @@ class _Projects:
 
 
 def test_an_agent_cannot_move_off_its_teams_computer() -> None:
-    agent = {"id": "a1", "supervisorEmployeeId": "alice", "computerId": "device:alice:m1"}
+    agent = {"id": "a1", "supervisorUserId": "alice", "computerId": "device:alice:m1"}
     teams = _Teams(
         [{"id": "t1", "name": "Delivery", "computerId": "device:alice:m1", "memberAgentIds": ["a1"]}]
     )
@@ -131,7 +131,7 @@ def test_an_agent_cannot_move_off_its_teams_computer() -> None:
 
 
 def test_an_agent_cannot_move_off_its_projects_computer() -> None:
-    agent = {"id": "a1", "supervisorEmployeeId": "alice", "computerId": "device:alice:m1"}
+    agent = {"id": "a1", "supervisorUserId": "alice", "computerId": "device:alice:m1"}
     projects = _Projects(
         [{"id": "p1", "computerId": "device:alice:m1", "members": [{"agentId": "a1"}]}]
     )
@@ -145,7 +145,7 @@ def test_an_agent_cannot_move_off_its_projects_computer() -> None:
 
 
 def test_staying_on_the_same_computer_or_a_free_agent_may_move() -> None:
-    agent = {"id": "a1", "supervisorEmployeeId": "alice", "computerId": "device:alice:m1"}
+    agent = {"id": "a1", "supervisorUserId": "alice", "computerId": "device:alice:m1"}
     teams = _Teams(
         [{"id": "t1", "name": "Delivery", "computerId": "device:alice:m1", "memberAgentIds": ["a1"]}]
     )

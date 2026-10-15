@@ -8,35 +8,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { EmployeeAvatar } from "../../EmployeeAvatar";
-import type { EmployeeRecord } from "../../../types";
+import { UserAvatar } from "../../UserAvatar";
+import type { UserRecord } from "../../../types";
 import { AVATAR } from "../../icons";
-import { employeeHandleOf } from "../../../lib/employeeHandle";
+import { userHandleOf } from "../../../lib/userHandle";
 
-interface TopEmployeesProps {
-  employees: EmployeeRecord[];
-  ranked: Array<{ employeeId: string; sessionCount: number }>;
+interface TopUsersProps {
+  users: UserRecord[];
+  ranked: Array<{ userId: string; sessionCount: number }>;
   error?: string | null;
   className?: string;
 }
 
-export function TopEmployees({ employees, ranked, error, className }: TopEmployeesProps) {
+export function TopUsers({ users, ranked, error, className }: TopUsersProps) {
   const { t } = useTranslation();
   const titleId = useId();
 
   const rows = useMemo(() => {
-    const employeeMap = new Map(employees.map((e) => [e.id, e] as const));
+    const userMap = new Map(users.map((e) => [e.id, e] as const));
     return ranked.map((row) => {
-      const employee = employeeMap.get(row.employeeId);
+      const user = userMap.get(row.userId);
       return {
-        id: row.employeeId,
-        // A ranked employee can have left the roster; the handle helper keeps
+        id: row.userId,
+        // A ranked user can have left the roster; the handle helper keeps
         // their UUID off the screen either way.
-        displayName: employee?.displayName || employeeHandleOf(employee ?? { id: row.employeeId }),
+        displayName: user?.displayName || userHandleOf(user ?? { id: row.userId }),
         sessionCount: row.sessionCount,
       };
     });
-  }, [ranked, employees]);
+  }, [ranked, users]);
 
   return (
     <Card render={<section />} className={className}>
@@ -54,7 +54,7 @@ export function TopEmployees({ employees, ranked, error, className }: TopEmploye
           {rows.map((row, index) => (
             <li key={row.id} className="adm-dash-top-row">
               <span className="adm-dash-top-rank tnum">{index + 1}</span>
-              <EmployeeAvatar displayName={row.displayName} running={false} size={AVATAR.md} />
+              <UserAvatar displayName={row.displayName} running={false} size={AVATAR.md} />
               {/* One line per person: name and count. The computer count and
                   the share meter under each row restated the rank. */}
               <span className="adm-dash-top-name">{row.displayName}</span>

@@ -8,12 +8,12 @@ export const TEAMS_QUERY_KEY = "teams";
 const EMPTY_TEAMS: AgentTeam[] = [];
 
 export function useTeams(
-  employeeId?: string,
+  userId?: string,
 ): { teams: AgentTeam[]; isFetching: boolean; error: string | null; refetch: () => Promise<unknown> } {
   const query = useQuery({
-    queryKey: [TEAMS_QUERY_KEY, employeeId],
+    queryKey: [TEAMS_QUERY_KEY, userId],
     queryFn: ({ signal }) => listTeams(signal),
-    enabled: Boolean(employeeId),
+    enabled: Boolean(userId),
     refetchInterval: 10_000,
   });
   // Getters, not values: React Query re-renders a component for every result

@@ -89,8 +89,8 @@ def _webhook_automation_for_actor(request: Request, ctx: AppContextDep, task_id:
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     if not task.get("isRoutine") or not has_webhook(task):
         raise HTTPException(409, "automation_not_webhook")
-    editors = {task.get("ownerEmployeeId")} - {None}
-    if not actor["isAdmin"] and actor.get("employeeId") not in editors:
+    editors = {task.get("ownerUserId")} - {None}
+    if not actor["isAdmin"] and actor.get("userId") not in editors:
         raise HTTPException(403, "Only the automation's owner or an admin can manage its webhook.")
     return task
 

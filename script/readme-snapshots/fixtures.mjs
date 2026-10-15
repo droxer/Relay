@@ -15,7 +15,7 @@ const ago = (ms) => new Date(NOW - ms).toISOString();
 const dateOnly = (offsetDays) => new Date(NOW + offsetDays * DAY).toISOString().slice(0, 10);
 const jsonl = (records) => records.map((record) => JSON.stringify(record)).join("\n") + "\n";
 
-const EMPLOYEE = "ada";
+const USER = "ada";
 const WORKSPACE_ROOT = "/Users/ada/relay-workspace";
 
 /* ------------------------------------------------------------------ */
@@ -35,14 +35,14 @@ const AGENT_VERSIONS = {
   kimi: { version: "1.6.0", adapter: "cli" },
 };
 
-function node({ id, displayName, employeeId, workspaceId, managedNodeId, online = true, status = "ready", activeRuns = [], seenMs = 4_000, createdDays = 40 }) {
+function node({ id, displayName, userId, workspaceId, managedNodeId, online = true, status = "ready", activeRuns = [], seenMs = 4_000, createdDays = 40 }) {
   return {
     id,
     displayName,
-    employeeId,
-    workspacePath: managedNodeId ? "/workspace" : `/Users/${employeeId}/relay-workspace`,
+    userId,
+    workspacePath: managedNodeId ? "/workspace" : `/Users/${userId}/relay-workspace`,
     workspaceId,
-    ...(managedNodeId ? { managedNodeId, nodeLocation: "managed", sandboxMode: "boxlite" } : { nodeLocation: "employee-device", sandboxMode: "none" }),
+    ...(managedNodeId ? { managedNodeId, nodeLocation: "managed", sandboxMode: "boxlite" } : { nodeLocation: "user-device", sandboxMode: "none" }),
     capabilities: CAPABILITIES,
     status: online ? status : "stopped",
     agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "ready" },
@@ -61,7 +61,7 @@ function node({ id, displayName, employeeId, workspaceId, managedNodeId, online 
 
 const MACBOOK_ID = "node_ada_macbook";
 const BUILDBOX_ID = "node_buildbox_01";
-const MACBOOK = `device:${EMPLOYEE}:ada-macbook-pro`;
+const MACBOOK = `device:${USER}:ada-macbook-pro`;
 const BUILDBOX = "managed:mn_buildbox_01";
 
 /* ------------------------------------------------------------------ */
@@ -73,7 +73,7 @@ function agent({ id, displayName, executorKind, defaultRole, avatar, availabilit
   const daemonNodeId = onBuildBox ? BUILDBOX_ID : MACBOOK_ID;
   return {
     id,
-    supervisorEmployeeId: EMPLOYEE,
+    supervisorUserId: USER,
     displayName,
     profileImageUrl: `/avatars/agents/${avatar}.svg`,
     executorKind,
@@ -91,13 +91,13 @@ function agent({ id, displayName, executorKind, defaultRole, avatar, availabilit
     placements: [{
       id: `placement_${id}`,
       agentId: id,
-      employeeId: EMPLOYEE,
+      userId: USER,
       daemonNodeId,
       runtimeNodeId: daemonNodeId,
       computerId,
       ...(onBuildBox ? { managedNodeId: "mn_buildbox_01" } : {}),
       nodeDisplayName: onBuildBox ? "Build Box 01" : "Ada's MacBook Pro",
-      nodeOwnership: onBuildBox ? "managed" : "employee-device",
+      nodeOwnership: onBuildBox ? "managed" : "user-device",
       nodeSandboxMode: onBuildBox ? "boxlite" : "none",
       executorKind,
       desiredState: "active",
@@ -142,7 +142,7 @@ function memberSummary(id) {
 function team({ id, name, avatar, lead, members, collaborationStyle, acceptanceCriteria, responsibilities }) {
   return {
     id,
-    ownerEmployeeId: EMPLOYEE,
+    ownerUserId: USER,
     name,
     profileImageUrl: `/avatars/teams/${avatar}.svg`,
     collaborationStyle,
@@ -192,7 +192,7 @@ export const teams = [
 
 export const projects = [
   {
-    id: "project_billing", ownerEmployeeId: EMPLOYEE, name: "Billing Platform",
+    id: "project_billing", ownerUserId: USER, name: "Billing Platform",
     description: "Invoice generation, exports, and the ledger reconciliation jobs.",
     computerId: MACBOOK, workspaceLayout: "project", workspaceSubpath: "projects/billing-platform",
     leadAgentId: "agent_aria", enabled: true, version: 4, createdAt: ago(26 * DAY), updatedAt: ago(40 * MINUTE),
@@ -203,7 +203,7 @@ export const projects = [
     ],
   },
   {
-    id: "project_infra", ownerEmployeeId: EMPLOYEE, name: "Platform Infrastructure",
+    id: "project_infra", ownerUserId: USER, name: "Platform Infrastructure",
     description: "The public API edge, CI runners, and the alerting stack.",
     computerId: MACBOOK, workspaceLayout: "project", workspaceSubpath: "projects/platform-infrastructure",
     leadAgentId: "agent_scout", enabled: true, version: 3, createdAt: ago(21 * DAY), updatedAt: ago(6 * MINUTE),
@@ -214,7 +214,7 @@ export const projects = [
     ],
   },
   {
-    id: "project_onboarding", ownerEmployeeId: EMPLOYEE, name: "Onboarding Revamp",
+    id: "project_onboarding", ownerUserId: USER, name: "Onboarding Revamp",
     description: "The first-run checklist and the workspace setup flow.",
     computerId: MACBOOK, workspaceLayout: "project", workspaceSubpath: "projects/onboarding-revamp",
     leadAgentId: "agent_scout", enabled: true, version: 2, createdAt: ago(12 * DAY), updatedAt: ago(5 * HOUR),
@@ -315,7 +315,7 @@ function summary({ id, title, goal, status, minutes, agentKind, ownerAgentId, te
     workspacePath: WORKSPACE_ROOT,
     workspaceLayout: projectId ? "project" : "thread",
     workspaceSubpath: projectId ? projects.find((item) => item.id === projectId).workspaceSubpath : `threads/${id}`,
-    ownerEmployeeId: EMPLOYEE,
+    ownerUserId: USER,
     ownerAgentId,
     ...(teamId ? { teamId } : {}),
     ...(projectId ? { projectId } : {}),
@@ -374,7 +374,7 @@ function task({ ref, title, description = "", priority = "normal", status, due, 
     status,
     workflowStage: ["waiting_for_human", "blocked"].includes(status) ? "running" : status,
     acceptancePolicy: "human",
-    ownerEmployeeId: EMPLOYEE,
+    ownerUserId: USER,
     ...(projectId ? { projectId } : {}),
     ...(due === undefined ? {} : { dueDate: dateOnly(due) }),
     ...(agentId ? { assignedAgentId: agentId, assignedAgent: agentById[agentId].executorKind } : {}),
@@ -395,7 +395,7 @@ function task({ ref, title, description = "", priority = "normal", status, due, 
 }
 
 /* Numbers the way the backend's task_number_scope does — per project for
-   project issues, per employee for unfiled issues, and separately for
+   project issues, per user for unfiled issues, and separately for
    automations — so the tables show `#3` and `AUTO-2`, not raw ids. */
 function numbered(list) {
   const counters = new Map();
@@ -438,24 +438,24 @@ const heroActiveRun = { commandId: "cmd_run_cascade_1", sessionId: HERO_ID, runI
 const alertActiveRun = { commandId: "cmd_run_scout_1", sessionId: "thread_alert_thresholds", runId: "run_scout_1", agent: "pi", logicalAgentId: "agent_scout", placementId: "placement_agent_scout", taskGoal: "Tune infra alert thresholds", workspacePath: WORKSPACE_ROOT, startedAt: ago(6 * MINUTE) };
 
 export const nodes = [
-  node({ id: MACBOOK_ID, displayName: "Ada's MacBook Pro", employeeId: EMPLOYEE, workspaceId: "ada-macbook-pro", status: "running", activeRuns: [heroActiveRun, alertActiveRun] }),
-  node({ id: BUILDBOX_ID, displayName: "Build Box 01", employeeId: EMPLOYEE, workspaceId: "buildbox-01", managedNodeId: "mn_buildbox_01", seenMs: 7_000 }),
+  node({ id: MACBOOK_ID, displayName: "Ada's MacBook Pro", userId: USER, workspaceId: "ada-macbook-pro", status: "running", activeRuns: [heroActiveRun, alertActiveRun] }),
+  node({ id: BUILDBOX_ID, displayName: "Build Box 01", userId: USER, workspaceId: "buildbox-01", managedNodeId: "mn_buildbox_01", seenMs: 7_000 }),
 ];
 
 export const fleet = [
   ...nodes,
-  node({ id: "node_marcus_studio", displayName: "Marcus's Mac Studio", employeeId: "marcus", workspaceId: "marcus-mac-studio", seenMs: 9_000, createdDays: 21 }),
-  node({ id: "node_priya_thinkpad", displayName: "Priya's ThinkPad", employeeId: "priya", workspaceId: "priya-thinkpad", online: false, seenMs: 19 * HOUR, createdDays: 18 }),
-  node({ id: "node_review_runner", displayName: "Review Runner", employeeId: "jonas", workspaceId: "review-runner", managedNodeId: "mn_review_runner", seenMs: 3_000, createdDays: 9 }),
+  node({ id: "node_marcus_studio", displayName: "Marcus's Mac Studio", userId: "marcus", workspaceId: "marcus-mac-studio", seenMs: 9_000, createdDays: 21 }),
+  node({ id: "node_priya_thinkpad", displayName: "Priya's ThinkPad", userId: "priya", workspaceId: "priya-thinkpad", online: false, seenMs: 19 * HOUR, createdDays: 18 }),
+  node({ id: "node_review_runner", displayName: "Review Runner", userId: "jonas", workspaceId: "review-runner", managedNodeId: "mn_review_runner", seenMs: 3_000, createdDays: 9 }),
 ];
 
 export const managedNodes = [
-  { id: "mn_buildbox_01", displayName: "Build Box 01", employeeId: EMPLOYEE, assignmentMode: "dedicated", provider: "boxlite", profile: "standard", sandboxMode: "boxlite", workspacePolicy: {}, desiredState: "running", generation: 2, phase: "ready", activeDaemonNodeId: BUILDBOX_ID, conditions: [], createdAt: ago(40 * DAY), updatedAt: ago(2 * HOUR) },
-  { id: "mn_review_runner", displayName: "Review Runner", employeeId: "jonas", assignmentMode: "dedicated", provider: "boxlite", profile: "standard", sandboxMode: "boxlite", workspacePolicy: {}, desiredState: "running", generation: 1, phase: "ready", activeDaemonNodeId: "node_review_runner", conditions: [], createdAt: ago(9 * DAY), updatedAt: ago(1 * HOUR) },
+  { id: "mn_buildbox_01", displayName: "Build Box 01", userId: USER, assignmentMode: "dedicated", provider: "boxlite", profile: "standard", sandboxMode: "boxlite", workspacePolicy: {}, desiredState: "running", generation: 2, phase: "ready", activeDaemonNodeId: BUILDBOX_ID, conditions: [], createdAt: ago(40 * DAY), updatedAt: ago(2 * HOUR) },
+  { id: "mn_review_runner", displayName: "Review Runner", userId: "jonas", assignmentMode: "dedicated", provider: "boxlite", profile: "standard", sandboxMode: "boxlite", workspacePolicy: {}, desiredState: "running", generation: 1, phase: "ready", activeDaemonNodeId: "node_review_runner", conditions: [], createdAt: ago(9 * DAY), updatedAt: ago(1 * HOUR) },
 ];
 
-export const employees = [
-  { id: EMPLOYEE, handle: "ada", displayName: "Ada Chen", email: "ada@acme.example", departmentId: "platform", departmentName: "Platform", effectiveMaxLocalComputers: 3, localComputerCount: 1, createdAt: ago(60 * DAY), updatedAt: ago(2 * DAY) },
+export const users = [
+  { id: USER, handle: "ada", displayName: "Ada Chen", email: "ada@acme.example", departmentId: "platform", departmentName: "Platform", effectiveMaxLocalComputers: 3, localComputerCount: 1, createdAt: ago(60 * DAY), updatedAt: ago(2 * DAY) },
   { id: "marcus", handle: "marcus", displayName: "Marcus Lee", email: "marcus@acme.example", departmentId: "platform", departmentName: "Platform", effectiveMaxLocalComputers: 3, localComputerCount: 1, createdAt: ago(44 * DAY), updatedAt: ago(5 * DAY) },
   { id: "priya", handle: "priya", displayName: "Priya Nair", email: "priya@acme.example", departmentId: "growth", departmentName: "Growth", effectiveMaxLocalComputers: 3, localComputerCount: 1, createdAt: ago(30 * DAY), updatedAt: ago(8 * DAY) },
   { id: "jonas", handle: "jonas", displayName: "Jonas Weber", email: "jonas@acme.example", departmentId: "security", departmentName: "Security", maxLocalComputers: 1, effectiveMaxLocalComputers: 1, localComputerCount: 0, createdAt: ago(16 * DAY), updatedAt: ago(1 * DAY) },
@@ -477,11 +477,11 @@ export const dashboardSessions = {
   last7d: DAILY_SESSIONS.slice(-7).reduce((sum, count) => sum + count, 0),
   statusCounts: { running: 4, waiting_for_human: 3, completed: 1_198, failed: 61, cancelled: 18 },
   dailyCounts,
-  topEmployees: [
-    { employeeId: EMPLOYEE, sessionCount: 412 },
-    { employeeId: "marcus", sessionCount: 356 },
-    { employeeId: "priya", sessionCount: 301 },
-    { employeeId: "jonas", sessionCount: 215 },
+  topUsers: [
+    { userId: USER, sessionCount: 412 },
+    { userId: "marcus", sessionCount: 356 },
+    { userId: "priya", sessionCount: 301 },
+    { userId: "jonas", sessionCount: 215 },
   ],
 };
 
@@ -505,13 +505,13 @@ export const dashboardTokens = {
   timeZone: "UTC",
   unreportedRuns: [],
   daily: dailyTokens,
-  byEmployee: [
-    { employeeId: EMPLOYEE, ...usage(2_410_000, 596_000, 9_820_000), sessionCount: 112 },
-    { employeeId: "marcus", ...usage(1_930_000, 471_000, 8_140_000), sessionCount: 94 },
-    { employeeId: "priya", ...usage(1_520_000, 344_000, 6_310_000), sessionCount: 71 },
-    { employeeId: "jonas", ...usage(1_010_000, 252_000, 4_220_000), sessionCount: 45 },
+  byUser: [
+    { userId: USER, ...usage(2_410_000, 596_000, 9_820_000), sessionCount: 112 },
+    { userId: "marcus", ...usage(1_930_000, 471_000, 8_140_000), sessionCount: 94 },
+    { userId: "priya", ...usage(1_520_000, 344_000, 6_310_000), sessionCount: 71 },
+    { userId: "jonas", ...usage(1_010_000, 252_000, 4_220_000), sessionCount: 45 },
   ],
-  recentSessions: sessions.slice(0, 6).map((item, index) => ({ sessionId: item.id, employeeId: EMPLOYEE, taskGoal: item.title, updatedAt: item.updatedAt, ...usage(18_420 + index * 3_100, 3_960 + index * 540, 96_300 + index * 11_000) })),
+  recentSessions: sessions.slice(0, 6).map((item, index) => ({ sessionId: item.id, userId: USER, taskGoal: item.title, updatedAt: item.updatedAt, ...usage(18_420 + index * 3_100, 3_960 + index * 540, 96_300 + index * 11_000) })),
 };
 
 /* ------------------------------------------------------------------ */
@@ -522,11 +522,11 @@ function skill({ id, name, displayName, description, visibility = "org", revisio
   const revisions = Array.from({ length: revision }, (_, index) => ({
     id: `${id}_rev_${revision - index}`, revision: revision - index, bytes: 4_200 + (revision - index) * 380,
     manifestSha256: `${(revision - index).toString(16).padStart(2, "0")}c4e1a97b3d5f08`.padEnd(64, "a"),
-    createdAt: ago((days + index * 6) * DAY), createdByEmployeeId: EMPLOYEE,
+    createdAt: ago((days + index * 6) * DAY), createdByUserId: USER,
     note: index === 0 ? "Tightened the verification steps" : index === revision - 1 ? "First version" : "Clarified edge cases",
   }));
   return {
-    id, ownerEmployeeId: EMPLOYEE, namespace: "acme", name, slug: name, displayName, description, visibility, source: "authored",
+    id, ownerUserId: USER, namespace: "acme", name, slug: name, displayName, description, visibility, source: "authored",
     currentRevisionId: revisions[0].id, stableRevisionId: revisions[0].id,
     createdAt: ago((days + revision * 6) * DAY), updatedAt: ago(days * DAY),
     grantedAgentCount: grantedAgentIds.length, assignmentCount: 0,
@@ -591,11 +591,11 @@ function brief(params) {
     ? run.logicalAgentId === agentId
     : scopedSessions.some((item) => item.id === run.sessionId)));
   const artifacts = scopedSessions.some((item) => item.id === HERO_ID)
-    ? heroArtifacts.map((artifact) => ({ ...artifact, sessionId: HERO_ID, sessionTitle: heroSummary.title, taskGoal: heroSummary.taskGoal, ownerEmployeeId: EMPLOYEE, sessionUpdatedAt: heroSummary.updatedAt }))
+    ? heroArtifacts.map((artifact) => ({ ...artifact, sessionId: HERO_ID, sessionTitle: heroSummary.title, taskGoal: heroSummary.taskGoal, ownerUserId: USER, sessionUpdatedAt: heroSummary.updatedAt }))
     : [];
   const active = (status) => status === "running" || status === "waiting_for_human";
   return {
-    employeeId: EMPLOYEE,
+    userId: USER,
     ...(teamId ? { teamId } : {}),
     ...(projectId ? { projectId } : {}),
     workspacePath: WORKSPACE_ROOT,
@@ -638,7 +638,7 @@ function workspaceFiles(extra) {
    state instead of crashing the surface. */
 const FALLBACK = {
   sessions: [], tasks: [], agents: [], teams: [], projects: [], nodes: [], sandboxes: [], skills: [],
-  employees: [], integrations: [], artifacts: [], events: [], runs: [], entries: [], produced: [],
+  users: [], integrations: [], artifacts: [], events: [], runs: [], entries: [], produced: [],
 };
 
 const byId = (items, id) => items.find((item) => item.id === id);
@@ -646,7 +646,7 @@ const byId = (items, id) => items.find((item) => item.id === id);
 export function currentUser(language) {
   return {
     id: "user_ada", username: "ada", displayName: "Ada Chen", email: "ada@acme.example", role: "admin",
-    employeeId: EMPLOYEE, theme: "dark", language, effectiveMaxLocalComputers: 3, localComputerCount: 1,
+    userId: USER, theme: "dark", language, effectiveMaxLocalComputers: 3, localComputerCount: 1,
   };
 }
 
@@ -661,7 +661,7 @@ export function routeBody(pathname, params, language) {
   if (path === "/threads") return { sessions };
   if (head === "threads" && id && !tail) return id === HERO_ID ? hero : byId(sessions, id);
 
-  if (path === "/tasks") return { flowPolicy: { wipLimit: 5, scope: "employee" }, tasks };
+  if (path === "/tasks") return { flowPolicy: { wipLimit: 5, scope: "user" }, tasks };
   if (head === "tasks" && id && !tail) return { ...byId(tasks, id), events: [], activity: [] };
   if (head === "tasks" && tail === "runs") return { taskId: id, runs: [] };
   if (head === "tasks" && tail === "events") return { events: [] };
@@ -687,9 +687,9 @@ export function routeBody(pathname, params, language) {
 
   if (path === "/admin/daemon-nodes") return { nodes: fleet };
   if (path === "/admin/managed-nodes") return { nodes: managedNodes };
-  if (path === "/admin/employees") return { employees };
+  if (path === "/admin/users") return { users };
   if (path === "/admin/agents") return { agents };
-  if (path === "/admin/settings") return { settings: { maxLocalComputersPerEmployee: 3, maxTaskRounds: 3, updatedAt: ago(12 * DAY) }, capabilities: { employeeEdits: true } };
+  if (path === "/admin/settings") return { settings: { maxLocalComputersPerUser: 3, maxTaskRounds: 3, updatedAt: ago(12 * DAY) }, capabilities: { userEdits: true } };
   if (path === "/admin/dashboard/sessions") return dashboardSessions;
   if (path === "/admin/dashboard/tokens") return dashboardTokens;
 

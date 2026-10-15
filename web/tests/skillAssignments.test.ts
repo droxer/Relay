@@ -13,7 +13,7 @@ test("the web skill contract exposes scoped assignments and stable revisions", a
 test("the share drawer assigns scopes instead of expanding teams into agent grants", async () => {
   const source = await readFile(resolve("web/src/components/ShareSkillDrawer.tsx"), "utf8");
   assert.match(source, /assignSkill/);
-  assert.match(source, /targetType: "employee"/);
+  assert.match(source, /targetType: "user"/);
   assert.match(source, /targetType: "team"/);
   assert.match(source, /targetType: "agent"/);
   assert.doesNotMatch(source, /team\.memberAgentIds\.filter/);

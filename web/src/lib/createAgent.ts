@@ -1,12 +1,12 @@
 /**
  * Pure option-derivation helpers for the create-agent form: grouping a
- * employee's daemon nodes into computers, and listing the runtimes actually
+ * user's daemon nodes into computers, and listing the runtimes actually
  * available on a given computer.
  */
 
 export interface NodeLike {
   id: string;
-  employeeId?: string;
+  userId?: string;
   workspaceId?: string;
   managedNodeId?: string;
   supportedAgents?: string[];
@@ -33,19 +33,19 @@ export function computerName(node: { id: string; displayName?: string }): string
 export function computerId(node: NodeLike): string {
   const managed = node.managedNodeId?.trim();
   if (managed) return `managed:${managed}`;
-  const employee = node.employeeId?.trim();
+  const user = node.userId?.trim();
   const machine = node.workspaceId?.trim();
-  if (employee && machine) return `device:${employee}:${machine}`;
+  if (user && machine) return `device:${user}:${machine}`;
   return `node:${node.id}`;
 }
 
-export function computersForEmployee(
+export function computersForUser(
   nodes: NodeLike[],
-  employeeId: string,
+  userId: string,
 ): { computerId: string; ownership: ComputerOwnership; nodes: NodeLike[] }[] {
   const byComputer = new Map<string, NodeLike[]>();
   for (const node of nodes) {
-    if (node.employeeId !== employeeId) continue;
+    if (node.userId !== userId) continue;
     const id = computerId(node);
     byComputer.set(id, [...(byComputer.get(id) ?? []), node]);
   }

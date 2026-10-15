@@ -168,13 +168,13 @@ test("BoxLite home leaves room for runtime sockets in managed workspaces", () =>
   const workspace = join(
     process.cwd(),
     ".relay",
-    "employee-workspaces",
+    "user-workspaces",
     "5dadd571-0557-4288-8378-90af89b20c6e",
   );
 
   const resolved = resolveBoxliteHome(workspace, undefined);
   const otherWorkspace = resolveBoxliteHome(
-    join(process.cwd(), ".relay", "employee-workspaces", "b10e0f0d-70d6-4b61-8249-bf9582d45480"),
+    join(process.cwd(), ".relay", "user-workspaces", "b10e0f0d-70d6-4b61-8249-bf9582d45480"),
     undefined,
   );
   const readySocket = join(resolved, "boxes", "Te1OnCQiUQlF", "sockets", "ready.sock");
@@ -191,7 +191,7 @@ test("BoxLite home leaves room for runtime sockets in managed workspaces", () =>
 // them all at one directory, and every run on the daemon that started second
 // failed with "Another BoxliteRuntime is already using directory".
 test("BoxLite home is private to a daemon, so two nodes sharing a workspace do not collide", () => {
-  const workspace = join(process.cwd(), ".relay", "employee-workspaces", "shared");
+  const workspace = join(process.cwd(), ".relay", "user-workspaces", "shared");
 
   const first = resolveBoxliteHome(workspace, undefined, "fe1d7172-a306-4910-8c3d-6999f98fbe38");
   const second = resolveBoxliteHome(workspace, undefined, "010b02ae-1b5f-4368-91d8-55954c74ff00");
@@ -307,7 +307,7 @@ test("BoxLite mode clears local agent process flags", async () => {
     await runRelayDaemon({
       backendUrl: "http://relay.test",
       sandboxId: "sbx_boxlite_env",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       logger: testLogger(),
@@ -323,7 +323,7 @@ test("BoxLite mode clears local agent process flags", async () => {
   }
 });
 
-test("local node mode detects agents from the employee host home by default", async () => {
+test("local node mode detects agents from the user host home by default", async () => {
   const previous = captureEnv(["RELAY_AGENT_HOME", "RELAY_RUN_AS_CURRENT_USER"]);
   const stop = new AbortController();
   stop.abort();
@@ -332,7 +332,7 @@ test("local node mode detects agents from the employee host home by default", as
     await runRelayDaemon({
       backendUrl: "http://relay.test",
       sandboxId: "sbx_local_env",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       sandbox: "none",
       token: "node_token",
@@ -659,7 +659,7 @@ test("relay daemon ignores duplicate run.start commands already active", async (
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -741,7 +741,7 @@ test(`handoff workspace validation before receiver execution: ${variant}`, async
   }
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
       workspacePath: root, token: "node_token", pollIntervalMs: 5, shutdownGraceMs: 50,
       logger: testLogger(), signal: stop.signal,
       environment: fakeEnvironment({
@@ -809,7 +809,7 @@ test("relay daemon reports structured Codex collaboration events", async () => {
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -859,7 +859,7 @@ test("relay daemon advertises active delivery leases while polling", async () =>
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -918,7 +918,7 @@ test("relay daemon refreshes an active command lease from a duplicate dispatch",
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -970,7 +970,7 @@ test("relay daemon advertises only agents with passing capability preflight", as
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     workspaceId: "repo:relay",
     token: "node_token",
@@ -1015,7 +1015,7 @@ test("local node refreshes agent availability before heartbeat registration", as
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_local_refresh",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     sandbox: "none",
     token: "node_token",
@@ -1062,7 +1062,7 @@ test("capability refresh never probes agents while a run is active", async () =>
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_active_refresh",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     sandbox: "none",
     token: "node_token",
@@ -1120,7 +1120,7 @@ test("daemon renews liveness while an idle command poll is in flight", async () 
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_explicit_heartbeat",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     commandPollWaitMs: 25_000,
@@ -1169,7 +1169,7 @@ test("relay daemon doctor reports per-agent preflight failures", async () => {
   const report = await runRelayDaemonDoctor({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     logger: testLogger(),
@@ -1199,7 +1199,7 @@ test("relay daemon retries terminal event posts across backend failures", async 
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -1244,7 +1244,7 @@ test("relay daemon completes a successful run whose output batch the backend rej
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: root,
     token: "node_token",
     pollIntervalMs: 5,
@@ -1321,7 +1321,7 @@ test("relay daemon batches large alternating output without losing order", async
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
     sandbox: "none",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 1,
@@ -1401,7 +1401,7 @@ test("relay daemon fails safely when undelivered output exceeds its memory budge
       backendUrl: "http://relay.test",
       sandboxId: "sbx_output_budget",
       sandbox: "none",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       pollIntervalMs: 1,
@@ -1457,7 +1457,7 @@ test("RELAY_DAEMON_ECHO_AGENT_OUTPUT=0 keeps the agent response off the daemon t
       backendUrl: "http://relay.test",
       sandboxId: "sbx_no_echo",
       sandbox: "none",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       pollIntervalMs: 1,
@@ -1524,7 +1524,7 @@ test("agent response echoes to the daemon terminal by default", async () => {
       backendUrl: "http://relay.test",
       sandboxId: "sbx_echo_default",
       sandbox: "none",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       pollIntervalMs: 1,
@@ -1593,7 +1593,7 @@ test("relay daemon exits startup preflight after external stop", async () => {
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -1641,7 +1641,7 @@ test("relay daemon skips startup probes when external stop is already requested"
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -1679,7 +1679,7 @@ test("relay daemon exits backend reconnect after external stop during registrati
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -1734,7 +1734,7 @@ test("managed daemon retries transient enrollment failures before registration",
         return jsonResponse({
           sandboxId: "sbx_managed",
           token: "node_token",
-          employeeId: "alice",
+          userId: "alice",
           sandboxMode: "boxlite",
           heartbeat: { intervalMs: 5, timeoutMs: 15 },
         }, 201);
@@ -1766,7 +1766,7 @@ test("relay daemon removes shutdown listeners after external stop", async () => 
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -1799,7 +1799,7 @@ test("relay daemon exits polling sleep after external stop", async () => {
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 10_000,
@@ -1841,7 +1841,7 @@ test("relay daemon immediately renews a completed long poll by default", async (
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     commandPollWaitMs: 20,
@@ -1881,7 +1881,7 @@ test("relay daemon retains the default delay after a rejected command poll", asy
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     shutdownGraceMs: 50,
@@ -1917,7 +1917,7 @@ test("relay daemon retains the default delay when long polling is disabled", asy
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     commandPollWaitMs: 0,
@@ -1954,7 +1954,7 @@ test("relay daemon retains the default delay when an empty long poll returns ear
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     commandPollWaitMs: 25_000,
@@ -1991,7 +1991,7 @@ test("relay daemon bounds stopped registration during shutdown", async () => {
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2046,7 +2046,7 @@ test("relay daemon posts cancellation during shutdown", async (t) => {
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: root,
     token: "node_token",
     pollIntervalMs: 5,
@@ -2102,7 +2102,7 @@ test("relay daemon bounds cancellation event retry during shutdown", async () =>
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2178,7 +2178,7 @@ test("relay daemon reports a cancel for a run it never received as cancelled", a
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2230,7 +2230,7 @@ test("relay daemon advertises three concurrent runs by default", async () => {
     await runRelayDaemon({
       backendUrl: "http://relay.test",
       sandboxId: "sbx_test",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       pollIntervalMs: 5,
@@ -2277,7 +2277,7 @@ test("relay daemon retries normal run.cancel terminal event while running", asyn
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2351,7 +2351,7 @@ test("UI cancellation terminates a live local process tree before acknowledgemen
   const timeout = setTimeout(() => stop.abort("test timed out"), 10_000);
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", sandbox: "none",
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", sandbox: "none",
       workspacePath: process.cwd(), token: "node_token", pollIntervalMs: 5,
       logger: testLogger(), signal: stop.signal,
       environment: fakeEnvironment({
@@ -2427,7 +2427,7 @@ test("relay daemon rejects a second distinct run while busy", async () => {
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2483,7 +2483,7 @@ test("relay daemon runs concurrent commands within capacity", async () => {
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2543,7 +2543,7 @@ test("relay daemon stops while retrying a busy-command rejection event", async (
   const daemon = runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: process.cwd(),
     token: "node_token",
     pollIntervalMs: 5,
@@ -2637,7 +2637,7 @@ test("relay daemon can register, poll, execute, and report through a local backe
     await runRelayDaemon({
       backendUrl: `http://127.0.0.1:${port}`,
       sandboxId: "sbx_http",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       pollIntervalMs: 5,
@@ -2859,7 +2859,7 @@ test("relay daemon reports generated workspace documents in run.completed", asyn
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: workspace,
     token: "node_token",
     pollIntervalMs: 5,
@@ -2945,7 +2945,7 @@ test("upgraded daemon keeps legacy sessions on the existing node root", async (t
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
-    employeeId: "alice",
+    userId: "alice",
     workspacePath: workspace,
     token: "node_token",
     pollIntervalMs: 5,
@@ -3299,7 +3299,7 @@ test("relay daemon serves project workspace commands", async () => {
   let registration: DaemonNodeRegistration | undefined;
   let served = false;
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+    backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", workspacePath: root, token: "node_token",
     pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ exec: async () => ({ exit_code: 0, stdout: "", stderr: "" }) }),
     fetchFn: async (url, init) => {
@@ -3348,7 +3348,7 @@ test("relay daemon confines thread workspace reads to the thread directory", asy
   let served = false;
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", workspacePath: root, token: "node_token",
       pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
       environment: fakeEnvironment(),
       fetchFn: async (url, init) => {
@@ -3400,7 +3400,7 @@ test("relay daemon deletes a project workspace and acknowledges repeated deliver
   let registration: DaemonNodeRegistration | undefined;
   let served = false;
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+    backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", workspacePath: root, token: "node_token",
     pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ exec: async () => ({ exit_code: 0, stdout: "", stderr: "" }) }),
     fetchFn: async (url, init) => {
@@ -3444,7 +3444,7 @@ test("relay daemon resolves a task workspace under the node root", async () => {
   let registration: DaemonNodeRegistration | undefined;
   let served = false;
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+    backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", workspacePath: root, token: "node_token",
     pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ exec: async () => ({ exit_code: 0, stdout: "", stderr: "" }) }),
     fetchFn: async (url, init) => {
@@ -3479,7 +3479,7 @@ test("relay daemon rejects a task workspace path that escapes the node root", as
   const events: DaemonNodeEvent[] = [];
   let served = false;
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+    backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", workspacePath: root, token: "node_token",
     pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ exec: async () => ({ exit_code: 0, stdout: "", stderr: "" }) }),
     fetchFn: async (url, init) => {
@@ -3519,7 +3519,7 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
     workspaceSubpath: "tasks/../../escape",
   };
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice", workspacePath: root, token: "node_token",
+    backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice", workspacePath: root, token: "node_token",
     pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ exec: async () => ({ exit_code: 0, stdout: "", stderr: "" }) }),
     fetchFn: async (url, init) => {
@@ -3575,7 +3575,7 @@ for (const workspaceLayout of ["task", "node-root"] as const) {
     await runRelayDaemon({
       backendUrl: "http://relay.test",
       sandboxId: "sbx_test",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: root,
       token: "node_token",
       pollIntervalMs: 5,
@@ -3629,7 +3629,7 @@ for (const deletedDuring of ["registration", "poll"]) {
     await runRelayDaemon({
       backendUrl: "http://relay.test",
       sandboxId: "sbx_deleted",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: process.cwd(),
       token: "node_token",
       signal: AbortSignal.timeout(1000),
@@ -3668,7 +3668,7 @@ test("daemon cannot inherit a stale verdict from the shared workspace", async ()
   let served = false;
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
       workspacePath: workspace, token: "node_token", pollIntervalMs: 5,
       signal: stop.signal, logger: testLogger(), environment: fakeEnvironment(),
       fetchFn: async (url, init) => {
@@ -3725,7 +3725,7 @@ for (const kind of ["normal", "setup", "throws"] as const) {
     } satisfies DaemonNodeRunCommand;
     try {
       await runRelayDaemon({
-        backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
         workspacePath: root, token: "node_token", pollIntervalMs: 5,
         signal: stop.signal, logger: testLogger(),
         environment: fakeEnvironment({ exec: async () => {
@@ -3834,7 +3834,7 @@ test("daemon reports and logs a rejected verdict without its contents", async ()
   let served = false;
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "sbx_test", employeeId: "alice",
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
       workspacePath: workspace, token: "node_token", pollIntervalMs: 5,
       signal: stop.signal,
       logger: { ...testLogger(), warn: (message, fields) => { warnings.push({ message, fields }); } },
@@ -3891,7 +3891,7 @@ test("blocker: terminal delivery does not occupy a process or workspace slot", a
   const timeout = setTimeout(() => { release(); stop.abort(); }, 3000);
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+      backendUrl: "http://relay.test", sandboxId: "node", userId: "alice", token: "token",
       workspacePath: root, maxConcurrentRuns: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
       signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
       environment: fakeEnvironment({ exec: async (_cmd, args) => {
@@ -3942,7 +3942,7 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
     const timeout = setTimeout(() => stop.abort(), 6000);
     try {
       await runRelayDaemon({
-        backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+        backendUrl: "http://relay.test", sandboxId: "node", userId: "alice", token: "token",
         workspacePath: root, commandLeaseSeconds: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
         signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
         environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
@@ -4011,7 +4011,7 @@ async function runThroughOutage(options: {
   const timeout = setTimeout(() => stop.abort(), options.outageMs + options.runMs + 4000);
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "node", employeeId: "alice", token: "token",
+      backendUrl: "http://relay.test", sandboxId: "node", userId: "alice", token: "token",
       workspacePath: root, commandLeaseSeconds: 1, pollIntervalMs: 5, commandPollWaitMs: 0,
       unreachableGraceMs: options.graceMs, signal: stop.signal, logger: testLogger(), shutdownGraceMs: 100,
       environment: fakeEnvironment({ exec: async (_cmd, args, execOptions) => {
@@ -4114,7 +4114,7 @@ test("explicit runtime refresh re-registers before the periodic refresh is due",
   let served = false;
   let checks = 0;
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_explicit_refresh", employeeId: "alice",
+    backendUrl: "http://relay.test", sandboxId: "sbx_explicit_refresh", userId: "alice",
     workspacePath: process.cwd(), sandbox: "none", token: "node_token", pollIntervalMs: 1,
     heartbeatIntervalMs: 60_000, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ ensure: async () => { checks += 1; } }),
@@ -4150,7 +4150,7 @@ test("doctor authenticates without registering or persisting credentials", async
   const requests: string[] = [];
   try {
     const report = await runRelayDaemonDoctor({
-      sandboxId: "sbx_test", employeeId: "alice", workspacePath: root,
+      sandboxId: "sbx_test", userId: "alice", workspacePath: root,
       stateDir: join(root, "state"), token: "test-token", logger: testLogger(),
       environment: fakeEnvironment(), backendUrl: "http://relay.test",
       fetchFn: async (url, init) => {
@@ -4203,7 +4203,7 @@ for (const rejectedDuring of ["registration", "poll"]) {
   test(`revoked token stops cleanly during ${rejectedDuring}`, async () => {
     let registrations = 0;
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "sbx_revoked", token: "revoked", employeeId: "alice",
+      backendUrl: "http://relay.test", sandboxId: "sbx_revoked", token: "revoked", userId: "alice",
       workspacePath: process.cwd(), signal: AbortSignal.timeout(2000), preflight: false,
       pollIntervalMs: 1, shutdownGraceMs: 10, logger: testLogger(), environment: fakeEnvironment(),
       fetchFn: async (url) => {
@@ -4233,13 +4233,13 @@ test("managed daemon reuses durable enrollment after grant expiry", async () => 
           if (path.endsWith("/daemon-node-enrollments")) {
             enrollments++;
             if (restart) return jsonResponse({}, 401);
-            return jsonResponse({ sandboxId: "sbx_restart", token: "runtime-token", employeeId: "alice", sandboxMode: "boxlite" });
+            return jsonResponse({ sandboxId: "sbx_restart", token: "runtime-token", userId: "alice", sandboxMode: "boxlite" });
           }
           if (path.endsWith("/daemon-node-registrations")) {
             const body = JSON.parse(String(init?.body));
             assert.equal(body.sandboxId, "sbx_restart");
             assert.equal(body.token, "runtime-token");
-            assert.equal(body.employeeId, "alice");
+            assert.equal(body.userId, "alice");
             return jsonResponse({});
           }
           if (path.endsWith("/commands")) { stop.abort(); return jsonResponse({ commands: [] }); }
@@ -4261,7 +4261,7 @@ test("daemon restart fences a retained execution instead of running it again", a
   let polls = 0;
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "restart-fence", employeeId: "alice", token: "node_token",
+      backendUrl: "http://relay.test", sandboxId: "restart-fence", userId: "alice", token: "node_token",
       workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
       signal: stop.signal, logger: testLogger(),
       environment: fakeEnvironment({ exec: async (_cmd, args) => {
@@ -4292,7 +4292,7 @@ test("daemon reports retained executions at registration and forgets them once a
   let polls = 0;
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "journal-report", employeeId: "alice", token: "node_token",
+      backendUrl: "http://relay.test", sandboxId: "journal-report", userId: "alice", token: "node_token",
       workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
       signal: stop.signal, logger: testLogger(),
       environment: fakeEnvironment({ exec: async (_cmd, args) => {
@@ -4337,7 +4337,7 @@ test("a restarted daemon settles a run it can prove ended instead of leaving it 
   let polls = 0;
   try {
     await runRelayDaemon({
-      backendUrl: "http://relay.test", sandboxId: "proven-exit", employeeId: "alice", token: "node_token",
+      backendUrl: "http://relay.test", sandboxId: "proven-exit", userId: "alice", token: "node_token",
       workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
       signal: stop.signal, logger: testLogger(),
       environment: { ...fakeEnvironment(), proveExited: async (records) =>
@@ -4375,7 +4375,7 @@ test("a run reports the runtime conversation it ran in so it can be resumed", as
   let capabilities: unknown[] = [];
   let served = false;
   await runRelayDaemon({
-    backendUrl: "http://relay.test", sandboxId: "sbx_session", employeeId: "alice", token: "node_token",
+    backendUrl: "http://relay.test", sandboxId: "sbx_session", userId: "alice", token: "node_token",
     workspacePath: process.cwd(), pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
     environment: fakeEnvironment({ exec: async (_cmd, args) => isInventoryProbe(args)
       ? { exit_code: 0, stdout: "", stderr: "" }

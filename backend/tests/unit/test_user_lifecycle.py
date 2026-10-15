@@ -11,8 +11,8 @@ from relay.persistence.agent_placement_store import (
 from relay.persistence.agent_store import DatabaseAgentStore, LocalAgentStore
 from relay.persistence.daemon_store import DatabaseDaemonStore, LocalDaemonStore
 from relay.persistence.team_store import DatabaseTeamStore, LocalTeamStore
-from relay.security.auth import DatabaseUserAuthStore, UserAuthStore
-from relay.services.employee_lifecycle import cascade_engine, soft_delete_employee
+from relay.security.auth import DatabaseAccountAuthStore, AccountAuthStore
+from relay.services.user_lifecycle import cascade_engine, soft_delete_user
 
 
 class RaisingManagedNodeStore:
@@ -33,13 +33,13 @@ class RaisingManagedNodeStore:
         return node
 
 
-def add_managed_node(store: RaisingManagedNodeStore, employee_id: str) -> None:
-    store.nodes.append({"id": "managed_a", "employeeId": employee_id})
+def add_managed_node(store: RaisingManagedNodeStore, user_id: str) -> None:
+    store.nodes.append({"id": "managed_a", "userId": user_id})
 
 
 def build_context(tmp_path: Path, managed_node_store: object) -> SimpleNamespace:
     url = f"sqlite:///{tmp_path}/relay.db"
-    auth_store = DatabaseUserAuthStore(url, create_schema=True)
+    auth_store = DatabaseAccountAuthStore(url, create_schema=True)
     agent_store = DatabaseAgentStore(url)
     placement_store = DatabaseAgentPlacementStore(url)
     team_store = DatabaseTeamStore(url)
@@ -47,7 +47,7 @@ def build_context(tmp_path: Path, managed_node_store: object) -> SimpleNamespace
     registry = SimpleNamespace(
         daemon_store=daemon_store,
         sandboxes={},
-        unassign_employee_everywhere=lambda employee_id: [],
+        unassign_user_everywhere=lambda user_id: [],
         get=lambda node_id: None,
         fence_managed_node=lambda node_id: None,
     )
@@ -61,20 +61,20 @@ def build_context(tmp_path: Path, managed_node_store: object) -> SimpleNamespace
     )
 
 
-def seed_employee(ctx: SimpleNamespace) -> tuple[str, str]:
-    user = ctx.auth_store.create_user(
-        "alice", "userpass", employee_id="alice", display_name="Alice"
+def seed_user(ctx: SimpleNamespace) -> tuple[str, str]:
+    account = ctx.auth_store.create_account(
+        "alice", "userpass", user_id="alice", display_name="Alice"
     )
-    employee_id = user["employeeId"]
+    user_id = account["userId"]
     agent = ctx.agent_store.create_agent(
-        employee_id,
+        user_id,
         {
             "displayName": "Planner",
             "executorKind": "claude",
             "defaultRole": "implementer",
         },
     )
-    return employee_id, agent["id"]
+    return user_id, agent["id"]
 
 
 def test_cascade_stores_share_one_engine(tmp_path: Path) -> None:
@@ -83,34 +83,34 @@ def test_cascade_stores_share_one_engine(tmp_path: Path) -> None:
     assert cascade_engine(ctx) is ctx.auth_store.engine
 
 
-def test_successful_cascade_deletes_employee_and_agents(tmp_path: Path) -> None:
+def test_successful_cascade_deletes_user_and_agents(tmp_path: Path) -> None:
     ctx = build_context(tmp_path, RaisingManagedNodeStore())
-    employee_id, agent_id = seed_employee(ctx)
+    user_id, agent_id = seed_user(ctx)
 
-    result = soft_delete_employee(ctx, employee_id)
+    result = soft_delete_user(ctx, user_id)
 
     assert result["deletedAgents"] == [agent_id]
-    assert ctx.auth_store.list_employees() == []
-    assert ctx.agent_store.list_agents(supervisor_employee_id=employee_id) == []
+    assert ctx.auth_store.list_users() == []
+    assert ctx.agent_store.list_agents(supervisor_user_id=user_id) == []
 
 
-def test_failure_midway_leaves_the_employee_and_agents_intact(tmp_path: Path) -> None:
+def test_failure_midway_leaves_the_user_and_agents_intact(tmp_path: Path) -> None:
     """The whole cascade is one transaction.
 
-    Without it, the employee was already marked deleted and their agents gone
+    Without it, the user was already marked deleted and their agents gone
     by the time the managed-node step failed, leaving no way to finish or undo.
     """
     ctx = build_context(
         tmp_path, RaisingManagedNodeStore(RuntimeError("provider down"))
     )
-    employee_id, agent_id = seed_employee(ctx)
-    add_managed_node(ctx.managed_node_store, employee_id)
+    user_id, agent_id = seed_user(ctx)
+    add_managed_node(ctx.managed_node_store, user_id)
 
     with pytest.raises(RuntimeError, match="provider down"):
-        soft_delete_employee(ctx, employee_id)
+        soft_delete_user(ctx, user_id)
 
-    assert [item["id"] for item in ctx.auth_store.list_employees()] == [employee_id]
-    live_agents = ctx.agent_store.list_agents(supervisor_employee_id=employee_id)
+    assert [item["id"] for item in ctx.auth_store.list_users()] == [user_id]
+    live_agents = ctx.agent_store.list_agents(supervisor_user_id=user_id)
     assert [agent["id"] for agent in live_agents] == [agent_id]
 
 
@@ -118,28 +118,28 @@ def test_failure_restores_in_memory_registry_nodes(tmp_path: Path) -> None:
     ctx = build_context(
         tmp_path, RaisingManagedNodeStore(RuntimeError("provider down"))
     )
-    employee_id, _ = seed_employee(ctx)
-    add_managed_node(ctx.managed_node_store, employee_id)
-    ctx.registry.sandboxes["node_a"] = {"id": "node_a", "employeeId": employee_id}
+    user_id, _ = seed_user(ctx)
+    add_managed_node(ctx.managed_node_store, user_id)
+    ctx.registry.sandboxes["node_a"] = {"id": "node_a", "userId": user_id}
 
-    def drop_employee(_employee_id: str) -> list[str]:
+    def drop_user(_user_id: str) -> list[str]:
         ctx.registry.sandboxes["node_a"] = {"id": "node_a"}
         return ["node_a"]
 
-    ctx.registry.unassign_employee_everywhere = drop_employee
+    ctx.registry.unassign_user_everywhere = drop_user
 
     with pytest.raises(RuntimeError, match="provider down"):
-        soft_delete_employee(ctx, employee_id)
+        soft_delete_user(ctx, user_id)
 
-    assert ctx.registry.sandboxes["node_a"]["employeeId"] == employee_id
+    assert ctx.registry.sandboxes["node_a"]["userId"] == user_id
 
 
 def test_failure_does_not_erase_an_unrelated_registry_update(tmp_path: Path) -> None:
     ctx = build_context(tmp_path, RaisingManagedNodeStore())
-    employee_id, _ = seed_employee(ctx)
-    ctx.registry.sandboxes["node_a"] = {"id": "node_a", "employeeId": employee_id}
+    user_id, _ = seed_user(ctx)
+    ctx.registry.sandboxes["node_a"] = {"id": "node_a", "userId": user_id}
 
-    add_managed_node(ctx.managed_node_store, employee_id)
+    add_managed_node(ctx.managed_node_store, user_id)
 
     def fail_after_unrelated_update(node_id: str, patch: dict) -> dict:
         ctx.registry.sandboxes["node_b"] = {"id": "node_b", "status": "ready"}
@@ -148,7 +148,7 @@ def test_failure_does_not_erase_an_unrelated_registry_update(tmp_path: Path) -> 
     ctx.managed_node_store.update_node = fail_after_unrelated_update
 
     with pytest.raises(RuntimeError, match="provider down"):
-        soft_delete_employee(ctx, employee_id)
+        soft_delete_user(ctx, user_id)
 
     assert ctx.registry.sandboxes["node_b"]["status"] == "ready"
 
@@ -165,8 +165,8 @@ def test_file_backed_stores_have_no_shared_engine(tmp_path: Path) -> None:
     assert cascade_engine(ctx) is None
 
 
-def test_file_backed_failure_restores_employee_and_agent(tmp_path: Path) -> None:
-    auth_store = UserAuthStore(tmp_path)
+def test_file_backed_failure_restores_user_and_agent(tmp_path: Path) -> None:
+    auth_store = AccountAuthStore(tmp_path)
     agent_store = LocalAgentStore(tmp_path)
     placement_store = LocalAgentPlacementStore(tmp_path)
     team_store = LocalTeamStore(tmp_path)
@@ -179,18 +179,18 @@ def test_file_backed_failure_restores_employee_and_agent(tmp_path: Path) -> None
         registry=SimpleNamespace(
             daemon_store=daemon_store,
             sandboxes={},
-            unassign_employee_everywhere=lambda employee_id: [],
+            unassign_user_everywhere=lambda user_id: [],
             get=lambda node_id: None,
             fence_managed_node=lambda node_id: None,
         ),
         managed_node_store=RaisingManagedNodeStore(RuntimeError("provider down")),
     )
-    employee_id, agent_id = seed_employee(ctx)
-    add_managed_node(ctx.managed_node_store, employee_id)
+    user_id, agent_id = seed_user(ctx)
+    add_managed_node(ctx.managed_node_store, user_id)
 
     with pytest.raises(RuntimeError, match="provider down"):
-        soft_delete_employee(ctx, employee_id)
+        soft_delete_user(ctx, user_id)
 
     assert auth_store.authenticate("alice", "userpass") is not None
-    assert auth_store.deleted_employee_ids() == set()
+    assert auth_store.deleted_user_ids() == set()
     assert [agent["id"] for agent in agent_store.list_agents()] == [agent_id]

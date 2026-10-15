@@ -8,11 +8,11 @@ import { nodeOwnershipProfile } from "./helpers";
     chips, which made the most ordinary facts on the card read as the loudest. */
 export function NodeMeta({
   node,
-  employeeName,
+  userName,
   t,
 }: {
   node: ControlPanelDaemonNodeRecord;
-  employeeName?: string;
+  userName?: string;
   t: TFunction;
 }) {
   const ownership = nodeOwnershipProfile(node);
@@ -21,10 +21,10 @@ export function NodeMeta({
       <NodeOwnershipIcon ownership={ownership} size={ICON.sm} className="adm-node-meta-icon" aria-hidden="true" />
       <span className="adm-node-meta-text">
         {t(`admin.v2.node_ownership_${ownership}`)}
-        {employeeName ? (
+        {userName ? (
           <>
             <span className="adm-node-meta-sep" aria-hidden="true"> · </span>
-            <span translate="no">{employeeName}</span>
+            <span translate="no">{userName}</span>
           </>
         ) : null}
       </span>

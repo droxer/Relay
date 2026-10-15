@@ -26,7 +26,7 @@ def test_task_store_persists_assignment_status_activity_and_link() -> None:
                 "title": "Add Kanban board",
                 "description": "Show backlog.",
                 "priority": "high",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "dueDate": "2026-06-30",
                 "isRoutine": True,
                 "routineType": "job",
@@ -42,7 +42,7 @@ def test_task_store_persists_assignment_status_activity_and_link() -> None:
         task = store.link_session(task["id"], "ses_test")
         task = store.update_task(task["id"], {"status": "running"})
 
-        assert task["assigneeEmployeeId"] == "alice"
+        assert task["assigneeUserId"] == "alice"
         assert task["dueDate"] == "2026-06-30"
         assert task["isRoutine"] is True
         assert task["routineType"] == "job"
@@ -133,7 +133,7 @@ def test_database_task_store_persists_assignment_status_activity_and_link() -> N
                 "title": "Add Kanban board",
                 "description": "Show backlog.",
                 "priority": "high",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "dueDate": "2026-06-30",
                 "isRoutine": True,
                 "routineType": "job",
@@ -149,7 +149,7 @@ def test_database_task_store_persists_assignment_status_activity_and_link() -> N
         task = store.link_session(task["id"], session["id"])
         task = store.update_task(task["id"], {"status": "running"})
 
-        assert task["assigneeEmployeeId"] == "alice"
+        assert task["assigneeUserId"] == "alice"
         assert task["dueDate"] == "2026-06-30"
         assert task["isRoutine"] is True
         assert task["routineType"] == "job"
@@ -261,7 +261,7 @@ def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
             {
                 "title": "Later",
                 "priority": "high",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": "project_billing",
                 "dueDate": "2026-07-10",
             }
@@ -270,7 +270,7 @@ def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
             {
                 "title": "Earlier",
                 "priority": "high",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": "project_billing",
                 "dueDate": "2026-06-25",
             }
@@ -279,7 +279,7 @@ def test_task_claim_orders_by_priority_due_date_and_assignee() -> None:
             {
                 "title": "Bob",
                 "priority": "high",
-                "assigneeEmployeeId": "bob",
+                "assigneeUserId": "bob",
                 "projectId": "project_billing",
                 "dueDate": "2026-06-01",
             }
@@ -472,8 +472,8 @@ def test_task_store_creates_one_routine_occurrence() -> None:
                 "routineCadence": "weekly",
                 "routineNextRunDate": "2026-06-25",
                 "assignedAgent": "codex",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             }
         )
 
@@ -523,7 +523,7 @@ def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
             {
                 "title": "Later",
                 "priority": "high",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": "project_billing",
                 "dueDate": "2026-07-10",
             }
@@ -532,7 +532,7 @@ def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
             {
                 "title": "Earlier",
                 "priority": "high",
-                "assigneeEmployeeId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": "project_billing",
                 "dueDate": "2026-06-25",
             }
@@ -541,7 +541,7 @@ def test_database_task_claim_orders_by_priority_due_date_and_assignee() -> None:
             {
                 "title": "Bob",
                 "priority": "high",
-                "assigneeEmployeeId": "bob",
+                "assigneeUserId": "bob",
                 "projectId": "project_billing",
                 "dueDate": "2026-06-01",
             }
@@ -727,8 +727,8 @@ def test_database_task_store_creates_one_routine_occurrence() -> None:
                 "routineCadence": "weekly",
                 "routineNextRunDate": "2026-06-25",
                 "assignedAgent": "codex",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             }
         )
 
@@ -750,8 +750,8 @@ def assert_store_supports_canonical_assignment_and_dispatch_leases(store) -> Non
         {
             "title": "Keep explicit state",
             "status": "blocked",
-            "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice",
+            "assigneeUserId": "alice",
         }
     )
 
@@ -823,8 +823,8 @@ def assert_store_records_routine_occurrence_lineage(store) -> None:
             "routineNextRunDate": "2026-06-25",
             "assignedAgent": "codex",
             "assignedAgentId": "agent_builder",
-            "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice",
+            "assigneeUserId": "alice",
         }
     )
 
@@ -856,7 +856,7 @@ def assert_store_delete_hides_task_everywhere(store, session_store) -> None:
             "workspacePath": "/workspace",
             "taskGoal": "Linked work",
             "participants": ["human", "codex"],
-            "ownerEmployeeId": "alice",
+            "ownerUserId": "alice",
         }
     )
     late_session = session_store.create_session(
@@ -864,7 +864,7 @@ def assert_store_delete_hides_task_everywhere(store, session_store) -> None:
             "workspacePath": "/workspace",
             "taskGoal": "Too-late work",
             "participants": ["human"],
-            "ownerEmployeeId": "alice",
+            "ownerUserId": "alice",
         }
     )
     routine = store.create_task(
@@ -903,11 +903,11 @@ def assert_store_delete_hides_task_everywhere(store, session_store) -> None:
 
     deleted = store.delete_task(routine["id"], deleted_by="alice")
     assert deleted["deletedAt"]
-    assert deleted["deletedByEmployeeId"] == "alice"
+    assert deleted["deletedByUserId"] == "alice"
     deleted_event = next(
         event for event in deleted["events"] if event["type"] == "task.deleted"
     )
-    assert deleted_event["actorEmployeeId"] == "alice"
+    assert deleted_event["actorUserId"] == "alice"
     again = store.delete_task(routine["id"])
     assert again["deletedAt"] == deleted["deletedAt"]
     assert (
@@ -959,8 +959,8 @@ def assert_team_assignment_contract(store) -> None:
     task = store.create_task(
         {
             "title": "Ship together",
-            "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice",
+            "assigneeUserId": "alice",
             "assignedTeamId": "team_delivery",
             "status": "assigned",
         }
@@ -1121,8 +1121,8 @@ def test_routine_occurrence_inherits_collaboration_style(database: bool) -> None
                 "routineCadence": "weekly",
                 "routineNextRunDate": "2026-06-25",
                 "assignedAgent": "codex",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "collaborationStyle": "solo",
             }
         )
@@ -1148,8 +1148,8 @@ def test_routine_occurrence_without_a_style_inherits_nothing(database: bool) -> 
                 "routineCadence": "weekly",
                 "routineNextRunDate": "2026-06-25",
                 "assignedAgent": "codex",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
             }
         )
 
@@ -1168,9 +1168,9 @@ def test_task_claim_skips_intake_issues(database) -> None:
             if database
             else LocalTaskStore(root)
         )
-        intake = store.create_task({"title": "Loose", "priority": "high", "assigneeEmployeeId": "alice"})
+        intake = store.create_task({"title": "Loose", "priority": "high", "assigneeUserId": "alice"})
         run = store.create_task({
-            "title": "Nightly run", "assigneeEmployeeId": "alice", "sourceRoutineId": "routine_nightly",
+            "title": "Nightly run", "assigneeUserId": "alice", "sourceRoutineId": "routine_nightly",
         })
         for task in (intake, run):
             store.assign_task(task["id"], "codex")

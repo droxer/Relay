@@ -18,7 +18,7 @@ PROJECT_CONTEXT_MAX_LENGTH = 8_000
 
 
 def create_project_payload(
-    owner_employee_id: str,
+    owner_user_id: str,
     payload: dict[str, Any],
     *,
     registry: Any,
@@ -29,7 +29,7 @@ def create_project_payload(
     node = registry.get(node_id)
     if not node or node.get("retiredAt"):
         raise ProjectValidationError("project_computer_not_found")
-    if node.get("employeeId") != owner_employee_id:
+    if node.get("userId") != owner_user_id:
         raise ProjectValidationError("project_computer_forbidden")
     if not node.get("workspacePath"):
         raise ProjectValidationError("project_workspace_unavailable")
@@ -37,7 +37,7 @@ def create_project_payload(
         raise ProjectValidationError("project_workspace_unsupported")
     target_computer_id = computer_id(node)
     members, lead_agent_id = validate_project_roster(
-        owner_employee_id,
+        owner_user_id,
         payload.get("members"),
         payload.get("leadAgentId"),
         target_computer_id=target_computer_id,
@@ -126,7 +126,7 @@ def resolve_target_node_id(monitor_nodes: list[dict[str, Any]], computer_id_valu
 
 
 def update_project_payload(
-    owner_employee_id: str,
+    owner_user_id: str,
     current: dict[str, Any],
     payload: dict[str, Any],
     *,
@@ -193,7 +193,7 @@ def update_project_payload(
             patch["contextRevision"] = int(current.get("contextRevision") or 0) + 1
     if "members" in patch or "leadAgentId" in patch:
         members, lead_agent_id = validate_project_roster(
-            owner_employee_id,
+            owner_user_id,
             patch.get("members", current["members"]),
             patch.get("leadAgentId", current["leadAgentId"]),
             target_computer_id=current["computerId"],
@@ -215,7 +215,7 @@ def update_project_payload(
 
 
 def validate_project_roster(
-    owner_employee_id: str,
+    owner_user_id: str,
     raw_members: Any,
     lead_agent_id: Any,
     *,
@@ -248,7 +248,7 @@ def validate_project_roster(
         agent = agent_store.get_agent(member["agentId"])
         if not agent or agent.get("deletedAt"):
             raise ProjectValidationError("project_member_not_found")
-        if agent.get("supervisorEmployeeId") != owner_employee_id:
+        if agent.get("supervisorUserId") != owner_user_id:
             raise ProjectValidationError("project_member_wrong_owner")
         previous = previous_members.get(member["agentId"])
         newly_enabled = member["enabled"] and previous and not previous.get("enabled", True)

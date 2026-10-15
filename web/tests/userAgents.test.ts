@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { dedupeAgentsById } from "../src/lib/employeeAgents.js";
-import type { EmployeeAgent } from "../src/types.js";
+import { dedupeAgentsById } from "../src/lib/userAgents.js";
+import type { UserAgent } from "../src/types.js";
 
-function agent(id: string): EmployeeAgent {
+function agent(id: string): UserAgent {
   return {
     id,
-    supervisorEmployeeId: "alice",
+    supervisorUserId: "alice",
     displayName: `Agent ${id}`,
     executorKind: "codex",
     skillPolicy: {},

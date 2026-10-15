@@ -5,33 +5,33 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
   const computerId = "device:alice:host";
   const agents = ["lead", "qa"].map((id) => ({
     id, displayName: id === "lead" ? "Builder" : "Reviewer", executorKind: "codex",
-    defaultRole: id === "lead" ? "implementer" : "reviewer", supervisorEmployeeId: "alice",
+    defaultRole: id === "lead" ? "implementer" : "reviewer", supervisorUserId: "alice",
     enabled: true, availability: "ready", version: 1, skills: [],
     placements: [{ id: `placement-${id}`, agentId: id, computerId, daemonNodeId: "node", desiredState: "active", status: "ready" }],
     createdAt: stamp, updatedAt: stamp,
   }));
-  let team = { id: "delivery", name: "Delivery", ownerEmployeeId: "alice", leadAgentId: "lead",
+  let team = { id: "delivery", name: "Delivery", ownerUserId: "alice", leadAgentId: "lead",
     memberAgentIds: ["lead", "qa"], members: agents, lead: agents[0], enabled: true,
     collaborationStyle: "build_review", memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
   let task = { id: "task", title: "Ship the fix", description: "Fix and review", status: "backlog", priority: "normal",
-    acceptancePolicy: "human", assignedTeamId: team.id, projectId: "project", ownerEmployeeId: "alice",
+    acceptancePolicy: "human", assignedTeamId: team.id, projectId: "project", ownerUserId: "alice",
     isRoutine: false, linkedSessionIds: [], activity: [], events: [], createdAt: stamp, updatedAt: stamp };
   const session = { id: "style-thread", title: "Style thread", taskGoal: "Improve the API", teamId: team.id,
-    ownerEmployeeId: "alice", ownerAgentId: "lead", daemonNodeId: "node", computerId,
+    ownerUserId: "alice", ownerAgentId: "lead", daemonNodeId: "node", computerId,
     workspacePath: "/workspace", status: "completed", phase: "created", participants: ["human"],
     agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
     eventCount: 0, artifactCount: 0, runCount: 0, createdAt: stamp, updatedAt: stamp };
-  const node = { id: "node", employeeId: "alice", workspaceId: "host", computerId, name: "Computer",
+  const node = { id: "node", userId: "alice", workspaceId: "host", computerId, name: "Computer",
     activeRuns: [],
     online: true, stale: false, status: "ready", agents: { codex: "ready" }, capabilities: ["thread-workspaces", "work-results"] };
-  const project = { id: "project", name: "API", ownerEmployeeId: "alice", computerId, enabled: true, members: [], version: 1 };
+  const project = { id: "project", name: "API", ownerUserId: "alice", computerId, enabled: true, members: [], version: 1 };
   const sends: Record<string, unknown>[] = [];
   const patches: Record<string, unknown>[] = [];
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
     let body: unknown = { sessions: [session], agents, teams: [team], tasks: [task], nodes: [node], projects: [project], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", employeeId: "alice", username: "alice", role: "employee", theme, language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme, language: "en" } };
     if (path.endsWith("/teams/delivery") && method === "PATCH") {
       const patch = route.request().postDataJSON(); patches.push(patch); team = { ...team, ...patch }; body = { team };
     }

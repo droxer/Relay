@@ -55,7 +55,7 @@ def resolve_bundle(
         grants = [item for item in grants if item["skillId"] not in direct]
         grants.extend(direct.values())
 
-    owner = agent.get("supervisorEmployeeId")
+    owner = agent.get("supervisorUserId")
     resolved, seen = [], set()
     for grant in grants:
         skill_id = grant["skillId"]
@@ -79,7 +79,7 @@ def resolve_bundle(
                 _skipped(skill_id, slug, "deleted", grant.get("assignmentMode"))
             )
             continue
-        if skill.get("visibility") != "org" and skill.get("ownerEmployeeId") != owner:
+        if skill.get("visibility") != "org" and skill.get("ownerUserId") != owner:
             skipped.append(
                 _skipped(
                     skill_id,

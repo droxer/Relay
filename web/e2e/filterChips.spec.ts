@@ -4,9 +4,9 @@ import { expect, test, type Page } from "@playwright/test";
    the URL. These drive the real chips (the interaction tests stub them). */
 
 const stamp = "2026-09-01T00:00:00.000Z";
-const user = { id: "u", employeeId: "u", username: "review", role: "employee", theme: "light", language: "en" };
+const user = { id: "u", userId: "u", username: "review", role: "user", theme: "light", language: "en" };
 function task(id: string, priority: string) {
-  return { id, title: id, description: "", priority, status: "backlog", workflowStage: "backlog", ownerEmployeeId: "u",
+  return { id, title: id, description: "", priority, status: "backlog", workflowStage: "backlog", ownerUserId: "u",
     acceptancePolicy: "human", isRoutine: false, linkedSessionIds: [], createdAt: stamp,
     updatedAt: stamp, eventCount: 1, activityCount: 0 };
 }

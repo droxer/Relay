@@ -1,7 +1,7 @@
 /**
  * One sort vocabulary for every full-page list.
  *
- * The lists (backlog, routines, the admin employee and node tables) each
+ * The lists (backlog, routines, the admin user and node tables) each
  * arrived with a hardcoded `.sort(...)` baked into their filter function and
  * no way for the reader to change it. This module is the seam: a surface
  * declares its sortable columns once, the header renders them, and the same

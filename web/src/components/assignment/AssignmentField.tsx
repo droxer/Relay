@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AgentTeam, EmployeeAgent } from "../../types";
+import type { AgentTeam, UserAgent } from "../../types";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { agentLabel } from "../../lib/plan";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
@@ -151,7 +151,7 @@ export function AssignmentSelect({
 }: {
   /** `agent:<id>`, `team:<id>`, or `NO_ASSIGNMENT`. */
   value: string;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   teams: AgentTeam[];
   /** Resolved views for the current value — may be placeholders for a roster
    *  entry that has since been deleted. */

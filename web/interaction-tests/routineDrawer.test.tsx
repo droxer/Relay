@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { AUTH_CAPABILITIES_QUERY_KEY } from "../src/hooks/useAuthSession";
 import { emptyBacklogForm, emptyRoutineForm, routineMutationFields, type RoutineTaskFormState, type TaskBoardFormState } from "../src/lib/taskBoardForm";
-import type { AgentTeam, CurrentUser, EmployeeAgent, ProjectRecord, RoutineTrigger } from "../src/types";
+import type { AgentTeam, CurrentUser, UserAgent, ProjectRecord, RoutineTrigger } from "../src/types";
 
 const { previewSchedule } = vi.hoisted(() => ({
   previewSchedule: vi.fn(),
@@ -48,10 +48,10 @@ vi.mock("@/components/ui/select", () => {
   };
 });
 
-const user = { employeeId: "u", username: "u" } as CurrentUser;
+const user = { userId: "u", username: "u" } as CurrentUser;
 const projects = [{ id: "p", name: "Launch", enabled: true, members: [] }] as unknown as ProjectRecord[];
-const agents = [{ id: "agent-1", displayName: "Builder", executorKind: "codex", supervisorEmployeeId: "u" }] as unknown as EmployeeAgent[];
-const teams = [{ id: "team-1", name: "Crew", ownerEmployeeId: "u", members: [] }] as unknown as AgentTeam[];
+const agents = [{ id: "agent-1", displayName: "Builder", executorKind: "codex", supervisorUserId: "u" }] as unknown as UserAgent[];
+const teams = [{ id: "team-1", name: "Crew", ownerUserId: "u", members: [] }] as unknown as AgentTeam[];
 const WEEKDAYS_9: RoutineTrigger = { kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "weekday", at: "09:00" } } };
 
 beforeEach(() => {

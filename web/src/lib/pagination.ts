@@ -2,7 +2,7 @@
  * One pagination vocabulary for every list and card surface.
  *
  * Client-side by design: these collections already arrive whole (the backlog,
- * routine, employee, and node endpoints return the full set, and the filter,
+ * routine, user, and node endpoints return the full set, and the filter,
  * search, and sort layers all run over that set locally). Paging on the server
  * would mean filtering a page instead of paging the filtered result, which
  * gets the semantics backwards — you would search one screenful. When a

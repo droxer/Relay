@@ -30,7 +30,7 @@ import {
   taskAssignmentOptions,
   type TaskAssignmentChange,
 } from "../../lib/taskAssignment";
-import type { AgentTeam, EmployeeAgent, ProjectRecord, RelayTaskListItem, TaskPriority, TaskStatus } from "../../types";
+import type { AgentTeam, UserAgent, ProjectRecord, RelayTaskListItem, TaskPriority, TaskStatus } from "../../types";
 
 /*
  * A row's properties, edited where they are read: the status mark, the
@@ -161,7 +161,7 @@ export function InlineAssignee({
   readOnly = false,
 }: {
   task: RelayTaskListItem;
-  agents: readonly EmployeeAgent[];
+  agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
   /** The task's project — its computer decides who may take the task. */
   project?: ProjectRecord | null;
@@ -180,7 +180,7 @@ export function InlineAssignee({
     project,
     agents,
     teams,
-    assigneeEmployeeId: task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "",
+    assigneeUserId: task.assigneeUserId ?? task.ownerUserId ?? "",
     assignedAgentId: task.assignedAgentId,
     assignedTeamId: task.assignedTeamId,
   });

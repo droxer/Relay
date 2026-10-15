@@ -11,7 +11,7 @@ triggering task-failure automations, and attribute Stop to its initiating person
 | A question with a nonzero exit emits no blocked task transition | `test_a_question_survives_the_cli_exiting_badly_after_asking` |
 | Stop retains its first actor across restart and late completion | `test_stop_keeps_its_actor_across_registry_restart` (file and database stores) |
 | Admin identity reaches cancellation without losing admin access | `test_admin_stop_preserves_identity_for_backend` |
-| Delivered Stop records the UI employee or admin | `test_cancel_command_is_redelivered_until_run_termination_confirms_it` |
+| Delivered Stop records the UI user or admin | `test_cancel_command_is_redelivered_until_run_termination_confirms_it` |
 
 RED: the initial five cases failed for the intended bugs. GREEN: the same
 five cases passed after the fixes. Command:

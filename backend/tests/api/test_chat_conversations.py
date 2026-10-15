@@ -34,10 +34,10 @@ def _bootstrap_admin(client: TestClient) -> None:
 
 def _active_integration(client: TestClient) -> str:
     client.app.state.chat_probe = _healthy_provider
-    assert client.post("/api/v1/admin/users", json={
+    assert client.post("/api/v1/admin/accounts", json={
         "username": "alice",
         "password": "harbor-quartz-8830",
-        "employeeId": "alice",
+        "userId": "alice",
         "displayName": "Alice",
     }).status_code == 201
     integration_id = client.post("/api/v1/admin/chat-integrations", json={
@@ -47,7 +47,7 @@ def _active_integration(client: TestClient) -> str:
         "secrets": {"botToken": "discord-secret-token"},
     }).json()["integration"]["id"]
     client.post(f"/api/v1/admin/chat-integrations/{integration_id}/identity-links", json={
-        "externalUserId": "discord_user_1", "employeeId": "alice", "defaultSandboxId": "sbx_alice",
+        "externalUserId": "discord_user_1", "userId": "alice", "defaultSandboxId": "sbx_alice",
     })
     client.post(f"/api/v1/admin/chat-integrations/{integration_id}/allowed-conversations", json={
         "conversationId": "channel_123", "label": "team-agents",
@@ -61,7 +61,7 @@ def _create_session(client: TestClient, owner: str) -> str:
     response = client.post("/api/v1/threads", json={
         "taskGoal": f"task for {owner}",
         "assignments": [{"agent": "claude"}],
-        "ownerEmployeeId": owner,
+        "ownerUserId": owner,
     })
     assert response.status_code == 201
     return response.json()["id"]
@@ -89,7 +89,7 @@ def test_conversation_mapping_round_trip(monkeypatch) -> None:
         )
         assert bind.status_code == 200
         assert bind.json()["mapping"]["sessionId"] == session_id
-        assert bind.json()["mapping"]["ownerEmployeeId"] == "alice"
+        assert bind.json()["mapping"]["ownerUserId"] == "alice"
         assert bind.json()["mapping"]["providerMessageId"] == "provider_reply_1"
 
         # Resolving now returns the bound session.

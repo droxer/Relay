@@ -33,8 +33,8 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
 
-// The logged-in employee's own threads. Each row is a session; the list
-// is owner-scoped by the backend, so it only ever shows the current employee's
+// The logged-in user's own threads. Each row is a session; the list
+// is owner-scoped by the backend, so it only ever shows the current user's
 // work. “New thread” starts a fresh thread without archiving the rest.
 export function ThreadListPanel({
   directoryMode,

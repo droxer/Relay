@@ -38,7 +38,7 @@ def execution(tmp_path, request):
     node = registry.register(
         {
             "sandboxId": "node",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -69,8 +69,8 @@ def execution(tmp_path, request):
             "title": "Deliver work",
             "assignedAgent": "codex",
             "assignedAgentId": agent["id"],
-            "assigneeEmployeeId": "alice",
-            "ownerEmployeeId": "alice",
+            "assigneeUserId": "alice",
+            "ownerUserId": "alice",
             "projectId": project["id"],
             "status": "assigned",
         }
@@ -118,15 +118,15 @@ def test_missing_assignment_records_actionable_blocker(
         {
             "title": "Missing assignment",
             "status": "assigned",
-            "assigneeEmployeeId": "alice",
-            "ownerEmployeeId": "alice",
+            "assigneeUserId": "alice",
+            "ownerUserId": "alice",
             **fields,
         }
     )
     if source == "manual":
         asyncio.run(
             start_task_on_ready_node(
-                ctx, task, {"employeeId": "alice", "isAdmin": False}
+                ctx, task, {"userId": "alice", "isAdmin": False}
             )
         )
     else:
@@ -144,7 +144,7 @@ def test_disabled_agent_records_actionable_blocker(execution, source):
     if source == "manual":
         asyncio.run(
             start_task_on_ready_node(
-                ctx, task, {"employeeId": "alice", "isAdmin": False}
+                ctx, task, {"userId": "alice", "isAdmin": False}
             )
         )
     else:
@@ -176,7 +176,7 @@ def test_scheduler_leaves_admitted_work_untouched(execution, admission):
     else:
         asyncio.run(
             start_task_on_ready_node(
-                ctx, task, {"employeeId": "alice", "isAdmin": False}
+                ctx, task, {"userId": "alice", "isAdmin": False}
             )
         )
         assert ctx.registry.daemon_store.active_run_request_for_task(task["id"])
@@ -252,7 +252,7 @@ def test_failed_dispatch_requires_manual_retry(execution, monkeypatch, source, c
     monkeypatch.setattr(ctx.backend, "run", fail)
     if source == "manual":
         result = asyncio.run(start_task_on_ready_node(
-            ctx, task, {"employeeId": "alice", "isAdmin": False}
+            ctx, task, {"userId": "alice", "isAdmin": False}
         ))
         assert result["dispatch"]["state"] == "rejected"
     else:
@@ -271,7 +271,7 @@ def test_failed_dispatch_requires_manual_retry(execution, monkeypatch, source, c
         ctx.task_store.update_task(task["id"], {"status": "assigned"})
         result = asyncio.run(start_task_on_ready_node(
             ctx, ctx.task_store.get_task(task["id"]),
-            {"employeeId": "alice", "isAdmin": False}
+            {"userId": "alice", "isAdmin": False}
         ))
         assert result["dispatch"]["state"] == "started"
 
@@ -307,7 +307,7 @@ def test_wip_rejection_does_not_fill_conversation_list(execution, monkeypatch):
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
     ctx.task_store.create_task({
         "title": "Already in progress", "status": "running",
-        "assigneeEmployeeId": "alice",
+        "assigneeUserId": "alice",
     })
     asyncio.run(scheduler(ctx).tick())
     failed = ctx.task_store.get_task(task["id"])

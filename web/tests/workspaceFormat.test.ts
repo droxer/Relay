@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { taskAssigneeName } from "../src/lib/workspaceFormat.js";
-import type { EmployeeAgent } from "../src/types.js";
+import type { UserAgent } from "../src/types.js";
 
-const agent = (id: string, displayName: string): EmployeeAgent => ({
+const agent = (id: string, displayName: string): UserAgent => ({
   id,
-  supervisorEmployeeId: "employee-1",
+  supervisorUserId: "user-1",
   displayName,
   executorKind: "claude",
   skillPolicy: {},

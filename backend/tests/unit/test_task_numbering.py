@@ -24,14 +24,14 @@ def store(request, tmp_path) -> Iterator[LocalTaskStore | DatabaseTaskStore]:
 
 
 def _issue(store, owner: str, **extra):
-    return store.create_task({"title": "Issue", "ownerEmployeeId": owner, **extra})
+    return store.create_task({"title": "Issue", "ownerUserId": owner, **extra})
 
 
 def _automation(store, owner: str, **extra):
     return store.create_task(
         {
             "title": "Automation",
-            "ownerEmployeeId": owner,
+            "ownerUserId": owner,
             "isRoutine": True,
             "routineEnabled": True,
             "routineCadence": "weekly",
@@ -43,9 +43,9 @@ def _automation(store, owner: str, **extra):
 
 
 def test_scope_puts_automations_before_projects_and_people() -> None:
-    assert task_number_scope({"isRoutine": True, "projectId": "p", "ownerEmployeeId": "a"}) == "automation:a"
-    assert task_number_scope({"projectId": "p", "ownerEmployeeId": "a"}) == "project:p"
-    assert task_number_scope({"ownerEmployeeId": "a"}) == "issue:a"
+    assert task_number_scope({"isRoutine": True, "projectId": "p", "ownerUserId": "a"}) == "automation:a"
+    assert task_number_scope({"projectId": "p", "ownerUserId": "a"}) == "project:p"
+    assert task_number_scope({"ownerUserId": "a"}) == "issue:a"
     assert task_number_scope({}) == "issue:"
 
 
@@ -139,7 +139,12 @@ def test_numbering_migration_backfills_in_creation_order(tmp_path) -> None:
             row = conn.execute(
                 select(store.tasks.c.snapshot).where(store.tasks.c.id == task["id"])
             ).scalar_one()
-            legacy = {k: v for k, v in row.items() if k not in ("number", "numberScope")}
+            # 0083 predates the user rename, so it reads the employee-era keys.
+            legacy = {
+                k.replace("User", "Employee"): v
+                for k, v in row.items()
+                if k not in ("number", "numberScope")
+            }
             conn.execute(
                 update(store.tasks)
                 .where(store.tasks.c.id == task["id"])

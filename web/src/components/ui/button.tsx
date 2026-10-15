@@ -83,7 +83,7 @@ const buttonVariants = cva(
         false: "",
       },
       /* Destructive intent on a QUIET tier — the icon-only row actions (delete
-         a node, an employee, a chat link, a thread) and menu items where the
+         a node, a user, a chat link, a thread) and menu items where the
          `destructive` variant's resting ring, repeated down every row, would
          turn the surface into a wall of red. Neutral at rest, --err on
          hover/focus.

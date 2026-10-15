@@ -1,7 +1,7 @@
 from .scheduler import (
     SchedulerTickResult,
     TaskScheduler,
-    employee_has_device_node,
+    user_has_device_node,
     ensure_managed_capacity_for_task,
     materialize_legacy_agent_assignment,
     materialize_legacy_task_assignment,
@@ -12,7 +12,7 @@ from .scheduler import (
 __all__ = [
     "SchedulerTickResult",
     "TaskScheduler",
-    "employee_has_device_node",
+    "user_has_device_node",
     "ensure_managed_capacity_for_task",
     "materialize_legacy_agent_assignment",
     "materialize_legacy_task_assignment",

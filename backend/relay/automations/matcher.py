@@ -134,9 +134,9 @@ class AutomationMatcher:
             automations = {target_id: target} if is_active(target) else {}
         matched = []
         for task in automations.values():
-            owner = task.get("ownerEmployeeId")
+            owner = task.get("ownerUserId")
             subject = event.get("subject") or {}
-            if owner and owner not in (subject.get("ownerEmployeeId"), subject.get("assigneeEmployeeId")):
+            if owner and owner not in (subject.get("ownerUserId"), subject.get("assigneeUserId")):
                 continue
             if listens_for(task, event):
                 matched.append(task)
@@ -166,7 +166,7 @@ class AutomationMatcher:
         run = next((item for item in session.get("agentRuns", []) if item.get("id") == payload.get("runId")), {})
         linked = [task for task in self.task_store.list_tasks_for_session(session_id) if not task.get("isRoutine")]
         task = linked[0] if linked else None
-        subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerEmployeeId": session.get("ownerEmployeeId")}
+        subject = subject_of(task) if task else {"projectId": session.get("projectId"), "ownerUserId": session.get("ownerUserId")}
         if not subject.get("assignedAgentId") and run.get("logicalAgentId"):
             subject = {**subject, "assignedAgentId": run["logicalAgentId"]}
         origin = task.get("sourceRoutineId") if task else None

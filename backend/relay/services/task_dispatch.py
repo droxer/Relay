@@ -51,7 +51,7 @@ from .team_dispatch import (
     TEAM_UNAVAILABLE_MESSAGE,
     TeamDispatchError,
     resolve_team_task_assignments,
-    task_execution_employee_id,
+    task_execution_user_id,
 )
 
 PERMANENT_DISPATCH_CODES = frozenset(
@@ -100,14 +100,14 @@ def implicit_group_assignments_for_task(
     resolved on the task owner's Computers; daemon registration must not
     manufacture compatibility agents.
     """
-    employee_id = task.get("assigneeEmployeeId") or task.get("ownerEmployeeId")
-    if not employee_id:
+    user_id = task.get("assigneeUserId") or task.get("ownerUserId")
+    if not user_id:
         return []
 
     selected: list[dict[str, Any]] = []
     daemon_nodes = ctx.registry.monitor_nodes()
     for logical_agent in ctx.agent_store.list_agents(
-        supervisor_employee_id=employee_id
+        supervisor_user_id=user_id
     ):
         if not logical_agent.get("enabled", True):
             continue
@@ -120,7 +120,7 @@ def implicit_group_assignments_for_task(
         try:
             resolve_agent_assignments(
                 [*selected, candidate],
-                employee_id=employee_id,
+                user_id=user_id,
                 is_admin=True,
                 agent_store=ctx.agent_store,
                 placement_store=ctx.agent_placement_store,
@@ -274,7 +274,7 @@ class TaskDispatcher:
                         current["id"],
                         {
                             "status": "assigned",
-                            "actorEmployeeId": self.actor.get("employeeId"),
+                            "actorUserId": self.actor.get("userId"),
                             "expectedStatus": "blocked",
                             "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
                         },
@@ -497,8 +497,8 @@ class TaskDispatcher:
             try:
                 self.run_assignments = resolve_agent_assignments(
                     self.run_assignments,
-                    employee_id=task_execution_employee_id(self.task)
-                    or self.actor["employeeId"],
+                    user_id=task_execution_user_id(self.task)
+                    or self.actor["userId"],
                     is_admin=False,
                     agent_store=self.ctx.agent_store,
                     placement_store=self.ctx.agent_placement_store,
@@ -548,8 +548,8 @@ class TaskDispatcher:
                 self.task, self.ctx.registry, self.ctx.managed_node_store
             )
             if capacity and capacity.provisioning_requested:
-                employee_id = task_execution_employee_id(self.task)
-                message = f"Managed node provisioning requested for {employee_id}."
+                user_id = task_execution_user_id(self.task)
+                message = f"Managed node provisioning requested for {user_id}."
                 self.ctx.task_store.record_activity(
                     self.task["id"], message, activity_payload
                 )
@@ -558,8 +558,8 @@ class TaskDispatcher:
         )
 
     def _node_unavailable_result(self) -> DispatchResult | None:
-        employee_id = self.task.get("assigneeEmployeeId") or self.task.get(
-            "ownerEmployeeId"
+        user_id = self.task.get("assigneeUserId") or self.task.get(
+            "ownerUserId"
         )
         capacity = ensure_managed_capacity_for_task(
             self.task, self.ctx.registry, self.ctx.managed_node_store
@@ -569,7 +569,7 @@ class TaskDispatcher:
             return None
         label = ", ".join(dict.fromkeys(item["agent"] for item in self.run_assignments))
         message = (
-            f"Managed node provisioning requested for {employee_id}."
+            f"Managed node provisioning requested for {user_id}."
             if requested_capacity
             else f"No ready node is available for {label}."
         )
@@ -711,7 +711,7 @@ class TaskDispatcher:
         if self.claim_id:
             request["idempotencyKey"] = self.claim_id
         if not self.actor["isAdmin"]:
-            request["actorEmployeeId"] = self.actor["employeeId"]
+            request["actorUserId"] = self.actor["userId"]
         return request
 
     def _dispatch_error_result(self, error: Exception) -> DispatchResult:

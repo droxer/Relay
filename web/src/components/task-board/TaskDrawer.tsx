@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentTeam, EmployeeAgent, ProjectRecord, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
+import type { AgentTeam, UserAgent, ProjectRecord, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
 import { manualTaskStatuses } from "../../lib/taskFlow";
 import { taskAssignmentOptions } from "../../lib/taskAssignment";
@@ -46,7 +46,7 @@ import {
 type TaskDrawerProps = {
   open: boolean;
   form: TaskBoardFormState;
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   teams?: AgentTeam[];
   projects?: ProjectRecord[];
   onCreateProject?: () => void;
@@ -134,7 +134,7 @@ function BacklogFields({ form, onChange, canRun }: {
  *  schedule controls, followed by its enabled switch. */
 function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
   form: RoutineTaskFormState; onChange: (next: TaskBoardFormState) => void;
-  logicalAgents: EmployeeAgent[]; teams: AgentTeam[]; projects: ProjectRecord[];
+  logicalAgents: UserAgent[]; teams: AgentTeam[]; projects: ProjectRecord[];
 }) {
   const { t } = useTranslation();
   const enabledHintId = useId();
@@ -259,7 +259,7 @@ export function TaskDrawer({
     project,
     agents: logicalAgents,
     teams,
-    assigneeEmployeeId: form.assigneeEmployeeId,
+    assigneeUserId: form.assigneeUserId,
     assignedAgentId: form.assignedAgentId,
     assignedTeamId: form.assignedTeamId,
   });
@@ -444,8 +444,8 @@ export function TaskDrawer({
                 assignedAgentId: logicalAgent.id,
                 assignedTeamId: "",
                 // An ownerless agent says nothing about who the task is
-                // for, so it leaves the assignee as the employee chose it.
-                assigneeEmployeeId: logicalAgent.supervisorEmployeeId ?? form.assigneeEmployeeId,
+                // for, so it leaves the assignee as the user chose it.
+                assigneeUserId: logicalAgent.supervisorUserId ?? form.assigneeUserId,
                 ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
               });
               return;

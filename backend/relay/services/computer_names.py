@@ -61,7 +61,7 @@ def rename_computer_for_actor(
     node = ctx.registry.get(node_id)
     if not node:
         raise KeyError(node_id)
-    if not actor.get("isAdmin") and node.get("employeeId") != actor.get("employeeId"):
+    if not actor.get("isAdmin") and node.get("userId") != actor.get("userId"):
         raise PermissionError(node_id)
 
     display_name = normalize_computer_display_name(requested_display_name)

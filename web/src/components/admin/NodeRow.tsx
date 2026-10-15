@@ -58,11 +58,11 @@ export function NodeIdentityCell({
   );
 }
 
-export function NodeEmployeeCell({ employeeName }: { employeeName?: string }) {
-  if (!employeeName) return null;
+export function NodeUserCell({ userName }: { userName?: string }) {
+  if (!userName) return null;
   return (
-    <span className="adm-node-row-employee" translate="no" title={employeeName}>
-      {employeeName}
+    <span className="adm-node-row-user" translate="no" title={userName}>
+      {userName}
     </span>
   );
 }

@@ -1,23 +1,23 @@
-import type { AgentTeam, EmployeeAgent, LogicalAgentAvailability, ProjectRecord, RelayTaskListItem, TaskMutationInput } from "../types.js";
+import type { AgentTeam, UserAgent, LogicalAgentAvailability, ProjectRecord, RelayTaskListItem, TaskMutationInput } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
 import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
 
-/** Can this agent/team be offered for a task assigned to `assigneeEmployeeId`?
+/** Can this agent/team be offered for a task assigned to `assigneeUserId`?
  *
- *  An owned record belongs to one employee and is offered only to them. An
+ *  An owned record belongs to one user and is offered only to them. An
  *  OWNERLESS record is globally assignable — agents and teams are not always
- *  employee-scoped, and hiding them left the picker with nothing to show.
+ *  user-scoped, and hiding them left the picker with nothing to show.
  *  This mirrors the backend rule that ownerless sessions are allowed. */
 export function assignmentOptionVisible(
-  ownerEmployeeId: string | undefined,
-  assigneeEmployeeId: string,
+  ownerUserId: string | undefined,
+  assigneeUserId: string,
   selected: boolean,
 ): boolean {
   if (selected) return true;
-  if (!assigneeEmployeeId) return true;
-  if (!ownerEmployeeId) return true;
-  return ownerEmployeeId === assigneeEmployeeId;
+  if (!assigneeUserId) return true;
+  if (!ownerUserId) return true;
+  return ownerUserId === assigneeUserId;
 }
 
 type ComputerPlaced = {
@@ -83,18 +83,18 @@ export function taskAssignmentOptions({
   project,
   agents,
   teams,
-  assigneeEmployeeId,
+  assigneeUserId,
   assignedAgentId,
   assignedTeamId,
 }: {
   project?: Pick<ProjectRecord, "computerId" | "members"> | null;
-  agents: readonly EmployeeAgent[];
+  agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
-  assigneeEmployeeId: string;
+  assigneeUserId: string;
   assignedAgentId?: string;
   assignedTeamId?: string;
-}): { agents: EmployeeAgent[]; teams: AgentTeam[] } {
-  const agentOnTaskComputer = (agent: EmployeeAgent) => !project
+}): { agents: UserAgent[]; teams: AgentTeam[] } {
+  const agentOnTaskComputer = (agent: UserAgent) => !project
     || project.members.some((member) => member.agentId === agent.id && member.enabled)
     || agentOnComputer(agent, project.computerId);
   const teamOnTaskComputer = (team: AgentTeam) => project
@@ -102,9 +102,9 @@ export function taskAssignmentOptions({
     : teamSharesOneComputer(team, agents);
   return {
     agents: agents.filter((agent) => (agent.id === assignedAgentId || agentOnTaskComputer(agent))
-      && assignmentOptionVisible(agent.supervisorEmployeeId, assigneeEmployeeId, agent.id === assignedAgentId)),
+      && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, agent.id === assignedAgentId)),
     teams: teams.filter((team) => (team.id === assignedTeamId || teamOnTaskComputer(team))
-      && assignmentOptionVisible(team.ownerEmployeeId, assigneeEmployeeId, team.id === assignedTeamId)),
+      && assignmentOptionVisible(team.ownerUserId, assigneeUserId, team.id === assignedTeamId)),
   };
 }
 
@@ -165,10 +165,10 @@ export function isTeamRoutable(
   return team.enabled && !team.deletedAt && isLogicalAgentRoutable(teamAvailability(team));
 }
 
-/** Resolve execution identity independently of the employee responsible for the task. */
+/** Resolve execution identity independently of the user responsible for the task. */
 export function taskAgentDisplayName(
   task: RelayTaskListItem,
-  agents: readonly Pick<EmployeeAgent, "id" | "displayName">[],
+  agents: readonly Pick<UserAgent, "id" | "displayName">[],
   teams: readonly Pick<AgentTeam, "id" | "name">[],
 ): string | undefined {
   if (task.assignedTeamId) return teams.find((team) => team.id === task.assignedTeamId)?.name;

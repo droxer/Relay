@@ -91,11 +91,11 @@ export interface RelayTask {
   waitingRequest?: TaskWaitingRequest;
   blockerReason?: string;
   attention?: TaskExecutionAttention;
-  blockerOwnerEmployeeId?: string;
+  blockerOwnerUserId?: string;
   executionOwner?: { requestId: string; revision: number };
   id: string;
   /** Human-facing sequence number, counted per scope: a project's issues, an
-   * employee's other issues, or an employee's automations. */
+   * user's other issues, or a user's automations. */
   number?: number;
   /** The counter `number` was drawn from, e.g. `project:<id>`. */
   numberScope?: string;
@@ -103,12 +103,12 @@ export interface RelayTask {
   description: string;
   priority: TaskPriority;
   status: TaskStatus;
-  /** Employee who owns this task; their agent carries it out on their behalf. */
-  ownerEmployeeId?: string;
+  /** User who owns this task; their agent carries it out on their behalf. */
+  ownerUserId?: string;
   /** Project whose conversations and workspace contain this task. */
   projectId?: string;
   /** Human assignee responsible for the backlog item. */
-  assigneeEmployeeId?: string;
+  assigneeUserId?: string;
   /** Date-only due date in YYYY-MM-DD format. */
   dueDate?: string;
   isRoutine: boolean;
@@ -196,9 +196,9 @@ export type RelayTaskEvent =
       description: string;
       priority: TaskPriority;
       acceptancePolicy?: "human" | "automatic";
-      ownerEmployeeId?: string;
+      ownerUserId?: string;
       projectId?: string;
-      assigneeEmployeeId?: string;
+      assigneeUserId?: string;
       dueDate?: string;
       isRoutine?: boolean;
       routineTriggers?: RoutineTrigger[];
@@ -220,7 +220,7 @@ export type RelayTaskEvent =
       description?: string;
       priority?: TaskPriority;
       acceptancePolicy?: "human" | "automatic";
-      assigneeEmployeeId?: string;
+      assigneeUserId?: string;
       dueDate?: string;
       isRoutine?: boolean;
       routineTriggers?: RoutineTrigger[];
@@ -300,7 +300,7 @@ export type RelayTaskEvent =
       status: TaskStatus;
       reason?: string;
       attention?: Partial<TaskExecutionAttention>;
-      actorEmployeeId?: string;
+      actorUserId?: string;
       /** For `waiting_for_human`: the thread the answer belongs in. */
       sessionId?: string;
       /** For `waiting_for_human`: the agent's structured question. */
@@ -363,9 +363,9 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     title: created.title,
     description: created.description,
     priority: created.priority,
-    ...(created.ownerEmployeeId ? { ownerEmployeeId: created.ownerEmployeeId } : {}),
+    ...(created.ownerUserId ? { ownerUserId: created.ownerUserId } : {}),
     ...(created.projectId ? { projectId: created.projectId } : {}),
-    ...(created.assigneeEmployeeId ? { assigneeEmployeeId: created.assigneeEmployeeId } : {}),
+    ...(created.assigneeUserId ? { assigneeUserId: created.assigneeUserId } : {}),
     ...(created.dueDate ? { dueDate: created.dueDate } : {}),
     status: "backlog",
     workflowStage: "backlog",
@@ -397,9 +397,9 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
       if (event.title !== undefined) task.title = event.title;
       if (event.description !== undefined) task.description = event.description;
       if (event.priority !== undefined) task.priority = event.priority;
-      if (event.assigneeEmployeeId !== undefined) {
-        if (event.assigneeEmployeeId) task.assigneeEmployeeId = event.assigneeEmployeeId;
-        else delete task.assigneeEmployeeId;
+      if (event.assigneeUserId !== undefined) {
+        if (event.assigneeUserId) task.assigneeUserId = event.assigneeUserId;
+        else delete task.assigneeUserId;
       }
       if (event.dueDate !== undefined) {
         if (event.dueDate) task.dueDate = event.dueDate;
@@ -521,7 +521,7 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
         const value = metadata[key];
         if (typeof value === "string" && value && value.length <= 200) task.attention[key] = value;
       }
-      task.blockerOwnerEmployeeId = event.actorEmployeeId || task.assigneeEmployeeId || task.ownerEmployeeId || "unowned";
+      task.blockerOwnerUserId = event.actorUserId || task.assigneeUserId || task.ownerUserId || "unowned";
     } else {
       task.waitingReason = event.reason || "Execution needs attention.";
       if (event.sessionId) task.waitingSessionId = event.sessionId;
@@ -540,7 +540,7 @@ function applyFlowStatus(task: RelayTask, event: Extract<RelayTaskEvent, { type:
     delete task.blockedFromStatus;
     delete task.blockerReason;
     delete task.attention;
-    delete task.blockerOwnerEmployeeId;
+    delete task.blockerOwnerUserId;
   }
   if (status !== "waiting_for_human") {
     delete task.waitingFromStatus;

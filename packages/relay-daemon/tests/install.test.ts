@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseInstallArgs, serviceDefinition } from '../src/install.js';
 
-const args = ['--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--employee-id', 'alice', '--workspace', '/tmp/a project'];
+const args = ['--backend-url', 'https://relay.example.com', '--sandbox-id', 'node-1', '--user-id', 'alice', '--workspace', '/tmp/a project'];
 test('installer requires scoped settings and rejects unsupported origins and identifiers', () => {
   assert.equal(parseInstallArgs(args).workspace, '/tmp/a project');
   assert.equal(parseInstallArgs(args).verbose, false);
@@ -11,6 +11,7 @@ test('installer requires scoped settings and rejects unsupported origins and ide
   assert.throws(() => parseInstallArgs([...args, '--token', 'secret']), /Unknown/);
   assert.throws(() => parseInstallArgs(args.map(x => x === 'node-1' ? '../bad' : x)), /sandbox-id/);
   assert.throws(() => parseInstallArgs(args.map(x => x === 'https://relay.example.com' ? 'http://public.example.com' : x)), /HTTPS/);
+  assert.equal(parseInstallArgs(args.map(x => x === '--user-id' ? '--employee-id' : x)).userId, parseInstallArgs(args).userId);
 });
 test('services preserve argv boundaries and never contain node credentials', () => {
   const command = ['/a path/node', '/a path/cli.js', '--workspace', '/tmp/" & % $(touch x)'];
@@ -90,7 +91,7 @@ test('installer verifies authentication and writes a service using the real pack
       }
       if (request.url === '/api/v1/computer-authorizations/token') {
         assert.equal(request.headers.authorization, 'Device device-fixture-secret');
-        response.end(JSON.stringify({ sandboxId: 'node-install-test', employeeId: 'alice', token: 'fixture-token', workspacePath: workspace }));
+        response.end(JSON.stringify({ sandboxId: 'node-install-test', userId: 'alice', token: 'fixture-token', workspacePath: workspace }));
         return;
       }
       if (rejected && request.url?.endsWith('/auth-check')) {
@@ -110,7 +111,7 @@ test('installer verifies authentication and writes a service using the real pack
     assert.ok(address && typeof address !== 'string');
     const command = [resolve('packages/relay-daemon/dist/install.js'),
       '--backend-url', `http://127.0.0.1:${address.port}`, '--sandbox-id', 'node-install-test',
-      '--employee-id', 'alice', '--workspace', workspace];
+      '--user-id', 'alice', '--workspace', workspace];
     const { stdout, stderr } = await exec(process.execPath, command, {
       env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, CODEX_HOME: customHome, RELAY_DAEMON_NODE_TOKEN: 'fixture-token', RELAY_DAEMON_STATE_DIR: join(root, 'unrelated-state') },
       timeout: 30_000,

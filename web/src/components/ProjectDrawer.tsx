@@ -2,13 +2,13 @@
 
 import { useId, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import { provisionalProjectName } from "../lib/projectSetup";
-import type { DaemonNodeMonitorRecord, EmployeeAgent, ProjectRecord } from "../types";
+import type { DaemonNodeMonitorRecord, UserAgent, ProjectRecord } from "../types";
 import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
@@ -34,7 +34,7 @@ type ProjectDrawerProps = {
   open: boolean;
   computers: DaemonNodeMonitorRecord[];
   /** The owner whose agents can draft a setup; without it only the manual form is offered. */
-  employeeId?: string;
+  userId?: string;
   onClose: () => void;
   onSaved: (project: ProjectRecord) => void;
   layer?: number;
@@ -47,23 +47,23 @@ export function ProjectDrawer(props: ProjectDrawerProps) {
   }
   // Each opening starts from an empty form.
   const generation = opening.generation + (props.open && !opening.open ? 1 : 0);
-  return props.employeeId
-    ? <ProjectDrawerWithAgents key={generation} {...props} employeeId={props.employeeId} />
+  return props.userId
+    ? <ProjectDrawerWithAgents key={generation} {...props} userId={props.userId} />
     : <ProjectDrawerBody key={generation} {...props} agents={NO_AGENTS} />;
 }
 
-const NO_AGENTS: EmployeeAgent[] = [];
+const NO_AGENTS: UserAgent[] = [];
 
 /** Only the describe flow needs the owner's agents, so only it subscribes. */
-function ProjectDrawerWithAgents(props: ProjectDrawerProps & { employeeId: string }) {
-  const { agents } = useEmployeeAgents(props.open ? props.employeeId : undefined);
+function ProjectDrawerWithAgents(props: ProjectDrawerProps & { userId: string }) {
+  const { agents } = useUserAgents(props.open ? props.userId : undefined);
   return <ProjectDrawerBody {...props} agents={agents} />;
 }
 
-function ProjectDrawerBody({ open, computers, employeeId, agents, onClose, onSaved, layer }: ProjectDrawerProps & { agents: EmployeeAgent[] }) {
+function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, layer }: ProjectDrawerProps & { agents: UserAgent[] }) {
   const { t } = useTranslation();
   const { createProjectMutation, startProjectSetupMutation } = useRelayMutations();
-  const [mode, setMode] = useState<Mode>(employeeId ? "describe" : "manual");
+  const [mode, setMode] = useState<Mode>(userId ? "describe" : "manual");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [intent, setIntent] = useState("");
@@ -237,7 +237,7 @@ function ProjectDrawerBody({ open, computers, employeeId, agents, onClose, onSav
         )}
 
         <div className="adm-form-actions">
-          {employeeId ? (
+          {userId ? (
             <Button
               size="cta"
               type="button"
@@ -302,7 +302,7 @@ function ComputerField({ computers, value, error, triggerRef, onChange }: {
 }
 
 function SetupAgentField({ agents, value, disabled, hint, onChange }: {
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   value: string;
   disabled: boolean;
   hint: string;

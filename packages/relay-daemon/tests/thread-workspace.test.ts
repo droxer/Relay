@@ -63,10 +63,10 @@ test("thread workspace ids cannot escape the configured root", () => {
   }
 });
 
-test("thread workspace setup never creates the employee or supervisor configured root", () => {
+test("thread workspace setup never creates the user or supervisor configured root", () => {
   const parent = mkdtempSync(join(tmpdir(), "relay-thread-workspace-parent-"));
   try {
-    const missingRoot = join(parent, "employee-selected-root");
+    const missingRoot = join(parent, "user-selected-root");
     assert.throws(
       () => new ThreadWorkspaceManager(missingRoot, "none"),
       /ENOENT|no such file/i,

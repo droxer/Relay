@@ -23,7 +23,7 @@ describe("Agent team management", () => {
     assert.deepEqual(input.memberConfigs, { lead: { responsibility: "Integration" } });
     assert.deepEqual(input.acceptanceCriteria, ["All acceptance checks pass"]);
   });
-  it("keeps teams in employee agent management instead of standalone admin navigation", async () => {
+  it("keeps teams in user agent management instead of standalone admin navigation", async () => {
     const adminPageSource = await readFile(resolve("web/src/components/AdminPage.tsx"), "utf8");
     const appSource = await readFile(resolve("web/src/App.tsx"), "utf8");
     const agentsSource = await readFile(resolve("web/src/components/AgentsPage.tsx"), "utf8");
@@ -79,13 +79,13 @@ describe("Agent team management", () => {
     assert.match(sideNavSource, /handleRouteClick\(event, "teams"\)/);
     assert.match(drawerSource, /memberAgentIds/);
     assert.match(drawerSource, /leadAgentId/);
-    assert.match(drawerSource, /useEmployeeAgents\(open \? employeeId : undefined\)/);
-    assert.match(teamsSource, /employeeId=\{currentUser\.employeeId\}/);
+    assert.match(drawerSource, /useUserAgents\(open \? userId : undefined\)/);
+    assert.match(teamsSource, /userId=\{currentUser\.userId\}/);
     assert.match(pickerSource, /team:\$\{team\.id\}/);
     assert.match(pickerSource, /backlog\.teams_section/);
   });
 
-  it("builds an agent-team payload without exposing employee ownership fields", () => {
+  it("builds an agent-team payload without exposing user ownership fields", () => {
     assert.deepEqual(teamMutationInput({
       name: " Delivery ",
       leadAgentId: "agent_lead",

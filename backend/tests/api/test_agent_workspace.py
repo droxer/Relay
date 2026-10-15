@@ -19,8 +19,8 @@ def _bootstrap(client: TestClient) -> None:
 def _agent(client: TestClient) -> dict:
     assert (
         client.post(
-            "/api/v1/admin/users",
-            json={"username": "alice", "password": "userpass", "employeeId": "alice"},
+            "/api/v1/admin/accounts",
+            json={"username": "alice", "password": "userpass", "userId": "alice"},
         ).status_code
         == 201
     )
@@ -30,7 +30,7 @@ def _agent(client: TestClient) -> dict:
     node = client.app.state.registry.register(
         {
             "sandboxId": "offline_node_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
@@ -43,7 +43,7 @@ def _agent(client: TestClient) -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": "alice",
+            "supervisorUserId": "alice",
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -54,7 +54,7 @@ def _agent(client: TestClient) -> dict:
     return response.json()["agent"]
 
 
-def test_workspace_brief_accepts_legacy_agent_employee_id(monkeypatch, tmp_path):
+def test_workspace_brief_accepts_legacy_agent_user_id(monkeypatch, tmp_path):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(tmp_path)
     client = TestClient(app)
@@ -62,9 +62,9 @@ def test_workspace_brief_accepts_legacy_agent_employee_id(monkeypatch, tmp_path)
     agent = _agent(client)
     legacy_agent = {
         **agent,
-        "employeeId": agent["supervisorEmployeeId"],
+        "userId": agent["supervisorUserId"],
     }
-    legacy_agent.pop("supervisorEmployeeId")
+    legacy_agent.pop("supervisorUserId")
     get_agent = app.state.agent_store.get_agent
     monkeypatch.setattr(
         app.state.agent_store,
@@ -77,7 +77,7 @@ def test_workspace_brief_accepts_legacy_agent_employee_id(monkeypatch, tmp_path)
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text
-    assert response.json()["employeeId"] == "alice"
+    assert response.json()["userId"] == "alice"
 
 
 def test_agent_workspace_brief_includes_owned_session_before_first_run(
@@ -91,7 +91,7 @@ def test_agent_workspace_brief_includes_owned_session_before_first_run(
     session = app.state.session_store.create_session(
         {
             "workspacePath": "/workspace",
-            "ownerEmployeeId": "alice",
+            "ownerUserId": "alice",
             "ownerAgentId": agent["id"],
             "taskGoal": "queued work",
         }
@@ -103,7 +103,7 @@ def test_agent_workspace_brief_includes_owned_session_before_first_run(
     sessions = response.json()["sessions"]
     assert len(sessions) == 1
     assert sessions[0]["id"] == session["id"]
-    assert sessions[0]["ownerEmployeeId"] == "alice"
+    assert sessions[0]["ownerUserId"] == "alice"
     assert sessions[0]["ownerAgentId"] == agent["id"]
     assert sessions[0]["runCount"] == 0
 
@@ -120,7 +120,7 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
         app.state.session_store.create_session(
             {
                 "workspacePath": "/workspace",
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "ownerAgentId": agent["id"],
                 "taskGoal": f"thread {index}",
             }
@@ -136,7 +136,7 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
     assert {session["id"] for session in sessions} == created_ids
 
 
-def test_agent_workspace_brief_uses_authorized_placements_for_employee(
+def test_agent_workspace_brief_uses_authorized_placements_for_user(
     monkeypatch, tmp_path
 ):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -146,17 +146,17 @@ def test_agent_workspace_brief_uses_authorized_placements_for_employee(
     agent = _agent(admin)
     assert (
         admin.post(
-            "/api/v1/admin/users",
-            json={"username": "bob", "password": "userpass", "employeeId": "bob"},
+            "/api/v1/admin/accounts",
+            json={"username": "bob", "password": "userpass", "userId": "bob"},
         ).status_code
         == 201
     )
     app.state.registry.register(
         {
             "sandboxId": "node_placed",
-            "employeeId": "bob",
+            "userId": "bob",
             "token": "placed_token",
-            "nodeLocation": "employee-device",
+            "nodeLocation": "user-device",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "status": "ready",
@@ -164,10 +164,10 @@ def test_agent_workspace_brief_uses_authorized_placements_for_employee(
     )
     app.state.registry.register(
         {
-            "sandboxId": "node_same_employee_unplaced",
-            "employeeId": "alice",
+            "sandboxId": "node_same_user_unplaced",
+            "userId": "alice",
             "token": "unplaced_token",
-            "nodeLocation": "employee-device",
+            "nodeLocation": "user-device",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "status": "ready",
@@ -208,10 +208,10 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     app.state.registry.register(
         {
             "sandboxId": "runtime_old",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-1",
             "token": "old_token",
-            "nodeLocation": "employee-device",
+            "nodeLocation": "user-device",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "status": "ready",
@@ -226,10 +226,10 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     app.state.registry.register(
         {
             "sandboxId": "runtime_new",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspaceId": "machine-1",
             "token": "new_token",
-            "nodeLocation": "employee-device",
+            "nodeLocation": "user-device",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "status": "ready",

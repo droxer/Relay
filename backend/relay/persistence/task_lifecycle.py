@@ -18,7 +18,7 @@ def wip_limit() -> int:
 
 
 def flow_scope(task: dict[str, Any]) -> str:
-    return task.get("assigneeEmployeeId") or task.get("ownerEmployeeId") or "unowned"
+    return task.get("assigneeUserId") or task.get("ownerUserId") or "unowned"
 
 
 def is_wip(task: dict[str, Any]) -> bool:
@@ -32,7 +32,7 @@ def is_wip(task: dict[str, Any]) -> bool:
 
 
 def needs_wip_admission(current: dict[str, Any], updated: dict[str, Any]) -> bool:
-    """Continuations retain a slot; reopening or changing employee acquires one."""
+    """Continuations retain a slot; reopening or changing user acquires one."""
     return is_wip(updated) and (
         not is_wip(current) or flow_scope(current) != flow_scope(updated)
     )
@@ -63,7 +63,7 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
             task.setdefault("blockedAt", event["timestamp"])
             task["blockerReason"] = event.get("reason") or UNKNOWN_REASON
             task["attention"] = blocked_attention(event)
-            task["blockerOwnerEmployeeId"] = event.get("actorEmployeeId") or flow_scope(
+            task["blockerOwnerUserId"] = event.get("actorUserId") or flow_scope(
                 task
             )
         else:
@@ -96,7 +96,7 @@ def apply_flow_status(task: dict[str, Any], event: dict[str, Any]) -> None:
         for field in (
             "blockedAt",
             "blockerReason",
-            "blockerOwnerEmployeeId",
+            "blockerOwnerUserId",
             "blockedFromStatus",
             "attention",
         ):

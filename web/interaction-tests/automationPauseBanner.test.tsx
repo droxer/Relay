@@ -60,9 +60,9 @@ it("resumes through the resume route and says so", async () => {
 });
 
 it("lets only the owner or an admin manage an automation", () => {
-  const task = { ownerEmployeeId: "fei" };
-  expect(canManageAutomation(task, { role: "user", employeeId: "fei" })).toBe(true);
-  expect(canManageAutomation(task, { role: "admin", employeeId: "ops" })).toBe(true);
-  expect(canManageAutomation(task, { role: "user", employeeId: "bob" })).toBe(false);
+  const task = { ownerUserId: "fei" };
+  expect(canManageAutomation(task, { role: "user", userId: "fei" })).toBe(true);
+  expect(canManageAutomation(task, { role: "admin", userId: "ops" })).toBe(true);
+  expect(canManageAutomation(task, { role: "user", userId: "bob" })).toBe(false);
   expect(canManageAutomation({}, { role: "user" })).toBe(false);
 });

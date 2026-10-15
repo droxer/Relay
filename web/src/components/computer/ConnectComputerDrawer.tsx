@@ -27,9 +27,9 @@ interface ConnectComputerDrawerProps {
 }
 
 /**
- * Self-service registration of the employee's own machine — the counterpart
+ * Self-service registration of the user's own machine — the counterpart
  * to admin's AssignNodeDrawer, but scoped to the caller's own device: no
- * employee picker, no "assign an existing node" branch, just "connect this
+ * user picker, no "assign an existing node" branch, just "connect this
  * one" against POST /daemon-node-enrollments/local.
  *
  * A personal computer runs its agents directly, so there is no runtime to

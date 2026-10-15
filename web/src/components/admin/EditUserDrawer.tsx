@@ -2,9 +2,9 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { updateControlPanelEmployee } from "../../api";
-import type { EmployeeRecord } from "../../types";
-import { employeeHandleOf } from "../../lib/employeeHandle";
+import { updateControlPanelUser } from "../../api";
+import type { UserRecord } from "../../types";
+import { userHandleOf } from "../../lib/userHandle";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -19,27 +19,27 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { useOnOpen } from "@/hooks/useKeyChange";
 
-interface EditEmployeeDrawerProps {
+interface EditUserDrawerProps {
   open: boolean;
   onClose: () => void;
-  employee: EmployeeRecord | null;
+  user: UserRecord | null;
   /** The org default, shown as the placeholder when no override is pinned. */
   defaultMaxLocalComputers?: number;
-  onSuccess: (employee: EmployeeRecord) => void;
+  onSuccess: (user: UserRecord) => void;
 }
 
-/** Edit an existing employee: name, email, and their personal-computer limit.
+/** Edit an existing user: name, email, and their personal-computer limit.
 
-    Leaving the limit field empty clears the override, so the employee follows
+    Leaving the limit field empty clears the override, so the user follows
     the org default again — that is a real edit, not a no-op, which is why the
     submit sends an explicit `null` rather than omitting the key. */
-export function EditEmployeeDrawer({
+export function EditUserDrawer({
   open,
   onClose,
-  employee,
+  user,
   defaultMaxLocalComputers,
   onSuccess,
-}: EditEmployeeDrawerProps) {
+}: EditUserDrawerProps) {
   const { t } = useTranslation();
 
   const [displayName, setDisplayName] = useState("");
@@ -52,10 +52,10 @@ export function EditEmployeeDrawer({
   const displayNameRef = useRef<HTMLInputElement>(null);
   const limitRef = useRef<HTMLInputElement>(null);
 
-  const initialDisplayName = employee?.displayName ?? "";
-  const initialEmail = employee?.email ?? "";
+  const initialDisplayName = user?.displayName ?? "";
+  const initialEmail = user?.email ?? "";
   const initialLimit =
-    employee?.maxLocalComputers != null ? String(employee.maxLocalComputers) : "";
+    user?.maxLocalComputers != null ? String(user.maxLocalComputers) : "";
 
   useOnOpen(open, () => {
     setDisplayName(initialDisplayName);
@@ -80,13 +80,13 @@ export function EditEmployeeDrawer({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!employee) return;
+    if (!user) return;
     // Both failures are field errors, under their own control and focused —
     // the missing name used to surface as a boxed submit-level error at the
     // foot of the form, and the limit error was never focused at all.
     const trimmedName = displayName.trim();
     if (!trimmedName) {
-      setNameError(t("admin.v2.edit_employee_name_required"));
+      setNameError(t("admin.v2.edit_user_name_required"));
       displayNameRef.current?.focus();
       return;
     }
@@ -102,15 +102,15 @@ export function EditEmployeeDrawer({
     setIsBusy(true);
     setError(null);
     try {
-      const result = await updateControlPanelEmployee({
-        employeeId: employee.id,
+      const result = await updateControlPanelUser({
+        userId: user.id,
         displayName: trimmedName,
         email: email.trim(),
         maxLocalComputers: parsedLimit,
       });
-      onSuccess(result.employee);
+      onSuccess(result.user);
     } catch (err) {
-      setError(t("admin.v2.edit_employee_error", { message: err instanceof Error ? err.message : String(err) }));
+      setError(t("admin.v2.edit_user_error", { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setIsBusy(false);
     }
@@ -120,10 +120,10 @@ export function EditEmployeeDrawer({
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("admin.v2.provision_kicker_employee")}
-      title={t("admin.v2.edit_employee_title")}
-      subtitle={employee ? `@${employeeHandleOf(employee)}` : undefined}
-      subtitleMono={Boolean(employee)}
+      kicker={t("admin.v2.provision_kicker_user")}
+      title={t("admin.v2.edit_user_title")}
+      subtitle={user ? `@${userHandleOf(user)}` : undefined}
+      subtitleMono={Boolean(user)}
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
       width="form"
@@ -226,9 +226,9 @@ export function EditEmployeeDrawer({
             </Button>
           ) : null}
 
-          {employee?.localComputerCount !== undefined ? (
+          {user?.localComputerCount !== undefined ? (
             <p className="adm-form-hint">
-              {t("admin.v2.emp_limit_in_use", { count: employee.localComputerCount })}
+              {t("admin.v2.emp_limit_in_use", { count: user.localComputerCount })}
             </p>
           ) : null}
         </section>

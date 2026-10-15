@@ -25,10 +25,10 @@ def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
     )
     alice, bob = str(uuid4()), str(uuid4())
     with store.engine.begin() as conn:
-        for employee_id, handle in ((alice, "alice"), (bob, "bob")):
+        for user_id, handle in ((alice, "alice"), (bob, "bob")):
             conn.execute(
-                insert(store.employees).values(
-                    id=employee_id,
+                insert(store.users).values(
+                    id=user_id,
                     handle=handle,
                     display_name=handle.title(),
                     email=None,

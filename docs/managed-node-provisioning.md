@@ -9,9 +9,9 @@ grants, managed daemon linkage, control-plane APIs, daemon enrollment, and the
 resources, database-backed reconcile leases, remote providers, and the final
 control-panel workflow remain rollout work described below.
 
-The employee-facing ownership and dispatch model is defined by the accepted
+The user-facing ownership and dispatch model is defined by the accepted
 [Agent-First Runtime Design](agent-first-runtime-design.md). Managed nodes remain
-infrastructure desired state while employee-owned logical agents connect to
+infrastructure desired state while user-owned logical agents connect to
 runtime nodes through placements.
 
 ## Summary
@@ -98,9 +98,9 @@ daemon token to a supervisor on a later reconciliation pass.
 
 ### Provisioning policy is explicit
 
-"One node for every employee" is a policy, not a registry invariant. The first
-policy may remain dedicated-per-employee, but it must create managed-node
-specifications rather than infer desired state from the employee list forever.
+"One node for every user" is a policy, not a registry invariant. The first
+policy may remain dedicated-per-user, but it must create managed-node
+specifications rather than infer desired state from the user list forever.
 
 ## Architecture
 
@@ -139,7 +139,7 @@ controller instance can resume reconciliation.
 | :- | :- | :- |
 | `id` | UUID | Stable idempotency key across provider retries. |
 | `displayName` | string | Operator-facing name. |
-| `employeeId` | UUID, nullable | Owner for dedicated nodes; null for pooled nodes. |
+| `userId` | UUID, nullable | Owner for dedicated nodes; null for pooled nodes. |
 | `assignmentMode` | enum | `dedicated`, `pooled`, or `shared`. Only `dedicated` is currently accepted (`MANAGED_NODE_ASSIGNMENT_MODES` in `backend/relay/services/managed_nodes.py`); `pooled`/`shared` are reserved for the assignment-policy work below. |
 | `provider` | string | Provider adapter name, initially `local-process`. |
 | `providerConfigRef` | string, nullable | Reference to server-side provider configuration; never embedded credentials. |
@@ -154,14 +154,14 @@ controller instance can resume reconciliation.
 | `conditions` | JSON array | Structured readiness and failure conditions. |
 | `createdAt` / `updatedAt` | timestamp | Audit timestamps. |
 
-Only one non-deleted dedicated managed node may be active for the same employee
+Only one non-deleted dedicated managed node may be active for the same user
 and policy slot. This constraint is enforced in storage, not by list ordering.
 
 The provider resolves `workspacePolicy` to one node workspace root before it
 starts the daemon. In accordance with [ADR-013](adr/013-thread-scoped-workspaces.md),
 the daemon—not the provider or backend—creates `<root>/<thread-id>` and selects
-that child as the run working directory. Employee-owned nodes receive their
-root from employee setup; cloud providers provision it, including persistence
+that child as the run working directory. User-owned nodes receive their
+root from user setup; cloud providers provision it, including persistence
 or recovery appropriate to the provider. Sessions created before the
 thread-layout event field continue at the legacy node root after an upgrade;
 Relay does not copy an ambiguous shared root into a thread automatically.
@@ -432,12 +432,12 @@ Example request:
 ```json
 {
   "displayName": "Alice development node",
-  "employeeId": "alice",
+  "userId": "alice",
   "assignmentMode": "dedicated",
   "provider": "local-process",
   "profile": "standard",
   "sandboxMode": "boxlite",
-  "workspacePolicy": { "kind": "employee-home" },
+  "workspacePolicy": { "kind": "user-home" },
   "desiredState": "running"
 }
 ```
@@ -476,20 +476,20 @@ Provisioning and scheduling are related but separate.
 
 ### Dedicated
 
-The managed node has one `employeeId`. Scheduler authorization and session
+The managed node has one `userId`. Scheduler authorization and session
 ownership continue to enforce that assignment. A policy controller may create
-one dedicated managed node for each eligible employee, but employee existence
+one dedicated managed node for each eligible user, but user existence
 alone is not permanent provisioning intent.
 
 ### Pooled
 
-The managed node has no permanent employee. The scheduler selects it using
+The managed node has no permanent user. The scheduler selects it using
 capability, capacity, workspace, and policy constraints. Task/session ownership
 does not change when a pooled node executes work.
 
 ### Shared
 
-The managed node accepts multiple employee sessions up to declared capacity.
+The managed node accepts multiple user sessions up to declared capacity.
 Workspace isolation and credential injection must be per run. Shared mode must
 not be enabled until those isolation rules are enforced.
 
@@ -505,7 +505,7 @@ Do not use one ambiguous `workspacePath` as both provider host path and daemon
 guest path. `workspacePolicy` expresses intent, for example:
 
 ```json
-{ "kind": "employee-home" }
+{ "kind": "user-home" }
 ```
 
 or:
@@ -593,8 +593,8 @@ conditions rather than only the latest `lastError`.
 - Convert `relay-supervisor` into a reconciler over managed-node resources.
 - Implement the `local-process` provider using the provider contract.
 - Persist attempt and provider instance handles before waiting for readiness.
-- Remove the employee-list inference loop from the default controller path.
-- Keep dedicated-per-employee as an optional policy controller.
+- Remove the user-list inference loop from the default controller path.
+- Keep dedicated-per-user as an optional policy controller.
 
 ### Phase 3: Control-panel workflow
 
@@ -633,7 +633,7 @@ intent from a live daemon because Relay cannot know whether it is authorized to
 stop or delete that provider resource.
 
 The legacy supervisor can run only until the local managed provider reaches
-feature parity. It must not reconcile the same employee or runtime as the new
+feature parity. It must not reconcile the same user or runtime as the new
 controller.
 
 ## Acceptance criteria

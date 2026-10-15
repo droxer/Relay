@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { assignControlPanelDaemonNode, createControlPanelDaemonNode, createControlPanelEmployee, createManagedNode, deleteManagedNode, listManagedNodes, permanentlyDeleteManagedNode } from "../src/api.js";
+import { assignControlPanelDaemonNode, createControlPanelDaemonNode, createControlPanelUser, createManagedNode, deleteManagedNode, listManagedNodes, permanentlyDeleteManagedNode } from "../src/api.js";
 import { threadDaemonStatus } from "../src/lib/threadStatus.js";
 import {
   mergeVisibleDaemonNodes,
@@ -24,7 +24,7 @@ import type {
   DaemonNodeMonitorRecord,
 } from "../src/types.js";
 
-function daemonNode(input: Partial<DaemonNodeMonitorRecord> & { id: string; employeeId?: string }): DaemonNodeMonitorRecord {
+function daemonNode(input: Partial<DaemonNodeMonitorRecord> & { id: string; userId?: string }): DaemonNodeMonitorRecord {
   return {
     status: "ready",
     agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
@@ -39,7 +39,7 @@ function daemonNode(input: Partial<DaemonNodeMonitorRecord> & { id: string; empl
 }
 
 function controlPanelNode(
-  input: Partial<ControlPanelDaemonNodeRecord> & { id: string; employeeId?: string },
+  input: Partial<ControlPanelDaemonNodeRecord> & { id: string; userId?: string },
 ): ControlPanelDaemonNodeRecord {
   return {
     ...daemonNode(input),
@@ -62,7 +62,7 @@ describe("Relay web thread status", () => {
     assert.equal(threadDaemonStatus({
       node: {
         id: "sbx_alice",
-        employeeId: "alice",
+        userId: "alice",
         status: "ready",
         agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
         createdAt: "2026-06-12T00:00:00.000Z",
@@ -80,7 +80,7 @@ describe("Relay web thread status", () => {
     assert.equal(threadDaemonStatus({
       node: {
         id: "sbx_alice",
-        employeeId: "alice",
+        userId: "alice",
         status: "ready",
         agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown" },
         createdAt: "2026-06-12T00:00:00.000Z",
@@ -97,14 +97,14 @@ describe("Relay web thread status", () => {
   it("prefers a live local control-panel node over a stale authenticated node", () => {
     const staleAuthenticatedNode = daemonNode({
       id: "sbx_alice_old",
-      employeeId: "alice",
+      userId: "alice",
       online: false,
       stale: true,
       lastSeenAt: "2026-06-12T00:00:00.000Z",
     });
     const liveControlPanelNode = controlPanelNode({
       id: "sbx_alice_live",
-      employeeId: "alice",
+      userId: "alice",
       online: true,
       stale: false,
       lastSeenAt: "2026-06-12T00:00:03.000Z",
@@ -123,13 +123,13 @@ describe("Relay web thread status", () => {
   it("claims an online local node when the saved token only exposes stale nodes", () => {
     const staleAuthenticatedNode = daemonNode({
       id: "sbx_alice_old",
-      employeeId: "alice",
+      userId: "alice",
       online: false,
       stale: true,
     });
     const liveControlPanelNode = controlPanelNode({
       id: "sbx_alice_live",
-      employeeId: "alice",
+      userId: "alice",
       online: true,
       stale: false,
     });
@@ -137,7 +137,7 @@ describe("Relay web thread status", () => {
     assert.equal(shouldClaimLocalDaemonNode(liveControlPanelNode, [staleAuthenticatedNode]), true);
     assert.equal(shouldClaimLocalDaemonNode(liveControlPanelNode, [daemonNode({
       id: "sbx_alice_live",
-      employeeId: "alice",
+      userId: "alice",
       online: true,
       stale: false,
     })]), false);
@@ -146,7 +146,7 @@ describe("Relay web thread status", () => {
   it("keeps unassigned control-panel nodes out of the chat roster", () => {
     const assignedNode = controlPanelNode({
       id: "sbx_alice",
-      employeeId: "alice",
+      userId: "alice",
       online: true,
       stale: false,
     });
@@ -162,9 +162,9 @@ describe("Relay web thread status", () => {
     assert.equal(shouldClaimLocalDaemonNode(unassignedNode, []), false);
   });
 
-  it("keeps distinct computers for one employee in the thread runtime picker", () => {
-    const first = daemonNode({ id: "node_a", employeeId: "alice" });
-    const second = controlPanelNode({ id: "node_b", employeeId: "alice" });
+  it("keeps distinct computers for one user in the thread runtime picker", () => {
+    const first = daemonNode({ id: "node_a", userId: "alice" });
+    const second = controlPanelNode({ id: "node_b", userId: "alice" });
 
     const runtimeNodes = mergeThreadRuntimeNodes([first], [second]);
 
@@ -174,14 +174,14 @@ describe("Relay web thread status", () => {
 
   it("evicts every cached runtime incarnation of a deleted cloud computer", () => {
     const cached = [
-      daemonNode({ id: "runtime_old", employeeId: "alice", managedNodeId: "cloud_1" }),
-      daemonNode({ id: "runtime_active", employeeId: "alice", managedNodeId: "cloud_1" }),
-      daemonNode({ id: "runtime_keep", employeeId: "alice", managedNodeId: "cloud_2" }),
+      daemonNode({ id: "runtime_old", userId: "alice", managedNodeId: "cloud_1" }),
+      daemonNode({ id: "runtime_active", userId: "alice", managedNodeId: "cloud_1" }),
+      daemonNode({ id: "runtime_keep", userId: "alice", managedNodeId: "cloud_2" }),
     ];
 
     const remaining = withoutDeletedComputer(cached, controlPanelNode({
       id: "runtime_active",
-      employeeId: "alice",
+      userId: "alice",
       managedNodeId: "cloud_1",
     }));
 
@@ -190,10 +190,10 @@ describe("Relay web thread status", () => {
 
   it("keeps the computer's display name when the authenticated record wins the merge", () => {
     const lastSeenAt = "2026-06-12T00:00:03.000Z";
-    const authenticated = daemonNode({ id: "sbx_alice", employeeId: "alice", lastSeenAt });
+    const authenticated = daemonNode({ id: "sbx_alice", userId: "alice", lastSeenAt });
     const controlPanel = controlPanelNode({
       id: "sbx_alice",
-      employeeId: "alice",
+      userId: "alice",
       lastSeenAt,
       displayName: "Alice's MacBook",
     });
@@ -202,14 +202,14 @@ describe("Relay web thread status", () => {
     assert.equal("displayName" in tied ? tied.displayName : undefined, "Alice's MacBook");
 
     const [fresherAuthenticated] = mergeThreadRuntimeNodes(
-      [daemonNode({ id: "sbx_alice", employeeId: "alice", lastSeenAt: "2026-06-12T00:00:05.000Z" })],
+      [daemonNode({ id: "sbx_alice", userId: "alice", lastSeenAt: "2026-06-12T00:00:05.000Z" })],
       [controlPanel],
     );
     assert.equal("displayName" in fresherAuthenticated ? fresherAuthenticated.displayName : undefined, "Alice's MacBook");
     assert.equal(fresherAuthenticated.lastSeenAt, "2026-06-12T00:00:05.000Z");
   });
 
-  it("posts employee creation with the selected unassigned node", async () => {
+  it("posts user creation with the selected unassigned node", async () => {
     const originalFetch = globalThis.fetch;
     let requestPath = "";
     let requestInit: RequestInit | undefined;
@@ -217,20 +217,20 @@ describe("Relay web thread status", () => {
       requestPath = String(input);
       requestInit = init;
       return new Response(JSON.stringify({
-        employee: {
+        user: {
           id: "alice",
           displayName: "Alice",
           email: "alice@example.com",
         },
-        user: {
+        account: {
           id: "usr_alice",
           username: "alice",
           role: "user",
-          employeeId: "alice",
+          userId: "alice",
         },
         node: controlPanelNode({
           id: "sbx_unassigned",
-          employeeId: "alice",
+          userId: "alice",
         }),
       }), {
         status: 201,
@@ -238,8 +238,8 @@ describe("Relay web thread status", () => {
       });
     }) as typeof fetch;
     try {
-      const result = await createControlPanelEmployee({
-        employeeId: "alice",
+      const result = await createControlPanelUser({
+        userId: "alice",
         username: "alice",
         password: "userpass",
         nodeId: "sbx_unassigned",
@@ -247,23 +247,23 @@ describe("Relay web thread status", () => {
         displayName: "Alice",
       });
 
-      assert.equal(requestPath, "/api/v1/admin/employees");
+      assert.equal(requestPath, "/api/v1/admin/users");
       assert.equal(requestInit?.method, "POST");
       assert.deepEqual(JSON.parse(String(requestInit?.body)), {
-        employeeId: "alice",
+        userId: "alice",
         username: "alice",
         password: "userpass",
         nodeId: "sbx_unassigned",
         email: "alice@example.com",
         displayName: "Alice",
       });
-      assert.equal(result.node?.employeeId, "alice");
+      assert.equal(result.node?.userId, "alice");
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  it("posts ownerless daemon node creation when no employee is supplied", async () => {
+  it("posts ownerless daemon node creation when no user is supplied", async () => {
     const originalFetch = globalThis.fetch;
     let requestPath = "";
     let requestInit: RequestInit | undefined;
@@ -295,7 +295,7 @@ describe("Relay web thread status", () => {
         displayName: "Lab computer",
         workspacePath: "/workspace/shared",
       });
-      assert.equal(result.node.employeeId, undefined);
+      assert.equal(result.node.userId, undefined);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -312,12 +312,12 @@ describe("Relay web thread status", () => {
         node: {
           id: "mnode_alice",
           displayName: "Managed node for alice",
-          employeeId: "alice",
+          userId: "alice",
           assignmentMode: "dedicated",
           provider: "local-process",
           profile: "standard",
           sandboxMode: "boxlite",
-          workspacePolicy: { kind: "employee-home" },
+          workspacePolicy: { kind: "user-home" },
           desiredState: "running",
           generation: 1,
           phase: "requested",
@@ -332,7 +332,7 @@ describe("Relay web thread status", () => {
     }) as typeof fetch;
     try {
       const result = await createManagedNode({
-        employeeId: "alice",
+        userId: "alice",
         displayName: "Alice cloud",
         sandboxMode: "boxlite",
       });
@@ -340,13 +340,13 @@ describe("Relay web thread status", () => {
       assert.equal(requestPath, "/api/v1/admin/managed-nodes");
       assert.equal(requestInit?.method, "POST");
       assert.deepEqual(JSON.parse(String(requestInit?.body)), {
-        employeeId: "alice",
+        userId: "alice",
         displayName: "Alice cloud",
         assignmentMode: "dedicated",
         provider: "local-process",
         profile: "standard",
         sandboxMode: "boxlite",
-        workspacePolicy: { kind: "employee-home" },
+        workspacePolicy: { kind: "user-home" },
         desiredState: "running",
       });
       assert.equal(result.node.phase, "requested");
@@ -414,7 +414,7 @@ describe("Relay web thread status", () => {
     }
   });
 
-  it("posts direct node assignment for an existing employee", async () => {
+  it("posts direct node assignment for an existing user", async () => {
     const originalFetch = globalThis.fetch;
     let requestPath = "";
     let requestInit: RequestInit | undefined;
@@ -422,13 +422,13 @@ describe("Relay web thread status", () => {
       requestPath = String(input);
       requestInit = init;
       return new Response(JSON.stringify({
-        employee: {
+        user: {
           id: "alice",
           displayName: "Alice",
         },
         node: controlPanelNode({
           id: "node_unassigned",
-          employeeId: "alice",
+          userId: "alice",
         }),
       }), {
         status: 200,
@@ -437,16 +437,16 @@ describe("Relay web thread status", () => {
     }) as typeof fetch;
     try {
       const result = await assignControlPanelDaemonNode({
-        employeeId: "alice",
+        userId: "alice",
         nodeId: "node_unassigned",
       });
 
       assert.equal(requestPath, "/api/v1/admin/daemon-nodes/node_unassigned/assignment");
       assert.equal(requestInit?.method, "PUT");
       assert.deepEqual(JSON.parse(String(requestInit?.body)), {
-        employeeId: "alice",
+        userId: "alice",
       });
-      assert.equal(result.node.employeeId, "alice");
+      assert.equal(result.node.userId, "alice");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -457,7 +457,7 @@ describe("Relay web admin node helpers", () => {
   it("keeps a provisioning placeholder's stored status so quick filters match the lifecycle", () => {
     const placeholder = controlPanelNode({
       id: "mnode_alice",
-      employeeId: "alice",
+      userId: "alice",
       status: "provisioning",
       online: false,
       stale: false,
@@ -467,7 +467,7 @@ describe("Relay web admin node helpers", () => {
 
     const stopped = controlPanelNode({
       id: "mnode_bob",
-      employeeId: "bob",
+      userId: "bob",
       status: "stopped",
       online: false,
       stale: false,
@@ -478,7 +478,7 @@ describe("Relay web admin node helpers", () => {
   it("builds a daemon start command from cached node metadata", () => {
     const command = buildDaemonStartCommand({
       id: "sbx_alice",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: "/workspace/alice",
       sandboxMode: "boxlite",
     }, "tok_secret", "http://127.0.0.1:8790");
@@ -487,14 +487,14 @@ describe("Relay web admin node helpers", () => {
     assert.doesNotMatch(command, /tok_secret|--token/);
     assert.match(command, /--sandbox boxlite/);
     assert.doesNotMatch(command, /--use-local-agent-home/);
-    assert.match(command, /--employee-id alice/);
+    assert.match(command, /--user-id alice/);
     assert.match(command, /--workspace /);
   });
 
   it("defaults missing sandbox mode to managed command reconstruction", () => {
     const command = buildDaemonStartCommand({
       id: "sbx_pending",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: "/workspace/alice",
     }, "tok_secret", "http://127.0.0.1:8790");
 
@@ -505,7 +505,7 @@ describe("Relay web admin node helpers", () => {
   it("adds local agent home only for local daemon commands", () => {
     const command = buildDaemonStartCommand({
       id: "sbx_local",
-      employeeId: "alice",
+      userId: "alice",
       workspacePath: "/workspace/alice",
       sandboxMode: "none",
     }, "tok_secret", "http://127.0.0.1:8790");
@@ -519,7 +519,7 @@ describe("Relay web admin node helpers", () => {
     const node = {
       ...controlPanelNode({
         id: "sbx_alice",
-        employeeId: "alice",
+        userId: "alice",
         online: true,
         stale: false,
       }),
@@ -538,7 +538,7 @@ describe("Relay web admin node helpers", () => {
   it("keeps device location separate from sandbox isolation", () => {
     const node = controlPanelNode({
       id: "sbx_alice",
-      employeeId: "alice",
+      userId: "alice",
       online: true,
       stale: false,
       sandboxMode: "none",
@@ -559,7 +559,7 @@ describe("Relay web admin node helpers", () => {
       colocated: true,
       storedTokens: { sbx_alice: { nodeToken: "tok_cached", savedAt: "2026-06-12T00:00:00.000Z" } },
     }), ["saved_here"]);
-    assert.equal(nodeOwnershipProfile({ nodeLocation: "employee-device", sandboxMode: "boxlite" }), "local");
+    assert.equal(nodeOwnershipProfile({ nodeLocation: "user-device", sandboxMode: "boxlite" }), "local");
     assert.equal(nodeOwnershipProfile({ nodeLocation: "managed", sandboxMode: "none" }), "managed");
     assert.equal(nodeOwnershipProfile({ sandboxMode: "none" }), "pending");
     assert.equal(nodeSandboxProfile({ sandboxMode: "boxlite" }), "boxlite");
@@ -570,7 +570,7 @@ describe("Relay web admin node helpers", () => {
   it("persists ephemeral control-panel node tokens into the stored map", () => {
     const node = controlPanelNode({
       id: "sbx_alice",
-      employeeId: "alice",
+      userId: "alice",
       nodeToken: "tok_live",
       workspacePath: "/workspace/alice",
     });

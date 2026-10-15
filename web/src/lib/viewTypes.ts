@@ -25,11 +25,11 @@ export function isSettingsSection(value: string | null | undefined): value is Se
    (`/admin/<section>`), so a reload or a shared link lands where it left off.
    The id IS the URL segment: one spelling per section, no id→slug map to
    drift. Adding a section = one entry here plus its case in AdminPage. */
-export type AdminSection = "dashboard" | "employees" | "computers" | "organization";
+export type AdminSection = "dashboard" | "users" | "computers" | "organization";
 
 const ADMIN_SECTIONS: readonly AdminSection[] = [
   "dashboard",
-  "employees",
+  "users",
   "computers",
   "organization",
 ];

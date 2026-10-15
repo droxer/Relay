@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { Button } from "@/components/ui/button";
-import type { ControlPanelDaemonNodeRecord, EmployeeRecord } from "../../types";
+import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../types";
 import {
   AdminNode,
   ICON,
@@ -37,7 +37,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { isNodeOnline } from "./helpers";
 import { NodeCard } from "./NodeCard";
-import { NodeActionsCell, NodeEmployeeCell, NodeIdentityCell, NodeRuntimesCell } from "./NodeRow";
+import { NodeActionsCell, NodeUserCell, NodeIdentityCell, NodeRuntimesCell } from "./NodeRow";
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
 import { ListGroup } from "../ListGroup";
 import type { StateTone } from "../StateMark";
@@ -46,7 +46,7 @@ import { createCellState } from "../../lib/cellState";
 
 interface NodesViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
-  employees: EmployeeRecord[];
+  users: UserRecord[];
   layout: AdminLayout;
   onLayoutChange: (next: AdminLayout) => void;
   onRevealCredentials: (node: ControlPanelDaemonNodeRecord) => void;
@@ -87,12 +87,12 @@ function nodeBandTone(status: string): StateTone {
     `minmax(200px, 1.4fr) minmax(120px, 1fr) minmax(0, 1.6fr) 11rem`). */
 type ColumnChrome = { headClass?: string; cellClass?: string };
 
-/* `t`, the caller's inline callbacks and the employee lookup change under the
+/* `t`, the caller's inline callbacks and the user lookup change under the
    stable column defs (see lib/cellState); remounting a cell would also drop
    its `useNodeDelete` state. */
 interface NodeCellState {
   t: TFunction;
-  employeeById: Map<string, EmployeeRecord>;
+  userById: Map<string, UserRecord>;
   onRevealCredentials: NodesViewProps["onRevealCredentials"];
   onRenameNode: NodesViewProps["onRenameNode"];
   onManageExecutors: NodesViewProps["onManageExecutors"];
@@ -140,10 +140,10 @@ function NodeIdentityColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
   return <NodeIdentityCell node={node} t={t} />;
 }
 
-function NodeEmployeeColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
-  const { employeeById } = useNodeCellState();
-  const employee = node.employeeId ? employeeById.get(node.employeeId) : undefined;
-  return <NodeEmployeeCell employeeName={employee?.displayName} />;
+function NodeUserColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
+  const { userById } = useNodeCellState();
+  const user = node.userId ? userById.get(node.userId) : undefined;
+  return <NodeUserCell userName={user?.displayName} />;
 }
 
 function NodeRuntimesColumn({ node }: { node: ControlPanelDaemonNodeRecord }) {
@@ -232,16 +232,16 @@ function NodeBandTable({
   );
 }
 
-export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, onAddNode, highlightedNodeId }: NodesViewProps) {
+export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode, onAddNode, highlightedNodeId }: NodesViewProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<NodeQuickFilter>("all");
   const [query, setQuery] = useState("");
 
-  const employeeById = useMemo(() => {
-    const map = new Map<string, EmployeeRecord>();
-    for (const employee of employees) map.set(employee.id, employee);
+  const userById = useMemo(() => {
+    const map = new Map<string, UserRecord>();
+    for (const user of users) map.set(user.id, user);
     return map;
-  }, [employees]);
+  }, [users]);
 
   const counts = useMemo(() => {
     const result: Record<NodeQuickFilter, number> = {
@@ -259,20 +259,20 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
       if (matchesNodeQuickFilter(node, "provisioning")) result.provisioning += 1;
       if (matchesNodeQuickFilter(node, "failed")) result.failed += 1;
       if (matchesNodeQuickFilter(node, "stopped")) result.stopped += 1;
-      if (!node.employeeId) result.unassigned += 1;
+      if (!node.userId) result.unassigned += 1;
     }
     return result;
   }, [nodes]);
 
-  const sortColumns = useMemo(() => nodeSortColumns(employeeById), [employeeById]);
-  // A distinct param: the admin page keeps Nodes and Employees on one route,
+  const sortColumns = useMemo(() => nodeSortColumns(userById), [userById]);
+  // A distinct param: the admin page keeps Nodes and Users on one route,
   // so a bare `sort` would have the two tables fighting over one key.
   const { sort, toggleSort, setSort } = useListSort(sortColumns, "nodeSort");
   const { page, setPage } = usePagination("nodePage");
   // What the stable column defs read at render time (see NodeCells).
   const cellState = useMemo<NodeCellState>(
-    () => ({ t, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode }),
-    [t, employeeById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode],
+    () => ({ t, userById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode }),
+    [t, userById, onRevealCredentials, onRenameNode, onManageExecutors, onDeleteNode],
   );
   /* `useListSort` owns the sort (it persists in the URL); TanStack's
      SortingState is a read-only projection of it. Header clicks go back
@@ -300,10 +300,10 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
         cell: ({ row }) => <NodeIdentityColumn node={row.original} />,
       },
       {
-        id: "employee",
-        meta: { headClass: "adm-node-col-employee" } satisfies ColumnChrome,
-        header: () => sortHead("employee", "admin.v2.col_employee"),
-        cell: ({ row }) => <NodeEmployeeColumn node={row.original} />,
+        id: "user",
+        meta: { headClass: "adm-node-col-user" } satisfies ColumnChrome,
+        header: () => sortHead("user", "admin.v2.col_user"),
+        cell: ({ row }) => <NodeUserColumn node={row.original} />,
       },
       {
         id: "runtimes",
@@ -325,15 +325,15 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
     const matching = stableNodeOrder(nodes).filter((node) => {
       if (!matchesNodeQuickFilter(node, filter)) return false;
       if (!q) return true;
-      const employee = (node.employeeId && employeeById.get(node.employeeId)) ?? null;
-      const employeeName = employee ? `${employee.displayName} ${employee.id}`.toLowerCase() : "";
+      const user = (node.userId && userById.get(node.userId)) ?? null;
+      const userName = user ? `${user.displayName} ${user.id}`.toLowerCase() : "";
       const haystack = [
         node.id,
         node.displayName ?? "",
         node.workspacePath ?? "",
         node.sandboxMode ?? "",
         ...Object.keys(node.agents),
-        employeeName,
+        userName,
       ]
         .join(" ")
         .toLowerCase();
@@ -341,7 +341,7 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
     });
     // Unsorted, `stableNodeOrder` above still decides — applySort is identity.
     return applySort(matching, sortColumns, sort);
-  }, [nodes, filter, query, employeeById, sort, sortColumns]);
+  }, [nodes, filter, query, userById, sort, sortColumns]);
 
   // One cursor for both layouts: switching card/list keeps the reader on the
   // same machines rather than resetting them to the top of the fleet.
@@ -403,7 +403,7 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
         <SortMenu
           options={[
                   { key: "node", label: t("admin.v2.col_node") },
-                  { key: "employee", label: t("admin.v2.col_employee") },
+                  { key: "user", label: t("admin.v2.col_user") },
                   { key: "runtimes", label: t("admin.v2.node_runtimes"), defaultDirection: "desc" as const },
         ]}
           sort={sort}
@@ -428,13 +428,13 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
       ) : layout === "card" ? (
         <div className="adm-fleet-grid">
           {paged.items.map((node) => {
-            const employee = node.employeeId ? employeeById.get(node.employeeId) : undefined;
-            const employeeName = employee?.displayName;
+            const user = node.userId ? userById.get(node.userId) : undefined;
+            const userName = user?.displayName;
             return (
               <NodeCard
                 key={node.id}
                 node={node}
-                employeeName={employeeName}
+                userName={userName}
                 onReveal={onRevealCredentials}
                 onRename={onRenameNode}
                 onManageExecutors={onManageExecutors}
@@ -485,7 +485,7 @@ export function NodesView({ nodes, employees, layout, onLayoutChange, onRevealCr
       )}
 
       {/* The CARD layout is a flat grid and pages off one cursor; the list
-          groups, so it pages per band. Same split as the employee list. */}
+          groups, so it pages per band. Same split as the user list. */}
       {layout === "card" ? (
         <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_computers")} />
       ) : null}

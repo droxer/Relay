@@ -13,7 +13,7 @@ class TaskDispatchAssignment:
     agent_id: str | None
     team_id: str | None
     project_id: str | None
-    employee_id: str | None
+    user_id: str | None
 
     @classmethod
     def capture(cls, task: dict[str, Any]) -> TaskDispatchAssignment:
@@ -21,8 +21,8 @@ class TaskDispatchAssignment:
             agent_id=task.get("assignedAgentId"),
             team_id=task.get("assignedTeamId"),
             project_id=task.get("projectId"),
-            employee_id=task.get("assigneeEmployeeId")
-            or task.get("ownerEmployeeId"),
+            user_id=task.get("assigneeUserId")
+            or task.get("ownerUserId"),
         )
 
     def matches(self, task: dict[str, Any]) -> bool:
@@ -59,10 +59,10 @@ class SessionStore(Protocol):
     def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]: ...
     def list_sessions(self) -> list[dict[str, Any]]: ...
     def list_session_summaries(
-        self, *, owner_employee_id: str | None = None, limit: int = 100
+        self, *, owner_user_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]: ...
     def list_session_snapshots(
-        self, *, owner_employee_id: str, project_id: str | None = None
+        self, *, owner_user_id: str, project_id: str | None = None
     ) -> list[dict[str, Any]]: ...
     def create_artifact(
         self, session_id: str, payload: dict[str, Any]
@@ -85,11 +85,11 @@ class TaskStore(Protocol):
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     def get_task(self, task_id: str) -> dict[str, Any]: ...
     def list_tasks(
-        self, *, employee_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]: ...
     def list_tasks_for_session(self, session_id: str) -> list[dict[str, Any]]: ...
     def list_task_summaries(
-        self, *, employee_id: str | None = None, limit: int | None = None
+        self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]: ...
     def update_task(
         self,
@@ -175,15 +175,15 @@ class TaskStore(Protocol):
 
 class AgentStore(Protocol):
     def create_agent(
-        self, supervisor_employee_id: str, payload: dict[str, Any]
+        self, supervisor_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]: ...
     def get_agent(self, agent_id: str) -> dict[str, Any] | None: ...
     def list_agents(
         self,
-        supervisor_employee_id: str | None = None,
+        supervisor_user_id: str | None = None,
         *,
         include_deleted: bool = False,
-        employee_id: str | None = None,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]: ...
     def update_agent(self, agent_id: str, patch: dict[str, Any]) -> dict[str, Any]: ...
     def transform_skill_policy(
@@ -194,7 +194,7 @@ class AgentStore(Protocol):
     def delete_agent(self, agent_id: str) -> dict[str, Any]: ...
     def ensure_compatibility_agent(
         self,
-        supervisor_employee_id: str,
+        supervisor_user_id: str,
         executor_kind: str,
         compatibility_key: str,
         **kwargs: Any,
@@ -239,12 +239,12 @@ class AgentPlacementStore(Protocol):
 
 class TeamStore(Protocol):
     def create_team(
-        self, owner_employee_id: str, payload: dict[str, Any]
+        self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]: ...
     def get_team(self, team_id: str) -> dict[str, Any] | None: ...
     def list_teams(
         self,
-        owner_employee_id: str | None = None,
+        owner_user_id: str | None = None,
         *,
         include_deleted: bool = False,
     ) -> list[dict[str, Any]]: ...
@@ -254,12 +254,12 @@ class TeamStore(Protocol):
 
 class ProjectStore(Protocol):
     def create_project(
-        self, owner_employee_id: str, payload: dict[str, Any]
+        self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]: ...
     def get_project(self, project_id: str) -> dict[str, Any] | None: ...
     def list_projects(
         self,
-        owner_employee_id: str | None = None,
+        owner_user_id: str | None = None,
         *,
         include_archived: bool = False,
     ) -> list[dict[str, Any]]: ...
@@ -287,30 +287,30 @@ class ProjectStore(Protocol):
 class AuthStore(Protocol):
     session_ttl_seconds: int
 
-    def has_users(self) -> bool: ...
-    def create_user(
+    def has_accounts(self) -> bool: ...
+    def create_account(
         self, username: str, password: str, **kwargs: Any
     ) -> dict[str, Any]: ...
     def update_user_preferences(
-        self, user_id: str, **kwargs: Any
+        self, account_id: str, **kwargs: Any
     ) -> dict[str, Any]: ...
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None: ...
     def bootstrap_with_token(
         self, token: str, username: str, password: str
     ) -> dict[str, Any]: ...
-    def create_session(self, user_id: str) -> dict[str, Any]: ...
+    def create_session(self, account_id: str) -> dict[str, Any]: ...
     def get_session_by_token(self, token: str | None) -> dict[str, Any] | None: ...
-    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None: ...
+    def get_account_by_id(self, account_id: str) -> dict[str, Any] | None: ...
     def delete_session(self, token: str) -> bool: ...
-    def list_users(self) -> list[dict[str, Any]]: ...
-    def deleted_employee_ids(self) -> set[str]: ...
-    def soft_delete_employee(self, employee_id: str) -> dict[str, Any]: ...
+    def list_accounts(self) -> list[dict[str, Any]]: ...
+    def deleted_user_ids(self) -> set[str]: ...
+    def soft_delete_user(self, user_id: str) -> dict[str, Any]: ...
 
 
 class DaemonStore(Protocol):
     def request_run_stop(
         self, request_id: str, command_id: str, reason: str,
-        *, actor_employee_id: str | None = None,
+        *, actor_user_id: str | None = None,
     ) -> dict[str, Any] | None: ...
     def mark_run_request_state(
         self, request_id: str, key: str
@@ -356,7 +356,7 @@ class OrgSettingsStore(Protocol):
     def update_settings(
         self,
         *,
-        max_local_computers_per_employee: int | None = None,
+        max_local_computers_per_user: int | None = None,
         max_task_rounds: int | None = None,
         skill_import_allowed_hosts: list[str] | None = None,
     ) -> dict[str, Any]: ...

@@ -3,11 +3,11 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 const stamp = "2026-09-01T00:00:00.000Z";
 /* The lanes live on a project's Issues tab — the global Issues route is a
    cross-project table — so every card here belongs to one project. */
-const project = { id: "p", name: "Launch", ownerEmployeeId: "review-user", computerId: "c", enabled: true, members: [],
+const project = { id: "p", name: "Launch", ownerUserId: "review-user", computerId: "c", enabled: true, members: [],
   leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p", createdAt: stamp, updatedAt: stamp };
 function task(id: string, status: string, extra: Record<string, unknown> = {}) {
   return { id, title: id, description: "", priority: "normal", status, workflowStage: status, projectId: project.id,
-    ownerEmployeeId: "review-user", assignedAgentId: "agent", acceptancePolicy: "human",
+    ownerUserId: "review-user", assignedAgentId: "agent", acceptancePolicy: "human",
     isRoutine: false, linkedSessionIds: [], createdAt: stamp, updatedAt: stamp,
     eventCount: 1, activityCount: 0, ...extra };
 }
@@ -32,8 +32,8 @@ test("five-stage board preserves blocked review and accepts it only after unbloc
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
-    let body: any = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], artifacts: [], events: [], runs: [], files: [], entries: [], tasks, flowPolicy: { wipLimit: 5, scope: "employee" } };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+    let body: any = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], artifacts: [], events: [], runs: [], files: [], entries: [], tasks, flowPolicy: { wipLimit: 5, scope: "user" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     const record = tasks.find((item) => decodeURIComponent(path).endsWith(`/tasks/${item.id}`));
     if (record && method === "PATCH") {
       const input = route.request().postDataJSON();
@@ -103,8 +103,8 @@ async function mockQueuedTask(page: Page): Promise<string[]> {
   const writes: string[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: any = { tasks: [queued], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "employee" } };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+    let body: any = { tasks: [queued], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "user" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     if (route.request().method() === "POST" && path.endsWith("/runs")) {
       writes.push("run");
       body = { task: { ...queued, events: [{}], activity: [] }, session: null, dispatch: { state: "queued", code: "task_wip_limit", message: "Finish existing work before starting another task." } };

@@ -4,7 +4,7 @@ import { matchesThreadQuery, reuseThreadItems, runningAgentName, threadOriginInd
 import { threadNodeOffline } from "../lib/threadRuntime";
 
 /**
- * What the thread rail shows: the employee's threads decorated with live state,
+ * What the thread rail shows: the user's threads decorated with live state,
  * narrowed by the search box, and — on the projects route — grouped against the
  * project list.
  *

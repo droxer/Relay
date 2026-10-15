@@ -67,7 +67,7 @@ it("keeps the directory usable after local-node discovery fails", async () => {
 
 it("applies discovered runs and keeps them visible if a later refresh fails", async () => {
   const node = {
-    id: "computer", employeeId: "employee", status: "ready", online: true, stale: false,
+    id: "computer", userId: "user", status: "ready", online: true, stale: false,
     activeRuns: [{ sessionId: "thread", agent: "codex" }],
   } as ControlPanelDaemonNodeRecord;
   vi.mocked(listControlPanelDaemonNodes).mockResolvedValue({ nodes: [] });

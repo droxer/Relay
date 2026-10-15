@@ -9,7 +9,7 @@ import {
   replaceAddressRun,
   type MentionCandidate,
 } from "../src/lib/mentions.js";
-import type { EmployeeAgent } from "../src/types.js";
+import type { UserAgent } from "../src/types.js";
 
 const candidates: MentionCandidate[] = [
   { id: "agent_lead", displayName: "Lead", eligible: true },
@@ -17,10 +17,10 @@ const candidates: MentionCandidate[] = [
   { id: "agent_far", displayName: "Remote", eligible: false, reason: "unavailable" },
 ];
 
-function agent(overrides: Partial<EmployeeAgent>): EmployeeAgent {
+function agent(overrides: Partial<UserAgent>): UserAgent {
   return {
     id: "agent_1",
-    employeeId: "emp_1",
+    userId: "emp_1",
     displayName: "Agent One",
     executorKind: "claude",
     skillPolicy: {},
@@ -33,20 +33,20 @@ function agent(overrides: Partial<EmployeeAgent>): EmployeeAgent {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
-  } as EmployeeAgent;
+  } as UserAgent;
 }
 
-function placement(daemonNodeId: string): EmployeeAgent["placements"][number] {
+function placement(daemonNodeId: string): UserAgent["placements"][number] {
   return {
     id: `pl_${daemonNodeId}`,
     agentId: "agent_1",
-    employeeId: "emp_1",
+    userId: "emp_1",
     daemonNodeId,
     executorKind: "claude",
     desiredState: "active",
     status: "ready",
     priority: 100,
-  } as EmployeeAgent["placements"][number];
+  } as UserAgent["placements"][number];
 }
 
 describe("mentionCandidates", () => {

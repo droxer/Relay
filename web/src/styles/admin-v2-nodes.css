@@ -16,7 +16,7 @@
 /* Column tracks for the per-band node tables. Lengths, not scale steps —
    the design grid bans arbitrary bracket values in component classes. */
 .adm-node-col-identity { min-width: 200px; }
-.adm-node-col-employee { min-width: 120px; }
+.adm-node-col-user { min-width: 120px; }
 .adm-node-col-actions { width: 11rem; }
 
 .adm-node-row-id {
@@ -68,7 +68,7 @@
 
 /* The owner is plain text: a bordered chip made the most ordinary column on
    the row its loudest. */
-.adm-node-row-employee {
+.adm-node-row-user {
   display: block;
   min-width: 0;
   max-width: 100%;
@@ -261,7 +261,7 @@
   letter-spacing: var(--type-label-strong-track);
 }
 
-/* Employee cards represent people: a circular avatar that reads as a
+/* User cards represent people: a circular avatar that reads as a
    profile picture, with slightly stronger ink so the person identity is
    the anchor. */
 .adm-node-avatar.adm-emp-avatar {
@@ -442,7 +442,7 @@
 }
 
 /* ── Card footer + actions ─────────────────────────────────────────────
-   The footer frame is the employee card's (metrics + edit/delete). A
+   The footer frame is the user card's (metrics + edit/delete). A
    computer card ends on its runtime row instead, with no divider: its
    actions live in the header's overflow menu. */
 .adm-node-card-foot {

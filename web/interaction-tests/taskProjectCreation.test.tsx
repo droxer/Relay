@@ -13,7 +13,7 @@ vi.mock("../src/api", async (original) => ({
 }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
 vi.mock("../src/components/assignment/AssignmentField", () => ({ AssignmentField: ({ agents, teams }: any) => <div data-testid="assignment-options">{agents.map((a: any) => a.displayName).join(",")}{teams.map((a: any) => a.name).join(",")}</div> }));
-const user = { employeeId: "u", username: "u" } as CurrentUser;
+const user = { userId: "u", username: "u" } as CurrentUser;
 const projects = [
   { id: "p", name: "Launch", enabled: true, members: [{ agentId: "a", enabled: true }] },
   { id: "q", name: "Support", enabled: true, members: [] },
@@ -28,8 +28,8 @@ function Form({ initial = { ...emptyBacklogForm(user), title: "Ship" }, save, cr
   return <QueryClientProvider client={client}>
     <TaskDrawer open form={form} projectChoice={projectChoice} onChange={setForm} onSubmit={() => save(form)} onClose={vi.fn()}
       saving={false} title="New" subtitle="Task" projects={choices} onCreateProject={createProject}
-      logicalAgents={[{ id: "a", displayName: "Member", supervisorEmployeeId: "u" }, { id: "b", displayName: "Outside", supervisorEmployeeId: "u" }] as any}
-      teams={[{ id: "team", name: "Outside team", ownerEmployeeId: "u" }] as any} />
+      logicalAgents={[{ id: "a", displayName: "Member", supervisorUserId: "u" }, { id: "b", displayName: "Outside", supervisorUserId: "u" }] as any}
+      teams={[{ id: "team", name: "Outside team", ownerUserId: "u" }] as any} />
   </QueryClientProvider>;
 }
 
@@ -77,13 +77,13 @@ it("offers every agent and team on the project's computer, not just its roster",
     return <TaskDrawer open form={form} onChange={setForm} onSubmit={vi.fn()} onClose={vi.fn()}
       saving={false} title="New" subtitle="Task" projects={onComputer}
       logicalAgents={[
-        { id: "a", displayName: "Member", supervisorEmployeeId: "u", placements: on("pc-1") },
-        { id: "b", displayName: "Neighbour", supervisorEmployeeId: "u", placements: on("pc-1") },
-        { id: "c", displayName: "Far", supervisorEmployeeId: "u", placements: on("pc-2") },
+        { id: "a", displayName: "Member", supervisorUserId: "u", placements: on("pc-1") },
+        { id: "b", displayName: "Neighbour", supervisorUserId: "u", placements: on("pc-1") },
+        { id: "c", displayName: "Far", supervisorUserId: "u", placements: on("pc-2") },
       ] as any}
       teams={[
-        { id: "near", name: "Near team", ownerEmployeeId: "u", memberAgentIds: ["a", "b"] },
-        { id: "split", name: "Split team", ownerEmployeeId: "u", memberAgentIds: ["a", "c"] },
+        { id: "near", name: "Near team", ownerUserId: "u", memberAgentIds: ["a", "b"] },
+        { id: "split", name: "Split team", ownerUserId: "u", memberAgentIds: ["a", "c"] },
       ] as any} />;
   }
   render(<Placed />);

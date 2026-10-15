@@ -8,13 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
-import type { AgentTeam, EmployeeAgent, ProjectRecord, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
+import type { AgentTeam, UserAgent, ProjectRecord, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
 
 const ANY = "__any__";
 
 type Props = {
   trigger: RoutineTrigger;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   teams: AgentTeam[];
   projects: ProjectRecord[];
   onChange: (next: RoutineTrigger) => void;

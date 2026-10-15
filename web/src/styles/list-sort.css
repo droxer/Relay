@@ -1,6 +1,6 @@
 /* ============================ list sort ============================
    The column-header sort affordance, shared by every full-page list table
-   (backlog, routines, the admin employee and node tables).
+   (backlog, routines, the admin user and node tables).
 
    It deliberately owns no geometry. The head cell keeps its own class from
    its own stylesheet — `.backlog-rows-head-due` is where the 116px track is
@@ -76,7 +76,7 @@
    The two tiers below are not a choice, they are the two widths the tables
    already restack at: the backlog and routine lists at the app-wide 820 tier
    (backlog-list.css hides `.backlog-rows-head`), and the admin tables at 719
-   (admin-v2-employees.css hides `.adm-emp-cols`, admin-v2-nodes.css hides
+   (admin-v2-users.css hides `.adm-emp-cols`, admin-v2-nodes.css hides
    `.adm-node-cols`). Both rules are here rather than in those three
    stylesheets so the pair can be read — and kept in step — at once. Move a
    table's restack breakpoint and you have to move its line here too. */

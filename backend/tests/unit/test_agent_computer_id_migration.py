@@ -20,7 +20,7 @@ from relay.persistence.agent_store import DatabaseAgentStore, LocalAgentStore
 def _node(node_id: str = "node-1") -> dict:
     return {
         "id": node_id,
-        "employeeId": "alice",
+        "userId": "alice",
         "workspaceId": "machine-a",
         "workspacePath": "/w",
     }
@@ -131,7 +131,7 @@ def test_migration_defers_while_only_a_provisional_node_identity_exists(
     agent = agents.ensure_compatibility_agent("alice", "claude", "node-1")
     legacy = placements.create_placement(agent, "node-1")
     registry = SimpleNamespace(
-        monitor_nodes=lambda: [{"id": "node-1", "employeeId": "alice"}]
+        monitor_nodes=lambda: [{"id": "node-1", "userId": "alice"}]
     )
 
     assert migrate_agent_placement_computer_ids(placements, registry) == 0
@@ -214,7 +214,7 @@ def test_one_agent_failing_to_migrate_does_not_block_the_rest(
     )
     node_2 = {
         "id": "node-2",
-        "employeeId": "bob",
+        "userId": "bob",
         "workspaceId": "machine-b",
         "workspacePath": "/w",
     }

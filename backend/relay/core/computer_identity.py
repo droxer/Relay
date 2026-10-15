@@ -27,13 +27,13 @@ def computer_id(node: Mapping[str, Any]) -> str:
     managed_node_id = _clean(node.get("managedNodeId"))
     if managed_node_id:
         return f"managed:{managed_node_id}"
-    employee_id = _clean(node.get("employeeId"))
+    user_id = _clean(node.get("userId"))
     # The field name is historical: `workspaceId` holds the host machine-id
     # (the daemon's `ensureMachineId()`), not anything about a directory.
     # Do not read it as related to `workspacePath`.
     machine_id = _clean(node.get("workspaceId"))
-    if employee_id and machine_id:
-        return f"device:{employee_id}:{machine_id}"
+    if user_id and machine_id:
+        return f"device:{user_id}:{machine_id}"
     return f"node:{node['id']}"
 
 
@@ -47,18 +47,18 @@ def is_provisional_computer_id(value: Any) -> bool:
     return isinstance(value, str) and value.startswith("node:")
 
 
-def local_enrollment_key(employee_id: Any, workspace_path: Any) -> str | None:
+def local_enrollment_key(user_id: Any, workspace_path: Any) -> str | None:
     """Return the provisional identity used before a device reports machine-id.
 
     The stable machine identity is unavailable until the daemon starts. During
-    that gap, enrollment retries are the same request when both the employee
+    that gap, enrollment retries are the same request when both the user
     and normalized workspace path match. Hashing keeps the indexed value fixed
     length without treating the workspace path as a secret.
     """
-    employee = _clean(employee_id)
+    user = _clean(user_id)
     workspace = _clean(workspace_path)
-    if not employee or not workspace:
+    if not user or not workspace:
         return None
     normalized_workspace = os.path.normcase(os.path.abspath(workspace))
-    digest = hashlib.sha256(f"{employee}\0{normalized_workspace}".encode()).hexdigest()
+    digest = hashlib.sha256(f"{user}\0{normalized_workspace}".encode()).hexdigest()
     return f"sha256:{digest}"

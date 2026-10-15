@@ -51,7 +51,7 @@ export function AgentProfileEditor({
   const dirty = nameChanged || personalityChanged;
   const canSave = dirty && nameDraft.trim().length > 0;
   const nameError = nameDraft.trim().length === 0
-    ? t("admin.v2.edit_employee_name_required")
+    ? t("admin.v2.edit_user_name_required")
     : null;
   const hasCustomPersonality = savedPersonality.length > 0;
   const titleId = useId();

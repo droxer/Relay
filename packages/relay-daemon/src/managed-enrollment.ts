@@ -6,7 +6,7 @@ import type { DaemonNodeHeartbeatSettings, DaemonNodeSandboxMode } from "relay-c
 interface ManagedEnrollment {
   sandboxId: string;
   token: string;
-  employeeId?: string;
+  userId?: string;
   sandboxMode?: DaemonNodeSandboxMode;
   heartbeat?: DaemonNodeHeartbeatSettings;
 }

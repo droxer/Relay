@@ -2,15 +2,15 @@ import type { DaemonNodeMonitorRecord } from "../types.js";
 import { computerId } from "./createAgent.ts";
 import { preferDaemonNode } from "./daemonNodes.ts";
 
-/** Nodes assigned to one employee — what an employee sees on their own computer page. */
-export function nodesAssignedToEmployee(
+/** Nodes assigned to one user — what a user sees on their own computer page. */
+export function nodesAssignedToUser(
   nodes: DaemonNodeMonitorRecord[],
-  employeeId: string | undefined,
+  userId: string | undefined,
 ): DaemonNodeMonitorRecord[] {
-  if (!employeeId) return [];
+  if (!userId) return [];
   const byComputer = new Map<string, DaemonNodeMonitorRecord>();
   for (const node of nodes) {
-    if (node.employeeId !== employeeId) continue;
+    if (node.userId !== userId) continue;
     const identity = computerId(node);
     const current = byComputer.get(identity);
     byComputer.set(identity, current ? preferDaemonNode(current, node) : node);
@@ -18,11 +18,11 @@ export function nodesAssignedToEmployee(
   return [...byComputer.values()];
 }
 
-/** Count only personal employee devices against the self-service limit. */
-export function countEmployeeDeviceComputers(
+/** Count only personal user devices against the self-service limit. */
+export function countUserDeviceComputers(
   nodes: readonly Pick<DaemonNodeMonitorRecord, "nodeLocation">[],
 ): number {
-  return nodes.filter((node) => node.nodeLocation === "employee-device").length;
+  return nodes.filter((node) => node.nodeLocation === "user-device").length;
 }
 
 /**

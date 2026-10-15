@@ -1,5 +1,5 @@
 import type {
-  EmployeeAgent,
+  UserAgent,
   ProjectMember,
   ProjectRecord,
   WorkspaceBriefResponse,
@@ -29,10 +29,10 @@ export const MAX_PROJECT_MEMBERS = 32;
    Filtering on runtime node alone (as the thread composer does) offers
    agents the backend then rejects, so the picker cannot reuse it. */
 export function agentsEligibleForProject(
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
   computerId: string,
   runtimeNodeId: string,
-): EmployeeAgent[] {
+): UserAgent[] {
   return agents.filter((agent) =>
     !agent.deletedAt
     && agent.enabled
@@ -60,7 +60,7 @@ export function orderedProjectMembers(project: ProjectRecord): ProjectMember[] {
   ];
 }
 
-export function projectMemberState(member: ProjectMember, agent?: EmployeeAgent) {
+export function projectMemberState(member: ProjectMember, agent?: UserAgent) {
   const available = Boolean(agent && !agent.deletedAt);
   return {
     available,

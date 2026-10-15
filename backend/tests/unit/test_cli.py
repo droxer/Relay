@@ -12,7 +12,7 @@ def test_cli_never_logs_bootstrap_token_and_uses_trusted_proxy_list(
     messages: list[str] = []
     uvicorn_options: dict[str, object] = {}
     app = SimpleNamespace(
-        state=SimpleNamespace(auth_store=SimpleNamespace(has_users=lambda: False))
+        state=SimpleNamespace(auth_store=SimpleNamespace(has_accounts=lambda: False))
     )
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", secret)

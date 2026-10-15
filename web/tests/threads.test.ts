@@ -107,10 +107,10 @@ describe("web thread helpers", () => {
 
   it("selects a computer first and exposes only agents placed on it", () => {
     const nodes = [
-      { id: "node_a", employeeId: "alice", online: true, stale: false, status: "ready" },
-      { id: "node_b", employeeId: "alice", online: true, stale: false, status: "running" },
-      { id: "node_bob", employeeId: "bob", online: true, stale: false, status: "ready" },
-      { id: "node_stale", employeeId: "alice", online: true, stale: true, status: "ready" },
+      { id: "node_a", userId: "alice", online: true, stale: false, status: "ready" },
+      { id: "node_b", userId: "alice", online: true, stale: false, status: "running" },
+      { id: "node_bob", userId: "bob", online: true, stale: false, status: "ready" },
+      { id: "node_stale", userId: "alice", online: true, stale: true, status: "ready" },
     ];
     const agents = [
       { id: "agent_a", placements: [{ daemonNodeId: "node_a", desiredState: "active" }] },
@@ -139,7 +139,7 @@ describe("web thread helpers", () => {
           {
             id: "node_new",
             managedNodeId: "computer_a",
-            employeeId: "alice",
+            userId: "alice",
             online: true,
             stale: false,
             status: "ready",
@@ -165,7 +165,7 @@ describe("web thread helpers", () => {
         [{
           id: "node_a",
           managedNodeId: "computer_a",
-          employeeId: "alice",
+          userId: "alice",
           online: true,
           stale: false,
           status: "ready",
@@ -194,11 +194,11 @@ describe("web thread helpers", () => {
   it("follows a local computer that reconnected under a new node id", () => {
     const nodes = [
       {
-        id: "node_old", employeeId: "alice", workspaceId: "mch_laptop",
+        id: "node_old", userId: "alice", workspaceId: "mch_laptop",
         retiredAt: "2026-10-01T00:00:00.000Z", online: false, stale: true, status: "stopped",
       },
-      { id: "node_new", employeeId: "alice", workspaceId: "mch_laptop", online: true, stale: false, status: "ready" },
-      { id: "node_other", employeeId: "alice", workspaceId: "mch_desktop", online: true, stale: false, status: "ready" },
+      { id: "node_new", userId: "alice", workspaceId: "mch_laptop", online: true, stale: false, status: "ready" },
+      { id: "node_other", userId: "alice", workspaceId: "mch_desktop", online: true, stale: false, status: "ready" },
     ];
     const reconnected = session({ daemonNodeId: "node_old", computerId: "device:alice:mch_laptop" });
 
@@ -248,19 +248,19 @@ describe("web thread helpers", () => {
     );
   });
 
-  it("lists only the employee's own non-archived sessions, newest first", () => {
+  it("lists only the user's own non-archived sessions, newest first", () => {
     const sessions = [
-      session({ id: "a", ownerEmployeeId: "alice", updatedAt: "2026-06-20T01:00:00.000Z" }),
-      session({ id: "b", ownerEmployeeId: "bob", updatedAt: "2026-06-20T05:00:00.000Z" }),
-      session({ id: "c", ownerEmployeeId: "alice", archived: true, updatedAt: "2026-06-20T09:00:00.000Z" }),
-      session({ id: "d", ownerEmployeeId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" }),
+      session({ id: "a", ownerUserId: "alice", updatedAt: "2026-06-20T01:00:00.000Z" }),
+      session({ id: "b", ownerUserId: "bob", updatedAt: "2026-06-20T05:00:00.000Z" }),
+      session({ id: "c", ownerUserId: "alice", archived: true, updatedAt: "2026-06-20T09:00:00.000Z" }),
+      session({ id: "d", ownerUserId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" }),
     ];
     const mine = myThreadSessions(sessions, "alice");
     assert.deepEqual(mine.map((s) => s.id), ["d", "a"]);
   });
 
-  it("keeps ownerless legacy sessions for the current employee", () => {
-    const sessions = [session({ id: "legacy", ownerEmployeeId: undefined })];
+  it("keeps ownerless legacy sessions for the current user", () => {
+    const sessions = [session({ id: "legacy", ownerUserId: undefined })];
     assert.deepEqual(myThreadSessions(sessions, "alice").map((s) => s.id), ["legacy"]);
   });
 
@@ -279,8 +279,8 @@ describe("web thread helpers", () => {
   });
 
   it("picks the selected active thread only from visible threads", () => {
-    const visible = session({ id: "visible", ownerEmployeeId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" });
-    const selected = session({ id: "selected", ownerEmployeeId: "alice", updatedAt: "2026-06-20T01:00:00.000Z" });
+    const visible = session({ id: "visible", ownerUserId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" });
+    const selected = session({ id: "selected", ownerUserId: "alice", updatedAt: "2026-06-20T01:00:00.000Z" });
 
     assert.equal(pickActiveThreadSession({
       threads: [visible, selected],
@@ -292,9 +292,9 @@ describe("web thread helpers", () => {
 
   it("falls back when the selected thread is stale, archived, or out of scope", () => {
     const sessions = [
-      session({ id: "archived", ownerEmployeeId: "alice", archived: true, updatedAt: "2026-06-20T09:00:00.000Z" }),
-      session({ id: "bob", ownerEmployeeId: "bob", updatedAt: "2026-06-20T08:00:00.000Z" }),
-      session({ id: "active", ownerEmployeeId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" }),
+      session({ id: "archived", ownerUserId: "alice", archived: true, updatedAt: "2026-06-20T09:00:00.000Z" }),
+      session({ id: "bob", ownerUserId: "bob", updatedAt: "2026-06-20T08:00:00.000Z" }),
+      session({ id: "active", ownerUserId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" }),
     ];
     const threads = myThreadSessions(sessions, "alice");
 
@@ -308,7 +308,7 @@ describe("web thread helpers", () => {
   });
 
   it("suppresses all active thread fallback while composing a new thread", () => {
-    const threads = [session({ id: "active", ownerEmployeeId: "alice" })];
+    const threads = [session({ id: "active", ownerUserId: "alice" })];
 
     assert.equal(pickActiveThreadSession({
       threads,
@@ -323,8 +323,8 @@ describe("web thread helpers", () => {
   // id nobody can find, so the fallback lands on threads[0] — the
   // previous thread — and the transcript flashes it before jumping.
   it("opens the freshly created thread instead of the previous thread", () => {
-    const previous = session({ id: "previous", ownerEmployeeId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" });
-    const created = session({ id: "created", ownerEmployeeId: "alice", updatedAt: "2026-06-20T04:00:00.000Z" });
+    const previous = session({ id: "previous", ownerUserId: "alice", updatedAt: "2026-06-20T03:00:00.000Z" });
+    const created = session({ id: "created", ownerUserId: "alice", updatedAt: "2026-06-20T04:00:00.000Z" });
 
     const threads = upsertThreadSession([previous], created);
     assert.equal(pickActiveThreadSession({
@@ -368,7 +368,7 @@ describe("web thread helpers", () => {
 
 describe("new-thread computer selection", () => {
   const ready = (id: string, over: Record<string, unknown> = {}) => ({
-    id, employeeId: "alice", online: true, stale: false, status: "ready", ...over,
+    id, userId: "alice", online: true, stale: false, status: "ready", ...over,
   });
 
   it("keeps the picked computer when a poll reports it briefly unselectable", () => {
@@ -391,10 +391,10 @@ describe("new-thread computer selection", () => {
     assert.equal(resolveNewThreadComputer("node_b", [], []), null);
   });
 
-  it("drops a pick that belongs to another employee", () => {
-    // The fleet spans employees for an admin actor, so switching who you are
-    // acting as must not leave the previous employee's machine picked.
-    const fleet = [ready("node_a"), ready("bobs_node", { employeeId: "bob" })];
+  it("drops a pick that belongs to another user", () => {
+    // The fleet spans users for an admin actor, so switching who you are
+    // acting as must not leave the previous user's machine picked.
+    const fleet = [ready("node_a"), ready("bobs_node", { userId: "bob" })];
     const assignable = assignableThreadComputers(fleet, "alice");
     const selectable = selectableThreadComputers(fleet, "alice");
 
@@ -432,7 +432,7 @@ describe("new-thread computer selection", () => {
     // that stops being pending has to re-render even though the list is
     // otherwise identical.
     const pending = [ready("node_a")];
-    const located = [ready("node_a", { nodeLocation: "employee-device" })];
+    const located = [ready("node_a", { nodeLocation: "user-device" })];
 
     assert.notEqual(threadComputerSignature(pending), threadComputerSignature(located));
   });

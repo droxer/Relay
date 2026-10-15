@@ -18,14 +18,14 @@ interface CredentialsDrawerProps {
   onClose: () => void;
   node: ControlPanelDaemonNodeRecord | null;
   storedToken?: StoredNodeToken;
-  /** The assigned employee's @handle. The node only carries an id, which is a
+  /** The assigned user's @handle. The node only carries an id, which is a
       UUID under the database auth store. */
-  employeeHandle?: string;
+  userHandle?: string;
   onUnassign?: (node: ControlPanelDaemonNodeRecord) => Promise<void>;
   onDelete?: (node: ControlPanelDaemonNodeRecord) => Promise<void>;
 }
 
-export function CredentialsDrawer({ open, onClose, node, storedToken, employeeHandle, onUnassign, onDelete }: CredentialsDrawerProps) {
+export function CredentialsDrawer({ open, onClose, node, storedToken, userHandle, onUnassign, onDelete }: CredentialsDrawerProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const { copiedField, copy } = useCopyFeedback();
@@ -46,9 +46,9 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, employeeHa
 
   async function handleUnassign() {
     if (!node || !onUnassign) return;
-    const employee = employeeHandle || node.employeeId || "";
+    const user = userHandle || node.userId || "";
     const ok = await confirm({
-      title: t("admin.v2.unassign_confirm", { employee, id: node.id }),
+      title: t("admin.v2.unassign_confirm", { user, id: node.id }),
       message: t("admin.v2.unassign_message"),
       confirmLabel: t("admin.v2.unassign_action"),
       tone: "danger",
@@ -84,8 +84,8 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, employeeHa
     );
   }
 
-  const employeeLabel = node.employeeId
-    ? `@${employeeHandle || node.employeeId}`
+  const userLabel = node.userId
+    ? `@${userHandle || node.userId}`
     : t("admin.unassigned");
   const credentials = resolveNodeCredentials(node, storedToken);
   const { sandboxToken, nodeToken, daemonCommand, source } = credentials;
@@ -106,7 +106,7 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, employeeHa
       open={open}
       onClose={onClose}
       title={t("admin.v2.credentials_title")}
-      subtitle={`${employeeLabel} · ${node.id}`}
+      subtitle={`${userLabel} · ${node.id}`}
       subtitleMono
       closeLabel={t("drawer.close")}
       layer={1}
@@ -157,7 +157,7 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, employeeHa
               <p className="adm-cred-note">{credentialsNote}</p>
             ) : (
               <p className="adm-cred-note">
-                {t("admin.token_cached_note", { employee: employeeLabel })}
+                {t("admin.token_cached_note", { user: userLabel })}
               </p>
             )}
           </>
@@ -169,7 +169,7 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, employeeHa
             <div className="adm-drawer-section">
               <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
               <div className="adm-drawer-section-actions">
-                {onUnassign && node.employeeId ? (
+                {onUnassign && node.userId ? (
                   <Button
                     type="button"
                     variant="outline"

@@ -45,7 +45,7 @@ def _agent(agent_id: str, executor: str, **overrides: Any) -> dict[str, Any]:
 def _team(style: str | None = None, **overrides: Any) -> dict[str, Any]:
     return {
         "id": "team_1",
-        "ownerEmployeeId": "alice",
+        "ownerUserId": "alice",
         "leadAgentId": "lead",
         "memberAgentIds": ["support", "lead"],
         "memberConfigs": {},
@@ -104,7 +104,7 @@ def test_team_agents_returns_the_lead_first() -> None:
         (_team(deletedAt="2026-01-01T00:00:00Z"), [], "team_not_found"),
         (_team(enabled=False), [], "team_disabled"),
         (_team(enabled=False, memberAgentIds=[], leadAgentId=None), [], "team_invalid"),
-        (_team(ownerEmployeeId="bob"), [], "team_forbidden"),
+        (_team(ownerUserId="bob"), [], "team_forbidden"),
         (_team(leadAgentId="stranger"), [], "team_invalid"),
     ],
 )
@@ -403,7 +403,7 @@ def test_style_builders_do_not_mutate_the_roster() -> None:
 def _task_stores(team: dict[str, Any]):
     team = {
         **team,
-        "ownerEmployeeId": "alice",
+        "ownerUserId": "alice",
         "enabled": True,
         "memberAgentIds": [agent["id"] for agent in _roster()],
     }
@@ -412,7 +412,7 @@ def _task_stores(team: dict[str, Any]):
 
 def test_task_style_overrides_the_team_style_for_task_rounds() -> None:
     team_store, agent_store = _task_stores(_team("pipeline"))
-    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice", "collaborationStyle": "build_review"}
+    task = {"assignedTeamId": "team_1", "ownerUserId": "alice", "collaborationStyle": "build_review"}
     assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
     assert [a["agentId"] for a in assignments] == ["dev", "qa"]
     assert assignments[0]["teamSnapshot"]["collaborationStyle"] == "build_review"
@@ -420,14 +420,14 @@ def test_task_style_overrides_the_team_style_for_task_rounds() -> None:
 
 def test_task_without_style_uses_the_team_style() -> None:
     team_store, agent_store = _task_stores(_team("pipeline"))
-    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice"}
+    task = {"assignedTeamId": "team_1", "ownerUserId": "alice"}
     assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
     assert [a["agentId"] for a in assignments] == ["lead", "dev", "qa"]
 
 
 def test_unstyled_team_task_defaults_to_build_review() -> None:
     team_store, agent_store = _task_stores(_team())
-    task = {"assignedTeamId": "team_1", "ownerEmployeeId": "alice"}
+    task = {"assignedTeamId": "team_1", "ownerUserId": "alice"}
     assignments = task_thread_assignments(task, [], team_store=team_store, agent_store=agent_store)
     assert [a["agentId"] for a in assignments] == ["dev", "qa"]
 
@@ -441,14 +441,14 @@ def test_task_dispatch_resolves_style_before_placement(monkeypatch, task_style, 
     team_store, agent_store = _task_stores(_team("pipeline"))
 
     def resolve(assignments, **kwargs):
-        assert kwargs["employee_id"] == "alice"
+        assert kwargs["user_id"] == "alice"
         assert kwargs["is_admin"] is False
         return assignments
 
     monkeypatch.setattr("relay.services.team_dispatch.resolve_agent_assignments", resolve)
     assignments = resolve_team_task_assignments(
-        {"assignedTeamId": "team_1", "ownerEmployeeId": "requester",
-         "assigneeEmployeeId": "alice", "collaborationStyle": task_style},
+        {"assignedTeamId": "team_1", "ownerUserId": "requester",
+         "assigneeUserId": "alice", "collaborationStyle": task_style},
         team_store=team_store, agent_store=agent_store,
         placement_store=None, daemon_nodes=[],
     )

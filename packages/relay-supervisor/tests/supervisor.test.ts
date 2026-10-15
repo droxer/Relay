@@ -6,21 +6,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ControlPanelDaemonNodeRecord } from "relay-core";
 import { SupervisorBackendClient } from "../src/backend-client.js";
-import { CommandTemplateLauncher, LocalDaemonLauncher, workspaceForEmployee, workspaceForManagedNode } from "../src/launchers.js";
+import { defaultWorkspaceRoot } from "../src/cli.js";
+import { CommandTemplateLauncher, LocalDaemonLauncher, workspaceForUser, workspaceForManagedNode } from "../src/launchers.js";
 import { RelaySupervisor } from "../src/reconcile.js";
 import type {
   DaemonLaunchRequest,
   DaemonLauncher,
-  EmployeeRecord,
+  UserRecord,
   ManagedDaemon,
   ProvisionedDaemonNode,
   SupervisorBackend,
 } from "../src/types.js";
 
-function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string; employeeId: string }): ControlPanelDaemonNodeRecord {
+function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string; userId: string }): ControlPanelDaemonNodeRecord {
   return {
     id: input.id,
-    employeeId: input.employeeId,
+    userId: input.userId,
     workspacePath: input.workspacePath,
     status: input.status ?? "provisioning",
     agents: input.agents ?? { claude: "unknown", pi: "unknown", codex: "unknown", kimi: "unknown" },
@@ -35,29 +36,29 @@ function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string; emplo
 }
 
 class FakeBackend implements SupervisorBackend {
-  provisionCalls: Array<{ employeeId: string; workspacePath?: string }> = [];
+  provisionCalls: Array<{ userId: string; workspacePath?: string }> = [];
 
   constructor(
-    private readonly employees: EmployeeRecord[],
+    private readonly users: UserRecord[],
     private readonly nodes: ControlPanelDaemonNodeRecord[],
   ) {}
 
-  async listEmployees(): Promise<EmployeeRecord[]> {
-    return this.employees;
+  async listUsers(): Promise<UserRecord[]> {
+    return this.users;
   }
 
   async listDaemonNodes(): Promise<ControlPanelDaemonNodeRecord[]> {
     return this.nodes;
   }
 
-  async provisionDaemonNode(input: { employeeId: string; workspacePath?: string }): Promise<ProvisionedDaemonNode> {
+  async provisionDaemonNode(input: { userId: string; workspacePath?: string }): Promise<ProvisionedDaemonNode> {
     this.provisionCalls.push(input);
-    const existing = this.nodes.find((item) => item.employeeId === input.employeeId);
+    const existing = this.nodes.find((item) => item.userId === input.userId);
     const next = existing ?? node({
-      id: `sbx_${input.employeeId}`,
-      employeeId: input.employeeId,
+      id: `sbx_${input.userId}`,
+      userId: input.userId,
       workspacePath: input.workspacePath,
-      nodeToken: `tok_${input.employeeId}`,
+      nodeToken: `tok_${input.userId}`,
     });
     if (!existing) this.nodes.push(next);
     return {
@@ -66,7 +67,7 @@ class FakeBackend implements SupervisorBackend {
       daemonEnv: {
         RELAY_BACKEND_URL: "http://backend.test",
         RELAY_SANDBOX_ID: next.id,
-        RELAY_EMPLOYEE_ID: input.employeeId,
+        RELAY_USER_ID: input.userId,
         RELAY_DAEMON_NODE_TOKEN: next.nodeToken ?? "",
         RELAY_WORKSPACE: input.workspacePath ?? "",
       },
@@ -81,7 +82,7 @@ class FakeLauncher implements DaemonLauncher {
   async start(request: DaemonLaunchRequest): Promise<ManagedDaemon> {
     this.starts.push(request);
     return {
-      key: `${request.employee.id}:${request.node.id}`,
+      key: `${request.user.id}:${request.node.id}`,
       provider: this.name,
       async stop() {},
     };
@@ -99,7 +100,7 @@ class ExitedChildLauncher implements DaemonLauncher {
       signalCode: null,
     } as ChildProcess;
     return {
-      key: `${request.employee.id}:${request.node.id}`,
+      key: `${request.user.id}:${request.node.id}`,
       provider: this.name,
       child,
       async stop() {},
@@ -107,19 +108,19 @@ class ExitedChildLauncher implements DaemonLauncher {
   }
 }
 
-test("supervisor provisions and starts missing employee daemon nodes", async () => {
+test("supervisor provisions and starts missing user daemon nodes", async () => {
   const backend = new FakeBackend([{ id: "alice" }], []);
   const launcher = new FakeLauncher();
   const supervisor = new RelaySupervisor({
     backend,
     launcher,
-    workspacePathForEmployee: (employee) => `/workspaces/${employee.id}`,
+    workspacePathForUser: (user) => `/workspaces/${user.id}`,
   });
 
   const result = await supervisor.reconcileOnce();
 
-  assert.deepEqual(result, { employees: 1, provisioned: 1, started: 1, skipped: 0 });
-  assert.deepEqual(backend.provisionCalls, [{ employeeId: "alice", workspacePath: "/workspaces/alice" }]);
+  assert.deepEqual(result, { users: 1, provisioned: 1, started: 1, skipped: 0 });
+  assert.deepEqual(backend.provisionCalls, [{ userId: "alice", workspacePath: "/workspaces/alice" }]);
   assert.equal(launcher.starts[0].node.id, "sbx_alice");
   assert.equal(launcher.starts[0].env.RELAY_DAEMON_NODE_TOKEN, "tok_alice");
 });
@@ -133,8 +134,8 @@ test("local supervisor launcher defaults daemon nodes to BoxLite mode", async ()
       command: "/usr/bin/true",
     });
     const managed = await launcher.start({
-      employee: { id: "alice" },
-      node: node({ id: "sbx_alice", employeeId: "alice", nodeToken: "tok_alice" }),
+      user: { id: "alice" },
+      node: node({ id: "sbx_alice", userId: "alice", nodeToken: "tok_alice" }),
       workspacePath: join(workspaceRoot, "alice"),
       env: { RELAY_DAEMON_NODE_TOKEN: "tok_alice" },
     });
@@ -146,8 +147,8 @@ test("local supervisor launcher defaults daemon nodes to BoxLite mode", async ()
   }
 });
 
-test("managed employee workspaces are absolute when the configured root is relative", () => {
-  assert.equal(workspaceForEmployee(".relay/employee-workspaces", "alice"), join(process.cwd(), ".relay/employee-workspaces/alice"));
+test("managed user workspaces are absolute when the configured root is relative", () => {
+  assert.equal(workspaceForUser(".relay/user-workspaces", "alice"), join(process.cwd(), ".relay/user-workspaces/alice"));
 });
 
 test("managed cloud computers receive distinct node workspace roots", () => {
@@ -165,35 +166,35 @@ test("supervisor skips online nodes and does not assume a BoxLite provider", asy
   const backend = new FakeBackend(
     [{ id: "alice" }, { id: "bob" }],
     [
-      node({ id: "sbx_alice", employeeId: "alice", status: "ready", online: true, stale: false, nodeToken: "tok_alice" }),
-      node({ id: "sbx_bob", employeeId: "bob", status: "stopped", online: false, stale: true, nodeToken: "tok_bob" }),
+      node({ id: "sbx_alice", userId: "alice", status: "ready", online: true, stale: false, nodeToken: "tok_alice" }),
+      node({ id: "sbx_bob", userId: "bob", status: "stopped", online: false, stale: true, nodeToken: "tok_bob" }),
     ],
   );
   const launcher = new FakeLauncher();
   const supervisor = new RelaySupervisor({
     backend,
     launcher,
-    workspacePathForEmployee: (employee) => `/remote/${employee.id}`,
+    workspacePathForUser: (user) => `/remote/${user.id}`,
   });
 
   const result = await supervisor.reconcileOnce();
 
   assert.equal(result.started, 1);
   assert.equal(result.skipped, 1);
-  assert.equal(launcher.starts[0].employee.id, "bob");
+  assert.equal(launcher.starts[0].user.id, "bob");
   assert.equal(launcher.starts[0].workspacePath, "/remote/bob");
 });
 
 test("supervisor restarts a managed daemon after its child exits", async () => {
   const backend = new FakeBackend(
     [{ id: "alice" }],
-    [node({ id: "sbx_alice", employeeId: "alice", status: "stopped", online: false, stale: true, nodeToken: "tok_alice" })],
+    [node({ id: "sbx_alice", userId: "alice", status: "stopped", online: false, stale: true, nodeToken: "tok_alice" })],
   );
   const launcher = new ExitedChildLauncher();
   const supervisor = new RelaySupervisor({
     backend,
     launcher,
-    workspacePathForEmployee: (employee) => `/workspaces/${employee.id}`,
+    workspacePathForUser: (user) => `/workspaces/${user.id}`,
   });
 
   assert.equal((await supervisor.reconcileOnce()).started, 1);
@@ -214,14 +215,14 @@ test("supervisor backend requests time out instead of freezing reconciliation", 
 });
 
 test("supervisor recovers offline nodes without tokens in HTTP list responses", async () => {
-  const backend = new FakeBackend([{ id: "alice" }], [node({ id: "sbx_alice", employeeId: "alice" })]);
+  const backend = new FakeBackend([{ id: "alice" }], [node({ id: "sbx_alice", userId: "alice" })]);
   const provision = backend.provisionDaemonNode.bind(backend);
   backend.provisionDaemonNode = async (input) => {
     const response = await provision(input);
     return { ...response, daemonEnv: { ...response.daemonEnv, RELAY_DAEMON_NODE_TOKEN: "recovered-token" } };
   };
   const launcher = new FakeLauncher();
-  const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForEmployee: () => "/workspace" });
+  const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForUser: () => "/workspace" });
   assert.equal((await supervisor.reconcileOnce()).started, 1);
   assert.equal(backend.provisionCalls.length, 1);
   assert.equal(launcher.starts[0].env.RELAY_DAEMON_NODE_TOKEN, "recovered-token");
@@ -231,14 +232,14 @@ test("remote bootstrap exit does not replace HTTP registration during its grace 
   const backend = new FakeBackend([{ id: "alice" }], []);
   const launcher = new ExitedChildLauncher();
   Object.defineProperty(launcher, "connectionMode", { value: "http" });
-  const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForEmployee: () => "/workspace" });
+  const supervisor = new RelaySupervisor({ backend, launcher, workspacePathForUser: () => "/workspace" });
   assert.equal((await supervisor.reconcileOnce()).started, 1);
   assert.equal((await supervisor.reconcileOnce()).started, 0);
   assert.equal(launcher.starts.length, 1);
 });
 
 test("remote recovery follows HTTP liveness after bootstrap and detaches on shutdown", async () => {
-  const runtime = node({ id: "sbx_alice", employeeId: "alice", nodeToken: "token" });
+  const runtime = node({ id: "sbx_alice", userId: "alice", nodeToken: "token" });
   const backend = new FakeBackend([{ id: "alice" }], [runtime]);
   let starts = 0;
   let stops = 0;
@@ -248,7 +249,7 @@ test("remote recovery follows HTTP liveness after bootstrap and detaches on shut
     async start() { starts++; return { key: "remote", provider: "cloud", async stop() { stops++; } }; },
   };
   const supervisor = new RelaySupervisor({ backend, launcher, now: () => clock,
-    registrationTimeoutMs: 1000, workspacePathForEmployee: () => "/workspace" });
+    registrationTimeoutMs: 1000, workspacePathForUser: () => "/workspace" });
   await supervisor.reconcileOnce();
   clock = 999;
   await supervisor.reconcileOnce();
@@ -273,8 +274,8 @@ test("local launcher rejects spawn failures without crashing the supervisor", as
   try {
     const launcher = new LocalDaemonLauncher({ backendUrl: "http://backend.test", workspaceRoot: root,
       command: join(root, "missing-daemon") });
-    await assert.rejects(launcher.start({ employee: { id: "alice" },
-      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+    await assert.rejects(launcher.start({ user: { id: "alice" },
+      node: node({ id: "sbx_alice", userId: "alice" }), workspacePath: root,
       env: { RELAY_DAEMON_NODE_TOKEN: "token" } }), /ENOENT/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -286,8 +287,8 @@ test("local launcher refuses host execution before spawning without acknowledgem
   try {
     const launcher = new LocalDaemonLauncher({ backendUrl: "http://backend.test", workspaceRoot: root,
       sandboxMode: "none", command: "/usr/bin/true" });
-    await assert.rejects(launcher.start({ employee: { id: "alice" },
-      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+    await assert.rejects(launcher.start({ user: { id: "alice" },
+      node: node({ id: "sbx_alice", userId: "alice" }), workspacePath: root,
       env: { RELAY_DAEMON_NODE_TOKEN: "token" } }), /Host agent execution/);
   } finally {
     if (previous === undefined) delete process.env.RELAY_ALLOW_HOST_AGENT_EXECUTION;
@@ -301,8 +302,8 @@ test("acknowledged local host execution forwards permission to the daemon", asyn
   try {
     const launcher = new LocalDaemonLauncher({ backendUrl: "http://backend.test", workspaceRoot: root,
       sandboxMode: "none", allowHostAgentExecution: true, command: "/usr/bin/true" });
-    const managed = await launcher.start({ employee: { id: "alice" },
-      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+    const managed = await launcher.start({ user: { id: "alice" },
+      node: node({ id: "sbx_alice", userId: "alice" }), workspacePath: root,
       env: { RELAY_DAEMON_NODE_TOKEN: "token" } });
     assert.ok(managed.child?.spawnargs.includes("--allow-host-agent-execution"));
     await managed.stop();
@@ -313,8 +314,18 @@ test("remote command launcher rejects a missing bootstrap directory safely", asy
   const root = mkdtempSync(join(tmpdir(), "relay-bootstrap-error-"));
   try {
     const launcher = new CommandTemplateLauncher({ command: "true", cwd: join(root, "missing") });
-    await assert.rejects(launcher.start({ employee: { id: "alice" },
-      node: node({ id: "sbx_alice", employeeId: "alice" }), workspacePath: root,
+    await assert.rejects(launcher.start({ user: { id: "alice" },
+      node: node({ id: "sbx_alice", userId: "alice" }), workspacePath: root,
       env: { RELAY_DAEMON_NODE_TOKEN: "token" } }), /ENOENT/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("supervisor keeps the pre-rename workspace root when only it exists", () => {
+  const present = (paths: string[]) => (path: string) => paths.includes(path);
+  assert.equal(defaultWorkspaceRoot(present([])), ".relay/user-workspaces");
+  assert.equal(defaultWorkspaceRoot(present([".relay/employee-workspaces"])), ".relay/employee-workspaces");
+  assert.equal(
+    defaultWorkspaceRoot(present([".relay/employee-workspaces", ".relay/user-workspaces"])),
+    ".relay/user-workspaces",
+  );
 });

@@ -11,6 +11,7 @@ from urllib.parse import urlparse, urlunsplit
 from sqlalchemy import Column, DateTime, Table, Text, insert, select, update
 from cryptography.fernet import Fernet, InvalidToken
 
+from ..core.legacy_names import upgrade_legacy_names
 from ..core.ids import new_relay_id, now_iso
 from ..persistence.store_common import (
     _append_jsonl,
@@ -254,18 +255,18 @@ class LocalChatIntegrationStore:
     def add_identity_link(self, integration_id: str, payload: dict[str, Any], actor: str | None = None) -> dict[str, Any]:
         with self._lock:
             external_user_id = _required_string(payload.get("externalUserId"), "externalUserId")
-            employee_id = _required_string(payload.get("employeeId"), "employeeId")
+            user_id = _required_string(payload.get("userId"), "userId")
             link = {
                 "id": new_relay_id("cil"),
                 "externalUserId": external_user_id,
-                "employeeId": employee_id,
+                "userId": user_id,
                 "displayName": _string(payload.get("displayName")),
                 "defaultAgentId": _string(payload.get("defaultAgentId")),
                 "createdAt": now_iso(),
                 "updatedAt": now_iso(),
             }
             integration = self._mutate_collection(integration_id, "identityLinks", link)
-            self._audit("chat.identity_link.created", integration_id, actor, {"employeeId": employee_id})
+            self._audit("chat.identity_link.created", integration_id, actor, {"userId": user_id})
             return self._public_integration(integration)
 
     def delete_identity_link(self, integration_id: str, link_id: str, actor: str | None = None) -> dict[str, Any]:
@@ -300,7 +301,7 @@ class LocalChatIntegrationStore:
             if not self.audit_path.exists():
                 return []
             events = [
-                json.loads(line)
+                upgrade_legacy_names(json.loads(line))
                 for line in self.audit_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
@@ -331,7 +332,7 @@ class LocalChatIntegrationStore:
                     "integrationId": integration["id"],
                     "provider": provider,
                     "tenantId": integration.get("tenantId"),
-                    "employeeId": link["employeeId"],
+                    "userId": link["userId"],
                     "displayName": link.get("displayName"),
                     "defaultAgentId": link.get("defaultAgentId"),
                 }
@@ -360,7 +361,7 @@ class LocalChatIntegrationStore:
                 self._write_conversations(remaining)
             return removed
 
-    def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_employee_id: str) -> dict[str, Any]:
+    def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_user_id: str) -> dict[str, Any]:
         """Bind a conversation thread to a Relay session (upsert by thread key)."""
         with self._lock:
             key = _conversation_key(payload)
@@ -371,7 +372,7 @@ class LocalChatIntegrationStore:
                     updated = {
                         **record,
                         "sessionId": session_id,
-                        "ownerEmployeeId": owner_employee_id,
+                        "ownerUserId": owner_user_id,
                         "providerMessageId": _string(payload.get("messageId")) or record.get("providerMessageId"),
                         "updatedAt": now,
                     }
@@ -386,7 +387,7 @@ class LocalChatIntegrationStore:
                 "threadId": _string(payload.get("threadId")),
                 "providerMessageId": _string(payload.get("messageId")),
                 "sessionId": session_id,
-                "ownerEmployeeId": owner_employee_id,
+                "ownerUserId": owner_user_id,
                 "createdAt": now,
                 "updatedAt": now,
             }
@@ -592,10 +593,10 @@ class DatabaseChatIntegrationStore(LocalChatIntegrationStore):
             )
         )
 
-    def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_employee_id: str) -> dict[str, Any]:
+    def set_conversation_session(self, payload: dict[str, Any], session_id: str, owner_user_id: str) -> dict[str, Any]:
         return self._atomic(
             lambda: super(DatabaseChatIntegrationStore, self).set_conversation_session(
-                payload, session_id, owner_employee_id
+                payload, session_id, owner_user_id
             )
         )
 

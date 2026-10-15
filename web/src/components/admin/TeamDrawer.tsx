@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useEmployeeAgents } from "../../hooks/useEmployeeAgents";
+import { useUserAgents } from "../../hooks/useUserAgents";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
 import {
   agentsForTeamComputer,
@@ -29,12 +29,12 @@ import { useOnOpen } from "@/hooks/useKeyChange";
 export function TeamDrawer({
   open,
   team,
-  employeeId,
+  userId,
   onClose,
 }: {
   open: boolean;
   team?: AgentTeam | null;
-  employeeId?: string;
+  userId?: string;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -49,7 +49,7 @@ export function TeamDrawer({
   const [leadId, setLeadId] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("teams"));
   // Null until the user picks: the computer then follows the team record, or
-  // the only computer the employee has.
+  // the only computer the user has.
   const [computerPick, setComputerPick] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<"name" | "computer" | "members" | "off_computer" | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -67,12 +67,12 @@ export function TeamDrawer({
     setValidationError(null);
   }, team?.id ?? "");
 
-  const { agents: employeeAgents } = useEmployeeAgents(open ? employeeId : undefined);
+  const { agents: userAgents } = useUserAgents(open ? userId : undefined);
   const agents = useMemo(
-    () => employeeAgents.filter((agent) => !agent.deletedAt),
-    [employeeAgents],
+    () => userAgents.filter((agent) => !agent.deletedAt),
+    [userAgents],
   );
-  const computers = useComputerOptions(employeeId ?? "", open && Boolean(employeeId));
+  const computers = useComputerOptions(userId ?? "", open && Boolean(userId));
   // A team lives on one computer: it is chosen first, and the member picker
   // only offers the agents placed on it.
   const savedComputerId = team ? teamComputerId(team, agents) : "";

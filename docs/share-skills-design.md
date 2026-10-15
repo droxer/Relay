@@ -8,7 +8,7 @@
 
 Relay stores a published skill once in the control plane and resolves who
 receives it at dispatch time. A publication is not copied into every agent
-record. Assignments target an employee, team, project, agent, or the
+record. Assignments target a user, team, project, agent, or the
 organization, so membership changes automatically affect later runs.
 
 The design follows the useful parts of other agent platforms: a central
@@ -36,14 +36,14 @@ is available. Neither implies the other.
 
 | Scope | Meaning |
 |---|---|
-| `employee` | Every current and future agent owned by that employee |
+| `user` | Every current and future agent owned by that user |
 | `team` | Agents currently in the team |
 | `project` | The lead and enabled project members, only for runs in that project |
 | `agent` | One logical agent |
-| `org` | Every employee agent; administrator-only to assign |
+| `org` | Every user agent; administrator-only to assign |
 
 More specific scopes override less specific scopes for the same publication:
-`org < employee < team < project < agent`. Assignments are evaluated on every
+`org < user < team < project < agent`. Assignments are evaluated on every
 dispatch; Relay does not fan them out into per-agent grants.
 
 ### Assignment policy
@@ -158,7 +158,7 @@ as Relay-managed assignments.
 - A caller may assign a visible publication only to a target they own.
 - Organization assignments require an administrator.
 - Private publications remain usable only by their owner targets; `org`
-  visibility enables discovery and assignment by other employees.
+  visibility enables discovery and assignment by other users.
 - Soft deletion and immutable events keep historical failures explainable.
 
 Approval workflows, scanning attestations, quarantine, and cross-organization

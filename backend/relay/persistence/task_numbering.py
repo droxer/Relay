@@ -1,6 +1,6 @@
 """Human-facing task numbers, counted per scope.
 
-A project counts its own issues; an employee counts their issues outside any
+A project counts its own issues; a user counts their issues outside any
 project and, separately, their automations (rendered ``AUTO-<n>``). The number
 travels on the event that fixes the scope -- ``task.created``, or
 ``task.project_set`` when an intake issue joins a project and takes that
@@ -21,7 +21,7 @@ NUMBERED_EVENT = "task.numbered"
 
 def task_number_scope(task: dict[str, Any]) -> str:
     """The counter ``task`` draws from; accepts a task or a created payload."""
-    owner = task.get("ownerEmployeeId") or ""
+    owner = task.get("ownerUserId") or ""
     if task.get("isRoutine"):
         return f"automation:{owner}"
     if task.get("projectId"):

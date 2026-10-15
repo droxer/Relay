@@ -45,7 +45,7 @@ def _dispatched_run(app, session_id: str, *, lease_seconds: float = 60) -> dict:
     """A run the daemon took and never reported back on."""
     registry = app.state.registry
     registry.register({
-        "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+        "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
         "protocolVersion": 1, "supportedAgents": ["claude"], "status": "ready",
     })
     request = registry.daemon_store.create_run_request({
@@ -323,7 +323,7 @@ def test_reconcile_records_who_asserted_the_execution_was_gone(monkeypatch) -> N
         # Asserted death is a human claim, not observed evidence: it is written
         # to the log with its actor so the record never implies the daemon said so.
         assert len(asserted) == 1
-        assert asserted[0]["actorEmployeeId"]
+        assert asserted[0]["actorUserId"]
         assert asserted[0]["blockingReason"] == "orphaned_run"
 
 
@@ -375,7 +375,7 @@ def test_reconcile_rejects_a_daemon_node_token(monkeypatch) -> None:
         _bootstrap(client)
         session_id = _create_session(client)
         app.state.registry.register({
-            "sandboxId": "sbx_alice", "employeeId": "alice", "token": "node_token",
+            "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
             "protocolVersion": 1, "supportedAgents": ["claude"], "status": "ready",
         })
 
@@ -390,7 +390,7 @@ def test_reconcile_rejects_a_daemon_node_token(monkeypatch) -> None:
         assert response.status_code == 401
 
 
-def test_reconcile_denies_an_employee_who_does_not_own_the_thread(monkeypatch) -> None:
+def test_reconcile_denies_an_user_who_does_not_own_the_thread(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -400,9 +400,9 @@ def test_reconcile_denies_an_employee_who_does_not_own_the_thread(monkeypatch) -
         SessionController(app.state.session_store).record_agent_started(session_id, {
             "runId": "run_orphaned", "agent": "claude",
         })
-        assert client.post("/api/v1/admin/users", json={
+        assert client.post("/api/v1/admin/accounts", json={
             "username": "mallory", "password": "harbour-kestrel-8823",
-            "employeeId": "mallory", "displayName": "Mallory",
+            "userId": "mallory", "displayName": "Mallory",
         }).status_code == 201
         other = TestClient(app)
         assert other.post("/api/v1/auth/login", json={

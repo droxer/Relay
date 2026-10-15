@@ -136,6 +136,8 @@ export function parseAppPath(pathname: string): AppLocationState {
   if (head === "admin" && rest.length === 0) {
     if (!second) return { route: "admin", ...base, adminSection: DEFAULT_ADMIN_SECTION };
     if (isAdminSection(second)) return { route: "admin", ...base, adminSection: second };
+    // Bookmarks from before the user rename.
+    if (second === "employees") return { route: "admin", ...base, adminSection: "users" };
     return { route: "main", ...base, notFound: true };
   }
   const legacySection = LEGACY_SECTION_PATHS[normalized];
@@ -250,8 +252,8 @@ const LIST_SORT_PARAMS: Record<string, Record<string, ReadonlySet<string>>> = {
   routines: { sort: new Set(["title", "state", "priority", "assignee", "nextRun"]) },
   // Two tables on one path, so each owns its own key.
   admin: {
-    employeeSort: new Set(["employee", "computers", "localLimit", "running", "ready"]),
-    nodeSort: new Set(["node", "employee", "runtimes"]),
+    userSort: new Set(["user", "computers", "localLimit", "running", "ready"]),
+    nodeSort: new Set(["node", "user", "runtimes"]),
   },
 };
 
@@ -268,7 +270,7 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
   routines: ["page"],
   settings: ["page"],
   // Two paged collections on one path, so each owns its own key.
-  admin: ["employeePage", "nodePage"],
+  admin: ["userPage", "nodePage"],
 };
 
 /**
@@ -280,11 +282,11 @@ const LIST_PAGE_PARAMS: Record<string, readonly string[]> = {
  * lib/adminHelpers respectively.
  *
  * /admin has two grouped lists on one path, so each owns its own key — same
- * reason `employeePage`/`nodePage` are split below.
+ * reason `userPage`/`nodePage` are split below.
  */
 const LANE_PAGE_PARAMS: Record<string, readonly string[]> = {
   backlog: ["lanes"],
-  admin: ["employeeLanes", "nodeLanes"],
+  admin: ["userLanes", "nodeLanes"],
 };
 
 /**
@@ -377,8 +379,32 @@ function copyRecordTab(
 }
 
 /** Returns only query parameters owned by the current route and tab. */
+/** Admin list params from before the user rename, mapped onto their new keys. */
+const LEGACY_ADMIN_PARAMS: Readonly<Record<string, string>> = {
+  employeePage: "userPage",
+  employeeSort: "userSort",
+  employeeLanes: "userLanes",
+};
+
+/** A saved admin view from before the rename keeps its page, sort, and lanes. */
+function withLegacyAdminParams(source: URLSearchParams): URLSearchParams {
+  const upgraded = new URLSearchParams(source);
+  for (const [legacy, current] of Object.entries(LEGACY_ADMIN_PARAMS)) {
+    const value = source.get(legacy);
+    upgraded.delete(legacy);
+    if (value && !source.has(current)) upgraded.set(current, value);
+  }
+  for (const param of ["userSort", "nodeSort"]) {
+    const value = upgraded.get(param);
+    if (value === "employee" || value === "-employee") upgraded.set(param, value.replace("employee", "user"));
+  }
+  return upgraded;
+}
+
 function canonicalSearchForPath(pathname: string, search = ""): string {
-  const source = new URLSearchParams(search);
+  const [pathHead] = pathSegments(pathname);
+  const raw = new URLSearchParams(search);
+  const source = pathHead === "admin" ? withLegacyAdminParams(raw) : raw;
   const target = new URLSearchParams();
   const [head, entityId, ...rest] = pathSegments(pathname);
 
@@ -500,7 +526,7 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     copyPageParams(head, source, target);
   } else if (head === "admin") {
     // Same shape as settings: the section is a path segment, so the sort,
-    // page, and filter params of the employee and computer tables have to be
+    // page, and filter params of the user and computer tables have to be
     // copied HERE rather than falling through to the no-entity branch below —
     // otherwise every admin table control would write a param that
     // canonicalization strips straight back out.
@@ -524,6 +550,8 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
 const RENAMED_PATH_HEADS: Readonly<Record<string, string>> = { routines: "automations", issues: "tasks" };
 
 function canonicalPathname(pathname: string): string {
+  // The Users section was "employees" before the user rename.
+  if (pathname === "/admin/employees") return "/admin/users";
   const match = /^\/([^/]+)(\/.*)?$/.exec(pathname);
   const renamed = match ? RENAMED_PATH_HEADS[match[1]] : undefined;
   return renamed ? `/${renamed}${match?.[2] ?? ""}` : pathname;

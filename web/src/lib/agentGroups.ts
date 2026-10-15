@@ -1,4 +1,4 @@
-import type { EmployeeAgent } from "../types.js";
+import type { UserAgent } from "../types.js";
 import { activePlacements, describeAgentPlacements, placementRuntimeNodeId } from "./agentPlacements.ts";
 
 /** The band an agent with nowhere to run falls into; always sorted last. */
@@ -10,7 +10,7 @@ interface AgentComputerGroup {
   /** The computer's display name; `null` for the unplaced band, whose label
       is a translated string the caller owns. */
   label: string | null;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
 }
 
 /**
@@ -29,10 +29,10 @@ interface AgentComputerGroup {
  * destination, and an agent left with none sinks to the trailing band.
  */
 export function groupAgentsByComputer(
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
 ): AgentComputerGroup[] {
   const groups = new Map<string, AgentComputerGroup>();
-  const unplaced: EmployeeAgent[] = [];
+  const unplaced: UserAgent[] = [];
 
   for (const agent of agents) {
     const descriptions = describeAgentPlacements(activePlacements(agent.placements));

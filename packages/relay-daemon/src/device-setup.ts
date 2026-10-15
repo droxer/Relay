@@ -2,7 +2,7 @@ import { relayApiUrl } from "relay-core";
 
 interface ComputerAuthorization {
   sandboxId: string;
-  employeeId: string;
+  userId: string;
   workspacePath: string;
   token: string;
 }
@@ -39,7 +39,7 @@ export async function authorizeComputer(options: {
     });
     if (response.status === 200) {
       const result = await response.json() as ComputerAuthorization;
-      if (!result.token || !result.sandboxId || !result.employeeId || result.workspacePath !== options.workspace) {
+      if (!result.token || !result.sandboxId || !result.userId || result.workspacePath !== options.workspace) {
         throw new Error("Incomplete or mismatched computer authorization.");
       }
       return result;

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
-  AdminEmployees,
+  AdminUsers,
   ICON,
   ICON_STROKE_LARGE,
 } from "../icons";
@@ -20,40 +20,40 @@ import { Pagination } from "@/components/ui/Pagination";
 import { useListSort } from "../../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { ListGroup } from "../ListGroup";
-import { employeeSortColumns } from "../../lib/adminHelpers";
-import { EmployeeGroupTable } from "./EmployeeRow";
+import { userSortColumns } from "../../lib/adminHelpers";
+import { UserGroupTable } from "./UserRow";
 import {
-  buildEmployeeSummaries,
-  employeeEmptyStateTranslationKey,
-  employeesByStatus,
-  EMPLOYEE_SUMMARY_STATUS_ORDER,
-  type EmployeeSummaryStatusKey,
-  matchesEmployeeQuickFilter,
-  type EmployeeQuickFilter,
+  buildUserSummaries,
+  userEmptyStateTranslationKey,
+  usersByStatus,
+  USER_SUMMARY_STATUS_ORDER,
+  type UserSummaryStatusKey,
+  matchesUserQuickFilter,
+  type UserQuickFilter,
 } from "./helpers";
-import { EmployeeCard } from "./EmployeeCard";
+import { UserCard } from "./UserCard";
 import type { StateTone } from "../StateMark";
 import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
 import { Alert } from "@/components/ui/alert";
 
-interface EmployeesViewProps {
-  employees: import("../../types").EmployeeRecord[];
+interface UsersViewProps {
+  users: import("../../types").UserRecord[];
   nodes: ControlPanelDaemonNodeRecord[];
   layout: AdminLayout;
   onLayoutChange: (next: AdminLayout) => void;
-  onAddEmployee: () => void;
-  onDeleteEmployee?: (employee: import("../../types").EmployeeRecord) => Promise<void>;
-  onEditEmployee?: (employee: import("../../types").EmployeeRecord) => void;
-  highlightedEmployeeId: string | null;
+  onAddUser: () => void;
+  onDeleteUser?: (user: import("../../types").UserRecord) => Promise<void>;
+  onEditUser?: (user: import("../../types").UserRecord) => void;
+  highlightedUserId: string | null;
 }
 
-const FILTERS: EmployeeQuickFilter[] = ["all", "running", "ready", "idle", "failed", "unassigned"];
+const FILTERS: UserQuickFilter[] = ["all", "running", "ready", "idle", "failed", "unassigned"];
 
 /* The band's tone. `running` takes `live` rather than `info`: a band saying
    work is in flight right now is exactly what --live is scoped to, and it is
    the same reading the row's old pill carried through `live={tone==="info"}`.
-   Everything else is `employeeSummaryStatus`'s own tone. */
-const EMPLOYEE_STATUS_BAND_TONE: Record<EmployeeSummaryStatusKey, StateTone> = {
+   Everything else is `userSummaryStatus`'s own tone. */
+const USER_STATUS_BAND_TONE: Record<UserSummaryStatusKey, StateTone> = {
   failed: "bad",
   running: "live",
   ready: "good",
@@ -61,55 +61,55 @@ const EMPLOYEE_STATUS_BAND_TONE: Record<EmployeeSummaryStatusKey, StateTone> = {
   no_nodes: "neutral",
 };
 
-// Employee activity slices mirror the Nodes status chips (and the card status
-// pill). running/ready/failed overlap by design — an employee can own one
+// User activity slices mirror the Nodes status chips (and the card status
+// pill). running/ready/failed overlap by design — a user can own one
 // running and one failed node — so counts are per-predicate membership, like
 // the Nodes view. "idle" is the quiet remainder: has nodes, but none are
 // running, ready, or failed (e.g. provisioning/stopped), so a broken node
 // surfaces under "failed" instead of hiding as idle.
-function filterLabel(filter: EmployeeQuickFilter, t: TFunction): string {
+function filterLabel(filter: UserQuickFilter, t: TFunction): string {
   if (filter === "all") return t("admin.v2.filter_all");
-  // "unassigned" here means the employee owns no computer — distinct from the
-  // Nodes view, where it means a node has no employee. Use dedicated copy.
+  // "unassigned" here means the user owns no computer — distinct from the
+  // Nodes view, where it means a node has no user. Use dedicated copy.
   if (filter === "unassigned") return t("admin.v2.emp_state_no_nodes");
   if (filter === "failed") return t("admin.v2.filter_failed");
   return t(`admin.v2.emp_state_${filter}`, { defaultValue: filter });
 }
 
-export function EmployeesView({
-  employees,
+export function UsersView({
+  users,
   nodes,
   layout,
   onLayoutChange,
-  onAddEmployee,
-  onDeleteEmployee,
-  onEditEmployee,
-  highlightedEmployeeId,
-}: EmployeesViewProps) {
+  onAddUser,
+  onDeleteUser,
+  onEditUser,
+  highlightedUserId,
+}: UsersViewProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<EmployeeQuickFilter>("all");
+  const [filter, setFilter] = useState<UserQuickFilter>("all");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const employeesById = useMemo(() => new Map(employees.map((employee) => [employee.id, employee])), [employees]);
+  const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
 
-  async function handleDeleteEmployee(employeeId: string) {
-    if (!onDeleteEmployee) return;
-    const employee = employeesById.get(employeeId);
-    if (!employee) return;
+  async function handleDeleteUser(userId: string) {
+    if (!onDeleteUser) return;
+    const user = usersById.get(userId);
+    if (!user) return;
     const ok = await confirm({
-      title: t("admin.v2.delete_employee_confirm", { name: employee.displayName ?? employee.id, id: employee.id }),
-      message: t("admin.v2.delete_employee_message"),
-      confirmLabel: t("admin.v2.delete_employee_action"),
+      title: t("admin.v2.delete_user_confirm", { name: user.displayName ?? user.id, id: user.id }),
+      message: t("admin.v2.delete_user_message"),
+      confirmLabel: t("admin.v2.delete_user_action"),
       tone: "danger",
     });
     if (!ok) return;
-    setPendingDelete(employeeId);
+    setPendingDelete(userId);
     setDeleteError(null);
     try {
-      await onDeleteEmployee(employee);
+      await onDeleteUser(user);
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -117,31 +117,31 @@ export function EmployeesView({
     }
   }
 
-  const summaries = useMemo(() => buildEmployeeSummaries(employees, nodes), [employees, nodes]);
+  const summaries = useMemo(() => buildUserSummaries(users, nodes), [users, nodes]);
 
   const counts = useMemo(() => {
-    const result: Record<EmployeeQuickFilter, number> = { all: summaries.length, running: 0, ready: 0, idle: 0, failed: 0, unassigned: 0 };
+    const result: Record<UserQuickFilter, number> = { all: summaries.length, running: 0, ready: 0, idle: 0, failed: 0, unassigned: 0 };
     for (const member of summaries) {
-      if (matchesEmployeeQuickFilter(member, "running")) result.running += 1;
-      if (matchesEmployeeQuickFilter(member, "ready")) result.ready += 1;
-      if (matchesEmployeeQuickFilter(member, "idle")) result.idle += 1;
-      if (matchesEmployeeQuickFilter(member, "failed")) result.failed += 1;
-      if (matchesEmployeeQuickFilter(member, "unassigned")) result.unassigned += 1;
+      if (matchesUserQuickFilter(member, "running")) result.running += 1;
+      if (matchesUserQuickFilter(member, "ready")) result.ready += 1;
+      if (matchesUserQuickFilter(member, "idle")) result.idle += 1;
+      if (matchesUserQuickFilter(member, "failed")) result.failed += 1;
+      if (matchesUserQuickFilter(member, "unassigned")) result.unassigned += 1;
     }
     return result;
   }, [summaries]);
 
-  const sortColumns = useMemo(() => employeeSortColumns(), []);
-  // A distinct param: the admin page keeps Employees and Nodes on one route,
+  const sortColumns = useMemo(() => userSortColumns(), []);
+  // A distinct param: the admin page keeps Users and Nodes on one route,
   // so a bare `sort` would have the two tables fighting over one key.
-  const { sort, toggleSort, setSort } = useListSort(sortColumns, "employeeSort");
-  const { page, setPage } = usePagination("employeePage");
-  const { lanePages: groupPages, setLanePage: setGroupPage } = useLanePagination(EMPLOYEE_SUMMARY_STATUS_ORDER, "employeeLanes");
+  const { sort, toggleSort, setSort } = useListSort(sortColumns, "userSort");
+  const { page, setPage } = usePagination("userPage");
+  const { lanePages: groupPages, setLanePage: setGroupPage } = useLanePagination(USER_SUMMARY_STATUS_ORDER, "userLanes");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matching = summaries.filter((item) => {
-      if (!matchesEmployeeQuickFilter(item, filter)) return false;
+      if (!matchesUserQuickFilter(item, filter)) return false;
       if (!q) return true;
       // Computers are what the row shows, so they are what search matches —
       // both the display name and the node id, since either can be on screen.
@@ -156,33 +156,33 @@ export function EmployeesView({
         .toLowerCase();
       return haystack.includes(q);
     });
-    // Unsorted, `buildEmployeeSummaries`' id order stands — applySort is identity.
+    // Unsorted, `buildUserSummaries`' id order stands — applySort is identity.
     return applySort(matching, sortColumns, sort);
   }, [summaries, query, filter, sort, sortColumns]);
 
   // One cursor for both layouts: switching card/list keeps the reader on the
   // same people rather than resetting them to the top of the roster.
   const paged = paginate(filtered, page);
-  const grouped = useMemo(() => employeesByStatus(filtered), [filtered]);
+  const grouped = useMemo(() => usersByStatus(filtered), [filtered]);
   const pagedGroups = useMemo(
-    () => Object.fromEntries(EMPLOYEE_SUMMARY_STATUS_ORDER.map((key) => [
+    () => Object.fromEntries(USER_SUMMARY_STATUS_ORDER.map((key) => [
       key,
       paginate(grouped[key], groupPages[key] ?? 1, LANE_PAGE_SIZE),
-    ])) as Record<EmployeeSummaryStatusKey, ReturnType<typeof paginate<ReturnType<typeof buildEmployeeSummaries>[number]>>>,
+    ])) as Record<UserSummaryStatusKey, ReturnType<typeof paginate<ReturnType<typeof buildUserSummaries>[number]>>>,
     [grouped, groupPages],
   );
 
   if (summaries.length === 0) {
     return (
       <RelayEmptyState
-        className="adm-employees-empty"
+        className="adm-users-empty"
         fill
-        title={t("admin.v2.empty_employees_title")}
-        body={t("admin.v2.empty_employees_body")}
-        illustration={<AdminEmployees size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
+        title={t("admin.v2.empty_users_title")}
+        body={t("admin.v2.empty_users_body")}
+        illustration={<AdminUsers size={ICON.hero} strokeWidth={ICON_STROKE_LARGE} aria-hidden="true" />}
         actions={(
-          <Button type="button" onClick={onAddEmployee}>
-            {t("admin.v2.add_employee_cta")}
+          <Button type="button" onClick={onAddUser}>
+            {t("admin.v2.add_user_cta")}
           </Button>
         )}
       />
@@ -217,17 +217,17 @@ export function EmployeesView({
         <SearchInput
           className="relay-search adm-search"
           inputClassName="adm-search-input"
-          label={t("admin.v2.search_employees_placeholder")}
-          name="admin-employees-search"
+          label={t("admin.v2.search_users_placeholder")}
+          name="admin-users-search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("admin.v2.search_employees_placeholder")}
+          placeholder={t("admin.v2.search_users_placeholder")}
         />
         {/* Sits with the layout toggle, not inside the filter chips: at the
             widths it appears, it is the only way to sort at all. */}
         <SortMenu
           options={[
-                  { key: "employee", label: t("admin.col_employee") },
+                  { key: "user", label: t("admin.col_user") },
                   { key: "computers", label: t("admin.v2.col_computers"), defaultDirection: "desc" as const },
                   { key: "localLimit", label: t("admin.v2.col_local_limit"), defaultDirection: "desc" as const },
                   { key: "running", label: t("admin.v2.col_running"), defaultDirection: "desc" as const },
@@ -235,7 +235,7 @@ export function EmployeesView({
         ]}
           sort={sort}
           onSortChange={setSort}
-          label={t("admin.v2.nav_employees", { defaultValue: "Employees" })}
+          label={t("admin.v2.nav_users", { defaultValue: "Users" })}
         />
         <AdminLayoutToggle layout={layout} onChange={onLayoutChange} />
       </div>
@@ -246,21 +246,21 @@ export function EmployeesView({
 
       {filtered.length === 0 ? (
         <RelayEmptyState
-          className="adm-employees-empty"
+          className="adm-users-empty"
           fill
-          title={t(employeeEmptyStateTranslationKey(query, filter))}
+          title={t(userEmptyStateTranslationKey(query, filter))}
         />
       ) : layout === "card" ? (
         <div className="adm-fleet-grid">
           {paged.items.map((member) => (
-            <EmployeeCard
+            <UserCard
               key={member.id}
               member={member}
-              highlight={highlightedEmployeeId === member.id}
-              onDelete={onDeleteEmployee ? (id) => void handleDeleteEmployee(id) : undefined}
-              onEdit={onEditEmployee ? (id) => {
-                const employee = employeesById.get(id);
-                if (employee) onEditEmployee(employee);
+              highlight={highlightedUserId === member.id}
+              onDelete={onDeleteUser ? (id) => void handleDeleteUser(id) : undefined}
+              onEdit={onEditUser ? (id) => {
+                const user = usersById.get(id);
+                if (user) onEditUser(user);
               } : undefined}
               deletePending={pendingDelete !== null}
               t={t}
@@ -270,9 +270,9 @@ export function EmployeesView({
       ) : (
         /* Grouped by fleet health — the reason an admin opens this list. The
            per-row status pill went with it: the band is that pill, said once
-           for the whole group instead of once per employee. */
+           for the whole group instead of once per user. */
         <div className="adm-grouped-list">
-          {EMPLOYEE_SUMMARY_STATUS_ORDER.map((key) => {
+          {USER_SUMMARY_STATUS_ORDER.map((key) => {
             const group = grouped[key];
             if (group.length === 0) return null;
             const label = t(`admin.v2.emp_state_${key}`, { defaultValue: key });
@@ -282,20 +282,20 @@ export function EmployeesView({
                 key={key}
                 label={label}
                 count={group.length}
-                tone={EMPLOYEE_STATUS_BAND_TONE[key]}
+                tone={USER_STATUS_BAND_TONE[key]}
               >
-                <EmployeeGroupTable
+                <UserGroupTable
                   label={label}
                   members={groupPage.items}
                   sort={sort}
                   onSort={toggleSort}
-                  highlightedId={highlightedEmployeeId}
+                  highlightedId={highlightedUserId}
                   deletePending={pendingDelete !== null}
-                  onEdit={onEditEmployee ? (id) => {
-                    const employee = employeesById.get(id);
-                    if (employee) onEditEmployee(employee);
+                  onEdit={onEditUser ? (id) => {
+                    const user = usersById.get(id);
+                    if (user) onEditUser(user);
                   } : undefined}
-                  onDelete={onDeleteEmployee ? (id) => void handleDeleteEmployee(id) : undefined}
+                  onDelete={onDeleteUser ? (id) => void handleDeleteUser(id) : undefined}
                 />
                 <Pagination
                   compact
@@ -315,7 +315,7 @@ export function EmployeesView({
           empty a band because of the cursor rather than because nobody is in
           that state. */}
       {layout === "card" ? (
-        <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_employees", { defaultValue: "Employees" })} />
+        <Pagination page={paged} onPageChange={setPage} label={t("admin.v2.nav_users", { defaultValue: "Users" })} />
       ) : null}
     </div>
   );

@@ -14,7 +14,7 @@ export type TaskBoardFormBase = {
   title: string;
   description: string;
   priority: TaskPriority;
-  assigneeEmployeeId: string;
+  assigneeUserId: string;
   assignedAgent: "" | AgentName;
   assignedAgentId?: string;
   assignedTeamId?: string;
@@ -47,7 +47,7 @@ export function emptyBacklogForm(currentUser: CurrentUser): BacklogTaskFormState
     priority: "normal",
     status: "backlog",
     dueDate: "",
-    assigneeEmployeeId: currentUser.employeeId ?? currentUser.username,
+    assigneeUserId: currentUser.userId ?? currentUser.username,
     assignedAgent: "",
     assignedAgentId: "",
     assignedTeamId: "",
@@ -61,7 +61,7 @@ export function emptyRoutineForm(currentUser: CurrentUser): RoutineTaskFormState
     description: "",
     acceptancePolicy: "human",
     priority: "normal",
-    assigneeEmployeeId: currentUser.employeeId ?? currentUser.username,
+    assigneeUserId: currentUser.userId ?? currentUser.username,
     assignedAgent: "",
     assignedAgentId: "",
     assignedTeamId: "",
@@ -104,7 +104,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     || a.title !== b.title
     || a.description !== b.description
     || a.priority !== b.priority
-    || a.assigneeEmployeeId !== b.assigneeEmployeeId
+    || a.assigneeUserId !== b.assigneeUserId
     || a.assignedAgent !== b.assignedAgent
     || a.assignedAgentId !== b.assignedAgentId
     || a.assignedTeamId !== b.assignedTeamId

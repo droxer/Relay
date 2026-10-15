@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { useRosterTabs } from "../src/components/roster/RosterTabs";
 import { AgentSelect } from "../src/components/composer/AgentSelect";
-import type { AgentTeam, EmployeeAgent } from "../src/types";
+import type { AgentTeam, UserAgent } from "../src/types";
 
 // Keep the popup mounted while its options change, as SelectContent does.
 // Options own DOM focus; replacing the roster must not strand it on body.
@@ -60,7 +60,7 @@ it("moves focus into the new roster after a tab click", () => {
 });
 
 it("selects a composer team with Enter after switching rosters", async () => {
-  const agent = { id: "a", displayName: "Alice", executorKind: "claude", enabled: true, availability: "ready" } as EmployeeAgent;
+  const agent = { id: "a", displayName: "Alice", executorKind: "claude", enabled: true, availability: "ready" } as UserAgent;
   const team = { id: "t", name: "Team One", enabled: true, members: [agent] } as AgentTeam;
   const onTeamPicked = vi.fn();
   render(<AgentSelect logicalAgents={[agent]} activeLogicalAgentId="a" onLogicalAgentPicked={vi.fn()}

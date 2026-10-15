@@ -1,4 +1,4 @@
-import type { AgentTeam, EmployeeAgent } from "../types.js";
+import type { AgentTeam, UserAgent } from "../types.js";
 
 /*
  * A team lives on one computer. Team dispatch runs every member in one shared
@@ -18,7 +18,7 @@ type TeamMembership = { memberIds: string[]; leadId: string };
  *  draining agent is leaving, so a new roster must not be built on it. This is
  *  deliberately stricter than `agentOnComputer` in `taskAssignment.ts`, which
  *  admits work to a roster that already exists. */
-export function agentComputerIds(agent: EmployeeAgent): string[] {
+export function agentComputerIds(agent: UserAgent): string[] {
   const placed = agent.placements
     .filter((placement) => placement.desiredState === "active" && placement.computerId)
     .map((placement) => placement.computerId as string);
@@ -26,7 +26,7 @@ export function agentComputerIds(agent: EmployeeAgent): string[] {
   return agent.computerId ? [agent.computerId] : [];
 }
 
-function isOnComputer(agent: EmployeeAgent, computerId: string): boolean {
+function isOnComputer(agent: UserAgent, computerId: string): boolean {
   return agentComputerIds(agent).includes(computerId);
 }
 
@@ -34,10 +34,10 @@ function isOnComputer(agent: EmployeeAgent, computerId: string): boolean {
  *  members stay listed even when the computer does not host them, so a
  *  legacy split roster can be seen and trimmed rather than silently hidden. */
 export function agentsForTeamComputer(
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
   computerId: string,
   memberIds: readonly string[],
-): EmployeeAgent[] {
+): UserAgent[] {
   if (!computerId) return [];
   return agents.filter((agent) => !agent.deletedAt
     && (isOnComputer(agent, computerId) || memberIds.includes(agent.id)));
@@ -45,7 +45,7 @@ export function agentsForTeamComputer(
 
 /** Members the computer does not host — each one blocks saving. */
 export function membersOffComputer(
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
   computerId: string,
   memberIds: readonly string[],
 ): string[] {
@@ -59,7 +59,7 @@ export function membersOffComputer(
  *  is dropped hands the role to the next remaining member. */
 export function pruneMembershipToComputer(
   membership: TeamMembership,
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
   computerId: string,
 ): TeamMembership {
   const off = new Set(membersOffComputer(agents, computerId, membership.memberIds));
@@ -73,7 +73,7 @@ export function pruneMembershipToComputer(
  *  else its lead's, so a legacy split team opens on a sensible machine. */
 export function teamComputerId(
   team: Pick<AgentTeam, "memberAgentIds"> & Partial<Pick<AgentTeam, "computerId" | "leadAgentId">>,
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
 ): string {
   if (team.computerId) return team.computerId;
   const rosters = team.memberAgentIds.map((id) => {

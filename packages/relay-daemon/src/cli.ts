@@ -6,6 +6,7 @@ import { applyLocalRuntimeEnvironment, loadPackageEnv } from "relay-core";
 import { resolveSandboxMode, runRelayDaemon, runRelayDaemonDoctor } from "./index.js";
 
 import { loadRuntimeProfile } from "./runtime-profile.js";
+import { isUserIdFlag, userIdFromEnv } from "./legacy-names.js";
 
 loadPackageEnv("relay-daemon");
 
@@ -15,13 +16,13 @@ function showHelp(): void {
 Options:
   --backend-url <url>   Relay backend URL (also RELAY_BACKEND_URL).
   --sandbox-id <id>     Sandbox identifier (required; also RELAY_SANDBOX_ID).
-  --employee-id <id>    Employee identifier (also RELAY_EMPLOYEE_ID).
+  --user-id <id>        User identifier (also RELAY_USER_ID).
   --token <token>       Daemon node token (also RELAY_DAEMON_NODE_TOKEN).
   --enrollment-token <token>
                         One-time managed-node enrollment token (also
                         RELAY_ENROLLMENT_TOKEN). Replaces --sandbox-id and
                         --token for the first start.
-  --workspace <path>    Employee-selected or supervisor-provisioned workspace
+  --workspace <path>    User-selected or supervisor-provisioned workspace
                         root; Relay creates <path>/<thread-id> per thread
                         (also RELAY_WORKSPACE or WORKSPACE).
   --workspace-id <id>   Stable workspace identity for continuity and drift
@@ -56,7 +57,7 @@ function showVersion(): void {
 export interface DaemonCliArgs {
   backendUrl?: string;
   sandboxId?: string;
-  employeeId?: string;
+  userId?: string;
   token?: string;
   enrollmentToken?: string;
   workspace?: string;
@@ -78,7 +79,7 @@ export function resolveAllowHostAgentExecution(args: DaemonCliArgs): boolean {
 export function parseArgs(argv: string[]): DaemonCliArgs {
   let backendUrl: string | undefined;
   let sandboxId: string | undefined;
-  let employeeId: string | undefined;
+  let userId: string | undefined;
   let token: string | undefined;
   let enrollmentToken: string | undefined;
   let workspace: string | undefined;
@@ -125,12 +126,12 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
       }
       sandboxId = value;
       i += 1;
-    } else if (arg === "--employee-id") {
+    } else if (isUserIdFlag(arg)) {
       const value = argv[i + 1];
       if (!value || value.startsWith("-")) {
-        throw new Error("--employee-id requires a value.");
+        throw new Error(`${arg} requires a value.`);
       }
-      employeeId = value;
+      userId = value;
       i += 1;
     } else if (arg === "--token") {
       const value = argv[i + 1];
@@ -174,7 +175,7 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
   return {
     backendUrl,
     sandboxId,
-    employeeId,
+    userId,
     token,
     ...(enrollmentToken ? { enrollmentToken } : {}),
     workspace,
@@ -232,7 +233,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
     const report = await runRelayDaemonDoctor({
       backendUrl: args.backendUrl ?? process.env.RELAY_BACKEND_URL,
       sandboxId,
-      employeeId: args.employeeId ?? process.env.RELAY_EMPLOYEE_ID,
+      userId: args.userId ?? userIdFromEnv(),
       token: args.token ?? process.env.RELAY_DAEMON_NODE_TOKEN ?? process.env.RELAY_DAEMON_TOKEN,
       workspacePath,
       workspaceId: args.workspaceId ?? process.env.RELAY_WORKSPACE_ID,
@@ -249,7 +250,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
   await runRelayDaemon({
     backendUrl: args.backendUrl ?? process.env.RELAY_BACKEND_URL,
     sandboxId,
-    employeeId: args.employeeId ?? process.env.RELAY_EMPLOYEE_ID,
+    userId: args.userId ?? userIdFromEnv(),
     token: args.token ?? process.env.RELAY_DAEMON_NODE_TOKEN ?? process.env.RELAY_DAEMON_TOKEN,
     enrollmentToken,
     workspacePath,

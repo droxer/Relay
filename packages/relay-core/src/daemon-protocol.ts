@@ -8,12 +8,12 @@ import type {
 import type { AgentRole } from "./session-store.js";
 
 export type SandboxStatus = "provisioning" | "ready" | "busy" | "running" | "stopped" | "failed";
-export type DaemonNodeLocation = "employee-device" | "managed";
+export type DaemonNodeLocation = "user-device" | "managed";
 
 export interface SandboxRecord {
   id: string;
   displayName?: string;
-  employeeId?: string;
+  userId?: string;
   workspacePath?: string;
   /** Stable host machine identity reported by the daemon; not a workspace path. */
   workspaceId?: string;

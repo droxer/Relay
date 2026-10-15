@@ -42,24 +42,24 @@ def _bootstrap_admin(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-def _bootstrap_employee(client: TestClient, employee_id: str = "alice") -> None:
+def _bootstrap_user(client: TestClient, user_id: str = "alice") -> None:
     response = client.post(
-        "/api/v1/admin/employees",
+        "/api/v1/admin/users",
         json={
-            "employeeId": employee_id,
-            "username": employee_id,
+            "userId": user_id,
+            "username": user_id,
             "password": "userpass",
-            "displayName": employee_id.title(),
+            "displayName": user_id.title(),
         },
     )
     assert response.status_code == 201
 
 
-def _login_employee(client: TestClient, employee_id: str = "alice") -> None:
+def _login_user(client: TestClient, user_id: str = "alice") -> None:
     assert client.post("/api/v1/auth/logout").status_code == 200
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": employee_id, "password": "userpass"},
+        json={"username": user_id, "password": "userpass"},
     )
     assert response.status_code == 200
 
@@ -69,14 +69,14 @@ def _register_node(
     node_id: str,
     *,
     capabilities: list[str],
-    employee_id: str = "alice",
+    user_id: str = "alice",
 ) -> dict:
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "employeeId": employee_id,
+            "userId": user_id,
             "token": f"token_{node_id}",
-            "workspacePath": f"/workspace/{employee_id}",
+            "workspacePath": f"/workspace/{user_id}",
             "workspaceId": f"machine-{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -87,9 +87,9 @@ def _register_node(
     )
 
 
-def _agent(app, node: dict, *, employee_id: str = "alice") -> dict:
+def _agent(app, node: dict, *, user_id: str = "alice") -> dict:
     agent = app.state.agent_store.create_agent(
-        employee_id,
+        user_id,
         {
             "displayName": "Task Agent",
             "executorKind": "codex",
@@ -154,8 +154,8 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
             {
                 **ROUTINE_RUN,
                 "title": "Write the report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -184,8 +184,8 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
             {
                 **ROUTINE_RUN,
                 "title": "Write the report",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
                 "status": "assigned",
@@ -232,13 +232,13 @@ def test_dispatch_resolves_the_layout_on_the_legacy_no_agent_record_branch(
                 **ROUTINE_RUN,
                 "title": "Legacy task without a named agent",
                 "assignedAgent": "codex",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"employeeId": "alice", "isAdmin": True}
+        actor = {"userId": "alice", "isAdmin": True}
 
         result = asyncio.run(
             start_task_on_ready_node(ctx, task, actor, assignments=None)
@@ -259,7 +259,7 @@ def test_project_task_keeps_the_project_workspace(monkeypatch) -> None:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        _bootstrap_employee(client)
+        _bootstrap_user(client)
         node = _register_node(
             app,
             "sbx_alice",
@@ -270,7 +270,7 @@ def test_project_task_keeps_the_project_workspace(monkeypatch) -> None:
             ],
         )
         lead = _agent(app, node)
-        _login_employee(client)
+        _login_user(client)
 
         project = client.post(
             "/api/v1/projects",
@@ -323,8 +323,8 @@ def test_routine_occurrence_dispatch_nests_under_its_routine(monkeypatch) -> Non
             "/api/v1/tasks",
             json={
                 "title": "Nightly",
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "assignedAgentId": agent["id"],
                 "isRoutine": True,
                 "routineState": "active",
@@ -367,14 +367,14 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
                 "title": "Manual dispatch that fails",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": project["id"],
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"employeeId": "alice", "isAdmin": True}
+        actor = {"userId": "alice", "isAdmin": True}
 
         result = asyncio.run(
             start_task_on_ready_node(ctx, task, actor, assignments=None)
@@ -419,14 +419,14 @@ def test_unrecorded_dispatch_failure_reraises_the_original_error(monkeypatch) ->
                 "title": "Dispatch whose caller records the failure",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": project["id"],
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"employeeId": "alice", "isAdmin": True}
+        actor = {"userId": "alice", "isAdmin": True}
 
         with pytest.raises(ValueError, match="capacity_exhausted: node is full"):
             asyncio.run(
@@ -461,14 +461,14 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
                 "title": "Manual dispatch with unknown outcome",
                 "assignedAgent": "codex",
                 "assignedAgentId": agent["id"],
-                "ownerEmployeeId": "alice",
-                "assigneeEmployeeId": "alice",
+                "ownerUserId": "alice",
+                "assigneeUserId": "alice",
                 "projectId": project["id"],
                 "status": "assigned",
             }
         )
         ctx = app_context_for(app)
-        actor = {"employeeId": "alice", "isAdmin": True}
+        actor = {"userId": "alice", "isAdmin": True}
 
         result = asyncio.run(
             start_task_on_ready_node(ctx, task, actor, assignments=None)

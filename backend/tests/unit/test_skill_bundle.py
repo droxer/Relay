@@ -38,7 +38,7 @@ def _ctx():
         store.skills[skill_id] = {
             "id": skill_id,
             "name": skill_id,
-            "ownerEmployeeId": owner,
+            "ownerUserId": owner,
             "visibility": visibility,
             "deletedAt": None,
             "slug": skill_id,
@@ -63,7 +63,7 @@ def _ctx():
 def _agent(grants, owner="alice", version=1):
     return {
         "id": "agent",
-        "supervisorEmployeeId": owner,
+        "supervisorUserId": owner,
         "skillPolicy": {"version": version, "grants": grants},
     }
 
@@ -73,7 +73,7 @@ def _grant(skill_id, pin="latest"):
         "skillId": skill_id,
         "pin": pin,
         "grantedAt": "now",
-        "grantedByEmployeeId": "alice",
+        "grantedByUserId": "alice",
     }
 
 
@@ -88,7 +88,7 @@ def test_explicit_v1_empty_policy_returns_versioned_empty_bundle():
 
 def test_default_legacy_policy_is_unmanaged():
     bundle, skipped = resolve_bundle(
-        _ctx(), {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}}
+        _ctx(), {"id": "agent", "supervisorUserId": "alice", "skillPolicy": {}}
     )
     assert bundle is None
     assert skipped == []
@@ -165,7 +165,7 @@ def test_required_assignment_keeps_severity_for_a_legacy_invalid_slug():
         {
             "id": "assignment",
             "skillId": "b",
-            "targetType": "employee",
+            "targetType": "user",
             "targetId": "alice",
             "mode": "required",
             "pin": "stable",
@@ -176,7 +176,7 @@ def test_required_assignment_keeps_severity_for_a_legacy_invalid_slug():
 
     bundle, skipped = resolve_bundle(
         ctx,
-        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+        {"id": "agent", "supervisorUserId": "alice", "skillPolicy": {}},
     )
 
     assert bundle["skills"] == []
@@ -222,13 +222,13 @@ def test_kimi_different_names_do_not_conflict():
     assert skipped == []
 
 
-def test_employee_assignment_is_resolved_without_legacy_agent_policy():
+def test_user_assignment_is_resolved_without_legacy_agent_policy():
     ctx = _ctx()
     ctx.skill_store.assignments.append(
         {
             "id": "assignment",
             "skillId": "b",
-            "targetType": "employee",
+            "targetType": "user",
             "targetId": "alice",
             "mode": "optional",
             "pin": "stable",
@@ -240,7 +240,7 @@ def test_employee_assignment_is_resolved_without_legacy_agent_policy():
 
     bundle, skipped = resolve_bundle(
         ctx,
-        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+        {"id": "agent", "supervisorUserId": "alice", "skillPolicy": {}},
     )
 
     assert skipped == []
@@ -254,7 +254,7 @@ def test_explicit_assignment_does_not_auto_materialize():
         {
             "id": "assignment",
             "skillId": "b",
-            "targetType": "employee",
+            "targetType": "user",
             "targetId": "alice",
             "mode": "suggested",
             "pin": "latest",
@@ -265,7 +265,7 @@ def test_explicit_assignment_does_not_auto_materialize():
 
     bundle, skipped = resolve_bundle(
         ctx,
-        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+        {"id": "agent", "supervisorUserId": "alice", "skillPolicy": {}},
     )
 
     assert skipped == []
@@ -278,7 +278,7 @@ def test_required_assignment_failure_is_marked_as_blocking():
         {
             "id": "assignment",
             "skillId": "missing",
-            "targetType": "employee",
+            "targetType": "user",
             "targetId": "alice",
             "mode": "required",
             "pin": "stable",
@@ -289,7 +289,7 @@ def test_required_assignment_failure_is_marked_as_blocking():
 
     bundle, skipped = resolve_bundle(
         ctx,
-        {"id": "agent", "supervisorEmployeeId": "alice", "skillPolicy": {}},
+        {"id": "agent", "supervisorUserId": "alice", "skillPolicy": {}},
     )
 
     assert bundle["skills"] == []

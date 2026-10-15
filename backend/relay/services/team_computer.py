@@ -17,11 +17,11 @@ from ..persistence.team_store import TeamValidationError
 from .agent_location import agent_computer_ids
 
 
-def _named_computer(owner_employee_id: str, value: Any, registry: Any) -> str:
+def _named_computer(owner_user_id: str, value: Any, registry: Any) -> str:
     """Validate the computer a team write names.
 
     Matched by stable computer id and owner together, as agent creation does:
-    naming another employee's computer id must not pass.
+    naming another user's computer id must not pass.
     """
     if not isinstance(value, str) or not value.strip():
         raise TeamValidationError("team_computer_required")
@@ -35,13 +35,13 @@ def _named_computer(owner_employee_id: str, value: Any, registry: Any) -> str:
     ]
     if not nodes:
         raise TeamValidationError("team_computer_not_found")
-    if not any(node.get("employeeId") == owner_employee_id for node in nodes):
+    if not any(node.get("userId") == owner_user_id for node in nodes):
         raise TeamValidationError("team_computer_forbidden")
     return target
 
 
 def resolve_team_computer(
-    owner_employee_id: str,
+    owner_user_id: str,
     body: Mapping[str, Any],
     member_ids: list[str],
     *,
@@ -66,7 +66,7 @@ def resolve_team_computer(
     if not names_computer and not roster_changed:
         return None
     target = (
-        _named_computer(owner_employee_id, body.get("computerId"), registry)
+        _named_computer(owner_user_id, body.get("computerId"), registry)
         if names_computer
         else (current or {}).get("computerId")
     )

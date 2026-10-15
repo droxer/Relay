@@ -27,7 +27,7 @@ wire names stay `routine*`.
   existing `promote_due_routine` → daemon dispatch path runs them.
 - The event log is authoritative. Trigger configuration lives on
   `task.created` / `task.updated` events and replays into the snapshot.
-- An automation's runs pass through `assertSessionOwnedByEmployee`, the
+- An automation's runs pass through `assertSessionOwnedByUser`, the
   same as every other run.
 
 ### Out of scope
@@ -228,7 +228,7 @@ the rate cap. Owner or admin only. Works for every kind.
 
 ### Capability
 
-`GET /admin/settings` (and the employee-visible settings payload) reports
+`GET /admin/settings` (and the user-visible settings payload) reports
 `capabilities.automationTriggers`, driven by
 `RELAY_AUTOMATION_TRIGGERS_ENABLED` (default on). With it off, the API
 rejects non-schedule kinds and the web offers only Schedule.

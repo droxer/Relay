@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { legacyUserId, userIdFromEnv } from "./legacy-names.js";
 import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
 import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
 export { localProcessExecStream } from "./local-runtime.js";
@@ -117,7 +118,7 @@ export interface DaemonRuntimeOptions {
   sandbox?: DaemonSandboxMode;
   /** Explicit acknowledgement required before running agents as host processes. */
   allowHostAgentExecution?: boolean;
-  employeeId?: string;
+  userId?: string;
   workspacePath?: string;
   workspaceId?: string;
   pollIntervalMs?: number;
@@ -196,8 +197,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const rawFetch = options.fetchFn ?? fetch;
   let fetchFn = rawFetch;
   let sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
-  let configuredEmployeeId = options.employeeId ?? process.env.RELAY_EMPLOYEE_ID;
-  const employeeId = configuredEmployeeId ?? process.env.USER ?? "local";
+  let configuredUserId = options.userId ?? userIdFromEnv();
+  const userId = configuredUserId ?? process.env.USER ?? "local";
   const workspacePath = firstNonBlank(options.workspacePath, process.env.RELAY_WORKSPACE, process.env.WORKSPACE) ?? process.cwd();
   // Identify the computer by a stable per-host machine id, not the working
   // directory. Relaunching the daemon from a different path (or booting a fresh
@@ -226,12 +227,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     saveManagedEnrollment(enrollmentPath, enrollment);
     sandboxId = enrollment.sandboxId;
     enrolledToken = enrollment.token;
-    configuredEmployeeId = configuredEmployeeId ?? enrollment.employeeId;
+    configuredUserId = configuredUserId ?? legacyUserId(enrollment);
     enrolledSandboxMode = enrollment.sandboxMode;
     enrolledHeartbeatSettings = validHeartbeatSettings(enrollment.heartbeat);
   }
   if (!sandboxId) throw new Error("RELAY_SANDBOX_ID or RELAY_ENROLLMENT_TOKEN is required for the relay daemon.");
-  const effectiveEmployeeId = configuredEmployeeId ?? employeeId;
+  const effectiveUserId = configuredUserId ?? userId;
   const sandboxMode = resolveSandboxMode(options.sandbox ?? process.env.RELAY_SANDBOX_MODE ?? enrolledSandboxMode);
   if (!options.environment) {
     assertHostAgentExecutionAllowed(
@@ -273,7 +274,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const tokenResolution = ensureDaemonNodeToken({
     credentialDirectory: join(stateDir, "credentials"),
     legacyWorkspacePath: workspacePath,
-    employeeId: effectiveEmployeeId,
+    userId: effectiveUserId,
     token: options.token ?? process.env.RELAY_DAEMON_TOKEN ?? process.env.RELAY_DAEMON_NODE_TOKEN ?? enrolledToken,
   });
   const token = tokenResolution.token;
@@ -318,7 +319,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     health = next;
     logger.info("daemon health", { sandboxId, health: next, ...fields });
   };
-  logger.info("daemon starting", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
+  logger.info("daemon starting", { sandboxId, userId: effectiveUserId, workspacePath, backendUrl, sandboxMode });
   // Runs the machine proves ended are settled with that evidence instead of
   // waiting for a person. They stay fenced: none of them is ever run again.
   const provenExits = await proveJournaledExits(environment, executionJournal.pending(), logger, sandboxId);
@@ -330,7 +331,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       sessionId: execution.sessionId, leaseId: execution.leaseId,
     });
   }
-  setHealth("starting", { employeeId: effectiveEmployeeId, workspacePath, backendUrl, sandboxMode });
+  setHealth("starting", { userId: effectiveUserId, workspacePath, backendUrl, sandboxMode });
   const activeRuns = new Map<string, { command: DaemonNodeRunCommand; controller: AbortController; promise: Promise<void> }>();
   // Runs whose stop could not be verified, each with the switch that lets it go.
   const unconfirmedExits = new Map<string, AbortController>();
@@ -357,9 +358,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), options.signal, inventoryDiscoveryTimeoutMs, providerModelLists);
   const runtimeRefreshCommands = new Map<string, string>();
   let refreshedCommands: Array<{ commandId: string; leaseId: string }> = [];
-  const buildRegistration = (includeEmployeeId = Boolean(configuredEmployeeId), status?: DaemonNodeRegistration["status"]): DaemonNodeRegistration => ({
+  const buildRegistration = (includeUserId = Boolean(configuredUserId), status?: DaemonNodeRegistration["status"]): DaemonNodeRegistration => ({
     sandboxId,
-    ...(includeEmployeeId ? { employeeId: effectiveEmployeeId } : {}),
+    ...(includeUserId ? { userId: effectiveUserId } : {}),
     token,
     workspacePath,
     ...(workspaceId ? { workspaceId } : {}),
@@ -504,13 +505,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         });
       });
     }
-    logger.info("daemon registered", { sandboxId, employeeId: effectiveEmployeeId, workspacePath, backendUrl, logPath: logger.logPath });
+    logger.info("daemon registered", { sandboxId, userId: effectiveUserId, workspacePath, backendUrl, logPath: logger.logPath });
     setHealth("registered");
     console.log(`Relay daemon registered sandbox ${sandboxId} with backend at ${backendUrl} (sandbox: ${sandboxMode})`);
     if (logger.logPath) console.log(`Relay daemon log: ${logger.logPath}`);
     if (tokenResolution.source === "generated" && tokenResolution.path) {
-      logger.info("daemon generated token", { sandboxId, employeeId: effectiveEmployeeId, path: tokenResolution.path });
-      console.log(`Relay daemon generated token for ${effectiveEmployeeId}: ${tokenResolution.path}`);
+      logger.info("daemon generated token", { sandboxId, userId: effectiveUserId, path: tokenResolution.path });
+      console.log(`Relay daemon generated token for ${effectiveUserId}: ${tokenResolution.path}`);
     }
 
     setHealth("polling");
@@ -971,8 +972,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
 export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): Promise<DaemonDoctorReport> {
   const backendUrl = normalizeBaseUrl(options.backendUrl ?? process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL ?? "http://127.0.0.1:8790");
   const sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
-  const configuredEmployeeId = options.employeeId ?? process.env.RELAY_EMPLOYEE_ID;
-  const employeeId = configuredEmployeeId ?? process.env.USER ?? "local";
+  const configuredUserId = options.userId ?? userIdFromEnv();
+  const userId = configuredUserId ?? process.env.USER ?? "local";
   const workspacePath = firstNonBlank(options.workspacePath, process.env.RELAY_WORKSPACE, process.env.WORKSPACE) ?? process.cwd();
   const sandboxMode = resolveSandboxMode(options.sandbox ?? process.env.RELAY_SANDBOX_MODE);
   if (!options.environment) {
@@ -1001,7 +1002,7 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
   let token = "";
   try {
     token = options.token?.trim() || process.env.RELAY_DAEMON_NODE_TOKEN?.trim() || process.env.RELAY_DAEMON_TOKEN?.trim()
-      || readDaemonNodeToken(join(stateDir, "credentials"), employeeId) || "";
+      || readDaemonNodeToken(join(stateDir, "credentials"), userId) || "";
     if (!token) throw new Error("No saved node token. Enroll this computer before running doctor.");
     add("token", true, "daemon node token resolved.");
   } catch (error) {
@@ -1054,7 +1055,7 @@ function configureAgentProcessEnvironment(
   } else {
     process.env.RELAY_AGENT_WORKSPACE = workspacePath;
     process.env.RELAY_RUN_AS_CURRENT_USER = "1";
-    // Local nodes discover and run the employee's existing host agents. An
+    // Local nodes discover and run the user's existing host agents. An
     // explicit home remains available for service accounts and tests.
     process.env.RELAY_AGENT_HOME = agentHome ?? process.env.RELAY_AGENT_HOME ?? homedir();
   }
@@ -1883,7 +1884,7 @@ class DaemonStoppedError extends Error {
 interface ManagedDaemonEnrollment {
   sandboxId: string;
   token: string;
-  employeeId?: string;
+  userId?: string;
   sandboxMode?: DaemonNodeSandboxMode;
   heartbeat?: DaemonNodeHeartbeatSettings;
 }

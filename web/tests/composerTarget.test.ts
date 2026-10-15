@@ -36,7 +36,7 @@ describe("composer team targeting", () => {
     assert.match(select, /onTeamPicked/);
     // The trigger names the thread's target by identity, never through a
     // routability filter. Resolving the active agent with
-    // `isEmployeeAgentRoutable` dropped the Select's value to null the moment
+    // `isUserAgentRoutable` dropped the Select's value to null the moment
     // that agent went offline or was disabled, so the trigger announced "no
     // available agent" about an agent the thread was still pinned to — while
     // its option stayed listed below. Teams already resolved by id; agents
@@ -46,7 +46,7 @@ describe("composer team targeting", () => {
       select,
       /const activeLogicalAgent = logicalAgents\.find\(\(agent\) => agent\.id === activeLogicalAgentId\);/,
     );
-    assert.doesNotMatch(select, /activeLogicalAgentId && isEmployeeAgentRoutable/);
+    assert.doesNotMatch(select, /activeLogicalAgentId && isUserAgentRoutable/);
     assert.match(select, /disabled=\{!isRoutable\}/);
     // A thread is pinned to a computer, not a roster: a started thread can
     // hand its next round to any team there, so nothing locks the picker.

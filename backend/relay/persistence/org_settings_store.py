@@ -40,7 +40,7 @@ from .store_common import (
 SETTINGS_ROW_ID = "org"
 
 DEFAULT_MAX_LOCAL_COMPUTERS = 3
-# 0 means "this employee may enroll no personal machine". The ceiling exists so
+# 0 means "this user may enroll no personal machine". The ceiling exists so
 # a typo cannot turn the limit into an accidental no-op; an admin who wants no
 # practical cap sets the ceiling.
 MIN_MAX_LOCAL_COMPUTERS = 0
@@ -126,7 +126,7 @@ class DatabaseOrgSettingsStore:
         metadata,
         Column("id", Text, primary_key=True),
         Column(
-            "max_local_computers_per_employee",
+            "max_local_computers_per_user",
             Integer,
             nullable=False,
         ),
@@ -144,7 +144,7 @@ class DatabaseOrgSettingsStore:
             name="ck_org_settings_max_task_rounds_positive",
         ),
         CheckConstraint(
-            "max_local_computers_per_employee >= 0",
+            "max_local_computers_per_user >= 0",
             name="ck_org_settings_max_local_computers_non_negative",
         ),
     )
@@ -167,7 +167,7 @@ class DatabaseOrgSettingsStore:
             # Absent row is the shipped default rather than an error: a fresh
             # install has never opened the settings screen.
             return {
-                "maxLocalComputersPerEmployee": DEFAULT_MAX_LOCAL_COMPUTERS,
+                "maxLocalComputersPerUser": DEFAULT_MAX_LOCAL_COMPUTERS,
                 "maxTaskRounds": DEFAULT_MAX_TASK_ROUNDS,
                 "skillImportAllowedHosts": ["github.com"],
                 "updatedAt": None,
@@ -177,7 +177,7 @@ class DatabaseOrgSettingsStore:
     def update_settings(
         self,
         *,
-        max_local_computers_per_employee: int | None = None,
+        max_local_computers_per_user: int | None = None,
         max_task_rounds: int | None = None,
         skill_import_allowed_hosts: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -185,9 +185,9 @@ class DatabaseOrgSettingsStore:
         # read and resend the other, which would race a concurrent edit.
         current = self.get_settings()
         limit = normalize_max_local_computers(
-            current["maxLocalComputersPerEmployee"]
-            if max_local_computers_per_employee is None
-            else max_local_computers_per_employee
+            current["maxLocalComputersPerUser"]
+            if max_local_computers_per_user is None
+            else max_local_computers_per_user
         )
         rounds = normalize_max_task_rounds(
             current["maxTaskRounds"] if max_task_rounds is None else max_task_rounds
@@ -202,8 +202,8 @@ class DatabaseOrgSettingsStore:
             )
             if existing:
                 values: dict[str, Any] = {"updated_at": now}
-                if max_local_computers_per_employee is not None:
-                    values["max_local_computers_per_employee"] = limit
+                if max_local_computers_per_user is not None:
+                    values["max_local_computers_per_user"] = limit
                 if max_task_rounds is not None:
                     values["max_task_rounds"] = rounds
                 if skill_import_allowed_hosts is not None:
@@ -217,7 +217,7 @@ class DatabaseOrgSettingsStore:
                 conn.execute(
                     insert(self.settings).values(
                         id=SETTINGS_ROW_ID,
-                        max_local_computers_per_employee=limit,
+                        max_local_computers_per_user=limit,
                         max_task_rounds=rounds,
                         skill_import_allowed_hosts=hosts,
                         created_at=now,
@@ -229,7 +229,7 @@ class DatabaseOrgSettingsStore:
 
 def _row_to_settings(row: Any) -> dict[str, Any]:
     return {
-        "maxLocalComputersPerEmployee": int(row["max_local_computers_per_employee"]),
+        "maxLocalComputersPerUser": int(row["max_local_computers_per_user"]),
         "maxTaskRounds": int(row["max_task_rounds"]),
         "skillImportAllowedHosts": list(row["skill_import_allowed_hosts"]),
         "updatedAt": _format_iso(row["updated_at"]),

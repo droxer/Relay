@@ -6,7 +6,7 @@ import type { ControlPanelDaemonNodeRecord } from "../src/types";
 
 vi.mock("../src/api", () => ({ revealComputerToken: vi.fn(), reissueComputerToken: vi.fn(), RelayApiError: class extends Error {} }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: async () => true }) }));
-const node = { id: "local-1", nodeLocation: "employee-device", sandboxMode: "none" } as ControlPanelDaemonNodeRecord;
+const node = { id: "local-1", nodeLocation: "user-device", sandboxMode: "none" } as ControlPanelDaemonNodeRecord;
 const credentials = {
   nodeToken: "fixture-token", daemonEnv: {}, daemonCommand: "legacy-daemon-command",
   installCommand: "curl -fsSL https://relay.example/install.sh | sudo bash -s -- --sandbox-id local-1",

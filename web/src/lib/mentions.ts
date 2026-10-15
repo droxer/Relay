@@ -1,5 +1,5 @@
-import type { EmployeeAgent } from "../types.js";
-import { isEmployeeAgentRoutable } from "./agentDisplayNames.ts";
+import type { UserAgent } from "../types.js";
+import { isUserAgentRoutable } from "./agentDisplayNames.ts";
 
 /** An agent that may be addressed from this thread's composer. */
 export type MentionCandidate = {
@@ -44,12 +44,12 @@ const MENTION_PREFIX = "@";
  * list is what makes the picker and `@` a single selection.
  */
 export function mentionCandidates(
-  agents: readonly EmployeeAgent[],
+  agents: readonly UserAgent[],
 ): MentionCandidate[] {
   return agents
     .filter((agent) => !agent.deletedAt)
     .map((agent) => {
-      const routable = isEmployeeAgentRoutable(agent);
+      const routable = isUserAgentRoutable(agent);
       return {
         id: agent.id,
         displayName: agent.displayName,

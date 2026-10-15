@@ -9,7 +9,7 @@ import { useAuthSession } from "../src/hooks/useAuthSession";
 import { useSessionCapabilities } from "../src/hooks/useSessionCapabilities";
 import type { CurrentUser } from "../src/types";
 
-const ADMIN = { id: "u1", username: "admin", role: "admin", employeeId: "admin" } as CurrentUser;
+const ADMIN = { id: "u1", username: "admin", role: "admin", userId: "admin" } as CurrentUser;
 
 function wrapper() {
   const client = new QueryClient();

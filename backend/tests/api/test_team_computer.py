@@ -19,11 +19,11 @@ from relay.core.computer_identity import computer_id
 from relay.services.node_agents import sync_node_agents
 
 
-def _node(app, sandbox_id: str, employee_id: str = "admin") -> dict[str, Any]:
+def _node(app, sandbox_id: str, user_id: str = "admin") -> dict[str, Any]:
     return app.state.registry.register(
         {
             "sandboxId": sandbox_id,
-            "employeeId": employee_id,
+            "userId": user_id,
             "token": f"token_{sandbox_id}",
             "workspacePath": f"/workspace/{sandbox_id}",
             "protocolVersion": 1,
@@ -131,7 +131,7 @@ def test_team_computer_must_belong_to_the_owner(monkeypatch) -> None:
     with _world(monkeypatch) as (app, client, here, there):
         lead = _agent(app, here, "Lead")
         _sync(app, here, there)
-        foreign = _node(app, "node_foreign", employee_id="someone-else")
+        foreign = _node(app, "node_foreign", user_id="someone-else")
 
         response = _create(client, lead, computerId=computer_id(foreign))
 

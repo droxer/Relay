@@ -146,11 +146,11 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
         _login(client, "admin", "kestrel-vault-7719")
         assert (
             client.post(
-                "/api/v1/admin/users",
+                "/api/v1/admin/accounts",
                 json={
                     "username": "alice",
                     "password": "harbor-quartz-8830",
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -159,7 +159,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
         node = client.app.state.registry.register(
             {
                 "sandboxId": "offline_node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -172,7 +172,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
         agent = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorEmployeeId": "alice",
+                "supervisorUserId": "alice",
                 "displayName": "Chat agent",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
@@ -215,7 +215,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
             f"/api/v1/admin/chat-integrations/{integration_id}/identity-links",
             json={
                 "externalUserId": "discord_user_1",
-                "employeeId": "alice",
+                "userId": "alice",
                 "displayName": "Alice",
                 "defaultAgentId": agent["id"],
             },
@@ -268,7 +268,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
             },
         )
         assert resolved.status_code == 200
-        assert resolved.json()["identity"]["employeeId"] == "alice"
+        assert resolved.json()["identity"]["userId"] == "alice"
         assert resolved.json()["identity"]["defaultAgentId"] == agent["id"]
 
         disallowed = client.post(
@@ -309,11 +309,11 @@ def test_chat_integration_check_rejects_invalid_provider_credentials(
         _login(client, "admin", "kestrel-vault-7719")
         assert (
             client.post(
-                "/api/v1/admin/users",
+                "/api/v1/admin/accounts",
                 json={
                     "username": "alice",
                     "password": "harbor-quartz-8830",
-                    "employeeId": "alice",
+                    "userId": "alice",
                 },
             ).status_code
             == 201
@@ -330,7 +330,7 @@ def test_chat_integration_check_rejects_invalid_provider_credentials(
             f"/api/v1/admin/chat-integrations/{integration_id}/identity-links",
             json={
                 "externalUserId": "42",
-                "employeeId": "alice",
+                "userId": "alice",
             },
         )
         client.post(
@@ -372,11 +372,11 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
         _login(client, "admin", "kestrel-vault-7719")
         assert (
             client.post(
-                "/api/v1/admin/users",
+                "/api/v1/admin/accounts",
                 json={
                     "username": "alice",
                     "password": "harbor-quartz-8830",
-                    "employeeId": "alice",
+                    "userId": "alice",
                 },
             ).status_code
             == 201
@@ -430,7 +430,7 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
             f"/api/v1/admin/chat-integrations/{integration_id}/identity-links",
             json={
                 "externalUserId": "42",
-                "employeeId": "alice",
+                "userId": "alice",
             },
         )
         client.post(
@@ -517,7 +517,7 @@ def test_chat_integrations_require_admin(monkeypatch) -> None:
         _login(admin_client, "admin", "kestrel-vault-7719")
 
         response = admin_client.post(
-            "/api/v1/admin/users",
+            "/api/v1/admin/accounts",
             json={
                 "username": "alice",
                 "password": "userpass",
@@ -526,9 +526,9 @@ def test_chat_integrations_require_admin(monkeypatch) -> None:
         )
         assert response.status_code == 201
 
-        user_client = TestClient(app)
-        _login(user_client, "alice", "userpass")
-        response = user_client.get("/api/v1/admin/chat-integrations")
+        account_client = TestClient(app)
+        _login(account_client, "alice", "userpass")
+        response = account_client.get("/api/v1/admin/chat-integrations")
         assert response.status_code == 403
 
 
@@ -573,7 +573,7 @@ def test_database_chat_integration_store_encrypts_secrets(monkeypatch) -> None:
             actor="admin",
         )
         store.add_identity_link(
-            integration["id"], {"externalUserId": "u1", "employeeId": "alice"}
+            integration["id"], {"externalUserId": "u1", "userId": "alice"}
         )
         store.add_allowed_conversation(integration["id"], {"conversationId": "c1"})
         store.check_integration(
@@ -589,7 +589,7 @@ def test_database_chat_integration_store_encrypts_secrets(monkeypatch) -> None:
                     "externalUserId": "u1",
                     "conversationId": "c1",
                 }
-            )["employeeId"]
+            )["userId"]
             == "alice"
         )
         assert (

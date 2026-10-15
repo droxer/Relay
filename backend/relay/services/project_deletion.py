@@ -23,7 +23,7 @@ def delete_project(
     project_id: str,
     *,
     expected_version: int,
-    employee_id: str,
+    user_id: str,
     lifecycle: Any,
 ) -> dict[str, Any]:
     projects = ctx.project_store
@@ -62,7 +62,7 @@ def delete_project(
         ).scalar_one_or_none()
         if project is None:
             raise KeyError(project_id)
-        if project["ownerEmployeeId"] != employee_id:
+        if project["ownerUserId"] != user_id:
             raise ProjectDeletionError("project_delete_forbidden")
         if project["version"] != expected_version:
             raise ProjectVersionConflict(project_id)
@@ -88,14 +88,14 @@ def delete_project(
         for session in project_sessions:
             try:
                 controller.delete_session(
-                    session["id"], snapshot=session, deleted_by=employee_id
+                    session["id"], snapshot=session, deleted_by=user_id
                 )
             except SessionRunInFlightError as error:
                 raise ProjectDeletionError("project_execution_active") from error
         task_ids = [task["id"] for task in project_tasks]
         # Apply the authoritative deletion event before purging task history.
         for task in project_tasks:
-            tasks.delete_task(task["id"], deleted_by=employee_id, reject_active_claim=True)
+            tasks.delete_task(task["id"], deleted_by=user_id, reject_active_claim=True)
         for table in (tasks.task_sessions, tasks.events):
             conn.execute(delete(table).where(table.c.task_id.in_(task_ids)))
         conn.execute(delete(tasks.tasks).where(tasks.tasks.c.id.in_(task_ids)))

@@ -160,7 +160,7 @@ function backlogTask(input: Partial<RelayTask> & { id: string; title: string }):
     description: "",
     priority: "normal",
     status: "backlog",
-    ownerEmployeeId: "alice",
+    ownerUserId: "alice",
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     ...input,
@@ -202,7 +202,7 @@ describe("backlog columns", () => {
     assert.equal(applySort(tasks, columns, { key: "due", direction: "desc" }).at(-1)?.id, "t2");
   });
 
-  it("sorts assignee by the name the row prints, not the raw employee id", () => {
+  it("sorts assignee by the name the row prints, not the raw user id", () => {
     // The row shows a resolved display name, so sorting by the underlying id
     // would order the list by something invisible.
     const named = backlogSortColumns((task) => (task.id === "t1" ? "Ada" : "Zoe"));

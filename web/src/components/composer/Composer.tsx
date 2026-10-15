@@ -1,6 +1,6 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, EmployeeAgent, ThreadMessageInput } from "../../types";
+import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, UserAgent, ThreadMessageInput } from "../../types";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
 import { effectiveStyle } from "../../lib/collaborationStyle";
 import { sendShortcutLabel } from "../../lib/sendShortcut";
@@ -49,16 +49,16 @@ export type ComposerDispatchOptions = { literal?: boolean };
 // control. Draft state stays inside this component so every
 // keystroke does not re-render the full application shell and transcript.
 const ComposerView = forwardRef<ComposerHandle, {
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   activeLogicalAgentId: string | null;
-  onLogicalAgentPicked: (agent: EmployeeAgent) => void;
+  onLogicalAgentPicked: (agent: UserAgent) => void;
   /** Teams whose whole roster lives on the thread's computer. */
   teams?: AgentTeam[];
   /** The team this round runs: the pick, or a team thread's own team. */
   activeTeamId?: string | null;
   onTeamPicked?: (team: AgentTeam) => void;
   activeAgentDisplayName: string;
-  selectedEmployee: string;
+  selectedUser: string;
   initializingThread: boolean;
   /** A project room owns its Computer and roster, so neither is editable here. */
   projectName?: string;
@@ -86,7 +86,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   prompt?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedEmployee, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
+}>(function Composer({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, prompt, placeholder }, ref) {
   const { t } = useTranslation();
   const composer = useComposer();
   const [style, setStyle] = useState<CollaborationStyle | null>(null);
@@ -121,7 +121,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // The footer picker and `@` are one selection, so picking in the footer
   // rewrites the draft's address run instead of losing to it at dispatch — a
   // leading mention outranks the picker when the message is sent.
-  const pickLogicalAgent = (agent: EmployeeAgent) => {
+  const pickLogicalAgent = (agent: UserAgent) => {
     if (parsed.mentions.length > 0) {
       setComposerText(replaceAddressRun(composerText, parsed.mentions, agent.displayName));
       textareaRef.current?.focus();
@@ -320,15 +320,15 @@ const ComposerView = forwardRef<ComposerHandle, {
               render={<Textarea ref={textareaRef} rows={1} /> as never}
               type={undefined}
               className="composer-textarea"
-              aria-label={selectedEmployee
-                ? t("composer.aria_label", { employee: selectedEmployee, agent: activeAgentDisplayName })
-                : t("composer.aria_label_no_employee", { agent: activeAgentDisplayName })}
+              aria-label={selectedUser
+                ? t("composer.aria_label", { user: selectedUser, agent: activeAgentDisplayName })
+                : t("composer.aria_label_no_user", { agent: activeAgentDisplayName })}
               autoComplete="off"
               disabled={readOnly}
               name="message"
-              placeholder={placeholder ?? (selectedEmployee
+              placeholder={placeholder ?? (selectedUser
                 ? t("composer.placeholder")
-                : t("composer.placeholder_no_employee"))}
+                : t("composer.placeholder_no_user"))}
               value={composerText}
               onChange={(e) => {
                 setComposerText(e.target.value);

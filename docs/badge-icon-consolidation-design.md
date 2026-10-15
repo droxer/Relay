@@ -39,7 +39,7 @@ legitimate per-surface residue (height, fill, accent). **They are out of scope
 and must not be touched:**
 
 `.adm-agent-chip`, `.adm-node-chip`, `.adm-fleet-chip`, `.adm-computer-chip`,
-`.adm-node-card-employee-badge`, `.backlog-filter-chip`,
+`.adm-node-card-user-badge`, `.backlog-filter-chip`,
 `.agents-roster-row-badge`, `.artifacts-empty-tag`, `.routine-state`,
 `.adm-copy-pill`, `.adm-presence-pill`.
 

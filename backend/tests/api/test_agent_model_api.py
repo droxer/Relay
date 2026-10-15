@@ -16,8 +16,8 @@ def _bootstrap(client: TestClient) -> None:
     assert response.status_code == 200
     assert (
         client.post(
-            "/api/v1/admin/employees",
-            json={"employeeId": "alice", "username": "alice", "password": "userpass"},
+            "/api/v1/admin/users",
+            json={"userId": "alice", "username": "alice", "password": "userpass"},
         ).status_code
         == 201
     )
@@ -28,7 +28,7 @@ def _register_node(app, capabilities: list[str], **extra) -> None:
         {
             **extra,
             "sandboxId": "node_a",
-            "employeeId": "alice",
+            "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
@@ -43,7 +43,7 @@ def _create_agent(client: TestClient, **extra) -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": "alice",
+            "supervisorUserId": "alice",
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -91,7 +91,7 @@ def test_invalid_model_is_rejected_at_creation(env) -> None:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": "alice",
+            "supervisorUserId": "alice",
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",

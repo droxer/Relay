@@ -246,7 +246,7 @@ class LocalAgentPlacementStore:
 
 
 class DatabaseAgentPlacementStore:
-    # `supervisor_employee_id` and `executor_kind` are copied from the agent and
+    # `supervisor_user_id` and `executor_kind` are copied from the agent and
     # have no refresh path, which is safe only because neither is patchable on
     # an agent -- `update_agent` rejects both. `test_agent_placements` pins that,
     # so making either mutable fails there rather than silently drifting every
@@ -266,12 +266,12 @@ class DatabaseAgentPlacementStore:
             index=True,
         ),
         Column(
-            "supervisor_employee_id",
+            "supervisor_user_id",
             entity_uuid_type(),
             ForeignKey(
-                "employees.id",
+                "users.id",
                 ondelete="RESTRICT",
-                name="fk_agent_placements_supervisor_employee",
+                name="fk_agent_placements_supervisor_user",
             ),
             nullable=False,
             index=True,
@@ -352,7 +352,7 @@ class DatabaseAgentPlacementStore:
                     select(
                         self.placements.c.id,
                         self.placements.c.snapshot,
-                        self.placements.c.supervisor_employee_id,
+                        self.placements.c.supervisor_user_id,
                         self.placements.c.event_version,
                     )
                     .where(self.placements.c.agent_id == agent["id"])
@@ -364,7 +364,7 @@ class DatabaseAgentPlacementStore:
             )
             active = [
                 _normalized_placement_snapshot(
-                    row["snapshot"], row["supervisor_employee_id"]
+                    row["snapshot"], row["supervisor_user_id"]
                 )
                 for row in rows
             ]
@@ -395,7 +395,7 @@ class DatabaseAgentPlacementStore:
                     select(
                         self.placements.c.id,
                         self.placements.c.snapshot,
-                        self.placements.c.supervisor_employee_id,
+                        self.placements.c.supervisor_user_id,
                         self.placements.c.event_version,
                     )
                     .where(self.placements.c.agent_id == agent["id"])
@@ -407,7 +407,7 @@ class DatabaseAgentPlacementStore:
             )
             active = [
                 _normalized_placement_snapshot(
-                    row["snapshot"], row["supervisor_employee_id"]
+                    row["snapshot"], row["supervisor_user_id"]
                 )
                 for row in rows
             ]
@@ -490,7 +490,7 @@ class DatabaseAgentPlacementStore:
                 conn.execute(
                     select(
                         self.placements.c.snapshot,
-                        self.placements.c.supervisor_employee_id,
+                        self.placements.c.supervisor_user_id,
                     ).where(self.placements.c.id == placement_id)
                 )
                 .mappings()
@@ -498,7 +498,7 @@ class DatabaseAgentPlacementStore:
             )
         return (
             _normalized_placement_snapshot(
-                row["snapshot"], row["supervisor_employee_id"]
+                row["snapshot"], row["supervisor_user_id"]
             )
             if row
             else None
@@ -523,7 +523,7 @@ class DatabaseAgentPlacementStore:
                     select(
                         self.placements.c.id,
                         self.placements.c.snapshot,
-                        self.placements.c.supervisor_employee_id,
+                        self.placements.c.supervisor_user_id,
                         self.placements.c.event_version,
                     )
                     .where(self.placements.c.id == placement_id)
@@ -535,7 +535,7 @@ class DatabaseAgentPlacementStore:
             if not row:
                 raise KeyError(placement_id)
             current = _normalized_placement_snapshot(
-                row["snapshot"], row["supervisor_employee_id"]
+                row["snapshot"], row["supervisor_user_id"]
             )
             if (
                 current.get("daemonNodeId") == daemon_node_id
@@ -588,7 +588,7 @@ class DatabaseAgentPlacementStore:
     ) -> list[dict[str, Any]]:
         statement = select(
             self.placements.c.snapshot,
-            self.placements.c.supervisor_employee_id,
+            self.placements.c.supervisor_user_id,
         )
         if agent_id is not None:
             statement = statement.where(self.placements.c.agent_id == agent_id)
@@ -603,7 +603,7 @@ class DatabaseAgentPlacementStore:
         return sorted(
             (
                 _normalized_placement_snapshot(
-                    row["snapshot"], row["supervisor_employee_id"]
+                    row["snapshot"], row["supervisor_user_id"]
                 )
                 for row in rows
             ),
@@ -690,7 +690,7 @@ class DatabaseAgentPlacementStore:
                     select(
                         self.placements.c.id,
                         self.placements.c.snapshot,
-                        self.placements.c.supervisor_employee_id,
+                        self.placements.c.supervisor_user_id,
                         self.placements.c.event_version,
                     )
                     .where(self.placements.c.id == placement_id)
@@ -702,7 +702,7 @@ class DatabaseAgentPlacementStore:
             if not row:
                 raise KeyError(placement_id)
             current = _normalized_placement_snapshot(
-                row["snapshot"], row["supervisor_employee_id"]
+                row["snapshot"], row["supervisor_user_id"]
             )
             if int(current.get("agentVersion") or 0) >= agent_version:
                 return current
@@ -795,7 +795,7 @@ def _new_placement(
     return {
         "id": new_database_id(),
         "agentId": agent["id"],
-        "supervisorEmployeeId": agent["supervisorEmployeeId"],
+        "supervisorUserId": agent["supervisorUserId"],
         "daemonNodeId": daemon_node_id,
         "executorKind": agent["executorKind"],
         "desiredState": desired_state,
@@ -885,9 +885,9 @@ def _rebound_placement(
     """Bind a placement to a node, adopting that node's Computer identity.
 
     ``managedNodeId`` records managed ownership while ``computerId`` carries
-    the stable identity for both managed and employee-device Computers. Both
+    the stable identity for both managed and user-device Computers. Both
     are always rewritten from the target. Leaving stale values behind lets a
-    managed node's sync reclaim a placement that now lives on an employee
+    managed node's sync reclaim a placement that now lives on a user
     device, which rebinds the placement back and forth indefinitely.
     """
     updated = {
@@ -926,14 +926,14 @@ def create_node_placement(
 
 
 def _normalized_placement_snapshot(
-    placement: dict[str, Any], supervisor_employee_id: str | None = None
+    placement: dict[str, Any], supervisor_user_id: str | None = None
 ) -> dict[str, Any]:
     owner = (
-        placement.get("supervisorEmployeeId")
-        or placement.get("employeeId")
-        or supervisor_employee_id
+        placement.get("supervisorUserId")
+        or placement.get("userId")
+        or supervisor_user_id
     )
-    return {**placement, "supervisorEmployeeId": owner} if owner else placement
+    return {**placement, "supervisorUserId": owner} if owner else placement
 
 
 def _placement_event(
@@ -954,7 +954,7 @@ def _placement_row(
     return {
         "id": database_id or placement["id"],
         "agent_id": placement["agentId"],
-        "supervisor_employee_id": placement["supervisorEmployeeId"],
+        "supervisor_user_id": placement["supervisorUserId"],
         "daemon_node_id": placement["daemonNodeId"],
         "executor_kind": placement["executorKind"],
         "desired_state": placement["desiredState"],

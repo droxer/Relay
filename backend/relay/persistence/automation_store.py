@@ -31,7 +31,7 @@ MAX_PENDING_EVENTS = 20
 # Occurrences run one at a time, so a re-count can only come from a recent one
 # flipping again (a retry); twenty covers that without growing forever.
 MAX_COUNTED_OCCURRENCES = 20
-SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerEmployeeId", "assigneeEmployeeId")
+SUBJECT_KEYS = ("id", "title", "status", "priority", "projectId", "assignedAgentId", "assignedTeamId", "ownerUserId", "assigneeUserId")
 
 automation_outbox = Table(
     "automation_outbox", shared_metadata,

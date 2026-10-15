@@ -37,6 +37,7 @@ from .passwords import (  # noqa: F401  (re-exported: one policy, one module)
 )
 from ..core import deploy_config
 from ..core.ids import new_database_id, now_iso
+from ..core.legacy_names import upgrade_legacy_session
 from ..core.storage_config import database_url_from_env, use_postgres_storage
 from ..persistence.admin_token_store import DatabaseAdminTokenStore
 from ..persistence.store_common import (
@@ -91,6 +92,11 @@ def normalize_database_id(value: str | None) -> str | None:
         return str(UUID(value.strip()))
     except ValueError:
         return None
+
+
+# Handles hash under the "employee" kind: the name predates "user", and
+# changing it would give every handle-derived id a different UUID.
+USER_ENTITY_KIND = "employee"
 
 
 def database_id_for_reference(value: str, entity_kind: str) -> str:
@@ -201,7 +207,7 @@ def reissue_admin_token() -> str:
     return token
 
 
-class UserAuthStore:
+class AccountAuthStore:
     def __init__(
         self,
         root_dir: str | Path,
@@ -212,76 +218,79 @@ class UserAuthStore:
         self.auth_dir = self.root_dir / "auth"
         self.auth_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(self.auth_dir, 0o700)
-        self.users_path = self.auth_dir / "users.json"
+        self.accounts_path = self.auth_dir / "users.json"
         self.sessions_path = self.auth_dir / "sessions.json"
-        self.deleted_employees_path = self.auth_dir / "deleted_employees.json"
+        self.deleted_users_path = self.auth_dir / "deleted_users.json"
+        legacy_deleted_path = self.auth_dir / "deleted_employees.json"
+        if legacy_deleted_path.exists() and not self.deleted_users_path.exists():
+            legacy_deleted_path.replace(self.deleted_users_path)
         self.session_ttl_seconds = session_ttl_seconds
         self._lock = _shared_auth_lock(f"local:{self.auth_dir.resolve()}")
 
-    def resolve_employee_id(self, employee_id: str) -> str:
-        """The id an `employee_id` will actually land on in this store.
+    def resolve_user_id(self, user_id: str) -> str:
+        """The id a `user_id` will actually land on in this store.
 
         The file store keeps the handle verbatim, so resolution is a trim. The
         database store maps handles onto UUIDs, and callers that need to ask
-        "does this employee already exist?" before creating one have to compare
+        "does this user already exist?" before creating one have to compare
         the resolved form or the check silently passes on a live collision."""
-        return (employee_id or "").strip()
+        return (user_id or "").strip()
 
-    def deleted_employee_ids(self) -> set[str]:
-        if not self.deleted_employees_path.exists():
+    def deleted_user_ids(self) -> set[str]:
+        if not self.deleted_users_path.exists():
             return set()
-        raw = _read_json(self.deleted_employees_path)
+        raw = _read_json(self.deleted_users_path)
         return {entry["id"] for entry in raw if entry.get("id")}
 
-    def soft_delete_employee(self, employee_id: str) -> dict[str, Any]:
-        employee_id = (employee_id or "").strip()
-        if not employee_id:
-            raise ValueError("employeeId is required.")
-        users = self._read_users()
-        if not any(user.get("employeeId") == employee_id for user in users):
-            raise KeyError(employee_id)
+    def soft_delete_user(self, user_id: str) -> dict[str, Any]:
+        user_id = (user_id or "").strip()
+        if not user_id:
+            raise ValueError("userId is required.")
+        accounts = self._read_accounts()
+        if not any(account.get("userId") == user_id for account in accounts):
+            raise KeyError(user_id)
         entries: list[dict[str, Any]] = []
-        if self.deleted_employees_path.exists():
-            entries = _read_json(self.deleted_employees_path)
-        if any(entry.get("id") == employee_id for entry in entries):
-            raise ValueError("Employee is already deleted.")
-        record = {"id": employee_id, "deletedAt": now_iso()}
+        if self.deleted_users_path.exists():
+            entries = _read_json(self.deleted_users_path)
+        if any(entry.get("id") == user_id for entry in entries):
+            raise ValueError("User is already deleted.")
+        record = {"id": user_id, "deletedAt": now_iso()}
         entries.append(record)
-        _write_json(self.deleted_employees_path, entries, mode=0o600)
-        logger.info("Employee soft-deleted", employee_id=employee_id)
+        _write_json(self.deleted_users_path, entries, mode=0o600)
+        logger.info("User soft-deleted", user_id=user_id)
         return record
 
-    def has_users(self) -> bool:
-        return len(self._read_users()) > 0
+    def has_accounts(self) -> bool:
+        return len(self._read_accounts()) > 0
 
-    def create_user(
+    def create_account(
         self,
         username: str,
         password: str,
         role: UserRole = "user",
         email: str | None = None,
-        employee_id: str | None = None,
+        user_id: str | None = None,
         display_name: str | None = None,
         department_id: str | None = None,
         department_name: str | None = None,
     ) -> dict[str, Any]:
-        users = self._read_users()
+        accounts = self._read_accounts()
         username = username.strip().lower()
         if not username:
             raise ValueError("username is required.")
         validate_password(
-            password, identifiers=(username, employee_id, display_name, email)
+            password, identifiers=(username, user_id, display_name, email)
         )
         if role not in ("admin", "user"):
             raise ValueError("role must be admin or user.")
-        if any(user["username"] == username for user in users):
+        if any(account["username"] == username for account in accounts):
             raise ValueError("username already exists.")
-        user = {
+        account = {
             "id": new_database_id(),
             "username": username,
             "email": email.strip() if email else None,
             "role": role,
-            "employeeId": employee_id.strip() if employee_id else None,
+            "userId": user_id.strip() if user_id else None,
             "displayName": display_name.strip() if display_name else None,
             "departmentId": department_id.strip() if department_id else None,
             "departmentName": department_name.strip() if department_name else None,
@@ -291,47 +300,47 @@ class UserAuthStore:
             "createdAt": now_iso(),
             "updatedAt": now_iso(),
         }
-        users.append(user)
-        self._write_users(users)
-        if user.get("employeeId") and self.deleted_employees_path.exists():
+        accounts.append(account)
+        self._write_accounts(accounts)
+        if account.get("userId") and self.deleted_users_path.exists():
             entries = [
                 entry
-                for entry in _read_json(self.deleted_employees_path)
-                if entry.get("id") != user["employeeId"]
+                for entry in _read_json(self.deleted_users_path)
+                if entry.get("id") != account["userId"]
             ]
-            _write_json(self.deleted_employees_path, entries, mode=0o600)
-        logger.info("User created", user_id=user["id"], username=username, role=role)
-        return self._public_user(user)
+            _write_json(self.deleted_users_path, entries, mode=0o600)
+        logger.info("Account created", account_id=account["id"], username=username, role=role)
+        return self._public_account(account)
 
     def update_user_preferences(
         self,
-        user_id: str,
+        account_id: str,
         *,
         theme: UserTheme | None = None,
         language: UserLanguage | None = None,
     ) -> dict[str, Any]:
         _validate_user_preferences(theme=theme, language=language)
-        users = self._read_users()
-        user = next((entry for entry in users if entry["id"] == user_id), None)
-        if not user:
-            raise KeyError(user_id)
+        accounts = self._read_accounts()
+        account = next((entry for entry in accounts if entry["id"] == account_id), None)
+        if not account:
+            raise KeyError(account_id)
         if theme is not None:
-            user["theme"] = theme
+            account["theme"] = theme
         if language is not None:
-            user["language"] = language
-        user["updatedAt"] = now_iso()
-        self._write_users(users)
-        return self._public_user(user)
+            account["language"] = language
+        account["updatedAt"] = now_iso()
+        self._write_accounts(accounts)
+        return self._public_account(account)
 
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None:
         username = username.strip().lower()
-        for user in self._read_users():
-            if user["username"] == username and verify_password(
-                password, user["passwordHash"]
+        for account in self._read_accounts():
+            if account["username"] == username and verify_password(
+                password, account["passwordHash"]
             ):
-                if user.get("employeeId") in self.deleted_employee_ids():
+                if account.get("userId") in self.deleted_user_ids():
                     return None
-                return user
+                return account
         return None
 
     def bootstrap_with_token(
@@ -342,19 +351,19 @@ class UserAuthStore:
         if not verify_admin_token(token):
             raise HTTPException(401, "Invalid admin token.")
         with self._lock:
-            if self.has_users():
+            if self.has_accounts():
                 raise HTTPException(
                     409, "Bootstrap is only allowed before the first user is created."
                 )
-            return self.create_user(username, password, role="admin")
+            return self.create_account(username, password, role="admin")
 
-    def create_session(self, user_id: str) -> dict[str, Any]:
+    def create_session(self, account_id: str) -> dict[str, Any]:
         token = new_session_token()
         now = datetime.now(timezone.utc)
         expires_at = now.timestamp() + self.session_ttl_seconds
         session = {
             "tokenHash": hash_session_token(token),
-            "userId": user_id,
+            "accountId": account_id,
             "createdAt": _format_iso(now),
             "expiresAt": _format_iso(
                 datetime.fromtimestamp(expires_at, tz=timezone.utc)
@@ -392,13 +401,13 @@ class UserAuthStore:
                 return session
         return None
 
-    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
-        user = next(
-            (user for user in self._read_users() if user["id"] == user_id), None
+    def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
+        account = next(
+            (account for account in self._read_accounts() if account["id"] == account_id), None
         )
-        if user and user.get("employeeId") in self.deleted_employee_ids():
+        if account and account.get("userId") in self.deleted_user_ids():
             return None
-        return user
+        return account
 
     def delete_session(self, token: str) -> bool:
         sessions = self._read_sessions()
@@ -429,37 +438,39 @@ class UserAuthStore:
             self._write_sessions(kept)
         return removed
 
-    def list_users(self) -> list[dict[str, Any]]:
-        return [self._public_user(user) for user in self._read_users()]
+    def list_accounts(self) -> list[dict[str, Any]]:
+        return [self._public_account(account) for account in self._read_accounts()]
 
-    def _read_users(self) -> list[dict[str, Any]]:
-        return _read_json(self.users_path) if self.users_path.exists() else []
+    def _read_accounts(self) -> list[dict[str, Any]]:
+        return _read_json(self.accounts_path) if self.accounts_path.exists() else []
 
-    def _write_users(self, users: list[dict[str, Any]]) -> None:
-        _write_json(self.users_path, users, mode=0o600)
+    def _write_accounts(self, accounts: list[dict[str, Any]]) -> None:
+        _write_json(self.accounts_path, accounts, mode=0o600)
 
     def _read_sessions(self) -> list[dict[str, Any]]:
-        return _read_json(self.sessions_path) if self.sessions_path.exists() else []
+        if not self.sessions_path.exists():
+            return []
+        return [upgrade_legacy_session(session) for session in _read_json(self.sessions_path)]
 
     def _write_sessions(self, sessions: list[dict[str, Any]]) -> None:
         _write_json(self.sessions_path, sessions, mode=0o600)
 
     @staticmethod
-    def _public_user(user: dict[str, Any]) -> dict[str, Any]:
+    def _public_account(account: dict[str, Any]) -> dict[str, Any]:
         return {
-            "id": user["id"],
-            "username": user["username"],
-            "email": user.get("email"),
-            "role": user["role"],
-            "employeeId": user.get("employeeId"),
-            "displayName": user.get("displayName"),
-            "theme": user.get("theme", DEFAULT_USER_THEME),
-            "language": normalize_user_language(user.get("language")),
-            "createdAt": user["createdAt"],
+            "id": account["id"],
+            "username": account["username"],
+            "email": account.get("email"),
+            "role": account["role"],
+            "userId": account.get("userId"),
+            "displayName": account.get("displayName"),
+            "theme": account.get("theme", DEFAULT_USER_THEME),
+            "language": normalize_user_language(account.get("language")),
+            "createdAt": account["createdAt"],
         }
 
 
-class DatabaseUserAuthStore:
+class DatabaseAccountAuthStore:
     metadata = shared_metadata
 
     departments = Table(
@@ -477,8 +488,8 @@ class DatabaseUserAuthStore:
         Column("updated_at", DateTime(timezone=True), nullable=False),
         Index("ix_departments_parent_department_id", "parent_department_id"),
     )
-    employees = Table(
-        "employees",
+    users = Table(
+        "users",
         metadata,
         database_id_column(),
         # The @handle. `id` is a UUID (uuid5 of the handle for anything created
@@ -495,26 +506,26 @@ class DatabaseUserAuthStore:
             nullable=True,
         ),
         # Empty means "inherit the org-wide default" rather than "no
-        # computers": a global change has to move every employee who was never
+        # computers": a global change has to move every user who was never
         # pinned to a number of their own.
         Column("max_local_computers", Integer, nullable=True),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
         Column("deleted_at", DateTime(timezone=True), nullable=True),
-        Index("ix_employees_department_id", "department_id"),
-        Index("uq_employees_handle", "handle", unique=True),
+        Index("ix_users_department_id", "department_id"),
+        Index("uq_users_handle", "handle", unique=True),
     )
-    users = Table(
-        "auth_users",
+    accounts = Table(
+        "auth_accounts",
         metadata,
         database_id_column(),
         Column("username", Text, nullable=False, unique=True),
         Column("email", Text, nullable=True),
         Column("role", Text, nullable=False),
         Column(
-            "employee_id",
+            "user_id",
             entity_uuid_type(),
-            ForeignKey("employees.id", ondelete="SET NULL"),
+            ForeignKey("users.id", ondelete="SET NULL"),
             nullable=True,
         ),
         Column("theme", Text, nullable=False, server_default=DEFAULT_USER_THEME),
@@ -522,9 +533,9 @@ class DatabaseUserAuthStore:
         Column("password_hash", Text, nullable=False),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("updated_at", DateTime(timezone=True), nullable=False),
-        CheckConstraint("role in ('admin', 'user')", name="ck_auth_users_role"),
-        Index("ix_auth_users_role", "role"),
-        Index("ix_auth_users_employee_id", "employee_id"),
+        CheckConstraint("role in ('admin', 'user')", name="ck_auth_accounts_role"),
+        Index("ix_auth_accounts_role", "role"),
+        Index("ix_auth_accounts_user_id", "user_id"),
     )
     sessions = Table(
         "auth_sessions",
@@ -532,14 +543,14 @@ class DatabaseUserAuthStore:
         database_id_column(),
         Column("token_hash", Text, nullable=False, unique=True),
         Column(
-            "user_id",
+            "account_id",
             entity_uuid_type(),
-            ForeignKey("auth_users.id", ondelete="CASCADE"),
+            ForeignKey("auth_accounts.id", ondelete="CASCADE"),
             nullable=False,
         ),
         Column("created_at", DateTime(timezone=True), nullable=False),
         Column("expires_at", DateTime(timezone=True), nullable=False),
-        Index("ix_auth_sessions_user_id", "user_id"),
+        Index("ix_auth_sessions_account_id", "account_id"),
         Index("ix_auth_sessions_expires_at", "expires_at"),
     )
 
@@ -556,17 +567,17 @@ class DatabaseUserAuthStore:
         if create_schema:
             create_all_tables(self.engine)
 
-    def has_users(self) -> bool:
+    def has_accounts(self) -> bool:
         with store_transaction(self.engine) as conn:
-            return conn.execute(select(self.users.c.id).limit(1)).first() is not None
+            return conn.execute(select(self.accounts.c.id).limit(1)).first() is not None
 
-    def create_user(
+    def create_account(
         self,
         username: str,
         password: str,
         role: UserRole = "user",
         email: str | None = None,
-        employee_id: str | None = None,
+        user_id: str | None = None,
         display_name: str | None = None,
         department_id: str | None = None,
         department_name: str | None = None,
@@ -576,18 +587,18 @@ class DatabaseUserAuthStore:
         if not username:
             raise ValueError("username is required.")
         validate_password(
-            password, identifiers=(username, employee_id, display_name, email)
+            password, identifiers=(username, user_id, display_name, email)
         )
         if role not in ("admin", "user"):
             raise ValueError("role must be admin or user.")
         requested_handle = (
             None
-            if not employee_id or normalize_database_id(employee_id)
-            else employee_id.strip()
+            if not user_id or normalize_database_id(user_id)
+            else user_id.strip()
         )
-        employee_id = (
-            database_id_for_reference(employee_id, "employee")
-            if employee_id
+        user_id = (
+            database_id_for_reference(user_id, USER_ENTITY_KIND)
+            if user_id
             else new_database_id()
         )
         display_name = display_name.strip() if display_name else username
@@ -596,12 +607,12 @@ class DatabaseUserAuthStore:
         email = email.strip() if email else None
 
         now = datetime.now(timezone.utc)
-        user = {
+        account = {
             "id": new_database_id(),
             "username": username,
             "email": email,
             "role": role,
-            "employeeId": None,
+            "userId": None,
             "theme": DEFAULT_USER_THEME,
             "language": DEFAULT_USER_LANGUAGE,
             "passwordHash": hash_password(password),
@@ -610,9 +621,9 @@ class DatabaseUserAuthStore:
         }
         try:
             with store_transaction(self.engine) as conn:
-                employee = self._ensure_employee(
+                user = self._ensure_user(
                     conn,
-                    employee_id,
+                    user_id,
                     handle=requested_handle,
                     display_name=display_name,
                     email=email,
@@ -620,20 +631,20 @@ class DatabaseUserAuthStore:
                     department_name=department_name,
                     max_local_computers=max_local_computers,
                 )
-                user["employeeId"] = employee["id"]
+                account["userId"] = user["id"]
                 conn.execute(
-                    insert(self.users).values(
-                        **database_user_to_row(user, employee_pk=employee["id"])
+                    insert(self.accounts).values(
+                        **database_account_to_row(account, user_pk=user["id"])
                     )
                 )
         except IntegrityError as error:
             raise ValueError("username already exists.") from error
-        logger.info("User created", user_id=user["id"], username=username, role=role)
-        return UserAuthStore._public_user(user)
+        logger.info("Account created", account_id=account["id"], username=username, role=role)
+        return AccountAuthStore._public_account(account)
 
     def update_user_preferences(
         self,
-        user_id: str,
+        account_id: str,
         *,
         theme: UserTheme | None = None,
         language: UserLanguage | None = None,
@@ -646,16 +657,16 @@ class DatabaseUserAuthStore:
             patch["language"] = language
         with store_transaction(self.engine) as conn:
             result = conn.execute(
-                update(self.users).where(self.users.c.id == user_id).values(**patch)
+                update(self.accounts).where(self.accounts.c.id == account_id).values(**patch)
             )
             if result.rowcount == 0:
-                raise KeyError(user_id)
+                raise KeyError(account_id)
             row = (
-                conn.execute(select(self.users).where(self.users.c.id == user_id))
+                conn.execute(select(self.accounts).where(self.accounts.c.id == account_id))
                 .mappings()
                 .one()
             )
-        return UserAuthStore._public_user(row_to_database_user(row))
+        return AccountAuthStore._public_account(row_to_database_account(row))
 
     def ensure_department(
         self,
@@ -684,21 +695,21 @@ class DatabaseUserAuthStore:
             )
         return [row_to_department(row) for row in rows]
 
-    def resolve_employee_id(self, employee_id: str) -> str:
-        """See UserAuthStore.resolve_employee_id — here a handle becomes a UUID.
+    def resolve_user_id(self, user_id: str) -> str:
+        """See UserAuthStore.resolve_user_id — here a handle becomes a UUID.
 
         The handle column is consulted first: rows backfilled by the migration
         carry a handle whose uuid5 is not their id, so the deterministic mapping
         alone would miss a real collision."""
-        requested = (employee_id or "").strip()
+        requested = (user_id or "").strip()
         if not requested:
             return ""
         if not normalize_database_id(requested):
             with store_transaction(self.engine) as conn:
                 row = (
                     conn.execute(
-                        select(self.employees.c.id).where(
-                            self.employees.c.handle == requested.lower()
+                        select(self.users.c.id).where(
+                            self.users.c.handle == requested.lower()
                         )
                     )
                     .mappings()
@@ -706,11 +717,11 @@ class DatabaseUserAuthStore:
                 )
             if row:
                 return str(row["id"])
-        return database_id_for_reference(requested, "employee")
+        return database_id_for_reference(requested, USER_ENTITY_KIND)
 
-    def ensure_employee(
+    def ensure_user(
         self,
-        employee_id: str,
+        user_id: str,
         *,
         display_name: str | None = None,
         email: str | None = None,
@@ -718,43 +729,43 @@ class DatabaseUserAuthStore:
         department_name: str | None = None,
         max_local_computers: int | None = None,
     ) -> dict[str, Any]:
-        requested_employee_id = employee_id.strip()
-        if not requested_employee_id:
-            raise ValueError("employeeId is required.")
+        requested_user_id = user_id.strip()
+        if not requested_user_id:
+            raise ValueError("userId is required.")
         with store_transaction(self.engine) as conn:
-            return self._ensure_employee(
+            return self._ensure_user(
                 conn,
-                database_id_for_reference(requested_employee_id, "employee"),
-                # The caller's employee_id IS the handle when it is not already
+                database_id_for_reference(requested_user_id, USER_ENTITY_KIND),
+                # The caller's user_id IS the handle when it is not already
                 # a UUID — that is the only place the spelling survives.
                 handle=None
-                if normalize_database_id(requested_employee_id)
-                else requested_employee_id,
-                display_name=display_name or requested_employee_id,
+                if normalize_database_id(requested_user_id)
+                else requested_user_id,
+                display_name=display_name or requested_user_id,
                 email=email,
                 department_id=department_id,
                 department_name=department_name,
                 max_local_computers=max_local_computers,
             )
 
-    def update_employee(
+    def update_user(
         self,
-        employee_id: str,
+        user_id: str,
         *,
         display_name: str | None = None,
         email: str | None = None,
         max_local_computers: int | None = None,
         clear_max_local_computers: bool = False,
     ) -> dict[str, Any]:
-        """Patch an employee's profile. Absent arguments leave a field alone.
+        """Patch a user's profile. Absent arguments leave a field alone.
 
         `max_local_computers=None` therefore cannot mean "clear the override" —
         that is what `clear_max_local_computers` is for, since clearing is a
         distinct intent ("inherit the org default") from leaving it untouched.
         """
-        employee_id = (employee_id or "").strip()
-        if not employee_id:
-            raise ValueError("employeeId is required.")
+        user_id = (user_id or "").strip()
+        if not user_id:
+            raise ValueError("userId is required.")
         if clear_max_local_computers and max_local_computers is not None:
             raise ValueError("maxLocalComputers cannot be both cleared and set.")
         now = datetime.now(timezone.utc)
@@ -773,31 +784,31 @@ class DatabaseUserAuthStore:
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
-                    select(self.employees).where(self.employees.c.id == employee_id)
+                    select(self.users).where(self.users.c.id == user_id)
                 )
                 .mappings()
                 .first()
             )
             if not row or row.get("deleted_at"):
-                raise KeyError(employee_id)
+                raise KeyError(user_id)
             if not patch:
-                return row_to_employee(row)
+                return row_to_user(row)
             conn.execute(
-                update(self.employees)
-                .where(self.employees.c.id == row["id"])
+                update(self.users)
+                .where(self.users.c.id == row["id"])
                 .values(**patch, updated_at=now)
             )
             updated = (
                 conn.execute(
-                    select(self.employees).where(self.employees.c.id == row["id"])
+                    select(self.users).where(self.users.c.id == row["id"])
                 )
                 .mappings()
                 .first()
             )
-        logger.info("Employee updated", employee_id=employee_id)
-        return row_to_employee(updated)
+        logger.info("User updated", user_id=user_id)
+        return row_to_user(updated)
 
-    def list_employees(self) -> list[dict[str, Any]]:
+    def list_users(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             department_rows = conn.execute(select(self.departments)).mappings().all()
             departments = {
@@ -805,66 +816,66 @@ class DatabaseUserAuthStore:
             }
             rows = (
                 conn.execute(
-                    select(self.employees)
-                    .where(self.employees.c.deleted_at.is_(None))
-                    .order_by(self.employees.c.created_at, self.employees.c.id)
+                    select(self.users)
+                    .where(self.users.c.deleted_at.is_(None))
+                    .order_by(self.users.c.created_at, self.users.c.id)
                 )
                 .mappings()
                 .all()
             )
         return [
-            employee_with_department(row_to_employee(row), departments) for row in rows
+            user_with_department(row_to_user(row), departments) for row in rows
         ]
 
-    def soft_delete_employee(self, employee_id: str) -> dict[str, Any]:
-        employee_id = (employee_id or "").strip()
-        if not employee_id:
-            raise ValueError("employeeId is required.")
+    def soft_delete_user(self, user_id: str) -> dict[str, Any]:
+        user_id = (user_id or "").strip()
+        if not user_id:
+            raise ValueError("userId is required.")
         now = datetime.now(timezone.utc)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
-                    select(self.employees).where(self.employees.c.id == employee_id)
+                    select(self.users).where(self.users.c.id == user_id)
                 )
                 .mappings()
                 .first()
             )
             if not row:
-                raise KeyError(employee_id)
+                raise KeyError(user_id)
             if row.get("deleted_at"):
-                raise ValueError("Employee is already deleted.")
+                raise ValueError("User is already deleted.")
             conn.execute(
-                update(self.employees)
-                .where(self.employees.c.id == row["id"])
+                update(self.users)
+                .where(self.users.c.id == row["id"])
                 .values(deleted_at=now, updated_at=now)
             )
-        logger.info("Employee soft-deleted", employee_id=employee_id)
-        return {"id": employee_id, "deletedAt": _format_iso(now)}
+        logger.info("User soft-deleted", user_id=user_id)
+        return {"id": user_id, "deletedAt": _format_iso(now)}
 
     def authenticate(self, username: str, password: str) -> dict[str, Any] | None:
         username = username.strip().lower()
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
-                    select(self.users).where(self.users.c.username == username)
+                    select(self.accounts).where(self.accounts.c.username == username)
                 )
                 .mappings()
                 .first()
             )
-            user = row_to_database_user(row) if row else None
-            if user and verify_password(password, user["passwordHash"]):
-                employee_id = user.get("employeeId")
-                employee = (
+            account = row_to_database_account(row) if row else None
+            if account and verify_password(password, account["passwordHash"]):
+                user_id = account.get("userId")
+                user = (
                     conn.execute(
-                        select(self.employees).where(self.employees.c.id == employee_id)
+                        select(self.users).where(self.users.c.id == user_id)
                     )
                     .mappings()
                     .first()
-                    if employee_id
+                    if user_id
                     else None
                 )
-                if not employee_id or (employee and not employee.get("deleted_at")):
-                    return user
+                if not user_id or (user and not user.get("deleted_at")):
+                    return account
         return None
 
     def bootstrap_with_token(
@@ -880,13 +891,13 @@ class DatabaseUserAuthStore:
                     text("SELECT pg_advisory_xact_lock(:lock_id)"),
                     {"lock_id": _BOOTSTRAP_ADVISORY_LOCK_ID},
                 )
-            if conn.execute(select(self.users.c.id).limit(1)).first() is not None:
+            if conn.execute(select(self.accounts.c.id).limit(1)).first() is not None:
                 raise HTTPException(
                     409, "Bootstrap is only allowed before the first user is created."
                 )
-            return self.create_user(username, password, role="admin")
+            return self.create_account(username, password, role="admin")
 
-    def create_session(self, user_id: str) -> dict[str, Any]:
+    def create_session(self, account_id: str) -> dict[str, Any]:
         token = new_session_token()
         now = datetime.now(timezone.utc)
         expires_at = datetime.fromtimestamp(
@@ -895,7 +906,7 @@ class DatabaseUserAuthStore:
         session = {
             "id": new_database_id(),
             "token": token,
-            "userId": user_id,
+            "accountId": account_id,
             "createdAt": _format_iso(now),
             "expiresAt": _format_iso(expires_at),
         }
@@ -903,7 +914,7 @@ class DatabaseUserAuthStore:
             conn.execute(
                 insert(self.sessions).values(
                     **database_session_to_row(
-                        session, user_pk=self._user_pk(conn, user_id)
+                        session, account_pk=self._account_pk(conn, account_id)
                     )
                 )
             )
@@ -935,26 +946,26 @@ class DatabaseUserAuthStore:
                 return None
         return session
 
-    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+    def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (
-                conn.execute(select(self.users).where(self.users.c.id == user_id))
+                conn.execute(select(self.accounts).where(self.accounts.c.id == account_id))
                 .mappings()
                 .first()
             )
-            user = row_to_database_user(row) if row else None
-            if not user or not user.get("employeeId"):
-                return user
-            employee = (
+            account = row_to_database_account(row) if row else None
+            if not account or not account.get("userId"):
+                return account
+            user = (
                 conn.execute(
-                    select(self.employees).where(
-                        self.employees.c.id == user["employeeId"]
+                    select(self.users).where(
+                        self.users.c.id == account["userId"]
                     )
                 )
                 .mappings()
                 .first()
             )
-            return user if employee and not employee.get("deleted_at") else None
+            return account if user and not user.get("deleted_at") else None
 
     def delete_session(self, token: str) -> bool:
         with store_transaction(self.engine) as conn:
@@ -974,18 +985,18 @@ class DatabaseUserAuthStore:
             )
         return result.rowcount
 
-    def list_users(self) -> list[dict[str, Any]]:
+    def list_accounts(self) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
             rows = (
-                conn.execute(select(self.users).order_by(self.users.c.created_at))
+                conn.execute(select(self.accounts).order_by(self.accounts.c.created_at))
                 .mappings()
                 .all()
             )
-        return [UserAuthStore._public_user(row_to_database_user(row)) for row in rows]
+        return [AccountAuthStore._public_account(row_to_database_account(row)) for row in rows]
 
     @staticmethod
-    def _public_user(user: dict[str, Any]) -> dict[str, Any]:
-        return UserAuthStore._public_user(user)
+    def _public_account(account: dict[str, Any]) -> dict[str, Any]:
+        return AccountAuthStore._public_account(account)
 
     def _ensure_department(
         self,
@@ -1057,10 +1068,10 @@ class DatabaseUserAuthStore:
         )
         return department
 
-    def _ensure_employee(
+    def _ensure_user(
         self,
         conn: Any,
-        employee_id: str | None,
+        user_id: str | None,
         *,
         handle: str | None = None,
         display_name: str | None = None,
@@ -1077,22 +1088,22 @@ class DatabaseUserAuthStore:
             else None
         )
         department_pk = department["id"] if department else None
-        employee_id = normalize_database_id(employee_id)
+        user_id = normalize_database_id(user_id)
         row = None
-        if employee_id:
+        if user_id:
             row = (
                 conn.execute(
-                    select(self.employees).where(self.employees.c.id == employee_id)
+                    select(self.users).where(self.users.c.id == user_id)
                 )
                 .mappings()
                 .first()
             )
         if row:
-            employee_pk = row["id"]
+            user_pk = row["id"]
             patch: dict[str, Any] = {"updated_at": now}
             if row.get("deleted_at"):
                 patch["deleted_at"] = None
-            # Only ever fills a blank — an existing handle is the employee's
+            # Only ever fills a blank — an existing handle is the user's
             # identity and is not rewritten by a later ensure — and only when
             # the handle is still free, since the column is unique and an
             # ensure has no business failing the whole request over a name.
@@ -1108,12 +1119,12 @@ class DatabaseUserAuthStore:
                 patch["max_local_computers"] = max_local_computers
             if len(patch) > 1:
                 conn.execute(
-                    update(self.employees)
-                    .where(self.employees.c.id == employee_pk)
+                    update(self.users)
+                    .where(self.users.c.id == user_pk)
                     .values(**patch)
                 )
                 return {
-                    **row_to_employee(row),
+                    **row_to_user(row),
                     **({"handle": patch["handle"]} if "handle" in patch else {}),
                     **({"displayName": display_name} if display_name else {}),
                     **({"email": email} if email else {}),
@@ -1125,13 +1136,13 @@ class DatabaseUserAuthStore:
                     ),
                     "updatedAt": _format_iso(now),
                 }
-            return row_to_employee(row)
+            return row_to_user(row)
 
         candidate = handle or slugify_handle(display_name) or None
-        employee = {
-            "id": employee_id or new_database_id(),
+        user = {
+            "id": user_id or new_database_id(),
             "handle": candidate if candidate and self._handle_is_free(conn, candidate) else None,
-            "displayName": display_name or employee_id,
+            "displayName": display_name or user_id,
             "email": email,
             "departmentId": department_pk,
             "maxLocalComputers": max_local_computers,
@@ -1139,77 +1150,77 @@ class DatabaseUserAuthStore:
             "updatedAt": _format_iso(now),
         }
         conn.execute(
-            insert(self.employees).values(
-                **employee_to_row(employee, department_pk=department_pk)
+            insert(self.users).values(
+                **user_to_row(user, department_pk=department_pk)
             )
         )
-        return employee
+        return user
 
     def _handle_is_free(self, conn: Any, handle: str) -> bool:
         return (
             conn.execute(
-                select(self.employees.c.id).where(self.employees.c.handle == handle)
+                select(self.users.c.id).where(self.users.c.handle == handle)
             )
             .mappings()
             .first()
             is None
         )
 
-    def _user_pk(self, conn: Any, user_id: str) -> str:
-        user_pk = conn.scalar(select(self.users.c.id).where(self.users.c.id == user_id))
-        if not user_pk:
-            raise KeyError(user_id)
-        return user_pk
+    def _account_pk(self, conn: Any, account_id: str) -> str:
+        account_pk = conn.scalar(select(self.accounts.c.id).where(self.accounts.c.id == account_id))
+        if not account_pk:
+            raise KeyError(account_id)
+        return account_pk
 
 
 def auth_store_from_env(root_dir: str | Path) -> Any:
     auth_store = os.environ.get("RELAY_AUTH_STORE", "").strip().lower()
     if auth_store != "database" and not use_postgres_storage():
-        return UserAuthStore(root_dir)
+        return AccountAuthStore(root_dir)
     setting = (
         "RELAY_AUTH_STORE=database"
         if auth_store == "database"
         else "RELAY_STORAGE=postgres"
     )
     database_url = database_url_from_env(setting=setting)
-    return DatabaseUserAuthStore(database_url)
+    return DatabaseAccountAuthStore(database_url)
 
 
-def database_user_to_row(
-    user: dict[str, Any],
+def database_account_to_row(
+    account: dict[str, Any],
     *,
-    employee_pk: str | None = None,
+    user_pk: str | None = None,
     database_id: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "id": database_id or user["id"],
-        "username": user["username"],
-        "email": user.get("email"),
-        "role": user["role"],
-        "employee_id": employee_pk,
-        "theme": user.get("theme", DEFAULT_USER_THEME),
-        "language": normalize_user_language(user.get("language")),
-        "password_hash": user["passwordHash"],
-        "created_at": _parse_iso(user["createdAt"]),
-        "updated_at": _parse_iso(user["updatedAt"]),
+        "id": database_id or account["id"],
+        "username": account["username"],
+        "email": account.get("email"),
+        "role": account["role"],
+        "user_id": user_pk,
+        "theme": account.get("theme", DEFAULT_USER_THEME),
+        "language": normalize_user_language(account.get("language")),
+        "password_hash": account["passwordHash"],
+        "created_at": _parse_iso(account["createdAt"]),
+        "updated_at": _parse_iso(account["updatedAt"]),
     }
 
 
-def employee_to_row(
-    employee: dict[str, Any],
+def user_to_row(
+    user: dict[str, Any],
     *,
     department_pk: str | None = None,
     database_id: str | None = None,
 ) -> dict[str, Any]:
     return {
-        "id": database_id or employee["id"],
-        "handle": employee.get("handle"),
-        "display_name": employee["displayName"],
-        "email": employee.get("email"),
+        "id": database_id or user["id"],
+        "handle": user.get("handle"),
+        "display_name": user["displayName"],
+        "email": user.get("email"),
         "department_id": department_pk,
-        "max_local_computers": employee.get("maxLocalComputers"),
-        "created_at": _parse_iso(employee["createdAt"]),
-        "updated_at": _parse_iso(employee["updatedAt"]),
+        "max_local_computers": user.get("maxLocalComputers"),
+        "created_at": _parse_iso(user["createdAt"]),
+        "updated_at": _parse_iso(user["updatedAt"]),
     }
 
 
@@ -1240,7 +1251,7 @@ def row_to_department(row: Any) -> dict[str, Any]:
     }
 
 
-def row_to_employee(row: Any) -> dict[str, Any]:
+def row_to_user(row: Any) -> dict[str, Any]:
     limit = row["max_local_computers"]
     handle = row["handle"]
     return {
@@ -1258,22 +1269,22 @@ def row_to_employee(row: Any) -> dict[str, Any]:
     }
 
 
-def employee_with_department(
-    employee: dict[str, Any], departments: dict[str, dict[str, Any]]
+def user_with_department(
+    user: dict[str, Any], departments: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
-    department = departments.get(employee.get("departmentId") or "")
+    department = departments.get(user.get("departmentId") or "")
     if not department:
-        return employee
-    return {**employee, "departmentName": department["name"]}
+        return user
+    return {**user, "departmentName": department["name"]}
 
 
-def row_to_database_user(row: Any) -> dict[str, Any]:
+def row_to_database_account(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "username": row["username"],
         "email": row["email"],
         "role": row["role"],
-        "employeeId": str(row["employee_id"]) if row["employee_id"] else None,
+        "userId": str(row["user_id"]) if row["user_id"] else None,
         "theme": row["theme"],
         "language": normalize_user_language(row["language"]),
         "passwordHash": row["password_hash"],
@@ -1294,12 +1305,12 @@ def _validate_user_preferences(
 
 
 def database_session_to_row(
-    session: dict[str, Any], *, user_pk: str, database_id: str | None = None
+    session: dict[str, Any], *, account_pk: str, database_id: str | None = None
 ) -> dict[str, Any]:
     return {
         "id": database_id or session["id"],
         "token_hash": hash_session_token(session["token"]),
-        "user_id": user_pk,
+        "account_id": account_pk,
         "created_at": _parse_iso(session["createdAt"]),
         "expires_at": _parse_iso(session["expiresAt"]),
     }
@@ -1309,7 +1320,7 @@ def row_to_database_session(row: Any, token: str) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "token": token,
-        "userId": str(row["user_id"]),
+        "accountId": str(row["account_id"]),
         "createdAt": _format_iso(row["created_at"]),
         "expiresAt": _format_iso(row["expires_at"]),
     }
@@ -1319,21 +1330,21 @@ def user_session_token_from_request(request: Request) -> str | None:
     return request.cookies.get(USER_COOKIE_NAME)
 
 
-def require_user_session(request: Request, auth_store: UserAuthStore) -> dict[str, Any]:
+def require_user_session(request: Request, auth_store: AccountAuthStore) -> dict[str, Any]:
     token = user_session_token_from_request(request)
     if not token:
         raise HTTPException(401, "Authentication required.")
     session = auth_store.get_session_by_token(token)
     if not session:
         raise HTTPException(401, "Session expired or invalid.")
-    user = auth_store.get_user_by_id(session["userId"])
-    if not user:
+    account = auth_store.get_account_by_id(session["accountId"])
+    if not account:
         raise HTTPException(401, "User not found.")
-    return user
+    return account
 
 
 def require_admin_session(
-    request: Request, auth_store: UserAuthStore
+    request: Request, auth_store: AccountAuthStore
 ) -> dict[str, Any]:
     bearer = _bearer_token(request)
     if verify_admin_token(bearer):
@@ -1343,10 +1354,10 @@ def require_admin_session(
             "role": "admin",
             "isAdmin": True,
         }
-    user = require_user_session(request, auth_store)
-    if user.get("role") != "admin":
+    account = require_user_session(request, auth_store)
+    if account.get("role") != "admin":
         raise HTTPException(403, "Admin access required.")
-    return user
+    return account
 
 
 def _bearer_token(request: Request) -> str | None:

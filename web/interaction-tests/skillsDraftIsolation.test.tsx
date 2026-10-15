@@ -34,7 +34,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 const skill = {
-  id: "skill-1", ownerEmployeeId: "employee-1", name: "release", slug: "release",
+  id: "skill-1", ownerUserId: "user-1", name: "release", slug: "release",
   displayName: "Release notes", description: "Draft concise release notes",
   visibility: "org" as const, source: "authored" as const, currentRevisionId: "rev-1",
   grantedAgentIds: [], revisions: [{ id: "rev-1", revision: 1, note: "", createdAt: "2026-09-01T00:00:00Z" }],
@@ -50,7 +50,7 @@ vi.mock("../src/hooks/useSkills", () => ({
   useSkills: () => ({ data: { skills: [{ ...skill, grantedAgentCount: 0 }] }, isLoading: false, error: null, refetch: vi.fn() }),
   useSkill: () => ({ data: skill, isLoading: false, error: null }),
 }));
-vi.mock("../src/hooks/useEmployeeAgents", () => ({ useEmployeeAgents: () => ({ agents: [] }) }));
+vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 
 /* The drawer and the detail editor used to share one set of metadata fields:
@@ -60,7 +60,7 @@ it("keeps the publish draft out of the selected skill's editor", async () => {
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider>
+      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider>
     </QueryClientProvider>,
   );
   const editorName = () => screen.getByLabelText(/^Display name/) as HTMLInputElement;
@@ -92,7 +92,7 @@ it("marks the editor's required fields and gates Save on them", async () => {
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider>
+      <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider>
     </QueryClientProvider>,
   );
   const field = (label: string) =>

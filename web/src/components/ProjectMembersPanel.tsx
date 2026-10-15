@@ -4,7 +4,7 @@ import { useMemo, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { agentLabel } from "../lib/plan";
 import { MAX_PROJECT_MEMBERS, orderedProjectMembers, projectMemberState } from "../lib/projectPage";
-import type { EmployeeAgent, ProjectMember, ProjectRecord } from "../types";
+import type { UserAgent, ProjectMember, ProjectRecord } from "../types";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { ActionAdd, ActionEdit, ICON } from "./icons";
 import { LeadBadge } from "./LeadBadge";
@@ -22,7 +22,7 @@ export function ProjectMembersPanel({
   onEditMember,
 }: {
   project: ProjectRecord;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   onAddMember?: () => void;
   onEditMember?: (member: ProjectMember) => void;
 }) {
@@ -66,7 +66,7 @@ function ProjectMemberLane({
   onEdit,
 }: {
   member: ProjectMember;
-  agent?: EmployeeAgent;
+  agent?: UserAgent;
   index: number;
   lead: boolean;
   onEdit?: () => void;
@@ -139,7 +139,7 @@ function ProjectCrew({
 }: {
   project: ProjectRecord;
   members: ProjectMember[];
-  agentsById: Map<string, EmployeeAgent>;
+  agentsById: Map<string, UserAgent>;
   onAddMember?: () => void;
   onEditMember?: (member: ProjectMember) => void;
 }) {

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 
 from ..automations.service import automation_triggers_enabled
+from ..core.legacy_names import with_legacy_user_id
 from ..daemon_registry import public_sandbox_record
 from ..persistence.store_common import split_cache_tokens
 from ..persistence.org_settings_store import (
@@ -27,11 +28,11 @@ from ..security.auth import (
 )
 from ..services.computer_limits import (
     assert_local_computer_allowed,
-    decorate_employee_limits,
+    decorate_user_limits,
 )
 from ..services.computer_names import normalize_computer_display_name, present_computer
-from ..services.employee_lifecycle import (
-    soft_delete_employee as soft_delete_employee_cascade,
+from ..services.user_lifecycle import (
+    soft_delete_user as soft_delete_user_cascade,
 )
 from ..services.managed_nodes import managed_node_placeholder
 from ..services.node_agents import (
@@ -42,14 +43,14 @@ from ..services.node_agents import (
 from .deps import AppContextDep
 from .helpers import (
     JsonBodyDep,
-    assert_employee_device_runtime,
+    assert_user_device_runtime,
     daemon_start_command,
     daemon_start_env,
-    employee_record,
-    normalize_employee_handle,
-    resolve_employee_id,
+    user_record,
+    normalize_user_handle,
+    resolve_user_id,
     string_field,
-    valid_employee_workspace_path,
+    valid_user_workspace_path,
 )
 
 router = APIRouter()
@@ -86,12 +87,12 @@ def get_org_settings(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     return {
         "settings": ctx.org_settings_store.get_settings(),
-        # Editing an employee — display name, email, or their own computer
-        # limit — writes the employees table, which only the database auth
+        # Editing a user — display name, email, or their own computer
+        # limit — writes the users table, which only the database auth
         # store has. Reported so the admin UI can leave those controls out
         # instead of offering an edit that would come back a 400.
         "capabilities": {
-            "employeeEdits": hasattr(ctx.auth_store, "update_employee"),
+            "userEdits": hasattr(ctx.auth_store, "update_user"),
             # Off: automations may hold only schedule triggers.
             "automationTriggers": automation_triggers_enabled(),
         },
@@ -117,15 +118,15 @@ def update_org_settings(
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
-    if not {"maxLocalComputersPerEmployee", "maxTaskRounds", "skillImportAllowedHosts"}.intersection(body):
+    if not {"maxLocalComputersPerUser", "maxTaskRounds", "skillImportAllowedHosts"}.intersection(body):
         raise HTTPException(
-            400, "maxLocalComputersPerEmployee, maxTaskRounds or skillImportAllowedHosts is required."
+            400, "maxLocalComputersPerUser, maxTaskRounds or skillImportAllowedHosts is required."
         )
     try:
         settings = ctx.org_settings_store.update_settings(
-            max_local_computers_per_employee=(
-                normalize_max_local_computers(body["maxLocalComputersPerEmployee"])
-                if "maxLocalComputersPerEmployee" in body
+            max_local_computers_per_user=(
+                normalize_max_local_computers(body["maxLocalComputersPerUser"])
+                if "maxLocalComputersPerUser" in body
                 else None
             ),
             max_task_rounds=(
@@ -143,32 +144,32 @@ def update_org_settings(
     return {"settings": settings}
 
 
-@router.get("/admin/users")
-def list_users(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/admin/accounts")
+def list_accounts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    return {"users": ctx.auth_store.list_users()}
+    return {"accounts": ctx.auth_store.list_accounts()}
 
 
-@router.post("/admin/users", status_code=201)
-def create_user(
+@router.post("/admin/accounts", status_code=201)
+def create_account(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
     try:
-        user = ctx.auth_store.create_user(
+        account = ctx.auth_store.create_account(
             string_field(body, "username"),
             string_field(body, "password"),
             role=string_field(body, "role") or "user",
             email=string_field(body, "email") or None,
-            employee_id=string_field(body, "employeeId") or None,
+            user_id=string_field(body, "userId") or None,
             display_name=string_field(body, "displayName") or None,
             department_id=string_field(body, "departmentId") or None,
             department_name=string_field(body, "departmentName") or None,
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    return {"user": user}
+    return {"account": account}
 
 
 @router.get("/admin/departments")
@@ -202,58 +203,67 @@ def create_department(
     return {"department": department}
 
 
-@router.get("/admin/employees")
-def list_employees(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/admin/users")
+def list_users(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if hasattr(ctx.auth_store, "list_employees"):
-        return {
-            "employees": decorate_employee_limits(ctx, ctx.auth_store.list_employees())
-        }
-    deleted_ids = ctx.auth_store.deleted_employee_ids() if hasattr(ctx.auth_store, "deleted_employee_ids") else set()
-    employees = []
+    return {"users": _user_records(ctx)}
+
+
+@router.get("/admin/employees", deprecated=True)
+def list_users_for_legacy_supervisor(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    """The pre-rename route a supervisor older than the user rename still polls."""
+    require_admin_session(request, ctx.auth_store)
+    return {"employees": _user_records(ctx)}
+
+
+def _user_records(ctx: Any) -> list[dict[str, Any]]:
+    if hasattr(ctx.auth_store, "list_users"):
+        return decorate_user_limits(ctx, ctx.auth_store.list_users())
+    deleted_ids = ctx.auth_store.deleted_user_ids() if hasattr(ctx.auth_store, "deleted_user_ids") else set()
+    users = []
     seen = set()
-    for user in ctx.auth_store.list_users():
-        employee_id = user.get("employeeId")
-        if not employee_id or employee_id in seen or employee_id in deleted_ids:
+    for account in ctx.auth_store.list_accounts():
+        user_id = account.get("userId")
+        if not user_id or user_id in seen or user_id in deleted_ids:
             continue
-        seen.add(employee_id)
-        employees.append({
-            "id": employee_id,
-            "displayName": user.get("displayName") or user.get("username") or employee_id,
-            "email": user.get("email"),
-            "createdAt": user.get("createdAt"),
-            "updatedAt": user.get("createdAt"),
+        seen.add(user_id)
+        users.append({
+            "id": user_id,
+            "displayName": account.get("displayName") or account.get("username") or user_id,
+            "email": account.get("email"),
+            "createdAt": account.get("createdAt"),
+            "updatedAt": account.get("createdAt"),
         })
-    return {"employees": decorate_employee_limits(ctx, employees)}
+    return decorate_user_limits(ctx, users)
 
 
-@router.delete("/admin/employees/{employee_id}", status_code=200)
-def soft_delete_employee(
-    employee_id: str, request: Request, ctx: AppContextDep
+@router.delete("/admin/users/{user_id}", status_code=200)
+def soft_delete_user(
+    user_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if not hasattr(ctx.auth_store, "soft_delete_employee"):
-        raise HTTPException(400, "Employee soft-delete is not supported by this auth store.")
+    if not hasattr(ctx.auth_store, "soft_delete_user"):
+        raise HTTPException(400, "User soft-delete is not supported by this auth store.")
     try:
-        return soft_delete_employee_cascade(ctx, employee_id)
+        return soft_delete_user_cascade(ctx, user_id)
     except KeyError as error:
-        raise HTTPException(404, "Employee not found.") from error
+        raise HTTPException(404, "User not found.") from error
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
 
-@router.patch("/admin/employees/{employee_id}")
-def update_employee(
-    employee_id: str,
+@router.patch("/admin/users/{user_id}")
+def update_user(
+    user_id: str,
     request: Request,
     ctx: AppContextDep,
     *,
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    if not hasattr(ctx.auth_store, "update_employee"):
+    if not hasattr(ctx.auth_store, "update_user"):
         raise HTTPException(
-            400, "Editing an employee requires the database auth store."
+            400, "Editing a user requires the database auth store."
         )
     body = _request_body
     patch: dict[str, Any] = {}
@@ -274,26 +284,26 @@ def update_employee(
             except OrgSettingsValidationError as error:
                 raise HTTPException(400, str(error)) from error
     try:
-        employee = ctx.auth_store.update_employee(employee_id, **patch)
+        user = ctx.auth_store.update_user(user_id, **patch)
     except KeyError as error:
-        raise HTTPException(404, "Employee not found.") from error
+        raise HTTPException(404, "User not found.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    return {"employee": decorate_employee_limits(ctx, [employee])[0]}
+    return {"user": decorate_user_limits(ctx, [user])[0]}
 
 
-@router.post("/admin/employees", status_code=201)
-def create_employee(
+@router.post("/admin/users", status_code=201)
+def create_user(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
-    employee_id = normalize_employee_handle(string_field(body, "employeeId"))
+    user_id = normalize_user_handle(string_field(body, "userId"))
     username = string_field(body, "username")
     password = string_field(body, "password")
     node_id = string_field(body, "nodeId") or None
     email = string_field(body, "email") or None
-    display_name = string_field(body, "displayName") or username or employee_id
+    display_name = string_field(body, "displayName") or username or user_id
     max_local_computers: int | None = None
     if body.get("maxLocalComputers") is not None:
         try:
@@ -307,77 +317,77 @@ def create_employee(
     # guesses anyone makes, so a password built from them is refused.
     try:
         validate_password(
-            password, identifiers=(username, employee_id, display_name, email)
+            password, identifiers=(username, user_id, display_name, email)
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    # An employee id that already exists is a collision, not a second employee.
-    # The stores' ensure_employee reuses a matching row and patches the profile
-    # onto it, so without this check "Add employee" silently rewrote a live
+    # A user id that already exists is a collision, not a second user.
+    # The stores' ensure_user reuses a matching row and patches the profile
+    # onto it, so without this check "Add user" silently rewrote a live
     # colleague's display name, email, and computer limit and attached a second
     # login to them. Resolution goes through the store because the database
     # store maps handles onto UUIDs — comparing raw handles would never match.
-    # Soft-deleted employees are deliberately not blocked: re-creating a removed
-    # employee is an existing, intended path.
-    if employee_record(ctx.auth_store, resolve_employee_id(ctx.auth_store, employee_id)):
-        raise HTTPException(409, f"Employee @{employee_id} already exists.")
-    # Node assignment is optional at onboarding — an employee may be created
+    # Soft-deleted users are deliberately not blocked: re-creating a removed
+    # user is an existing, intended path.
+    if user_record(ctx.auth_store, resolve_user_id(ctx.auth_store, user_id)):
+        raise HTTPException(409, f"User @{user_id} already exists.")
+    # Node assignment is optional at onboarding — a user may be created
     # first and bound to a sandbox later via the assign-node flow. Only validate
     # the node when one was supplied.
     if node_id:
         existing_node = ctx.registry.get(node_id)
         if not existing_node:
             raise HTTPException(404, "Daemon node not found.")
-        if existing_node.get("employeeId"):
+        if existing_node.get("userId"):
             raise HTTPException(409, "Daemon node is already assigned.")
     try:
-        user = ctx.auth_store.create_user(
+        account = ctx.auth_store.create_account(
             username,
             password,
             role="user",
             email=email,
-            employee_id=employee_id,
+            user_id=user_id,
             display_name=display_name,
         )
     except ValueError as error:
         message = str(error)
         status = 409 if "already exists" in message else 400
         raise HTTPException(status, message) from error
-    if hasattr(ctx.auth_store, "ensure_employee"):
-        employee = ctx.auth_store.ensure_employee(
-            user.get("employeeId") or employee_id,
+    if hasattr(ctx.auth_store, "ensure_user"):
+        user = ctx.auth_store.ensure_user(
+            account.get("userId") or user_id,
             display_name=display_name,
             email=email,
             max_local_computers=max_local_computers,
         )
     else:
-        # The file auth store keeps no employee row, so an override has nowhere
+        # The file auth store keeps no user row, so an override has nowhere
         # to live. Say so rather than accepting a limit that would be dropped.
         if max_local_computers is not None:
             raise HTTPException(
                 400,
-                "Per-employee computer limits require the database auth store.",
+                "Per-user computer limits require the database auth store.",
             )
-        employee = {
-            "id": employee_id,
-            "handle": employee_id,
+        user = {
+            "id": user_id,
+            "handle": user_id,
             "displayName": display_name,
             "email": email,
-            "createdAt": user.get("createdAt"),
-            "updatedAt": user.get("createdAt"),
+            "createdAt": account.get("createdAt"),
+            "updatedAt": account.get("createdAt"),
         }
-    employee = decorate_employee_limits(ctx, [employee])[0]
+    user = decorate_user_limits(ctx, [user])[0]
     public_node: dict[str, Any] | None = None
     assignment_error: str | None = None
     if node_id:
-        # The employee is already committed by this point, so a computer that
+        # The user is already committed by this point, so a computer that
         # got claimed in the meantime cannot be reported as a failed request:
-        # raising here left a created employee behind an error message, and the
+        # raising here left a created user behind an error message, and the
         # retry then failed on "username already exists" with no way forward.
-        # The employee is the outcome; the unattached computer is a warning the
+        # The user is the outcome; the unattached computer is a warning the
         # admin resolves from the assign flow.
         try:
-            assigned_node = ctx.registry.assign_employee(node_id, employee["id"])
+            assigned_node = ctx.registry.assign_user(node_id, user["id"])
             sync_node_agents(ctx, assigned_node)
             public_node = _public_control_panel_node(ctx, assigned_node)
         except KeyError:
@@ -386,14 +396,14 @@ def create_employee(
             assignment_error = str(error)
         if assignment_error:
             logger.warning(
-                "Employee created but computer assignment failed",
-                employee_id=employee["id"],
+                "User created but computer assignment failed",
+                user_id=user["id"],
                 node_id=node_id,
                 error=assignment_error,
             )
     return {
-        "employee": employee,
         "user": user,
+        "account": account,
         **({"node": public_node} if public_node else {}),
         **({"assignmentError": assignment_error} if assignment_error else {}),
     }
@@ -405,26 +415,26 @@ def assign_control_panel_daemon_node(
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
-    employee_id = string_field(body, "employeeId")
-    if not employee_id:
-        raise HTTPException(400, "employeeId is required.")
+    user_id = string_field(body, "userId")
+    if not user_id:
+        raise HTTPException(400, "userId is required.")
     existing_node = ctx.registry.get(node_id)
     if not existing_node:
         raise HTTPException(404, "Daemon node not found.")
-    if existing_node.get("employeeId"):
+    if existing_node.get("userId"):
         raise HTTPException(409, "Daemon node is already assigned.")
-    employee = employee_record(ctx.auth_store, employee_id)
-    if not employee:
-        raise HTTPException(404, "Employee not found.")
+    user = user_record(ctx.auth_store, user_id)
+    if not user:
+        raise HTTPException(404, "User not found.")
     try:
-        assigned_node = ctx.registry.assign_employee(node_id, employee_id)
+        assigned_node = ctx.registry.assign_user(node_id, user_id)
         sync_node_agents(ctx, assigned_node)
     except KeyError as error:
         raise HTTPException(404, "Daemon node not found.") from error
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
     public_node = _public_control_panel_node(ctx, assigned_node)
-    return {"employee": employee, "node": public_node}
+    return {"user": user, "node": public_node}
 
 
 @router.delete("/admin/daemon-nodes/{node_id}/assignment")
@@ -435,10 +445,10 @@ def unassign_control_panel_daemon_node(
     existing_node = ctx.registry.get(node_id)
     if not existing_node:
         raise HTTPException(404, "Daemon node not found.")
-    if not existing_node.get("employeeId"):
+    if not existing_node.get("userId"):
         raise HTTPException(409, "Daemon node is not assigned.")
     try:
-        updated = ctx.registry.unassign_employee(node_id)
+        updated = ctx.registry.unassign_user(node_id)
     except KeyError as error:
         raise HTTPException(404, "Daemon node not found.") from error
     except ValueError as error:
@@ -542,7 +552,7 @@ def control_panel_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         for node in ctx.managed_node_store.list_nodes()
         if node["id"] not in observed_managed_ids
     ]
-    return {"nodes": [*observed, *pending]}
+    return {"nodes": [with_legacy_user_id(node) for node in [*observed, *pending]]}
 
 
 @router.post("/admin/daemon-nodes", status_code=201)
@@ -551,7 +561,7 @@ def create_control_panel_daemon_node(
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     body = _request_body
-    employee_id = string_field(body, "employeeId") or None
+    user_id = string_field(body, "userId") or None
     sandbox_mode = string_field(body, "sandboxMode") or "boxlite"
     requested_location = string_field(body, "nodeLocation") or None
     if sandbox_mode not in ("boxlite", "none"):
@@ -561,39 +571,39 @@ def create_control_panel_daemon_node(
         display_name = normalize_computer_display_name(body.get("displayName"))
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    if requested_location not in (None, "employee-device"):
-        raise HTTPException(400, 'nodeLocation must be "employee-device".')
-    if requested_location == "employee-device" and not valid_employee_workspace_path(workspace_path):
+    if requested_location not in (None, "user-device"):
+        raise HTTPException(400, 'nodeLocation must be "user-device".')
+    if requested_location == "user-device" and not valid_user_workspace_path(workspace_path):
         raise HTTPException(
-            400, "An absolute workspacePath on the employee device is required."
+            400, "An absolute workspacePath on the user device is required."
         )
-    assert_employee_device_runtime(requested_location, sandbox_mode)
-    if hasattr(ctx.auth_store, "ensure_employee"):
-        if employee_id:
-            ctx.auth_store.ensure_employee(employee_id)
+    assert_user_device_runtime(requested_location, sandbox_mode)
+    if hasattr(ctx.auth_store, "ensure_user"):
+        if user_id:
+            ctx.auth_store.ensure_user(user_id)
     provision_payload = {
-        **({"employeeId": employee_id} if employee_id else {}),
+        **({"userId": user_id} if user_id else {}),
         **({"displayName": display_name} if display_name else {}),
         "workspacePath": workspace_path,
         "sandboxMode": sandbox_mode,
-        **({"nodeLocation": "employee-device"} if requested_location else {}),
+        **({"nodeLocation": "user-device"} if requested_location else {}),
     }
-    if requested_location == "employee-device" and employee_id:
+    if requested_location == "user-device" and user_id:
         # Admin-provisioned hardware is unbounded; a personal computer is not,
         # and this route creates one just as self-enrollment does. Check and
         # provision share the (reentrant) lock so two concurrent creates cannot
         # both pass a limit with one slot left. Adopting a workspace the
-        # employee already enrolled is not a new computer, so it is exempt.
+        # user already enrolled is not a new computer, so it is exempt.
         with ctx.registry.dispatch_lock:
-            if not ctx.registry.find_by_employee(employee_id, workspace_path):
-                assert_local_computer_allowed(ctx, employee_id)
+            if not ctx.registry.find_by_user(user_id, workspace_path):
+                assert_local_computer_allowed(ctx, user_id)
             node = ctx.backend.provision_daemon_node(provision_payload)
     else:
         node = ctx.backend.provision_daemon_node(provision_payload)
     effective_sandbox_mode = node.get("sandboxMode") if node.get("sandboxMode") in ("boxlite", "none") else sandbox_mode
     public_node = _public_control_panel_node(ctx, node)
     response = {
-        "node": public_node,
+        "node": with_legacy_user_id(public_node),
         "daemonEnv": daemon_start_env(request, node, effective_sandbox_mode),
     }
     if node.get("sandboxToken"):
@@ -606,8 +616,8 @@ def create_control_panel_daemon_node(
 
 # ── Chat integrations ───────────────────────────────────────────────────
 
-def _actor_name(user: dict[str, Any]) -> str:
-    return str(user.get("username") or user.get("id") or "admin")
+def _actor_name(account: dict[str, Any]) -> str:
+    return str(account.get("username") or account.get("id") or "admin")
 
 
 def _chat_error(error: Exception) -> HTTPException:
@@ -628,10 +638,10 @@ def list_chat_integrations(request: Request, ctx: AppContextDep) -> dict[str, An
 def create_chat_integration(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     body = _request_body
     try:
-        integration = ctx.chat_store.create_integration(body, actor=_actor_name(user))
+        integration = ctx.chat_store.create_integration(body, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -657,10 +667,10 @@ def update_chat_integration(
     *,
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     body = _request_body
     try:
-        integration = ctx.chat_store.update_integration(integration_id, body, actor=_actor_name(user))
+        integration = ctx.chat_store.update_integration(integration_id, body, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -668,7 +678,7 @@ def update_chat_integration(
 
 @router.post("/admin/chat-integrations/{integration_id}/activations")
 async def activate_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     try:
         ctx.chat_store.validate_activation(integration_id)
         settings = ctx.chat_store.connection_settings(integration_id)
@@ -678,7 +688,7 @@ async def activate_chat_integration(integration_id: str, request: Request, ctx: 
                 raise ValueError(message)
         else:
             message = "Integration activated."
-        integration = ctx.chat_store.activate_integration(integration_id, actor=_actor_name(user))
+        integration = ctx.chat_store.activate_integration(integration_id, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration, "provisioning": {"ok": True, "message": message}}
@@ -686,13 +696,13 @@ async def activate_chat_integration(integration_id: str, request: Request, ctx: 
 
 @router.post("/admin/chat-integrations/{integration_id}/health-checks")
 async def check_chat_integration(integration_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     try:
         settings = ctx.chat_store.connection_settings(integration_id)
         provider_health = await request.app.state.chat_probe(settings)
         integration = ctx.chat_store.check_integration(
             integration_id,
-            actor=_actor_name(user),
+            actor=_actor_name(account),
             provider_health=provider_health,
         )
     except (KeyError, ValueError) as error:
@@ -706,18 +716,18 @@ async def rotate_telegram_webhook_secret(
     request: Request,
     ctx: AppContextDep,
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     locks = request.app.state.chat_rotation_locks
     lock = locks.setdefault(integration_id, asyncio.Lock())
     async with lock:
-        return await _rotate_telegram_webhook_secret(integration_id, request, ctx, user)
+        return await _rotate_telegram_webhook_secret(integration_id, request, ctx, account)
 
 
 async def _rotate_telegram_webhook_secret(
     integration_id: str,
     request: Request,
     ctx: AppContextDep,
-    user: dict[str, Any],
+    account: dict[str, Any],
 ) -> dict[str, Any]:
     try:
         ctx.chat_store.validate_telegram_webhook_rotation(integration_id)
@@ -727,7 +737,7 @@ async def _rotate_telegram_webhook_secret(
         integration = ctx.chat_store.set_telegram_webhook_secret(
             integration_id,
             webhook_secret,
-            actor=_actor_name(user),
+            actor=_actor_name(account),
         )
         settings = ctx.chat_store.connection_settings(integration_id)
         provisioned, message = await request.app.state.chat_provision(settings, integration_id)
@@ -735,7 +745,7 @@ async def _rotate_telegram_webhook_secret(
             if isinstance(previous_secret, str) and previous_secret:
                 restored, restore_message = await request.app.state.chat_provision(previous_settings, integration_id)
                 if restored:
-                    ctx.chat_store.set_telegram_webhook_secret(integration_id, previous_secret, actor=_actor_name(user))
+                    ctx.chat_store.set_telegram_webhook_secret(integration_id, previous_secret, actor=_actor_name(account))
                 else:
                     raise ValueError(
                         f"{message} The previous webhook could not be restored ({restore_message}); "
@@ -755,25 +765,25 @@ def add_chat_identity_link(
     *,
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     body = _request_body
-    employee_id = string_field(body, "employeeId")
+    user_id = string_field(body, "userId")
     default_agent_id = string_field(body, "defaultAgentId")
-    if not employee_record(ctx.auth_store, employee_id):
-        raise HTTPException(404, "Employee not found.")
+    if not user_record(ctx.auth_store, user_id):
+        raise HTTPException(404, "User not found.")
     if default_agent_id:
         agent = ctx.agent_store.get_agent(default_agent_id)
         if (
             not agent
             or agent.get("deletedAt")
             or not agent.get("enabled", True)
-            or agent.get("supervisorEmployeeId") != employee_id
+            or agent.get("supervisorUserId") != user_id
         ):
             raise HTTPException(
-                400, "defaultAgentId must reference an enabled agent owned by the linked employee."
+                400, "defaultAgentId must reference an enabled agent owned by the linked user."
             )
     try:
-        integration = ctx.chat_store.add_identity_link(integration_id, body, actor=_actor_name(user))
+        integration = ctx.chat_store.add_identity_link(integration_id, body, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -783,9 +793,9 @@ def add_chat_identity_link(
 def delete_chat_identity_link(
     integration_id: str, link_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     try:
-        integration = ctx.chat_store.delete_identity_link(integration_id, link_id, actor=_actor_name(user))
+        integration = ctx.chat_store.delete_identity_link(integration_id, link_id, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -799,10 +809,10 @@ def add_chat_allowed_conversation(
     *,
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     body = _request_body
     try:
-        integration = ctx.chat_store.add_allowed_conversation(integration_id, body, actor=_actor_name(user))
+        integration = ctx.chat_store.add_allowed_conversation(integration_id, body, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -815,9 +825,9 @@ def delete_chat_allowed_conversation(
     request: Request,
     ctx: AppContextDep,
 ) -> dict[str, Any]:
-    user = require_admin_session(request, ctx.auth_store)
+    account = require_admin_session(request, ctx.auth_store)
     try:
-        integration = ctx.chat_store.delete_allowed_conversation(integration_id, conversation_record_id, actor=_actor_name(user))
+        integration = ctx.chat_store.delete_allowed_conversation(integration_id, conversation_record_id, actor=_actor_name(account))
     except (KeyError, ValueError) as error:
         raise _chat_error(error) from error
     return {"integration": integration}
@@ -875,7 +885,7 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     last_24h = 0
     last_7d = 0
     status_counts: Counter[str] = Counter()
-    per_employee: Counter[str] = Counter()
+    per_user: Counter[str] = Counter()
 
     one_day = now - timedelta(hours=24)
     seven_day = now - timedelta(days=7)
@@ -884,9 +894,9 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         created = _parse_timestamp(session.get("createdAt"))
         status = str(session.get("status") or "unknown")
         status_counts[status] += 1
-        owner = session.get("ownerEmployeeId")
+        owner = session.get("ownerUserId")
         if owner:
-            per_employee[str(owner)] += 1
+            per_user[str(owner)] += 1
         if created is None:
             continue
         if created >= one_day:
@@ -903,9 +913,9 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
                 bucket["failed"] += 1
 
     daily_counts = [{"date": day, **stats} for day, stats in buckets.items()]
-    top_employees = [
-        {"employeeId": employee_id, "sessionCount": count}
-        for employee_id, count in per_employee.most_common(5)
+    top_users = [
+        {"userId": user_id, "sessionCount": count}
+        for user_id, count in per_user.most_common(5)
     ]
 
     return {
@@ -914,7 +924,7 @@ def dashboard_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         "last7d": last_7d,
         "statusCounts": dict(status_counts),
         "dailyCounts": daily_counts,
-        "topEmployees": top_employees,
+        "topUsers": top_users,
     }
 
 

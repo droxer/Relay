@@ -2,7 +2,7 @@
 
 The user requested that each task show its assigned agent as its assignee.
 Cards, list rows, routine rows, and task detail facts now use the agent/team
-identity rather than the responsible employee. Unassigned work has an explicit
+identity rather than the responsible user. Unassigned work has an explicit
 label; missing roster entries use localized unavailable labels. Legacy tasks
 with only an executor kind show that kind. Assignee sorting uses the same label.
 The tablet breakpoint preserves the assignee column, and mobile labels truncate
@@ -12,7 +12,7 @@ within their available width.
 
 - RED: `npm run test:react -w web -- --run interaction-tests/taskAssignee.test.tsx`
   produced 10 failed, 2 passed before implementation. Assigned tasks displayed
-  “Unassigned” in the employee identity slot rather than the assigned agent.
+  “Unassigned” in the user identity slot rather than the assigned agent.
   Checkpoint: `4ac5825b`.
 - GREEN: same target passed all 12 original cases. Four additional availability
   cases pass too: 16 total.

@@ -138,12 +138,12 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
 ) -> None:
     from relay.persistence.agent_store import DatabaseAgentStore
     from relay.persistence.project_store import DatabaseProjectStore
-    from relay.security.auth import DatabaseUserAuthStore
+    from relay.security.auth import DatabaseAccountAuthStore
 
     url, _schema = migrated_schema
-    owner = DatabaseUserAuthStore(url).create_user(
-        "project-owner", "kestrel-vault-7719", employee_id="project-owner"
-    )["employeeId"]
+    owner = DatabaseAccountAuthStore(url).create_account(
+        "project-owner", "kestrel-vault-7719", user_id="project-owner"
+    )["userId"]
     store = DatabaseProjectStore(url)
     project = store.create_project(owner, {
         "name": "New project", "computerId": "device:review", "members": [],
@@ -176,15 +176,15 @@ def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema
 
     from relay.persistence.store_common import relay_task_event
     from relay.persistence.task_store import DatabaseTaskStore
-    from relay.security.auth import DatabaseUserAuthStore
+    from relay.security.auth import DatabaseAccountAuthStore
 
     monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
     url, _schema = migrated_schema
-    owner = DatabaseUserAuthStore(url).create_user(
-        'wip-owner', 'test-wip-password', employee_id='wip-owner',
-    )['employeeId']
+    owner = DatabaseAccountAuthStore(url).create_account(
+        'wip-owner', 'test-wip-password', user_id='wip-owner',
+    )['userId']
     store = DatabaseTaskStore(url)
-    tasks = [store.create_task({'title': str(i), 'ownerEmployeeId': owner}) for i in range(4)]
+    tasks = [store.create_task({'title': str(i), 'ownerUserId': owner}) for i in range(4)]
 
     def attempt(task):
         try:
@@ -204,7 +204,7 @@ def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema
     assert sum(bool(task.get('startedAt')) for task in store.list_tasks()) == 1
 
 
-def test_postgres_task_admission_does_not_lock_other_employees(migrated_schema):
+def test_postgres_task_admission_does_not_lock_other_users(migrated_schema):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
@@ -213,9 +213,9 @@ def test_postgres_task_admission_does_not_lock_other_employees(migrated_schema):
 
     url, _ = migrated_schema
     store = DatabaseTaskStore(url)
-    first = store.create_task({"title": "First", "ownerEmployeeId": str(uuid.uuid4())})
+    first = store.create_task({"title": "First", "ownerUserId": str(uuid.uuid4())})
     second = store.create_task(
-        {"title": "Second", "ownerEmployeeId": str(uuid.uuid4())}
+        {"title": "Second", "ownerUserId": str(uuid.uuid4())}
     )
     acquired, release = Event(), Event()
 
@@ -252,7 +252,7 @@ def test_postgres_performance_projections_and_queue_pages(migrated_schema):
     owner = str(uuid.uuid4())
     sessions = DatabaseSessionStore(url)
     session = sessions.create_session(
-        {"taskGoal": "Projection", "workspacePath": "/work", "ownerEmployeeId": owner}
+        {"taskGoal": "Projection", "workspacePath": "/work", "ownerUserId": owner}
     )
     sessions.append_event(
         session["id"],
@@ -275,22 +275,22 @@ def test_postgres_performance_projections_and_queue_pages(migrated_schema):
                 },
             ),
         )
-    summary = sessions.list_session_summaries(owner_employee_id=owner)[0]
+    summary = sessions.list_session_summaries(owner_user_id=owner)[0]
     assert summary["runCount"] == 1 and summary["hasRunningAgent"]
     assert summary["artifactCount"] == 1
     artifacts = sessions.list_artifact_summaries(
-        owner_employee_id=owner, workspace_path="/work", limit=2
+        owner_user_id=owner, workspace_path="/work", limit=2
     )
     assert len(artifacts) == 1 and artifacts[0]["createdAt"].endswith("02.000Z")
     tasks = DatabaseTaskStore(url)
     for i in range(5):
-        task = tasks.create_task({"title": str(i), "ownerEmployeeId": owner})
+        task = tasks.create_task({"title": str(i), "ownerUserId": owner})
         tasks.assign_task(task["id"], "codex")
     first = tasks.list_dispatchable_tasks(limit=2)
     second = tasks.list_dispatchable_tasks(limit=2, after=first[-1])
     third = tasks.list_dispatchable_tasks(limit=2, after=second[-1])
     assert len({t["id"] for t in [*first, *second, *third]}) == 5
-    assert len(tasks.list_tasks(employee_id=owner, limit=2)) == 2
+    assert len(tasks.list_tasks(user_id=owner, limit=2)) == 2
 
 
 def test_postgres_managed_nodes_lock_independently_and_enrollment_is_shared(migrated_schema):
@@ -299,8 +299,8 @@ def test_postgres_managed_nodes_lock_independently_and_enrollment_is_shared(migr
     from relay.persistence.managed_node_store import DatabaseManagedNodeStore
     url, _ = migrated_schema
     a, b = DatabaseManagedNodeStore(url), DatabaseManagedNodeStore(url)
-    one = a.create_node({'employeeId': 'one'})
-    two = a.create_node({'employeeId': 'two'})
+    one = a.create_node({'userId': 'one'})
+    two = a.create_node({'userId': 'two'})
     with ThreadPoolExecutor(2) as pool:
         with a._mutation_scope(one['id']):
             assert pool.submit(b.create_attempt, two['id']).result(timeout=3)[0]['managedNodeId'] == two['id']
@@ -437,7 +437,7 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
     tasks = DatabaseTaskStore(url)
     daemons = DatabaseDaemonStore(url)
     session = sessions.create_session(
-        {"taskGoal": "Backfill", "workspacePath": "/work", "ownerEmployeeId": owner}
+        {"taskGoal": "Backfill", "workspacePath": "/work", "ownerUserId": owner}
     )
     sid = session["id"]
     for artifact_id, name, created in (
@@ -452,7 +452,7 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
             artifact["createdAt"] = created
         sessions.append_event(sid, relay_event("artifact.created", sid, {"artifact": artifact}))
     sessions.append_event(sid, relay_event("session.deletion_requested", sid, {"requestedBy": "x"}))
-    task = tasks.create_task({"title": "Gone", "ownerEmployeeId": owner})
+    task = tasks.create_task({"title": "Gone", "ownerUserId": owner})
     tasks.link_session(task["id"], sid)
     tasks.delete_task(task["id"])
     daemons.register_node({"id": str(uuid.uuid4()), "workspacePath": "/w",
@@ -464,17 +464,17 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
     daemons.stage_command(node_id, {"id": str(uuid.uuid4()), "type": "run.start", "sessionId": sid,
                                     "runId": str(uuid.uuid4()), "agent": "codex", "taskGoal": "g",
                                     "_runRequestId": request_id})
-    before = sessions.list_artifact_summaries(owner_employee_id=owner, limit=10)
+    before = sessions.list_artifact_summaries(owner_user_id=owner, limit=10)
 
     config = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
     command.downgrade(config, "20261010_0084")
     command.upgrade(config, "head")
 
-    after = sessions.list_artifact_summaries(owner_employee_id=owner, limit=10)
+    after = sessions.list_artifact_summaries(owner_user_id=owner, limit=10)
     assert [a["id"] for a in after] == [a["id"] for a in before] == ["a2", "b1"]
     assert [s["id"] for s in sessions.list_pending_deletions()] == [sid]
-    assert tasks.list_task_summaries(employee_id=owner) == []
+    assert tasks.list_task_summaries(user_id=owner) == []
     assert daemons.pending_command_for_run_request(request_id)["command"]["_runRequestId"] == request_id
     with sessions.engine.connect() as conn:
         links = conn.execute(text("SELECT count(*) FROM task_sessions")).scalar_one()

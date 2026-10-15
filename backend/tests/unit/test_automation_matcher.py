@@ -326,8 +326,8 @@ def test_ledger_metadata_is_authoritative_after_replay(world) -> None:
 
 def test_unfiltered_automation_does_not_observe_another_owner(world) -> None:
     tasks, _, service, _ = world
-    routine = _automation(tasks, ownerEmployeeId="alice", assigneeEmployeeId="alice")
-    foreign = tasks.create_task({"title": "Private Bob issue", "ownerEmployeeId": "bob"})
+    routine = _automation(tasks, ownerUserId="alice", assigneeUserId="alice")
+    foreign = tasks.create_task({"title": "Private Bob issue", "ownerUserId": "bob"})
     tasks.update_task(foreign["id"], {"status": "blocked", "blockerReason": "private"})
     assert run(world) == 0
     assert not _occurrences(tasks, routine["id"])
@@ -687,7 +687,7 @@ def test_resume_drops_stale_pending_events_before_the_next_tick(world):
                                       "routineNextRunAt": None})
     automations.mark_pending(routine["id"], {"eventType": "task.status_changed", "toStatus": "blocked",
                                              "subject": {"title": "stale"}, "depth": 0}, clock.value)
-    resumed = service.resume(routine["id"], {"isAdmin": True, "employeeId": "ops"}, clock.value)
+    resumed = service.resume(routine["id"], {"isAdmin": True, "userId": "ops"}, clock.value)
     assert resumed["routineState"] == "active"
     assert run(world) == 0
     assert _occurrences(tasks, routine["id"]) == []
@@ -847,9 +847,9 @@ def test_missing_pending_routine_is_cleared(world):
 
 def test_targeted_event_retry_keeps_owner_scope(world):
     tasks, _, service, _ = world
-    routine = _automation(tasks, ownerEmployeeId="owner-one")
-    event = {"eventType": "task.status_changed", "subject": {"ownerEmployeeId": "owner-two"}, "toStatus": "blocked", "depth": 0}
+    routine = _automation(tasks, ownerUserId="owner-one")
+    event = {"eventType": "task.status_changed", "subject": {"ownerUserId": "owner-two"}, "toStatus": "blocked", "depth": 0}
     row = {"kind": "task_event", "target_routine_id": routine["id"]}
     assert service.matcher._targets(row, event, {}) == []
-    event["subject"]["assigneeEmployeeId"] = "owner-one"
+    event["subject"]["assigneeUserId"] = "owner-one"
     assert [task["id"] for task in service.matcher._targets(row, event, {})] == [routine["id"]]

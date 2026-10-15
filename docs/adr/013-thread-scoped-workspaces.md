@@ -15,7 +15,7 @@ also made concurrent read-only runs depend on process-global workspace state.
 
 Relay supports two ownership models for computers:
 
-- on an employee-owned computer, the employee chooses the workspace root while
+- on a user-owned computer, the user chooses the workspace root while
   setting up the local daemon;
 - on a cloud computer, the backend supervisor's provider adapter chooses and
   provisions the workspace root.
@@ -74,7 +74,7 @@ workspace layout retain `node-root` compatibility.
 
 ## Ownership and lifecycle
 
-- Employee devices: the selected root remains local configuration and must
+- User devices: the selected root remains local configuration and must
   already exist and be writable at daemon setup. Relay creates only validated
   thread children beneath it.
 - Cloud computers: the supervisor/provider provisions the root and its
@@ -83,7 +83,7 @@ workspace layout retain `node-root` compatibility.
 - Daemon upgrade: sessions already created under the legacy shared-root model
   continue at that root; only newly-created sessions select thread children.
 - Thread archive or deletion: directory retention and garbage collection are a
-  separate policy decision; this change does not delete employee or cloud data.
+  separate policy decision; this change does not delete user or cloud data.
 - Node reassignment: ADR-011's immutable thread runtime still applies. Moving a
   thread requires an explicit checkpoint/restore design rather than path reuse.
 

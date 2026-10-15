@@ -8,7 +8,7 @@ export type DaemonNodeSandboxMode = "none" | "boxlite";
 export type DaemonAgentAdapter = "cli" | "service";
 export type DaemonAgentHealthStatus = "ready" | "failed";
 
-/** Runtime capability advertised by a daemon. Logical employee agents are
+/** Runtime capability advertised by a daemon. Logical user agents are
  * control-plane identities and are connected to these capabilities by placements. */
 export interface DaemonExecutorCapability {
   executorKind: AgentName;
@@ -207,7 +207,7 @@ export interface DaemonNodeRegistration {
   /** Runs admitted before a daemon restart that this daemon will not resume. */
   journaledCommandIds?: string[];
   sandboxId: string;
-  employeeId?: string;
+  userId?: string;
   token: string;
   workspacePath?: string;
   workspaceId?: string;

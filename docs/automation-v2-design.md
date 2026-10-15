@@ -42,7 +42,7 @@ that do not earn their place. This revision:
   `task.updated`; materialized columns are derived from the snapshot.
 - Automations are routines on the wire: fields, columns, and events keep
   `routine*` names.
-- An automation's runs pass through `assertSessionOwnedByEmployee`.
+- An automation's runs pass through `assertSessionOwnedByUser`.
 
 ### Out of scope
 

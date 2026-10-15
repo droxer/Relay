@@ -14,7 +14,7 @@ import { projectMessages } from "../src/lib/projectMessages";
 
 vi.mock("react-i18next", async (load) => load());
 vi.mock("../src/hooks/useSkills", () => ({ SKILLS_QUERY_KEY: "skills", useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }), useSkill: () => ({ data: null, isLoading: false, error: null }) }));
-vi.mock("../src/hooks/useEmployeeAgents", () => ({ EMPLOYEE_AGENTS_QUERY_KEY: "employee-agents", useEmployeeAgents: () => ({ agents: [] }) }));
+vi.mock("../src/hooks/useUserAgents", () => ({ USER_AGENTS_QUERY_KEY: "user-agents", useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/api", () => ({ createSkill: vi.fn(), deleteSkill: vi.fn(), importSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn(), assignSkill: vi.fn(), revokeSkillAssignment: vi.fn() }));
 
@@ -31,7 +31,7 @@ it.each([
   ["zh-CN" as const, "技能库还是空的", "发布第一个技能"],
 ])("renders the %s library workflow from the real locale resource", async (language, emptyTitle, publish) => {
   const instance = await locale(language);
-  render(providers(instance, <DialogProvider><SkillsPage currentUser={{ employeeId: "employee-1" } as any} /></DialogProvider>));
+  render(providers(instance, <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} /></DialogProvider>));
   expect(screen.getByRole("heading", { name: emptyTitle })).toBeTruthy();
   expect(screen.getByRole("button", { name: publish })).toBeTruthy();
   expect(screen.queryByText("Your skills library is empty")).toBeNull();

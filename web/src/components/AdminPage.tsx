@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DashboardView } from "./admin/dashboard/DashboardView";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useTranslation } from "react-i18next";
-import { handleForEmployeeId } from "../lib/employeeHandle";
+import { handleForUserId } from "../lib/userHandle";
 import { StateMark } from "./StateMark";
 import { useMutationError } from "../hooks/useMutationError";
 import { Button } from "@/components/ui/button";
@@ -13,16 +13,16 @@ import {
   ActionAdd,
   ICON,
 } from "./icons";
-import { getOrgSettings, deleteControlPanelDaemonNode, deleteControlPanelEmployee, deleteManagedNode, getAuthStatus, getMe, listManagedNodes, permanentlyDeleteManagedNode, recoverManagedNode, RelayApiError, unassignControlPanelDaemonNode, updateComputerDisplayName, updateControlPanelDaemonNodeDisabledAgents, updateManagedNodeDisplayName } from "../api";
+import { getOrgSettings, deleteControlPanelDaemonNode, deleteControlPanelUser, deleteManagedNode, getAuthStatus, getMe, listManagedNodes, permanentlyDeleteManagedNode, recoverManagedNode, RelayApiError, unassignControlPanelDaemonNode, updateComputerDisplayName, updateControlPanelDaemonNodeDisabledAgents, updateManagedNodeDisplayName } from "../api";
 import type {
   AssignControlPanelDaemonNodeResponse,
   ControlPanelDaemonNodeRecord,
   CreateManagedNodeResponse,
   CreateControlPanelDaemonNodeResponse,
-  CreateControlPanelEmployeeResponse,
+  CreateControlPanelUserResponse,
   CurrentUser,
   DaemonNodeMonitorRecord,
-  EmployeeRecord,
+  UserRecord,
   ManagedNodeRecord,
 } from "../types";
 import { AssignNodeDrawer } from "./admin/AssignNodeDrawer";
@@ -33,10 +33,10 @@ import { ManageExecutorsDrawer } from "./admin/ManageExecutorsDrawer";
 import { ManagedNodeHistory } from "./admin/ManagedNodeHistory";
 import { PageHeader } from "./PageHeader";
 import { AdminViewToggle, type AdminView } from "./admin/AdminViewToggle";
-import { AddEmployeeDrawer } from "./admin/AddEmployeeDrawer";
+import { AddUserDrawer } from "./admin/AddUserDrawer";
 import { AddNodeDrawer, type AddNodeDrawerSuccess } from "./admin/AddNodeDrawer";
-import { EmployeesView } from "./admin/EmployeesView";
-import { EditEmployeeDrawer } from "./admin/EditEmployeeDrawer";
+import { UsersView } from "./admin/UsersView";
+import { EditUserDrawer } from "./admin/EditUserDrawer";
 import { SettingsView } from "./admin/SettingsView";
 import type { AdminLayout } from "./admin/AdminLayoutToggle";
 import { useAdminNodes } from "../hooks/useAdminNodes";
@@ -117,7 +117,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
   const view = section;
   const setView = onSelectSection;
   const [layout, setLayout] = useState<AdminLayout>("card");
-  const { nodes, employees, pollError, mergeNodes, refetch } = useAdminNodes(
+  const { nodes, users, pollError, mergeNodes, refetch } = useAdminNodes(
     Boolean(admin),
     view === "dashboard" || layout === "list",
   );
@@ -128,27 +128,27 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     refetchInterval: CONTROL_PANEL_POLL_MS,
   });
   const managedNodes = managedNodesQuery.data?.nodes ?? [];
-  // The org default is what an employee without an override follows, so the
-  // employee forms show it as their placeholder.
+  // The org default is what a user without an override follows, so the
+  // user forms show it as their placeholder.
   const orgSettingsQuery = useQuery({
     queryKey: ["admin", "settings"],
     queryFn: ({ signal }) => getOrgSettings(signal),
     enabled: Boolean(admin),
   });
-  const defaultMaxLocalComputers = orgSettingsQuery.data?.settings.maxLocalComputersPerEmployee;
+  const defaultMaxLocalComputers = orgSettingsQuery.data?.settings.maxLocalComputersPerUser;
   // Absent while the query is in flight; only a definite false hides the
   // controls, so a slow answer does not flash them away.
-  const canEditEmployees = orgSettingsQuery.data?.capabilities?.employeeEdits !== false;
+  const canEditUsers = orgSettingsQuery.data?.capabilities?.userEdits !== false;
   const setAdminView = useRelayStore((state) => state.setAdminView);
-  const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
-  const [editEmployeeId, setEditEmployeeId] = useState<string | null>(null);
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [editUserId, setEditUserId] = useState<string | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
-  const [assignTarget, setAssignTarget] = useState<{ employeeId?: string } | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{ userId?: string } | null>(null);
   const [credentialsNodeId, setCredentialsNodeId] = useState<string | null>(null);
   const [manageExecutorsNodeId, setManageExecutorsNodeId] = useState<string | null>(null);
-  const [highlightedEmployeeId, setHighlightedEmployeeId] = useState<string | null>(null);
+  const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
   const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
-  /** A created employee whose computer could not be attached — the employee is
+  /** A created user whose computer could not be attached — the user is
       real, so this is a warning to resolve from Assign, not a failed request. */
   const [assignmentWarning, setAssignmentWarning] = useState<string | null>(null);
   const [storedTokens, setStoredTokens] = useState<StoredNodeTokenMap>(() => readStoredNodeTokens());
@@ -189,9 +189,9 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     setAdminView(view);
   }, [setAdminView, view]);
 
-  const metrics = useNodeMetrics(nodes, employees);
+  const metrics = useNodeMetrics(nodes, users);
 
-  const unassignedNodes = useMemo(() => nodes.filter((node) => !node.employeeId), [nodes]);
+  const unassignedNodes = useMemo(() => nodes.filter((node) => !node.userId), [nodes]);
   const credentialsNode = useMemo(
     () => (credentialsNodeId ? nodes.find((node) => node.id === credentialsNodeId) ?? null : null),
     [credentialsNodeId, nodes],
@@ -336,73 +336,73 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     }
   }
 
-  async function handleDeleteEmployee(employee: EmployeeRecord) {
+  async function handleDeleteUser(user: UserRecord) {
     try {
-      const result = await deleteControlPanelEmployee(employee.id);
+      const result = await deleteControlPanelUser(user.id);
       const unassignedSet = new Set(result.unassignedNodes);
       mergeNodes((prev) => ({
-        employees: prev.employees.filter((current) => current.id !== employee.id),
+        users: prev.users.filter((current) => current.id !== user.id),
         nodes: prev.nodes.map((current) =>
-          unassignedSet.has(current.id) ? omit(current, "employeeId") : current,
+          unassignedSet.has(current.id) ? omit(current, "userId") : current,
         ),
       }));
     } catch (error) {
-      reportMutationError("Failed to delete employee", error, t("errors.admin_delete_employee"));
+      reportMutationError("Failed to delete user", error, t("errors.admin_delete_user"));
       throw error;
     }
   }
 
-  function handleEditEmployeeSuccess(employee: EmployeeRecord) {
+  function handleEditUserSuccess(user: UserRecord) {
     mergeNodes((prev) => ({
       ...prev,
-      employees: prev.employees.map((item) => (item.id === employee.id ? employee : item)),
+      users: prev.users.map((item) => (item.id === user.id ? user : item)),
     }));
-    setEditEmployeeId(null);
+    setEditUserId(null);
   }
 
-  function handleAddEmployeeSuccess(result: CreateControlPanelEmployeeResponse) {
+  function handleAddUserSuccess(result: CreateControlPanelUserResponse) {
     const { node } = result;
     mergeNodes((prev) => ({
       nodes: node ? [node, ...prev.nodes.filter((current) => current.id !== node.id)] : prev.nodes,
-      employees: [result.employee, ...prev.employees.filter((employee) => employee.id !== result.employee.id)],
+      users: [result.user, ...prev.users.filter((user) => user.id !== result.user.id)],
     }));
 
     if (node?.nodeToken) {
       writeStoredNodeToken(node.id, {
-        employeeId: result.employee.id,
+        userId: result.user.id,
         nodeToken: node.nodeToken,
         savedAt: new Date().toISOString(),
       });
       setStoredTokens(readStoredNodeTokens());
     }
 
-    setHighlightedEmployeeId(result.employee.id);
-    window.setTimeout(() => setHighlightedEmployeeId((prev) => (prev === result.employee.id ? null : prev)), HIGHLIGHT_PULSE_MS);
+    setHighlightedUserId(result.user.id);
+    window.setTimeout(() => setHighlightedUserId((prev) => (prev === result.user.id ? null : prev)), HIGHLIGHT_PULSE_MS);
 
-    setAddEmployeeOpen(false);
-    setView("employees");
-    // The employee exists either way; a computer that got claimed in the
+    setAddUserOpen(false);
+    setView("users");
+    // The user exists either way; a computer that got claimed in the
     // meantime is reported alongside them rather than swallowing the result.
     setAssignmentWarning(result.assignmentError ?? null);
     // Only surface the credentials drawer when a sandbox was bound — it is
-    // keyed by node id and has nothing to show for an unassigned employee.
+    // keyed by node id and has nothing to show for an unassigned user.
     if (node) setCredentialsNodeId(node.id);
   }
 
   function handleAssignSuccess(result: AssignControlPanelDaemonNodeResponse) {
     mergeNodes((prev) => ({
       nodes: [result.node, ...prev.nodes.filter((node) => node.id !== result.node.id)],
-      employees: [result.employee, ...prev.employees.filter((employee) => employee.id !== result.employee.id)],
+      users: [result.user, ...prev.users.filter((user) => user.id !== result.user.id)],
     }));
-    setHighlightedEmployeeId(result.employee.id);
-    window.setTimeout(() => setHighlightedEmployeeId((prev) => (prev === result.employee.id ? null : prev)), HIGHLIGHT_PULSE_MS);
+    setHighlightedUserId(result.user.id);
+    window.setTimeout(() => setHighlightedUserId((prev) => (prev === result.user.id ? null : prev)), HIGHLIGHT_PULSE_MS);
     setAssignTarget(null);
-    setView("employees");
+    setView("users");
   }
 
   function handleCreateManagedNodeSuccess(result: CreateManagedNodeResponse) {
     const { node } = result;
-    // The pulse used to be keyed on the employee, but both node paths switch to
+    // The pulse used to be keyed on the user, but both node paths switch to
     // the Computers view, where nothing reads that — so provisioning ended with
     // the drawer closing and no confirmation anywhere on screen.
     pulseNode(node.id);
@@ -430,7 +430,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
     }));
 
     writeStoredNodeToken(node.id, {
-      employeeId: node.employeeId,
+      userId: node.userId,
       sandboxToken: result.sandboxToken,
       nodeToken: result.nodeToken,
       daemonCommand: result.daemonCommand,
@@ -484,13 +484,13 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
   const headerError = authError ?? pollError ?? managedNodesError;
   const viewTitle = t(`admin.v2.title_${view}`);
   /* Only the two roster sections own a create action. The dashboard reads;
-     its Add computer / Add employee pair repeated the sections one click away.
+     its Add computer / Add user pair repeated the sections one click away.
      An EMPTY actions container is not the same as none: the narrow layout
      hides a header that holds nothing but a title (section-rail.css), and an
      empty container kept it on screen as a 1px rule. */
-  const hasHeaderActions = Boolean(headerError) || view === "employees" || view === "computers";
-  const headerCount = view === "employees"
-    ? t("admin.employee_count", { count: employees.length })
+  const hasHeaderActions = Boolean(headerError) || view === "users" || view === "computers";
+  const headerCount = view === "users"
+    ? t("admin.user_count", { count: users.length })
     : view === "computers"
       ? t("admin.node_count", { count: nodes.length })
       : undefined;
@@ -545,15 +545,15 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   the cobalt fill and anything beside it steps down to an
                   outline. Two ghost buttons side by side named no primary at
                   all, which is how a page ends up with no focal point. */}
-              {view === "employees" ? (
+              {view === "users" ? (
                 <Button
                   type="button"
                   className="adm-create-action"
-                  onClick={() => setAddEmployeeOpen(true)}
-                  tooltip={t("admin.v2.add_employee_cta")}
+                  onClick={() => setAddUserOpen(true)}
+                  tooltip={t("admin.v2.add_user_cta")}
                 >
                   <ActionAdd size={ICON.md} aria-hidden="true" />
-                  {t("admin.v2.add_employee_cta")}
+                  {t("admin.v2.add_user_cta")}
                 </Button>
               ) : null}
               {view === "computers" ? (
@@ -576,7 +576,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
             <div key={view} className="adm-view-stage">
               {assignmentWarning ? (
                 <Alert variant="boxed" render={<div />}>
-                  {t("admin.v2.add_employee_assignment_warning", { message: assignmentWarning })}
+                  {t("admin.v2.add_user_assignment_warning", { message: assignmentWarning })}
                   <Button
                     type="button"
                     variant="ghost"
@@ -589,19 +589,19 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
               ) : null}
               {view === "dashboard" ? (
                 <DashboardView
-                  nodes={nodes} employees={employees} metrics={metrics}
+                  nodes={nodes} users={users} metrics={metrics}
                   onManageNodes={() => setView("computers")}
                 />
-              ) : view === "employees" ? (
-                <EmployeesView
-                  employees={employees}
+              ) : view === "users" ? (
+                <UsersView
+                  users={users}
                   nodes={nodes}
                   layout={layout}
                   onLayoutChange={setLayout}
-                  onAddEmployee={() => setAddEmployeeOpen(true)}
-                  onDeleteEmployee={handleDeleteEmployee}
-                  onEditEmployee={canEditEmployees ? (employee) => setEditEmployeeId(employee.id) : undefined}
-                  highlightedEmployeeId={highlightedEmployeeId}
+                  onAddUser={() => setAddUserOpen(true)}
+                  onDeleteUser={handleDeleteUser}
+                  onEditUser={canEditUsers ? (user) => setEditUserId(user.id) : undefined}
+                  highlightedUserId={highlightedUserId}
                 />
               ) : view === "organization" ? (
                 <SettingsView />
@@ -609,7 +609,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                 <>
                   <NodesView
                     nodes={nodes}
-                    employees={employees}
+                    users={users}
                     layout={layout}
                     onLayoutChange={setLayout}
                     onRevealCredentials={handleRevealCredentials}
@@ -621,7 +621,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
                   />
                   <ManagedNodeHistory
                     nodes={managedNodes}
-                    employees={employees}
+                    users={users}
                     onRecover={handleRecoverManagedNode}
                     onDeletePermanently={handlePermanentlyDeleteManagedNode}
                   />
@@ -632,33 +632,33 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
         </div>
       </div>
 
-      <AddEmployeeDrawer
-        open={addEmployeeOpen}
-        onClose={() => setAddEmployeeOpen(false)}
+      <AddUserDrawer
+        open={addUserOpen}
+        onClose={() => setAddUserOpen(false)}
         unassignedNodes={unassignedNodes}
-        defaultMaxLocalComputers={canEditEmployees ? defaultMaxLocalComputers : undefined}
-        allowLimitOverride={canEditEmployees}
-        onSuccess={handleAddEmployeeSuccess}
+        defaultMaxLocalComputers={canEditUsers ? defaultMaxLocalComputers : undefined}
+        allowLimitOverride={canEditUsers}
+        onSuccess={handleAddUserSuccess}
       />
-      <EditEmployeeDrawer
-        open={editEmployeeId !== null}
-        onClose={() => setEditEmployeeId(null)}
-        employee={employees.find((employee) => employee.id === editEmployeeId) ?? null}
+      <EditUserDrawer
+        open={editUserId !== null}
+        onClose={() => setEditUserId(null)}
+        user={users.find((user) => user.id === editUserId) ?? null}
         defaultMaxLocalComputers={defaultMaxLocalComputers}
-        onSuccess={handleEditEmployeeSuccess}
+        onSuccess={handleEditUserSuccess}
       />
       <AddNodeDrawer
         open={addNodeOpen}
         onClose={() => setAddNodeOpen(false)}
-        employees={employees}
+        users={users}
         onSuccess={handleAddNodeSuccess}
       />
       <AssignNodeDrawer
         open={assignTarget !== null}
         onClose={() => setAssignTarget(null)}
-        employees={employees}
+        users={users}
         unassignedNodes={unassignedNodes}
-        defaultEmployeeId={assignTarget?.employeeId}
+        defaultUserId={assignTarget?.userId}
         onAssignSuccess={handleAssignSuccess}
         onCreateNodeSuccess={handleAddNodeSuccess}
       />
@@ -667,7 +667,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
         onClose={() => setCredentialsNodeId(null)}
         node={credentialsNode}
         storedToken={credentialsNodeId ? storedTokens[credentialsNodeId] : undefined}
-        employeeHandle={handleForEmployeeId(employees, credentialsNode?.employeeId)}
+        userHandle={handleForUserId(users, credentialsNode?.userId)}
         onUnassign={handleUnassignNode}
         onDelete={handleDeleteNode}
       />
@@ -675,7 +675,7 @@ export function AdminPage({ currentUser, section, onSelectSection }: AdminPagePr
         open={manageExecutorsNodeId !== null}
         onClose={() => setManageExecutorsNodeId(null)}
         node={manageExecutorsNode}
-        employeeHandle={handleForEmployeeId(employees, manageExecutorsNode?.employeeId)}
+        userHandle={handleForUserId(users, manageExecutorsNode?.userId)}
         onUpdated={handleNodeUpdated}
         onSave={updateControlPanelDaemonNodeDisabledAgents}
       />

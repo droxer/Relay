@@ -21,7 +21,7 @@ export function filterRoutineTasks(tasks: RelayTaskListItem[], filters: RoutineF
     if (!task.isRoutine) return false;
     if (!matchesTriggerFilter(task, filters.trigger)) return false;
     if (filters.agent !== "all" && task.assignedAgentId !== filters.agent) return false;
-    if (assignee && !(task.assigneeEmployeeId ?? task.ownerEmployeeId ?? "").toLowerCase().includes(assignee)) return false;
+    if (assignee && !(task.assigneeUserId ?? task.ownerUserId ?? "").toLowerCase().includes(assignee)) return false;
     if (filters.state !== "all" && routineState(task, running, now) !== filters.state) return false;
     if (query) {
       const haystack = `${taskRef(task)} ${task.title} ${task.description} ${task.id}`.toLowerCase();

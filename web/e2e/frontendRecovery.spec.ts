@@ -4,7 +4,7 @@ test.beforeEach(async ({ page }) => {
   const now = new Date().toISOString();
   const session = {
     id: "review-thread", title: "Review thread", taskGoal: "Test frontend recovery",
-    workspacePath: "/workspace", ownerEmployeeId: "review-user", participants: ["human"],
+    workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
     status: "completed", phase: "created", createdAt: now, updatedAt: now,
     agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
     eventCount: 0, artifactCount: 0, runCount: 0,
@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [session], agents: [agent], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", employeeId: "review-user", username: "review", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/review-thread")) body = session;
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });

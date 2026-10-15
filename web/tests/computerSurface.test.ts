@@ -150,7 +150,7 @@ describe("My Computer record card", () => {
 
   it("connects a personal computer as direct-run, with no runtime to pick", async () => {
     // BoxLite is provisioned on admin hardware. Offering "Isolated" here let an
-    // employee ask their own laptop for a sandbox it was never set up to boot,
+    // user ask their own laptop for a sandbox it was never set up to boot,
     // and the enrollment would hand back a start command for that VM.
     const [drawer, api] = await Promise.all([
       read("web/src/components/computer/ConnectComputerDrawer.tsx"),
@@ -223,10 +223,10 @@ describe("My Computer record card", () => {
 });
 
 describe("My Computer: connect CTA respects the local-computer limit", () => {
-  it("counts only employee-device computers, not managed cloud capacity", async () => {
+  it("counts only user-device computers, not managed cloud capacity", async () => {
     const page = await read("web/src/components/ComputerPage.tsx");
 
-    assert.match(page, /const computersUsed = countEmployeeDeviceComputers\(myNodes\)/);
+    assert.match(page, /const computersUsed = countUserDeviceComputers\(myNodes\)/);
     assert.doesNotMatch(page, /const computersUsed = myNodes\.length/);
   });
 
@@ -245,7 +245,7 @@ describe("My Computer: connect CTA respects the local-computer limit", () => {
     // so a connect or disconnect this session moves it immediately.
     const page = await read("web/src/components/ComputerPage.tsx");
     assert.match(page, /\{computersUsed\}\/\{computerLimit\}/);
-    assert.match(page, /const computersUsed = countEmployeeDeviceComputers\(myNodes\)/);
+    assert.match(page, /const computersUsed = countUserDeviceComputers\(myNodes\)/);
   });
 
   it("ships the limit copy and the session fields it depends on", async () => {
@@ -268,9 +268,9 @@ describe("Admin console: adding a local computer", () => {
     "web/src/components/admin/AssignNodeDrawer.tsx",
   ];
 
-  it("creates an employee device as direct-run, matching self-service enrollment", async () => {
+  it("creates a user device as direct-run, matching self-service enrollment", async () => {
     // Regression: both drawers sent `sandboxMode: "boxlite"` alongside
-    // `nodeLocation: "employee-device"`. The backend stores the mode verbatim,
+    // `nodeLocation: "user-device"`. The backend stores the mode verbatim,
     // so the admin was handed `--sandbox boxlite` with no
     // `--use-local-agent-home` and the daemon tried to boot a VM on someone's
     // laptop — while the drawer's own copy promised agents would "run directly
@@ -279,7 +279,7 @@ describe("Admin console: adding a local computer", () => {
       const source = await read(path);
       const call = source.match(/createControlPanelDaemonNode\(\{[\s\S]*?\n\s*\}\);/)?.[0] ?? "";
       assert.notEqual(call.trim(), "", `${path}: the create-call regex stopped matching — refresh it`);
-      assert.match(call, /nodeLocation: "employee-device"/, path);
+      assert.match(call, /nodeLocation: "user-device"/, path);
       assert.match(call, /sandboxMode: "none"/, path);
       assert.doesNotMatch(call, /sandboxMode: "boxlite"/, path);
     }
@@ -288,11 +288,11 @@ describe("Admin console: adding a local computer", () => {
   it("pairs nodeLocation with sandboxMode in the type, so the drawers cannot drift again", async () => {
     // The two fields are not independent. Encoding that in the input type makes
     // the regression above a compile error rather than a start command the
-    // employee's machine cannot execute.
+    // user's machine cannot execute.
     const types = await read("web/src/types.ts");
     const input = types.match(/export type CreateControlPanelDaemonNodeInput =[\s\S]*?\n\s*\}\);/)?.[0] ?? "";
     assert.notEqual(input.trim(), "", "the input-type regex stopped matching — refresh it");
-    assert.match(input, /nodeLocation: "employee-device";[\s\S]*?sandboxMode: "none";/);
+    assert.match(input, /nodeLocation: "user-device";[\s\S]*?sandboxMode: "none";/);
     assert.match(input, /nodeLocation\?: never;[\s\S]*?sandboxMode\?: "boxlite";/);
   });
 

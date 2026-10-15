@@ -26,8 +26,8 @@ vi.mock("../src/api", () => ({
   readTaskWorkspaceFile: vi.fn(),
   taskWorkspaceStatus: vi.fn(async () => ({ state: "idle" })),
   listTeams: vi.fn(async () => ({ teams: [] })),
-  listEmployeeAgents: vi.fn(async () => ({ agents: [] })),
-  listControlPanelEmployees: vi.fn(async () => ({ employees: [] })),
+  listUserAgents: vi.fn(async () => ({ agents: [] })),
+  listControlPanelUsers: vi.fn(async () => ({ users: [] })),
   RelayApiError: class extends Error { constructor(message: string, public status: number) { super(message); } },
 }));
 vi.mock("../src/hooks/useRelayMutations", () => ({
@@ -54,7 +54,7 @@ const ROUTINE = {
   routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "day", at: "09:00" } } }],
   routineNextRunAt: "2026-09-21T09:00:00Z",
   assignedAgentId: "agent-1",
-  assigneeEmployeeId: "fei",
+  assigneeUserId: "fei",
   linkedSessionIds: [],
   createdAt: "2026-09-01T09:00:00Z",
   updatedAt: "2026-09-19T09:04:00Z",
@@ -72,7 +72,7 @@ function renderRecord(props: Partial<Parameters<typeof TaskRecordView>[0]> = {})
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <TaskRecordView
         taskId="R-42"
-        currentUser={{ id: "u-1", username: "fei", role: "user", employeeId: "fei" }}
+        currentUser={{ id: "u-1", username: "fei", role: "user", userId: "fei" }}
         tasks={[ROUTINE]}
         onEdit={onEdit}
         onOpenThread={vi.fn()}
@@ -189,7 +189,7 @@ it("explains coalesced status triggers in the run ledger", async () => {
 });
 
 it("offers one Resume action after the rate cap pauses an automation", async () => {
-  getTask.mockResolvedValue({ ...ROUTINE, ownerEmployeeId: "fei", routineState: "paused_by_relay",
+  getTask.mockResolvedValue({ ...ROUTINE, ownerUserId: "fei", routineState: "paused_by_relay",
     routinePauseReason: "rate_limited", routineNextRunAt: undefined });
   renderRecord();
   expect(await screen.findByText("automation.paused_reasons.rate_limited")).toBeTruthy();

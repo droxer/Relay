@@ -42,7 +42,7 @@ rather than reopening accepted work with new scope.
 
 ## WIP and scheduling
 
-`RELAY_TASK_WIP_LIMIT` is a positive integer, default **5 per employee**. Scope is
+`RELAY_TASK_WIP_LIMIT` is a positive integer, default **5 per user**. Scope is
 the task's human assignee, falling back to its owner; tasks with neither share an
 unowned scope. All backend replicas must use the same configured limit.
 
@@ -52,12 +52,12 @@ Legacy event histories also recognize the first running/review/human-waiting
 transition. Unadmitted Ready inventory and routine templates do not consume WIP.
 All admitted, unfinished tasks do, including blocked work, review, and queued
 continuations. Retries use the same slot; reopening a finished task or moving WIP
-to another employee requires capacity.
+to another user requires capacity.
 
 Manual starts, scheduled starts, and task-scoped thread recovery share the event
 store admission check. PostgreSQL serializes count-and-admit with a transaction
 advisory lock; SQLite acquires its writer lock before reading snapshots. Admission
-reads unfinished snapshots for the affected employee. Execution still runs only
+reads unfinished snapshots for the affected user. Execution still runs only
 through daemon commands.
 
 At capacity, tasks remain queued with `dispatch.code=task_wip_limit`. This is not a
@@ -85,7 +85,7 @@ Metrics use the full accessible list before board filters and pagination; routin
 templates are excluded. Deleted tasks are excluded from this operational board,
 so these figures are not an immutable historical delivery ledger. Reopened tasks
 leave the completed sample until accepted again. An administrator sees aggregates
-across accessible employees, while the displayed WIP limit remains per employee.
+across accessible users, while the displayed WIP limit remains per user.
 
 ## Existing tasks and rollout
 

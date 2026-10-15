@@ -6,7 +6,7 @@
  * everywhere it appears — and across reloads — without storing anything
  * server-side. Agents and teams no longer take a per-name mark at all: their
  * default is the class glyph in IdentityMark.tsx. This stays for the human
- * initials in EmployeeAvatar and the assignee chip.
+ * initials in UserAvatar and the assignee chip.
  */
 
 /** Word boundaries used by handles (`growth.lead`, `claude-main`) and names. */

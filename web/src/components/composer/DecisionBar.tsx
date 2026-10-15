@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { EmployeeAgent } from "../../types";
-import { isEmployeeAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
+import type { UserAgent } from "../../types";
+import { isUserAgentRoutable, visualAvailabilityOf } from "../../lib/agentDisplayNames";
 import { RosterAgentItem, RosterOption, RosterTriggerValue } from "../roster/RosterOption";
 import { StateMark } from "../StateMark";
 import { availabilityPipTone } from "./availabilityTone";
@@ -26,7 +26,7 @@ import { useHandoffStore } from "@/lib/handoffStore";
 type DecisionAction = "approve" | "reject" | "rerun" | "mark_done" | "handoff";
 
 export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
-  logicalAgents: EmployeeAgent[];
+  logicalAgents: UserAgent[];
   sendDecision: (kind: "approve" | "reject" | "rerun" | "mark_done") => Promise<void>;
   sendHandoff: () => Promise<void>;
 }) {
@@ -112,7 +112,7 @@ export function DecisionBar({ logicalAgents, sendDecision, sendHandoff }: {
               </SelectTrigger>
               <SelectContent>
                 {logicalAgents.map((agent) => {
-                  const isRoutable = isEmployeeAgentRoutable(agent);
+                  const isRoutable = isUserAgentRoutable(agent);
                   const availability = visualAvailabilityOf(agent);
                   return (
                     <RosterAgentItem

@@ -7,7 +7,7 @@ import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
 import { projectReadOnly } from "../lib/projectPage";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
@@ -130,8 +130,8 @@ export function IssuesPage({
      opens the record, where every property is a full-size control. Inline
      chips there were 28px targets crowded onto one meta line. */
   const phone = useMediaQuery(PHONE_QUERY);
-  const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
-  const { teams } = useTeams(currentUser.employeeId);
+  const { agents: logicalAgents } = useUserAgents(currentUser.userId);
+  const { teams } = useTeams(currentUser.userId);
 
   // Every control is URL state, so a triage view is a link somebody can paste.
   const [filters, setFilters] = useUrlFilters(initialFilters, BACKLOG_FILTER_SPEC);
@@ -179,8 +179,8 @@ export function IssuesPage({
       && (!task.projectId || !archived.has(task.projectId) || task.projectId === projectFilter));
   }, [tasks, projects, projectFilter]);
   const queueContext = useMemo(
-    () => ({ employeeId: currentUser.employeeId ?? "", today: isoToday() }),
-    [currentUser.employeeId],
+    () => ({ userId: currentUser.userId ?? "", today: isoToday() }),
+    [currentUser.userId],
   );
   const scoped = useMemo(() => filterTasks(issues, { ...filters, status: "all" })
     .filter((task) => !projectFilter || task.projectId === projectFilter), [issues, filters, projectFilter]);

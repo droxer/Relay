@@ -15,8 +15,8 @@ import type {
   DaemonNodeMonitorRecord,
 } from "../types";
 import {
-  countEmployeeDeviceComputers,
-  nodesAssignedToEmployee,
+  countUserDeviceComputers,
+  nodesAssignedToUser,
 } from "../lib/computerNodes";
 import { useMutationError } from "../hooks/useMutationError";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -62,7 +62,7 @@ export function ComputerPage({
   const [removedIds, setRemovedIds] = useState<string[]>([]);
 
   const myNodes = useMemo<ControlPanelDaemonNodeRecord[]>(() => {
-    const merged = nodesAssignedToEmployee(nodes, currentUser.employeeId).map(
+    const merged = nodesAssignedToUser(nodes, currentUser.userId).map(
       (node): ControlPanelDaemonNodeRecord => {
         const override = overrides[node.id];
         if (!override || override.updatedAt < node.updatedAt) return node;
@@ -84,14 +84,14 @@ export function ComputerPage({
     // waiting on a refetch.
     const knownIds = new Set(merged.map((node) => node.id));
     const newlyConnected = Object.values(overrides).filter(
-      (node) => !knownIds.has(node.id) && node.employeeId === currentUser.employeeId,
+      (node) => !knownIds.has(node.id) && node.userId === currentUser.userId,
     );
     const removed = new Set(removedIds);
-    return nodesAssignedToEmployee(
+    return nodesAssignedToUser(
       [...newlyConnected, ...merged].filter((node) => !removed.has(node.id)),
-      currentUser.employeeId,
+      currentUser.userId,
     );
-  }, [nodes, currentUser.employeeId, overrides, removedIds]);
+  }, [nodes, currentUser.userId, overrides, removedIds]);
 
   const pagedNodes = useMemo(() => paginate(myNodes, page), [myNodes, page]);
   const manageExecutorsNode = myNodes.find((node) => node.id === manageExecutorsNodeId) ?? null;
@@ -103,7 +103,7 @@ export function ComputerPage({
   // count comes from the roster on screen — not the /auth/me snapshot — so a
   // connect or disconnect in this session moves it immediately.
   const computerLimit = currentUser.effectiveMaxLocalComputers;
-  const computersUsed = countEmployeeDeviceComputers(myNodes);
+  const computersUsed = countUserDeviceComputers(myNodes);
   const atLimit = computerLimit !== undefined && computersUsed >= computerLimit;
   const limitHint = atLimit
     ? t("computer.limit_reached", { used: computersUsed, limit: computerLimit })

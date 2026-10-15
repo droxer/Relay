@@ -18,8 +18,8 @@ interface CommandTemplateLauncherOptions {
   logger?: SupervisorLogger;
 }
 
-export function workspaceForEmployee(workspaceRoot: string, employeeId: string): string {
-  return resolve(workspaceRoot, safePathSegment(employeeId));
+export function workspaceForUser(workspaceRoot: string, userId: string): string {
+  return resolve(workspaceRoot, safePathSegment(userId));
 }
 
 export function workspaceForManagedNode(workspaceRoot: string, nodeId: string): string {
@@ -54,8 +54,8 @@ export class LocalDaemonLauncher implements DaemonLauncher {
       this.backendUrl,
       "--sandbox-id",
       request.node.id,
-      "--employee-id",
-      request.employee.id,
+      "--user-id",
+      request.user.id,
       "--token",
       requiredToken(request),
       "--sandbox",
@@ -67,7 +67,7 @@ export class LocalDaemonLauncher implements DaemonLauncher {
         ...process.env,
         ...request.env,
         RELAY_BACKEND_URL: this.backendUrl,
-        RELAY_EMPLOYEE_ID: request.employee.id,
+        RELAY_USER_ID: request.user.id,
         RELAY_SANDBOX_ID: request.node.id,
         RELAY_DAEMON_NODE_TOKEN: requiredToken(request),
         RELAY_WORKSPACE: request.workspacePath,
@@ -79,11 +79,11 @@ export class LocalDaemonLauncher implements DaemonLauncher {
       stdio: "inherit",
     });
     await waitForSpawn(child);
-    return managedChild(`${request.employee.id}:${request.node.id}`, this.name, child, this.logger);
+    return managedChild(`${request.user.id}:${request.node.id}`, this.name, child, this.logger);
   }
 
-  workspacePath(employeeId: string): string {
-    return workspaceForEmployee(this.workspaceRoot, employeeId);
+  workspacePath(userId: string): string {
+    return workspaceForUser(this.workspaceRoot, userId);
   }
 }
 
@@ -103,7 +103,9 @@ export class CommandTemplateLauncher implements DaemonLauncher {
 
   async start(request: DaemonLaunchRequest): Promise<ManagedDaemon> {
     const rendered = renderTemplate(this.command, {
-      employeeId: request.employee.id,
+      userId: request.user.id,
+      // Templates written before "employee" became "user" still say {{employeeId}}.
+      employeeId: request.user.id,
       sandboxId: request.node.id,
       nodeToken: requiredToken(request),
       workspacePath: request.workspacePath,
@@ -122,7 +124,7 @@ export class CommandTemplateLauncher implements DaemonLauncher {
       stdio: "inherit",
     });
     await waitForSpawn(child);
-    return managedChild(`${request.employee.id}:${request.node.id}`, this.name, child, this.logger);
+    return managedChild(`${request.user.id}:${request.node.id}`, this.name, child, this.logger);
   }
 }
 

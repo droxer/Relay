@@ -4,7 +4,7 @@ import { installedServices, type InstalledService } from './control.js';
 
 export interface InstalledComputer extends InstalledService {
   backendUrl: string;
-  employeeId: string;
+  userId: string;
   workspace: string;
 }
 
@@ -34,15 +34,15 @@ function option(argv: string[], name: string): string | undefined {
   return index >= 0 ? argv[index + 1] : undefined;
 }
 
-/** Installed computers whose service names a backend, employee and workspace; unreadable files are skipped. */
+/** Installed computers whose service names a backend, user and workspace; unreadable files are skipped. */
 export function installedComputers(platform: string, home: string): InstalledComputer[] {
   return installedServices(platform, home).flatMap(service => {
     let argv: string[];
     try { argv = serviceArguments(platform, readFileSync(service.file, 'utf8')); } catch { return []; }
     const backendUrl = option(argv, '--backend-url');
-    const employeeId = option(argv, '--employee-id');
+    const userId = option(argv, '--user-id') ?? option(argv, '--employee-id');
     const workspace = option(argv, '--workspace');
-    return backendUrl && employeeId && workspace ? [{ ...service, backendUrl, employeeId, workspace }] : [];
+    return backendUrl && userId && workspace ? [{ ...service, backendUrl, userId, workspace }] : [];
   });
 }
 

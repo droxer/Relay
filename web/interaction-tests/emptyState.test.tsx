@@ -31,12 +31,12 @@ it("offers filter recovery without offering creation on a filtered board", () =>
 
 it("starter cards fill the composer with the prompt rather than the short card label", () => {
   const onSuggestion = vi.fn();
-  render(<TranscriptEmpty selectedEmployee="employee-1" onSuggestion={onSuggestion} />);
+  render(<TranscriptEmpty selectedUser="user-1" onSuggestion={onSuggestion} />);
   fireEvent.click(screen.getByRole("button", { name: /transcript.suggestion_plan_label/ }));
   expect(onSuggestion).toHaveBeenCalledWith("transcript.suggestion_plan");
 });
 
-it("does not offer starter actions until an employee is selected", () => {
-  render(<TranscriptEmpty selectedEmployee="" onSuggestion={vi.fn()} />);
+it("does not offer starter actions until a user is selected", () => {
+  render(<TranscriptEmpty selectedUser="" onSuggestion={vi.fn()} />);
   expect(screen.queryByRole("button")).toBeNull();
 });

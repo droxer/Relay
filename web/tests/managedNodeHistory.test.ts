@@ -13,7 +13,7 @@ function managedNode(
     provider: "local-process",
     profile: "standard",
     sandboxMode: "boxlite",
-    workspacePolicy: { kind: "employee-home" },
+    workspacePolicy: { kind: "user-home" },
     generation: 1,
     conditions: [],
     createdAt: "2026-07-01T00:00:00Z",

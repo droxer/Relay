@@ -1,10 +1,10 @@
-/* Admin console — the PROVISION forms (add employee / add node), the run-mode
+/* Admin console — the PROVISION forms (add user / add node), the run-mode
    segmented control, the agent-profile drawer's runtime placement list, the
    credentials drawer rows, the auth screens, and this surface's responsive
    rules. Split out of a 1053-line admin-v2-drawers.css; the drawer shell,
    the shared form stack, and the assign-node drawer stay there. */
 
-/* ── Provision forms (add employee / add node) ────────────────────── */
+/* ── Provision forms (add user / add node) ────────────────────── */
 /* Sections separate by space alone. Each used to sit under a dotted rule
    with a micro-caps title and a right-aligned "Optional", which turned a
    short form into a stack of ruled boxes. */

@@ -4,11 +4,11 @@ import { describe, it } from "node:test";
 import { resolve } from "node:path";
 
 import {
-  employeeHandleOf,
-  handleForEmployeeId,
-  isValidEmployeeHandle,
-  normalizeEmployeeHandle,
-} from "../src/lib/employeeHandle.js";
+  userHandleOf,
+  handleForUserId,
+  isValidUserHandle,
+  normalizeUserHandle,
+} from "../src/lib/userHandle.js";
 import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
@@ -18,21 +18,21 @@ import {
 
 const readWeb = (path: string) => readFileSync(resolve("web", path), "utf8");
 
-describe("employee handle grammar", () => {
+describe("user handle grammar", () => {
   it("normalizes decoration, spacing, and case so the preview cannot lie", () => {
-    assert.equal(normalizeEmployeeHandle("  @Alice  "), "alice");
-    assert.equal(normalizeEmployeeHandle("@@bob"), "bob");
-    assert.equal(normalizeEmployeeHandle(""), "");
+    assert.equal(normalizeUserHandle("  @Alice  "), "alice");
+    assert.equal(normalizeUserHandle("@@bob"), "bob");
+    assert.equal(normalizeUserHandle(""), "");
   });
 
   it("mirrors the backend pattern in relay/api/helpers.py", () => {
     for (const good of ["alice", "a1", "alice.chen", "alice-chen", "a_b"]) {
-      assert.equal(isValidEmployeeHandle(good), true, good);
+      assert.equal(isValidUserHandle(good), true, good);
     }
     // Too short, spaces, slashes, and leading punctuation are the shapes that
     // would make two spellings look like one identity in a path or an @handle.
     for (const bad of ["a", "alice chen", "alice/bob", "-alice", ".x", "Alice"]) {
-      assert.equal(isValidEmployeeHandle(bad), false, bad);
+      assert.equal(isValidUserHandle(bad), false, bad);
     }
   });
 });
@@ -66,7 +66,7 @@ describe("provision drawers", () => {
     const source = readWeb("src/components/admin/AddNodeDrawer.tsx");
     const hint = source.slice(source.indexOf("adm-form-hint\">"));
     assert.ok(
-      !hint.includes("admin.employee_required"),
+      !hint.includes("admin.user_required"),
       "the assignment hint must be guidance, not the field's own error text",
     );
   });
@@ -74,17 +74,17 @@ describe("provision drawers", () => {
   it("says what handle will be stored when it differs from what was typed", () => {
     // The preview card is gone; the id field's hint carries the same promise
     // — `@Alice` is not what gets stored — without announcing per keystroke.
-    const source = readWeb("src/components/admin/AddEmployeeDrawer.tsx");
-    assert.match(source, /normalizedHandle !== employeeId\.trim\(\)/);
-    assert.match(source, /admin\.v2\.employee_id_normalized/);
+    const source = readWeb("src/components/admin/AddUserDrawer.tsx");
+    assert.match(source, /normalizedHandle !== userId\.trim\(\)/);
+    assert.match(source, /admin\.v2\.user_id_normalized/);
     assert.ok(!source.includes("adm-provision-preview"), "the preview card must not come back");
     assert.ok(!source.includes("aria-live"), "the hint must not announce on every character");
   });
 
   it("never offers the admin's own autofill for an account they are creating", () => {
     for (const path of [
-      "src/components/admin/AddEmployeeDrawer.tsx",
-      "src/components/admin/EditEmployeeDrawer.tsx",
+      "src/components/admin/AddUserDrawer.tsx",
+      "src/components/admin/EditUserDrawer.tsx",
     ]) {
       const source = readWeb(path);
       for (const value of ["\"username\"", "\"email\"", "\"new-password\""]) {
@@ -97,9 +97,9 @@ describe("provision drawers", () => {
   });
 
   it("focuses every field it validates", () => {
-    const source = readWeb("src/components/admin/AddEmployeeDrawer.tsx");
+    const source = readWeb("src/components/admin/AddUserDrawer.tsx");
     const chain = source.slice(source.indexOf("const firstInvalid"), source.indexOf("if (firstInvalid)"));
-    for (const field of ["employeeId", "maxLocalComputers", "username", "password"]) {
+    for (const field of ["userId", "maxLocalComputers", "username", "password"]) {
       assert.ok(chain.includes(field), `${field} is validated but never focused`);
     }
   });
@@ -107,7 +107,7 @@ describe("provision drawers", () => {
   it("marks the created computer in the list it lands in", () => {
     const admin = readWeb("src/components/AdminPage.tsx");
     assert.match(admin, /highlightedNodeId/);
-    // Both node paths switch to the Computers view, where an employee-keyed
+    // Both node paths switch to the Computers view, where a user-keyed
     // pulse is never read.
     assert.match(admin, /function handleCreateManagedNodeSuccess[\s\S]{0,400}pulseNode\(node\.id\)/);
     assert.match(admin, /function handleCreateManualNodeSuccess[\s\S]{0,600}pulseNode\(node\.id\)/);

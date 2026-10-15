@@ -1,4 +1,4 @@
-"""Validation for creating an agent. Shared by the employee and admin routes."""
+"""Validation for creating an agent. Shared by the user and admin routes."""
 
 from __future__ import annotations
 
@@ -18,25 +18,25 @@ class AgentCreationError(ValueError):
 
 
 def computer_nodes(
-    ctx: Any, target_computer_id: str, employee_id: str
+    ctx: Any, target_computer_id: str, user_id: str
 ) -> list[dict[str, Any]]:
-    """All node records for this employee's computer (online or not).
+    """All node records for this user's computer (online or not).
 
-    The ``employeeId`` filter is what keeps one employee from creating an
+    The ``userId`` filter is what keeps one user from creating an
     agent on a computer that genuinely belongs to someone else — matching on
     computerId alone would not be enough, since a caller could still name
-    another employee's computerId directly in the request body.
+    another user's computerId directly in the request body.
     """
     return [
         node
         for node in ctx.registry.monitor_nodes()
         if computer_id(node) == target_computer_id
-        and node.get("employeeId") == employee_id
+        and node.get("userId") == user_id
     ]
 
 
-def create_agent_for_employee(
-    ctx: Any, supervisor_employee_id: str, body: dict[str, Any]
+def create_agent_for_user(
+    ctx: Any, supervisor_user_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     if "skillPolicy" in body:
         raise AgentCreationError(
@@ -47,7 +47,7 @@ def create_agent_for_employee(
     target_computer_id = (body.get("computerId") or "").strip()
     if not target_computer_id:
         raise AgentCreationError("computer_required", "computerId is required.")
-    nodes = computer_nodes(ctx, target_computer_id, supervisor_employee_id)
+    nodes = computer_nodes(ctx, target_computer_id, supervisor_user_id)
     if not nodes:
         raise AgentCreationError(
             "computer_not_found", "Computer not found.", status=404
@@ -65,7 +65,7 @@ def create_agent_for_employee(
             f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.",
         )
     agent = ctx.agent_store.create_agent(
-        supervisor_employee_id,
+        supervisor_user_id,
         {
             **{
                 key: value

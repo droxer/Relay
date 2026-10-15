@@ -13,6 +13,7 @@ from sqlalchemy import JSON, Column, MetaData, Text, Uuid, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import make_url
 
+from ..core.legacy_names import upgrade_legacy_names
 from ..core.ids import new_database_id, now_iso
 from .task_numbering import NUMBERED_EVENT, apply_task_number
 from ..core.models import (
@@ -27,7 +28,7 @@ DEFAULT_RELAY_DATA_DIR = REPO_ROOT / ".relay"
 SESSION_WORKSPACE_LAYOUT_THREAD = "thread"
 
 # Every database-backed store registers its tables here. One MetaData is what
-# lets foreign keys cross aggregate boundaries (agents -> employees, placements
+# lets foreign keys cross aggregate boundaries (agents -> users, placements
 # -> daemon_nodes) and lets `tests/unit/test_schema_drift.py` compare the
 # migrated schema against the declared one.
 #
@@ -126,7 +127,7 @@ def shared_engine(database_url: str) -> Any:
     Stores used to build an Engine each, so eight connection pools pointed at
     the same database and no operation could span two stores in one
     transaction. Sharing the Engine is what lets `transaction()` make a
-    multi-store write -- deleting an employee, say -- atomic.
+    multi-store write -- deleting a user, say -- atomic.
     """
     with _ENGINE_LOCK:
         engine = _ENGINES.get(database_url)
@@ -153,7 +154,7 @@ def create_all_tables(engine: Any) -> None:
     """Create every Relay table on `engine`.
 
     Always creates the whole schema, never one store's slice: foreign keys now
-    cross store boundaries, so `agents` cannot be created without `employees`
+    cross store boundaries, so `agents` cannot be created without `users`
     also being registered on the shared MetaData. The import is deferred to
     here because `relay.persistence.schema` imports the stores that import this
     module.
@@ -173,7 +174,7 @@ def store_transaction(engine: Any) -> Any:
     Every store method opens one of these instead of `engine.begin()`. On its
     own it behaves identically. Wrapped in an outer `store_transaction` on the
     same engine, the inner ones enlist in it rather than committing separately,
-    which is what makes a cascade that spans stores -- deleting an employee and
+    which is what makes a cascade that spans stores -- deleting a user and
     its agents, placements, teams, and nodes -- atomic.
 
     The bookkeeping is thread-local, so a transaction on one thread never leaks
@@ -255,7 +256,7 @@ def _format_iso(value: datetime | None) -> str | None:
 
 def _read_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        return upgrade_legacy_names(json.load(handle))
 
 
 def _write_json(path: Path, value: Any, mode: int | None = None) -> None:
@@ -297,7 +298,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         raise KeyError(path)
     return [
-        json.loads(line)
+        upgrade_legacy_names(json.loads(line))
         for line in path.read_text(encoding="utf-8").splitlines()
         if line
     ]
@@ -393,8 +394,8 @@ def materialize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
     if created.get("workspaceLayout"):
         session["workspaceLayout"] = created["workspaceLayout"]
-    if created.get("ownerEmployeeId"):
-        session["ownerEmployeeId"] = created["ownerEmployeeId"]
+    if created.get("ownerUserId"):
+        session["ownerUserId"] = created["ownerUserId"]
     if created.get("ownerAgentId"):
         session["ownerAgentId"] = created["ownerAgentId"]
         # The room starts as whoever the thread started with; `@` mentions grow
@@ -685,10 +686,10 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     if "routineEnabled" in created:
         # Only a legacy record says this; v2 routines carry routineState.
         task["routineEnabled"] = bool(created["routineEnabled"])
-    if created.get("ownerEmployeeId"):
-        task["ownerEmployeeId"] = created["ownerEmployeeId"]
-    if created.get("assigneeEmployeeId"):
-        task["assigneeEmployeeId"] = created["assigneeEmployeeId"]
+    if created.get("ownerUserId"):
+        task["ownerUserId"] = created["ownerUserId"]
+    if created.get("assigneeUserId"):
+        task["assigneeUserId"] = created["assigneeUserId"]
     if created.get("projectId"):
         task["projectId"] = created["projectId"]
     if created.get("dueDate"):
@@ -738,14 +739,14 @@ def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
         "title",
         "description",
         "priority",
-        "assigneeEmployeeId",
+        "assigneeUserId",
         "dueDate",
         "acceptancePolicy",
         "collaborationStyle",
     ):
         if key not in event or event[key] is None:
             continue
-        if key in ("assigneeEmployeeId", "dueDate", "collaborationStyle") and event[key] == "":
+        if key in ("assigneeUserId", "dueDate", "collaborationStyle") and event[key] == "":
             task.pop(key, None)
         else:
             task[key] = event[key]
@@ -834,8 +835,8 @@ def _apply_task_status(task: dict[str, Any], event: dict[str, Any]) -> None:
 
 def _apply_task_deleted(task: dict[str, Any], event: dict[str, Any]) -> None:
     task["deletedAt"] = event["timestamp"]
-    if event.get("actorEmployeeId"):
-        task["deletedByEmployeeId"] = event["actorEmployeeId"]
+    if event.get("actorUserId"):
+        task["deletedByUserId"] = event["actorUserId"]
 
 
 def _apply_task_session_linked(task: dict[str, Any], event: dict[str, Any]) -> None:

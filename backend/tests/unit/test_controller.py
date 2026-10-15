@@ -56,7 +56,7 @@ def test_fallback_thread_delete_serializes_concurrent_task_mutations(monkeypatch
         assert not errors
         result = tasks.get_task(task["id"])
         assert result.get("deletedAt")
-        assert result["deletedByEmployeeId"] == "alice"
+        assert result["deletedByUserId"] == "alice"
         assert result["linkedSessionIds"] == []
         assert not result.get("dispatchClaim")
         assert sessions.get_session(new_thread["id"])["id"] == new_thread["id"]

@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { AgentTeam, EmployeeAgent, LogicalAgentAvailability } from "../../types";
+import type { AgentTeam, UserAgent, LogicalAgentAvailability } from "../../types";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { AgentStateBadge } from "../AgentStateBadge";
 import { IdentityMark } from "../IdentityMark";
@@ -20,7 +20,7 @@ import { ProfileImage } from "../ProfileImagePicker";
 // narrowed view. This lets a caller synthesize a placeholder for a value that
 // references an agent/team no longer present in the fetched roster (deleted or
 // scoped out) instead of leaking a raw `agent:<id>` value.
-export type AgentView = Pick<EmployeeAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">;
+export type AgentView = Pick<UserAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">;
 export type TeamView = Pick<AgentTeam, "name" | "profileImageUrl" | "members" | "lead" | "enabled">;
 
 // Status is carried by the glyph's corner pip (the designed agent-state
@@ -34,7 +34,7 @@ export function availabilityTone(availability: LogicalAgentAvailability): "tone-
   return "tone-warn";
 }
 
-export function effectiveAgentAvailability(agent: Pick<EmployeeAgent, "enabled" | "availability">): LogicalAgentAvailability {
+export function effectiveAgentAvailability(agent: Pick<UserAgent, "enabled" | "availability">): LogicalAgentAvailability {
   return agent.enabled ? agent.availability : "offline";
 }
 

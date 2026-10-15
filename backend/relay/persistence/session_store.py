@@ -137,8 +137,8 @@ class LocalSessionStore:
                         "workspaceLayout", SESSION_WORKSPACE_LAYOUT_THREAD
                     ),
                     **(
-                        {"ownerEmployeeId": payload["ownerEmployeeId"]}
-                        if payload.get("ownerEmployeeId")
+                        {"ownerUserId": payload["ownerUserId"]}
+                        if payload.get("ownerUserId")
                         else {}
                     ),
                     **(
@@ -362,7 +362,7 @@ class LocalSessionStore:
                     "id": session_id,
                     "taskGoal": snapshot.get("taskGoal"),
                     "title": snapshot.get("title"),
-                    "ownerEmployeeId": snapshot.get("ownerEmployeeId"),
+                    "ownerUserId": snapshot.get("ownerUserId"),
                     "deletedBy": deleted_by,
                     "deletedAt": now_iso(),
                 },
@@ -397,18 +397,18 @@ class LocalSessionStore:
         return [s for s in self.list_sessions() if s.get("deletionRequestedAt")][offset:offset + limit]
 
     def list_session_snapshots(
-        self, *, owner_employee_id: str, project_id: str | None = None
+        self, *, owner_user_id: str, project_id: str | None = None
     ) -> list[dict[str, Any]]:
         return [
             session
             for session in self.list_session_summaries(
-                owner_employee_id=owner_employee_id, limit=2**31
+                owner_user_id=owner_user_id, limit=2**31
             )
             if project_id is None or session.get("projectId") == project_id
         ]
 
     def list_session_summaries(
-        self, *, owner_employee_id: str | None = None, limit: int = 100
+        self, *, owner_user_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         if not self.sessions_dir.exists():
             return []
@@ -419,11 +419,11 @@ class LocalSessionStore:
             and path != self._agent_runs_index_dir()
             and self._snapshot_path(path.name).exists()
         ]
-        if owner_employee_id is not None:
+        if owner_user_id is not None:
             summaries = [
                 item
                 for item in summaries
-                if item.get("ownerEmployeeId") == owner_employee_id
+                if item.get("ownerUserId") == owner_user_id
             ]
         return sorted(summaries, key=lambda item: item["updatedAt"], reverse=True)[
             : max(1, limit)
@@ -617,7 +617,7 @@ class DatabaseSessionStore:
             ForeignKey("projects.id", ondelete="RESTRICT", name="fk_sessions_project"),
             nullable=True,
         ),
-        Column("owner_employee_id", entity_uuid_type(), nullable=True),
+        Column("owner_user_id", entity_uuid_type(), nullable=True),
         Column("title", Text, nullable=True),
         Column("task_goal", Text, nullable=False),
         Column("participants", json_type(), nullable=False),
@@ -636,7 +636,7 @@ class DatabaseSessionStore:
         Index("ix_sessions_updated_at", "updated_at"),
         Index("ix_sessions_created_at", "created_at"),
         Index("ix_sessions_project_id", "project_id"),
-        Index("ix_sessions_owner_updated_at", "owner_employee_id", "updated_at"),
+        Index("ix_sessions_owner_updated_at", "owner_user_id", "updated_at"),
         Index(
             "ix_sessions_pending_deletion",
             "updated_at",
@@ -694,7 +694,7 @@ class DatabaseSessionStore:
         # is permanently deleted so token-usage history survives.
         Column("session_id", entity_uuid_type(), nullable=False),
         Column("run_id", Text, nullable=False),
-        Column("owner_employee_id", entity_uuid_type(), nullable=True),
+        Column("owner_user_id", entity_uuid_type(), nullable=True),
         Column("task_goal", Text, nullable=True),
         Column("input_tokens", BigInteger, nullable=False),
         Column("output_tokens", BigInteger, nullable=False),
@@ -714,7 +714,7 @@ class DatabaseSessionStore:
             "session_id", "run_id", name="uq_session_run_token_usage_session_run"
         ),
         Index("ix_session_run_token_usage_completed_at", "completed_at"),
-        Index("ix_session_run_token_usage_owner_employee_id", "owner_employee_id"),
+        Index("ix_session_run_token_usage_owner_user_id", "owner_user_id"),
     )
     agent_runs = Table(
         "session_agent_runs",
@@ -744,7 +744,7 @@ class DatabaseSessionStore:
         ),
         Column("file_key", Text, primary_key=True),
         Column("artifact_id", Text, nullable=True),
-        Column("owner_employee_id", entity_uuid_type(), nullable=True),
+        Column("owner_user_id", entity_uuid_type(), nullable=True),
         Column("workspace_path", Text, nullable=False),
         # A missing or unreadable createdAt ranks oldest (the epoch), matching
         # helpers.workspace_artifacts, so the column is never NULL.
@@ -752,7 +752,7 @@ class DatabaseSessionStore:
         Column("artifact", json_type(), nullable=False),
         Index(
             "ix_session_workspace_files_owner_recent",
-            "owner_employee_id",
+            "owner_user_id",
             "created_at",
         ),
         Index(
@@ -769,7 +769,7 @@ class DatabaseSessionStore:
         Column("session_id", entity_uuid_type(), nullable=False),
         Column("task_goal", Text, nullable=False),
         Column("title", Text, nullable=True),
-        Column("owner_employee_id", entity_uuid_type(), nullable=True),
+        Column("owner_user_id", entity_uuid_type(), nullable=True),
         Column("deleted_by", Text, nullable=True),
         Column("deleted_at", DateTime(timezone=True), nullable=False),
         UniqueConstraint("session_id", name="uq_session_tombstones_session"),
@@ -885,8 +885,8 @@ class DatabaseSessionStore:
                         "workspaceLayout", SESSION_WORKSPACE_LAYOUT_THREAD
                     ),
                     **(
-                        {"ownerEmployeeId": payload["ownerEmployeeId"]}
-                        if payload.get("ownerEmployeeId")
+                        {"ownerUserId": payload["ownerUserId"]}
+                        if payload.get("ownerUserId")
                         else {}
                     ),
                     **(
@@ -1396,7 +1396,7 @@ class DatabaseSessionStore:
                 session_id=session_pk,
                 task_goal=snapshot.get("taskGoal") or "",
                 title=snapshot.get("title"),
-                owner_employee_id=snapshot.get("ownerEmployeeId"),
+                owner_user_id=snapshot.get("ownerUserId"),
                 deleted_by=deleted_by,
                 deleted_at=_parse_iso(now_iso()),
             )
@@ -1549,14 +1549,14 @@ class DatabaseSessionStore:
         return list(rows)
 
     def list_session_summaries(
-        self, *, owner_employee_id: str | None = None, limit: int = 100
+        self, *, owner_user_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         # Project JSON fields in SQL: completed run logs never cross the wire.
         fields = (
             "daemonNodeId",
             "managedNodeId",
             "workspacePath",
-            "ownerEmployeeId",
+            "ownerUserId",
             "ownerAgentId",
             "teamId",
             "projectId",
@@ -1601,9 +1601,9 @@ class DatabaseSessionStore:
                 f"(SELECT COUNT(DISTINCT COALESCE(NULLIF({value('workspaceRelativePath')}, ''), NULLIF({value('path')}, ''), {value('id')})) FROM {elements}({artifacts}) a WHERE {value('kind')} = 'workspace_file')"
             ).label("artifactCount"),
         ).order_by(self.sessions.c.updated_at.desc(), self.sessions.c.id.desc())
-        if owner_employee_id is not None:
+        if owner_user_id is not None:
             statement = statement.where(
-                self.sessions.c.owner_employee_id == owner_employee_id
+                self.sessions.c.owner_user_id == owner_user_id
             )
         statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:
@@ -1623,9 +1623,9 @@ class DatabaseSessionStore:
         return compact_completed_run_output(self, older_than=older_than, limit=limit)
 
     def list_session_snapshots(
-        self, *, owner_employee_id: str, project_id: str | None = None
+        self, *, owner_user_id: str, project_id: str | None = None
     ) -> list[dict[str, Any]]:
-        """One employee's threads as projections, newest first, with no events.
+        """One user's threads as projections, newest first, with no events.
 
         For views that need runs and artifacts but not the log: owner and
         project filter in SQL through their indexes, and completed run logs
@@ -1633,7 +1633,7 @@ class DatabaseSessionStore:
         """
         statement = (
             select(self.sessions.c.snapshot, self.sessions.c.version)
-            .where(self.sessions.c.owner_employee_id == owner_employee_id)
+            .where(self.sessions.c.owner_user_id == owner_user_id)
             .order_by(self.sessions.c.updated_at.desc(), self.sessions.c.id.desc())
         )
         if project_id is not None:
@@ -1646,7 +1646,7 @@ class DatabaseSessionStore:
         ]
 
     def list_artifact_summaries(
-        self, *, owner_employee_id: str | None = None,
+        self, *, owner_user_id: str | None = None,
         workspace_path: str | None = None, limit: int = 200
     ) -> list[dict[str, Any]]:
         # One indexed range read over the per-file projection: regenerated
@@ -1657,7 +1657,7 @@ class DatabaseSessionStore:
             select(
                 files.c.artifact,
                 files.c.session_id,
-                files.c.owner_employee_id,
+                files.c.owner_user_id,
                 files.c.workspace_path,
                 sessions.c.title,
                 sessions.c.task_goal,
@@ -1671,8 +1671,8 @@ class DatabaseSessionStore:
             )
             .limit(max(1, limit))
         )
-        if owner_employee_id is not None:
-            statement = statement.where(files.c.owner_employee_id == owner_employee_id)
+        if owner_user_id is not None:
+            statement = statement.where(files.c.owner_user_id == owner_user_id)
         if workspace_path is not None:
             statement = statement.where(files.c.workspace_path == workspace_path)
         with store_transaction(self.engine) as conn:
@@ -1691,8 +1691,8 @@ class DatabaseSessionStore:
                     "sessionId": str(row["session_id"]),
                     "sessionTitle": row["title"],
                     "taskGoal": row["task_goal"],
-                    "ownerEmployeeId": str(row["owner_employee_id"])
-                    if row["owner_employee_id"]
+                    "ownerUserId": str(row["owner_user_id"])
+                    if row["owner_user_id"]
                     else None,
                     "workspacePath": row["workspace_path"],
                     "sessionUpdatedAt": _format_iso(
@@ -1733,10 +1733,10 @@ class DatabaseSessionStore:
             total = sum(int(row[1] or 0) for row in status_rows)
             last_24h = sum(int(row[2] or 0) for row in status_rows)
             last_7d = sum(int(row[3] or 0) for row in status_rows)
-            employee_rows = conn.execute(
-                select(self.sessions.c.owner_employee_id, func.count().label("count"))
-                .where(self.sessions.c.owner_employee_id.is_not(None))
-                .group_by(self.sessions.c.owner_employee_id)
+            user_rows = conn.execute(
+                select(self.sessions.c.owner_user_id, func.count().label("count"))
+                .where(self.sessions.c.owner_user_id.is_not(None))
+                .group_by(self.sessions.c.owner_user_id)
                 .order_by(text("count DESC"))
                 .limit(5)
             ).all()
@@ -1778,9 +1778,9 @@ class DatabaseSessionStore:
                 }
                 for offset in range(day_window)
             ],
-            "topEmployees": [
-                {"employeeId": str(employee_id), "sessionCount": int(count)}
-                for employee_id, count in employee_rows
+            "topUsers": [
+                {"userId": str(user_id), "sessionCount": int(count)}
+                for user_id, count in user_rows
             ],
         }
 
@@ -1810,7 +1810,7 @@ class DatabaseSessionStore:
             {
                 "sessionId": row["session_id"],
                 "runId": row["run_id"],
-                "ownerEmployeeId": row["owner_employee_id"],
+                "ownerUserId": row["owner_user_id"],
                 "taskGoal": row["task_goal"] or row["session_task_goal"],
                 "agent": row["agent"],
                 "reported": bool(row["reported"]),
@@ -2121,7 +2121,7 @@ def session_to_row(
         "id": database_id or session["id"],
         "workspace_path": session["workspacePath"],
         "project_id": session.get("projectId"),
-        "owner_employee_id": session.get("ownerEmployeeId"),
+        "owner_user_id": session.get("ownerUserId"),
         "title": session.get("title"),
         "task_goal": session["taskGoal"],
         "participants": session.get("participants") or [],
@@ -2173,7 +2173,7 @@ def workspace_file_row(
         "session_id": session_pk,
         "file_key": file_key,
         "artifact_id": artifact.get("id"),
-        "owner_employee_id": session.get("ownerEmployeeId"),
+        "owner_user_id": session.get("ownerUserId"),
         "workspace_path": session.get("workspacePath") or "",
         "created_at": _parse_optional_iso(artifact.get("createdAt"))
         or WORKSPACE_FILE_UNDATED,
@@ -2253,7 +2253,7 @@ def session_run_token_usage_to_row(
         "id": new_database_id(),
         "session_id": session_pk,
         "run_id": run_id,
-        "owner_employee_id": record["ownerEmployeeId"],
+        "owner_user_id": record["ownerUserId"],
         "task_goal": record["taskGoal"],
         "input_tokens": record["input"],
         "output_tokens": record["output"],
@@ -2290,7 +2290,7 @@ def run_token_usage_record(
     return {
         "sessionId": session["id"],
         "runId": run["id"],
-        "ownerEmployeeId": session.get("ownerEmployeeId"),
+        "ownerUserId": session.get("ownerUserId"),
         "taskGoal": session.get("taskGoal"),
         "agent": run.get("agent"),
         "reported": reported,

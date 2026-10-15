@@ -30,7 +30,7 @@ export interface AgentRun {
   dependsOnWorkItemIds?: string[];
   workKind?: CollaborationWorkKind;
   agent: AgentName;
-  /** Logical (employee) agent that ran this step. `agent` is only its executor
+  /** Logical (user) agent that ran this step. `agent` is only its executor
    * kind, which several named agents can share — this is the identity. */
   logicalAgentId?: string;
   /** Computer that executed this run; retained for legacy thread affinity. */
@@ -87,8 +87,8 @@ export interface HumanDecision {
   targetAgent?: AgentName;
   /** Stable logical-agent identity when the decision targets a named agent. */
   targetAgentId?: string;
-  /** Employee who made the decision, for governance/audit attribution. */
-  actorEmployeeId?: string;
+  /** User who made the decision, for governance/audit attribution. */
+  actorUserId?: string;
 }
 
 export type CollaborationPurpose = "accomplish" | "discuss" | "review";
@@ -237,8 +237,8 @@ export interface RelaySession {
   managedNodeId?: string;
   /** Stable Computer identity; daemon node IDs may be replaced. */
   computerId?: string;
-  /** Employee who owns this session; their agent runs the work on their behalf. */
-  ownerEmployeeId?: string;
+  /** User who owns this session; their agent runs the work on their behalf. */
+  ownerUserId?: string;
   /** Named Team that originated this session, retained as immutable provenance. */
   teamId?: string;
   /** Optional human-set label for the conversation; falls back to taskGoal when unset. */
@@ -309,7 +309,7 @@ export type RelayEvent =
       computerId?: string;
       daemonNodeId?: string;
       managedNodeId?: string;
-      ownerEmployeeId?: string;
+      ownerUserId?: string;
       teamId?: string;
       taskGoal: string;
       participants: string[];
@@ -320,7 +320,7 @@ export type RelayEvent =
       sessionId: string;
       timestamp: string;
       text: string;
-      actorEmployeeId?: string;
+      actorUserId?: string;
     }
   | {
       id: string;
@@ -361,7 +361,7 @@ export type RelayEvent =
       dependsOnWorkItemIds?: string[];
       workKind?: CollaborationWorkKind;
       agent: AgentName;
-      /** Logical (employee) agent dispatched for this run; absent on legacy
+      /** Logical (user) agent dispatched for this run; absent on legacy
        * runs and workflow dispatches that name only an executor kind. */
       logicalAgentId?: string;
       placementId?: string;
@@ -538,7 +538,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
     ...(created.workspaceLayout ? { workspaceLayout: created.workspaceLayout } : {}),
     ...(created.daemonNodeId ? { daemonNodeId: created.daemonNodeId } : {}),
     ...(created.managedNodeId ? { managedNodeId: created.managedNodeId } : {}),
-    ...(created.ownerEmployeeId ? { ownerEmployeeId: created.ownerEmployeeId } : {}),
+    ...(created.ownerUserId ? { ownerUserId: created.ownerUserId } : {}),
     ...(created.teamId ? { teamId: created.teamId } : {}),
     taskGoal: created.taskGoal,
     participants: created.participants,

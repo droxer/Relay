@@ -21,32 +21,32 @@ def bootstrap(client: TestClient) -> None:
     )
 
 
-def employee(client: TestClient, employee_id: str) -> None:
+def user(client: TestClient, user_id: str) -> None:
     assert (
         client.post(
-            "/api/v1/admin/employees",
+            "/api/v1/admin/users",
             json={
-                "employeeId": employee_id,
-                "username": employee_id,
+                "userId": user_id,
+                "username": user_id,
                 "password": "userpass",
-                "displayName": employee_id.title(),
+                "displayName": user_id.title(),
             },
         ).status_code
         == 201
     )
 
 
-def _agent(client: TestClient, employee_id: str) -> dict:
+def _agent(client: TestClient, user_id: str) -> dict:
     # An offline birth-certificate computer: enough to mint a computerId
     # without auto-placing the agent, so callers that manually place it
     # afterward don't hit a duplicate-placement conflict.
     node = client.app.state.registry.register(
         {
-            "sandboxId": f"test_node_{employee_id}",
-            "employeeId": employee_id,
-            "workspaceId": f"machine-{employee_id}",
+            "sandboxId": f"test_node_{user_id}",
+            "userId": user_id,
+            "workspaceId": f"machine-{user_id}",
             "token": "node_token",
-            "workspacePath": f"/workspace/{employee_id}",
+            "workspacePath": f"/workspace/{user_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "capabilities": ["thread-workspaces"],
@@ -56,7 +56,7 @@ def _agent(client: TestClient, employee_id: str) -> dict:
     response = client.post(
         "/api/v1/admin/agents",
         json={
-            "supervisorEmployeeId": employee_id,
+            "supervisorUserId": user_id,
             "displayName": "Builder",
             "executorKind": "codex",
             "defaultRole": "implementer",
@@ -67,14 +67,14 @@ def _agent(client: TestClient, employee_id: str) -> dict:
     return response.json()["agent"]
 
 
-def test_employee_updates_and_removes_agent_and_team_profile_images(
+def test_user_updates_and_removes_agent_and_team_profile_images(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
+        user(client, "alice")
         agent = _agent(client, "alice")
         client.app.state.agent_placement_store.create_placement(
             agent, "test_node_alice"
@@ -82,7 +82,7 @@ def test_employee_updates_and_removes_agent_and_team_profile_images(
         team = client.post(
             "/api/v1/admin/teams",
             json={
-                "ownerEmployeeId": "alice",
+                "ownerUserId": "alice",
                 "name": "Delivery",
                 "leadAgentId": agent["id"],
                 "memberAgentIds": [agent["id"]],
@@ -126,13 +126,13 @@ def test_employee_updates_and_removes_agent_and_team_profile_images(
         assert client.get(agent_url).status_code == 404
 
 
-def test_employee_cannot_update_another_employees_profile_image(monkeypatch) -> None:
+def test_user_cannot_update_another_users_profile_image(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
-        employee(client, "bob")
+        user(client, "alice")
+        user(client, "bob")
         agent = _agent(client, "bob")
         assert client.post("/api/v1/auth/logout").status_code == 200
         assert (
@@ -154,7 +154,7 @@ def test_profile_image_endpoint_rejects_unsupported_data(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
+        user(client, "alice")
         agent = _agent(client, "alice")
 
         response = client.put(
@@ -180,7 +180,7 @@ def _admin_team(client: TestClient, agent: dict, **extra) -> dict:
     response = client.post(
         "/api/v1/admin/teams",
         json={
-            "ownerEmployeeId": agent["supervisorEmployeeId"],
+            "ownerUserId": agent["supervisorUserId"],
             "name": "Delivery",
             "leadAgentId": agent["id"],
             "memberAgentIds": [agent["id"]],
@@ -196,7 +196,7 @@ def test_choosing_a_preset_replaces_and_deletes_an_uploaded_image(monkeypatch) -
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
+        user(client, "alice")
         agent = _agent(client, "alice")
         team = _admin_team(client, agent)
         _login_as(client, "alice")
@@ -225,7 +225,7 @@ def test_preset_endpoint_rejects_unknown_and_wrong_kind_presets(monkeypatch) -> 
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
+        user(client, "alice")
         agent = _agent(client, "alice")
 
         for preset in (
@@ -246,11 +246,11 @@ def test_agents_and_teams_can_be_created_with_a_preset(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
+        user(client, "alice")
         node = client.app.state.registry.register(
             {
                 "sandboxId": "test_node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -305,11 +305,11 @@ def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         bootstrap(client)
-        employee(client, "alice")
+        user(client, "alice")
         node = client.app.state.registry.register(
             {
                 "sandboxId": "test_node_alice",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspaceId": "machine-alice",
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
@@ -322,7 +322,7 @@ def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
         created = client.post(
             "/api/v1/admin/agents",
             json={
-                "supervisorEmployeeId": "alice",
+                "supervisorUserId": "alice",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
                 "computerId": computer_id(node),

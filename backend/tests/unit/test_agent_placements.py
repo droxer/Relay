@@ -134,7 +134,7 @@ def test_first_managed_attachment_is_idempotent_across_store_instances(
     phantom = first_store.create_placement(agent, "node-missing")
     target = {
         "id": "node-ready",
-        "employeeId": "alice",
+        "userId": "alice",
         "managedNodeId": "computer-ready",
     }
 
@@ -179,8 +179,8 @@ def test_first_managed_attachment_allows_only_one_competing_computer(
     )
     phantom = first_store.create_placement(agent, "node-missing")
     targets = (
-        {"id": "node-a", "employeeId": "alice", "managedNodeId": "computer-a"},
-        {"id": "node-b", "employeeId": "alice", "managedNodeId": "computer-b"},
+        {"id": "node-a", "userId": "alice", "managedNodeId": "computer-a"},
+        {"id": "node-b", "userId": "alice", "managedNodeId": "computer-b"},
     )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -496,8 +496,8 @@ def test_database_placement_store_normalizes_legacy_owner_snapshot(
         },
     )
     placement = placements.create_placement(agent, "node_a")
-    legacy = {**placement, "employeeId": "alice"}
-    legacy.pop("supervisorEmployeeId")
+    legacy = {**placement, "userId": "alice"}
+    legacy.pop("supervisorUserId")
     with placements.engine.begin() as conn:
         conn.execute(
             placements.placements.update()
@@ -505,7 +505,7 @@ def test_database_placement_store_normalizes_legacy_owner_snapshot(
             .values(snapshot=legacy)
         )
 
-    assert placements.get_placement(placement["id"])["supervisorEmployeeId"] == "alice"
+    assert placements.get_placement(placement["id"])["supervisorUserId"] == "alice"
 
 
 @pytest.mark.parametrize("database", [False, True])
@@ -533,7 +533,7 @@ def test_rebinding_to_an_unmanaged_node_clears_the_computer_identity(
     )
     assert managed["managedNodeId"] == "computer_one"
 
-    # A placement bound to an employee device belongs to no managed Computer.
+    # A placement bound to a user device belongs to no managed Computer.
     # Leaving computer_one behind would let that Computer's sync reclaim it.
     device = placements.rebind_placement(original["id"], "device_node")
 
@@ -577,10 +577,10 @@ def test_rebind_repairs_a_stale_computer_identity_on_the_same_node(
 def test_placement_denormalized_agent_fields_cannot_drift(
     tmp_path: Path, store_kind: str
 ) -> None:
-    """Placements copy supervisorEmployeeId and executorKind from the agent and
+    """Placements copy supervisorUserId and executorKind from the agent and
     never refresh them. That is only safe while neither is patchable, so pin it
     here: making either mutable must fail this test, not silently leave every
-    placement pointing at the wrong employee or executor."""
+    placement pointing at the wrong user or executor."""
     store = (
         LocalAgentStore(tmp_path / "local")
         if store_kind == "local"
@@ -596,7 +596,7 @@ def test_placement_denormalized_agent_fields_cannot_drift(
     )
 
     for field, value in (
-        ("supervisorEmployeeId", "bob"),
+        ("supervisorUserId", "bob"),
         ("executorKind", "codex"),
     ):
         with pytest.raises(ValueError, match="Unsupported agent field"):
@@ -622,7 +622,7 @@ def test_placement_records_the_computer_identity(tmp_path) -> None:
     )
     node = {
         "id": "node-1",
-        "employeeId": "alice",
+        "userId": "alice",
         "workspaceId": "machine-a",
         "workspacePath": "/w",
     }

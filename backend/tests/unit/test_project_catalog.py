@@ -17,7 +17,7 @@ def update(current, members, *, disabled=(), misplaced=(), lead="lead", foreign=
         dict(expectedVersion=1, members=members, leadAgentId=lead),
         agent_store=SimpleNamespace(get_agent=lambda agent_id: dict(
             id=agent_id, enabled=agent_id not in disabled,
-            supervisorEmployeeId="bob" if agent_id in foreign else "alice")),
+            supervisorUserId="bob" if agent_id in foreign else "alice")),
         placement_store=SimpleNamespace(list_placements=lambda *, agent_id: [dict(
             desiredState="active", computerId="other" if agent_id in misplaced else "computer")] ),
     )[0]

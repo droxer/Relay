@@ -42,7 +42,7 @@ def test_addressed_agent_placement_follows_replacement_runtime_on_same_computer(
         [
             {
                 "id": "runtime_new",
-                "employeeId": "alice",
+                "userId": "alice",
                 "workspaceId": "machine-1",
             }
         ],

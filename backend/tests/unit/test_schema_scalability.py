@@ -98,7 +98,7 @@ def workspace_file(artifact_id: str, name: str, created_at: str) -> dict:
 def test_artifact_index_reads_the_projection_not_session_snapshots(tmp_path):
     store = session_store(tmp_path)
     session = store.create_session(
-        {"taskGoal": "Files", "workspacePath": "/work", "ownerEmployeeId": "alice"}
+        {"taskGoal": "Files", "workspacePath": "/work", "ownerUserId": "alice"}
     )
     for i, name in enumerate(("a.txt", "b.txt", "a.txt")):
         store.append_event(
@@ -111,7 +111,7 @@ def test_artifact_index_reads_the_projection_not_session_snapshots(tmp_path):
         )
     statements = capture_sql(store.engine)
 
-    artifacts = store.list_artifact_summaries(owner_employee_id="alice", limit=10)
+    artifacts = store.list_artifact_summaries(owner_user_id="alice", limit=10)
 
     assert [a["id"] for a in artifacts] == ["f2", "f1"]
     assert artifacts[0]["sessionTitle"] is None and artifacts[0]["taskGoal"] == "Files"
@@ -123,7 +123,7 @@ def test_artifact_index_reads_the_projection_not_session_snapshots(tmp_path):
 def test_artifact_index_keeps_the_newest_copy_when_events_arrive_out_of_order(tmp_path):
     store = session_store(tmp_path)
     session = store.create_session(
-        {"taskGoal": "Files", "workspacePath": "/work", "ownerEmployeeId": "alice"}
+        {"taskGoal": "Files", "workspacePath": "/work", "ownerUserId": "alice"}
     )
     for artifact in (
         workspace_file("new", "a.txt", "2026-10-10T00:00:09.000Z"),
@@ -179,13 +179,13 @@ def task_store(tmp_path):
 
 def test_task_lists_filter_deleted_tasks_on_the_derived_column(tmp_path):
     store = task_store(tmp_path)
-    kept = store.create_task({"title": "Keep", "ownerEmployeeId": "alice"})
-    gone = store.create_task({"title": "Gone", "ownerEmployeeId": "alice"})
+    kept = store.create_task({"title": "Keep", "ownerUserId": "alice"})
+    gone = store.create_task({"title": "Gone", "ownerUserId": "alice"})
     store.delete_task(gone["id"])
     statements = capture_sql(store.engine)
 
-    summaries = store.list_task_summaries(employee_id="alice")
-    full = store.list_tasks(employee_id="alice")
+    summaries = store.list_task_summaries(user_id="alice")
+    full = store.list_tasks(user_id="alice")
 
     assert [t["id"] for t in summaries] == [kept["id"]]
     assert [t["id"] for t in full] == [kept["id"]]
@@ -201,7 +201,7 @@ def daemon_store(tmp_path):
     store.register_node(
         {
             "id": "sbx_alice",
-            "employeeId": "alice",
+            "userId": "alice",
             "workspacePath": "/workspace/alice",
             "workspaceId": "repo:relay",
             "status": "ready",
@@ -429,7 +429,7 @@ def test_dashboard_counters_share_one_pass_over_sessions(tmp_path):
     store = session_store(tmp_path)
     for owner, status_event in (("alice", "session.completed"), ("bob", None)):
         session = store.create_session(
-            {"taskGoal": owner, "workspacePath": "/work", "ownerEmployeeId": owner}
+            {"taskGoal": owner, "workspacePath": "/work", "ownerUserId": owner}
         )
         if status_event:
             store.append_event(
@@ -442,7 +442,7 @@ def test_dashboard_counters_share_one_pass_over_sessions(tmp_path):
     assert len(statements) == 3
     assert metrics["total"] == 2 and metrics["last24h"] == 2 and metrics["last7d"] == 2
     assert metrics["statusCounts"] == {"completed": 1, "running": 1}
-    assert {e["employeeId"] for e in metrics["topEmployees"]} == {"alice", "bob"}
+    assert {e["userId"] for e in metrics["topUsers"]} == {"alice", "bob"}
     assert metrics["dailyCounts"][-1]["count"] == 2
     assert metrics["dailyCounts"][-1]["completed"] == 1
 
@@ -469,7 +469,7 @@ def test_storage_report_counts_rows_and_inline_content(tmp_path):
 def test_daemon_reported_files_reach_the_artifact_index(tmp_path):
     store = session_store(tmp_path)
     session = store.create_session(
-        {"taskGoal": "Files", "workspacePath": "/work", "ownerEmployeeId": "alice"}
+        {"taskGoal": "Files", "workspacePath": "/work", "ownerUserId": "alice"}
     )
 
     store.index_workspace_artifact(
@@ -478,5 +478,5 @@ def test_daemon_reported_files_reach_the_artifact_index(tmp_path):
         b"# report",
     )
 
-    [artifact] = store.list_artifact_summaries(owner_employee_id="alice")
+    [artifact] = store.list_artifact_summaries(owner_user_id="alice")
     assert artifact["id"] == "gen" and artifact["bytes"] == 8

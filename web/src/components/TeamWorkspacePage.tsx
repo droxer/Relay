@@ -6,7 +6,7 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { deleteTeamProfileImage, getWorkspaceBrief, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { useComputerOptions } from "../hooks/useComputerOptions";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
@@ -53,14 +53,14 @@ function parseTeamTab(value: string | null): TeamPageTab {
 
 /** The computer a team lives on, resolved the way the roster editor does.
  *  Shared by the profile (which edits against it) and the page's facts. */
-function useTeamComputer(team: AgentTeam, employeeId?: string) {
-  const { agents: employeeAgents } = useEmployeeAgents(employeeId);
+function useTeamComputer(team: AgentTeam, userId?: string) {
+  const { agents: userAgents } = useUserAgents(userId);
   const agents = useMemo(
-    () => employeeAgents.filter((agent) => !agent.deletedAt),
-    [employeeAgents],
+    () => userAgents.filter((agent) => !agent.deletedAt),
+    [userAgents],
   );
   const computerId = teamComputerId(team, agents);
-  const { options: computers } = useComputerOptions(team.ownerEmployeeId, true);
+  const { options: computers } = useComputerOptions(team.ownerUserId, true);
   const computer = computers.find((option) => option.computerId === computerId);
   const computerLabel = computer?.label || agents
     .flatMap((agent) => agent.placements)
@@ -71,12 +71,12 @@ function useTeamComputer(team: AgentTeam, employeeId?: string) {
 
 function TeamProfile({
   team,
-  employeeId,
+  userId,
   facts,
   onDeleted,
 }: {
   team: AgentTeam;
-  employeeId?: string;
+  userId?: string;
   /** The record's properties, shown under the identity in the rail. */
   facts: readonly RecordFact[];
   onDeleted: () => void;
@@ -85,7 +85,7 @@ function TeamProfile({
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
   const { updateTeamMutation, deleteTeamMutation } = useRelayMutations();
-  const { agents, computerId } = useTeamComputer(team, employeeId);
+  const { agents, computerId } = useTeamComputer(team, userId);
   const [editing, setEditing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(team.name);
@@ -500,12 +500,12 @@ function TeamProfile({
 
 export function TeamWorkspacePage({
   team,
-  employeeId,
+  userId,
   onOpenThread,
   onDeleted,
 }: {
   team: AgentTeam;
-  employeeId?: string;
+  userId?: string;
   onOpenThread: (sessionId: string) => void;
   onDeleted: () => void;
 }) {
@@ -517,7 +517,7 @@ export function TeamWorkspacePage({
     enabled: pageTab !== "profile",
     refetchInterval: pageTab === "activities" ? TEAM_BRIEF_POLL_MS : false,
   });
-  const { computer, computerLabel } = useTeamComputer(team, employeeId);
+  const { computer, computerLabel } = useTeamComputer(team, userId);
   /* The record's properties, one list for both tabs: in the identity rail on
      Profile, in the record's right column on Activity. Availability leads —
      it is the fact you came to check; the id is a reference coordinate and
@@ -605,7 +605,7 @@ export function TeamWorkspacePage({
       <RecordLayout facts={pageTab === "profile" ? [] : teamFacts} label={t("workspace.band_team_label")}>
       <div className="workspace-body">
         <TabsContent value="profile">
-          <TeamProfile team={team} employeeId={employeeId} facts={teamFacts} onDeleted={onDeleted} />
+          <TeamProfile team={team} userId={userId} facts={teamFacts} onDeleted={onDeleted} />
         </TabsContent>
         <TabsContent value="activities">
           {briefQuery.isLoading && !briefQuery.data ? (

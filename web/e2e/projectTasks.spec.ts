@@ -5,13 +5,13 @@ for (const mobile of [false, true]) {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
     const project = { id: "launch", name: "Autumn launch", description: "Ship the autumn release: landing page, pricing, and notes.",
-      ownerEmployeeId: "u", computerId: "c", enabled: true,
+      ownerUserId: "u", computerId: "c", enabled: true,
       members: [], leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
     const tasks = ["backlog", "assigned", "running", "review", "done", "blocked"].map((status, i) => ({
       id: `task_${i}abcdef`, title: ["Write the release brief", "Polish onboarding", "Build the launch page", "Review final copy", "Choose the release date", "Resolve the deployment issue"][i],
       projectId: "launch", status, workflowStage: status === "blocked" ? "running" : status,
       description: "", priority: "normal", isRoutine: false,
-      linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp,
+      linkedSessionIds: [], ownerUserId: "u", createdAt: stamp, updatedAt: stamp,
     }));
     // Another project's task must never reach this project's board.
     const elsewhere = { ...tasks[0], id: "task_elsewhere", title: "Another project's task", projectId: "other" };
@@ -19,7 +19,7 @@ for (const mobile of [false, true]) {
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [...tasks, elsewhere], sandboxes: [], skills: [] };
-      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
       if (path.endsWith("/tasks") && route.request().method() === "POST") {
         const input = route.request().postDataJSON();
         created.push(input);
@@ -125,13 +125,13 @@ test("creating the first project preserves a global task draft", async ({ page }
   const stamp = "2026-09-01T00:00:00Z";
   const projects: any[] = [];
   const tasks: any[] = [];
-  const node = { activeRuns: [], agents: [], queuedCommandCount: 0, stale: false, id: "node", computerId: "computer", employeeId: "u", displayName: "Work computer", capabilities: ["project-workspaces"], online: true, status: "ready", workspacePath: "/workspace" };
+  const node = { activeRuns: [], agents: [], queuedCommandCount: 0, stale: false, id: "node", computerId: "computer", userId: "u", displayName: "Work computer", capabilities: ["project-workspaces"], online: true, status: "ready", workspacePath: "/workspace" };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [], agents: [], teams: [], nodes: [node], projects, tasks, sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/projects") && route.request().method() === "POST") {
-      const project = { ...route.request().postDataJSON(), id: "first", ownerEmployeeId: "u", computerId: "computer", enabled: true, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/first", createdAt: stamp, updatedAt: stamp };
+      const project = { ...route.request().postDataJSON(), id: "first", ownerUserId: "u", computerId: "computer", enabled: true, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/first", createdAt: stamp, updatedAt: stamp };
       projects.push(project); body = { project };
     }
     if (path.endsWith("/tasks") && route.request().method() === "POST") {
@@ -163,13 +163,13 @@ for (const mobile of [false, true]) {
   test(`issue thread stays in Issues (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
-    const project = { id: "p", name: "Launch", ownerEmployeeId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
-    const session = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerEmployeeId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
-    const task = { id: "t", title: "Release notes", projectId: "p", status: "done", workflowStage: "done", description: "", priority: "normal", isRoutine: false, linkedSessionIds: ["s"], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] };
+    const project = { id: "p", name: "Launch", ownerUserId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
+    const session = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerUserId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
+    const task = { id: "t", title: "Release notes", projectId: "p", status: "done", workflowStage: "done", description: "", priority: "normal", isRoutine: false, linkedSessionIds: ["s"], ownerUserId: "u", createdAt: stamp, updatedAt: stamp, events: [], activity: [] };
     await page.route("**/api/**", async route => {
       const path = new URL(route.request().url()).pathname;
       let body: unknown = { sessions: [session], tasks: [task], projects: [project], agents: [], teams: [], nodes: [], sandboxes: [], skills: [] };
-      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
       if (path.endsWith("/threads/s")) body = session;
       if (path.endsWith("/tasks/t")) body = task;
       if (path.endsWith("/events")) body = { events: [] };
@@ -229,12 +229,12 @@ for (const mobile of [false, true]) {
    bounce the reader back to the project. */
 test("sidenav Threads opens the thread list while a project room is active", async ({ page }) => {
   const stamp = "2026-09-01T00:00:00Z";
-  const project = { id: "p", name: "Launch", ownerEmployeeId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
-  const room = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerEmployeeId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
+  const project = { id: "p", name: "Launch", ownerUserId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
+  const room = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerUserId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [room], tasks: [], projects: [project], agents: [], teams: [], nodes: [], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/s")) body = room;
     if (path.endsWith("/events")) body = { events: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -248,7 +248,7 @@ test("sidenav Threads opens the thread list while a project room is active", asy
 
 test("renaming without a runtime node recovers from a concurrent project edit", async ({ page }) => {
   const stamp = "2026-09-01T00:00:00Z";
-  let project = { id: "edit-project", name: "Original project", ownerEmployeeId: "u", computerId: "node:gone",
+  let project = { id: "edit-project", name: "Original project", ownerUserId: "u", computerId: "node:gone",
     enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project",
     workspaceSubpath: "projects/edit-project", createdAt: stamp, updatedAt: stamp };
   const patches: Array<{ expectedVersion: number; name: string }> = [];
@@ -256,7 +256,7 @@ test("renaming without a runtime node recovers from a concurrent project edit", 
     const path = new URL(route.request().url()).pathname;
     let status = 200;
     let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Editor", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Editor", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/projects/edit-project")) {
       if (route.request().method() === "PATCH") {
         const input = route.request().postDataJSON();
@@ -295,11 +295,11 @@ test("renaming without a runtime node recovers from a concurrent project edit", 
 test("edits a task's priority, status and due date from its row", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const stamp = "2026-09-01T00:00:00Z";
-  const project = { id: "launch", name: "Autumn launch", ownerEmployeeId: "u", computerId: "c", enabled: true,
+  const project = { id: "launch", name: "Autumn launch", ownerUserId: "u", computerId: "c", enabled: true,
     members: [], leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
   const task = { id: "task_0abcdef", title: "Write the release brief", projectId: "launch", status: "backlog", workflowStage: "backlog",
     description: "", priority: "normal", isRoutine: false,
-    linkedSessionIds: [], ownerEmployeeId: "u", createdAt: stamp, updatedAt: stamp };
+    linkedSessionIds: [], ownerUserId: "u", createdAt: stamp, updatedAt: stamp };
   // One agent placed on the project's computer, so the row may offer it.
   const atlas = { id: "agent-atlas", displayName: "Atlas", executorKind: "codex", enabled: true, availability: "ready",
     placements: [{ computerId: "c", desiredState: "active" }], deletedAt: null, createdAt: stamp, updatedAt: stamp };
@@ -308,7 +308,7 @@ test("edits a task's priority, status and due date from its row", async ({ page 
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let body: unknown = { sessions: [], agents: [atlas], teams: [], nodes: [], projects: [project], tasks: [task], sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", employeeId: "u", username: "Designer", role: "employee", theme: "light", language: "en" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
     if (path.endsWith(`/tasks/${task.id}`) && request.method() === "PATCH") {
       const input = request.postDataJSON();
       patches.push(input);

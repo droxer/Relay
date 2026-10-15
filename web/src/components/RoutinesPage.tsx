@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
-import { useEmployeeAgents } from "../hooks/useEmployeeAgents";
+import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
@@ -64,8 +64,8 @@ interface RoutinesPageProps {
 }
 
 export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenRecord, tasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
-  const { agents: logicalAgents } = useEmployeeAgents(currentUser.employeeId);
-  const { teams } = useTeams(currentUser.employeeId);
+  const { agents: logicalAgents } = useUserAgents(currentUser.userId);
+  const { teams } = useTeams(currentUser.userId);
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
   const {
@@ -168,7 +168,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
       collaborationStyle: task.collaborationStyle ?? null,
       description: task.description,
       priority: task.priority,
-      assigneeEmployeeId: task.assigneeEmployeeId ?? task.ownerEmployeeId ?? currentUser.employeeId ?? currentUser.username,
+      assigneeUserId: task.assigneeUserId ?? task.ownerUserId ?? currentUser.userId ?? currentUser.username,
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
@@ -463,7 +463,7 @@ export function RoutinesPage({ projects = [], recordTaskId, recordRunId, onOpenR
           onDeleted={() => onOpenRecord(null)}
         />
       ) : null}
-      <ProjectDrawer open={creatingProject} computers={nodes} employeeId={currentUser.employeeId} layer={drawerRecord ? 2 : 1}
+      <ProjectDrawer open={creatingProject} computers={nodes} userId={currentUser.userId} layer={drawerRecord ? 2 : 1}
         onClose={() => setCreatingProject(false)}
         onSaved={(project) => setForm((current) => current ? { ...current, projectId: project.id } : current)} />
     </section>

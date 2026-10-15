@@ -1,4 +1,4 @@
-import type { AgentName, EmployeeAgent, LogicalAgentAvailability } from "../types.js";
+import type { AgentName, UserAgent, LogicalAgentAvailability } from "../types.js";
 
 function fallbackExecutorLabel(agent: AgentName): string {
   return agent.charAt(0).toUpperCase() + agent.slice(1);
@@ -11,8 +11,8 @@ export function isLogicalAgentRoutable(
   return availability === "ready" || availability === "busy";
 }
 
-/** An employee agent must be active as well as backed by a routable placement. */
-export function isEmployeeAgentRoutable(agent: EmployeeAgent): boolean {
+/** A user agent must be active as well as backed by a routable placement. */
+export function isUserAgentRoutable(agent: UserAgent): boolean {
   return agent.enabled && !agent.deletedAt && isLogicalAgentRoutable(agent.availability);
 }
 
@@ -23,34 +23,34 @@ export function isEmployeeAgentRoutable(agent: EmployeeAgent): boolean {
  * unpickable agent "ready". Being inactive outranks it.
  *
  * This is a display concern only — never route on it. Routing asks
- * `isEmployeeAgentRoutable`, which is a stricter question: `busy` reads as
+ * `isUserAgentRoutable`, which is a stricter question: `busy` reads as
  * "busy" here but still takes work.
  */
-export function visualAvailabilityOf(agent: EmployeeAgent): LogicalAgentAvailability | "inactive" {
+export function visualAvailabilityOf(agent: UserAgent): LogicalAgentAvailability | "inactive" {
   return !agent.enabled || agent.deletedAt ? "inactive" : agent.availability;
 }
 
 /** Keep the current selection when possible, otherwise choose the first agent
  * that can actually accept work. Never fall back to an unavailable agent. */
 export function preferredRoutableAgent(
-  logicalAgents: readonly EmployeeAgent[],
+  logicalAgents: readonly UserAgent[],
   preferredAgentId: string | null,
-): EmployeeAgent | undefined {
+): UserAgent | undefined {
   return logicalAgents.find(
-    (agent) => agent.id === preferredAgentId && isEmployeeAgentRoutable(agent),
-  ) ?? logicalAgents.find(isEmployeeAgentRoutable);
+    (agent) => agent.id === preferredAgentId && isUserAgentRoutable(agent),
+  ) ?? logicalAgents.find(isUserAgentRoutable);
 }
 
-function routableScore(agent: EmployeeAgent): number {
+function routableScore(agent: UserAgent): number {
   if (agent.availability === "ready") return 0;
   if (agent.availability === "busy") return 1;
   return 2;
 }
 
-/** Resolve the employee-configured label for an executor kind. */
+/** Resolve the user-configured label for an executor kind. */
 export function displayNameForExecutor(
   executorKind: AgentName | undefined,
-  logicalAgents: readonly EmployeeAgent[],
+  logicalAgents: readonly UserAgent[],
 ): string {
   if (!executorKind) return "";
   const map = buildExecutorDisplayNameMap(logicalAgents);
@@ -59,7 +59,7 @@ export function displayNameForExecutor(
 
 /** One display name per executor kind, preferring routable logical agents. */
 export function buildExecutorDisplayNameMap(
-  logicalAgents: readonly EmployeeAgent[],
+  logicalAgents: readonly UserAgent[],
 ): Partial<Record<AgentName, string>> {
   const map: Partial<Record<AgentName, string>> = {};
   const sorted = [...logicalAgents]
@@ -86,7 +86,7 @@ export function labelForExecutor(
 /** Display name per logical agent id — the only way to tell two named agents
  * that share an executor kind apart. */
 export function buildLogicalAgentNameMap(
-  logicalAgents: readonly EmployeeAgent[],
+  logicalAgents: readonly UserAgent[],
 ): Record<string, string> {
   const map: Record<string, string> = {};
   for (const agent of logicalAgents) {
@@ -111,7 +111,7 @@ export function labelForAgentRun(
  * from the map — their default profile image is the name monogram, which needs
  * no lookup. */
 export function buildLogicalAgentImageMap(
-  logicalAgents: readonly EmployeeAgent[],
+  logicalAgents: readonly UserAgent[],
 ): Record<string, string> {
   const map: Record<string, string> = {};
   for (const agent of logicalAgents) {

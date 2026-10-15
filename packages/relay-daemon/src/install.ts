@@ -10,11 +10,12 @@ import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
 import { installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { captureRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
+import { isUserIdFlag } from './legacy-names.js';
 
 interface InstallOptions {
   backendUrl: string;
   sandboxId: string;
-  employeeId: string;
+  userId: string;
   workspace: string;
   foreground: boolean;
   verbose: boolean;
@@ -28,16 +29,17 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   let foreground = false;
   let verbose = false;
   for (let i = 0; i < args.length; i++) {
-    const key = args[i]!;
+    // Install commands copied before the user rename still say --employee-id.
+    const key = isUserIdFlag(args[i]!) ? '--user-id' : args[i]!;
     if (key === '--foreground') { foreground = true; continue; }
     if (key === '--verbose') { verbose = true; continue; }
-    if (!['--backend-url', '--sandbox-id', '--employee-id', '--workspace', '--runtime-env-file', '--local-permission-policy'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
+    if (!['--backend-url', '--sandbox-id', '--user-id', '--workspace', '--runtime-env-file', '--local-permission-policy'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
     const value = args[++i];
     if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${key}`);
     values.set(key, value);
   }
   const deviceSetup = !values.has('--sandbox-id');
-  for (const key of deviceSetup ? ['--backend-url'] : ['--backend-url', '--sandbox-id', '--employee-id', '--workspace']) {
+  for (const key of deviceSetup ? ['--backend-url'] : ['--backend-url', '--sandbox-id', '--user-id', '--workspace']) {
     if (!values.has(key)) throw new Error(`Missing ${key}`);
   }
   const backendUrl = values.get('--backend-url')!;
@@ -45,8 +47,8 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('Backend must use HTTPS (HTTP is allowed for loopback only).');
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Backend URL must be an origin.');
   const sandboxId = values.get('--sandbox-id') ?? '';
-  const employeeId = values.get('--employee-id') ?? '';
-  for (const [key, value] of [['sandbox-id', sandboxId], ['employee-id', employeeId]]) {
+  const userId = values.get('--user-id') ?? '';
+  for (const [key, value] of [['sandbox-id', sandboxId], ['user-id', userId]]) {
     if (!deviceSetup && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value!)) throw new Error(`Invalid --${key}`);
   }
   const workspace = values.get('--workspace') ?? '';
@@ -55,7 +57,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   if (localPermissionPolicy !== 'native' && localPermissionPolicy !== 'trusted') throw new Error('Local permission policy must be native or trusted.');
   const runtimeEnvFile = values.get('--runtime-env-file');
   if (runtimeEnvFile && !isAbsolute(runtimeEnvFile)) throw new Error('--runtime-env-file must be an absolute path.');
-  return { backendUrl, sandboxId, employeeId, workspace, foreground, verbose, deviceSetup, localPermissionPolicy, ...(runtimeEnvFile ? { runtimeEnvFile } : {}) };
+  return { backendUrl, sandboxId, userId, workspace, foreground, verbose, deviceSetup, localPermissionPolicy, ...(runtimeEnvFile ? { runtimeEnvFile } : {}) };
 }
 
 const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -120,7 +122,7 @@ async function reusableComputer(installed: InstalledComputer[], backendUrl: stri
     .sort((a, b) => statSync(b.file).mtimeMs - statSync(a.file).mtimeMs);
   for (const computer of newestFirst) {
     const credentials = join(homedir(), '.relay', 'daemon-nodes', computer.id, 'credentials');
-    const token = readDaemonNodeToken(credentials, computer.employeeId);
+    const token = readDaemonNodeToken(credentials, computer.userId);
     if (!token) continue;
     try {
       const response = await fetch(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(computer.id)}/auth-check`), {
@@ -176,7 +178,7 @@ async function install(): Promise<void> {
     // Re-running the install command upgrades this computer in place: same node, same token, new release.
     console.log('Relay is already installed for this workspace; upgrading it.');
     options.sandboxId = existing.computer.id;
-    options.employeeId = existing.computer.employeeId;
+    options.userId = existing.computer.userId;
     process.env.RELAY_DAEMON_NODE_TOKEN = existing.token;
   } else if (options.deviceSetup) {
     const authorized = await authorizeComputer({
@@ -189,7 +191,7 @@ async function install(): Promise<void> {
       },
     });
     options.sandboxId = authorized.sandboxId;
-    options.employeeId = authorized.employeeId;
+    options.userId = authorized.userId;
     process.env.RELAY_DAEMON_NODE_TOKEN = authorized.token;
   }
   if (!process.env.RELAY_DAEMON_NODE_TOKEN?.trim()) throw new Error('A node token is required.');
@@ -214,7 +216,7 @@ async function install(): Promise<void> {
   try {
     report = await runRelayDaemonDoctor({
       backendUrl: options.backendUrl, sandboxId: options.sandboxId,
-      employeeId: options.employeeId, workspacePath: options.workspace,
+      userId: options.userId, workspacePath: options.workspace,
       sandbox: 'none', allowHostAgentExecution: true, stateDir,
       token: nodeToken,
       signal: AbortSignal.timeout(60_000),
@@ -226,13 +228,13 @@ async function install(): Promise<void> {
   if (failures.length) throw new Error(failures.map(check => `${check.name}: ${check.detail}`).join('\n'));
   // Persist the already-issued token only after read-only authentication succeeds.
   // The running daemon owns registration; reinstalling never marks a live node stopped.
-  ensureDaemonNodeToken({ credentialDirectory: join(stateDir, 'credentials'), employeeId: options.employeeId, token: nodeToken });
+  ensureDaemonNodeToken({ credentialDirectory: join(stateDir, 'credentials'), userId: options.userId, token: nodeToken });
   const runtimeProfile = profile ? writeRuntimeProfile(stateDir, profile) : undefined;
   delete process.env.RELAY_DAEMON_NODE_TOKEN;
   delete process.env.RELAY_DAEMON_TOKEN;
   const cli = join(dirname(fileURLToPath(import.meta.url)), 'cli.js');
   const argv = [process.execPath, cli, '--backend-url', options.backendUrl, '--sandbox-id', options.sandboxId,
-    '--employee-id', options.employeeId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
+    '--user-id', options.userId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
     '--local-permission-policy', options.localPermissionPolicy, ...(runtimeProfile ? ['--runtime-profile', runtimeProfile] : [])];
   const binDir = join(homedir(), '.local', 'bin');
   const wrapper = installLauncher(binDir, 'relay-daemon', cli);

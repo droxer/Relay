@@ -2,8 +2,8 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { assignSkill, revokeSkillAssignment } from "../api";
-import type { AgentTeam, EmployeeAgent, SkillDetail } from "../types";
-import { EMPLOYEE_AGENTS_QUERY_KEY } from "../hooks/useEmployeeAgents";
+import type { AgentTeam, UserAgent, SkillDetail } from "../types";
+import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { labelForExecutor } from "../lib/agentDisplayNames";
 import { Button } from "@/components/ui/button";
@@ -42,13 +42,13 @@ export function ShareSkillDrawer({
   skill,
   agents,
   teams,
-  employeeId,
+  userId,
   onClose,
 }: {
   skill: SkillDetail;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   teams: AgentTeam[];
-  employeeId?: string;
+  userId?: string;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -63,7 +63,7 @@ export function ShareSkillDrawer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const targetTypes = {
-    employee: { targetType: "employee" as const },
+    user: { targetType: "user" as const },
     team: { targetType: "team" as const },
     agent: { targetType: "agent" as const },
   };
@@ -76,8 +76,8 @@ export function ShareSkillDrawer({
     (agent) => agent.enabled && !assigned.has(`agent:${agent.id}`),
   );
   const teamCandidates = teams.filter((team) => !assigned.has(`team:${team.id}`));
-  const scopeTarget = employeeId && !assigned.has(`employee:${employeeId}`)
-    ? `employee:${employeeId}`
+  const scopeTarget = userId && !assigned.has(`user:${userId}`)
+    ? `user:${userId}`
     : null;
   function toggle(id: string) {
     setSelected((value) =>
@@ -87,7 +87,7 @@ export function ShareSkillDrawer({
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
-      queryClient.invalidateQueries({ queryKey: [EMPLOYEE_AGENTS_QUERY_KEY] }),
+      queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] }),
     ]);
   }
   async function submit() {
@@ -97,7 +97,7 @@ export function ShareSkillDrawer({
     try {
       await Promise.all(selected.map((target) => {
         const separator = target.indexOf(":");
-        const targetType = target.slice(0, separator) as "employee" | "team" | "agent";
+        const targetType = target.slice(0, separator) as "user" | "team" | "agent";
         const targetId = target.slice(separator + 1);
         return assignSkill(skill.id, { ...targetTypes[targetType], targetId, mode: "optional", pin: "stable", invocation: "implicit" });
       }));
@@ -139,7 +139,7 @@ export function ShareSkillDrawer({
             under Granted with their Revoke. */}
         {scopeTarget ? (
           <section>
-            <h3>{t("skills.employee_scope")}</h3>
+            <h3>{t("skills.user_scope")}</h3>
             <div className="skill-target-list">
               <TargetRow
                 checked={selected.includes(scopeTarget)}
@@ -197,7 +197,7 @@ export function ShareSkillDrawer({
               {assignments.map((assignment) => {
                 const agent = assignment.targetType === "agent" ? agents.find((a) => a.id === assignment.targetId) : undefined;
                 const team = assignment.targetType === "team" ? teams.find((item) => item.id === assignment.targetId) : undefined;
-                const label = assignment.targetType === "employee"
+                const label = assignment.targetType === "user"
                   ? t("skills.all_current_future_agents")
                   : agent?.displayName ?? team?.name ?? assignment.targetId;
                 return (

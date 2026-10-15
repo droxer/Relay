@@ -15,7 +15,7 @@ import { truncateId } from "../lib/adminHelpers";
 import type {
   CurrentUser,
   DaemonNodeMonitorRecord,
-  EmployeeAgent,
+  UserAgent,
   ProjectMember,
   ProjectRecord,
   RelayTaskListItem,
@@ -67,7 +67,7 @@ export function ProjectWorkspacePage({
   onBack,
 }: {
   project: ProjectRecord;
-  agents: EmployeeAgent[];
+  agents: UserAgent[];
   /* The shell already polls the task list; a second observer on the same
      query key with its own interval polled the whole table twice over for
      one project's lanes. */

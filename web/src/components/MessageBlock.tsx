@@ -236,7 +236,7 @@ export const MessageBlock = memo(function MessageBlock({
     return (
       <article
         className={`msg msg-agent ${message.streaming ? "streaming" : ""} ${grouped ? "grouped" : ""}`}
-        aria-label={t("message.agent_header", { employee: agentName })}
+        aria-label={t("message.agent_header", { user: agentName })}
       >
         {/* Who is speaking: mark, name, and time on one header row, with the
             answer flush beneath it at the full column width. A continuation

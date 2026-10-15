@@ -27,12 +27,12 @@ def test_blocking_preserves_stage_and_age_across_rework(store):
     started = task["startedAt"]
     task = status(store, task, "review")
     task = status(
-        store, task, "blocked", reason="Missing sign-off", actorEmployeeId="alice"
+        store, task, "blocked", reason="Missing sign-off", actorUserId="alice"
     )
     assert task["workflowStage"] == "review"
     assert task["blockedFromStatus"] == "review"
     assert task["blockerReason"] == "Missing sign-off"
-    assert task["blockerOwnerEmployeeId"] == "alice"
+    assert task["blockerOwnerUserId"] == "alice"
     assert task["blockedAt"]
     assert "finishedAt" not in task
     task = status(store, task, "review")
@@ -82,8 +82,8 @@ def test_wip_admission_counts_review_waiting_and_blocked_but_not_ready(
     store, monkeypatch
 ):
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
-    first = store.create_task({"title": "First", "ownerEmployeeId": "alice"})
-    second = store.create_task({"title": "Second", "ownerEmployeeId": "alice"})
+    first = store.create_task({"title": "First", "ownerUserId": "alice"})
+    second = store.create_task({"title": "Second", "ownerUserId": "alice"})
     claimed = claim(store, first)
     assert claimed["startedAt"]
     for state in ["review", "waiting_for_human", "blocked", "assigned"]:
@@ -104,7 +104,7 @@ def test_wip_admission_counts_review_waiting_and_blocked_but_not_ready(
     )
     status(store, first, "done")
     assert claim(store, second)["startedAt"]
-    other = store.create_task({"title": "Other employee", "ownerEmployeeId": "bob"})
+    other = store.create_task({"title": "Other user", "ownerUserId": "bob"})
     assert claim(store, other)["startedAt"]
 
 
@@ -126,7 +126,7 @@ def test_concurrent_wip_admission_is_atomic(tmp_path, monkeypatch):
     url = f"sqlite:///{tmp_path}/concurrent.db"
     store = DatabaseTaskStore(url, create_schema=True)
     tasks = [
-        store.create_task({"title": str(i), "ownerEmployeeId": "alice"})
+        store.create_task({"title": str(i), "ownerUserId": "alice"})
         for i in range(4)
     ]
 

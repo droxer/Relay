@@ -11,7 +11,7 @@ def _register(app, node_id: str, *, setup: bool = True) -> dict:
     return app.state.registry.register(
         {
             "sandboxId": node_id,
-            "employeeId": "alice",
+            "userId": "alice",
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],

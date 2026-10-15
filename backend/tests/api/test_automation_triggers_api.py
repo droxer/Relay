@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.automations.model import LEGACY_FIELDS
 
-from test_tasks import _bootstrap_admin, _create_agent, _create_user, _login
+from test_tasks import _bootstrap_admin, _create_agent, _create_account, _login
 
 WEBHOOK = {"kind": "webhook"}
 ON_BLOCKED = {"kind": "task_event", "on": "status_changed", "filters": {"toStatus": "blocked"}}
@@ -20,14 +20,14 @@ def _client(monkeypatch, root: str) -> tuple[TestClient, dict]:
     monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
     client = TestClient(create_app(root))
     _bootstrap_admin(client)
-    _create_user(client, "alice", employee_id="alice")
+    _create_account(client, "alice", user_id="alice")
     return client, _create_agent(client, "alice")
 
 
 def _routine(client: TestClient, agent: dict, **extra) -> dict:
     response = client.post("/api/v1/tasks", json={
         "title": "Triage failures", "description": "Look into it.",
-        "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice",
+        "ownerUserId": "alice", "assigneeUserId": "alice",
         "assignedAgentId": agent["id"], "isRoutine": True, "routineState": "active",
         "routineTriggers": DAILY_9, **extra,
     })
@@ -69,13 +69,13 @@ def test_invalid_trigger_is_a_400(monkeypatch) -> None:
         client, agent = _client(monkeypatch, root)
         response = client.post("/api/v1/tasks", json={
             "title": "Bad", "isRoutine": True, "assignedAgentId": agent["id"],
-            "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice", "assigneeUserId": "alice",
             "routineTriggers": [{"kind": "task_event", "on": "completed"}],
         })
         assert response.status_code == 400
         missing = client.post("/api/v1/tasks", json={
             "title": "Bad", "isRoutine": True, "assignedAgentId": agent["id"],
-            "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice",
+            "ownerUserId": "alice", "assigneeUserId": "alice",
             "routineTriggers": [DAILY_9[0], {"kind": "task_event", "on": "created", "filters": {"projectId": "nope"}}],
         })
         assert missing.status_code == 400
@@ -87,7 +87,7 @@ def test_scope_filters_require_owner_access_on_create_and_patch(monkeypatch) -> 
     from issue_projects import project_for_agents
     with TemporaryDirectory() as root:
         client, alice_agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         bob_agent = _create_agent(client, "bob")
         project = project_for_agents(client.app.state.project_store, "bob", [bob_agent])
         routine = _routine(client, alice_agent, routineTriggers=[ON_BLOCKED])
@@ -137,7 +137,7 @@ def test_reenable_rate_limited_automation_starts_a_fresh_window(monkeypatch) -> 
 def test_scope_team_and_agent_filters_use_owner_not_admin_access(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         foreign = _create_agent(client, "bob")
         team = client.app.state.team_store.create_team("bob", {
             "name": "Bob team", "leadAgentId": foreign["id"], "memberAgentIds": [foreign["id"]],
@@ -212,7 +212,7 @@ def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch)
 
 def _post(client: TestClient, **body):
     return client.post("/api/v1/tasks", json={
-        "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice", **body,
+        "ownerUserId": "alice", "assigneeUserId": "alice", **body,
     })
 
 
@@ -309,7 +309,7 @@ def test_legacy_routine_reads_as_v2_and_patches_keep_its_schedule(monkeypatch) -
         legacy = client.app.state.task_store.create_task({
             "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineType": "task",
             "routineNextRunDate": "2030-01-02", "routineEnabled": True,
-            "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerEmployeeId": "alice",
+            "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": "alice",
         })
         current = client.get(f"/api/v1/tasks/{legacy['id']}").json()
         assert current["routineState"] == "active"
@@ -353,7 +353,7 @@ def test_admin_settings_report_the_triggers_capability(monkeypatch) -> None:
         assert client.get("/api/v1/admin/settings").json()["capabilities"]["automationTriggers"] is False
 
 
-def test_employees_learn_the_triggers_capability_from_auth_me(monkeypatch) -> None:
+def test_users_learn_the_triggers_capability_from_auth_me(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, _ = _client(monkeypatch, root)
         _login(client, "alice")
@@ -367,8 +367,8 @@ def _legacy_routine(client: TestClient, agent: dict) -> dict:
     return client.app.state.task_store.create_task({
         "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineType": "task",
         "routineNextRunDate": "2030-01-02", "routineEnabled": True, "routineTrigger": {"kind": "schedule"},
-        "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerEmployeeId": "alice",
-        "assigneeEmployeeId": "alice",
+        "assignedAgent": agent["executorKind"], "assignedAgentId": agent["id"], "ownerUserId": "alice",
+        "assigneeUserId": "alice",
     })
 
 
@@ -389,8 +389,8 @@ def test_rejected_start_of_a_legacy_routine_answers_without_legacy_fields(monkey
         # is answered while preparing, before any automation path.
         legacy = client.app.state.task_store.create_task({
             "title": "Old", "isRoutine": True, "routineCadence": "weekly", "routineEnabled": True,
-            "routineNextRunDate": "2030-01-02", "assignedAgent": "kimi", "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice",
+            "routineNextRunDate": "2030-01-02", "assignedAgent": "kimi", "ownerUserId": "alice",
+            "assigneeUserId": "alice",
         })
         response = client.post(f"/api/v1/tasks/{legacy['id']}/runs", json={})
         assert response.status_code == 202, response.text
@@ -446,11 +446,11 @@ def test_resume_clears_pause_pending_and_recomputes_next_run(monkeypatch) -> Non
 def test_resume_by_non_owner_is_403(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         # Bob can see the automation as its assignee, but only its owner or an admin may resume it.
         task = _routine(client, agent)
         client.app.state.task_store.update_task(task["id"], {
-            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
+            "assigneeUserId": "bob", "routineState": "paused_by_relay", "routinePauseReason": "failing", "routineNextRunAt": None})
         _login(client, "bob")
         response = client.post(f"/api/v1/tasks/{task['id']}/automation/resume")
         assert response.status_code == 403
@@ -462,11 +462,11 @@ def test_resume_by_non_owner_is_403(monkeypatch) -> None:
 def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         task = _routine(client, agent)
         store = client.app.state.task_store
         store.update_task(task["id"], {
-            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay",
+            "assigneeUserId": "bob", "routineState": "paused_by_relay",
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         automations = client.app.state.automation_store
@@ -486,11 +486,11 @@ def test_assignee_cannot_lift_relay_pause_via_patch(monkeypatch, state: str) -> 
 def test_only_owner_or_admin_can_convert_a_relay_paused_automation(monkeypatch, actor: str, expected_status: int) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         task = _routine(client, agent)
         store = client.app.state.task_store
         store.update_task(task["id"], {
-            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay",
+            "assigneeUserId": "bob", "routineState": "paused_by_relay",
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         before = store.get_task(task["id"])
@@ -524,11 +524,11 @@ def test_owner_or_admin_can_lift_relay_pause_via_patch(monkeypatch, actor: str) 
 def test_assignee_can_edit_relay_pause_and_toggle_an_ordinary_pause(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         task = _routine(client, agent)
         store = client.app.state.task_store
         store.update_task(task["id"], {
-            "assigneeEmployeeId": "bob", "routineState": "paused_by_relay",
+            "assigneeUserId": "bob", "routineState": "paused_by_relay",
             "routinePauseReason": "failing", "routineNextRunAt": None,
         })
         _login(client, "bob")
@@ -604,8 +604,8 @@ def test_active_create_rejects_past_once(monkeypatch) -> None:
         client, agent = _client(monkeypatch, root)
         response = client.post("/api/v1/tasks", json={
             "title": "Missed", "isRoutine": True, "routineState": "active",
-            "assignedAgentId": agent["id"], "ownerEmployeeId": "alice",
-            "assigneeEmployeeId": "alice", "routineTriggers": PAST_ONCE,
+            "assignedAgentId": agent["id"], "ownerUserId": "alice",
+            "assigneeUserId": "alice", "routineTriggers": PAST_ONCE,
         })
         assert response.status_code == 400
         assert "routineTriggers[0]" in response.json()["detail"]
@@ -654,10 +654,10 @@ def test_patch_rechecks_a_relay_pause_after_initial_validation(monkeypatch, body
 
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        _create_user(client, "bob", employee_id="bob")
+        _create_account(client, "bob", user_id="bob")
         task = _routine(client, agent)
         store = client.app.state.task_store
-        store.update_task(task["id"], {"assigneeEmployeeId": "bob"})
+        store.update_task(task["id"], {"assigneeUserId": "bob"})
         _login(client, "bob")
         original = task_routes.routine_fields
         paused = False

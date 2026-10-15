@@ -214,7 +214,7 @@ class ExecutionLifecycleService:
         # database store instead locks the session row during admission/delete.
         return getattr(self.registry.daemon_store, "_run_request_claim_lock", nullcontext)()
 
-    def reconcile(self, session_id: str, employee_id: str) -> dict[str, Any] | None:
+    def reconcile(self, session_id: str, user_id: str) -> dict[str, Any] | None:
         """Record a person's assertion that a blocked execution is really gone.
 
         Exit evidence only ever arrives from the daemon, so a computer that
@@ -232,17 +232,17 @@ class ExecutionLifecycleService:
             status = self.status(session)
             if not status["canReportGone"]:
                 return None
-            return self._reconcile_locked(session, employee_id, status["blockingReason"])
+            return self._reconcile_locked(session, user_id, status["blockingReason"])
 
     def _reconcile_locked(
-        self, session: dict[str, Any], employee_id: str, blocking_reason: str | None
+        self, session: dict[str, Any], user_id: str, blocking_reason: str | None
     ) -> dict[str, Any]:
         """Release a blocked execution by assertion. Caller holds the locks."""
         session_id = session["id"]
         request = self.registry.daemon_store.active_run_request_for_session_any_node(session_id)
         session = self.registry.store.append_event(session_id, relay_event(
             "session.execution_reconciled", session_id,
-            {"actorEmployeeId": employee_id, "blockingReason": blocking_reason},
+            {"actorUserId": user_id, "blockingReason": blocking_reason},
         ))
         # The delivered command keeps its own liveness, so closing only the
         # request would leave the legacy active-run fallback reporting the
@@ -289,15 +289,15 @@ class ExecutionLifecycleService:
             )
             session = controller.cancel_session(session_id, RECONCILED_ERROR)
         logger.info("Execution reconciled by assertion", session_id=session_id,
-                    employee_id=employee_id, blocking_reason=blocking_reason)
+                    user_id=user_id, blocking_reason=blocking_reason)
         return self.status(session)
 
-    def request_delete(self, session_id: str, employee_id: str) -> dict[str, Any] | None:
+    def request_delete(self, session_id: str, user_id: str) -> dict[str, Any] | None:
         with self.registry.dispatch_lock, self.admission_scope():
             session = self.registry.store.get_session(session_id)
             if not session.get("deletionRequestedAt"):
                 session = self.registry.store.append_event(session_id, relay_event(
-                    "session.deletion_requested", session_id, {"requestedBy": employee_id},
+                    "session.deletion_requested", session_id, {"requestedBy": user_id},
                 ))
             return self.finish_delete(session_id)
 

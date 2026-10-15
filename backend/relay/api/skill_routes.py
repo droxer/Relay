@@ -76,18 +76,18 @@ def decode_files(raw: Any) -> list[dict[str, Any]]:
     return files
 
 
-def visible_skill(ctx: AppContextDep, skill_id: str, employee_id: str) -> dict[str, Any]:
+def visible_skill(ctx: AppContextDep, skill_id: str, user_id: str) -> dict[str, Any]:
     skill = ctx.skill_store.get_skill(skill_id)
     if skill is None or skill["deletedAt"] is not None:
         raise HTTPException(404, "skill-not-found")
-    if skill["visibility"] != "org" and skill["ownerEmployeeId"] != employee_id:
+    if skill["visibility"] != "org" and skill["ownerUserId"] != user_id:
         raise HTTPException(404, "skill-not-found")
     return skill
 
 
-def owned_skill(ctx: AppContextDep, skill_id: str, employee_id: str) -> dict[str, Any]:
-    skill = visible_skill(ctx, skill_id, employee_id)
-    if skill["ownerEmployeeId"] != employee_id:
+def owned_skill(ctx: AppContextDep, skill_id: str, user_id: str) -> dict[str, Any]:
+    skill = visible_skill(ctx, skill_id, user_id)
+    if skill["ownerUserId"] != user_id:
         raise HTTPException(403, "not-skill-owner")
     return skill
 
@@ -95,14 +95,14 @@ def owned_skill(ctx: AppContextDep, skill_id: str, employee_id: str) -> dict[str
 @router.get("/skills")
 def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    agents = ctx.agent_store.list_agents(supervisor_employee_id=actor["employeeId"])
+    agents = ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
     counts: dict[str, int] = {}
     for agent in agents:
         for skill_id in {entry["skillId"] for entry in skill_grants.read_grants(agent)}:
             counts[skill_id] = counts.get(skill_id, 0) + 1
     assignment_counts: dict[str, int] = {}
     for assignment in ctx.skill_store.list_assignments():
-        if assignment["createdByEmployeeId"] == actor["employeeId"] or actor["isAdmin"]:
+        if assignment["createdByUserId"] == actor["userId"] or actor["isAdmin"]:
             assignment_counts[assignment["skillId"]] = (
                 assignment_counts.get(assignment["skillId"], 0) + 1
             )
@@ -112,7 +112,7 @@ def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             "grantedAgentCount": counts.get(skill["id"], 0),
             "assignmentCount": assignment_counts.get(skill["id"], 0),
         }
-        for skill in ctx.skill_store.list_skills(actor["employeeId"])
+        for skill in ctx.skill_store.list_skills(actor["userId"])
     ]}
 
 
@@ -127,9 +127,9 @@ async def create_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     payload = {**body, "source": body.get("source", "authored"), "files": decode_files(body.get("files"))}
     # The authenticated identity supplies the collision suffix; callers cannot
     # impersonate another publisher by providing ownerHandle in the request.
-    payload["ownerHandle"] = actor["employeeId"]
+    payload["ownerHandle"] = actor["userId"]
     try:
-        return ctx.skill_store.create_skill(actor["employeeId"], payload)
+        return ctx.skill_store.create_skill(actor["userId"], payload)
     except SkillValidationError as error:
         raise skill_error(error) from error
 
@@ -137,11 +137,11 @@ async def create_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 @router.get("/skills/{skill_id}")
 def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    skill = visible_skill(ctx, skill_id, actor["employeeId"])
+    skill = visible_skill(ctx, skill_id, actor["userId"])
     return {
         **skill,
         "grantedAgentIds": [
-            agent["id"] for agent in ctx.agent_store.list_agents(supervisor_employee_id=actor["employeeId"])
+            agent["id"] for agent in ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
             if any(entry["skillId"] == skill_id for entry in skill_grants.read_grants(agent))
         ],
         "revisions": ctx.skill_store.list_revisions(skill_id),
@@ -149,7 +149,7 @@ def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, 
             assignment
             for assignment in ctx.skill_store.list_assignments(skill_id=skill_id)
             if actor["isAdmin"]
-            or assignment["createdByEmployeeId"] == actor["employeeId"]
+            or assignment["createdByUserId"] == actor["userId"]
         ],
         "files": [
             {key: entry[key] for key in ("path", "sha256", "bytes")}
@@ -182,9 +182,9 @@ async def import_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     source = {"url": body.get("url"), "ref": body.get("ref", "HEAD"), "subpath": body.get("subpath", "")}
     files = await import_files(ctx, source)
     payload = {key: value for key, value in body.items() if key not in source}
-    payload.update(source="git", sourceRef=source, files=files, ownerHandle=actor["employeeId"])
+    payload.update(source="git", sourceRef=source, files=files, ownerHandle=actor["userId"])
     try:
-        return ctx.skill_store.create_skill(actor["employeeId"], payload)
+        return ctx.skill_store.create_skill(actor["userId"], payload)
     except SkillValidationError as error:
         raise skill_error(error) from error
 
@@ -192,12 +192,12 @@ async def import_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 @router.post("/skills/{skill_id}/import", status_code=201)
 async def reimport_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    skill = owned_skill(ctx, skill_id, actor["employeeId"])
+    skill = owned_skill(ctx, skill_id, actor["userId"])
     if skill["source"] != "git" or not isinstance(skill.get("sourceRef"), dict):
         raise HTTPException(422, "not-git-source")
     files = await import_files(ctx, skill["sourceRef"])
     try:
-        return ctx.skill_store.add_revision(skill_id, actor["employeeId"], files, "Re-imported from Git")
+        return ctx.skill_store.add_revision(skill_id, actor["userId"], files, "Re-imported from Git")
     except SkillValidationError as error:
         raise skill_error(error) from error
     except KeyError as error:
@@ -207,13 +207,13 @@ async def reimport_skill(skill_id: str, request: Request, ctx: AppContextDep) ->
 @router.post("/skills/{skill_id}/revisions", status_code=201)
 async def add_revision(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["employeeId"])
+    owned_skill(ctx, skill_id, actor["userId"])
     body = await skill_body(request, {"files", "note"})
     if body.get("note") is not None and (not isinstance(body["note"], str) or len(body["note"]) > 4096):
         raise HTTPException(422, "invalid-note")
     files = decode_files(body.get("files"))
     try:
-        return ctx.skill_store.add_revision(skill_id, actor["employeeId"], files, body.get("note"))
+        return ctx.skill_store.add_revision(skill_id, actor["userId"], files, body.get("note"))
     except SkillValidationError as error:
         raise skill_error(error) from error
     except KeyError as error:
@@ -225,7 +225,7 @@ async def promote_revision(
     skill_id: str, revision_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["employeeId"])
+    owned_skill(ctx, skill_id, actor["userId"])
     # Consume and validate the JSON envelope consistently with other writes.
     await skill_body(request, set())
     try:
@@ -257,7 +257,7 @@ def read_skill_file(
     Binary files report their size and no content — a preview is for reading.
     """
     actor = request_actor(request, ctx.auth_store)
-    skill = visible_skill(ctx, skill_id, actor["employeeId"])
+    skill = visible_skill(ctx, skill_id, actor["userId"])
     revision_id = revision_for_channel(skill, channel)
     entry = next(
         (item for item in ctx.skill_store.revision_files(revision_id) if item["path"] == path),
@@ -294,7 +294,7 @@ def export_skill(
     channel: str = "stable",
 ) -> Response:
     actor = request_actor(request, ctx.auth_store)
-    skill = visible_skill(ctx, skill_id, actor["employeeId"])
+    skill = visible_skill(ctx, skill_id, actor["userId"])
     revision_id = revision_for_channel(skill, channel)
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -317,7 +317,7 @@ def export_skill(
 @router.patch("/skills/{skill_id}")
 async def update_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["employeeId"])
+    owned_skill(ctx, skill_id, actor["userId"])
     body = await skill_body(request, {"displayName", "description", "visibility"})
     try:
         return ctx.skill_store.update_skill(skill_id, body)
@@ -330,7 +330,7 @@ async def update_skill(skill_id: str, request: Request, ctx: AppContextDep) -> d
 @router.delete("/skills/{skill_id}", status_code=204)
 def delete_skill(skill_id: str, request: Request, ctx: AppContextDep) -> Response:
     actor = request_actor(request, ctx.auth_store)
-    owned_skill(ctx, skill_id, actor["employeeId"])
+    owned_skill(ctx, skill_id, actor["userId"])
     ctx.skill_store.delete_skill(skill_id)
     return Response(status_code=204)
 
@@ -368,7 +368,7 @@ async def assign_skill(
             skill_id,
             body["targetType"],
             body["targetId"],
-            actor["employeeId"],
+            actor["userId"],
             mode=body.get("mode", "optional"),
             pin=body.get("pin", "stable"),
             invocation=body.get("invocation", "implicit"),
@@ -390,7 +390,7 @@ def revoke_assignment(
         skill_assignments.revoke(
             ctx,
             assignment_id,
-            actor["employeeId"],
+            actor["userId"],
             actor_is_admin=actor["isAdmin"],
         )
     except skill_assignments.SkillAssignmentError as error:
@@ -406,7 +406,7 @@ async def grant_skill(skill_id: str, request: Request, ctx: AppContextDep) -> di
     if not isinstance(agent_ids, list) or len(agent_ids) > 300:
         raise HTTPException(422, "invalid-agent-ids")
     try:
-        granted = skill_grants.grant(ctx, skill_id, agent_ids, actor["employeeId"], body.get("pin", "latest"))
+        granted = skill_grants.grant(ctx, skill_id, agent_ids, actor["userId"], body.get("pin", "latest"))
     except skill_grants.SkillGrantError as error:
         raise grant_error(error) from error
     return {"granted": granted}
@@ -418,7 +418,7 @@ def revoke_skill(
 ) -> Response:
     actor = request_actor(request, ctx.auth_store)
     try:
-        skill_grants.revoke(ctx, skill_id, agent_id, actor["employeeId"])
+        skill_grants.revoke(ctx, skill_id, agent_id, actor["userId"])
     except skill_grants.SkillGrantError as error:
         raise grant_error(error) from error
     return Response(status_code=204)

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { handleForEmployeeId } from "../../lib/employeeHandle";
+import { handleForUserId } from "../../lib/userHandle";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { formatRelativeTime } from "../../lib/adminHelpers";
 import { managedNodeHistory } from "../../lib/managedNodeHistory";
-import type { EmployeeRecord, ManagedNodeRecord } from "../../types";
+import type { UserRecord, ManagedNodeRecord } from "../../types";
 import {
   AdminDelete,
   AdminNode,
@@ -17,15 +17,15 @@ import {
 
 interface ManagedNodeHistoryProps {
   nodes: ManagedNodeRecord[];
-  /** The roster, so a computer's employee id can be shown as its @handle. */
-  employees: EmployeeRecord[];
+  /** The roster, so a computer's user id can be shown as its @handle. */
+  users: UserRecord[];
   onRecover: (node: ManagedNodeRecord) => Promise<void>;
   onDeletePermanently: (node: ManagedNodeRecord) => Promise<void>;
 }
 
 type PendingAction = { id: string; kind: "recover" | "delete" } | null;
 
-export function ManagedNodeHistory({ nodes, employees, onRecover, onDeletePermanently }: ManagedNodeHistoryProps) {
+export function ManagedNodeHistory({ nodes, users, onRecover, onDeletePermanently }: ManagedNodeHistoryProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const [pending, setPending] = useState<PendingAction>(null);
@@ -97,7 +97,7 @@ export function ManagedNodeHistory({ nodes, employees, onRecover, onDeletePerman
               <span className="code">{node.id}</span>
             </span>
             <span className="adm-node-history-meta">
-              {node.employeeId ? `@${handleForEmployeeId(employees, node.employeeId)} · ` : ""}{node.provider} · {node.profile}
+              {node.userId ? `@${handleForUserId(users, node.userId)} · ` : ""}{node.provider} · {node.profile}
             </span>
             <time dateTime={node.updatedAt} title={node.updatedAt}>
               {t("admin.v2.history_deleted", { time: formatRelativeTime(node.updatedAt, t) })}

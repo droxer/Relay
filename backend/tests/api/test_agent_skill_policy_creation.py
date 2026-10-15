@@ -24,9 +24,9 @@ def client(monkeypatch, tmp_path):
         )
         assert (
             client.post(
-                "/api/v1/admin/employees",
+                "/api/v1/admin/users",
                 json={
-                    "employeeId": "alice",
+                    "userId": "alice",
                     "username": "alice",
                     "password": "userpass",
                     "displayName": "Alice",
@@ -37,7 +37,7 @@ def client(monkeypatch, tmp_path):
         node = app.state.registry.register(
             {
                 "sandboxId": "skill-policy-node",
-                "employeeId": "alice",
+                "userId": "alice",
                 "token": "node-token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
@@ -91,7 +91,7 @@ def test_admin_creation_rejects_skill_policy_but_default_creation_still_works(cl
         == 200
     )
     body = {
-        "supervisorEmployeeId": "alice",
+        "supervisorUserId": "alice",
         "displayName": "Worker",
         "executorKind": "codex",
         "defaultRole": "implementer",

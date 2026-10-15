@@ -9,36 +9,36 @@ export type AdminPageView = AdminSection;
 
 const ACTIVE_SESSION_PREFIX = "relay.activeSession.";
 
-/** Where the thread an employee last opened is remembered across reloads. */
-export function activeSessionStorageKey(employeeId: string): string {
-  return ACTIVE_SESSION_PREFIX + employeeId;
+/** Where the thread a user last opened is remembered across reloads. */
+export function activeSessionStorageKey(userId: string): string {
+  return ACTIVE_SESSION_PREFIX + userId;
 }
 
-function rememberActiveSession(employeeId: string, sessionId: string | null): void {
-  if (!employeeId || typeof localStorage === "undefined") return;
-  const key = activeSessionStorageKey(employeeId);
+function rememberActiveSession(userId: string, sessionId: string | null): void {
+  if (!userId || typeof localStorage === "undefined") return;
+  const key = activeSessionStorageKey(userId);
   if (sessionId) localStorage.setItem(key, sessionId);
   else localStorage.removeItem(key);
 }
 
-// Cross-cutting client state for the main app shell: which employee/session is
-// open and the per-employee/sandbox auth tokens. Server state stays in TanStack
+// Cross-cutting client state for the main app shell: which user/session is
+// open and the per-user/sandbox auth tokens. Server state stays in TanStack
 // Query; this store is only the local selection + UI state that was previously
 // threaded through App's useState + props.
 interface RelayClientStore {
-  selectedEmployee: string;
+  selectedUser: string;
   /** The thread explicitly opened (URL, click, or a dispatch that returned). */
   selectedSessionId: string | undefined;
-  /** The thread shown when nothing is explicitly selected; remembered per employee. */
+  /** The thread shown when nothing is explicitly selected; remembered per user. */
   activeSessionId: string | null;
   /** Staging a brand-new thread: suppresses the fall-back to a recent thread. */
   composingNew: boolean;
   tokens: TokenMap;
   adminView: AdminPageView;
 
-  setSelectedEmployee: (id: string) => void;
+  setSelectedUser: (id: string) => void;
   setSelectedSessionId: (id: string | undefined) => void;
-  /** Sets and remembers the active thread for the selected employee. */
+  /** Sets and remembers the active thread for the selected user. */
   setActiveSessionId: (id: string | null) => void;
   /** Sets the active thread from a derived pick without remembering it. */
   adoptActiveSessionId: (id: string | null) => void;
@@ -55,31 +55,31 @@ interface RelayClientStore {
 }
 
 export const useRelayStore = create<RelayClientStore>((set, get) => ({
-  selectedEmployee: "",
+  selectedUser: "",
   selectedSessionId: undefined,
   activeSessionId: null,
   composingNew: false,
   tokens: {},
   adminView: DEFAULT_ADMIN_SECTION,
 
-  setSelectedEmployee: (selectedEmployee) => set({ selectedEmployee }),
+  setSelectedUser: (selectedUser) => set({ selectedUser }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
   setActiveSessionId: (activeSessionId) => {
-    rememberActiveSession(get().selectedEmployee, activeSessionId);
+    rememberActiveSession(get().selectedUser, activeSessionId);
     set({ activeSessionId });
   },
   adoptActiveSessionId: (activeSessionId) => set({ activeSessionId }),
   setComposingNew: (composingNew) => set({ composingNew }),
   openSession: (id) => {
-    rememberActiveSession(get().selectedEmployee, id);
+    rememberActiveSession(get().selectedUser, id);
     set({ composingNew: false, selectedSessionId: id, activeSessionId: id });
   },
   startComposing: () => {
-    rememberActiveSession(get().selectedEmployee, null);
+    rememberActiveSession(get().selectedUser, null);
     set({ composingNew: true, selectedSessionId: undefined, activeSessionId: null });
   },
   clearSelection: () => {
-    rememberActiveSession(get().selectedEmployee, null);
+    rememberActiveSession(get().selectedUser, null);
     set({ selectedSessionId: undefined, activeSessionId: null });
   },
   setTokens: (tokens) => {

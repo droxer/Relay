@@ -56,13 +56,13 @@ Provider-specific IDs stay at the edge:
 - Lark: `open_id`, `union_id`, `chat_id`, `thread_id`, `root_id`, and
   `message_id`.
 
-Relay-facing identity is always `employeeId`. Authorization remains a backend
+Relay-facing identity is always `userId`. Authorization remains a backend
 responsibility.
 
 ## Required Configuration
 
 Configure the Relay backend with a chat service token. Provider adapters use it
-for identity resolution and employee-scoped run/status/cancel requests.
+for identity resolution and user-scoped run/status/cancel requests.
 
 ```bash
 RELAY_CHAT_TOKEN=replace-with-a-random-secret
@@ -97,11 +97,11 @@ When `relay-chat` calls the backend, it sends:
 
 ```http
 Authorization: Bearer $RELAY_CHAT_TOKEN
-X-Relay-Employee-Id: <employeeId>
+X-Relay-User-Id: <userId>
 ```
 
-The backend treats this as a non-admin employee actor. The actor can access only
-records and logical agents allowed for that employee unless a route explicitly
+The backend treats this as a non-admin user actor. The actor can access only
+records and logical agents allowed for that user unless a route explicitly
 allows public access.
 
 ## Web Setup
@@ -113,7 +113,7 @@ Admins configure chat clients in Relay Web:
 3. Add the provider tenant or guild ID when the provider has one.
 4. Store the provider secret. Relay records only whether a secret is configured
    in admin API responses; raw secret values are not returned.
-5. Add identity links from provider user IDs to Relay `employeeId` values.
+5. Add identity links from provider user IDs to Relay `userId` values.
 6. Add allowed conversations. Chat-triggered agent runs are rejected outside
    those channels, groups, chats, or threads.
 7. Run **Check Setup**, then **Activate**.
@@ -135,7 +135,7 @@ chat_integrations
 chat_identity_links
 - integration_id
 - external_user_id
-- employee_id
+- user_id
 - default_agent_id
 
 chat_allowed_conversations
@@ -178,7 +178,7 @@ Content-Type: application/json
 }
 ```
 
-The backend returns an employee identity only when the integration is active,
+The backend returns a user identity only when the integration is active,
 the provider conversation is allowlisted, and the provider user is linked.
 
 ## Shared Runtime Shape
@@ -201,7 +201,7 @@ packages/relay-chat/
 
 - parsing shared text commands,
 - mapping provider references into Relay chat references,
-- resolving chat users to employees,
+- resolving chat users to users,
 - calling the Relay backend,
 - streaming session events.
 
@@ -224,20 +224,20 @@ const identities = new StaticChatIdentityResolver([
     provider: "discord",
     tenantId: "discord-guild-id",
     externalUserId: "discord-user-id",
-    employeeId: "alice",
+    userId: "alice",
     defaultAgentId: "agent_alice_builder",
   },
   {
     provider: "telegram",
     externalUserId: "telegram-user-id",
-    employeeId: "alice",
+    userId: "alice",
     defaultAgentId: "agent_alice_builder",
   },
   {
     provider: "lark",
     tenantId: "lark-tenant-key",
     externalUserId: "lark-union-id-or-open-id",
-    employeeId: "alice",
+    userId: "alice",
     defaultAgentId: "agent_alice_builder",
   },
 ]);
@@ -250,7 +250,7 @@ chat_identity_links
 - provider
 - tenant_id
 - external_user_id
-- employee_id
+- user_id
 - default_agent_id
 - created_at
 - updated_at
@@ -398,7 +398,7 @@ Recommended flow:
 1. Register `/relay` slash commands with subcommands `run`, `status`, and
    `cancel`.
 2. On command receipt, call `interaction.deferReply()`.
-3. Resolve the Discord user to a Relay employee.
+3. Resolve the Discord user to a Relay user.
 4. Call `RelayChatGateway`.
 5. Edit the deferred reply with the session ID.
 6. Send progress into a Discord thread or follow-up messages.
@@ -498,7 +498,7 @@ Recommended flow:
 1. Create a Lark app with bot capability.
 2. Subscribe to `im.message.receive_v1`.
 3. Parse `event.message.content` as JSON and extract text.
-4. Resolve the sender ID to `employeeId`.
+4. Resolve the sender ID to `userId`.
 5. Call `RelayChatGateway`.
 6. Send initial status with `im.v1.message.create`.
 7. Use text updates or interactive cards for progress.
@@ -519,7 +519,7 @@ Lark message updates have edit restrictions. Prefer coarse status updates:
 - Scope identity links by tenant/guild/workspace where the provider supports it.
 - Verify webhook signatures or secret headers.
 - Enforce allowlisted channels/groups for early rollout.
-- Treat chat-triggered actions as employee actions in audit logs.
+- Treat chat-triggered actions as user actions in audit logs.
 - Avoid posting full raw agent output into public channels.
 
 ## Operational Requirements
@@ -534,7 +534,7 @@ chat_conversations
 - thread_id
 - provider_message_id
 - relay_session_id
-- created_by_employee_id
+- created_by_user_id
 - created_at
 - updated_at
 ```
@@ -561,9 +561,9 @@ This lets the bot:
 
 Backend:
 
-- chat token accepted with `X-Relay-Employee-Id`,
+- chat token accepted with `X-Relay-User-Id`,
 - missing or invalid chat token rejected,
-- cross-employee sandbox access rejected,
+- cross-user sandbox access rejected,
 - session SSE accepts chat actor identity.
 
 Provider adapters:
@@ -580,7 +580,7 @@ End-to-end:
 - agent output appears as throttled updates,
 - `/relay status` returns the session state,
 - `/relay cancel` cancels the active run,
-- one employee cannot run another employee's sandbox.
+- one user cannot run another user's sandbox.
 
 ## References
 

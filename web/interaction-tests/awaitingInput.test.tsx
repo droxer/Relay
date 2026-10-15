@@ -18,7 +18,7 @@ function setup(
     logicalAgents={[]}
     onLogicalAgentPicked={vi.fn()}
     activeAgentDisplayName="Ada"
-    selectedEmployee="emp"
+    selectedUser="emp"
     initializingThread={false}
     runtimeNodes={[]}
     runtimeNodeId="n1"

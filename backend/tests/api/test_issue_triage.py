@@ -75,7 +75,7 @@ def test_projectless_issue_cannot_be_assigned_or_started(triage_context, request
 
 def _legacy_ready(app, lead) -> dict:
     return app.state.task_store.create_task({
-        "title": "Legacy ready", "ownerEmployeeId": "alice", "assigneeEmployeeId": "alice",
+        "title": "Legacy ready", "ownerUserId": "alice", "assigneeUserId": "alice",
         "assignedAgent": "codex", "assignedAgentId": lead["id"], "status": "assigned",
     })
 
@@ -164,7 +164,7 @@ def test_clearing_legacy_intake_assignment_returns_it_to_backlog(triage_context)
     assert not response.json().get("assignedAgentId")
 
 
-def test_intake_cannot_move_to_another_employees_project(triage_context):
+def test_intake_cannot_move_to_another_users_project(triage_context):
     app, client, _node, project, _lead = triage_context
     other = app.state.project_store.create_project("bob", {
         "name": "Private", "computerId": project["computerId"],

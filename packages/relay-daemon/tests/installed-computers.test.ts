@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import { serviceDefinition } from '../src/install.js';
 import { installedComputers, removeService, sameComputer, serviceArguments } from '../src/installed-computers.js';
 
-const argv = ['/a path/node', '/relay/cli.js', '--backend-url', 'https://relay.example.com', '--employee-id', 'alice',
+const argv = ['/a path/node', '/relay/cli.js', '--backend-url', 'https://relay.example.com', '--user-id', 'alice',
   '--workspace', `/tmp/" & % $(touch x) 'w'`, '--sandbox', 'none'];
 
 function fixture(platform: 'darwin' | 'linux') {
@@ -28,13 +28,23 @@ describe('installed computers', () => {
       assert.deepEqual(serviceArguments(platform, serviceDefinition(platform, 'node-1', argv, '/tmp/log', '/usr/bin').content), argv);
     });
 
-    it(`lists ${platform} computers by backend, employee and workspace`, () => {
+    it(`still lists a ${platform} computer installed with the pre-rename --employee-id flag`, () => {
+      const { home, write, cleanup } = fixture(platform);
+      try {
+        write('node-a', argv.map(arg => (arg === '--user-id' ? '--employee-id' : arg)));
+        assert.deepEqual(installedComputers(platform, home).map(computer => computer.userId), ['alice']);
+      } finally {
+        cleanup();
+      }
+    });
+
+    it(`lists ${platform} computers by backend, user and workspace`, () => {
       const { home, write, cleanup } = fixture(platform);
       try {
         write('node-a', argv);
         write('node-b', argv.slice(0, 2));
         const computers = installedComputers(platform, home);
-        assert.deepEqual(computers.map(computer => [computer.id, computer.employeeId, computer.workspace]), [['node-a', 'alice', argv[7]]]);
+        assert.deepEqual(computers.map(computer => [computer.id, computer.userId, computer.workspace]), [['node-a', 'alice', argv[7]]]);
         assert.equal(sameComputer(computers[0]!, 'https://relay.example.com/', argv[7]!), true);
         assert.equal(sameComputer(computers[0]!, 'https://other.example.com', argv[7]!), false);
         assert.equal(sameComputer(computers[0]!, 'https://relay.example.com', '/tmp/other'), false);

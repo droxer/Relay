@@ -6,9 +6,9 @@ import { createControlPanelDaemonNode, createManagedNode } from "../../api";
 import type {
   CreateControlPanelDaemonNodeResponse,
   CreateManagedNodeResponse,
-  EmployeeRecord,
+  UserRecord,
 } from "../../types";
-import { employeeHandleOf } from "../../lib/employeeHandle";
+import { userHandleOf } from "../../lib/userHandle";
 import { Drawer } from "@/components/ui/Drawer";
 import { RunModeField, type RunLocation } from "./RunModeField";
 import { Button } from "@/components/ui/button";
@@ -32,57 +32,57 @@ export type AddNodeDrawerSuccess =
 interface AddNodeDrawerProps {
   open: boolean;
   onClose: () => void;
-  employees: EmployeeRecord[];
+  users: UserRecord[];
   onSuccess: (outcome: AddNodeDrawerSuccess) => void;
 }
 
 export function AddNodeDrawer({
   open,
   onClose,
-  employees,
+  users,
   onSuccess,
 }: AddNodeDrawerProps) {
   const { t } = useTranslation();
   const nodeHeadingId = useId();
   const assignmentHeadingId = useId();
-  const employeeLabelId = useId();
+  const userLabelId = useId();
 
   const [nodeLocation, setNodeLocation] = useState<RunLocation>("managed");
   const [displayName, setDisplayName] = useState("");
   const [workspacePath, setWorkspacePath] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
+  const [userId, setUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
-    employeeId?: string;
+    userId?: string;
     workspacePath?: string;
   }>({});
   const [isBusy, setIsBusy] = useState(false);
-  const employeeTriggerRef = useRef<HTMLButtonElement>(null);
+  const userTriggerRef = useRef<HTMLButtonElement>(null);
   const workspacePathRef = useRef<HTMLInputElement>(null);
   const isManaged = nodeLocation === "managed";
-  const hasEmployees = employees.length > 0;
-  // A cloud computer is provisioned FOR an employee, so with an empty directory
+  const hasUsers = users.length > 0;
+  // A cloud computer is provisioned FOR a user, so with an empty directory
   // that branch has no valid submission at all. Saying so up front beats a
-  // disabled picker that reports "Employee ID is required." on every attempt.
-  const blockedNoEmployees = isManaged && !hasEmployees;
-  const hasUnsavedChanges = Boolean(displayName || employeeId || workspacePath || nodeLocation !== "managed");
+  // disabled picker that reports "User ID is required." on every attempt.
+  const blockedNoUsers = isManaged && !hasUsers;
+  const hasUnsavedChanges = Boolean(displayName || userId || workspacePath || nodeLocation !== "managed");
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !isBusy);
 
-  const selectedEmployee = useMemo(
-    () => employees.find((employee) => employee.id === employeeId) ?? null,
-    [employees, employeeId],
+  const selectedUser = useMemo(
+    () => users.find((user) => user.id === userId) ?? null,
+    [users, userId],
   );
-  // Local computers are the bounded kind. Showing the employee's standing before
+  // Local computers are the bounded kind. Showing the user's standing before
   // submit turns a limit rejection from a raw backend string into something the
   // admin could see coming.
   const localQuota =
     !isManaged
-    && selectedEmployee
-    && selectedEmployee.effectiveMaxLocalComputers !== undefined
-    && selectedEmployee.localComputerCount !== undefined
+    && selectedUser
+    && selectedUser.effectiveMaxLocalComputers !== undefined
+    && selectedUser.localComputerCount !== undefined
       ? {
-          used: selectedEmployee.localComputerCount,
-          limit: selectedEmployee.effectiveMaxLocalComputers,
+          used: selectedUser.localComputerCount,
+          limit: selectedUser.effectiveMaxLocalComputers,
         }
       : null;
 
@@ -92,26 +92,26 @@ export function AddNodeDrawer({
     setNodeLocation("managed");
     setDisplayName("");
     setWorkspacePath("");
-    setEmployeeId("");
+    setUserId("");
     setError(null);
     setFieldErrors({});
     setIsBusy(false);
   });
 
-  function clearFieldError(field: "employeeId" | "workspacePath") {
+  function clearFieldError(field: "userId" | "workspacePath") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (blockedNoEmployees) return;
+    if (blockedNoUsers) return;
 
     const nextFieldErrors: typeof fieldErrors = {};
-    if (isManaged && !employeeId) nextFieldErrors.employeeId = t("admin.employee_required");
+    if (isManaged && !userId) nextFieldErrors.userId = t("admin.user_required");
     if (!isManaged && !workspacePath.trim()) nextFieldErrors.workspacePath = t("admin.v2.workspace_path_required");
     setFieldErrors(nextFieldErrors);
-    const firstInvalid = nextFieldErrors.employeeId
-      ? employeeTriggerRef
+    const firstInvalid = nextFieldErrors.userId
+      ? userTriggerRef
       : nextFieldErrors.workspacePath
         ? workspacePathRef
         : null;
@@ -125,7 +125,7 @@ export function AddNodeDrawer({
     try {
       if (isManaged) {
         const result = await createManagedNode({
-          employeeId,
+          userId,
           displayName: displayName.trim() || undefined,
           sandboxMode: "boxlite",
         });
@@ -135,11 +135,11 @@ export function AddNodeDrawer({
         // start command it produces has to match the runtime it can actually
         // boot. Same rule the self-service enrollment route enforces.
         const result = await createControlPanelDaemonNode({
-          employeeId: employeeId || undefined,
+          userId: userId || undefined,
           displayName: displayName.trim() || undefined,
           workspacePath: workspacePath.trim(),
           sandboxMode: "none",
-          nodeLocation: "employee-device",
+          nodeLocation: "user-device",
         });
         onSuccess({ kind: "manual", result });
       }
@@ -248,62 +248,62 @@ export function AddNodeDrawer({
             </span>
           </header>
 
-          {hasEmployees ? (
+          {hasUsers ? (
             <Field
-              label={t("admin.employee")}
-              labelId={employeeLabelId}
+              label={t("admin.user")}
+              labelId={userLabelId}
               wrapper="div"
-              error={fieldErrors.employeeId}
-              errorId="add-node-employee-error"
+              error={fieldErrors.userId}
+              errorId="add-node-user-error"
             >
               <Select
-                value={employeeId || null}
+                value={userId || null}
                 onValueChange={(value) => {
-                  setEmployeeId(value ?? "");
-                  clearFieldError("employeeId");
+                  setUserId(value ?? "");
+                  clearFieldError("userId");
                 }}
               >
                 <SelectTrigger
-                  ref={employeeTriggerRef}
+                  ref={userTriggerRef}
                   {...(isManaged ? { "data-modal-initial-focus": true } : {})}
                   className="w-full code"
-                  aria-labelledby={employeeLabelId}
-                  aria-invalid={Boolean(fieldErrors.employeeId) || undefined}
-                  aria-describedby={fieldErrors.employeeId ? "add-node-employee-error" : undefined}
+                  aria-labelledby={userLabelId}
+                  aria-invalid={Boolean(fieldErrors.userId) || undefined}
+                  aria-describedby={fieldErrors.userId ? "add-node-user-error" : undefined}
                 >
-                  <SelectValue placeholder={t("admin.select_employee")}>
+                  <SelectValue placeholder={t("admin.select_user")}>
                     {(value: string | null) => {
-                      if (!value) return t("admin.select_employee");
-                      const employee = employees.find((e) => e.id === value);
-                      if (!employee) return `@${value}`;
-                      const handle = employeeHandleOf(employee);
-                      return employee.displayName && employee.displayName !== handle
-                        ? `${employee.displayName} / @${handle}`
+                      if (!value) return t("admin.select_user");
+                      const user = users.find((e) => e.id === value);
+                      if (!user) return `@${value}`;
+                      const handle = userHandleOf(user);
+                      return user.displayName && user.displayName !== handle
+                        ? `${user.displayName} / @${handle}`
                         : `@${handle}`;
                     }}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.displayName && employee.displayName !== employeeHandleOf(employee)
-                        ? `${employee.displayName} / `
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.displayName && user.displayName !== userHandleOf(user)
+                        ? `${user.displayName} / `
                         : ""}
-                      <span className="text-muted-foreground">@{employeeHandleOf(employee)}</span>
+                      <span className="text-muted-foreground">@{userHandleOf(user)}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
           ) : (
-            <p className="adm-form-hint adm-form-hint--notice">{t("admin.v2.add_node_no_employees")}</p>
+            <p className="adm-form-hint adm-form-hint--notice">{t("admin.v2.add_node_no_users")}</p>
           )}
 
           {/* Guidance, not a pre-emptive error: this used to render the
-              "Employee ID is required." error string as a resting hint, so the
+              "User ID is required." error string as a resting hint, so the
               same sentence appeared twice — muted here and red below — once
               validation ran. */}
-          {!selectedEmployee && hasEmployees && !fieldErrors.employeeId ? (
+          {!selectedUser && hasUsers && !fieldErrors.userId ? (
             <p className="adm-form-hint">
               {t(isManaged ? "admin.v2.add_node_assign_managed" : "admin.v2.add_node_assign_later")}
             </p>
@@ -322,7 +322,7 @@ export function AddNodeDrawer({
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={isBusy}>
             {t("admin.v2.cancel")}
           </Button>
-          <Button size="cta" type="submit" loading={isBusy} disabled={isBusy || blockedNoEmployees}>
+          <Button size="cta" type="submit" loading={isBusy} disabled={isBusy || blockedNoUsers}>
             {isBusy
               ? t(isManaged ? "admin.creating" : "admin.v2.generating")
               : t(isManaged ? "admin.v2.provision_node" : "admin.v2.generate_node")}

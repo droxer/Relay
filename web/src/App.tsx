@@ -5,7 +5,7 @@ import { reconcileExecution, retryExecutionRecovery } from "./api";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logout } from "./api";
-import type { AgentName, AgentTeam, CollaborationStyle, EmployeeAgent, RelayArtifact, RelaySession, ThreadMessageInput } from "./types";
+import type { AgentName, AgentTeam, CollaborationStyle, UserAgent, RelayArtifact, RelaySession, ThreadMessageInput } from "./types";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
@@ -19,10 +19,10 @@ import { useSessionEvents } from "./hooks/useSessionEvents";
 import { useSessionDetail } from "./hooks/useSessionDetail";
 import { useLocalDaemonNodes } from "./hooks/useLocalDaemonNodes";
 import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "./lib/daemonNodes";
-import { isEmployeeAgentRoutable, preferredRoutableAgent } from "./lib/agentDisplayNames";
+import { isUserAgentRoutable, preferredRoutableAgent } from "./lib/agentDisplayNames";
 import { mentionCandidates } from "./lib/mentions";
 import { threadRoundTeam } from "./lib/messageRouting";
-import { applyTheme, normalizeLanguage, readTokens, selectedEmployeeKey } from "./lib/appStorage";
+import { applyTheme, normalizeLanguage, readTokens, legacySelectedUserKey, selectedUserKey } from "./lib/appStorage";
 import { canUseLocalControlPanel } from "./lib/controlPanel";
 import { useThreadDispatch } from "./hooks/useThreadDispatch";
 import { useRelayStore } from "./lib/store";
@@ -41,8 +41,8 @@ import { usePanelLayout } from "./hooks/usePanelLayout";
 import { useThreadSpace } from "./hooks/useThreadSpace";
 import { myThreadSessions, pickActiveThreadSession } from "./lib/threads";
 import { shouldTailSessionEvents } from "./lib/sessionEventStream";
-import { useEmployeeProvisioning } from "./hooks/useEmployeeProvisioning";
-import { useEmployeeAgents } from "./hooks/useEmployeeAgents";
+import { useUserProvisioning } from "./hooks/useUserProvisioning";
+import { useUserAgents } from "./hooks/useUserAgents";
 import { useTeams } from "./hooks/useTeams";
 import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { useDialogs } from "./components/ui/DialogProvider";
@@ -99,8 +99,8 @@ export function App() {
     submitThreadMessageMutation,
     requestThreadRecoveryMutation,
   } = useRelayMutations();
-  const selectedEmployee = useRelayStore((s) => s.selectedEmployee);
-  const setSelectedEmployee = useRelayStore((s) => s.setSelectedEmployee);
+  const selectedUser = useRelayStore((s) => s.selectedUser);
+  const setSelectedUser = useRelayStore((s) => s.setSelectedUser);
   const selectedSessionId = useRelayStore((s) => s.selectedSessionId);
   const tokens = useRelayStore((s) => s.tokens);
   const setTokens = useRelayStore((s) => s.setTokens);
@@ -144,8 +144,8 @@ export function App() {
     reportMutationError,
     saveErrorMessage: t("errors.save_preferences"),
   });
-  const { agents: logicalAgents } = useEmployeeAgents(user?.employeeId);
-  const { teams } = useTeams(user?.employeeId);
+  const { agents: logicalAgents } = useUserAgents(user?.userId);
+  const { teams } = useTeams(user?.userId);
   const localNodeAdoptionStartedRef = useRef(false);
   const [preferencesUserId, setPreferencesUserId] = useState<string | null>(null);
   const [preferencesOwner, setPreferencesOwner] = useState(user?.id ?? null);
@@ -157,7 +157,7 @@ export function App() {
   const messageOperationIdsRef = useRef(new Map<string, string>());
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
 
-  const selectedEmployeeToken = tokens[selectedEmployee];
+  const selectedUserToken = tokens[selectedUser];
   const {
     sandboxes,
     nodes,
@@ -170,7 +170,7 @@ export function App() {
     isRefreshing,
     refresh,
     setSandboxes,
-  } = useRelayData(selectedEmployeeToken, Boolean(user));
+  } = useRelayData(selectedUserToken, Boolean(user));
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     hydrated && user?.role === "admin" && canUseLocalControlPanel(),
   );
@@ -179,15 +179,15 @@ export function App() {
     () => mergeThreadRuntimeNodes(nodes, localNodes),
     [localNodes, nodes],
   );
-  const selectedSandbox = useMemo(() => sandboxes.find((s) => s.employeeId === selectedEmployee), [sandboxes, selectedEmployee]);
-  // The logged-in user is themselves an employee; their threads are the
+  const selectedSandbox = useMemo(() => sandboxes.find((s) => s.userId === selectedUser), [sandboxes, selectedUser]);
+  // The logged-in user's threads are the
   // sessions they own. The backend already owner-scopes /api/v1/threads, so this is
   // just the non-archived sessions sorted most-recent first.
   const myThreads = useMemo(
-    () => myThreadSessions(sessions, selectedEmployee),
-    [sessions, selectedEmployee],
+    () => myThreadSessions(sessions, selectedUser),
+    [sessions, selectedUser],
   );
-  const { activeSessionId } = useActiveSession(selectedEmployee, myThreads);
+  const { activeSessionId } = useActiveSession(selectedUser, myThreads);
   const activeSession = useMemo(
     () => pickActiveThreadSession({
       threads: myThreads,
@@ -214,7 +214,7 @@ export function App() {
     logicalAgents,
     newThreadNodeId,
     runtimeNodes,
-    selectedEmployee,
+    selectedUser,
     teams,
   });
 
@@ -366,7 +366,7 @@ export function App() {
   useSessionDetail(activeSession?.id, Boolean(user));
   useSessionEvents(activeSession?.id, Boolean(user) && shouldTailSessionEvents(activeSession?.status));
 
-  const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedEmployee]) : tokens[selectedEmployee];
+  const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedUser]) : tokens[selectedUser];
   const activeRunOwner = useMemo(
     () => findActiveRunOwnerForSession(visibleNodes, activeSession?.id),
     [visibleNodes, activeSession?.id],
@@ -433,7 +433,7 @@ export function App() {
     await refresh(undefined, tokenOverride);
   }, [refresh]);
 
-  const { adoptLocalDaemonNodes } = useEmployeeProvisioning({
+  const { adoptLocalDaemonNodes } = useUserProvisioning({
     nodes,
     setSandboxes,
     refreshLocalDaemonNodes,
@@ -468,12 +468,12 @@ export function App() {
   useEffect(() => {
     if (!authChecked) return;
     setTokens(readTokens());
-    // The logged-in user is their own employee; their threads are the
+    // The logged-in user's threads are the
     // sessions they own. Pin the selection to self so the chat view always
-    // shows the current employee's own work (never another employee's).
-    const myEmployeeId = user?.employeeId ?? user?.username ?? "";
-    if (myEmployeeId) setSelectedEmployee(myEmployeeId);
-  }, [authChecked, user, setTokens, setSelectedEmployee]);
+    // shows the current user's own work (never another user's).
+    const myUserId = user?.userId ?? user?.username ?? "";
+    if (myUserId) setSelectedUser(myUserId);
+  }, [authChecked, user, setTokens, setSelectedUser]);
   // Adoption reads /api/v1/admin/daemon-nodes, which is admin-only: running it for every
   // signed-in user meant a 403 on each load whose failure was swallowed. Gate
   // it exactly like the query it depends on (useLocalDaemonNodes above).
@@ -486,18 +486,19 @@ export function App() {
   // Admin local-node polling now lives in useLocalDaemonNodes (refetchInterval).
   useEffect(() => {
     if (!hydrated) return;
-    if (selectedEmployee) {
-      localStorage.setItem(selectedEmployeeKey, selectedEmployee);
+    if (selectedUser) {
+      localStorage.setItem(selectedUserKey, selectedUser);
+      localStorage.removeItem(legacySelectedUserKey);
     } else {
-      localStorage.removeItem(selectedEmployeeKey);
+      localStorage.removeItem(selectedUserKey);
     }
-  }, [selectedEmployee, hydrated]);
+  }, [selectedUser, hydrated]);
   // Keep the handoff target routable as the thread's roster changes.
   useEffect(() => {
     if (effectiveSelectableLogicalAgents.length === 0) return;
     const { agentId, setAgentId } = useHandoffStore.getState();
-    if (effectiveSelectableLogicalAgents.some((agent) => agent.id === agentId && isEmployeeAgentRoutable(agent))) return;
-    setAgentId(effectiveSelectableLogicalAgents.find(isEmployeeAgentRoutable)?.id ?? "");
+    if (effectiveSelectableLogicalAgents.some((agent) => agent.id === agentId && isUserAgentRoutable(agent))) return;
+    setAgentId(effectiveSelectableLogicalAgents.find(isUserAgentRoutable)?.id ?? "");
   }, [effectiveSelectableLogicalAgents]);
   useEffect(() => {
     if ((route === "admin" || route === "channels") && user && user.role !== "admin") {
@@ -553,7 +554,7 @@ export function App() {
     startComposing();
     dropPendingMessage();
     // Same rule as the staging effect: a pick survives a heartbeat flap, and
-    // only a machine that is no longer this employee's drops it.
+    // only a machine that is no longer this user's drops it.
     setNewThreadNodeId((current) => resolveNewThreadComputer(current, threadComputers, assignableComputers));
     composerRef.current?.clear();
     transcript.pinToBottom();
@@ -568,7 +569,7 @@ export function App() {
     navigateToProject(projectId);
   }
 
-  function openAgentDetail(agent: EmployeeAgent) {
+  function openAgentDetail(agent: UserAgent) {
     navigateToAgent(agent.id);
   }
 
@@ -622,7 +623,7 @@ export function App() {
     effectiveSelectableLogicalAgents,
     composerLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedEmployee, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -638,7 +639,7 @@ export function App() {
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
   const handleProjectRoomPicked = useStableEvent(() => pickRoom());
   // Picking one member narrows a project round to them and drops a staged team.
-  const handleLogicalAgentPicked = useStableEvent((agent: EmployeeAgent) => pickAgent(agent));
+  const handleLogicalAgentPicked = useStableEvent((agent: UserAgent) => pickAgent(agent));
   // Re-picking a team thread's own team is picking its room, not naming it.
   const handleTeamPicked = useStableEvent((team: AgentTeam) => {
     if (!requiresRuntimeSelection && team.id === activeSession?.teamId) {
@@ -860,7 +861,7 @@ export function App() {
             onSpaceResizeActive={panels.setSpaceResizing}
             onToggleThreadList={() => space.setThreadListHidden(!space.threadListHidden)}
             onBackToThreads={() => navigateToMobileView("threads")}
-            selectedEmployee={selectedEmployee}
+            selectedUser={selectedUser}
             initializingThread={requiresRuntimeSelection}
             projectName={activeProject?.name}
             projectRoom={activeProject ? { memberCount: effectiveSelectableLogicalAgents.length } : null}

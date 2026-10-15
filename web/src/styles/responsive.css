@@ -574,7 +574,7 @@
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .chat-title .employee-avatar {
+  .chat-title .user-avatar {
     display: none;
   }
 
