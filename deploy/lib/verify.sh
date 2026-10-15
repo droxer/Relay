@@ -3,8 +3,14 @@
 
 VERIFY_FAILURES=0
 
+# curl already writes 000 when it gets no response, so a failed run must not
+# append another. Retries absorb a connection blip during a Railway rollover;
+# without --fail an HTTP status is never an error, so 4xx/5xx are not retried.
 http_code() {
-  curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$@" 2>/dev/null || echo 000
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+    --retry 2 --retry-delay 2 --retry-all-errors "$@" 2>/dev/null) || true
+  printf '%s\n' "${code:-000}"
 }
 
 expect_code() {
