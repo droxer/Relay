@@ -7,12 +7,14 @@ import { fileURLToPath } from "node:url";
 import {
   LANDING_HERO_SHOT,
   LANDING_PRINCIPLES,
+  LANDING_SHOT_WIDTHS,
   LANDING_STEPS,
   LANDING_TOUR,
   RELAY_GITHUB_URL,
   RELAY_CLONE_COMMAND,
   landingCtas,
   landingShotSrc,
+  landingShotSrcSet,
 } from "../src/lib/landing.js";
 
 function findRepoRoot(): string {
@@ -43,13 +45,28 @@ describe("landingShotSrc", () => {
     assert.equal(landingShotSrc("teams", undefined), "/landing/teams.webp");
   });
 
-  it("ships every screenshot the page asks for, in both languages and both themes", () => {
+  it("names the smaller cut by its width and the full cut plainly", () => {
+    assert.equal(landingShotSrc("threads", "en", "dark", 800), "/landing/threads-800w.webp");
+    assert.equal(landingShotSrc("teams", "zh-CN", "light", 800), "/landing/teams-light-zh-CN-800w.webp");
+    assert.equal(landingShotSrc("threads", "en", "dark", 1600), "/landing/threads.webp");
+  });
+
+  it("offers every cut in the srcset, described by width", () => {
+    assert.equal(
+      landingShotSrcSet("issues", "en", "light"),
+      "/landing/issues-light-800w.webp 800w, /landing/issues-light.webp 1600w",
+    );
+  });
+
+  it("ships every screenshot the page asks for, in both languages, both themes, and every width", () => {
     const shots = [LANDING_HERO_SHOT, ...LANDING_TOUR.map((item) => item.shot)];
     for (const shot of shots) {
       for (const language of ["en", "zh-CN"]) {
         for (const theme of ["dark", "light"] as const) {
-          const file = path.join(webRoot, "public", landingShotSrc(shot, language, theme));
-          assert.ok(existsSync(file), `missing ${file}`);
+          for (const width of LANDING_SHOT_WIDTHS) {
+            const file = path.join(webRoot, "public", landingShotSrc(shot, language, theme, width));
+            assert.ok(existsSync(file), `missing ${file}`);
+          }
         }
       }
     }

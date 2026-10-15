@@ -7,6 +7,8 @@ import "../styles.css";
 import { InlineScript } from "../components/InlineScript";
 import en from "../i18n/locales/en/translation.json";
 import { SITE_NAME, SITE_SHARE_IMAGE, jsonLdScript, siteUrl, softwareJsonLd } from "../lib/site";
+import { SIGNED_IN_HINT_KEY } from "../lib/appStorage";
+import { LANDING_HERO_SHOT, LANDING_HERO_SIZES, landingShotSrc, landingShotSrcSet } from "../lib/landing";
 import { Providers } from "./providers";
 
 // The reading face is the platform's own UI face (see --font-sans in
@@ -72,6 +74,18 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// The landing page renders client-side, so its hero image is unknown to the
+// HTML until the page's code runs. Name the right cut (theme x language) up
+// front for a visitor who will see it: at `/`, not signed in last time.
+const heroCut = (theme: "dark" | "light", language: string) => [
+  landingShotSrc(LANDING_HERO_SHOT, language, theme),
+  landingShotSrcSet(LANDING_HERO_SHOT, language, theme),
+];
+const heroCuts = JSON.stringify({
+  dark: { en: heroCut("dark", "en"), "zh-CN": heroCut("dark", "zh-CN") },
+  light: { en: heroCut("light", "en"), "zh-CN": heroCut("light", "zh-CN") },
+});
+
 const themeScript = `(function(){try{
   var root=document.documentElement;
   var l=localStorage.getItem("relay-web.language");
@@ -82,6 +96,16 @@ const themeScript = `(function(){try{
   var d=matchMedia("(prefers-color-scheme: dark)").matches;
   var r=(t==="dark"||(t!=="light"&&d))?"dark":"light";
   root.setAttribute("data-theme",r);
+  var p=location.pathname;
+  if((p==="/"||p==="")&&localStorage.getItem(${JSON.stringify(SIGNED_IN_HINT_KEY)})!=="1"){
+    var h=${heroCuts}[r][l==="zh-CN"?"zh-CN":"en"];
+    var k=document.createElement("link");
+    k.rel="preload";k.as="image";k.href=h[0];
+    k.setAttribute("imagesrcset",h[1]);
+    k.setAttribute("imagesizes",${JSON.stringify(LANDING_HERO_SIZES)});
+    k.setAttribute("fetchpriority","high");
+    document.head.appendChild(k);
+  }
   var sync=function(){
     var color=getComputedStyle(root).getPropertyValue("--surface-0").trim();
     if(!color)return false;

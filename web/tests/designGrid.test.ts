@@ -25,6 +25,20 @@ const repoRoot = findRepoRoot();
 const stylesDir = path.join(repoRoot, STYLES_DIR);
 const readStyle = (rel: string) => readFileSync(path.join(stylesDir, rel), "utf8");
 
+/** The `relay` layer's cascade order: the global sheet's imports (src/styles.css,
+    what the landing page paints with), then the app sheet's (styles/app.css,
+    loaded with the app's chunk). A sheet both repeat — a11y.css — counts at its
+    later position, the one that decides the cascade inside the app. */
+function sheetOrder(): string[] {
+  const global = readFileSync(path.join(repoRoot, "web", "src", "styles.css"), "utf8");
+  const app = readStyle("app.css");
+  const all = [
+    ...[...global.matchAll(/@import\s+["']\.\/styles\/([^"']+\.css)["']/g)].map((m) => m[1]),
+    ...[...app.matchAll(/@import\s+["']\.\/([^"']+\.css)["']/g)].map((m) => m[1]),
+  ];
+  return all.filter((name, index) => all.lastIndexOf(name) === index);
+}
+
 /** Every surface stylesheet, excluding the token layer that originates values. */
 function surfaceSheets(): { name: string; source: string }[] {
   return readdirSync(stylesDir)
@@ -309,8 +323,7 @@ describe("design grid", () => {
        the declaration — `.chat-header, .page-header { border-bottom }` stays,
        because .page-header has no earlier copy. Only a rule whose EVERY
        selector already carries that exact declaration counts as a copy. */
-    const entry = readFileSync(path.join(repoRoot, "web", "src", "styles.css"), "utf8");
-    const order = [...entry.matchAll(/@import\s+["']\.\/styles\/([^"']+\.css)["']/g)].map((m) => m[1]);
+    const order = sheetOrder();
     const seen = new Map<string, string>(); // `${selector}|${prop}` -> value
     const copies: string[] = [];
 
@@ -354,9 +367,8 @@ describe("design grid", () => {
     //                    sheets' classes (documented as canonical owner at
     //                    sidenav.css:287, workspace.css:966, responsive.css:150).
     // The guard therefore only catches redefinition BETWEEN non-exempt sheets.
-    const entry = readFileSync(path.join(repoRoot, "web", "src", "styles.css"), "utf8");
-    const order = [...entry.matchAll(/@import\s+["']\.\/styles\/([^"']+\.css)["']/g)].map((m) => m[1]);
-    assert.ok(order.length > 0, "styles.css lost its sheet imports");
+    const order = sheetOrder();
+    assert.ok(order.length > 0, "styles.css and styles/app.css lost their sheet imports");
 
     const exempt: Record<string, true> = { "responsive.css": true, "a11y.css": true, "atelier.css": true };
     const surface = new Set(surfaceSheets().map(({ name }) => name));

@@ -1,0 +1,75 @@
+/* The app's surfaces, imported by App.tsx so they load with the app's chunk
+   instead of blocking the landing page's first paint. The global sheet
+   (src/styles.css) has already declared the layer order and the tokens; these
+   join the same `relay` layer in their original order, after landing.css, and
+   a11y.css stays last. */
+
+@import "./empty-state.css" layer(relay);
+@import "./shell.css" layer(relay);
+@import "./routes.css" layer(relay);
+@import "./sidenav.css" layer(relay);
+@import "./inputs.css" layer(relay);
+
+@import "./thread.css" layer(relay);
+@import "./chat.css" layer(relay);
+@import "./collab-style.css" layer(relay);
+@import "./agent-stream.css" layer(relay);
+/* KaTeX's own stylesheet, pulled into `relay` so markdown.css can override its
+   display-equation spacing by source order. Unlayered it would outrank every
+   app rule and the adjustments below it would silently do nothing. */
+@import "katex/dist/katex.min.css" layer(relay);
+@import "./markdown.css" layer(relay);
+@import "./syntax.css" layer(relay);
+@import "./artifact.css" layer(relay);
+@import "./thread-space.css" layer(relay);
+@import "./handoff.css" layer(relay);
+@import "./composer.css" layer(relay);
+
+@import "./pills.css" layer(relay);
+
+@import "./login.css" layer(relay);
+@import "./workspace.css" layer(relay);
+@import "./workspace-files.css" layer(relay);
+@import "./workspace-dossier.css" layer(relay);
+@import "./project-page.css" layer(relay);
+@import "./tasks-workspace.css" layer(relay);
+@import "./backlog.css" layer(relay);
+@import "./task-status.css" layer(relay);
+@import "./roster-select.css" layer(relay);
+@import "./task-drawer.css" layer(relay);
+@import "./task-record.css" layer(relay);
+@import "./record-panels.css" layer(relay);
+@import "./recovery.css" layer(relay);
+@import "./awaiting-input.css" layer(relay);
+@import "./list-sort.css" layer(relay);
+@import "./list-group.css" layer(relay);
+@import "./backlog-list.css" layer(relay);
+@import "./issues.css" layer(relay);
+@import "./agents.css" layer(relay);
+@import "./skills.css" layer(relay);
+@import "./teams.css" layer(relay);
+@import "./computer.css" layer(relay);
+@import "./profile-image.css" layer(relay);
+@import "./avatar-stack.css" layer(relay);
+@import "./overlay.css" layer(relay);
+@import "./command.css" layer(relay);
+@import "./preferences.css" layer(relay);
+@import "./dialog.css" layer(relay);
+@import "./section-rail.css" layer(relay);
+@import "./settings-page.css" layer(relay);
+@import "./admin-v2-shell.css" layer(relay);
+@import "./admin-v2-users.css" layer(relay);
+@import "./admin-v2-nodes.css" layer(relay);
+@import "./admin-v2-node-agents.css" layer(relay);
+@import "./admin-v2-channels.css" layer(relay);
+@import "./admin-v2-settings.css" layer(relay);
+@import "./admin-v2-waitlist.css" layer(relay);
+@import "./admin-v2-drawers.css" layer(relay);
+@import "./admin-v2-provision.css" layer(relay);
+@import "./admin-v2-dashboard.css" layer(relay);
+@import "./mobile-overlays.css" layer(relay);
+
+@import "./atelier.css" layer(relay);
+
+@import "./responsive.css" layer(relay);
+@import "./a11y.css" layer(relay);

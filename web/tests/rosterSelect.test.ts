@@ -85,9 +85,9 @@ describe("shared roster picker", () => {
   it("keeps the roster styles in one shared sheet", async () => {
     const styles = await read("web/src/styles/roster-select.css");
     const taskDrawer = await read("web/src/styles/task-drawer.css");
-    const entry = await read("web/src/styles.css");
+    const appSheet = await read("web/src/styles/app.css");
 
-    assert.match(entry, /@import "\.\/styles\/roster-select\.css" layer\(relay\);/);
+    assert.match(appSheet, /@import "\.\/roster-select\.css" layer\(relay\);/);
     for (const rule of [".roster-tabs", ".roster-tab", ".roster-option", ".roster-trigger"]) {
       assert.ok(styles.includes(`${rule} {`), `roster-select.css is missing ${rule}`);
     }

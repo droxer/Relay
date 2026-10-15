@@ -8,7 +8,9 @@ export const RELAY_GITHUB_URL = "https://github.com/droxer/Relay";
 export const RELAY_CLONE_COMMAND = `git clone ${RELAY_GITHUB_URL}.git`;
 
 /** A product screenshot under public/landing/, captured by
-    script/readme-snapshots (`--theme dark|light`) and saved as 1600px WebP.
+    script/readme-snapshots (`--theme dark|light`) and saved as 1600px WebP,
+    plus an 800px cut for one-density screens and narrow layouts
+    (`cwebp -q 80 -m 6 -resize 800 0 <shot>.webp -o <shot>-800w.webp`).
     Each ships English and zh-CN cuts in both themes. */
 export type LandingShot = "threads" | "projects" | "issues" | "routines" | "teams";
 
@@ -22,10 +24,29 @@ export const LANDING_SHOT_SIZE = { width: 1600, height: 1000 } as const;
     theme so the product pictured matches the page around it. */
 export type LandingTheme = "dark" | "light";
 
-export function landingShotSrc(shot: LandingShot, language: string | undefined, theme: LandingTheme = "dark"): string {
+/** Widths each shot ships at, smallest first; the last is the full cut. */
+export const LANDING_SHOT_WIDTHS = [800, LANDING_SHOT_SIZE.width] as const;
+
+/** How wide a shot renders, for `sizes`: the hero spans the page measure
+    (72rem), a tour shot two thirds of it beside its copy until the rows stack
+    at 1040px. Slight overestimates only ever pick the sharper cut. */
+export const LANDING_HERO_SIZES = "(min-width: 72rem) 72rem, 100vw";
+export const LANDING_TOUR_SIZES = "(min-width: 1041px) 48rem, 100vw";
+
+export function landingShotSrc(
+  shot: LandingShot,
+  language: string | undefined,
+  theme: LandingTheme = "dark",
+  width: number = LANDING_SHOT_SIZE.width,
+): string {
   const themeSuffix = theme === "light" ? "-light" : "";
   const languageSuffix = language === "zh-CN" ? "-zh-CN" : "";
-  return `/landing/${shot}${themeSuffix}${languageSuffix}.webp`;
+  const widthSuffix = width === LANDING_SHOT_SIZE.width ? "" : `-${width}w`;
+  return `/landing/${shot}${themeSuffix}${languageSuffix}${widthSuffix}.webp`;
+}
+
+export function landingShotSrcSet(shot: LandingShot, language: string | undefined, theme: LandingTheme = "dark"): string {
+  return LANDING_SHOT_WIDTHS.map((width) => `${landingShotSrc(shot, language, theme, width)} ${width}w`).join(", ");
 }
 
 export interface LandingStep {

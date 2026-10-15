@@ -1,12 +1,16 @@
 "use client";
 
 import { reconcileExecution, retryExecutionRecovery } from "./api";
+// The app surfaces' styles ride this chunk; the global sheet holds only what
+// the landing page and the auth gate paint before it (src/styles.css).
+import "./styles/app.css";
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { logout } from "./api";
 import type { AgentName, AgentTeam, CollaborationStyle, UserAgent, RelayArtifact, RelaySession, ThreadMessageInput } from "./types";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
+import { AuthChecking } from "./components/AuthChecking";
 import { DeviceApproval } from "./components/computer/DeviceApproval";
 import { LoginScreen } from "./components/LoginScreen";
 import { WaitlistScreen } from "./components/waitlist/WaitlistScreen";
@@ -678,13 +682,7 @@ export function App() {
   }
 
   if (!mounted || !authChecked || (user && preferencesUserId !== user.id)) {
-    return (
-      <main className="login-checking" aria-busy="true">
-        <p className="login-checking-text">
-          {mounted ? t("login.checking") : "Checking authentication…"}
-        </p>
-      </main>
-    );
+    return <AuthChecking />;
   }
 
   if (!user) {

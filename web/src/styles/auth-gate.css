@@ -1,0 +1,38 @@
+/* The gate shown while the session is unknown (AuthChecking, DeviceApproval).
+   It paints before the app's stylesheet (styles/app.css) arrives, so it lives
+   in the global sheet beside the landing page. */
+
+.login-checking {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  /* Renders before .login-screen mounts, so --lg-* isn't in scope yet —
+     fall back to the theme-independent "always dark" surface primitives
+     (also used by the diff viewer / artifact chrome) rather than a
+     one-off literal. */
+  background: var(--dark-surface);
+  color: var(--dark-ink-soft);
+}
+
+.login-checking-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  letter-spacing: var(--type-code-track);
+  font-size: var(--fs-3);
+  --blink-from: 0.55;
+  /* Passive readiness, not work in flight — the calm cadence, not the
+     --t-pulse active-work tempo. The ▌ caret has no channel of its own; it
+     rides this breathe, so there is no --t-tick split to make. */
+  animation: blink var(--t-pulse-calm) var(--ease) infinite;
+}
+
+.login-checking-text::after {
+  content: "▌";
+  margin-left: var(--sp-1);
+  /* Pre-mount caret on the pinned dark canvas — matches --lg-ink. That var
+     isn't in scope before .login-screen mounts, so fall back to the
+     root-level register token it aliases. */
+  color: var(--lg-ink, var(--dark-ink));
+}

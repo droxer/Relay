@@ -38,6 +38,7 @@ from .api import (
     waitlist_routes,
     web_routes,
 )
+from .api.conditional_get import ConditionalGetMiddleware
 from .api.contract import (
     API_DOCS_PATH,
     API_OPENAPI_PATH,
@@ -367,6 +368,9 @@ def create_app(root_dir: str | Path = DEFAULT_RELAY_DATA_DIR) -> FastAPI:
         openapi_url=API_OPENAPI_PATH,
         redoc_url=API_REDOC_PATH,
     )
+    # Innermost of these, so SecurityHeadersMiddleware sees the polled lists'
+    # `private, no-cache` and leaves it instead of forcing no-store.
+    app.add_middleware(ConditionalGetMiddleware)
     app.add_middleware(ServerTimingMiddleware)
     app.add_middleware(CookieRequestGuardMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)

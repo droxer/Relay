@@ -249,7 +249,7 @@ describe("markdown stylesheet", () => {
   });
 
   it("loads KaTeX inside the relay layer so app rules can still win", () => {
-    assert.match(readWeb("src/styles.css"), /@import "katex\/dist\/katex\.min\.css" layer\(relay\)/);
+    assert.match(readWeb("src/styles/app.css"), /@import "katex\/dist\/katex\.min\.css" layer\(relay\)/);
   });
 
   it("moves the document variant up the type ladder", () => {
