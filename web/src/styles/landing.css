@@ -1,0 +1,511 @@
+/* =====================================================================
+   Landing page
+
+   The signed-out front door at `/`. It stands in the sign-in canvas's
+   pinned dark register (the --ld-* names alias the always-dark tokens in
+   tokens/palette.css, exactly as login.css's --lg-* do), so a visitor who
+   walks from here to the gate never changes rooms — and the product
+   screenshots, which are dark, sit on their own canvas.
+
+   Composition: a sticky bar, a hero (copy over a framed screenshot), then
+   three sections on one column measure — how it works, the product tour,
+   the principles — and a closing call to action. The system stays flat:
+   planes separate by fill step and hairline, never by shadow.
+   ===================================================================== */
+
+.landing {
+  --ld-canvas: var(--dark-canvas);
+  --ld-surface: var(--dark-surface);
+  --ld-elevated: var(--dark-elevated);
+  --ld-ink: var(--dark-ink);
+  --ld-muted: var(--dark-ink-soft);
+  --ld-hairline: var(--dark-line);
+  --ld-hairline-soft: var(--dark-line-soft);
+  /* Pinned-dark canvas, so the shared focus ring binds to dark ink here —
+     the theme-register default would sit dark-on-dark under a light theme. */
+  --focus-outline: var(--focus-w) solid var(--ld-ink);
+  /* RelayMark strokes its lead path with the theme register's --ink-1. */
+  --ink-1: var(--ld-ink);
+  /* One column measure for every section, and the gutter beside it. */
+  --ld-measure: 72rem;
+  --ld-gutter: var(--sp-7);
+  --ld-section-gap: calc(var(--sp-8) * 2);
+
+  min-height: 100vh;
+  min-height: 100svh;
+  background: var(--ld-canvas);
+  color: var(--ld-ink);
+  font-family: var(--font-sans);
+}
+
+/* ---------- Bar ------------------------------------------------------- */
+
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 0.5px solid var(--ld-hairline-soft);
+  background: color-mix(in srgb, var(--ld-canvas) 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.landing-nav-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  max-width: var(--ld-measure);
+  margin-inline: auto;
+  padding: var(--sp-3) var(--ld-gutter);
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ld-ink);
+  text-decoration: none;
+}
+
+.landing-wordmark {
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+}
+
+.landing-nav-links {
+  display: flex;
+  gap: var(--sp-5);
+}
+
+.landing-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-left: auto;
+}
+
+.landing-nav-link {
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  color: var(--ld-muted);
+  text-decoration: none;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.landing-nav-link:hover {
+  color: var(--ld-ink);
+}
+
+/* ---------- Buttons --------------------------------------------------- */
+
+/* Links that look like the app's buttons: the neutral inverted plate for
+   the one primary door, a hairline outline for the other. Same geometry as
+   the shared Button's hero rung (--control-h-lg, --r-2). */
+.landing-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h-lg);
+  padding-inline: var(--sp-5);
+  border: 0.5px solid transparent;
+  border-radius: var(--r-2);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.landing-button-primary {
+  background: var(--ld-ink);
+  color: var(--ld-canvas);
+}
+
+.landing-button-primary:hover {
+  background: var(--ld-muted);
+}
+
+.landing-button-secondary {
+  border-color: var(--ld-hairline);
+  color: var(--ld-ink);
+}
+
+.landing-button-secondary:hover {
+  border-color: color-mix(in srgb, var(--ld-ink) 40%, var(--ld-canvas));
+  background: var(--ld-surface);
+}
+
+.landing-nav .landing-button {
+  height: var(--control-h-sm);
+  padding-inline: var(--sp-4);
+}
+
+/* ---------- Hero ------------------------------------------------------ */
+
+.landing-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: calc(var(--sp-8) * 2) var(--ld-gutter) 0;
+  background-image: radial-gradient(var(--ld-hairline-soft) 1px, transparent 1px);
+  background-size: var(--sp-6) var(--sp-6);
+}
+
+/* The chevron signature from the sign-in canvas, bled off the hero's
+   corner as a watermark rather than a logo. */
+.landing-bleed {
+  position: absolute;
+  top: calc(-1 * var(--sp-8));
+  right: calc(-1 * var(--sp-8));
+  width: min(40vmin, 360px);
+  height: min(40vmin, 360px);
+  color: color-mix(in srgb, var(--ld-ink) 4%, transparent);
+  pointer-events: none;
+}
+
+.landing-bleed > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.landing-hero-copy {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: 48rem;
+  text-align: center;
+}
+
+.landing-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-1);
+  letter-spacing: var(--type-code-track);
+  color: var(--ld-muted);
+}
+
+/* The page's one hero headline — the same --fs-hero clamp as the sign-in
+   cover. Balance comes from the shared heading rule in a11y.css. */
+.landing-headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  font-weight: 500;
+  line-height: var(--leading-display);
+  letter-spacing: var(--track-display);
+  color: var(--ld-ink);
+}
+
+.landing-lede {
+  margin: 0;
+  max-width: 40rem;
+  text-wrap: pretty;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  line-height: var(--leading-loose);
+  color: var(--ld-muted);
+}
+
+.landing-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+
+/* The screenshot rises out of the hero and is cut by the section seam, so
+   it reads as the product continuing below the fold. */
+.landing-hero-shot {
+  position: relative;
+  width: 100%;
+  max-width: var(--ld-measure);
+  /* A mask reads alpha only; the canvas token is just an opaque stop. */
+  mask-image: linear-gradient(to bottom, var(--ld-canvas) 70%, transparent);
+}
+
+.landing-shot {
+  margin: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--ld-hairline);
+  border-radius: var(--r-3);
+  background: var(--ld-surface);
+  /* A 1px top highlight — the window's edge catching light, not elevation. */
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ld-ink) 6%, transparent);
+}
+
+.landing-shot > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.landing-hero-shot .landing-shot {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* ---------- Sections -------------------------------------------------- */
+
+.landing-section {
+  max-width: var(--ld-measure);
+  margin-inline: auto;
+  padding: var(--ld-section-gap) var(--ld-gutter) 0;
+  /* Focus lands here after an in-page jump; the section is not a control,
+     so it shows no ring. */
+  outline: none;
+  scroll-margin-top: var(--sp-8);
+}
+
+.landing-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-7);
+}
+
+.landing-section-title {
+  margin: 0;
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
+  color: var(--ld-ink);
+}
+
+.landing-card-title {
+  margin: 0;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  color: var(--ld-ink);
+}
+
+.landing-card-body {
+  margin: 0;
+  text-wrap: pretty;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  line-height: var(--leading-loose);
+  color: var(--ld-muted);
+}
+
+/* How it works: three numbered steps on one rule. */
+.landing-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-7);
+  margin: 0;
+  padding: var(--sp-6) 0 0;
+  list-style: none;
+  border-top: 0.5px solid var(--ld-hairline-soft);
+}
+
+.landing-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.landing-step-index {
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-1);
+  letter-spacing: var(--type-code-track);
+  color: var(--ld-muted);
+}
+
+/* The tour: one surface per row, copy beside its screenshot, alternating
+   sides so the eye zig-zags down the page instead of down one gutter. */
+.landing-tour {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--sp-8) + var(--sp-6));
+}
+
+.landing-tour-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: center;
+  gap: var(--sp-8);
+}
+
+/* Even rows mirror the split itself, not just the order — flipping the
+   order alone seats the picture in the narrow column. */
+.landing-tour-row:nth-child(even) {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.landing-tour-row:nth-child(even) .landing-tour-copy {
+  order: 2;
+}
+
+.landing-tour-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.landing-tour-title {
+  margin: 0;
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
+  color: var(--ld-ink);
+}
+
+.landing-tour-body {
+  margin: 0;
+  text-wrap: pretty;
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+  line-height: var(--leading-loose);
+  color: var(--ld-muted);
+}
+
+/* Principles: four cards on a two-by-two grid. */
+.landing-principles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-principle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-6);
+  border: 0.5px solid var(--ld-hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--ld-surface);
+}
+
+.landing-principle-mark {
+  margin-bottom: var(--sp-2);
+  color: var(--ld-muted);
+}
+
+/* ---------- Closer & foot -------------------------------------------- */
+
+.landing-closer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: var(--ld-measure);
+  margin: var(--ld-section-gap) auto 0;
+  padding: var(--ld-section-gap) var(--ld-gutter);
+  border-top: 0.5px solid var(--ld-hairline-soft);
+  text-align: center;
+}
+
+.landing-foot {
+  border-top: 0.5px solid var(--ld-hairline-soft);
+}
+
+.landing-foot-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-5);
+  max-width: var(--ld-measure);
+  margin-inline: auto;
+  padding: var(--sp-6) var(--ld-gutter);
+}
+
+.landing-foot-tagline {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ld-muted);
+}
+
+.landing-foot-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-1);
+  letter-spacing: var(--type-code-track);
+  color: var(--ld-muted);
+}
+
+/* ---------- Motion --------------------------------------------------- */
+
+/* The hero arrives on the shared stagger ladder, copy before picture. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero-copy > *,
+  .landing-hero-shot {
+    --rise-from: var(--rise-sm);
+    animation: rise var(--t-slow) var(--ease) both;
+  }
+
+  .landing-hero-copy > :nth-child(2) { animation-delay: calc(var(--t-stagger) * 1); }
+  .landing-hero-copy > :nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
+  .landing-hero-copy > :nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
+  .landing-hero-shot { animation-delay: calc(var(--t-stagger) * 4); }
+}
+
+/* ---------- Responsive ----------------------------------------------- */
+
+/* The app-wide tablet tier: the tour stacks copy over picture, and steps
+   and principles fold to one column. */
+@media (max-width: 1040px) {
+  .landing-tour-row,
+  .landing-tour-row:nth-child(even) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-5);
+  }
+
+  .landing-tour-row:nth-child(even) .landing-tour-copy {
+    order: 0;
+  }
+
+  .landing-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-6);
+  }
+}
+
+/* The app-wide phone tier: the in-page links leave the bar (the hero's own
+   secondary action still jumps), the gutter tightens, principles stack. */
+@media (max-width: 820px) {
+  .landing {
+    --ld-gutter: var(--sp-5);
+    --ld-section-gap: calc(var(--sp-8) + var(--sp-6));
+  }
+
+  .landing-nav-links {
+    display: none;
+  }
+
+  .landing-hero {
+    gap: var(--sp-7);
+    padding-top: var(--sp-8);
+  }
+
+  .landing-principles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .landing {
+    --ld-gutter: var(--sp-4);
+  }
+
+  .landing-nav-actions {
+    gap: var(--sp-3);
+  }
+
+  .landing-ctas {
+    flex-direction: column;
+    align-self: stretch;
+  }
+
+  .landing-foot-meta {
+    margin-left: 0;
+  }
+}

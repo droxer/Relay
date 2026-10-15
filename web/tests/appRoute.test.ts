@@ -7,6 +7,7 @@ import {
   hrefForRoute,
   hrefForAdminSection,
   hrefForSettingsSection,
+  isLandingPath,
   parseAppPath,
   pathForAppState,
   pathKeepsThreadSpaceParams,
@@ -475,4 +476,17 @@ it("preserves team, assignment, and upcoming task filters in list and record URL
 it("keeps valid automation trigger filters only", () => {
   assert.equal(canonicalBrowserUrl("/automations", "?trigger=webhook"), "/automations?trigger=webhook");
   assert.equal(canonicalBrowserUrl("/automations", "?trigger=bogus"), "/automations");
+});
+
+describe("isLandingPath", () => {
+  it("treats only the bare origin as the signed-out landing page", () => {
+    assert.equal(isLandingPath("/"), true);
+    assert.equal(isLandingPath(""), true);
+  });
+
+  it("keeps every app and public address off the landing page", () => {
+    for (const path of ["/threads", "/login", "/waitlist", "/join", "/tasks/task_1", "//"]) {
+      assert.equal(isLandingPath(path), false, path);
+    }
+  });
 });
