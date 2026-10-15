@@ -10,7 +10,7 @@ import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
 import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
 import { installedComputers, removeService, sameComputer, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
-import { captureRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
+import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
 import { localBash } from './local-shell.js';
 import { encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
@@ -24,6 +24,7 @@ interface InstallOptions {
   verbose: boolean;
   deviceSetup: boolean;
   runtimeEnvFile?: string;
+  runtimeProfile?: string;
   localPermissionPolicy: "native" | "trusted";
 }
 
@@ -36,7 +37,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
     const key = isUserIdFlag(args[i]!) ? '--user-id' : args[i]!;
     if (key === '--foreground') { foreground = true; continue; }
     if (key === '--verbose') { verbose = true; continue; }
-    if (!['--backend-url', '--sandbox-id', '--user-id', '--workspace', '--runtime-env-file', '--local-permission-policy'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
+    if (!['--backend-url', '--sandbox-id', '--user-id', '--workspace', '--runtime-env-file', '--runtime-profile', '--local-permission-policy'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
     const value = args[++i];
     if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${key}`);
     values.set(key, value);
@@ -60,7 +61,10 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   if (localPermissionPolicy !== 'native' && localPermissionPolicy !== 'trusted') throw new Error('Local permission policy must be native or trusted.');
   const runtimeEnvFile = values.get('--runtime-env-file');
   if (runtimeEnvFile && !isAbsolute(runtimeEnvFile)) throw new Error('--runtime-env-file must be an absolute path.');
-  return { backendUrl, sandboxId, userId, workspace, foreground, verbose, deviceSetup, localPermissionPolicy, ...(runtimeEnvFile ? { runtimeEnvFile } : {}) };
+  const runtimeProfile = values.get('--runtime-profile');
+  if (runtimeProfile && !isAbsolute(runtimeProfile)) throw new Error('--runtime-profile must be an absolute path.');
+  if (runtimeProfile && runtimeEnvFile) throw new Error('Choose --runtime-profile or --runtime-env-file, not both.');
+  return { backendUrl, sandboxId, userId, workspace, foreground, verbose, deviceSetup, localPermissionPolicy, ...(runtimeEnvFile ? { runtimeEnvFile } : {}), ...(runtimeProfile ? { runtimeProfile } : {}) };
 }
 
 const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -195,6 +199,7 @@ function removeSupersededServices(installed: InstalledComputer[], options: Insta
 
 async function install(): Promise<void> {
   const options = parseInstallArgs(process.argv.slice(2));
+  const savedProfile = options.runtimeProfile ? readRuntimeProfile(options.runtimeProfile) : undefined;
   if (!['darwin', 'linux', 'win32'].includes(process.platform)) throw new Error('Only macOS, Linux and Windows are supported.');
   // Agent scripts run in bash; fail before authorizing a computer that could never run one.
   if (process.platform === 'win32') localBash();
@@ -233,8 +238,8 @@ async function install(): Promise<void> {
   const nodeToken = process.env.RELAY_DAEMON_NODE_TOKEN;
   const runtimeEnv = localRuntimeEnvironment();
   runtimeEnv.PATH = [dirname(process.execPath), runtimeEnv.PATH ?? '/usr/bin:/bin'].join(delimiter);
-  const profile = !options.foreground || options.runtimeEnvFile
-    ? captureRuntimeProfile(runtimeEnv, options.runtimeEnvFile) : undefined;
+  const profile = savedProfile ?? (!options.foreground || options.runtimeEnvFile
+    ? captureRuntimeProfile(runtimeEnv, options.runtimeEnvFile) : undefined);
   const installerEnvironment = process.env;
   if (profile) {
     // Preflight uses the same selected environment as the installed service.

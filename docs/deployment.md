@@ -308,6 +308,14 @@ calls the backend origin directly with `credentials: "include"`.
    `relay restart`, `relay status`, and `relay logs [--follow]`. `stop` keeps the
    service off across logins until `relay start` (or re-running the installer);
    with several connected computers, `--computer <node-id>` narrows any command.
+   `relay update` upgrades in place: it fetches `<backend>/install.sh` (or
+   `install.ps1`) and re-runs it with the backend, workspace, permission policy and
+   complete saved runtime profile, including any runtime env file reference, so
+   the same computer keeps its saved token and agent settings. It pauses new
+   work before checking for runs in flight and holds that pause through the
+   restart. It refuses active runs or a daemon that cannot acknowledge the pause
+   unless given `--force`. Failed updates release the pause; use `relay status`
+   to check service health afterward.
 
    **Windows** (10 version 1803 or newer, x64/arm64) gets a PowerShell twin:
    `irm <origin>/install.ps1 | iex`, or for an enrolled computer

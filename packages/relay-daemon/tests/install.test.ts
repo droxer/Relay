@@ -195,9 +195,12 @@ test('installer verifies authentication and writes a service using the real pack
     const setupCommand = [command[0]!, '--backend-url', `http://127.0.0.1:${address.port}`, '--workspace', workspace];
     const stale = service.replace('node-install-test', 'node-stale');
     writeFileSync(stale, content.replaceAll('node-install-test', 'node-stale'));
-    const upgrade = await exec(process.execPath, setupCommand, {
+    const savedProfile = readFileSync(profile, 'utf8');
+    const upgrade = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
       env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
     });
+    assert.equal(readFileSync(profile, 'utf8'), savedProfile);
+    assert.equal(JSON.parse(readFileSync(profile, 'utf8')).environment.CODEX_HOME, customHome);
     assert.match(upgrade.stdout, /already installed for this workspace; upgrading it/);
     assert.doesNotMatch(upgrade.stdout, /Confirm this computer in your browser/);
     assert.match(upgrade.stdout, /Removed an older Relay Dev install for this workspace \(node-stale\)/);
